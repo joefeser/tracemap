@@ -40,7 +40,7 @@ the change is recorded in `implementation-state.md`.
   initial implementation status before changing site code.
 - [ ] Choose the final route or placement:
   `/site-claim-guardrails/`, `/docs/site-claim-guardrails/`, section on
-  `/review-claim-checklist/`, contributor-only docs page linked from
+  `/review-claim-checklist/`, contributor-facing docs page linked from public
   `/docs/`, or a recorded equivalent that preserves the required boundaries.
 - [ ] Record the selected placement and rejected alternatives in
   `implementation-state.md`.
@@ -58,12 +58,16 @@ the change is recorded in `implementation-state.md`.
   canonical URL, Open Graph metadata, sitemap metadata, and discovery metadata
   with concept-level wording.
 - [ ] If implemented as hidden contributor-only docs, keep it out of public
-  sitemap and discovery metadata and record the hidden rationale.
+  sitemap, discovery metadata, public `/docs/` links, and navigation, then
+  record the hidden rationale.
 - [ ] If implemented as a section, record host metadata reconciliation and add
   stable unique anchors for every required section.
 - [ ] Include required sections: public claim levels, proof-path requirements,
   allowed evidence references, forbidden raw material, non-claim patterns,
   downgrade and hidden rules, validation expectations, and review handoff.
+- [ ] In the review handoff section, include bounded next states:
+  `repeat with proof`, `downgrade before repeating`,
+  `owner follow-up needed`, `do not repeat`, `internal only`, and `hidden`.
 - [ ] Include all required guardrail rows: shipped, demo, concept, hidden, raw
   artifact reference, dev-only feature, reduced coverage, runtime/release
   wording, AI/LLM wording, and private-only support.
@@ -128,6 +132,11 @@ the change is recorded in `implementation-state.md`.
   discovery `publicClaimLevel: concept` if a standalone public route is chosen.
 - [ ] Add focused validation that hidden contributor-only placement is absent
   from public sitemap and discovery metadata if that placement is chosen.
+- [ ] Add focused validation that hidden contributor-only placement is not
+  linked from public `/docs/` if that placement is chosen.
+- [ ] Add focused validation that the page or section is absent from primary
+  navigation unless `implementation-state.md` records a matching
+  information-architecture decision.
 - [ ] Add focused validation for forbidden product capability, runtime proof,
   release approval, release safety, operational safety, complete coverage,
   AI/LLM analysis, and replacement-of-human-review claims.

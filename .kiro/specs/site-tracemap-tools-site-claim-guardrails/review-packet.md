@@ -37,8 +37,8 @@ Review focus:
   `No public conclusion without evidence`?
 - Does the spec evaluate the required candidate placements:
   `/site-claim-guardrails/`, `/docs/site-claim-guardrails/`, section on
-  `/review-claim-checklist/`, and contributor-only docs page linked from
-  `/docs/`?
+  `/review-claim-checklist/`, and contributor-facing docs page linked from
+  public `/docs/`?
 - Does the spec distinguish the guardrails from `/review-claim-checklist/`,
   `/proof-source-catalog/`, `/roadmap/`, `/limitations/`,
   `/questions/objections/`, and `/language/change-risk/` when present?

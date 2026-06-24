@@ -44,9 +44,11 @@ demo result, runtime observation, release decision, operational safety claim,
 or shipped workflow.
 
 Contributor-only alternative: a future implementation may choose
-`Public claim level: hidden` only for a strictly contributor-only docs page
-that is excluded from public discovery, sitemap metadata, external-facing route
-output, and public navigation. That decision must be recorded before
+`Public claim level: hidden` only for a strictly contributor-only page that is
+excluded from public discovery, sitemap metadata, external-facing route output,
+public `/docs/` links, and public navigation. Because `/docs/` is public in
+this repository, any page linked from public `/docs/` is public-facing concept
+guidance. A hidden contributor-only decision must be recorded before
 implementation.
 
 ## Placement Decision
@@ -66,8 +68,10 @@ Candidate placements to reevaluate at implementation time:
   better home for contributor-facing guidance.
 - Section on `/review-claim-checklist/`: allowed only if the required content
   fits without turning the checklist into a general policy page.
-- Contributor-only docs page linked from `/docs/`: allowed only if hidden and
-  excluded from public sitemap and discovery output.
+- Contributor-facing docs page linked from `/docs/`: allowed as public-facing
+  concept guidance because `/docs/` is public in this repository. A hidden
+  contributor-only page must not be linked from public `/docs/` and must be
+  excluded from public sitemap, discovery output, and navigation.
 
 ## Scope Decisions
 
@@ -230,6 +234,25 @@ Completed spec-phase validation:
 Readiness upgraded to `ready-for-implementation` after Medium or higher review
 findings were patched or explicitly dispositioned, the reduced-coverage
 re-review completed, and the spec-phase validation checks passed.
+
+## PR Review-Loop Patch
+
+PR-loop on PR #313 returned `actionable_findings` after Codex and Qodo both
+returned, with `patchAuthorized: true`.
+
+Patched review-thread findings:
+
+- Added bounded next states to the design review-handoff content structure.
+- Added future implementation task coverage for bounded review-handoff states.
+- Added primary-navigation validation to the design and tasks.
+- Clarified that `/docs/` is public in this repository, so a page linked from
+  public `/docs/` is public-facing concept guidance. Hidden contributor-only
+  output must not be linked from public `/docs/`.
+
+Validation after PR-loop patch:
+
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
 
 ## Future Implementation Validation
 
