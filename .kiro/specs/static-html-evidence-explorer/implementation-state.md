@@ -510,5 +510,5 @@ Kiro implementation review status:
 
 PR status:
 
-- PR URL: pending.
+- PR URL: https://github.com/joefeser/tracemap/pull/308
 - PR-loop result: pending.
