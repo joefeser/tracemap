@@ -202,9 +202,9 @@ public sealed class StaticHtmlEvidenceExplorerTests
         await File.WriteAllTextAsync(Path.Combine(input, "rule-catalog.yml"), $$"""
             rules:
               - id: {{RuleIds.CSharpSyntaxDeclarations}}
-                name: C# syntax declarations
+                name: C# syntax declarations:
                 description: Documents declarations discovered from deterministic C# syntax evidence.
-                evidenceTier: Tier3SyntaxOrTextual
+                evidenceTier: Tier2Structural or Tier4Unknown
                 emits:
                   - TypeDeclared
                 limitations:
@@ -223,14 +223,14 @@ public sealed class StaticHtmlEvidenceExplorerTests
             && gap.GapKind == "catalog-unavailable");
         Assert.Contains(result.Data.Rules, rule =>
             rule.RuleId == RuleIds.CSharpSyntaxDeclarations
-            && rule.Title == "C# syntax declarations"
+            && rule.Title == "C# syntax declarations:"
             && rule.Description.Contains("deterministic C# syntax evidence", StringComparison.Ordinal)
-            && rule.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && rule.EvidenceTier == "Tier2Structural or Tier4Unknown"
             && rule.Limitations.Contains("Syntax evidence does not prove runtime execution.")
             && rule.RelatedSections.Contains("evidence-rows"));
 
         var html = await File.ReadAllTextAsync(Path.Combine(output, "index.html"));
-        Assert.Contains("C# syntax declarations", html);
+        Assert.Contains("C# syntax declarations:", html);
         Assert.Contains("Rule catalog", html);
         Assert.Contains("Rules include compatible rule catalog rows", html);
         Assert.Contains("SELECT table extraction only claims visible top-level FROM/JOIN identifiers.", html);

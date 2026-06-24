@@ -218,6 +218,9 @@ public static class StaticHtmlEvidenceExplorer
     };
 
     private static readonly Regex CommitShaPattern = new("^[0-9a-fA-F]{7,64}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex SqlPattern = new(
+        @"\b(select\s+(\*|[\w\[\]"".]+(?:\s*,\s*[\w\[\]"".]+)*)\s+from|insert\s+into|update\s+[\w\[\]"".]+\s+set|delete\s+from|merge\s+into)\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     public static async Task<StaticHtmlEvidenceExplorerResult> GenerateAsync(
         StaticHtmlEvidenceExplorerOptions options,
@@ -1357,7 +1360,7 @@ public static class StaticHtmlEvidenceExplorer
                 SafeRuleCatalogRuleId(id, redactions),
                 SafeRuleCatalogText(title, "rule-catalog.name", redactions),
                 SafeRuleCatalogText(description, "rule-catalog.description", redactions),
-                SafeRuleCatalogEvidenceTier(evidenceTier),
+                SafeRuleCatalogEvidenceTier(evidenceTier, redactions),
                 limitations
                     .Select(value => SafeRuleCatalogText(value, "rule-catalog.limitations", redactions))
                     .Where(value => !string.IsNullOrWhiteSpace(value))
@@ -1392,9 +1395,12 @@ public static class StaticHtmlEvidenceExplorer
                 continue;
             }
 
-            if (trimmed.EndsWith(":", StringComparison.Ordinal) && !trimmed.StartsWith("-", StringComparison.Ordinal))
+            var listSeparator = trimmed.IndexOf(':', StringComparison.Ordinal);
+            if (listSeparator > 0
+                && listSeparator == trimmed.Length - 1
+                && !trimmed.StartsWith("-", StringComparison.Ordinal))
             {
-                listContext = trimmed[..^1].Trim();
+                listContext = trimmed[..listSeparator].Trim();
                 continue;
             }
 
@@ -1466,11 +1472,13 @@ public static class StaticHtmlEvidenceExplorer
         return $"{safe[..MaxRuleCatalogTextLength]} [truncated-safe-text-hash:{Hash(safe, 12)}]";
     }
 
-    private static string SafeRuleCatalogEvidenceTier(string? value)
+    private static string SafeRuleCatalogEvidenceTier(
+        string? value,
+        Dictionary<(string RuleId, string Category, string Location, string Action), int> redactions)
     {
-        return value is EvidenceTiers.Tier1Semantic or EvidenceTiers.Tier2Structural or EvidenceTiers.Tier3SyntaxOrTextual or EvidenceTiers.Tier4Unknown
-            ? value
-            : Tier4Unknown;
+        return string.IsNullOrWhiteSpace(value)
+            ? Tier4Unknown
+            : SafeRuleCatalogText(value, "rule-catalog.evidenceTier", redactions);
     }
 
     private static string UnquoteYamlScalar(string value)
@@ -2066,7 +2074,7 @@ public static class StaticHtmlEvidenceExplorer
             return "raw-remote-or-url";
         }
 
-        if (Regex.IsMatch(value, @"(?i)\b(select\s+(\*|[\w\[\]"".]+(?:\s*,\s*[\w\[\]"".]+)*)\s+from|insert\s+into|update\s+[\w\[\]"".]+\s+set|delete\s+from|merge\s+into)\b", RegexOptions.CultureInvariant))
+        if (SqlPattern.IsMatch(value))
         {
             return "raw-sql";
         }
