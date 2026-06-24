@@ -386,7 +386,8 @@ Implementation validation on `codex/impl-site-evidence-gap-register`:
 
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
-- `cd site && npm test`: passed, 473 tests.
+- `cd site && npm test`: passed, 477 tests after reviewer-fix coverage was
+  added.
 - `cd site && npm run validate`: passed; built static site and validated 66
   HTML files, 2260 internal references, 65 sitemap URLs, 1 legacy story safety
   target, and 13 legacy modernization evidence-map rows.
@@ -402,11 +403,45 @@ ignored by git.
 
 ## PR Loop Outcome
 
-Pending. Final PR loop must run after the implementation PR is opened:
+PR: `https://github.com/joefeser/tracemap/pull/317`
 
-```bash
-agent-control pr-loop --repo joefeser/tracemap --pr <PR_NUMBER> --base dev --require-codex-review --quiet --json
-```
+Initial PR loop requested required Codex review and waited for the configured
+Codex/Qodo batch. After Codex and Qodo returned, the loop authorized patching
+combined findings. Patched findings:
+
+- Qodo private/raw scan bypass in `site/scripts/evidence-gap-register.mjs`.
+- Codex visible-body word-count validation issue in
+  `site/scripts/evidence-gap-register.mjs`.
+- Gemini unclosed boundary-region stripping issue in
+  `site/scripts/evidence-gap-register.mjs`.
+- Gemini proof-route query/hash normalization issue in
+  `site/scripts/evidence-gap-register.mjs`.
+
+Validation after patching:
+
+- `cd site && npm test`: passed, 477 tests.
+- `cd site && npm run validate`: passed.
+- `cd site && npm run build`: passed.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+
+PR loop after the reviewer-fix commit returned:
+
+- Decision: `merge_ready`.
+- Stop reason: `NONE`.
+- Head: `4cc31c1eef7ada30d007bbf35b99b906902e749f`.
+- Checks: no pending or failed checks.
+- Review threads: 0 unresolved.
+- Actionable findings: none.
+- Residual risk: medium, because Codex reviewed
+  `02e9a3984719e005ca9ff27d829aa24f799f2c92` and the current reviewed head
+  was `4cc31c1eef7ada30d007bbf35b99b906902e749f`; no stale actionable Codex
+  findings were found, and required review was satisfied by configured
+  `trustedCodeReview` quorum.
+
+This checked-in state note is bookkeeping. If it creates a docs/spec-only
+post-review head, final readiness should be reported from the final PR-loop
+JSON for the exact current head rather than repeatedly updating this note.
 
 Future implementation validation expectations are defined in
 `requirements.md`, `design.md`, and `tasks.md`. They include required rows,
@@ -439,6 +474,5 @@ browser sanity.
 
 ## Follow-Up Items
 
-- Open PR to `dev`, wait for required reviewers, and run the final
-  `agent-control pr-loop` command.
-- Patch only combined required-reviewer findings when ACK grants authority.
+- No implementation follow-up is currently known. Final merge authority is the
+  latest PR-loop JSON for the exact current head.
