@@ -7,7 +7,7 @@ limitations.
 
 ## Legacy .NET V0 Finish Line
 
-Legacy .NET v0 is complete when the already-specced cleanup work is closed or
+Legacy .NET v0 is complete when the already-specified cleanup work is closed or
 explicitly deferred in the relevant spec state files:
 
 - finish the remaining route-flow, UI field lineage, legacy data model, and
@@ -49,8 +49,8 @@ be narrow and evidence-first:
   unsafe inference.
 
 Swift v0 should not promise perfect Swift analysis, complete app navigation, or
-runtime UI behavior. Any Swift-specific fact types must follow
-`docs/LANGUAGE_ADAPTER_CONTRACT.md`: deterministic IDs, evidence tiers, rule
+runtime UI behavior. Any Swift-specific fact types must follow the
+[language adapter contract](LANGUAGE_ADAPTER_CONTRACT.md): deterministic IDs, evidence tiers, rule
 IDs, extractor versions, file spans, coverage labels, sorted metadata, and safe
 redaction.
 
@@ -59,9 +59,9 @@ redaction.
 TraceMap is the risk and evidence discovery engine. Its value is showing what a
 static scan can prove, what it can approximate, and where the analysis must
 stop. Legacy .NET v0 proves the engine can handle difficult old code with
-honest gaps. Swift v0 is the second-ecosystem proof that the same evidence model
-can cross into mobile application code without becoming a rewrite or a giant
-analyzer promise.
+honest gaps. Swift v0 is the next adapter-family proof that the same evidence
+model can cross into mobile application code without becoming a rewrite or a
+giant analyzer promise.
 
 Adapter output should stay useful for future WITS/ACK overnight classification:
 stable artifacts, rule IDs, evidence tiers, coverage labels, machine-readable
