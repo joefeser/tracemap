@@ -197,8 +197,22 @@ Required final command after ready PR creation and the requested wait:
 agent-control pr-loop --repo joefeser/tracemap --pr 307 --base dev --require-codex-review --quiet --json
 ```
 
-Authoritative PR-loop outcome must be recorded from the latest command output
-after the implementation branch is pushed.
+PR-loop outcome on head `f4508a6c881672802bbdc0ef076bf2317e71f0e2`:
+
+- Decision: `human_decision_required`.
+- Stop reason: `REVIEW_FINDINGS_DISPOSITIONED`.
+- Review freshness posture: `owner_override_ready`.
+- Mechanical gates: clean merge state, no unresolved review threads, no
+  pending checks, no failed checks, no active required-reviewer request locks,
+  Qodo actionable finding dispositioned with fixing commit and validation
+  evidence.
+- Residual risk: `medium`, because Codex reviewed older head `26f3f98ec4` and
+  the current head contains the post-review validator fix commit.
+- Human next action: owner may merge this exact head by accepting stale
+  required-review risk, wait, or request a fresh Codex review.
+
+If this implementation-state update becomes the latest PR head, rerun the
+required PR-loop command and use that newer output as the final authority.
 
 ## Oddities
 
