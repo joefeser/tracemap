@@ -310,7 +310,10 @@ Acceptance criteria:
   or an equivalent programmatic field-label association marker.
 - Validate that no public row directs visitors to internal spec artifacts such
   as `implementation-state.md`, `tasks.md`, `.kiro/specs/`, or other
-  non-public author material.
+  non-public author material. Relative path validation for directory segments
+  such as `.kiro` and `specs` must split candidate paths into segments and
+  check individual segment matches rather than using string containment or
+  slash-wrapped substring matching.
 - Validate that cross-links to adjacent surfaces use bounded anchor text.
 - Validate that illustrative examples are synthetic or already public-safe.
 - Validate standalone route metadata, sitemap metadata, and discovery metadata
