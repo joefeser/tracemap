@@ -275,7 +275,7 @@ async function validatePage({ pagePath, routeContext, errors }) {
   const pageText = normalizeRenderedText(html);
   const scopedHtml = stripAllowedBoundaryRegions(stripGapRows(decodedHtml));
   const scopedText = normalizeRenderedText(scopedHtml);
-  const wordCount = countWords(normalizeRenderedText(stripGapRows(html)));
+  const wordCount = countWords(extractVisibleBodyProse(html));
 
   validateVisibleText(pageText, errors);
   validateMetadata(html, errors);
@@ -442,8 +442,11 @@ function validateBoundaryRegions(html, errors) {
 }
 
 function validateForbiddenMaterial({ decodedHtml, scopedHtml, scopedText, errors }) {
+  const hardPrivateValues = privateMaterialScanValues(decodedHtml);
+  const rawMaterialValues = privateMaterialScanValues(scopedHtml);
+
   for (const pattern of hardPrivatePatterns) {
-    if (pattern.test(decodedHtml)) {
+    if (hardPrivateValues.some((value) => pattern.test(value))) {
       errors.push(withEvidence(`Evidence gap register contains hard private material: ${pattern}`, pageArtifact));
     }
   }
@@ -455,7 +458,7 @@ function validateForbiddenMaterial({ decodedHtml, scopedHtml, scopedText, errors
   }
 
   for (const pattern of rawMaterialPatterns) {
-    if (pattern.test(scopedHtml)) {
+    if (rawMaterialValues.some((value) => pattern.test(value))) {
       errors.push(withEvidence(`Evidence gap register contains forbidden raw/private material outside bounded contexts: ${pattern}`, pageArtifact));
     }
   }
@@ -551,6 +554,22 @@ function stripGapRows(html) {
   return html.replace(/<table\b(?=[^>]*\bdata-evidence-gap-register\b)[^>]*>[\s\S]*?<\/table>/gi, " ");
 }
 
+function extractVisibleBodyProse(html) {
+  const mainHtml = html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1] ?? "";
+  const withoutRows = stripGapRows(mainHtml);
+  const withoutCode = withoutRows.replace(/<code\b[^>]*>[\s\S]*?<\/code>/gi, " ");
+  return normalizeRenderedText(withoutCode);
+}
+
+function privateMaterialScanValues(value) {
+  const decoded = decodeHtmlEntities(value);
+  return [
+    decoded,
+    normalizeRenderedText(decoded),
+    decoded.replace(/<[^>]+>/g, "")
+  ];
+}
+
 function stripAllowedBoundaryRegions(html) {
   let output = html;
   for (const boundary of ["rejected-patterns", "non-claims", "raw-material-boundary", "stop-conditions"]) {
@@ -578,8 +597,13 @@ function findElementEnd(html, start, tagName) {
   tagPattern.lastIndex = start;
   let depth = 0;
   let match;
+  let firstTagLength = 0;
 
   while ((match = tagPattern.exec(html))) {
+    if (firstTagLength === 0) {
+      firstTagLength = match[0].length;
+    }
+
     if (match[0].startsWith("</")) {
       depth -= 1;
       if (depth === 0) {
@@ -590,7 +614,7 @@ function findElementEnd(html, start, tagName) {
     }
   }
 
-  return html.length;
+  return start + firstTagLength;
 }
 
 function extractTaggedElements(html, tagName, attributeName) {
@@ -641,12 +665,12 @@ function normalizeRouteHref(value) {
     }
   }
 
-  const withoutHash = value.split("#")[0];
-  if (!withoutHash.startsWith("/")) {
+  const withoutQueryAndHash = value.split("#")[0].split("?")[0];
+  if (!withoutQueryAndHash.startsWith("/")) {
     return "";
   }
 
-  return withoutHash.endsWith("/") ? withoutHash : `${withoutHash}/`;
+  return withoutQueryAndHash.endsWith("/") ? withoutQueryAndHash : `${withoutQueryAndHash}/`;
 }
 
 function countWords(text) {

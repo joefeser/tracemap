@@ -79,6 +79,17 @@ test("validateEvidenceGapRegisterDist reports missing adjacent links", async (t)
   assert.match(errors.join("\n"), /unsupported proof\/validation route: \/owners\/missing\//);
 });
 
+test("validateEvidenceGapRegisterDist normalizes proof routes with query strings and hashes", async (t) => {
+  const root = await createManagedEvidenceGapRegisterFixture(t, {
+    pageHtml: (await canonicalPage()).replace('href="/validation/"', 'href="/validation/?source=gap#checks"')
+  });
+  const errors = [];
+
+  await validateEvidenceGapRegisterDist({ dist: join(root, "site", "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateEvidenceGapRegisterDist rejects forbidden claims outside bounded contexts", async (t) => {
   const root = await createManagedEvidenceGapRegisterFixture(t, {
     pageHtml: (await canonicalPage()).replace("</main>", "<p>TraceMap proves runtime behavior and validates release readiness.</p></main>")
@@ -104,6 +115,20 @@ test("validateEvidenceGapRegisterDist permits bounded rejected wording", async (
   assert.deepEqual(errors, []);
 });
 
+test("validateEvidenceGapRegisterDist rejects malformed boundary regions that would hide the rest of the page", async (t) => {
+  const root = await createManagedEvidenceGapRegisterFixture(t, {
+    pageHtml: (await canonicalPage()).replace(
+      "</main>",
+      '<section data-evidence-gap-boundary="rejected-patterns"><p>TraceMap proves runtime behavior.</p><p>TraceMap validates release readiness.</p></main>'
+    )
+  });
+  const errors = [];
+
+  await validateEvidenceGapRegisterDist({ dist: join(root, "site", "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden claim wording outside bounded contexts/);
+});
+
 test("validateEvidenceGapRegisterDist rejects raw material outside bounded contexts", async (t) => {
   const root = await createManagedEvidenceGapRegisterFixture(t, {
     pageHtml: (await canonicalPage()).replace("</main>", "<p>Publish raw facts and analyzer logs in the public register.</p></main>")
@@ -115,9 +140,31 @@ test("validateEvidenceGapRegisterDist rejects raw material outside bounded conte
   assert.match(errors.join("\n"), /forbidden raw\/private material outside bounded contexts/);
 });
 
+test("validateEvidenceGapRegisterDist rejects tag-split raw material outside bounded contexts", async (t) => {
+  const root = await createManagedEvidenceGapRegisterFixture(t, {
+    pageHtml: (await canonicalPage()).replace("</main>", "<p>Publish facts.<span>ndjson</span> in the public register.</p></main>")
+  });
+  const errors = [];
+
+  await validateEvidenceGapRegisterDist({ dist: join(root, "site", "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden raw\/private material outside bounded contexts/);
+});
+
 test("validateEvidenceGapRegisterDist rejects hard private text in attributes", async (t) => {
   const root = await createManagedEvidenceGapRegisterFixture(t, {
     pageHtml: (await canonicalPage()).replace("</main>", '<img alt="file&#58;//private/report"></main>')
+  });
+  const errors = [];
+
+  await validateEvidenceGapRegisterDist({ dist: join(root, "site", "dist"), errors });
+
+  assert.match(errors.join("\n"), /hard private material/);
+});
+
+test("validateEvidenceGapRegisterDist rejects tag-split hard private text", async (t) => {
+  const root = await createManagedEvidenceGapRegisterFixture(t, {
+    pageHtml: (await canonicalPage()).replace("</main>", "<p>/Us<span>ers</span>/private/report</p></main>")
   });
   const errors = [];
 
