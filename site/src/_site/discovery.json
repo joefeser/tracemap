@@ -67,6 +67,23 @@
     ]
   },
   {
+    "path": "/evidence/gaps/",
+    "title": "Evidence Gap Register",
+    "summary": "Concept-level register for recording missing, reduced, stale, private-only, unsupported, unknown, validation, and owner-question evidence gaps as bounded follow-up rows.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/review-claim-checklist/",
+    "limitations": [
+      "The register records follow-up rows and stop conditions; it is not scanner output, reducer output, validation success, or a public proof source.",
+      "Gap rows must keep what evidence exists, what cannot be concluded, next owner, proof or validation route, safe wording, and stop condition attached."
+    ],
+    "nonClaims": [
+      "No absence-of-impact proof, runtime behavior proof, production traffic proof, endpoint performance proof, outage-cause proof, release approval, release readiness, operational certainty, clean-repo status, complete coverage, AI analysis, LLM analysis, embeddings, vector databases, prompt classification, autonomous approval, or replacement of human review.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public gap-register material."
+    ]
+  },
+  {
     "path": "/glossary/",
     "title": "Evidence Glossary",
     "summary": "Concept-level vocabulary for public-safe TraceMap evidence terms before readers repeat public claims.",

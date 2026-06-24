@@ -10,6 +10,11 @@
     "priority": "0.8"
   },
   {
+    "path": "/evidence/gaps/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/glossary/",
     "changefreq": "monthly",
     "priority": "0.7"
