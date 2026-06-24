@@ -19,6 +19,7 @@ import { validateEvidenceDecisionRecordDist } from "./evidence-decision-record.m
 import { validateEndpointReviewDist } from "./endpoint-review.mjs";
 import { validateEvidencePacketExamplesDist } from "./evidence-packet-examples.mjs";
 import { validateChangeReviewDist } from "./change-review.mjs";
+import { validateClaimReviewDrillDist } from "./claim-review-drill.mjs";
 import { validateGlossaryDist } from "./glossary.mjs";
 import { validateIncidentCallDist } from "./incident-call.mjs";
 import { validateIncidentEvidenceHandoffDist } from "./incident-evidence-handoff.mjs";
@@ -103,6 +104,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateEndpointReviewDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateEvidencePacketExamplesDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateChangeReviewDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateClaimReviewDrillDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateGlossaryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateAdoptionPlaybookDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateBlogProofPathSeriesDist({ baseUrl: normalizedBaseUrl, dist, errors, root: resolve(root, "src") });

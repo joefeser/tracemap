@@ -13,6 +13,7 @@ import {
   blogProofPathSeriesRoute
 } from "./blog-proof-path-series.mjs";
 import { changeRiskLanguageGuideRoute } from "./change-risk-language-guide.mjs";
+import { claimReviewDrillRoute } from "./claim-review-drill.mjs";
 import { createDiscoveryOutputs } from "./discovery.mjs";
 import { demoEvidenceTrailRoute } from "./demo-evidence-trail.mjs";
 import { demoRunbookInboundLinkRoutes, demoRunbookRoute } from "./demo-runbook.mjs";
@@ -206,6 +207,7 @@ async function createDistFixture({
       reviewerQuickstartRoute,
       evidencePacketExamplesRoute,
       reviewPacketAssemblyRoute,
+      claimReviewDrillRoute,
       reviewClaimChecklistRoute,
       releaseReviewBoundaryRoute,
       reviewRoomRoute,
@@ -260,6 +262,7 @@ async function createDistFixture({
     "/packets/",
     evidencePacketExamplesRoute,
     reviewPacketAssemblyRoute,
+    claimReviewDrillRoute,
     reviewClaimChecklistRoute,
     releaseReviewBoundaryRoute,
     reviewRoomRoute,
@@ -430,8 +433,12 @@ async function fixturePageHtml(route, path) {
     return readFile(new URL("../src/packets/examples/index.html", import.meta.url), "utf8");
   }
 
+  if (route === claimReviewDrillRoute) {
+    return readFile(new URL("../src/review-claim-checklist/drill/index.html", import.meta.url), "utf8");
+  }
+
   if (route === reviewClaimChecklistRoute) {
-    return reviewClaimChecklistPage();
+    return readFile(new URL("../src/review-claim-checklist/index.html", import.meta.url), "utf8");
   }
 
   if (route === releaseReviewBoundaryRoute) {
@@ -917,6 +924,20 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture review claim checklist limitations remain bounded."],
         nonClaims: ["No runtime behavior, production usage, AI impact analysis, or LLM analysis proof."]
+      },
+      {
+        path: claimReviewDrillRoute,
+        title: "Claim Review Drill",
+        summary: "Concept-level practice drill for checking whether a public claim has proof vocabulary before it is repeated.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/review-claim-checklist/",
+        limitations: ["The fixture drill remains bounded to authored practice rows and does not create new proof."],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, absence-of-impact proof, complete coverage, AI impact analysis, LLM analysis, automated grading, or replacement of human review.",
+          "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public drill material."
+        ]
       },
       {
         path: releaseReviewBoundaryRoute,
