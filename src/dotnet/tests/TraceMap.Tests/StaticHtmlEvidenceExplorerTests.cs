@@ -246,6 +246,89 @@ public sealed class StaticHtmlEvidenceExplorerTests
     }
 
     [Fact]
+    public async Task Explorer_generate_marks_present_unsupported_rule_catalog_without_no_catalog_gap()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("b"));
+        await File.WriteAllTextAsync(Path.Combine(input, "rule-catalog.yml"), """
+            rules:
+              - name: Missing ID
+                description: This catalog row is intentionally unsupported.
+            """);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Manifest.Inputs, artifact =>
+            artifact.ArtifactKind == "rule-catalog"
+            && artifact.Compatibility == "supported");
+        Assert.Contains(result.Gaps, gap =>
+            gap.RuleId == StaticHtmlEvidenceExplorer.UnsupportedSchemaRuleId
+            && gap.GapKind == "unsupported-schema"
+            && gap.AffectedSection == "rules");
+        Assert.DoesNotContain(result.Gaps, gap =>
+            gap.RuleId == StaticHtmlEvidenceExplorer.CatalogUnavailableRuleId
+            && gap.GapKind == "catalog-unavailable");
+        Assert.Contains(result.Data.SectionStatuses, row =>
+            row.SectionId == "rules"
+            && row.Status == "partial"
+            && row.Message.Contains("provided, but no compatible rule rows were loaded", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Explorer_generate_marks_oversized_rule_catalog_without_reading_rows()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("c"));
+        await File.WriteAllTextAsync(Path.Combine(input, "rule-catalog.yml"), new string('#', 1_048_577));
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Manifest.Inputs, artifact =>
+            artifact.ArtifactKind == "rule-catalog"
+            && artifact.Compatibility == "unsupported");
+        Assert.Contains(result.Gaps, gap =>
+            gap.RuleId == StaticHtmlEvidenceExplorer.UnsupportedSchemaRuleId
+            && gap.GapKind == "artifact-too-large"
+            && gap.AffectedSection == "rules");
+        Assert.DoesNotContain(result.Gaps, gap =>
+            gap.RuleId == StaticHtmlEvidenceExplorer.CatalogUnavailableRuleId
+            && gap.GapKind == "catalog-unavailable");
+    }
+
+    [Fact]
+    public async Task Explorer_generate_does_not_let_catalog_override_reserved_explorer_rules()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("d"));
+        await File.WriteAllTextAsync(Path.Combine(input, "rule-catalog.yml"), $$"""
+            rules:
+              - id: {{StaticHtmlEvidenceExplorer.UnsafeRejectedRuleId}}
+                name: Replaced unsafe rule
+                description: External catalog text must not replace reserved explorer rule stubs.
+                evidenceTier: Tier1Semantic
+                limitations:
+                  - Catalog limitations are also ignored for reserved explorer rules.
+            """);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Data.Rules, rule =>
+            rule.RuleId == StaticHtmlEvidenceExplorer.UnsafeRejectedRuleId
+            && rule.Title == "Explorer unsafe generated value rejected"
+            && !rule.Description.Contains("External catalog text", StringComparison.Ordinal)
+            && !rule.Limitations.Contains("Catalog limitations are also ignored for reserved explorer rules."));
+    }
+
+    [Fact]
     public async Task Explorer_generate_hashes_unsafe_rule_catalog_text()
     {
         using var temp = new TempDirectory();
