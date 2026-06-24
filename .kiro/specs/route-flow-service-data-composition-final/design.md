@@ -30,6 +30,7 @@ production use, or business impact.
 | `route-flow-service-data-composition` | Implemented the initial argument/fact-symbol projection, service/data traversal, interface candidates, data-surface gaps, redaction, and route-flow tests. This spec consumes its remaining polish and gap-hardening direction. |
 | `route-flow-service-data-composition-next` | Added context groups and grouped service/data presentation over existing route-flow rows. This spec finishes the deferred unjoinable-context gaps, downgrade hardening, and remaining candidate/data tests rather than adding another presentation-only layer. |
 | `route-centered-endpoint-trace-completeness` | Owns broad endpoint trace completeness and touched-file/touched-symbol summaries. This spec owns only service/data/query/dependency/value-origin composition and downgrades for selected route-flow rows. |
+| `route-flow-endpoint-composition` | Owns earlier endpoint-root composition behavior. This spec may audit it for ownership boundaries but should not duplicate completed endpoint-composition work. |
 | `route-flow-endpoint-stitching` | Added endpoint bridge state and began endpoint stitching for issue #201. This spec consumes the remaining endpoint method-to-call-edge and service/data attachment precision needed for the route-centered service/data trace. |
 | `static-dispatch-candidate-bridges` | If present on the implementation base, defines shared dispatch-candidate contracts that route-flow may consume. This spec consumes candidate evidence through route-flow interface bridge rows and does not redefine shared candidate derivation rules. |
 | GitHub issues #159, #179, #201 | Provide the public-safe problem statements: route-flow should start from a route/client/root, stitch into method/service/implementation evidence, and render business/data/dependency rows or specific gaps. |
@@ -117,7 +118,7 @@ JSON remains additive:
 {
   "reportType": "route-flow",
   "version": "1.0",
-  "reportCoverage": "full-or-reduced",
+  "reportCoverage": "FullEvidenceAvailable",
   "coverageWarnings": [],
   "query": {},
   "snapshot": {},
@@ -271,10 +272,6 @@ concepts to current route-flow vocabulary during live audit.
 Expected families include:
 
 - `SelectorNoMatch`
-- duplicate or ambiguous endpoint root gap; map to `SelectorNoMatch` when the
-  selector itself is ambiguous, or `MissingRouteRoot` when the selected root
-  cannot resolve to route-root evidence. A new code requires amending
-  `combined.route-flow.gap.v1`.
 - `MissingMethodSymbolBridge`
 - `MissingRouteRoot`
 - `MissingCallEdge`
@@ -292,6 +289,11 @@ Expected families include:
 - `TruncatedByLimit`
 - `TraversalBounds`
 - `UnsafeValueOmitted`
+
+Duplicate or ambiguous endpoint-root states should map to `SelectorNoMatch`
+when the selector itself is ambiguous, or to `MissingRouteRoot` when the
+selected root cannot resolve to route-root evidence. A new duplicate-root code
+requires amending `combined.route-flow.gap.v1`.
 
 New gap codes are allowed only after a rule-catalog update documents the code,
 limitations, evidence tier, and safe rendering behavior.
