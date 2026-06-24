@@ -285,6 +285,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/review-room/agenda/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/release-review-boundary/",
     "changefreq": "monthly",
     "priority": "0.7"

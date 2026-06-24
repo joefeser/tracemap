@@ -48,6 +48,7 @@ import { reviewerQuickstartRoute } from "./reviewer-quickstart.mjs";
 import { reviewPacketAssemblyRoute } from "./review-packet-assembly.mjs";
 import { reviewClaimChecklistInboundRoutes, reviewClaimChecklistRoute } from "./review-claim-checklist.mjs";
 import { releaseReviewBoundaryRoute } from "./release-review-boundary.mjs";
+import { reviewMeetingAgendaRoute } from "./review-meeting-agenda.mjs";
 import { reviewRoomRoute } from "./review-room.mjs";
 import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
@@ -212,6 +213,7 @@ async function createDistFixture({
       claimReviewDrillRoute,
       reviewClaimChecklistRoute,
       releaseReviewBoundaryRoute,
+      reviewMeetingAgendaRoute,
       reviewRoomRoute,
       roadmapClaimLedgerRoute,
       staticTriageRoute,
@@ -268,6 +270,7 @@ async function createDistFixture({
     claimReviewDrillRoute,
     reviewClaimChecklistRoute,
     releaseReviewBoundaryRoute,
+    reviewMeetingAgendaRoute,
     reviewRoomRoute,
     roadmapClaimLedgerRoute,
     staticTriageRoute,
@@ -300,6 +303,7 @@ async function createDistFixture({
   await writeDiscoveryFiles(dist);
   await writeEvidenceDecisionRecordImplementationState(root);
   await writeEvidenceGapRegisterImplementationState(root);
+  await writeReviewMeetingAgendaImplementationState(root);
 
   return root;
 }
@@ -354,6 +358,31 @@ Rejected-pattern marker: use \`data-evidence-gap-boundary="rejected-patterns"\`
 No adjacent route substitutions, omissions, or deferrals are needed.
 
 Discovery artifacts for validation: sitemap, routes-index, and llms.txt.
+`,
+    "utf8"
+  );
+}
+
+async function writeReviewMeetingAgendaImplementationState(root) {
+  const statePath = join(
+    root,
+    ".kiro",
+    "specs",
+    "site-tracemap-tools-review-meeting-agenda",
+    "implementation-state.md"
+  );
+  await mkdir(join(statePath, ".."), { recursive: true });
+  await writeFile(
+    statePath,
+    `Selected placement: \`/review-room/agenda/\`
+
+Rejected alternative: \`/meetings/evidence-review/\`
+Rejected alternative: section on \`/review-room/\`
+Rejected alternative: section on \`/reviewer-quickstart/\`
+
+Primary navigation remains unchanged.
+Word-count bounds: 700 to 1500 rendered main-content words
+Manual public-safety reviewer signoff: completed by implementation owner
 `,
     "utf8"
   );
@@ -490,6 +519,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === reviewRoomRoute) {
     return reviewRoomPage();
+  }
+
+  if (route === reviewMeetingAgendaRoute) {
+    return readFile(new URL("../src/review-room/agenda/index.html", import.meta.url), "utf8");
   }
 
   if (route === roadmapClaimLedgerRoute) {
@@ -637,6 +670,17 @@ async function writeDiscoveryFiles(dist) {
         hintCategory: "start",
         preferredProofPath: "/docs/",
         limitations: ["Fixture capabilities limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: "/evidence/",
+        title: "Evidence Model",
+        summary: "Fixture evidence model route for validation.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/proof-paths/",
+        limitations: ["Fixture evidence model limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
@@ -1026,6 +1070,23 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture review room limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: reviewMeetingAgendaRoute,
+        title: "Evidence Review Meeting Agenda",
+        summary: "Concept-level meeting agenda for checking TraceMap proof paths, evidence tiers, coverage labels, limitations, gaps, owners, and decision-record handoff.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The route is a human meeting agenda over existing public-safe static evidence surfaces, not meeting automation or a new proof source.",
+          "The agenda preserves review questions, proof paths, rule context, evidence tiers, coverage labels, limitations, gaps, owners, validation evidence category, and non-claims without upgrading missing evidence."
+        ],
+        nonClaims: [
+          "No meeting automation, release approval, release safety, operational safety, runtime proof, production traffic proof, endpoint performance proof, absence-of-impact proof, complete coverage, AI analysis, LLM analysis, embeddings, vector databases, prompt classification, automated impact analysis, or replacement of human judgment or governance.",
+          "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, credential-like values, connection strings, tokens, or keys are public agenda material."
+        ]
       },
       {
         path: roadmapClaimLedgerRoute,
@@ -1620,6 +1681,7 @@ function reviewRoomPage() {
     <a href="${evidenceDecisionRecordRoute}">Evidence decision record</a>
     <a href="${reviewPacketAssemblyRoute}">Review packet assembly</a>
     <a href="${reviewerQuickstartRoute}">Reviewer quickstart</a>
+    <a href="${reviewMeetingAgendaRoute}">Evidence review meeting agenda</a>
     <p>${filler}</p>
   `);
 }
