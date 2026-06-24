@@ -1,7 +1,7 @@
 # Site TraceMap Tools Release Review Boundary Implementation State
 
-Status: implementation-complete
-Readiness: ready-for-owner-merge
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Branch

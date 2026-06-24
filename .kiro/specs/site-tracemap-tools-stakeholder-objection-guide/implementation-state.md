@@ -1,7 +1,7 @@
 # Site TraceMap Tools Stakeholder Objection Guide Implementation State
 
-Status: implemented-pr-loop-merge-ready
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Branch

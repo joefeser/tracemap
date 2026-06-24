@@ -1,7 +1,7 @@
 # Site TraceMap Tools Proof Path FAQ Tasks
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Public claim level: concept
 
 These tasks track the completed spec review and public-site implementation phase. The implementation edits site source and validation only; generated output, scanner code, reducer code, and unrelated specs remain out of scope.
