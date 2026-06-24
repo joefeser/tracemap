@@ -104,7 +104,7 @@ The agenda table or list must include these rows exactly:
 | `limitation check` | Attach what the static evidence cannot prove. | Rule or limitation notes for the cited evidence. | Limitation kept with the claim or agenda note. |
 | `gap register check` | Capture unknown, reduced, unavailable, or private-only evidence. | Unknown, reduced, unavailable, or private-only coverage states. | Gap entry with review question and owner type. |
 | `owner follow-up` | Assign the next owner for unresolved work. | Open gaps and unresolved questions. | Role-based owner and requested follow-up. |
-| `decision record` | Prepare bounded handoff notes. | Bounded question, evidence state, limitations, gaps, owners, and non-claims. | Decision-record ingredients (question, evidence state, limitations, gaps, owners, non-claims) preserved without stronger claims. |
+| `decision record` | Prepare bounded handoff notes. | Bounded question, evidence state, validation evidence category, limitations, gaps, owners, and non-claims. | Decision-record ingredients (question, evidence state, validation evidence category, limitations, gaps, owners, non-claims) preserved without stronger claims. |
 | `closeout` | Remove unsupported wording before notes are shared. | Draft meeting notes. | Meeting notes with unsupported claims removed, downgraded, or assigned. |
 
 ## Evidence Vocabulary
