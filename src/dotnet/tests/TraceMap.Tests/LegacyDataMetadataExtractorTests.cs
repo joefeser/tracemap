@@ -1464,6 +1464,39 @@ public sealed class LegacyDataMetadataExtractorTests
     }
 
     [Fact]
+    public void Scan_links_nhibernate_nested_class_name_to_csharp_nested_type_syntax()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Mappings"));
+        Directory.CreateDirectory(Path.Combine(temp.Path, "Domain"));
+        File.WriteAllText(Path.Combine(temp.Path, "Mappings", "Address.hbm.xml"), """
+            <hibernate-mapping xmlns="urn:nhibernate-mapping-2.2">
+              <class name="Samples.Domain.Customer+Address" table="Addresses">
+                <id name="Id" column="AddressId" />
+              </class>
+            </hibernate-mapping>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Domain", "Customer.cs"), """
+            namespace Samples.Domain;
+            public sealed class Customer
+            {
+                public sealed class Address { }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        var link = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataGeneratedCodeLinked
+            && fact.RuleId == RuleIds.LegacyDataModelGeneratedLink);
+        Assert.Equal("Samples.Domain.Customer+Address", link.Properties.GetValueOrDefault("mappedTypeName"));
+        Assert.Equal("Samples.Domain.Customer.Address", link.Properties.GetValueOrDefault("typeName"));
+        Assert.Equal("Domain/Customer.cs", link.Evidence.FilePath);
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataModelGeneratedLink
+            && fact.Properties.GetValueOrDefault("classification") == "MissingGeneratedCode");
+    }
+
+    [Fact]
     public void Scan_gaps_missing_nhibernate_mapped_class_syntax_declaration()
     {
         using var temp = new TempDirectory();
