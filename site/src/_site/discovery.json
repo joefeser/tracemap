@@ -852,6 +852,23 @@
     ]
   },
   {
+    "path": "/review-claim-checklist/drill/",
+    "title": "Claim Review Drill",
+    "summary": "Concept-level practice drill for checking whether a public claim has a proof path, rule family, evidence tier, coverage label, limitation, non-claim, and public-safe status before it is repeated.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/review-claim-checklist/",
+    "limitations": [
+      "The drill uses authored sample rows and an answer key; it is not an automated grader, approval workflow, product proof, or generated evidence artifact.",
+      "Correct drill answers control reuse of sample sentences and do not upgrade scanner, reducer, runtime, release, or coverage claims."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, absence-of-impact proof, complete coverage, AI impact analysis, LLM analysis, automated grading, or replacement of human review.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public drill material."
+    ]
+  },
+  {
     "url": "https://github.com/joefeser/tracemap/blob/main/README.md",
     "title": "Repository README",
     "summary": "Source-of-truth project overview for CLI goals, required scan outputs, demo commands, and product boundaries.",
