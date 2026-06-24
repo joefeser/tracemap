@@ -1,7 +1,7 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: implementation-pr2-cycle-gap-ready-for-pr
-Readiness: focused-cycle-slice-implemented-validated-and-reviewed
+Status: implementation-pr2-cycle-gap-ack-patch-ready-to-push
+Readiness: focused-cycle-slice-implemented-reviewed-ack-patched-and-validated
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
 Target base: `dev`
@@ -577,7 +577,38 @@ Takeover notes:
   query-token, or connection-string key matches.
 - PR #320 opened against `dev` from
   `codex/implement-route-flow-service-data-composition-final`.
-- ACK loop is pending in this takeover pass.
+- Initial ACK loop for PR #320 waited for the required Codex/Qodo batch before
+  authorizing patches. After both required reviewers returned, ACK reported
+  `actionable_findings` with three unresolved review threads and
+  `patchAuthorized=true`.
+- ACK-authorized findings patched locally:
+  - changed bounded supporting fact ID emission to sort the selected `List` in
+    place before returning it;
+  - delayed cycle `TraversalBounds` gap emission until after implementation
+    candidate expansion has had a chance to continue traversal;
+  - populated cycle gap commit SHA, extractor name, and extractor version from
+    available source/edge evidence.
+- Added focused regression coverage proving cycle gap metadata and proving no
+  premature cycle gap is emitted when a static implementation candidate can
+  continue to a terminal surface.
+- Focused validation after the local ACK patch:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`
+  passed, 36 tests, with the same existing NuGet warnings.
+- Post-ACK `dotnet build src/dotnet/TraceMap.sln`: passed with the same
+  existing NuGet warnings.
+- Post-ACK `dotnet test src/dotnet/TraceMap.sln`: passed, 637 tests, with the
+  same existing NuGet warnings.
+- Post-ACK `./scripts/check-private-paths.sh`: passed.
+- Post-ACK `git diff --check`: passed.
+- Post-ACK explicit route-flow smoke over the refreshed public endpoint
+  combined index passed and produced `UnknownAnalysisGap`, `ReducedCoverage`, 3
+  entry evidence rows, 8 static flow rows, 5 business/data logic rows, 4
+  dependency surfaces, and 43 gaps.
+- Post-ACK targeted safety scan of the refreshed route-flow smoke artifacts
+  found no raw local workspace path, raw SQL wildcard, private
+  connection-string sample, password token, raw URL, raw GitHub remote, private
+  feed, secret-token, query-token, or connection-string key matches.
+- Push and ACK rerun are pending in this takeover pass.
 
 ### Kiro Implementation Review For PR 2
 

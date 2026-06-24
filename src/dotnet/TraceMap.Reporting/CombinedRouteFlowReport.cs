@@ -1008,11 +1008,6 @@ public static class CombinedRouteFlowReporter
                 queue.Enqueue(new EndpointTraversalState([.. state.Nodes, target], [.. state.Edges, edge]));
             }
 
-            if (!expanded && skippedCycleEdges.Count > 0)
-            {
-                gaps.Add(TraversalCycleGap(current, skippedCycleEdges));
-            }
-
             var candidateEdges = implementationCandidatesByInterface.GetValueOrDefault(current.NodeId, [])
                 .Where(edge => nodesById.TryGetValue(edge.FromNodeId, out var candidate) && EndpointSourcesCompatible(current, candidate))
                 .ToArray();
@@ -1056,6 +1051,11 @@ public static class CombinedRouteFlowReporter
                 queue.Enqueue(new EndpointTraversalState(
                     [.. state.Nodes, candidate],
                     [.. state.Edges, ReverseImplementationCandidateEdge(relationship, current.NodeId, candidate.NodeId)]));
+            }
+
+            if (!expanded && skippedCycleEdges.Count > 0)
+            {
+                gaps.Add(TraversalCycleGap(current, skippedCycleEdges, scannerVersionBySourceIndexId));
             }
 
             if (!expanded
@@ -1211,7 +1211,8 @@ public static class CombinedRouteFlowReporter
             selected.Add(value);
         }
 
-        return selected.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        selected.Sort(StringComparer.Ordinal);
+        return selected.ToArray();
     }
 
     private static string HashAmbiguousRootSet(
@@ -1640,7 +1641,10 @@ public static class CombinedRouteFlowReporter
             node.EndLine);
     }
 
-    private static RouteFlowGap TraversalCycleGap(CombinedPathNode node, IReadOnlyList<CombinedPathEdge> skippedCycleEdges)
+    private static RouteFlowGap TraversalCycleGap(
+        CombinedPathNode node,
+        IReadOnlyList<CombinedPathEdge> skippedCycleEdges,
+        IReadOnlyDictionary<string, string> scannerVersionBySourceIndexId)
     {
         var supportingFactIds = skippedCycleEdges
             .SelectMany(edge => edge.SupportingFactIds)
@@ -1669,7 +1673,12 @@ public static class CombinedRouteFlowReporter
             ["Traversal cycle detection prevents infinite static expansion and caps clean absence conclusions."],
             CombinedReportHelpers.SafePath(firstEdge.FilePath),
             firstEdge.StartLine,
-            firstEdge.EndLine);
+            firstEdge.EndLine,
+            SafeCommitSha(node.CommitSha),
+            ExtractorName(firstEdge.RuleId),
+            scannerVersionBySourceIndexId.TryGetValue(node.SourceIndexId, out var extractorVersion)
+                ? SafeSelector(extractorVersion) ?? "unknown"
+                : "unknown");
     }
 
     private static IEnumerable<CombinedPath> FilterPathsForSelectorSide(IReadOnlyList<CombinedPath> paths, string? routeSelector, string? clientSelector)
