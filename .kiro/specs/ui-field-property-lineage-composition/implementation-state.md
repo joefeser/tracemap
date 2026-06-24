@@ -136,8 +136,27 @@ Results:
 
 ## PR State
 
-PR: pending.
-ACK PR loop: pending.
+PR: https://github.com/joefeser/tracemap/pull/309
+
+ACK PR loop:
+
+- Initial run posted the required Codex review request and then returned
+  `environment_blocked` / `GITHUB_STATE_UNAVAILABLE` because GitHub GraphQL
+  returned a TLS handshake timeout.
+- Rerun returned `actionable_findings` / `UNRESOLVED_REVIEW_THREADS` while
+  Codex review was still pending; patching was not yet authorized by the
+  required-review batch state.
+- After Codex returned, ACK reported three unresolved review threads and
+  authorized patching:
+  - Qodo: `tasks.md` still showed "Open a ready PR into dev" unchecked.
+  - Codex: dynamic Angular/Razor UI boundaries could be read as allowing a
+    `NeedsReviewLineage` hop without static model identity.
+  - Codex: `ObservedDemoContext` was missing from the allowed classification
+    vocabulary even though observed evidence metadata remains non-upgrading.
+- Patch disposition: checked the PR-open task, changed dynamic UI boundaries to
+  emit a gap and no hop across that dynamic boundary, and added
+  `ObservedDemoContext` for observed evidence metadata rows only with explicit
+  non-upgrading semantics.
 
 ## Follow-Ups For Implementation
 
