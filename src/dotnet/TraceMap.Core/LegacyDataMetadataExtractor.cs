@@ -69,7 +69,7 @@ public static class LegacyDataMetadataExtractor
         AddGeneratedCodeLinks(manifest, facts, generatedCandidates);
         if (HasMappedTypeSyntaxLinkCandidates(facts))
         {
-            var csharpTypeDeclarations = LoadCSharpTypeDeclarations(repoPath, inventory);
+            var csharpTypeDeclarations = LoadCSharpTypeDeclarations(repoPath, manifest, inventory, facts);
             AddMappedTypeSyntaxLinks(manifest, facts, csharpTypeDeclarations);
         }
 
@@ -1328,14 +1328,30 @@ public static class LegacyDataMetadataExtractor
         return candidates;
     }
 
-    private static IReadOnlyDictionary<string, IReadOnlyList<CSharpTypeDeclaration>> LoadCSharpTypeDeclarations(string repoPath, IReadOnlyList<FileInventoryItem> inventory)
+    private static IReadOnlyDictionary<string, IReadOnlyList<CSharpTypeDeclaration>> LoadCSharpTypeDeclarations(
+        string repoPath,
+        ScanManifest manifest,
+        IReadOnlyList<FileInventoryItem> inventory,
+        List<CodeFact> facts)
     {
         var declarations = new SortedDictionary<string, List<CSharpTypeDeclaration>>(StringComparer.Ordinal);
         foreach (var item in inventory
             .Where(item => item.Kind is "CSharp" or "WebFormsCodeBehind" or "WinFormsDesigner")
-            .Where(item => item.SizeBytes <= MaxGeneratedDesignerBytes)
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal))
         {
+            if (item.SizeBytes > MaxGeneratedDesignerBytes)
+            {
+                AddGap(
+                    manifest,
+                    facts,
+                    item.RelativePath,
+                    RuleIds.LegacyDataModelGeneratedLink,
+                    "MappedTypeDeclarationFileTooLarge",
+                    "C# file exceeded the safe parsing size bound while resolving NHibernate mapped-type links; declarations in this file were not inspected.",
+                    null);
+                continue;
+            }
+
             var fullPath = Path.Combine(repoPath, item.RelativePath);
             try
             {
