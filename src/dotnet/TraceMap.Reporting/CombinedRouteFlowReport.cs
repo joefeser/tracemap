@@ -875,6 +875,7 @@ public static class CombinedRouteFlowReporter
             return new EndpointCompositionResult([], [], false);
         }
 
+        var rootAmbiguityGaps = EndpointRootAmbiguityGaps(requiredNodeKind, parsed.Method, parsed.PathKey, roots);
         var nodesById = inventory.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
         var outgoing = inventory.Edges
             .GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
@@ -900,7 +901,7 @@ public static class CombinedRouteFlowReporter
                 false);
         }
 
-        var gaps = new List<RouteFlowGap>();
+        var gaps = new List<RouteFlowGap>(rootAmbiguityGaps);
         var paths = new List<CombinedPath>();
         var queue = new Queue<EndpointTraversalState>();
         var emittedPathsByRoot = roots.ToDictionary(root => root.NodeId, _ => 0, StringComparer.Ordinal);
@@ -1103,6 +1104,55 @@ public static class CombinedRouteFlowReporter
                 .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
                 .ToArray(),
             truncated);
+    }
+
+    private static IReadOnlyList<RouteFlowGap> EndpointRootAmbiguityGaps(
+        string? requiredNodeKind,
+        string method,
+        string pathKey,
+        IReadOnlyList<CombinedPathNode> roots)
+    {
+        if (roots.Count <= 1)
+        {
+            return [];
+        }
+
+        var supportingFactIds = roots
+            .Select(root => root.CombinedFactId)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var rootIds = roots
+            .Select(root => root.NodeId)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var firstRoot = roots
+            .OrderBy(root => root.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(root => root.NodeKind, StringComparer.Ordinal)
+            .ThenBy(root => root.FilePath, StringComparer.Ordinal)
+            .ThenBy(root => root.StartLine ?? 0)
+            .ThenBy(root => root.NodeId, StringComparer.Ordinal)
+            .First();
+
+        return [
+            new RouteFlowGap(
+                $"gap:endpoint-composition:SelectorNoMatch:{CombinedReportHelpers.Hash($"{requiredNodeKind ?? "endpoint"}:{method}:{pathKey}:{string.Join("|", rootIds)}", 16)}",
+                "SelectorNoMatch",
+                "Route-flow selector matched multiple endpoint roots; downstream rows remain static review context until the root is narrowed.",
+                SelectorRuleId,
+                EvidenceTiers.Tier4Unknown,
+                "ReducedCoverage",
+                SafeLabel(firstRoot.SourceLabel),
+                firstRoot.NodeId,
+                supportingFactIds,
+                ["Duplicate route roots make selector ownership ambiguous and do not prove runtime routing, traffic, or handler selection."],
+                CombinedReportHelpers.SafePath(firstRoot.FilePath),
+                firstRoot.StartLine,
+                firstRoot.EndLine)
+        ];
     }
 
     private static IReadOnlyDictionary<string, CombinedPathEdge[]> BuildParameterForwardSeedEdgesByMethodNodeId(
