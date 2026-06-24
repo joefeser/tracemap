@@ -1,18 +1,18 @@
 # Site TraceMap Tools Review Meeting Agenda Implementation State
 
-Status: not-started
+Status: in-progress
 Readiness: ready-for-implementation
 Public claim level: concept
 
 ## Branch
 
-- Branch: `codex/spec-site-review-meeting-agenda`
+- Branch: `codex/impl-site-review-meeting-agenda`
 - Target base: `dev`
-- Base: `origin/dev` at `749de71fbb55660e235fa2530bd3c3f9398037ad`
-- Worktree: isolated spec worktree; absolute local path intentionally omitted
+- Base: `origin/dev` at `5a6641961c5285210ae6fdbb3902d32fc517074d`
+- Worktree: isolated implementation worktree; absolute local path intentionally omitted
   from the checked-in state file for the private-path guard.
 - Pull request: pending.
-- Latest spec commit: pending until commit; final report records the exact SHA
+- Latest implementation commit: pending until commit; final report records the exact SHA
   to avoid self-referential amend churn in this checked-in state file.
 
 ## Scope
@@ -22,8 +22,12 @@ Public claim level: concept
 - Required files:
   `requirements.md`, `design.md`, `tasks.md`,
   `implementation-state.md`, and `review-packet.md`.
-- This phase is spec-only. It does not change `site/src`, generated output,
-  scanner code, reducer code, validation scripts, or existing specs.
+- Implementation ownership:
+  `site/src/review-room/agenda/`, site metadata, route-specific validation,
+  and this spec bookkeeping packet.
+- This phase changes only public-site source, site validation scripts/tests,
+  and this spec packet. It does not change scanner code, reducer code, or
+  generated site output.
 
 ## Public Claim Level
 
@@ -35,16 +39,50 @@ Public claim level: concept
 
 ## Scope Decisions
 
-- Initial candidate placements:
-  `/review-room/agenda/`, `/meetings/evidence-review/`, section on
-  `/review-room/`, or section on `/reviewer-quickstart/`.
-- Recommended starting placement for future implementation:
-  `/review-room/agenda/`.
-- Future implementation must inspect live neighboring routes before changing
-  site source and record the selected placement, rejected alternatives,
-  metadata consequences, sitemap consequences, and validation consequences.
-- Primary navigation should remain unchanged unless a future
-  information-architecture review records otherwise.
+- Selected placement: `/review-room/agenda/`.
+- Selection rationale: the live `/review-room/` page is a broad orientation
+  route, while this agenda needs procedural table structure, direct linking,
+  standalone metadata, sitemap inclusion, discovery metadata, and focused
+  route validation without inflating the parent page.
+- Rejected alternative: `/meetings/evidence-review/`; no live meeting
+  hierarchy exists, so this would introduce a new information architecture
+  branch for one concept page.
+- Rejected alternative: section on `/review-room/`; the required agenda rows,
+  stop-condition categories, neighboring distinctions, and validation checks
+  would bloat the parent route and weaken its orientation focus.
+- Rejected alternative: section on `/reviewer-quickstart/`; the agenda is a
+  reusable meeting runbook rather than first-review onboarding.
+- Metadata consequences: standalone route must carry title, description,
+  canonical URL, Open Graph metadata, route-index metadata, sitemap metadata,
+  and discovery metadata with `publicClaimLevel: concept`.
+- Sitemap consequences: add `/review-room/agenda/` to `site/src/_site/pages.json`
+  with monthly change frequency and concept-route priority.
+- Discovery consequences: add `/review-room/agenda/` to
+  `site/src/_site/discovery.json` with limitations and non-claims; add useful
+  inbound discovery from `/review-room/` only, leaving primary navigation
+  unchanged.
+- Validation consequences: add a standalone route validator for required copy,
+  agenda rows and cells, evidence checks, stop conditions, required links,
+  neighbor distinctions, metadata, sitemap/discovery coverage, forbidden
+  claims, private/raw material, unsupported certainty language, blame
+  language, accessibility structure, and bounded word count.
+- Primary navigation remains unchanged. The parent review-room page receives a
+  contextual link because it improves discovery without promoting the agenda to
+  primary navigation.
+- Verified link set before publication: `/proof-paths/`, `/evidence/`,
+  `/validation/`, `/limitations/`, `/review-room/`,
+  `/reviewer-quickstart/`, `/packets/assembly/`, `/handoff/template/`,
+  `/owners/follow-up/`, `/decisions/evidence-record/`, and the live manager
+  presentation route `/demo/manager-script/`.
+- Rejected manager route alias: `/manager-demo-script/` is not the live route;
+  `/demo/manager-script/` resolves and is linked only as a neighboring
+  distinction, not as meeting evidence.
+- No unresolved, substituted, or deferred cross-links remain for this route.
+- Manual public-safety reviewer signoff: completed by implementation owner.
+  Automated validation checks blame-language patterns, unsupported certainty
+  language, raw/private material, hard private material, and forbidden positive
+  claims; this manual signoff confirms the page frames gaps as evidence states
+  and follow-up ownership rather than fault.
 - Required future sections:
   `Before the meeting`, `Agenda`, `Evidence checks`, `Gap capture`,
   `Owner assignment`, `Decision record handoff`, `Stop conditions`, and
@@ -59,11 +97,11 @@ Public claim level: concept
   `/handoff/template/`, `/owners/follow-up/`,
   `/decisions/evidence-record/`, and the verified manager demo or
   presentation route if present.
-- Word-count bounds: pending future implementation placement decision.
-- Word-count anchor page: pending future implementation placement decision.
-- If no comparable neighboring concept-page word-count pattern exists, future
-  implementation should use a 400 to 1000 rendered main-content word fallback
-  and record the rationale here.
+- Word-count bounds: 700 to 1500 rendered main-content words.
+- Word-count anchor page: concept-route validators such as evidence decision
+  record and evidence gap register use route-specific upper/lower bounds; this
+  agenda page is more compact than the gap register but larger than a simple
+  orientation page because the agenda table and distinction block are required.
 
 ## Spec Review
 
@@ -201,8 +239,21 @@ Public claim level: concept
 - Completed: `git diff --check` passed.
 - Completed: `./scripts/check-private-paths.sh` passed with
   `Private path guard passed.`
-- Site implementation validation is deferred because this phase intentionally
-  does not change site source.
+- Completed: `node --test site/scripts/review-meeting-agenda.test.mjs`
+  passed.
+- Completed: `npm test` from `site/` passed.
+- Completed: `npm run validate` from `site/` passed; generated-site validator
+  reported 67 HTML files, 2299 internal references, 66 sitemap URLs, 1 legacy
+  story safety target, and 13 legacy modernization evidence-map rows.
+- Completed: `npm run build` from `site/` passed.
+- Completed: desktop and mobile browser sanity through Playwright against
+  `http://localhost:4173/review-room/agenda/`.
+  - Desktop viewport: 1440 by 1100.
+  - Mobile viewport: 390 by 844.
+  - Console check: 0 errors, 0 warnings.
+  - Screenshots saved under `site/output/playwright/` for local review.
+- Browser sanity result: layout rendered at both sizes, required agenda table
+  and sections were reachable, and no obvious overlap was observed.
 
 ## PR Loop
 

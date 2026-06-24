@@ -803,7 +803,7 @@
   {
     "path": "/review-room/",
     "title": "Evidence Review Room",
-    "summary": "Concept-level meeting agenda for deciding what static dependency evidence is known, partial, or missing without claiming runtime proof.",
+    "summary": "Concept-level evidence-review room orientation for deciding what static dependency evidence is known, partial, or missing without claiming runtime proof.",
     "publicClaimLevel": "concept",
     "sourceType": "site-page",
     "hintCategory": "use-case",
@@ -815,6 +815,23 @@
     "nonClaims": [
       "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, or release approval proof.",
       "No raw source snippets, raw SQL, config values, secrets, facts.ndjson, index.sqlite, logs/analyzer.log, local paths, raw remotes, generated scan directories, AI impact analysis, LLM analysis, or complete product coverage claim."
+    ]
+  },
+  {
+    "path": "/review-room/agenda/",
+    "title": "Evidence Review Meeting Agenda",
+    "summary": "Concept-level meeting agenda for checking TraceMap proof paths, evidence tiers, coverage labels, limitations, gaps, owners, and decision-record handoff.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route is a human meeting agenda over existing public-safe static evidence surfaces, not meeting automation or a new proof source.",
+      "The agenda preserves review questions, proof paths, rule context, evidence tiers, coverage labels, limitations, gaps, owners, validation evidence category, and non-claims without upgrading missing evidence."
+    ],
+    "nonClaims": [
+      "No meeting automation, release approval, release safety, operational safety, runtime proof, production traffic proof, endpoint performance proof, absence-of-impact proof, complete coverage, AI analysis, LLM analysis, embeddings, vector databases, prompt classification, automated impact analysis, or replacement of human judgment or governance.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, credential-like values, connection strings, tokens, or keys are public agenda material."
     ]
   },
   {
