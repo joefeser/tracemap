@@ -435,6 +435,47 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_caps_duplicate_route_root_gap_supporting_facts()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var routeFacts = Enumerable.Range(0, 25)
+            .Select(index => RouteFact(
+                server,
+                "GET",
+                "/api/orders/{id}",
+                "/api/orders/{}",
+                $"Server.OrdersController{index:00}.Get(System.Int32)",
+                $"Controllers/OrdersController{index:00}.cs",
+                10 + index,
+                EvidenceTiers.Tier1Semantic))
+            .ToArray();
+
+        SqliteIndexWriter.Write(serverIndex, server, routeFacts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        var ambiguityGap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch" && gap.RuleId == "combined.route-flow.selector.v1");
+        var repeatedAmbiguityGap = Assert.Single(repeated.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch" && gap.RuleId == "combined.route-flow.selector.v1");
+        Assert.Equal(20, ambiguityGap.SupportingFactIds.Count);
+        Assert.Equal(ambiguityGap.GapId, repeatedAmbiguityGap.GapId);
+        Assert.Contains(ambiguityGap.Limitations, limitation => limitation.Contains("capped at 20 of 25", StringComparison.Ordinal));
+        Assert.DoesNotContain(ambiguityGap.SupportingFactIds, string.IsNullOrWhiteSpace);
+    }
+
+    [Fact]
     public async Task Route_flow_emits_missing_method_symbol_bridge_for_route_roots_without_source_local_handler_symbol()
     {
         using var temp = new TempDirectory();
