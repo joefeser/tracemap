@@ -109,8 +109,8 @@ not part of this spec-only branch.
 - [ ] 8. Thread candidates into route-flow.
   - [ ] Reuse the shared candidate builder for route-flow interface/override
         bridge rows.
-  - [ ] Define `interface-bridge` row kind schema compatible with existing
-        route-flow row processing.
+  - [ ] Define `interface-implementation-candidate` row kind schema compatible
+        with existing route-flow row processing.
   - [ ] Preserve existing route-flow row kinds such as `method`,
         `http-client`, and `sql-query`.
   - [ ] Preserve `combined.route-flow.interface-bridge.v1` presentation rows

@@ -420,7 +420,7 @@ Route-flow candidate rows should contain:
 Route-flow candidate bridge row kind:
 
 ```text
-rowKind: interface-bridge
+rowKind: interface-implementation-candidate
 ruleId: combined.route-flow.interface-bridge.v1
 abstractionSymbolId
 candidateSymbolId
@@ -435,8 +435,10 @@ limitations[]
 ```
 
 The implementation must preserve existing route-flow row kinds such as
-`method`, `http-client`, and `sql-query`. The `interface-bridge` row is an
-additive candidate presentation row over shared dispatch evidence.
+`method`, `http-client`, and `sql-query`. The
+`interface-implementation-candidate` row is an additive candidate presentation
+row over shared dispatch evidence and preserves the existing route-flow
+candidate vocabulary.
 
 ### Reverse
 
