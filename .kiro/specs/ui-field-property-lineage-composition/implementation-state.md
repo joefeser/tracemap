@@ -76,6 +76,10 @@ are patched and a final bounded re-review is recorded.
 
 Initial review runs:
 
+The `.tmp/kiro-reviews/...` artifact paths below are local-only review
+evidence from this workstation and are not committed. The durable in-repo record
+is the findings/disposition summary in this section.
+
 - Opus spec review:
   `.tmp/kiro-reviews/ui-field-property-lineage-composition/2026-06-24T030736-494Z-spec-claude-opus-4.8.clean.md`
   completed with full wrapper coverage. Findings patched in this branch:
