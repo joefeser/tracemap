@@ -1,7 +1,7 @@
 # Implementation State
 
-Status: complete
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Last verified: 2026-06-23
 Branch: codex/impl-site-evidence-handoff-template
 Worktree: isolated implementation worktree; local absolute path omitted from tracked spec
