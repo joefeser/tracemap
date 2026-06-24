@@ -124,7 +124,7 @@ const blamePattern = /\b(fault|to blame|negligent|careless)\b/i;
 const forbiddenPositioning =
   /\b(AI[- ]?powered|LLM[- ]?powered|machine learning impact analysis|artificial intelligence impact analysis|embedding-backed|prompt-classified|automated grading system|automated release approval|operational assurance|runtime-safe|release-safe|production-proven)\b/i;
 const affirmativeProofPattern =
-  /\b(?:TraceMap\s+)?(?:proves?|proven|proof of)\s+(?:runtime behavior|production traffic|production behavior|endpoint performance|outage cause|release safety|operational safety|release approval|absence of impact|complete coverage|complete product coverage)\b/gi;
+  /\b(?:TraceMap\s+)?(?:proves?|proven|proof\s+of)\b(?:(?![.!?]).){0,120}\b(?:runtime behavior|production traffic|production behavior|endpoint performance|endpoint\s+(?:stayed\s+)?fast|outage cause|release safety|release safe|operational safety|operationally safe|release approval|absence of impact|complete coverage|complete product coverage)\b/gi;
 const sanctionedBoundarySectionPattern =
   /<section\b(?=[^>]*\bid\s*=\s*["'](?:sample-public-safe-claims|unsafe-answer-examples|stop-conditions|non-claims)["'])[^>]*>[\s\S]*?<\/section>/gi;
 
@@ -383,7 +383,7 @@ function hasUnsanctionedProofClaim(value) {
   affirmativeProofPattern.lastIndex = 0;
   for (const match of value.matchAll(affirmativeProofPattern)) {
     const prefix = value.slice(Math.max(0, match.index - 40), match.index).toLowerCase();
-    if (!/(?:cannot|can't|does not|do not|not|no|without|neither)\s+$/.test(prefix)) {
+    if (!/(?:cannot|can't|does not|do not|not|no|without|neither)(?:\s+\w+){0,4}\s+$/.test(prefix)) {
       return true;
     }
   }
@@ -405,7 +405,7 @@ function extractElementsWithAttribute(html, marker) {
 }
 
 function extractHrefs(html) {
-  return [...html.matchAll(/<a\b[^>]*\shref\s*=\s*["']([^"']+)["']/gi)].map((match) => decodeHtmlEntities(match[1]));
+  return [...html.matchAll(/<[a-z][^>]*\s(?:href|src)\s*=\s*["']([^"']+)["'][^>]*>/gi)].map((match) => decodeHtmlEntities(match[1]));
 }
 
 function getAttribute(attributes, name) {
