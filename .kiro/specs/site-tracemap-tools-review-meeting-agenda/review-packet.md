@@ -28,8 +28,8 @@ Please inspect:
 Review focus:
 
 - Does the packet remain spec-only, with no site implementation work?
-- Are `Status: not-started`, `Readiness: spec-review` before review
-  completion, and `Public claim level: concept` present?
+- Are `Status: not-started`, `Readiness: ready-for-implementation` after
+  review completion, and `Public claim level: concept` present?
 - Does the spec require readiness to become `ready-for-implementation` only
   after Medium or higher findings are patched or explicitly dispositioned?
 - Does the spec define a future review meeting agenda that starts with the

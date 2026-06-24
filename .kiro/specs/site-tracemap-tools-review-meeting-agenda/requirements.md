@@ -88,7 +88,8 @@ Acceptance criteria:
 - The page states that gaps are captured as explicit follow-up items with
   owners rather than silently upgraded into conclusions.
 - The page states that decision-record handoff preserves the bounded question,
-  evidence state, gaps, owners, limitations, and non-claims.
+  evidence state, validation evidence category, gaps, owners, limitations, and
+  non-claims.
 - The page states that the meeting must stop or downgrade wording before
   runtime, release, safety, production, performance, absence-of-impact,
   complete-coverage, AI/LLM, or governance-replacement claims.

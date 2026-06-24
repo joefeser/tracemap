@@ -47,7 +47,7 @@ work or validation is complete.
   family, evidence tier, coverage label, limitation, gap, owner, decision
   record, and non-claim vocabulary.
 - [ ] Ensure the `decision record` agenda row carries limitations in its
-  evidence input and handoff output.
+  evidence input and handoff output, along with validation evidence category.
 - [ ] Ensure the `Evidence checks` section requires rule ID or rule family
   before evidence is repeated as meeting support.
 - [ ] Ensure the `Stop conditions` section enumerates the required stop or
