@@ -237,6 +237,23 @@
     ]
   },
   {
+    "path": "/limitations/reduced-coverage/",
+    "title": "Reduced Coverage Playbook",
+    "summary": "Concept-level playbook for labeling partial static evidence, preserving coverage labels, and routing owner follow-up.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "limitations",
+    "preferredProofPath": "/limitations/",
+    "limitations": [
+      "The playbook is guidance for labeling reduced coverage and owner handoff, not scanner output or reducer output.",
+      "Coverage labels, evidence tiers, limitations, proof links, and stop conditions must remain attached before wording is repeated."
+    ],
+    "nonClaims": [
+      "No absence-of-impact proof, clean-repo claim under reduced analysis, runtime behavior proof, production traffic proof, endpoint performance proof, outage cause proof, release approval, release safety, operational safety, or complete coverage proof.",
+      "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt-based classification, autonomous approval, replacement of human review, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values."
+    ]
+  },
+  {
     "path": "/demo/result/",
     "title": "Public Demo Result",
     "summary": "Current demo result guide with generated summary rows, rule IDs, evidence tiers, coverage labels, counts, and reasons.",
