@@ -454,9 +454,13 @@ Scope completed:
   stack-trace classification for generated explorer output and catalog text,
   while preserving safe explanatory rule-catalog prose such as SQL extraction
   limitations.
+- Patched ACK review findings by preserving catalog evidence-tier expressions,
+  using a static compiled SQL safety regex, and tightening YAML list-context
+  detection so scalar values ending in `:` are not mistaken for list keys.
 - Added focused tests for compatible catalog rendering, rules section status,
   artifact rows, catalog-unavailable suppression, and unsafe catalog text
-  redaction, including raw SQL and stack-trace safety cases.
+  redaction, including raw SQL and stack-trace safety cases, tier expressions,
+  and colon-suffixed scalar values.
 
 Scope intentionally deferred:
 
@@ -511,4 +515,4 @@ Kiro implementation review status:
 PR status:
 
 - PR URL: https://github.com/joefeser/tracemap/pull/308
-- PR-loop result: pending.
+- PR-loop result: ACK findings patched locally; rerun pending after push.
