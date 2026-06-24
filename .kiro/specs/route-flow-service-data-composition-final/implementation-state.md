@@ -207,6 +207,24 @@ but it is intentionally deferred because this branch is spec-only.
   staging. Unrelated untracked/staged spec folders observed in the original
   shared checkout were not staged or committed for this PR.
 
+## PR Loop Notes
+
+- PR #311 opened against `dev` from
+  `codex/spec-route-flow-service-data-composition-final`.
+- First ACK PR loop returned `actionable_findings` with five unresolved Gemini
+  review threads.
+- Patched review findings:
+  - changed the JSON `reportCoverage` example from placeholder wording to the
+    live `FullEvidenceAvailable` value;
+  - moved duplicate/ambiguous endpoint-root mapping out of the gap-code bullet
+    list;
+  - fixed a split Markdown code span for
+    `route-centered-endpoint-trace-completeness`;
+  - added `route-flow-endpoint-composition` to the relationship table and
+    non-reopen list so the Task 4 audit reference is intentional.
+- Post-patch validation: `git diff --check`, `./scripts/check-private-paths.sh`,
+  and the targeted safety scan passed.
+
 ## Implementation Guidance For Next PR
 
 Recommended next implementation flow:

@@ -52,8 +52,9 @@ already-shipped route-flow features.
    dependency/value-origin rows, unjoinable-context gaps, and downgrade/safety
    tests for those rows.
 5. This spec SHALL NOT reopen completed work from
-   `route-flow-service-data-composition-next`, `route-centered-endpoint-trace-
-   completeness`, `route-centered-static-flow-report`, or
+   `route-flow-service-data-composition-next`,
+   `route-centered-endpoint-trace-completeness`,
+   `route-centered-static-flow-report`, `route-flow-endpoint-composition`, or
    `route-flow-endpoint-stitching` except to add focused regression coverage or
    patch a live gap found during the audit.
 6. If live audit shows a listed task is already complete, the implementer SHALL
