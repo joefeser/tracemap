@@ -189,12 +189,12 @@ Focused validation added:
 
 ## PR Loop Outcome
 
-PR: pending creation.
+PR: https://github.com/joefeser/tracemap/pull/307
 
 Required final command after ready PR creation and the requested wait:
 
 ```bash
-agent-control pr-loop --repo joefeser/tracemap --pr <PR_NUMBER> --base dev --require-codex-review --quiet --json
+agent-control pr-loop --repo joefeser/tracemap --pr 307 --base dev --require-codex-review --quiet --json
 ```
 
 Authoritative PR-loop outcome must be recorded from the latest command output
@@ -219,7 +219,8 @@ after the implementation branch is pushed.
 
 ## Follow-ups
 
-- Create a ready PR to `dev`.
-- Wait 3 minutes, then run the required PR loop command.
+- Ready PR to `dev` created as #307.
+- Wait 3 minutes from the latest pushed head, then run the required PR loop
+  command.
 - Patch only if the PR-loop JSON grants authority; otherwise report the typed
   stop state and residual risk.
