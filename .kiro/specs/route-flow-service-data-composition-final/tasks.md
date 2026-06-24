@@ -42,23 +42,23 @@ section, not intended as one giant product PR. Do not check them off in this
 spec-only PR unless live audit during a future implementation proves they are
 already complete on `dev`.
 
-- [ ] 4. Audit live route-flow composition state. Requirements: 1.
+- [x] 4. Audit live route-flow composition state. Requirements: 1.
       Suggested boundary: PR 1 prerequisite.
-  - [ ] Inspect `CombinedRouteFlowReport`, route-flow tests, route-flow rule
+  - [x] Inspect `CombinedRouteFlowReport`, route-flow tests, route-flow rule
         catalog entries, selector/root handling, context groups, bridge states,
         gap constants, and the requested predecessor specs to confirm ownership
         boundaries.
-  - [ ] Map each required final-slice behavior to existing code or an unchecked
+  - [x] Map each required final-slice behavior to existing code or an unchecked
         implementation task.
-  - [ ] Confirm which gap codes in the design taxonomy already exist under
+  - [x] Confirm which gap codes in the design taxonomy already exist under
         `combined.route-flow.gap.v1` in `rules/rule-catalog.yml` and which
         require a rule-catalog limitation update before first use.
-  - [ ] Verify emitted top-level JSON field names against the live
+  - [x] Verify emitted top-level JSON field names against the live
         `RouteFlowReport` serializer before treating the field list in this
         spec as confirmed.
-  - [ ] Record the selected implementation scope in this spec's
+  - [x] Record the selected implementation scope in this spec's
         `implementation-state.md`.
-  - [ ] Confirm no new command, report type, JSON version, traversal engine, or
+  - [x] Confirm no new command, report type, JSON version, traversal engine, or
         rule namespace is needed.
 
 - [ ] 5. Complete endpoint/root method to service call stitching. Requirements:
@@ -72,6 +72,8 @@ already complete on `dev`.
         call-like evidence cannot stitch from the selected root.
   - [ ] Emit reduced/unknown gaps when coverage, schema, extractor, identity,
         or commit evidence prevents a clean conclusion.
+  - [x] Add focused duplicate-root coverage proving ambiguous normalized route
+        roots emit a deterministic selector gap and downgrade the report.
   - [ ] Add tests for direct service calls, no direct call under full coverage,
         no direct call under reduced coverage, duplicate roots, cycles, and
         deterministic ordering.
