@@ -172,6 +172,9 @@ Implementation validation before PR:
 - `git diff --check`: passed on 2026-06-23.
 - `./scripts/check-private-paths.sh`: passed on 2026-06-23 with private path
   guard success.
+- Review-fix validation after PR-loop actionable findings: focused test,
+  `npm test`, `npm run validate`, `npm run build`, `git diff --check`, and
+  `./scripts/check-private-paths.sh` passed on 2026-06-23.
 
 Focused validation added:
 
@@ -188,9 +191,21 @@ Focused validation added:
 
 ## PR Loop
 
-Status: pending. The ready PR must be created first, then the required
-`agent-control pr-loop --repo joefeser/tracemap --pr <PR_NUMBER> --base dev
---require-codex-review --quiet --json` command must be run and followed.
+Initial PR-loop command for PR 306 returned `actionable_findings` with
+`UNRESOLVED_REVIEW_THREADS`. Required reviewer batching first held patching
+while Codex was still unsettled. After Codex returned, the loop reported the
+required batch terminal for Codex and Qodo with `patchAuthorized: true`.
+
+Patched combined reviewer findings:
+
+- Decoded/boundary-stripped HTML is now scanned for forbidden claim and raw
+  material patterns, so encoded attributes are covered.
+- Attribute helpers now distinguish real `id`/`href` attributes from
+  `data-id`/`data-href`.
+- Tagged-element extraction now tracks nested tags of the same name for
+  boundary-region extraction.
+
+Final PR-loop result: pending after review-fix push.
 
 ## Oddities
 

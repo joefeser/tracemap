@@ -283,7 +283,8 @@ async function validatePage({ pagePath, errors }) {
   const html = await readFile(pagePath, "utf8");
   const decodedHtml = decodeHtmlEntities(html);
   const pageText = normalizeRenderedText(html);
-  const scopedText = normalizeRenderedText(stripAllowedBoundaryRegions(stripMatrix(html)));
+  const scopedHtml = stripAllowedBoundaryRegions(stripMatrix(decodedHtml));
+  const scopedText = normalizeRenderedText(scopedHtml);
   const wordCount = countWords(normalizeRenderedText(stripMatrix(html)));
 
   validateVisibleText(pageText, errors);
@@ -292,7 +293,7 @@ async function validatePage({ pagePath, errors }) {
   validateMatrix(html, errors);
   validateAdjacentLinks(html, errors);
   validateBoundaryRegions(html, errors);
-  validateForbiddenMaterial({ decodedHtml, html, scopedText, errors });
+  validateForbiddenMaterial({ decodedHtml, html, scopedHtml, scopedText, errors });
   validateSafeExamples(pageText, errors);
   validateWordCount(wordCount, errors);
 }
@@ -482,7 +483,7 @@ function validateBoundaryRegions(html, errors) {
   }
 }
 
-function validateForbiddenMaterial({ decodedHtml, html, scopedText, errors }) {
+function validateForbiddenMaterial({ decodedHtml, html, scopedHtml, scopedText, errors }) {
   for (const pattern of hardPrivatePatterns) {
     if (pattern.test(decodedHtml)) {
       errors.push(withEvidence("Reduced coverage playbook contains hard private material in rendered HTML or attributes.", pageArtifact));
@@ -490,13 +491,13 @@ function validateForbiddenMaterial({ decodedHtml, html, scopedText, errors }) {
   }
 
   for (const pattern of forbiddenClaimPatterns) {
-    if (pattern.test(scopedText)) {
+    if (pattern.test(scopedText) || pattern.test(scopedHtml)) {
       errors.push(withEvidence("Reduced coverage playbook contains forbidden claim wording outside bounded contexts.", pageArtifact));
     }
   }
 
   for (const pattern of rawMaterialPatterns) {
-    if (pattern.test(scopedText)) {
+    if (pattern.test(scopedText) || pattern.test(scopedHtml)) {
       errors.push(withEvidence("Reduced coverage playbook contains forbidden raw/private material outside bounded contexts.", pageArtifact));
     }
   }
@@ -560,21 +561,20 @@ function stripMatrix(html) {
 }
 
 function stripAllowedBoundaryRegions(html) {
-  return html.replace(
-    /<section\b(?=[^>]*\bdata-reduced-coverage-boundary=["'](?:rejected-patterns|non-claims|stop-conditions)["'])[^>]*>[\s\S]*?<\/section>/gi,
-    " "
-  );
+  return extractTaggedElements(html, "section", "data-reduced-coverage-boundary")
+    .filter((section) => boundaryNames.has(getAttribute(section.attributes, "data-reduced-coverage-boundary")))
+    .reduce((result, section) => result.replace(section.html, " "), html);
 }
 
 function extractIds(html) {
-  return new Set([...html.matchAll(/\bid=["']([^"']+)["']/gi)].map((match) => decodeHtmlEntities(match[1].trim())));
+  return new Set([...html.matchAll(actualAttributePattern("id", "g"))].map((match) => decodeHtmlEntities(match[1].trim())));
 }
 
 function findDuplicateIds(html) {
   const seen = new Set();
   const duplicates = new Set();
 
-  for (const match of html.matchAll(/\bid=["']([^"']+)["']/gi)) {
+  for (const match of html.matchAll(actualAttributePattern("id", "g"))) {
     const id = decodeHtmlEntities(match[1].trim());
     if (seen.has(id)) {
       duplicates.add(id);
@@ -587,14 +587,39 @@ function findDuplicateIds(html) {
 }
 
 function extractTaggedElements(html, tagName, attributeName) {
-  const pattern = new RegExp(`<${tagName}\\b([^>]*)>[\\s\\S]*?<\\/${tagName}>`, "gi");
+  const pattern = new RegExp(`<\\/?${tagName}\\b[^>]*>`, "gi");
   const elements = [];
   let match;
 
   while ((match = pattern.exec(html))) {
-    if (new RegExp(`\\b${escapeRegExp(attributeName)}=`, "i").test(match[1])) {
-      elements.push({ attributes: match[1], html: match[0] });
+    if (match[0].startsWith(`</`)) {
+      continue;
     }
+
+    const attributes = match[0].replace(new RegExp(`^<${tagName}\\b|>$`, "gi"), "");
+    const startIndex = match.index;
+    let depth = 1;
+    let endIndex = pattern.lastIndex;
+    let innerMatch;
+
+    while ((innerMatch = pattern.exec(html))) {
+      if (innerMatch[0].startsWith(`</`)) {
+        depth -= 1;
+      } else {
+        depth += 1;
+      }
+
+      if (depth === 0) {
+        endIndex = pattern.lastIndex;
+        break;
+      }
+    }
+
+    if (hasAttribute(attributes, attributeName)) {
+      elements.push({ attributes, html: html.slice(startIndex, endIndex) });
+    }
+
+    pattern.lastIndex = endIndex;
   }
 
   return elements;
@@ -612,7 +637,7 @@ function extractFieldCell(rowHtml, field) {
 
 function extractElementById(html, tagName, id) {
   const escaped = escapeRegExp(id);
-  return html.match(new RegExp(`<${tagName}\\b(?=[^>]*\\bid=["']${escaped}["'])[^>]*>[\\s\\S]*?<\\/${tagName}>`, "i"))?.[0] ?? "";
+  return html.match(new RegExp(`<${tagName}\\b(?=[^>]*(?:^|\\s)id=["']${escaped}["'])[^>]*>[\\s\\S]*?<\\/${tagName}>`, "i"))?.[0] ?? "";
 }
 
 function extractAnchors(html) {
@@ -623,12 +648,20 @@ function extractAnchors(html) {
 }
 
 function getAttribute(attributes, name) {
-  const match = String(attributes).match(new RegExp(`\\b${escapeRegExp(name)}=["']([^"']+)["']`, "i"));
+  const match = String(attributes).match(actualAttributePattern(name));
   return match ? decodeHtmlEntities(match[1].trim()) : null;
 }
 
 function hasHref(html, href) {
-  return new RegExp(`<a\\b[^>]*\\bhref=["']${escapeRegExp(href)}["']`, "i").test(html);
+  return new RegExp(`<a\\b(?=[^>]*(?:^|\\s)href=["']${escapeRegExp(href)}["'])[^>]*>`, "i").test(html);
+}
+
+function hasAttribute(attributes, name) {
+  return actualAttributePattern(name).test(String(attributes));
+}
+
+function actualAttributePattern(name, flags = "") {
+  return new RegExp(`(?:^|\\s)${escapeRegExp(name)}\\s*=\\s*["']([^"']+)["']`, `i${flags}`);
 }
 
 function countWords(text) {

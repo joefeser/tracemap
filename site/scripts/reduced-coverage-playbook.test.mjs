@@ -95,6 +95,21 @@ test("validateReducedCoveragePlaybookDist permits bounded rejected and non-claim
   assert.deepEqual(errors, []);
 });
 
+test("validateReducedCoveragePlaybookDist permits nested bounded rejected wording", async (t) => {
+  const source = await reducedCoveragePlaybookPage();
+  const root = await createManagedFixture(t, {
+    pageHtml: source.replace(
+      "</main>",
+      '<section data-reduced-coverage-boundary="rejected-patterns"><section><p>Rejected pattern: TraceMap proves runtime behavior and publishes raw facts.</p></section></section></main>'
+    )
+  });
+  const errors = [];
+
+  await validateReducedCoveragePlaybookDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateReducedCoveragePlaybookDist rejects raw material outside bounded contexts", async (t) => {
   const source = await reducedCoveragePlaybookPage();
   const root = await createManagedFixture(t, {
@@ -104,6 +119,19 @@ test("validateReducedCoveragePlaybookDist rejects raw material outside bounded c
 
   await validateReducedCoveragePlaybookDist({ dist: join(root, "dist"), errors });
 
+  assert.match(errors.join("\n"), /forbidden raw\/private material outside bounded contexts/);
+});
+
+test("validateReducedCoveragePlaybookDist rejects encoded forbidden attributes", async (t) => {
+  const source = await reducedCoveragePlaybookPage();
+  const root = await createManagedFixture(t, {
+    pageHtml: source.replace("</main>", '<img alt="TraceMap proves runtime behavior and raw facts are public"></main>')
+  });
+  const errors = [];
+
+  await validateReducedCoveragePlaybookDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden claim wording outside bounded contexts/);
   assert.match(errors.join("\n"), /forbidden raw\/private material outside bounded contexts/);
 });
 
@@ -117,6 +145,30 @@ test("validateReducedCoveragePlaybookDist rejects hard private material in attri
   await validateReducedCoveragePlaybookDist({ dist: join(root, "dist"), errors });
 
   assert.match(errors.join("\n"), /hard private material/);
+});
+
+test("validateReducedCoveragePlaybookDist does not accept data-href as a real link", async (t) => {
+  const source = await reducedCoveragePlaybookPage();
+  const root = await createManagedFixture(t, {
+    pageHtml: source.replace('href="/static-vs-runtime/"', 'data-href="/static-vs-runtime/"')
+  });
+  const errors = [];
+
+  await validateReducedCoveragePlaybookDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /adjacent surface link is missing: \/static-vs-runtime\//);
+});
+
+test("validateReducedCoveragePlaybookDist does not accept data-id as a real section id", async (t) => {
+  const source = await reducedCoveragePlaybookPage();
+  const root = await createManagedFixture(t, {
+    pageHtml: source.replace('id="safe-conclusions"', 'data-id="safe-conclusions"')
+  });
+  const errors = [];
+
+  await validateReducedCoveragePlaybookDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /missing required section: safe conclusions/);
 });
 
 test("validateReducedCoveragePlaybookDist reports missing adjacent route distinctions", async (t) => {
