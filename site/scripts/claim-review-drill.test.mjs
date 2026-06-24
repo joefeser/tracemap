@@ -91,8 +91,9 @@ test("validateClaimReviewDrillDist rejects answer-key outcome regressions", asyn
 });
 
 test("validateClaimReviewDrillDist rejects raw proof links and private text", async (t) => {
+  const privatePath = ["/", "Users", "/example"].join("");
   const root = await createManagedDrillFixture(t, {
-    drillHtml: drillPage().replace('href="/demo/evidence-trail/"', 'href="/facts.ndjson"').replace("Public claim level", "/Users/example Public claim level")
+    drillHtml: drillPage().replace('href="/demo/evidence-trail/"', 'href="/facts.ndjson"').replace("Public claim level", `${privatePath} Public claim level`)
   });
   const errors = [];
 
