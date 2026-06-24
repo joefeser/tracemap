@@ -653,42 +653,71 @@ function stripElementsWithAttribute(html, attribute, value) {
 }
 
 function findElementEnd(html, start, tagName) {
-  const tagPattern = new RegExp(`</?${escapeForPattern(tagName)}\\b[^>]*>`, "gi");
-  tagPattern.lastIndex = start;
+  const normalizedTagName = tagName.toLowerCase();
   let depth = 0;
-  let match;
   let firstTagLength = 0;
+  let cursor = start;
 
-  while ((match = tagPattern.exec(html))) {
-    if (isInsideHtmlComment(html, match.index ?? 0)) {
+  while (cursor < html.length) {
+    const tagStart = html.indexOf("<", cursor);
+    if (tagStart === -1) {
+      break;
+    }
+
+    if (html.startsWith("<!--", tagStart)) {
+      const commentEnd = html.indexOf("-->", tagStart + 4);
+      cursor = commentEnd === -1 ? html.length : commentEnd + 3;
+      continue;
+    }
+
+    const tagEnd = html.indexOf(">", tagStart + 1);
+    if (tagEnd === -1) {
+      break;
+    }
+
+    const token = html.slice(tagStart + 1, tagEnd).trim();
+    const parsed = parseTagToken(token);
+    if (!parsed || parsed.name !== normalizedTagName) {
+      cursor = tagEnd + 1;
       continue;
     }
 
     if (firstTagLength === 0) {
-      firstTagLength = match[0].length;
+      firstTagLength = tagEnd + 1 - tagStart;
     }
 
-    if (match[0].startsWith("</")) {
+    if (parsed.closing) {
       depth -= 1;
       if (depth === 0) {
-        return tagPattern.lastIndex;
+        return tagEnd + 1;
       }
-    } else if (!match[0].endsWith("/>")) {
+    } else if (!parsed.selfClosing) {
       depth += 1;
     }
+
+    cursor = tagEnd + 1;
   }
 
   return start + firstTagLength;
 }
 
-function isInsideHtmlComment(html, index) {
-  const lastCommentOpen = html.lastIndexOf("<!--", index);
-  if (lastCommentOpen === -1) {
-    return false;
+function parseTagToken(token) {
+  if (token === "" || token.startsWith("!") || token.startsWith("?")) {
+    return null;
   }
 
-  const lastCommentClose = html.lastIndexOf("-->", index);
-  return lastCommentClose < lastCommentOpen;
+  const closing = token.startsWith("/");
+  const body = closing ? token.slice(1).trimStart() : token;
+  const name = body.match(/^[a-z][a-z0-9-]*/i)?.[0]?.toLowerCase();
+  if (!name) {
+    return null;
+  }
+
+  return {
+    closing,
+    name,
+    selfClosing: /\/\s*$/.test(body)
+  };
 }
 
 function extractTaggedElements(html, tagName, attributeName) {

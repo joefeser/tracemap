@@ -286,9 +286,15 @@ Public claim level: concept
   - Removed the unconditional redundant implementation-state candidate path
     for real `site/dist` validation while retaining a conditional root-`dist`
     fixture fallback.
-  - Added HTML-comment awareness to the section-end scanner and a regression
-    test for commented closing tags inside bounded sections.
-- Pending: push post-review fix commit and rerun the final PR loop.
+  - Replaced the section-end scanner's regex tag loop with a small
+    comment-aware tag tokenizer and added a regression test for commented
+    closing tags inside bounded sections.
+- Completed: pushed first post-review fix commit; PR-loop still reported one
+  unresolved thread on the scanner implementation.
+- Completed: patched the scanner again with the tokenizer approach and reran
+  `npm test`, `npm run validate`, `npm run build`, `git diff --check`, and
+  `./scripts/check-private-paths.sh`.
+- Pending: push second post-review fix commit and rerun the final PR loop.
 - Repo-local lane config is expected at `.agent-control/lanes/pr-review-loop.yaml`.
 - Codex and Qodo are required as a batch by the repo-local lane policy. Do not
   patch partial findings until ACK grants authority through returned reviewers,
