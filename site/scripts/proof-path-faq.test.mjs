@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { createDiscoveryOutputs } from "./discovery.mjs";
+import { claimReviewDrillRoute } from "./claim-review-drill.mjs";
 import {
   proofPathFaqRequiredLinks,
   proofPathFaqRoute,
@@ -204,7 +205,7 @@ async function createManagedProofPathFaqFixture(t, options = {}) {
 }
 
 async function createProofPathFaqFixture({
-  discoveryRoutes = [proofPathFaqRoute, ...proofPathFaqRequiredLinks],
+  discoveryRoutes = [proofPathFaqRoute, ...proofPathFaqRequiredLinks, claimReviewDrillRoute],
   faqHtml,
   includeInboundLinks = true,
   sitemapRoutes = [proofPathFaqRoute]
