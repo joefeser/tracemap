@@ -1,7 +1,7 @@
 # Site TraceMap Tools Review Meeting Agenda Implementation State
 
-Status: in-progress
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: PR review loop in progress
 Public claim level: concept
 
 ## Branch
@@ -11,7 +11,7 @@ Public claim level: concept
 - Base: `origin/dev` at `5a6641961c5285210ae6fdbb3902d32fc517074d`
 - Worktree: isolated implementation worktree; absolute local path intentionally omitted
   from the checked-in state file for the private-path guard.
-- Pull request: pending.
+- Pull request: `#319`.
 - Latest implementation commit: pending until commit; final report records the exact SHA
   to avoid self-referential amend churn in this checked-in state file.
 
@@ -258,12 +258,16 @@ Public claim level: concept
   - Completed: `node --test site/scripts/review-meeting-agenda.test.mjs`
     passed with 12 tests after Qodo/Gemini-thread fixes.
   - Completed: `node --test scripts/validate.test.mjs` from `site/` passed.
-  - Completed: `npm test` from `site/` passed with 489 tests.
+  - Completed: `npm test` from `site/` passed with 489 tests after the
+    scanner fix and 490 tests after the metadata-safety regression test.
   - Completed: sequential `npm run validate && npm run build` from `site/`
     passed.
   - Completed: `git diff --check` passed.
   - Completed: `./scripts/check-private-paths.sh` passed with
     `Private path guard passed.`
+  - Completed: repeated `npm test`, `npm run validate`, `npm run build`,
+    `git diff --check`, and `./scripts/check-private-paths.sh` after the
+    Qodo metadata-safety scan fix.
 - Validation oddity: an intermediate parallel `npm run validate` and
   `npm run build` attempt failed because both commands rewrote `site/dist` at
   the same time. The commands passed when rerun sequentially.
@@ -294,7 +298,20 @@ Public claim level: concept
 - Completed: patched the scanner again with the tokenizer approach and reran
   `npm test`, `npm run validate`, `npm run build`, `git diff --check`, and
   `./scripts/check-private-paths.sh`.
-- Pending: push second post-review fix commit and rerun the final PR loop.
+- Completed: resolved the now-obsolete scanner review thread after the code
+  and regression test replaced the implementation it flagged.
+- Completed: PR-loop then reported one actionable Qodo bot finding for
+  metadata public-safety scanning. Patch authority remained granted because
+  the required-review batch was terminal and all required reviewers had
+  returned.
+- Patched Qodo finding:
+  - Safety scans now include rendered text plus public metadata and selected
+    public-facing attribute values before applying forbidden positive claim,
+    unsupported-certainty, and blame-language checks.
+  - Added a regression test that fails when the page metadata claims runtime
+    proof or release approval.
+- Completed: pushed the metadata-safety scan fix commit.
+- Pending: push this bookkeeping update and rerun the final PR loop.
 - Repo-local lane config is expected at `.agent-control/lanes/pr-review-loop.yaml`.
 - Codex and Qodo are required as a batch by the repo-local lane policy. Do not
   patch partial findings until ACK grants authority through returned reviewers,
