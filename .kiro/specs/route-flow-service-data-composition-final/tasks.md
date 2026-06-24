@@ -46,8 +46,8 @@ already complete on `dev`.
       Suggested boundary: PR 1 prerequisite.
   - [ ] Inspect `CombinedRouteFlowReport`, route-flow tests, route-flow rule
         catalog entries, selector/root handling, context groups, bridge states,
-        gap constants, and the `route-flow-endpoint-composition` spec to
-        confirm ownership boundaries.
+        gap constants, and the requested predecessor specs to confirm ownership
+        boundaries.
   - [ ] Map each required final-slice behavior to existing code or an unchecked
         implementation task.
   - [ ] Confirm which gap codes in the design taxonomy already exist under
