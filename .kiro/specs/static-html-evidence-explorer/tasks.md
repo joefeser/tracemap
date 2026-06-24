@@ -123,7 +123,7 @@ do not treat them as unfinished PR #231 tasks.
     effect.
   - [x] Render observed evidence rule rows and catalog-unavailable gaps when a
     compatible full rule catalog artifact is not available.
-  - [ ] Render compatible full rule catalog artifact rows when a future rule
+  - [x] Render compatible full rule catalog artifact rows when a future rule
     catalog reader is added.
   - [x] Render evidence rows with rule ID, evidence tier, support ID, artifact
     ID, safe file span, snippet hash, extractor version, coverage labels, and
@@ -198,6 +198,8 @@ do not treat them as unfinished PR #231 tasks.
   evidence rows. Public/demo claim-level output is not complete until the
   safety validation dependency in PR 4 lands, unless PR 3 also includes the
   relevant minimal safety gate.
+  - Completed sub-slice: compatible rule catalog artifact rows for the rules
+    section. Surface, path, and reducer result readers remain future PR 3 work.
 - [ ] PR 4: Safety-profile validation, hidden/local redaction labeling, and
   public/demo fixture checks.
 - [ ] PR 5: Determinism, accessibility, progressive enhancement, docs, and
