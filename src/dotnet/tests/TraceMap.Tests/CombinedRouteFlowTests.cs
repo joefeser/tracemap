@@ -469,7 +469,9 @@ public sealed class CombinedRouteFlowTests
 
         var ambiguityGap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch" && gap.RuleId == "combined.route-flow.selector.v1");
         var repeatedAmbiguityGap = Assert.Single(repeated.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch" && gap.RuleId == "combined.route-flow.selector.v1");
+        var expectedSupportingFactIds = await CombinedRouteFactIdsInCanonicalOrderAsync(combinedPath, 20);
         Assert.Equal(20, ambiguityGap.SupportingFactIds.Count);
+        Assert.Equal(expectedSupportingFactIds.OrderBy(value => value, StringComparer.Ordinal), ambiguityGap.SupportingFactIds);
         Assert.Equal(ambiguityGap.GapId, repeatedAmbiguityGap.GapId);
         Assert.Contains(ambiguityGap.Limitations, limitation => limitation.Contains("capped at 20 of 25", StringComparison.Ordinal));
         Assert.DoesNotContain(ambiguityGap.SupportingFactIds, string.IsNullOrWhiteSpace);
@@ -948,6 +950,99 @@ public sealed class CombinedRouteFlowTests
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "ControllerToServiceBridgeMissing");
         Assert.NotEqual(RouteFlowClassifications.NoRouteFlowEvidence, result.Report.Summary.Classification);
+    }
+
+    [Fact]
+    public async Task Route_flow_marks_service_call_cycles_as_traversal_bounds()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.OrderService.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14),
+            CallFact(server, service, controller, "Services/OrderService.cs", 21),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        var traversalGap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "TraversalBounds");
+        var repeatedTraversalGap = Assert.Single(repeated.Report.Gaps, gap => gap.GapKind == "TraversalBounds");
+        Assert.Equal("combined.route-flow.gap.v1", traversalGap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, traversalGap.EvidenceTier);
+        Assert.Equal("ReducedCoverage", traversalGap.Coverage);
+        Assert.Equal("Services/OrderService.cs", traversalGap.FilePath);
+        Assert.Equal(21, traversalGap.StartLine);
+        Assert.Equal(server.CommitSha, traversalGap.CommitSha);
+        Assert.Equal("csharp", traversalGap.ExtractorName);
+        Assert.Equal(server.ScannerVersion, traversalGap.ExtractorVersion);
+        Assert.True(traversalGap.SupportingFactIds.Count <= 20);
+        Assert.Contains("cycle", traversalGap.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(traversalGap.Limitations, limitation => limitation.Contains("cycle detection", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(traversalGap.GapId, repeatedTraversalGap.GapId);
+        Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root");
+        Assert.Empty(result.Report.FlowRows);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "MissingCallEdge");
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "DataSurfaceAttachmentMissing");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
+        Assert.Equal("ReducedCoverage", result.Report.ReportCoverage);
+        Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+    }
+
+    [Fact]
+    public async Task Route_flow_does_not_emit_cycle_gap_when_candidate_expansion_continues()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.IOrderService.Get(System.Int32)";
+        var implementation = "Server.OrderService.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14, targetSymbolKind: "InterfaceMember"),
+            CallFact(server, service, controller, "Services/IOrderService.cs", 15, targetSymbolKind: "Method"),
+            SymbolRelationshipFact(server, implementation, service, "Services/OrderService.cs", 18),
+            CallFact(server, implementation, repository, "Services/OrderService.cs", 21),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "TraversalBounds");
+        Assert.Contains(result.Report.FlowRows, row => row.RowKind == "interface-implementation-candidate"
+            && row.SourceSymbol.Contains(service, StringComparison.Ordinal)
+            && row.TargetSymbol?.Contains(implementation, StringComparison.Ordinal) == true);
+        Assert.Contains(result.Report.FlowRows, row => row.EdgeKind == "direct-call"
+            && row.SourceSymbol.Contains(implementation, StringComparison.Ordinal)
+            && row.TargetSymbol?.Contains(repository, StringComparison.Ordinal) == true);
+        Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query");
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
     }
 
     [Fact]
@@ -1697,6 +1792,37 @@ public sealed class CombinedRouteFlowTests
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
         return Convert.ToString(await command.ExecuteScalarAsync()) ?? string.Empty;
+    }
+
+    private static async Task<string[]> CombinedRouteFactIdsInCanonicalOrderAsync(string path, int limit)
+    {
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Mode = SqliteOpenMode.ReadOnly
+        }.ToString();
+        await using var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            select combined_fact_id
+            from combined_facts
+            where fact_type = $fact_type
+            order by file_path, start_line, combined_fact_id
+            limit $limit;
+            """;
+        command.Parameters.AddWithValue("$fact_type", FactTypes.HttpRouteBinding);
+        command.Parameters.AddWithValue("$limit", limit);
+
+        var values = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            values.Add(reader.GetString(0));
+        }
+
+        return values.ToArray();
     }
 
     private static async Task<long> CountRowsAsync(SqliteConnection connection, string tableName)
