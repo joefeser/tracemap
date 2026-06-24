@@ -216,6 +216,10 @@
           descriptor limitations now flow through path inventory nodes and
           generated vault output omits raw formula/filter/query/config-like
           values while preserving rule IDs, tiers, spans, and limitation codes.
+    - [x] Completed in slice 10 for portfolio inventory output: projected
+          `legacy-data` model surfaces now expose `surfaceSubtype = data-model`
+          and safe descriptor metadata as closed labels, IDs, or hashes while
+          hashing unsafe limitation strings and stable model keys.
 
 - [ ] 8. Integrate with combined reports, paths, reverse, impact, release-review, and portfolio. Requirements: 5, 6, 8.
   - [ ] Partially implemented across reporting-integration and slice 8. This
@@ -245,6 +249,10 @@
         safe defaults or availability gaps for unrecognized future model
         metadata, not exceptions.
   - [ ] Keep "impact" wording static and evidence-backed.
+  - [x] Completed in slice 10: portfolio before/after surface comparison uses
+        safe legacy-data model identity fields so limitation changes remain
+        `ChangedSurfaceEvidence` instead of noisy add/remove rows, and reduced
+        legacy-data coverage stays review-tier.
 
 - [ ] 9. Integrate with evidence graph and vault export. Requirements: 6, 7, 8.
   - [ ] Partially implemented across the surface-subtype and graph/vault
