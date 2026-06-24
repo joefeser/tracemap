@@ -321,8 +321,9 @@ async function validatePage({ pagePath, routeContext, errors }) {
   validateAdjacentLinks(html, routeContext, errors);
   validateBoundaryRegions(html, errors);
   validateForbiddenMaterial({ decodedHtml, scopedHtml, scopedText, errors });
-  validateUnsupportedCertainty(scopedText, errors);
-  validateBlame(scopedText, errors);
+  const safetyTextValues = publicSafetyScanValues(scopedHtml, scopedText);
+  validateUnsupportedCertainty(safetyTextValues, errors);
+  validateBlame(safetyTextValues, errors);
   validateWordCount(wordCount, errors);
 }
 
@@ -498,6 +499,7 @@ function validateBoundaryRegions(html, errors) {
 function validateForbiddenMaterial({ decodedHtml, scopedHtml, scopedText, errors }) {
   const hardPrivateValues = privateMaterialScanValues(decodedHtml);
   const rawMaterialValues = privateMaterialScanValues(scopedHtml);
+  const safetyTextValues = publicSafetyScanValues(scopedHtml, scopedText);
 
   for (const pattern of hardPrivatePatterns) {
     if (hardPrivateValues.some((value) => pattern.test(value))) {
@@ -506,7 +508,7 @@ function validateForbiddenMaterial({ decodedHtml, scopedHtml, scopedText, errors
   }
 
   for (const pattern of forbiddenPositiveClaimPatterns) {
-    if (pattern.test(scopedText)) {
+    if (safetyTextValues.some((value) => pattern.test(value))) {
       errors.push(withEvidence(`Review meeting agenda contains forbidden positive claim outside bounded contexts: ${pattern}`, pageArtifact));
     }
   }
@@ -518,17 +520,17 @@ function validateForbiddenMaterial({ decodedHtml, scopedHtml, scopedText, errors
   }
 }
 
-function validateUnsupportedCertainty(scopedText, errors) {
+function validateUnsupportedCertainty(safetyTextValues, errors) {
   for (const pattern of unsupportedCertaintyPatterns) {
-    if (pattern.test(scopedText)) {
+    if (safetyTextValues.some((value) => pattern.test(value))) {
       errors.push(withEvidence(`Review meeting agenda contains unsupported certainty language outside bounded contexts: ${pattern}`, pageArtifact));
     }
   }
 }
 
-function validateBlame(scopedText, errors) {
+function validateBlame(safetyTextValues, errors) {
   for (const pattern of blamePatterns) {
-    if (pattern.test(scopedText)) {
+    if (safetyTextValues.some((value) => pattern.test(value))) {
       errors.push(withEvidence(`Review meeting agenda contains blame language: ${pattern}`, pageArtifact));
     }
   }
@@ -628,6 +630,21 @@ function privateMaterialScanValues(value) {
     normalizeRenderedText(decoded),
     decoded.replace(/<[^>]+>/g, "")
   ];
+}
+
+function publicSafetyScanValues(scopedHtml, scopedText) {
+  const values = [scopedText];
+  for (const match of scopedHtml.matchAll(/\b(?:content|title|aria-label|alt)=["']([^"']*)["']/gi)) {
+    values.push(normalizeRenderedText(decodeHtmlEntities(match[1])));
+  }
+  for (const match of scopedHtml.matchAll(/<title\b[^>]*>([\s\S]*?)<\/title>/gi)) {
+    values.push(normalizeRenderedText(decodeHtmlEntities(match[1])));
+  }
+  return uniqueStrings(values.filter((value) => value.length > 0));
+}
+
+function uniqueStrings(values) {
+  return [...new Set(values)];
 }
 
 function stripAllowedBoundaryRegions(html) {
