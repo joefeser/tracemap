@@ -254,13 +254,41 @@ Public claim level: concept
   - Screenshots saved under `site/output/playwright/` for local review.
 - Browser sanity result: layout rendered at both sizes, required agenda table
   and sections were reachable, and no obvious overlap was observed.
+- Post-review fix validation:
+  - Completed: `node --test site/scripts/review-meeting-agenda.test.mjs`
+    passed with 12 tests after Qodo/Gemini-thread fixes.
+  - Completed: `node --test scripts/validate.test.mjs` from `site/` passed.
+  - Completed: `npm test` from `site/` passed with 489 tests.
+  - Completed: sequential `npm run validate && npm run build` from `site/`
+    passed.
+  - Completed: `git diff --check` passed.
+  - Completed: `./scripts/check-private-paths.sh` passed with
+    `Private path guard passed.`
+- Validation oddity: an intermediate parallel `npm run validate` and
+  `npm run build` attempt failed because both commands rewrote `site/dist` at
+  the same time. The commands passed when rerun sequentially.
 
 ## PR Loop
 
-- Pending: create a ready PR targeting `dev`.
-- Pending: wait 3 minutes after PR creation.
-- Pending: run `agent-control pr-loop --repo joefeser/tracemap --pr
-  <PR_NUMBER> --base dev --require-codex-review --quiet --json`.
+- Pull request: `#319`.
+- Completed: created a ready PR targeting `dev` and waited 3 minutes before
+  the first PR-loop run.
+- Completed initial run: `agent-control pr-loop --repo joefeser/tracemap --pr
+  319 --base dev --require-codex-review --quiet --json`.
+- Initial stop: `actionable_findings` with `UNRESOLVED_REVIEW_THREADS`.
+- Required-review batch initially held Qodo/Gemini thread patching while Codex
+  was `request_posted`; no partial patch was made.
+- Completed follow-up PR-loop polling after Codex returned.
+- Patch authority: `requiredReviewBatch.patchAuthorized: true`,
+  `reviewQuorum.waitPosture: all_returned`, and `nextAction:
+  patch_actionable_findings`.
+- Patched combined findings:
+  - Removed the unconditional redundant implementation-state candidate path
+    for real `site/dist` validation while retaining a conditional root-`dist`
+    fixture fallback.
+  - Added HTML-comment awareness to the section-end scanner and a regression
+    test for commented closing tags inside bounded sections.
+- Pending: push post-review fix commit and rerun the final PR loop.
 - Repo-local lane config is expected at `.agent-control/lanes/pr-review-loop.yaml`.
 - Codex and Qodo are required as a batch by the repo-local lane policy. Do not
   patch partial findings until ACK grants authority through returned reviewers,

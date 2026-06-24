@@ -103,6 +103,20 @@ test("validateReviewMeetingAgendaDist permits bounded non-claim wording", async 
   assert.deepEqual(errors, []);
 });
 
+test("validateReviewMeetingAgendaDist ignores commented closing tags while stripping boundaries", async (t) => {
+  const root = await createManagedReviewMeetingAgendaFixture(t, {
+    pageHtml: (await canonicalPage()).replace(
+      "<li>The agenda is not meeting automation",
+      "<!-- </section> --><li>The agenda is not meeting automation"
+    )
+  });
+  const errors = [];
+
+  await validateReviewMeetingAgendaDist({ dist: join(root, "site", "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateReviewMeetingAgendaDist rejects raw material outside boundaries", async (t) => {
   const root = await createManagedReviewMeetingAgendaFixture(t, {
     pageHtml: (await canonicalPage()).replace("</main>", "<p>Publish raw facts and analyzer logs in the meeting agenda.</p></main>")
