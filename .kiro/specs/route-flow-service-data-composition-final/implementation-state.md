@@ -1,7 +1,7 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: task-7-source-symbol-attachment-precision-ready-for-review
-Readiness: task-7-ready-for-pr-review-loop
+Status: task-7-sql-query-attachment-precision-ready-for-review
+Readiness: task-7-sql-query-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
 Target base: `dev`
@@ -1260,3 +1260,82 @@ claims, or the full remaining service/data/query/dependency taxonomy.
   existing projection tests.
 - Keep Task 8/9/10 unchecked except for validation/safety behavior directly
   touched by this event/message sub-slice.
+
+## Product Implementation PR 8
+
+Branch: `codex/task7-attachment-precision`
+Base: `origin/dev` at `7ac6e1ac`
+
+Selected slice: continue Task 7 after PR #334 and PR #335 with a small
+SQL/query dependency-surface attachment precision hardening slice. This slice
+does not start UI property lineage, site work, scanner extraction, runtime
+execution claims, or the full remaining service/data/query/dependency taxonomy.
+
+### Live Audit Notes For PR 8
+
+- Current `dev` already contains selected route-flow traversal, dependency
+  surface rendering from selected `routePaths`, parameter-forward seed edges,
+  argument-flow projection joins through selected route-flow caller/callee
+  pairs, source-role fact-symbol projection joins through selected source-local
+  symbols, and the projection/attachment gap kinds
+  `ArgumentProjectionUnavailable`, `FactSymbolProjectionUnavailable`,
+  `FactSymbolUnsupportedTypeSkipped`, and `DataSurfaceAttachmentMissing`.
+- PR #334's event/message terminal-surface precision and PR #335's source-role
+  fact-symbol precision are present on the audited base.
+- SQL/query terminal surfaces are already selected through route-flow path
+  evidence. The missing small-slice evidence was focused coverage for selected
+  SQL attachment versus adjacent same-source SQL evidence, path-context
+  labeling, and deterministic dependency surface/gap IDs.
+
+### Implementation Notes For PR 8
+
+- Added focused `CombinedRouteFlowTests` coverage proving selected SQL/query
+  surfaces render as dependency surfaces only when joined through the selected
+  static route-flow path.
+- Added adjacent same-source SQL/query evidence coverage proving route-flow
+  does not infer an unjoined SQL surface and preserves
+  `DataSurfaceAttachmentMissing` instead of a clean no-evidence conclusion.
+- Added deterministic repeated-render assertions for selected SQL surface IDs,
+  stable keys, and unjoinable gap IDs.
+- Added path-context labeling assertions for the selected SQL logic row and its
+  attachment to the selected terminal `flowRows` row.
+- Extended the synthetic `QueryPatternFact` test helper with optional table,
+  column, and shape values so fixtures can distinguish selected and adjacent
+  public-safe SQL surfaces without raw SQL/config values.
+
+### Validation Log For PR 8
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_selected_sql_surface_with_path_context_and_stable_ids|FullyQualifiedName~Route_flow_does_not_infer_adjacent_sql_surface_without_selected_join"`:
+  passed locally with 2 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 46 tests.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+  errors.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 654 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+### Oddities / Design Decisions For PR 8
+
+- The unjoinable SQL fixture's `DataSurfaceAttachmentMissing` gap currently
+  carries rule, source label, deterministic gap ID, and route-root file span,
+  but no commit SHA or supporting fact IDs on this traversal path. The test
+  asserts the stable rule-backed evidence available on `dev` and leaves broader
+  gap metadata enrichment out of this conservative slice.
+- The adjacent SQL fixture uses public-safe synthetic table/shape labels only;
+  no raw SQL, config values, secrets, private paths, remotes, or source snippets
+  are rendered.
+
+### Follow-Ups For PR 8
+
+- Continue Task 7 for the remaining taxonomy items: service/repository rows
+  beyond existing selected path rows, object/projection variants, legacy data,
+  package/config, HTTP client, WCF, ASMX/SOAP, remoting, storage,
+  validation/guard, serializer/contract, async/callback, flow-boundary breadth,
+  and any broader attached-versus-path-context matrix not already covered.
+- Consider enriching `DataSurfaceAttachmentMissing` gaps with commit SHA and
+  supporting fact IDs where traversal paths have that evidence available, but
+  keep the gap conservative when the join is unavailable.
+- Keep the large argument-pair and fact-symbol projection SQL batching follow-up
+  open so large selected route-flow graphs cannot exceed SQLite parameter
+  limits.
