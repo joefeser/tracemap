@@ -895,6 +895,72 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public void Route_flow_runtime_binding_gap_preserves_commit_and_extractor_metadata()
+    {
+        var service = "Server.IOrderService.Get(System.Int32)";
+        var node = new CombinedPathNode(
+            NodeId: "node:server:service",
+            NodeKind: "Method",
+            DisplayName: service,
+            SourceIndexId: "server",
+            SourceLabel: "server",
+            ScanId: "scan-server",
+            CommitSha: "abc123",
+            SymbolId: service,
+            CombinedFactId: "server:fact-service",
+            RuleId: RuleIds.CSharpSemanticCallGraph,
+            EvidenceTier: EvidenceTiers.Tier1Semantic,
+            FilePath: "Services/IOrderService.cs",
+            StartLine: 14,
+            EndLine: 14,
+            SurfaceKind: null,
+            SurfaceName: null,
+            HttpMethod: null,
+            NormalizedPathKey: null,
+            OperationName: null,
+            TableName: null,
+            ColumnNames: null,
+            SourceKind: null,
+            ShapeHash: null,
+            TextHash: null,
+            TextLength: null,
+            PackageName: null,
+            ConfigKey: null);
+        var edge = new CombinedPathEdge(
+            "edge:other:relationship",
+            "implements",
+            "node:other:implementation",
+            node.NodeId,
+            CombinedDependencyPathClassifications.NeedsReviewStaticPath,
+            RuleIds.CSharpSemanticSymbolRelationship,
+            EvidenceTiers.Tier1Semantic,
+            ["other:relationship-fact"],
+            ["other:relationship-edge"],
+            "Services/OrderService.cs",
+            20,
+            20);
+
+        var method = typeof(CombinedRouteFlowReporter).GetMethod(
+            "RuntimeBindingNotProvenGap",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(method);
+
+        var gap = Assert.IsType<RouteFlowGap>(method!.Invoke(null, [
+            node,
+            new[] { edge },
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["server"] = "tracemap-milestone15" }
+        ]));
+
+        Assert.Equal("RuntimeBindingNotProven", gap.GapKind);
+        Assert.Equal("abc123", gap.CommitSha);
+        Assert.Equal("csharp", gap.ExtractorName);
+        Assert.Equal("tracemap-milestone15", gap.ExtractorVersion);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal("ReducedCoverage", gap.Coverage);
+        Assert.Contains("other:relationship-fact", gap.SupportingFactIds);
+    }
+
+    [Fact]
     public async Task Route_flow_caps_syntax_route_root_bridge_even_with_stronger_downstream_edges()
     {
         using var temp = new TempDirectory();

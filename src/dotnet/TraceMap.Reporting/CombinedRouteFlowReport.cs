@@ -1010,21 +1010,32 @@ public static class CombinedRouteFlowReporter
                 queue.Enqueue(new EndpointTraversalState([.. state.Nodes, target], [.. state.Edges, edge]));
             }
 
-            var allCandidateEdges = implementationCandidatesByInterface.GetValueOrDefault(current.NodeId, [])
-                .Where(edge => nodesById.ContainsKey(edge.FromNodeId))
-                .ToArray();
-            var incompatibleCandidateEdges = allCandidateEdges
-                .Where(edge => !EndpointSourcesCompatible(current, nodesById[edge.FromNodeId]))
-                .ToArray();
-            if (incompatibleCandidateEdges.Length > 0)
+            var candidateEdges = new List<CombinedPathEdge>();
+            List<CombinedPathEdge>? incompatibleCandidateEdges = null;
+            foreach (var edge in implementationCandidatesByInterface.GetValueOrDefault(current.NodeId, []))
             {
-                gaps.Add(RuntimeBindingNotProvenGap(current, incompatibleCandidateEdges));
+                if (!nodesById.TryGetValue(edge.FromNodeId, out var candidate))
+                {
+                    continue;
+                }
+
+                if (EndpointSourcesCompatible(current, candidate))
+                {
+                    candidateEdges.Add(edge);
+                }
+                else
+                {
+                    incompatibleCandidateEdges ??= [];
+                    incompatibleCandidateEdges.Add(edge);
+                }
             }
 
-            var candidateEdges = allCandidateEdges
-                .Where(edge => EndpointSourcesCompatible(current, nodesById[edge.FromNodeId]))
-                .ToArray();
-            if (candidateEdges.Length > 1)
+            if (incompatibleCandidateEdges is { Count: > 0 })
+            {
+                gaps.Add(RuntimeBindingNotProvenGap(current, incompatibleCandidateEdges, scannerVersionBySourceIndexId));
+            }
+
+            if (candidateEdges.Count > 1)
             {
                 var supportingFactIds = candidateEdges
                     .SelectMany(edge => edge.SupportingFactIds)
@@ -1664,7 +1675,10 @@ public static class CombinedRouteFlowReporter
             node.EndLine);
     }
 
-    private static RouteFlowGap RuntimeBindingNotProvenGap(CombinedPathNode node, IReadOnlyList<CombinedPathEdge> incompatibleCandidateEdges)
+    private static RouteFlowGap RuntimeBindingNotProvenGap(
+        CombinedPathNode node,
+        IReadOnlyList<CombinedPathEdge> incompatibleCandidateEdges,
+        IReadOnlyDictionary<string, string> scannerVersionBySourceIndexId)
     {
         var edgeIds = incompatibleCandidateEdges
             .Select(edge => edge.EdgeId)
@@ -1677,6 +1691,9 @@ public static class CombinedRouteFlowReporter
             .OrderBy(value => value, StringComparer.Ordinal)
             .Take(20)
             .ToArray();
+        var firstEdge = incompatibleCandidateEdges
+            .OrderBy(EndpointEdgeSortKey, StringComparer.Ordinal)
+            .First();
         return new RouteFlowGap(
             $"gap:runtime-binding:cross-source:{HashCandidateSet("runtime-binding", node.NodeId, edgeIds, supportingFactIds, 16)}",
             "RuntimeBindingNotProven",
@@ -1690,7 +1707,12 @@ public static class CombinedRouteFlowReporter
             ["Cross-source, cross-language, dependency-injection, service-locator, factory, reflection, and dynamic-dispatch implementation bindings require a future deterministic rule."],
             CombinedReportHelpers.SafePath(node.FilePath),
             node.StartLine,
-            node.EndLine);
+            node.EndLine,
+            SafeCommitSha(node.CommitSha),
+            ExtractorName(firstEdge.RuleId),
+            scannerVersionBySourceIndexId.TryGetValue(node.SourceIndexId, out var extractorVersion)
+                ? SafeSelector(extractorVersion) ?? "unknown"
+                : "unknown");
     }
 
     private static RouteFlowGap TraversalBoundsGap(string reason, CombinedPathNode node)

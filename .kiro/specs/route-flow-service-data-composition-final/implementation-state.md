@@ -947,10 +947,27 @@ extraction, or broader Task 7/8/9/10 work.
 - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
   errors.
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
-  passed, 40 tests.
-- `dotnet test src/dotnet/TraceMap.sln`: passed, 643 tests.
+  passed, 40 tests before the ACK patch and 41 tests after the ACK patch.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 643 tests before the ACK
+  patch and 644 tests after the ACK patch.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+- Initial ACK PR loop for PR #330 returned `actionable_findings` with two
+  unresolved review threads and `patchAuthorized=true`.
+- ACK-authorized findings patched:
+  - partitioned implementation candidate edges in a single pass to avoid
+    redundant LINQ allocations and repeated node lookups;
+  - populated `RuntimeBindingNotProven` gaps with commit SHA, extractor name,
+    and extractor version metadata;
+  - added focused regression coverage for runtime-binding gap metadata.
+- Post-ACK patch validation:
+  - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+    errors.
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
+    passed, 41 tests.
+  - `dotnet test src/dotnet/TraceMap.sln`: passed, 644 tests.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
 
 ### Oddities / Design Decisions For PR 4
 
