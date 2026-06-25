@@ -245,6 +245,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/site-claim-guardrails/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/packets/",
     "changefreq": "monthly",
     "priority": "0.8"
