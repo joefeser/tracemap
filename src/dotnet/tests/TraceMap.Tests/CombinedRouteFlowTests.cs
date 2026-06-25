@@ -1566,13 +1566,40 @@ public sealed class CombinedRouteFlowTests
             Route: "GET /api/orders/{id}"));
 
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "ArgumentProjectionUnavailable");
-        // The fixture includes attached fact-symbol context selected by the route path, but unsupported
-        // fact-symbol shapes must be reported as skipped context rather than rendered as projection rows.
+        // The fixture includes same-source fact-symbol context that cannot join through selected
+        // source-local route-flow symbols.
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "FactSymbolProjectionUnavailable");
+        // Unsupported fact-symbol shapes that do join selected symbols must be reported as skipped
+        // context rather than rendered as projection rows.
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "FactSymbolUnsupportedTypeSkipped");
-        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "FactSymbolProjectionUnavailable");
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "ExtractorUnavailable");
         Assert.DoesNotContain(result.Report.LogicRows, row => row.Evidence.RuleId is "combined.route-flow.argument-projection.v1" or "combined.route-flow.fact-symbol-projection.v1");
+    }
+
+    [Fact]
+    public async Task Route_flow_fact_symbol_projection_requires_selected_source_symbol_identity()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateUnjoinableProjectionCombinedIndexAsync(temp);
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}"));
+
+        Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query");
+        var factSymbolGap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "FactSymbolProjectionUnavailable");
+        Assert.True(factSymbolGap.SupportingFactIds.Count > 0);
+        Assert.Equal("server", factSymbolGap.SourceLabel);
+        Assert.Equal("abc123", factSymbolGap.CommitSha);
+        Assert.Equal("Infrastructure/MisleadingTarget.cs", factSymbolGap.FilePath);
+        Assert.Equal("tracemap-milestone15", factSymbolGap.ExtractorVersion);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "FactSymbolProjectionUnavailable"
+            && gap.RuleId == "combined.route-flow.gap.v1");
+        Assert.DoesNotContain(result.Report.LogicRows, row => row.AttachmentKind == "fact-symbol-projection");
+        Assert.DoesNotContain(result.Report.LogicRows, row => row.Evidence.FilePath == "Infrastructure/MisleadingTarget.cs");
+        Assert.DoesNotContain(result.Report.ContextGroups ?? [], group => group.RuleIds.Contains("combined.route-flow.fact-symbol-projection.v1"));
     }
 
     [Fact]
@@ -1725,7 +1752,7 @@ public sealed class CombinedRouteFlowTests
             QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31),
             ArgumentPassedFact(server, unrelatedCaller, unrelatedCallee, "id", "id", "System.Int32", "Services/Unrelated.cs", 20),
             QueryPatternFact(server, unrelatedCallee, "Infrastructure/UnrelatedRepository.cs", 41, attachSymbol: true),
-            QueryPatternFact(server, unrelatedCallee, "Infrastructure/MisleadingTarget.cs", 42, attachSymbol: true, targetSymbol: repository)
+            QueryPatternFact(server, unrelatedCallee, "Infrastructure/MisleadingTarget.cs", 42, attachSymbol: true, targetSymbol: repository, attachTargetSymbol: true)
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
         return combinedPath;
@@ -1988,7 +2015,7 @@ public sealed class CombinedRouteFlowTests
             });
     }
 
-    private static CodeFact QueryPatternFact(ScanManifest manifest, string? sourceSymbol, string file, int line, bool attachSymbol = false, string targetSymbol = "orders")
+    private static CodeFact QueryPatternFact(ScanManifest manifest, string? sourceSymbol, string file, int line, bool attachSymbol = false, string targetSymbol = "orders", bool attachTargetSymbol = false)
     {
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
@@ -2004,6 +2031,14 @@ public sealed class CombinedRouteFlowTests
             properties["sourceSymbolDisplayName"] = sourceSymbol;
             properties["sourceSymbolKind"] = "Method";
             properties["sourceSymbolLanguage"] = "csharp";
+        }
+
+        if (attachTargetSymbol)
+        {
+            properties["targetSymbolId"] = targetSymbol;
+            properties["targetSymbolDisplayName"] = targetSymbol;
+            properties["targetSymbolKind"] = "Method";
+            properties["targetSymbolLanguage"] = "csharp";
         }
 
         return FactFactory.Create(
