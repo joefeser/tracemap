@@ -166,6 +166,13 @@ current `dev` code or merged PR records prove the behavior.
       rows and parameter-forward value-origin rows remain attached only through
       selected static route-flow rows, while adjacent unjoined argument-flow
       evidence now preserves a scoped `ArgumentProjectionUnavailable` gap.
+      Branch `codex/task7-http-wcf-attachments-20260625-182659` audited
+      `origin/dev` at `cb70ba7def4313cce34034421618062b60cb0c01` and selected
+      the ASMX/SOAP dependency-surface sub-slice: route-flow now accepts
+      selected ASMX/SOAP surface kinds already emitted by the shared surface
+      projection, attaches them only through selected static route-flow paths,
+      and preserves `DataSurfaceAttachmentMissing` for adjacent unjoined ASMX
+      evidence.
   - [ ] Attach service, repository, object/projection, query-shape, SQL-shape,
         legacy-data, package/config, HTTP client, WCF, ASMX/SOAP, remoting,
         event/message, storage, validation/guard, serializer/contract,
@@ -178,6 +185,10 @@ current `dev` code or merged PR records prove the behavior.
           Broader taxonomy remains unchecked until covered explicitly.
     - [x] Event/message terminal-surface attachment sub-slice covered by PR
           #334.
+    - [x] ASMX/SOAP dependency-surface sub-slice covered by
+          `Route_flow_attaches_asmx_client_surface_only_from_selected_static_path`
+          and
+          `Route_flow_does_not_infer_adjacent_asmx_client_surface_without_selected_join`.
   - [x] Render argument-flow and parameter-forward value-origin rows only when
         joined to selected static route-flow rows.
   - [x] Render fact-symbol context only for selected source-local symbols.
@@ -200,6 +211,12 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_selected_sql_surface_with_path_context_and_stable_ids`
           and
           `Route_flow_does_not_infer_adjacent_sql_surface_without_selected_join`.
+    - [x] ASMX/SOAP surface attachment, adjacent-unjoinable gap behavior,
+          terminal-surface labeling, dependency context grouping, and
+          deterministic stable IDs covered by
+          `Route_flow_attaches_asmx_client_surface_only_from_selected_static_path`
+          and
+          `Route_flow_does_not_infer_adjacent_asmx_client_surface_without_selected_join`.
 
 - [ ] 8. Enforce coverage, classification, and gap downgrade behavior.
       Requirements: 5.

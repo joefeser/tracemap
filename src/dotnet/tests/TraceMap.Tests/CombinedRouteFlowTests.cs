@@ -1674,6 +1674,98 @@ public sealed class CombinedRouteFlowTests
         Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
     }
 
+    [Fact]
+    public async Task Route_flow_attaches_asmx_client_surface_only_from_selected_static_path()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Post(System.Int32)";
+        var soapClient = "Server.LegacyRatingClient.Rate(System.Int32)";
+        var unrelatedClient = "Server.OtherLegacyClient.Rate(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "POST", "/api/orders/{id}/rate", "/api/orders/{}/rate", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, soapClient, "Controllers/OrdersController.cs", 15),
+            AsmxSurfaceFact(server, soapClient, FactTypes.AsmxClientOperationDeclared, RuleIds.LegacyAsmxClient, "asmx-client", "Rate", "Services/RatingReference.cs", 24),
+            AsmxSurfaceFact(server, unrelatedClient, FactTypes.AsmxClientOperationDeclared, RuleIds.LegacyAsmxClient, "asmx-client", "Rate", "Services/OtherRatingReference.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "POST /api/orders/{id}/rate",
+            ToSurface: "asmx-client"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "POST /api/orders/{id}/rate",
+            ToSurface: "asmx-client"));
+
+        var surface = Assert.Single(result.Report.DependencySurfaces);
+        Assert.Equal("asmx-client", surface.SurfaceKind);
+        Assert.Equal("Rate", surface.DisplayName);
+        Assert.Equal("combined.route-flow.dependency-surface.v1", surface.Evidence.RuleId);
+        Assert.Contains(RuleIds.LegacyAsmxClient, surface.Evidence.SupportingRuleIds);
+        Assert.Equal(surface.SurfaceId, Assert.Single(repeated.Report.DependencySurfaces).SurfaceId);
+
+        var terminal = Assert.Single(result.Report.FlowRows, row => row.EdgeKind == "terminal-surface");
+        Assert.Equal("terminal-surface", terminal.RowKind);
+        Assert.Contains(soapClient, terminal.SourceSymbol, StringComparison.Ordinal);
+        Assert.Contains("Rate", terminal.TargetSymbol!, StringComparison.Ordinal);
+        Assert.Equal(terminal.RowId, Assert.Single(repeated.Report.FlowRows, row => row.EdgeKind == "terminal-surface").RowId);
+
+        Assert.DoesNotContain(result.Report.FlowRows, row => row.SourceSymbol.Contains("OtherLegacyClient", StringComparison.Ordinal)
+            || row.TargetSymbol?.Contains("OtherLegacyClient", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(result.Report.DependencySurfaces, item => item.Evidence.FilePath == "Services/OtherRatingReference.cs");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "DataSurfaceAttachmentMissing" or "NoRouteFlowEvidence");
+        Assert.Contains(result.Report.ContextGroups!, group => group.GroupKind == "dependency"
+            && group.MatchKind == "dependency-surface"
+            && group.SupportingRowIds.Contains(surface.SurfaceId));
+    }
+
+    [Fact]
+    public async Task Route_flow_does_not_infer_adjacent_asmx_client_surface_without_selected_join()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Post(System.Int32)";
+        var service = "Server.OrderRatingService.Rate(System.Int32)";
+        var unrelatedClient = "Server.OtherLegacyClient.Rate(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "POST", "/api/orders/{id}/rate", "/api/orders/{}/rate", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 15),
+            AsmxSurfaceFact(server, unrelatedClient, FactTypes.AsmxClientOperationDeclared, RuleIds.LegacyAsmxClient, "asmx-client", "Rate", "Services/OtherRatingReference.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "POST /api/orders/{id}/rate",
+            ToSurface: "asmx-client"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "POST /api/orders/{id}/rate",
+            ToSurface: "asmx-client"));
+
+        Assert.Empty(result.Report.DependencySurfaces);
+        var gap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "DataSurfaceAttachmentMissing");
+        Assert.Equal("combined.route-flow.gap.v1", gap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal(gap.GapId, Assert.Single(repeated.Report.Gaps, item => item.GapKind == "DataSurfaceAttachmentMissing").GapId);
+        Assert.DoesNotContain(result.Report.FlowRows, row => row.EdgeKind == "terminal-surface"
+            && row.TargetSymbol?.Contains("Rate", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+    }
+
 
     [Fact]
     public async Task Route_flow_json_file_output_and_classification_filter_empty_rows_yields_selector_gap()
@@ -2414,6 +2506,38 @@ public sealed class CombinedRouteFlowTests
                 ["sourceSymbolKind"] = "Method",
                 ["sourceSymbolLanguage"] = "csharp",
                 ["stableMessageSurfaceKey"] = FactFactory.Hash($"{surfaceKind}:{destination}", 32),
+                ["surfaceKind"] = surfaceKind
+            });
+    }
+
+    private static CodeFact AsmxSurfaceFact(
+        ScanManifest manifest,
+        string sourceSymbol,
+        string factType,
+        string ruleId,
+        string surfaceKind,
+        string operationName,
+        string file,
+        int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            factType,
+            ruleId,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: operationName,
+            contractElement: operationName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["clientName"] = "RatingSoapClient",
+                ["coverageLabel"] = "syntax-asmx-client-operation",
+                ["operationName"] = operationName,
+                ["sourceSymbolDisplayName"] = sourceSymbol,
+                ["sourceSymbolId"] = sourceSymbol,
+                ["sourceSymbolKind"] = "Method",
+                ["sourceSymbolLanguage"] = "csharp",
                 ["surfaceKind"] = surfaceKind
             });
     }
