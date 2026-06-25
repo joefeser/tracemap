@@ -1,10 +1,31 @@
 # UI Field Property Lineage Continuation Implementation State
 
-Status: partial-implementation-pr-open
-Readiness: implementation-partial-pr-open
+Status: implemented-pr1-merged-followups-superseded
+Readiness: no-new-work-from-this-spec
 Branch: codex/implement-ui-field-property-lineage-continuation
 Target PR base: dev
 Public claim level: hidden
+
+## Reconciliation State
+
+Reconciled against `origin/dev` on 2026-06-25 at `87fe78a3`.
+
+Merged evidence on `dev`:
+
+- PR #286 merged this continuation spec (`fea9f6db`).
+- PR #293 merged the route-flow context gap implementation slice
+  (`e0c91f30`).
+- Current code contains `PropertyFlowReporter` support for
+  `combined_route_flow_edges`, `RouteFlowUnavailable`,
+  `RouteFlowNoPropertyContext`, static route-flow context notes, and focused
+  `PropertyFlowTests` coverage for missing, empty, reduced, unrelated, and
+  selected-endpoint route-flow signal cases.
+- `property-flow.edge.v1` documents the route-flow no-property-context gap.
+
+Do not start new work from this continuation spec. Its broader endpoint,
+service/data/dependency, and consumer-compatibility follow-ups are superseded
+by `.kiro/specs/ui-field-property-lineage-composition/`, which should be used
+after the route-flow contract is stable.
 
 ## Scope
 
@@ -167,9 +188,13 @@ Passed:
 
 PR: https://github.com/joefeser/tracemap/pull/293
 
-PR-loop result: not run yet.
+PR-loop result: completed by the implementation worker before merge. PR #293
+merged to `dev` as `e0c91f30` on 2026-06-22.
 
-## Follow-Ups For Implementation
+## Historical Follow-Ups For Implementation
+
+These follow-ups are retained for context but should be picked up through
+`ui-field-property-lineage-composition`, not this continuation spec.
 
 1. Complete route-flow endpoint downstream context by attaching real
    property-specific route-flow rows once a shared helper or documented table
