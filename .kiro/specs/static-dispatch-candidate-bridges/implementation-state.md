@@ -63,15 +63,21 @@ tables, or new scanner behavior.
 - Added bounded override-chain traversal with deterministic ordering, cycle
   protection, candidate cap reuse, weakest-evidence-tier propagation, and a
   documented max override traversal depth of 5.
+- After ACK-authorized review, precomputed the override target map once per
+  build, pruned duplicate override subtree traversal, normalized unknown
+  evidence tiers to `Tier4Unknown`, and emitted a documented
+  `DispatchCandidateTruncatedByLimit` gap when override traversal reaches the
+  depth cap while deeper `Overrides` evidence exists.
 - Added focused tests for explicit interface candidate traversal, override
   chain traversal under a tight path depth, override-chain Markdown/JSON byte
-  stability, and direct builder depth/cycle protection.
+  stability, direct builder depth/cycle protection, and the override-depth
+  truncation gap.
 - Updated `combined.dispatch-candidate.v1` limitations in
   `rules/rule-catalog.yml` to document the override-chain depth bound and
   cycle protection.
-- The shared builder still emits only `DispatchCandidateFanOut` gaps; broader
-  missing/identity/generic/reduced-coverage/truncation gap vocabulary remains
-  deferred.
+- The shared builder now emits `DispatchCandidateFanOut` and
+  `DispatchCandidateTruncatedByLimit` gaps. Broader missing/identity/generic
+  and reduced-coverage gap vocabulary remains deferred.
 
 ## Kiro Review State
 
@@ -175,6 +181,9 @@ Results:
 - The combined paths/reverse smoke completed against checked-in samples and
   verified scan/combine/report/paths/reverse behavior plus repeated targeted
   paths JSON byte stability.
+- After the ACK-authorized review patch, focused
+  `CombinedDependencyPathTests`, `git diff --check`, private-path scan, full
+  `.NET` solution tests, and combined paths/reverse smoke passed again.
 
 ## Safety Notes
 
@@ -187,12 +196,19 @@ appropriate.
 
 - DI registration-context annotations remain deferred to implementation task 7.
 - Type-level fallback candidates remain deferred within task 6.
-- Missing-candidate, ambiguous-identity, reduced-coverage, schema, generic, and
-  truncation gaps remain deferred within task 6.
+- Missing-candidate, ambiguous-identity, reduced-coverage, schema, and generic
+  gaps remain deferred within task 6.
 - Route-flow, reverse, impact, report/portfolio, vault, and docs-export
   consumption remain deferred to later slices.
 - Record the final PR-loop ACK decision in the handoff.
 
 ## PR Review Loop Notes
 
-- PR-loop ACK has not run yet for this branch.
+- Initial ACK returned `decision=actionable_findings`,
+  `stopReason=UNRESOLVED_REVIEW_THREADS`, `patchAuthorized=true`, and
+  `canMerge=false` for PR #333 at head
+  `73d4289836da9d31b41ea02e3325b7679f1a48a9`.
+- Patched the authorized findings by precomputing the override target map,
+  pruning repeated override traversal, normalizing unknown evidence tiers to
+  `Tier4Unknown`, and adding a depth-cap truncation gap.
+- Final ACK decision is pending after the review-fix push.

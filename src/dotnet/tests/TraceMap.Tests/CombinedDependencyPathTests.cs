@@ -315,6 +315,9 @@ public sealed class CombinedDependencyPathTests
         Assert.Equal(StaticDispatchCandidateBuilder.DefaultMaxOverrideDepth, rootCandidates.Length);
         Assert.DoesNotContain(rootCandidates, edge => edge.CandidateSymbolId == "method-6");
         Assert.All(rootCandidates, edge => Assert.Equal(StaticDispatchBridgeKinds.OverrideMember, edge.BridgeKind));
+        Assert.Contains(first.Gaps, gap => gap.GapKind == "DispatchCandidateTruncatedByLimit"
+            && gap.NodeId == "method-0"
+            && gap.Reason == "override-depth");
         Assert.Equal(
             first.Edges.Select(edge => edge.CandidateId).ToArray(),
             second.Edges.Select(edge => edge.CandidateId).ToArray());
@@ -463,6 +466,7 @@ public sealed class CombinedDependencyPathTests
         Assert.True(gapStart >= 0, "Missing rule catalog entry for combined.dispatch-gap.v1.");
         var gapBlock = catalog[gapStart..Math.Min(catalog.Length, gapStart + 900)];
         Assert.Contains("DispatchCandidateFanOut gap", gapBlock);
+        Assert.Contains("DispatchCandidateTruncatedByLimit gap", gapBlock);
     }
 
     [Fact]
