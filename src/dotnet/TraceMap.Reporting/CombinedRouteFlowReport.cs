@@ -3997,7 +3997,6 @@ public static class CombinedRouteFlowReporter
     {
         return gap.GapKind != "NoRouteFlowEvidence"
             && (IsNoEvidenceBlockingCompositionGap(gap)
-                || gap.GapKind is "DataSurfaceAttachmentMissing"
                 || gap.GapKind is "SelectorNoMatch"
                 || gap.GapKind is "ArgumentProjectionUnavailable"
                     or "FactSymbolProjectionUnavailable"
