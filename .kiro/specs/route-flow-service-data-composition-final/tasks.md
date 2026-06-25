@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Final Tasks
 
-Status: task-6-closed-ready-for-task-7
+Status: task-7-source-symbol-attachment-precision-ready-for-review
 
 ## Spec Delivery Tasks
 
@@ -164,8 +164,8 @@ current `dev` code or merged PR records prove the behavior.
         evidence.
   - [ ] Render argument-flow and parameter-forward value-origin rows only when
         joined to selected static route-flow rows.
-  - [ ] Render fact-symbol context only for selected source-local symbols.
-  - [ ] Emit `ArgumentProjectionUnavailable`,
+  - [x] Render fact-symbol context only for selected source-local symbols.
+  - [x] Emit `ArgumentProjectionUnavailable`,
         `FactSymbolProjectionUnavailable`, `DataSurfaceAttachmentMissing`, or
         shipped equivalents for adjacent but unjoinable facts.
   - [ ] Add tests for attached surfaces, unjoinable surfaces, attached versus
