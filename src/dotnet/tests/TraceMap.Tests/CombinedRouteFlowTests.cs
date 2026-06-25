@@ -851,6 +851,50 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_does_not_treat_runtime_adjacent_facts_as_implementation_dispatch_proof()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.IOrderService.Get(System.Int32)";
+        var implementation = "Server.OrderService.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14, targetSymbolKind: "InterfaceMember"),
+            RuntimeEvidenceFact(server, FactTypes.DependencyRegistered, "DependencyInjectionRegistration", service, implementation, "Startup/CompositionRoot.cs", 20),
+            RuntimeEvidenceFact(server, FactTypes.DependencyResolved, "ServiceLocatorResolution", service, implementation, "Services/ServiceLocator.cs", 21),
+            RuntimeEvidenceFact(server, FactTypes.ReflectionTarget, "ReflectionTarget", implementation, repository, "Services/ReflectionFactory.cs", 22),
+            RuntimeEvidenceFact(server, FactTypes.DynamicDispatchCandidate, "DynamicDispatchCandidate", implementation, repository, "Services/DynamicFactory.cs", 23),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "ImplementationCandidateUnavailable");
+        Assert.DoesNotContain(result.Report.FlowRows, row => row.RowKind == "interface-implementation-candidate");
+        Assert.DoesNotContain(result.Report.FlowRows, row => row.TargetSymbol?.Contains(implementation, StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(result.Report.FlowRows, row => row.TargetSymbol?.Contains(repository, StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query");
+        Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+        Assert.NotEqual(RouteFlowClassifications.ProbableStaticRouteFlow, result.Report.Summary.Classification);
+
+        var json = await File.ReadAllTextAsync(Path.Combine(temp.Path, "route-flow", "route-flow-report.json"));
+        var markdown = await File.ReadAllTextAsync(Path.Combine(temp.Path, "route-flow", "route-flow-report.md"));
+        AssertForbiddenRuntimeWording(json);
+        AssertForbiddenRuntimeWording(markdown);
+    }
+
+    [Fact]
     public async Task Route_flow_caps_syntax_route_root_bridge_even_with_stronger_downstream_edges()
     {
         using var temp = new TempDirectory();
@@ -1717,6 +1761,34 @@ public sealed class CombinedRouteFlowTests
             });
     }
 
+    private static CodeFact RuntimeEvidenceFact(
+        ScanManifest manifest,
+        string factType,
+        string evidenceKind,
+        string sourceSymbol,
+        string targetSymbol,
+        string file,
+        int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            factType,
+            RuleIds.CSharpSemanticRuntimeEvidence,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: targetSymbol,
+            contractElement: evidenceKind,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["evidenceKind"] = evidenceKind,
+                ["sourceSymbolDisplayName"] = sourceSymbol,
+                ["sourceSymbolId"] = sourceSymbol,
+                ["targetSymbolDisplayName"] = targetSymbol,
+                ["targetSymbolId"] = targetSymbol
+            });
+    }
+
     private static CodeFact CallFact(ScanManifest manifest, string caller, string callee, string file, int line, string evidenceTier = EvidenceTiers.Tier1Semantic, string targetSymbolKind = "Method")
     {
         return FactFactory.Create(
@@ -1978,6 +2050,13 @@ public sealed class CombinedRouteFlowTests
         Assert.DoesNotContain("authorized", value, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("used in production", value, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("query runs", value, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("proves DI target", value, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("selected runtime implementation", value, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("resolved runtime target", value, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("service locator target", value, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("factory target proof", value, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("reflection target proof", value, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("dynamic dispatch proof", value, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FindRepoRoot()

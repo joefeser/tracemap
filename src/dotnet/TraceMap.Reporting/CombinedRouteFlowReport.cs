@@ -1010,8 +1010,19 @@ public static class CombinedRouteFlowReporter
                 queue.Enqueue(new EndpointTraversalState([.. state.Nodes, target], [.. state.Edges, edge]));
             }
 
-            var candidateEdges = implementationCandidatesByInterface.GetValueOrDefault(current.NodeId, [])
-                .Where(edge => nodesById.TryGetValue(edge.FromNodeId, out var candidate) && EndpointSourcesCompatible(current, candidate))
+            var allCandidateEdges = implementationCandidatesByInterface.GetValueOrDefault(current.NodeId, [])
+                .Where(edge => nodesById.ContainsKey(edge.FromNodeId))
+                .ToArray();
+            var incompatibleCandidateEdges = allCandidateEdges
+                .Where(edge => !EndpointSourcesCompatible(current, nodesById[edge.FromNodeId]))
+                .ToArray();
+            if (incompatibleCandidateEdges.Length > 0)
+            {
+                gaps.Add(RuntimeBindingNotProvenGap(current, incompatibleCandidateEdges));
+            }
+
+            var candidateEdges = allCandidateEdges
+                .Where(edge => EndpointSourcesCompatible(current, nodesById[edge.FromNodeId]))
                 .ToArray();
             if (candidateEdges.Length > 1)
             {
@@ -1026,7 +1037,7 @@ public static class CombinedRouteFlowReporter
                     .OrderBy(value => value, StringComparer.Ordinal)
                     .ToArray();
                 gaps.Add(new RouteFlowGap(
-                    $"gap:endpoint-composition:AmbiguousImplementationCandidates:{CombinedReportHelpers.Hash($"{current.NodeId}:{string.Join("|", candidateNodeIds)}:{string.Join("|", supportingFactIds)}", 16)}",
+                    $"gap:endpoint-composition:AmbiguousImplementationCandidates:{HashCandidateSet("candidate-ambiguity", current.NodeId, candidateNodeIds, supportingFactIds, 16)}",
                     "AmbiguousImplementationCandidates",
                     "Interface member call has multiple static implementation candidates; candidate-dependent rows are review-tier.",
                     GapRuleId,
@@ -1248,6 +1259,34 @@ public static class CombinedRouteFlowReporter
         }
 
         hash.AppendData(separator);
+    }
+
+    private static string HashCandidateSet(
+        string scope,
+        string nodeId,
+        IReadOnlyList<string> candidateNodeIds,
+        IReadOnlyList<string> supportingFactIds,
+        int length)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var separator = new byte[] { 0 };
+        AppendHashValue(hash, separator, scope);
+        AppendHashValue(hash, separator, nodeId);
+        AppendHashValue(hash, separator, candidateNodeIds.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        foreach (var candidateNodeId in candidateNodeIds)
+        {
+            AppendHashValue(hash, separator, candidateNodeId);
+        }
+
+        AppendHashValue(hash, separator, supportingFactIds.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        foreach (var supportingFactId in supportingFactIds)
+        {
+            AppendHashValue(hash, separator, supportingFactId);
+        }
+
+        var bytes = hash.GetHashAndReset();
+        var text = Convert.ToHexString(bytes).ToLowerInvariant();
+        return text[..Math.Min(length, text.Length)];
     }
 
     private static IReadOnlyDictionary<string, CombinedPathEdge[]> BuildParameterForwardSeedEdgesByMethodNodeId(
@@ -1620,6 +1659,35 @@ public static class CombinedRouteFlowReporter
             node.NodeId,
             supportingFactIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             ["Endpoint route-flow composition uses bounded source-local static evidence and does not infer runtime behavior."],
+            CombinedReportHelpers.SafePath(node.FilePath),
+            node.StartLine,
+            node.EndLine);
+    }
+
+    private static RouteFlowGap RuntimeBindingNotProvenGap(CombinedPathNode node, IReadOnlyList<CombinedPathEdge> incompatibleCandidateEdges)
+    {
+        var edgeIds = incompatibleCandidateEdges
+            .Select(edge => edge.EdgeId)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var supportingFactIds = incompatibleCandidateEdges
+            .SelectMany(edge => edge.SupportingFactIds)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .Take(20)
+            .ToArray();
+        return new RouteFlowGap(
+            $"gap:runtime-binding:cross-source:{HashCandidateSet("runtime-binding", node.NodeId, edgeIds, supportingFactIds, 16)}",
+            "RuntimeBindingNotProven",
+            "Cross-source or cross-language implementation candidate evidence is blocked in route-flow v1; runtime binding is not proven.",
+            GapRuleId,
+            EvidenceTiers.Tier4Unknown,
+            "ReducedCoverage",
+            SafeLabel(node.SourceLabel),
+            node.NodeId,
+            supportingFactIds,
+            ["Cross-source, cross-language, dependency-injection, service-locator, factory, reflection, and dynamic-dispatch implementation bindings require a future deterministic rule."],
             CombinedReportHelpers.SafePath(node.FilePath),
             node.StartLine,
             node.EndLine);
