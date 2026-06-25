@@ -1,12 +1,33 @@
 # Route Flow Endpoint Stitching Implementation State
 
-Status: partial-implementation
-Readiness: implementation-pr-in-progress
+Status: partial-implementation-merged-superseded-for-new-work
+Readiness: no-new-work-from-this-spec
 Branch: codex/implement-route-flow-endpoint-stitching
 Base: origin/dev
 Target PR base: dev
 Primary issue: #201
 Public claim level: hidden
+
+## Reconciliation State
+
+Reconciled against `origin/dev` on 2026-06-25 at `87fe78a3`.
+
+Merged evidence on `dev`:
+
+- PR #285 merged this endpoint-stitching spec (`2781b2b9`).
+- PR #289 merged the first endpoint bridge-state slice (`bc7c2369`).
+- PR #318 later merged duplicate normalized endpoint/root selector ambiguity
+  gaps under `route-flow-service-data-composition-final` (`1e9c5660`).
+- PR #320 later merged source-local service-call cycle `TraversalBounds` gaps
+  under `route-flow-service-data-composition-final` (`565d7b64`).
+- Current code contains `entryEvidence[].bridgeState`, focused bridge-state
+  tests, duplicate-root selector-gap tests, and cycle-gap tests.
+
+Remaining endpoint-stitching work should be selected from
+`.kiro/specs/route-flow-service-data-composition-final/`, not this older spec:
+direct-call/no-call reduced-coverage cases, candidate continuation,
+service/data/dependency attachment precision, and directly affected downgrade
+or safety tests.
 
 ## Scope
 
@@ -186,11 +207,16 @@ Deferred:
   path/reverse/diff behavior. Focused route-flow tests plus the full .NET suite
   cover the changed surface.
 
-Pending before PR:
+PR-loop and merge state:
 
-- PR loop.
+- PR #289 completed review/validation and merged to `dev`; no PR loop action
+  remains pending for this first bridge-state slice.
 
-## Follow-Up Implementation Shape
+## Historical Follow-Up Implementation Shape
+
+This section is retained as history. For new route-flow implementation work,
+use `route-flow-service-data-composition-final` after re-auditing current
+`dev`.
 
 Recommended first implementation slice:
 
