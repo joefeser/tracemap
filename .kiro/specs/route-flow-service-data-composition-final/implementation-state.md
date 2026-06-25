@@ -710,3 +710,60 @@ node scripts/kiro-review.mjs --phase route-flow-service-data-composition-final -
 - If implementation requires a new gap code or row kind, update
   `rules/rule-catalog.yml` before emitting it and document limitations in the
   implementation state.
+
+## Product Implementation PR 3
+
+Branch: `codex/route-flow-service-data-stitching`
+Base: `origin/dev` at `87fe78a31ce9204230b00dab8dfeaabf79d1b206`
+
+Selected slice: the next remaining Task 5 no-direct-call/reduced-coverage
+subcase, plus the directly touched Task 8 guard that clean
+`NoRouteFlowEvidence` gaps require full relevant route-flow coverage.
+
+### Live Audit Notes
+
+- The prior duplicate-root and cycle Task 5 sub-slices are already present on
+  `origin/dev`.
+- Direct source-local service/repository call stitching and MissingCallEdge
+  behavior already exist in `CombinedRouteFlowReport`.
+- The remaining gap selected for this PR was narrower: when a route root has no
+  downstream flow rows and source coverage is reduced, route-flow should keep
+  the reduced/unknown gap and must not also emit a clean absence
+  `NoRouteFlowEvidence` gap.
+
+### Implementation Notes
+
+- Added a route-flow report guard that removes inherited clean
+  `NoRouteFlowEvidence` gaps and avoids adding a new one whenever reduced
+  coverage, schema/extractor/unknown, projection, attachment, or endpoint
+  composition gaps block a clean absence conclusion.
+- Preserved the existing full-coverage clean no-evidence fixture and avoided
+  broad path-reporter behavior changes.
+- Added a synthetic regression with a failed-build source, selected route root,
+  no downstream call rows, and a required terminal surface. The report now
+  emits the reduced-coverage gap, downgrades to `UnknownAnalysisGap`, and does
+  not emit `NoRouteFlowEvidence` or `MissingCallEdge`.
+
+### Validation Log For PR 3
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
+  passed, 37 tests.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+  errors.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 640 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Push, PR creation, and ACK loop are pending in this pass.
+
+### Oddities / Design Decisions For PR 3
+
+- A legacy full-coverage no-downstream fixture inherits a path-reporter
+  `TruncatedByLimit` gap with coverage-relative evidence. This PR leaves that
+  behavior unchanged and only suppresses clean absence when reduced/unknown or
+  endpoint-composition blockers are present.
+
+### Follow-Ups For PR 3
+
+- Remaining Task 5 backlog after this slice: MissingCallEdge-specific
+  full-coverage dead-end coverage and deterministic ordering coverage.
+- Broader Task 6/7 candidate and attachment precision work remains deferred.
