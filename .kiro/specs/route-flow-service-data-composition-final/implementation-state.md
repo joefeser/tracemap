@@ -775,6 +775,18 @@ subcase, plus the directly touched Task 8 guard that clean
   passed, 640 tests.
 - Post-ACK `./scripts/check-private-paths.sh`: passed.
 - Post-ACK `git diff --check`: passed.
+- After the ACK patch, the live PR diff showed an unrelated site
+  troubleshooting commit on this branch. A normal revert commit removed that
+  unrelated site slice from the net PR diff; the PR diff is back to this spec
+  folder plus route-flow reporting/tests only.
+- Final post-cleanup validation:
+  - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+    errors.
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
+    passed, 37 tests.
+  - `dotnet test src/dotnet/TraceMap.sln`: passed, 640 tests.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
 - Follow-up push and ACK rerun are pending in this pass.
 
 ### Oddities / Design Decisions For PR 3
