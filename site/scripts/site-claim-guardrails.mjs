@@ -192,7 +192,9 @@ function validateRouteEntry(routeEntry, errors) {
     errors.push(withEvidence("Site claim guardrails routes-index.json must include nonClaims metadata.", routesIndexArtifact));
   }
 
-  validatePublicSafetyText(JSON.stringify(routeEntry), errors, routesIndexArtifact);
+  const routeText = JSON.stringify(routeEntry);
+  validatePublicSafetyText(routeText, errors, routesIndexArtifact);
+  validateForbiddenPositiveClaims(routeText, errors, routesIndexArtifact);
 }
 
 async function validatePage({ pagePath, routeContext, errors }) {
@@ -306,7 +308,7 @@ function validateLinks({ html, routeContext, errors }) {
 }
 
 function validatePublicSafety({ decodedHtml, html, pageText, errors }) {
-  const searchText = `${decodedHtml}\n${pageText}`;
+  const searchText = `${decodedHtml}\n${pageText}\n${collapseTagSplitText(decodedHtml)}`;
   validatePublicSafetyText(searchText, errors, pageArtifact);
 
   for (const href of extractHrefs(html)) {
@@ -318,14 +320,9 @@ function validatePublicSafety({ decodedHtml, html, pageText, errors }) {
   }
 
   const publicClaimText = normalizeRenderedText(stripAllowedContextHtml(html));
-  for (const pattern of forbiddenPositiveClaimPatterns) {
-    const match = publicClaimText.match(pattern);
-    if (match) {
-      errors.push(withEvidence(`Site claim guardrails page contains forbidden public claim outside marked boundary copy: ${match[0]}`, pageArtifact));
-    }
-  }
+  validateForbiddenPositiveClaims(publicClaimText, errors, pageArtifact);
 
-  if (!/\bdata-claim-guardrails-zone=["'](?:boundary|non-claim|rejected)["']/.test(html)) {
+  if (!/\bdata-claim-guardrails-zone\s*=\s*["'](?:boundary|non-claim|rejected)["']/.test(html)) {
     errors.push(withEvidence("Site claim guardrails page is missing machine-marked boundary or non-claim zones.", pageArtifact));
   }
 }
@@ -342,6 +339,15 @@ function validatePublicSafetyText(text, errors, artifact) {
   }
 }
 
+function validateForbiddenPositiveClaims(text, errors, artifact) {
+  for (const pattern of forbiddenPositiveClaimPatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      errors.push(withEvidence(`Site claim guardrails page contains forbidden public claim outside marked boundary copy: ${match[0]}`, artifact));
+    }
+  }
+}
+
 function validatePrimaryNavigation(html, errors) {
   const navMatch = html.match(/<nav\b[^>]*class=["'][^"']*\btop-nav\b[^"']*["'][^>]*>([\s\S]*?)<\/nav>/i);
   if (!navMatch) {
@@ -355,10 +361,62 @@ function validatePrimaryNavigation(html, errors) {
 }
 
 function stripAllowedContextHtml(html) {
-  return html.replace(
-    /<([a-z][a-z0-9]*)\b(?=[^>]*\bdata-claim-guardrails-zone=["'](?:boundary|non-claim|rejected)["'])[^>]*>[\s\S]*?<\/\1>/gi,
-    " "
-  );
+  return stripMarkedZones(html, new Set(["non-claim", "rejected"]));
+}
+
+function stripMarkedZones(html, allowedZones) {
+  const tagPattern = /<\/?([a-z][a-z0-9:-]*)\b[^>]*>/gi;
+  let output = "";
+  let cursor = 0;
+  let skipDepth = 0;
+
+  for (const match of html.matchAll(tagPattern)) {
+    const token = match[0];
+    const isClosing = /^<\//.test(token);
+    const isSelfClosing = /\/>$/.test(token);
+
+    if (skipDepth === 0) {
+      output += html.slice(cursor, match.index);
+    }
+
+    if (isClosing) {
+      if (skipDepth > 0) {
+        skipDepth -= 1;
+        if (skipDepth === 0) {
+          cursor = match.index + token.length;
+        }
+      } else {
+        output += token;
+        cursor = match.index + token.length;
+      }
+      continue;
+    }
+
+    if (skipDepth > 0) {
+      if (!isSelfClosing) {
+        skipDepth += 1;
+      }
+      continue;
+    }
+
+    const zone = getAttribute(token, "data-claim-guardrails-zone");
+    if (zone && allowedZones.has(zone)) {
+      if (!isSelfClosing) {
+        skipDepth = 1;
+      }
+      cursor = match.index + token.length;
+      continue;
+    }
+
+    output += token;
+    cursor = match.index + token.length;
+  }
+
+  if (skipDepth === 0) {
+    output += html.slice(cursor);
+  }
+
+  return output;
 }
 
 function extractRows(html, attributeName) {
@@ -381,20 +439,24 @@ function extractRowFields(rowHtml) {
 }
 
 function hasId(html, id) {
-  return new RegExp(`<[^>]+\\sid=["']${escapeRegExp(id)}["']`, "i").test(html);
+  return new RegExp(`<[^>]+\\sid\\s*=\\s*["']${escapeRegExp(id)}["']`, "i").test(html);
 }
 
 function hasHref(html, href) {
-  return new RegExp(`\\bhref=["']${escapeRegExp(href)}["']`, "i").test(html);
+  return new RegExp(`\\bhref\\s*=\\s*["']${escapeRegExp(href)}["']`, "i").test(html);
 }
 
 function extractHrefs(html) {
-  return [...html.matchAll(/\bhref=["']([^"']+)["']/gi)].map((match) => decodeHtmlEntities(match[1]));
+  return [...html.matchAll(/\bhref\s*=\s*["']([^"']+)["']/gi)].map((match) => decodeHtmlEntities(match[1]));
 }
 
 function getAttribute(attributes, name) {
-  const match = attributes.match(new RegExp(`\\b${escapeRegExp(name)}=["']([^"']*)["']`, "i"));
+  const match = attributes.match(new RegExp(`\\b${escapeRegExp(name)}\\s*=\\s*["']([^"']*)["']`, "i"));
   return match ? decodeHtmlEntities(match[1]) : null;
+}
+
+function collapseTagSplitText(html) {
+  return normalizeRenderedText(String(html).replace(/<[^>]+>/g, ""));
 }
 
 function normalizeRouteHref(value) {

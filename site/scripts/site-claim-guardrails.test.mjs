@@ -60,6 +60,21 @@ test("validateSiteClaimGuardrailsDist reports missing required sections and rows
   assert.match(errors.join("\n"), /missing required row: demo/);
 });
 
+test("validateSiteClaimGuardrailsDist accepts optional whitespace in route attributes", async (t) => {
+  const html = (await sourcePage())
+    .replace('id="proof-path-requirements"', 'id = "proof-path-requirements"')
+    .replace('href="/roadmap/"', 'href = "/roadmap/"')
+    .replace('data-claim-guardrail-row="demo"', 'data-claim-guardrail-row = "demo"')
+    .replace('data-field="required proof path"', 'data-field = "required proof path"')
+    .replace('data-claim-guardrails-zone="non-claim"', 'data-claim-guardrails-zone = "non-claim"');
+  const root = await createManagedFixture(t, { pageHtml: html });
+  const errors = [];
+
+  await validateSiteClaimGuardrailsDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateSiteClaimGuardrailsDist reports missing row fields and invalid handoff states", async (t) => {
   const html = (await sourcePage())
     .replace('data-field="required proof path">Public demo proof', 'data-field-hidden="required proof path">Public demo proof')
@@ -109,6 +124,17 @@ test("validateSiteClaimGuardrailsDist rejects private or credential-like materia
   assert.match(errors.join("\n"), /hard private or credential-like material/);
 });
 
+test("validateSiteClaimGuardrailsDist rejects tag-split private material", async (t) => {
+  const root = await createManagedFixture(t, {
+    pageHtml: (await sourcePage()).replace("</main>", "<p><span>/</span><span>Users</span><span>/private</span></p></main>")
+  });
+  const errors = [];
+
+  await validateSiteClaimGuardrailsDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /hard private or credential-like material/);
+});
+
 test("validateSiteClaimGuardrailsDist rejects private material in route metadata", async (t) => {
   const root = await createManagedFixture(t);
   await rewriteRouteEntry(join(root, "dist"), {
@@ -119,6 +145,19 @@ test("validateSiteClaimGuardrailsDist rejects private material in route metadata
   await validateSiteClaimGuardrailsDist({ dist: join(root, "dist"), errors });
 
   assert.match(errors.join("\n"), /hard private or credential-like material/);
+  assert.match(errors.join("\n"), /routes-index\.json/);
+});
+
+test("validateSiteClaimGuardrailsDist rejects route metadata overclaims", async (t) => {
+  const root = await createManagedFixture(t);
+  await rewriteRouteEntry(join(root, "dist"), {
+    summary: "TraceMap proves runtime behavior for public copy."
+  });
+  const errors = [];
+
+  await validateSiteClaimGuardrailsDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden public claim outside marked boundary copy/);
   assert.match(errors.join("\n"), /routes-index\.json/);
 });
 
