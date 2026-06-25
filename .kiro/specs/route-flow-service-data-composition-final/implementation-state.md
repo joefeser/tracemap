@@ -1136,14 +1136,19 @@ remaining service/data/query/dependency taxonomy.
 - Initial ACK PR loop on PR #334 returned `actionable_findings` with one
   unresolved review thread and `patchAuthorized=true`.
 - ACK-authorized finding patched:
-  - derived the `route-flow --to-surface` validation message from the same
-    surface-kind allow-list used for validation, so future surface additions do
-    not drift between the set and the error text.
+  - added a reporting-internal terminal surface kind contract shared by
+    `CombinedDependencyPathReporter` and `CombinedRouteFlowReporter`;
+  - derived both `paths --to-surface` and `route-flow --to-surface`
+    validation messages from the shared surface-kind allow-list, so future
+    surface additions do not drift between the path engine, route-flow
+    selector validation, and error text.
 - Post-ACK patch validation:
   - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
     errors.
   - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
     passed locally with 43 tests.
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedDependencyPathTests`:
+    passed locally with 30 tests.
   - `dotnet test src/dotnet/TraceMap.sln`: passed locally with 651 tests.
   - `./scripts/check-private-paths.sh`: passed.
   - `git diff --check`: passed.
