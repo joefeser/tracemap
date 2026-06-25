@@ -2726,11 +2726,14 @@ public static class CombinedRouteFlowReporter
 
         await using var command = connection.CreateCommand();
         var sourceFilter = AddSourceFilterParameters(command, sourceIndexIds);
-        var pairExclusion = pairCandidates.Count == 0
-            ? string.Empty
-            : $"{Environment.NewLine}              and not ({AddArgumentPairFilterParameters(command, pairCandidates)})";
+        var selectedPairKeys = pairCandidates
+            .Select(candidate => SymbolPairKey(candidate.SourceIndexId, candidate.CallerSymbol, candidate.CalleeSymbol))
+            .ToHashSet(StringComparer.Ordinal);
         command.CommandText = """
             select flows.combined_fact_id,
+                   flows.source_index_id,
+                   flows.caller_symbol,
+                   flows.callee_symbol,
                    sources.label,
                    flows.commit_sha,
                    flows.rule_id,
@@ -2743,23 +2746,35 @@ public static class CombinedRouteFlowReporter
             where flows.source_index_id in (
             """ + sourceFilter + """
             )
-            """ + pairExclusion + """
             order by flows.source_index_id, flows.caller_symbol, flows.callee_symbol, flows.parameter_ordinal, flows.combined_fact_id
-            limit 20;
             """;
         var values = new List<ProjectionGapEvidence>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
+            var sourceIndexId = reader.GetString(1);
+            var callerSymbol = reader.IsDBNull(2) ? null : reader.GetString(2);
+            var calleeSymbol = reader.IsDBNull(3) ? null : reader.GetString(3);
+            if (!string.IsNullOrWhiteSpace(callerSymbol)
+                && !string.IsNullOrWhiteSpace(calleeSymbol)
+                && selectedPairKeys.Contains(SymbolPairKey(sourceIndexId, callerSymbol!, calleeSymbol!)))
+            {
+                continue;
+            }
+
             values.Add(new ProjectionGapEvidence(
                 reader.GetString(0),
-                reader.GetString(1),
-                reader.GetString(2),
-                reader.GetString(3),
                 reader.GetString(4),
-                reader.GetInt32(5),
-                reader.GetInt32(6),
-                reader.GetString(7)));
+                reader.GetString(5),
+                reader.GetString(6),
+                reader.GetString(7),
+                reader.GetInt32(8),
+                reader.GetInt32(9),
+                reader.GetString(10)));
+            if (values.Count == 20)
+            {
+                break;
+            }
         }
 
         return values;
