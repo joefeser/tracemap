@@ -118,14 +118,18 @@ Oddities:
   the generated client type as `sourceSymbol` and the callable operation as
   `targetSymbol`; the patch now links selected ASMX operation surfaces through
   that callable target symbol.
+- Qodo review found that legacy projected flow terminals and CLI help also
+  needed the ASMX/SOAP surface vocabulary; the patch now preserves ASMX surface
+  kinds in legacy projection terminal nodes and lists them in `paths` and
+  `route-flow` help.
 
 Validation status:
 
 - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
   errors.
-- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
-  passed locally with 49 tests.
-- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 657 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~CombinedRouteFlowTests|FullyQualifiedName~LegacyFlowCompositionTests"`:
+  passed locally with 73 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 658 tests.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
 
