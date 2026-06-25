@@ -1030,6 +1030,7 @@ public static class CombinedRouteFlowReporter
                 }
             }
 
+            var hasAnyImplementationCandidateEvidence = candidateEdges.Count > 0 || incompatibleCandidateEdges is { Count: > 0 };
             if (incompatibleCandidateEdges is { Count: > 0 })
             {
                 gaps.Add(RuntimeBindingNotProvenGap(current, incompatibleCandidateEdges, scannerVersionBySourceIndexId));
@@ -1093,7 +1094,7 @@ public static class CombinedRouteFlowReporter
                     currentCallEdges.SelectMany(edge => edge.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).Take(20).ToArray()));
             }
 
-            if (!expanded && IsInterfaceMemberSymbol(current, symbolKinds))
+            if (!expanded && !hasAnyImplementationCandidateEvidence && IsInterfaceMemberSymbol(current, symbolKinds))
             {
                 var support = current.CombinedFactId is null ? [] : new[] { current.CombinedFactId };
                 gaps.Add(RouteBridgeGap(
