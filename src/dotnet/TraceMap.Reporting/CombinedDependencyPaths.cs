@@ -221,31 +221,6 @@ public static class CombinedDependencyPathReporter
     private const string SymbolReconciliationRuleId = "combined.paths.symbol-reconciliation.v1";
     private const int SelectorCandidateLimit = 250;
 
-    private static readonly HashSet<string> TerminalSurfaceKinds = new(StringComparer.Ordinal)
-    {
-        "sql-query",
-        "sql-persistence",
-        "http-route",
-        "http-client",
-        "package-config",
-        "wcf-operation",
-        "remoting-endpoint",
-        "remoting-registration",
-        "remoting-channel",
-        "remoting-object",
-        "remoting-api",
-        "legacy-data",
-        "dependency-surface",
-        "message-queue",
-        "message-topic",
-        "message-subscription",
-        "message-exchange",
-        "message-stream",
-        "message-event",
-        "message-channel",
-        "message-unknown"
-    };
-
     private static readonly HashSet<string> EdgeKindTerms = new(StringComparer.Ordinal)
     {
         "calls",
@@ -385,9 +360,9 @@ public static class CombinedDependencyPathReporter
                 throw new ArgumentException($"paths --to-surface '{surfaceKind}' is an edge kind, not a terminal surface.");
             }
 
-            if (!TerminalSurfaceKinds.Contains(surfaceKind))
+            if (!CombinedTerminalSurfaceKinds.AllSet.Contains(surfaceKind))
             {
-                throw new ArgumentException("paths --to-surface must be one of sql-query, sql-persistence, http-route, http-client, package-config, wcf-operation, remoting-endpoint, remoting-registration, remoting-channel, remoting-object, remoting-api, legacy-data, dependency-surface, message-queue, message-topic, message-subscription, message-exchange, message-stream, message-event, message-channel, or message-unknown.");
+                throw new ArgumentException($"paths --to-surface must be one of {CombinedTerminalSurfaceKinds.ValidationList}.");
             }
         }
 
