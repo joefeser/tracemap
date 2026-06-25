@@ -1495,6 +1495,20 @@ public sealed class CombinedRouteFlowTests
             ArgumentPassedFact(server, unrelatedCaller, unrelatedCallee, unrelatedParameter, "request", "System.String", "Services/Unrelated.cs", 40)
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+        await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = combinedPath
+        }.ToString()))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                update combined_argument_flows
+                set caller_symbol = null
+                where file_path = 'Services/Unrelated.cs';
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
 
         var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
             combinedPath,
