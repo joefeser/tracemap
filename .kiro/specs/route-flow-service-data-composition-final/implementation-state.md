@@ -1,7 +1,7 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: partial-implementation-merged-ready-for-next-slice
-Readiness: ready-for-next-focused-slice-after-kepler
+Status: task-5-closed-ready-for-task-6
+Readiness: task-5-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
 Target base: `dev`
@@ -11,6 +11,34 @@ Public claim level: static evidence only
 ## Reconciliation State
 
 Reconciled against `origin/dev` on 2026-06-25 at `87fe78a3`.
+
+Task 5 closure branch: `codex/route-flow-task5-matrix`.
+Task 5 audited base: `origin/dev` at
+`625e6fef9c9a88539545334c3fcd3e979e7d3244`.
+
+Task 5 scope selected on 2026-06-25:
+
+- Audit the remaining endpoint/root method to service-call stitching matrix
+  after PR #325/reconciliation without moving to Task 6.
+- Keep existing source-local symbol/fact/edge identity stitching intact.
+- Add the smallest missing product/test slice:
+  `SelectorNoMatch` now blocks clean `NoRouteFlowEvidence` suppression, and
+  inherited path no-evidence gaps preserve `FullEvidenceAvailable` coverage
+  when the path report is full coverage.
+- Add focused route-flow tests for deterministic direct service-call ordering
+  and full-coverage no-direct-call selector-blocker suppression.
+- Leave implementation-candidate continuation, attached dependency precision,
+  and broader Task 8/9/10 work for later tasks.
+
+Task 5 validation status:
+
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+  errors.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 39 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 642 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
 
 Merged evidence on `dev`:
 
@@ -27,9 +55,6 @@ Merged evidence on `dev`:
 
 Remaining slices after reconciliation:
 
-- Task 5 remainder: audit and close the direct-call/no-call/reduced-coverage
-  matrix, including any still-missing `MissingCallEdge` full-coverage
-  dead-end or zero-path shapes and deterministic-ordering coverage.
 - Task 6: implementation-candidate continuation and downgrade hardening.
 - Task 7: attached versus unjoinable service/data/query/dependency/value-origin
   precision, including the large projection SQL parameter cap noted below.
