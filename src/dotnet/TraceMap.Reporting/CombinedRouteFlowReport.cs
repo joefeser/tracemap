@@ -414,6 +414,7 @@ public static class CombinedRouteFlowReporter
             .ToArray();
         var projections = await BuildProjectionRowsAsync(options.IndexPath, routePaths, selectedSourceIndexIds, flowRows, sources, cancellationToken);
         gaps.AddRange(projections.Gaps);
+        RemoveCleanNoEvidenceGapsWhenBlocked(gaps);
         var allLogicRows = BuildLogicRows(routePaths, flowRows, sources)
             .Concat(projections.Rows)
             .OrderBy(row => row.LogicKind, StringComparer.Ordinal)
