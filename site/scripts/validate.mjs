@@ -14,6 +14,7 @@ import {
 import { validateDeployAuditDist } from "./deploy-audit.mjs";
 import { validateDemoEvidenceTrailDist } from "./demo-evidence-trail.mjs";
 import { validateDemoRunbookDist } from "./demo-runbook.mjs";
+import { validateDemoTroubleshootingDist } from "./demo-troubleshooting.mjs";
 import { validateEvidenceHandoffTemplateDist } from "./evidence-handoff-template.mjs";
 import { validateEvidenceDecisionRecordDist } from "./evidence-decision-record.mjs";
 import { validateEvidenceGapRegisterDist } from "./evidence-gap-register.mjs";
@@ -100,6 +101,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateDeployAuditDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateDemoEvidenceTrailDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateDemoRunbookDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateDemoTroubleshootingDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateChangeRiskLanguageGuideDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateEvidenceHandoffTemplateDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateEvidenceDecisionRecordDist({ baseUrl: normalizedBaseUrl, dist, errors });
