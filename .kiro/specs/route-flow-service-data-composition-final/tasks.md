@@ -88,6 +88,13 @@ current `dev` code or merged PR records prove the behavior.
     - [x] Add focused cycle coverage proving source-local service-call cycles
           emit a deterministic `TraversalBounds` gap, suppress clean
           no-evidence claims, and downgrade the report.
+    - [x] Add focused no-direct-call reduced-coverage coverage proving clean
+          `NoRouteFlowEvidence` gaps are suppressed when source coverage gaps
+          prevent a clean absence conclusion.
+    - [x] Add focused projection/truncation blocker coverage proving clean
+          `NoRouteFlowEvidence` gaps are suppressed when projection schema,
+          argument projection, data-surface attachment, or traversal bounds
+          blockers prevent a clean absence conclusion.
     - [ ] Direct/no-call/reduced-coverage/deterministic-ordering remainder:
           still valid follow-up work unless a later `origin/dev` audit proves
           an in-flight route-flow branch completed or superseded it.

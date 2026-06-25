@@ -756,3 +756,118 @@ node scripts/kiro-review.mjs --phase route-flow-service-data-composition-final -
 - If implementation requires a new gap code or row kind, update
   `rules/rule-catalog.yml` before emitting it and document limitations in the
   implementation state.
+
+## Product Implementation PR 3
+
+Branch: `codex/route-flow-service-data-stitching`
+Base: `origin/dev` at `87fe78a31ce9204230b00dab8dfeaabf79d1b206`
+
+Selected slice: the next remaining Task 5 no-direct-call/reduced-coverage
+subcase, plus the directly touched Task 8 guard that clean
+`NoRouteFlowEvidence` gaps require full relevant route-flow coverage.
+
+### Live Audit Notes
+
+- The prior duplicate-root and cycle Task 5 sub-slices are already present on
+  `origin/dev`.
+- Direct source-local service/repository call stitching and MissingCallEdge
+  behavior already exist in `CombinedRouteFlowReport`.
+- The remaining gap selected for this PR was narrower: when a route root has no
+  downstream flow rows and source coverage is reduced, route-flow should keep
+  the reduced/unknown gap and must not also emit a clean absence
+  `NoRouteFlowEvidence` gap.
+
+### Implementation Notes
+
+- Added a route-flow report guard that removes inherited clean
+  `NoRouteFlowEvidence` gaps and avoids adding a new one whenever reduced
+  coverage, schema/extractor/unknown, projection, attachment, or endpoint
+  composition gaps block a clean absence conclusion.
+- Preserved the existing full-coverage clean no-evidence fixture and avoided
+  broad path-reporter behavior changes.
+- Added a synthetic regression with a failed-build source, selected route root,
+  no downstream call rows, and a required terminal surface. The report now
+  emits the reduced-coverage gap, downgrades to `UnknownAnalysisGap`, and does
+  not emit `NoRouteFlowEvidence` or `MissingCallEdge`.
+
+### Validation Log For PR 3
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
+  passed, 37 tests.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+  errors.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 640 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- PR #325 opened against `dev` from
+  `codex/route-flow-service-data-stitching`.
+- Initial ACK PR loop returned `actionable_findings` with two unresolved
+  review threads and `patchAuthorized=true`.
+- ACK-authorized findings patched:
+  - removed a redundant `DataSurfaceAttachmentMissing` branch from the clean
+    no-evidence blocker predicate because it is already covered by endpoint
+    composition blocker handling;
+  - treated `TruncatedByLimit` gaps as blockers for clean
+    `NoRouteFlowEvidence` and updated the truncation-adjacent fixture to assert
+    the safer unknown conclusion.
+- Focused validation after the ACK patch:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`
+  passed, 37 tests.
+- Post-ACK `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and
+  0 errors.
+- First post-ACK `dotnet test src/dotnet/TraceMap.sln` had one known
+  intermittent diagnostic artifact assertion miss for `NuGetRestoreFailed`.
+  The single diagnostic test passed in isolation, and the full solution rerun
+  passed, 640 tests.
+- Post-ACK `./scripts/check-private-paths.sh`: passed.
+- Post-ACK `git diff --check`: passed.
+- After the ACK patch, the live PR diff showed an unrelated site
+  troubleshooting commit on this branch. A normal revert commit removed that
+  unrelated site slice from the net PR diff; the PR diff is back to this spec
+  folder plus route-flow reporting/tests only.
+- Final post-cleanup validation:
+  - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+    errors.
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
+    passed, 37 tests.
+  - `dotnet test src/dotnet/TraceMap.sln`: passed, 640 tests.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
+- ACK rerun after cleanup showed the two review threads resolved but one Qodo
+  top-level actionable finding remained: inherited clean no-evidence gaps were
+  cleaned before projection gaps were appended.
+- Patched the Qodo finding by rerunning clean no-evidence gap cleanup after
+  projection gaps are appended, and added projection-gap coverage asserting
+  `NoRouteFlowEvidence` is absent when projection blockers exist.
+- Post-Qodo validation:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
+    passed, 37 tests.
+  - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+    errors.
+  - `dotnet test src/dotnet/TraceMap.sln`: passed, 640 tests.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
+- Follow-up push completed at
+  `bb881c95f5146b86af411e69e309c1f2ca6bd5a9`.
+- ACK rerun returned `merge_ready`, stop reason `NONE`, next action
+  `merge_ready`; Qodo's remaining finding was patched and dispositioned, Codex
+  stale review remained residual medium risk under the configured trusted
+  review quorum policy.
+- After PR #326 merged the spec reconciliation branch, PR #325 became dirty.
+  The branch merged `origin/dev`, preserved the completed no-direct-call
+  reduced/projection-blocker checklist items, and kept the broader
+  direct/no-call/reduced-coverage/deterministic-ordering remainder unchecked for
+  a future route-flow slice.
+
+### Oddities / Design Decisions For PR 3
+
+- A legacy full-coverage no-downstream fixture inherits a path-reporter
+  `TruncatedByLimit` gap with coverage-relative evidence. This PR leaves that
+  behavior unchanged and only suppresses clean absence when reduced/unknown or
+  endpoint-composition blockers are present.
+
+### Follow-Ups For PR 3
+
+- Remaining Task 5 backlog after this slice: MissingCallEdge-specific
+  full-coverage dead-end coverage and deterministic ordering coverage.
+- Broader Task 6/7 candidate and attachment precision work remains deferred.
