@@ -1,7 +1,7 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: task-7-sql-query-attachment-precision-ready-for-review
-Readiness: task-7-sql-query-ready-for-pr-review-loop
+Status: task-7-value-origin-precision-ready-for-review
+Readiness: task-7-value-origin-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
 Target base: `dev`
@@ -1339,3 +1339,115 @@ execution claims, or the full remaining service/data/query/dependency taxonomy.
 - Keep the large argument-pair and fact-symbol projection SQL batching follow-up
   open so large selected route-flow graphs cannot exceed SQLite parameter
   limits.
+
+## Product Implementation PR 9
+
+Branch: `codex/route-flow-task7-value-origin-precision-20260625173937`
+Base: `origin/dev` at `7ac6e1ac883998a7c09c87afc416f0c76be225f6`
+Merge refresh: merged `origin/dev` at
+`7dc99a8564ac3a46effce7492a5e21a1b243837a` to preserve the SQL/query
+attachment precision slice from Product Implementation PR 8.
+
+Selected slice: Task 7 argument-flow / parameter-forward value-origin
+attachment precision after PR #335 and current `origin/dev`. This slice
+preserves `route-flow`, JSON version `1.0`, and the existing
+`combined.route-flow.*` rule namespace. It does not add runtime proof,
+endpoint reachability, DI binding, production traffic, release-safety wording,
+AI/LLM analysis, vector search, or scanner extraction changes.
+
+### Live Audit Notes For PR 9
+
+- Current `origin/dev` already includes Task 5, Task 6, fact-symbol
+  source-role precision from PR #335, event/message terminal-surface
+  attachment precision from PR #334, and the SQL/query attachment precision
+  slice from Product Implementation PR 8.
+- `CombinedRouteFlowReport` already renders selected parameter-forward
+  value-origin rows through selected route-flow paths and already joins
+  argument-flow projection rows through selected caller/callee route-flow row
+  pairs.
+- The remaining value-origin gap was narrower: when one selected argument-flow
+  projection attached successfully, adjacent same-source argument-flow evidence
+  that could not join a selected static route-flow pair was silently omitted
+  instead of preserving `ArgumentProjectionUnavailable`.
+
+### Implementation Notes For PR 9
+
+- Argument projection gap evidence now reads unjoined same-source
+  `combined_argument_flows` rows by excluding the selected route-flow
+  caller/callee pair set.
+- `ArgumentProjectionUnavailable` is emitted for adjacent unjoined
+  argument-flow evidence even when other argument-flow projection rows attach
+  successfully.
+- The argument projection gap now carries source label, file span, commit SHA,
+  extractor name, and extractor version metadata from the unjoined evidence,
+  matching the fact-symbol projection gap evidence shape.
+- Added focused synthetic coverage proving selected argument-flow projection
+  rows attach to selected static route-flow rows, selected parameter-forward
+  value-origin rows remain route-flow path context, adjacent unjoined
+  argument-flow evidence does not render as flow/logic rows, and repeated
+  row/gap IDs are deterministic.
+
+### Validation Log For PR 9
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_value_origin_rows_only_from_selected_static_path"`:
+  passed locally with 1 test before the merge refresh. NuGet emitted the
+  existing `SQLitePCLRaw.lib.e_sqlite3` high-severity vulnerability warning.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 45 tests before the merge refresh, with the same existing
+  NuGet warning.
+- `git diff --check`: passed before the merge refresh.
+- `./scripts/check-private-paths.sh`: passed before the merge refresh.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 653 tests before
+  the merge refresh, with the same existing NuGet warning.
+- Post-merge refresh validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 47 tests, `git diff --check` passed,
+  `./scripts/check-private-paths.sh` passed, and
+  `dotnet test src/dotnet/TraceMap.sln` passed locally with 655 tests. NuGet
+  emitted the same existing `SQLitePCLRaw.lib.e_sqlite3` warning.
+- ACK-authorized patch after the merge refresh replaced the SQL
+  `not (caller/callee pair clauses)` gap-exclusion filter with deterministic
+  in-memory selected-pair exclusion. This avoids large exclusion predicates and
+  preserves null-caller/null-callee unjoined argument-flow rows as
+  `ArgumentProjectionUnavailable` evidence.
+- Post-ACK patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_value_origin_rows_only_from_selected_static_path"`
+  passed locally with 1 test,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 47 tests, `git diff --check` passed,
+  `./scripts/check-private-paths.sh` passed, and
+  `dotnet test src/dotnet/TraceMap.sln` passed locally with 655 tests. NuGet
+  emitted the same existing `SQLitePCLRaw.lib.e_sqlite3` warning.
+- Second ACK-authorized patch made the unjoined argument-flow gap evidence
+  query fully static SQL and moved selected source filtering into the same
+  deterministic in-memory pass as selected-pair exclusion.
+- Post-second-ACK patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_value_origin_rows_only_from_selected_static_path"`
+  passed locally with 1 test,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 47 tests, `git diff --check` passed,
+  `./scripts/check-private-paths.sh` passed, and
+  `dotnet test src/dotnet/TraceMap.sln` passed locally with 655 tests. NuGet
+  emitted the same existing `SQLitePCLRaw.lib.e_sqlite3` warning.
+- Third ACK-authorized patch groups unjoined argument-flow projection gap
+  evidence by source label, file span, commit SHA, rule ID, and extractor
+  version before emitting `ArgumentProjectionUnavailable`, so each gap's
+  metadata matches its supporting evidence location.
+- Post-third-ACK patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_value_origin_rows_only_from_selected_static_path"`
+  passed locally with 1 test,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 47 tests, `git diff --check` passed,
+  `./scripts/check-private-paths.sh` passed, and
+  `dotnet test src/dotnet/TraceMap.sln` passed locally with 655 tests. NuGet
+  emitted the same existing `SQLitePCLRaw.lib.e_sqlite3` warning.
+
+### Follow-Ups For PR 9
+
+- Complete the broader Task 7 taxonomy for storage, validation/guard,
+  serializer/contract, async/callback, flow-boundary, ASMX/SOAP if supported by
+  path terminals, and remaining attached-versus-path-context labeling coverage.
+- Keep the large argument-pair and fact-symbol projection SQL batching/cap
+  follow-up open for a dedicated performance/scale slice.
+- Keep Task 8/9/10 unchecked except for the validation and safety behavior
+  directly touched by this value-origin sub-slice.
