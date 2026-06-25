@@ -131,6 +131,43 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
+    public async Task Paths_traverse_explicit_interface_dispatch_candidates_from_relationship_identity()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.IOrderService.Get(System.Int32)";
+        var explicitImplementation = "Server.OrderService.Server.IOrderService.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14),
+            SymbolRelationshipFact(server, explicitImplementation, service, "Services/OrderService.cs", 18),
+            CallFact(server, explicitImplementation, repository, "Services/OrderService.cs", 21),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromEndpoint: "GET /api/orders/{}",
+                FromSource: "server",
+                ToSurface: "sql-query"));
+
+        var path = result.Report.Paths.First(candidatePath => candidatePath.Edges.Any(edge => edge.EdgeKind == "interface-candidate"));
+        Assert.Equal(CombinedDependencyPathClassifications.NeedsReviewPath, path.Classification);
+        var candidate = Assert.Single(path.Edges, edge => edge.EdgeKind == "interface-candidate");
+        Assert.Equal("combined.dispatch-candidate.v1", candidate.RuleId);
+        Assert.Contains(path.Nodes, node => node.DisplayName == explicitImplementation);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "MemberCandidateUnavailable");
+    }
+
+    [Fact]
     public async Task Paths_traverse_static_override_dispatch_candidates_as_needs_review()
     {
         using var temp = new TempDirectory();
@@ -167,6 +204,120 @@ public sealed class CombinedDependencyPathTests
         Assert.NotEmpty(candidate.SupportingCombinedEdgeIds);
         Assert.Contains(path.Notes, note => note.Code == "StaticDispatchCandidate");
         Assert.Equal("sql-query", path.Nodes.Last().SurfaceKind);
+    }
+
+    [Fact]
+    public async Task Paths_traverse_static_override_chain_candidates_with_stable_output()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var abstraction = "Server.OrderProcessor.Process(System.Int32)";
+        var intermediate = "Server.MidOrderProcessor.Process(System.Int32)";
+        var overrideMethod = "Server.APriorityOrderProcessor.Process(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, abstraction, "Controllers/OrdersController.cs", 14),
+            SymbolRelationshipFact(server, intermediate, abstraction, "Services/MidOrderProcessor.cs", 18, relationshipKind: "Overrides"),
+            SymbolRelationshipFact(server, overrideMethod, intermediate, "Services/APriorityOrderProcessor.cs", 19, relationshipKind: "Overrides"),
+            CallFact(server, overrideMethod, repository, "Services/APriorityOrderProcessor.cs", 21),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths-first"),
+                FromEndpoint: "GET /api/orders/{}",
+                FromSource: "server",
+                ToSurface: "sql-query",
+                MaxDepth: 5));
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths-second"),
+                FromEndpoint: "GET /api/orders/{}",
+                FromSource: "server",
+                ToSurface: "sql-query",
+                MaxDepth: 5));
+
+        var path = Assert.Single(result.Report.Paths);
+        Assert.Equal(CombinedDependencyPathClassifications.NeedsReviewPath, path.Classification);
+        var candidate = Assert.Single(path.Edges, edge => edge.EdgeKind == "override-candidate");
+        Assert.Equal("combined.dispatch-candidate.v1", candidate.RuleId);
+        Assert.True(candidate.SupportingCombinedEdgeIds.Count >= 2);
+        Assert.Contains(path.Nodes, node => node.DisplayName == overrideMethod);
+        Assert.DoesNotContain(path.Nodes, node => node.DisplayName == intermediate);
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(temp.Path, "paths-first", "paths-report.md")),
+            await File.ReadAllTextAsync(Path.Combine(temp.Path, "paths-second", "paths-report.md")));
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(temp.Path, "paths-first", "paths-report.json")),
+            await File.ReadAllTextAsync(Path.Combine(temp.Path, "paths-second", "paths-report.json")));
+    }
+
+    [Fact]
+    public void Static_dispatch_override_chain_respects_depth_bound_and_cycle_protection()
+    {
+        var nodes = Enumerable.Range(0, 7)
+            .ToDictionary(
+                index => $"method-{index}",
+                index => new StaticDispatchCandidateNode(
+                    $"method-{index}",
+                    "Method",
+                    $"Server.Processor{index}.Process(System.Int32)",
+                    "server",
+                    "server",
+                    "commit",
+                    $"Services/Processor{index}.cs",
+                    10 + index,
+                    10 + index),
+                StringComparer.Ordinal);
+        var relationships = Enumerable.Range(1, 6)
+            .Select(index => new StaticDispatchRelationshipEdge(
+                $"rel-{index}",
+                "overrides",
+                "Overrides",
+                $"method-{index}",
+                $"method-{index - 1}",
+                EvidenceTiers.Tier1Semantic,
+                [$"fact-{index}"],
+                [$"edge-{index}"],
+                $"Services/Processor{index}.cs",
+                20 + index,
+                20 + index))
+            .Append(new StaticDispatchRelationshipEdge(
+                "rel-cycle",
+                "overrides",
+                "Overrides",
+                "method-0",
+                "method-2",
+                EvidenceTiers.Tier1Semantic,
+                ["fact-cycle"],
+                ["edge-cycle"],
+                "Services/Processor0.cs",
+                40,
+                40))
+            .Reverse()
+            .ToArray();
+
+        var first = StaticDispatchCandidateBuilder.Build(nodes, relationships, options: new StaticDispatchCandidateBuildOptions(CandidateLimit: 20));
+        var second = StaticDispatchCandidateBuilder.Build(nodes, relationships, options: new StaticDispatchCandidateBuildOptions(CandidateLimit: 20));
+
+        var rootCandidates = first.Edges
+            .Where(edge => edge.AbstractionSymbolId == "method-0")
+            .ToArray();
+        Assert.Equal(StaticDispatchCandidateBuilder.DefaultMaxOverrideDepth, rootCandidates.Length);
+        Assert.DoesNotContain(rootCandidates, edge => edge.CandidateSymbolId == "method-6");
+        Assert.All(rootCandidates, edge => Assert.Equal(StaticDispatchBridgeKinds.OverrideMember, edge.BridgeKind));
+        Assert.Equal(
+            first.Edges.Select(edge => edge.CandidateId).ToArray(),
+            second.Edges.Select(edge => edge.CandidateId).ToArray());
     }
 
     [Fact]
