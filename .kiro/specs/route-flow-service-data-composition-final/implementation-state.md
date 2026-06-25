@@ -1263,8 +1263,90 @@ claims, or the full remaining service/data/query/dependency taxonomy.
 
 ## Product Implementation PR 8
 
+Branch: `codex/task7-attachment-precision`
+Base: `origin/dev` at `7ac6e1ac`
+
+Selected slice: continue Task 7 after PR #334 and PR #335 with a small
+SQL/query dependency-surface attachment precision hardening slice. This slice
+does not start UI property lineage, site work, scanner extraction, runtime
+execution claims, or the full remaining service/data/query/dependency taxonomy.
+
+### Live Audit Notes For PR 8
+
+- Current `dev` already contains selected route-flow traversal, dependency
+  surface rendering from selected `routePaths`, parameter-forward seed edges,
+  argument-flow projection joins through selected route-flow caller/callee
+  pairs, source-role fact-symbol projection joins through selected source-local
+  symbols, and the projection/attachment gap kinds
+  `ArgumentProjectionUnavailable`, `FactSymbolProjectionUnavailable`,
+  `FactSymbolUnsupportedTypeSkipped`, and `DataSurfaceAttachmentMissing`.
+- PR #334's event/message terminal-surface precision and PR #335's source-role
+  fact-symbol precision are present on the audited base.
+- SQL/query terminal surfaces are already selected through route-flow path
+  evidence. The missing small-slice evidence was focused coverage for selected
+  SQL attachment versus adjacent same-source SQL evidence, path-context
+  labeling, and deterministic dependency surface/gap IDs.
+
+### Implementation Notes For PR 8
+
+- Added focused `CombinedRouteFlowTests` coverage proving selected SQL/query
+  surfaces render as dependency surfaces only when joined through the selected
+  static route-flow path.
+- Added adjacent same-source SQL/query evidence coverage proving route-flow
+  does not infer an unjoined SQL surface and preserves
+  `DataSurfaceAttachmentMissing` instead of a clean no-evidence conclusion.
+- Added deterministic repeated-render assertions for selected SQL surface IDs,
+  stable keys, and unjoinable gap IDs.
+- Added path-context labeling assertions for the selected SQL logic row and its
+  attachment to the selected terminal `flowRows` row.
+- Extended the synthetic `QueryPatternFact` test helper with optional table,
+  column, and shape values so fixtures can distinguish selected and adjacent
+  public-safe SQL surfaces without raw SQL/config values.
+
+### Validation Log For PR 8
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_selected_sql_surface_with_path_context_and_stable_ids|FullyQualifiedName~Route_flow_does_not_infer_adjacent_sql_surface_without_selected_join"`:
+  passed locally with 2 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 46 tests.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+  errors.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 654 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+### Oddities / Design Decisions For PR 8
+
+- The unjoinable SQL fixture's `DataSurfaceAttachmentMissing` gap currently
+  carries rule, source label, deterministic gap ID, and route-root file span,
+  but no commit SHA or supporting fact IDs on this traversal path. The test
+  asserts the stable rule-backed evidence available on `dev` and leaves broader
+  gap metadata enrichment out of this conservative slice.
+- The adjacent SQL fixture uses public-safe synthetic table/shape labels only;
+  no raw SQL, config values, secrets, private paths, remotes, or source snippets
+  are rendered.
+
+### Follow-Ups For PR 8
+
+- Continue Task 7 for the remaining taxonomy items: service/repository rows
+  beyond existing selected path rows, object/projection variants, legacy data,
+  package/config, HTTP client, WCF, ASMX/SOAP, remoting, storage,
+  validation/guard, serializer/contract, async/callback, flow-boundary breadth,
+  and any broader attached-versus-path-context matrix not already covered.
+- Consider enriching `DataSurfaceAttachmentMissing` gaps with commit SHA and
+  supporting fact IDs where traversal paths have that evidence available, but
+  keep the gap conservative when the join is unavailable.
+- Keep the large argument-pair and fact-symbol projection SQL batching follow-up
+  open so large selected route-flow graphs cannot exceed SQLite parameter
+  limits.
+
+## Product Implementation PR 9
+
 Branch: `codex/route-flow-task7-value-origin-precision-20260625173937`
 Base: `origin/dev` at `7ac6e1ac883998a7c09c87afc416f0c76be225f6`
+Merge refresh: merged `origin/dev` at
+`7dc99a8564ac3a46effce7492a5e21a1b243837a` to preserve the SQL/query
+attachment precision slice from Product Implementation PR 8.
 
 Selected slice: Task 7 argument-flow / parameter-forward value-origin
 attachment precision after PR #335 and current `origin/dev`. This slice
@@ -1273,11 +1355,12 @@ preserves `route-flow`, JSON version `1.0`, and the existing
 endpoint reachability, DI binding, production traffic, release-safety wording,
 AI/LLM analysis, vector search, or scanner extraction changes.
 
-### Live Audit Notes For PR 8
+### Live Audit Notes For PR 9
 
 - Current `origin/dev` already includes Task 5, Task 6, fact-symbol
-  source-role precision from PR #335, and event/message terminal-surface
-  attachment precision from PR #334.
+  source-role precision from PR #335, event/message terminal-surface
+  attachment precision from PR #334, and the SQL/query attachment precision
+  slice from Product Implementation PR 8.
 - `CombinedRouteFlowReport` already renders selected parameter-forward
   value-origin rows through selected route-flow paths and already joins
   argument-flow projection rows through selected caller/callee route-flow row
@@ -1287,7 +1370,7 @@ AI/LLM analysis, vector search, or scanner extraction changes.
   that could not join a selected static route-flow pair was silently omitted
   instead of preserving `ArgumentProjectionUnavailable`.
 
-### Implementation Notes For PR 8
+### Implementation Notes For PR 9
 
 - Argument projection gap evidence now reads unjoined same-source
   `combined_argument_flows` rows by excluding the selected route-flow
@@ -1304,19 +1387,26 @@ AI/LLM analysis, vector search, or scanner extraction changes.
   argument-flow evidence does not render as flow/logic rows, and repeated
   row/gap IDs are deterministic.
 
-### Validation Log For PR 8
+### Validation Log For PR 9
 
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_value_origin_rows_only_from_selected_static_path"`:
-  passed locally with 1 test. NuGet emitted the existing
-  `SQLitePCLRaw.lib.e_sqlite3` high-severity vulnerability warning.
+  passed locally with 1 test before the merge refresh. NuGet emitted the
+  existing `SQLitePCLRaw.lib.e_sqlite3` high-severity vulnerability warning.
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
-  passed locally with 45 tests, with the same existing NuGet warning.
-- `git diff --check`: passed.
-- `./scripts/check-private-paths.sh`: passed.
-- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 653 tests, with
-  the same existing NuGet warning.
+  passed locally with 45 tests before the merge refresh, with the same existing
+  NuGet warning.
+- `git diff --check`: passed before the merge refresh.
+- `./scripts/check-private-paths.sh`: passed before the merge refresh.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 653 tests before
+  the merge refresh, with the same existing NuGet warning.
+- Post-merge refresh validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 47 tests, `git diff --check` passed,
+  `./scripts/check-private-paths.sh` passed, and
+  `dotnet test src/dotnet/TraceMap.sln` passed locally with 655 tests. NuGet
+  emitted the same existing `SQLitePCLRaw.lib.e_sqlite3` warning.
 
-### Follow-Ups For PR 8
+### Follow-Ups For PR 9
 
 - Complete the broader Task 7 taxonomy for storage, validation/guard,
   serializer/contract, async/callback, flow-boundary, ASMX/SOAP if supported by
