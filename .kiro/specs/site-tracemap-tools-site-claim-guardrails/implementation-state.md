@@ -292,6 +292,13 @@ Completed implementation validation:
   expected title, visible concept label, shared principle, 10 guardrail rows,
   programmatic table marker, no body overflow, and table overflow contained in
   the scroll wrapper.
+- PR review-loop hardening on 2026-06-25: patched whitespace-tolerant
+  attribute parsing, narrowed overclaim-scan exemptions to explicit
+  non-claim/rejected zones, added tag-split private-material scanning, added
+  route-metadata overclaim scanning, and removed a broad table-wrapper
+  exemption. Validation after the patch: `npm test -- site-claim-guardrails`,
+  `npm run validate`, `npm run build`, `git diff --check`, and
+  `./scripts/check-private-paths.sh` passed.
 
 Focused validation covers required guardrail rows, required adjacent links,
 metadata, discovery and sitemap metadata, forbidden claims, private/raw
