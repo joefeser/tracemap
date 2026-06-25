@@ -1,7 +1,7 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: task-5-closed-ready-for-task-6
-Readiness: task-5-ready-for-pr-review-loop
+Status: task-6-closed-ready-for-task-7
+Readiness: task-6-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
 Target base: `dev`
@@ -10,7 +10,7 @@ Public claim level: static evidence only
 
 ## Reconciliation State
 
-Reconciled against `origin/dev` on 2026-06-25 at `87fe78a3`.
+Reconciled against `origin/dev` on 2026-06-25 at `086ad376`.
 
 Task 5 closure branch: `codex/route-flow-task5-matrix`.
 Task 5 audited base: `origin/dev` at
@@ -55,7 +55,9 @@ Merged evidence on `dev`:
 
 Remaining slices after reconciliation:
 
-- Task 6: implementation-candidate continuation and downgrade hardening.
+- Task 6: implementation-candidate continuation and downgrade hardening is
+  closed by PR #330 plus branch `codex/route-flow-task6-gap-matrix`, which
+  audited `origin/dev` at `086ad376e387ea8d87e430175ef2673cbc74c0f1`.
 - Task 7: attached versus unjoinable service/data/query/dependency/value-origin
   precision, including the large projection SQL parameter cap noted below.
 - Task 8/9/10: only the downgrade, compatibility, exit-code, rule-catalog, and
@@ -989,5 +991,73 @@ extraction, or broader Task 7/8/9/10 work.
   fixtures if the combined graph gains an explicit persisted bridge contract
   that can represent those relationships without violating source-local symbol
   identity.
-- Finish the remaining Task 6 deterministic gap matrix item before marking
-  Task 6 complete.
+- Task 6 deterministic gap matrix is closed by the follow-up slice below.
+
+## Product Implementation PR 5
+
+Branch: `codex/route-flow-task6-gap-matrix`
+Base: `origin/dev` at `086ad376e387ea8d87e430175ef2673cbc74c0f1`
+
+Selected slice: finish the remaining Task 6 implementation-candidate
+continuation/downgrade matrix after PR #330 and static dispatch builder PR
+#331. This slice does not start Task 7, site work, scanner extraction, runtime
+binding proof, or attached dependency/data precision.
+
+### Live Audit Notes
+
+- PR #330 already closed source-local candidate traversal, single-candidate
+  review-tier continuation, multiple/no-candidate gaps, runtime-binding
+  non-proof gaps, syntax/name-only caps, reduced-coverage clean-absence
+  suppression, and runtime-adjacent non-proof coverage.
+- PR #331 added `StaticDispatchCandidateBuilder` for deterministic static
+  dispatch candidate derivation and fan-out gaps.
+- Remaining Task 6 work on this audited base was to let route-flow reuse the
+  shared builder where safe and to preserve a route-flow-native deterministic
+  `DispatchCandidateFanOut` gap for high fan-out candidate sets.
+
+### Implementation Notes
+
+- Route-flow now derives implementation candidates through
+  `StaticDispatchCandidateBuilder` and maps builder output back to existing
+  route-flow row/gap vocabulary.
+- Candidate flow rows remain `interface-implementation-candidate` rows with
+  `combined.route-flow.interface-bridge.v1` evidence and
+  `NeedsReviewStaticRouteFlow` classification.
+- Builder fan-out gaps are translated into `DispatchCandidateFanOut` route-flow
+  gaps under `combined.route-flow.gap.v1`, `Tier4Unknown`, and
+  `ReducedCoverage`; the gap documents deterministic capping and runtime
+  non-proof limitations.
+- Runtime-binding gaps now consume the builder candidate edge shape. This keeps
+  candidate bridges as static review context only and does not claim runtime DI
+  target selection, service locator behavior, factory output, reflection target
+  execution, or dynamic dispatch.
+- `rules/rule-catalog.yml` now documents `DispatchCandidateFanOut` under
+  `combined.route-flow.interface-bridge.v1` limitations.
+
+### Validation Log For PR 5
+
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+  errors.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed, 41 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedDependencyPathTests`:
+  passed, 27 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 646 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+### Oddities / Design Decisions For PR 5
+
+- The shared builder emits `combined.dispatch-candidate.v1` and
+  `combined.dispatch-gap.v1` for paths. Route-flow intentionally keeps its
+  public row/gap contract under `combined.route-flow.*` and uses builder output
+  as an internal deterministic derivation source.
+- High fan-out is review-tier, not a hard clean-absence blocker. It caps
+  candidate-dependent rows and summaries without implying a runtime target was
+  selected or omitted.
+
+### Follow-Ups For PR 5
+
+- Task 7 remains the next implementation task: attached versus unjoinable
+  service/data/query/dependency/value-origin precision. Do not start it from
+  this Task 6 branch.

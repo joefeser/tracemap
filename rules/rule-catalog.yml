@@ -2230,9 +2230,11 @@ rules:
       - interface-implementation-candidate row
       - RuntimeBindingNotProven gap
       - ImplementationCandidateUnavailable gap
+      - DispatchCandidateFanOut gap
     limitations:
       - Candidate implementation evidence is not runtime dependency-injection target proof and must not select one runtime implementation.
       - Name-only, syntax-only, fallback, cross-source, or cross-language implementation guesses are not strong bridge evidence in v1.
+      - High fan-out implementation candidates are deterministically capped and remain review-tier; omitted candidates may still be possible static review evidence.
       - Reflection, factories, service locators, configuration-driven bindings, and dynamic dispatch remain analysis gaps unless a future deterministic rule covers them.
 
   - id: combined.dispatch-candidate.v1
