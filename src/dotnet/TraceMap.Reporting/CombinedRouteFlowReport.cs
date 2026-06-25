@@ -376,6 +376,7 @@ public static class CombinedRouteFlowReporter
             .Concat(sourceIdentityGaps)
             .Concat(endpointComposition.Gaps)
             .ToList();
+        RemoveCleanNoEvidenceGapsWhenBlocked(gaps);
         if (entryEvidence.Length == 0 && !endpointMissingRouteRoot)
         {
             gaps.Add(new RouteFlowGap(
@@ -413,6 +414,7 @@ public static class CombinedRouteFlowReporter
             .ToArray();
         var projections = await BuildProjectionRowsAsync(options.IndexPath, routePaths, selectedSourceIndexIds, flowRows, sources, cancellationToken);
         gaps.AddRange(projections.Gaps);
+        RemoveCleanNoEvidenceGapsWhenBlocked(gaps);
         var allLogicRows = BuildLogicRows(routePaths, flowRows, sources)
             .Concat(projections.Rows)
             .OrderBy(row => row.LogicKind, StringComparer.Ordinal)
@@ -438,7 +440,7 @@ public static class CombinedRouteFlowReporter
         if (entryEvidence.Length > 0
             && !HasDownstreamFlowEvidence(flowRows)
             && dependencySurfaces.Count == 0
-            && !gaps.Any(IsNoEvidenceBlockingCompositionGap))
+            && !gaps.Any(BlocksCleanNoEvidenceGap))
         {
             gaps.Add(new RouteFlowGap(
                 "gap:no-route-flow-evidence",
@@ -3517,6 +3519,16 @@ public static class CombinedRouteFlowReporter
         return flowRows.Any(row => row.RowKind is not ("entry" or "endpoint-method-bridge"));
     }
 
+    private static void RemoveCleanNoEvidenceGapsWhenBlocked(List<RouteFlowGap> gaps)
+    {
+        if (!gaps.Any(BlocksCleanNoEvidenceGap))
+        {
+            return;
+        }
+
+        gaps.RemoveAll(gap => gap.GapKind == "NoRouteFlowEvidence");
+    }
+
     private static void ApplyClassificationFilter(
         string? classification,
         List<RouteFlowRow> flowRows,
@@ -3968,6 +3980,21 @@ public static class CombinedRouteFlowReporter
             or "DataSurfaceAttachmentMissing"
             or "IdentityGap"
             or "TraversalBounds";
+    }
+
+    private static bool BlocksCleanNoEvidenceGap(RouteFlowGap gap)
+    {
+        return gap.GapKind != "NoRouteFlowEvidence"
+            && (IsNoEvidenceBlockingCompositionGap(gap)
+                || gap.GapKind is "DataSurfaceAttachmentMissing"
+                || gap.GapKind is "ArgumentProjectionUnavailable"
+                    or "FactSymbolProjectionUnavailable"
+                    or "SchemaMissing"
+                    or "ExtractorUnavailable"
+                    or "UnknownCommitSha"
+                    or "UnknownAnalysisGap"
+                    or "TruncatedByLimit"
+                    or "ReducedCoverage");
     }
 
     private static string GapClassification(RouteFlowGap gap)
