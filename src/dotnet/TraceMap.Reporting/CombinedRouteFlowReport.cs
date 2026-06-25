@@ -376,6 +376,7 @@ public static class CombinedRouteFlowReporter
             .Concat(sourceIdentityGaps)
             .Concat(endpointComposition.Gaps)
             .ToList();
+        RemoveDuplicateDispatchCandidateFanOutGaps(gaps);
         RemoveCleanNoEvidenceGapsWhenBlocked(gaps);
         if (entryEvidence.Length == 0 && !endpointMissingRouteRoot)
         {
@@ -902,11 +903,18 @@ public static class CombinedRouteFlowReporter
             .Where(edge => edge.EdgeKind is "calls" or "creates" or "argument-passed" or "argument-flow" or "parameter-forward")
             .GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
-        var implementationCandidatesByInterface = inventory.Edges
+        var implementationRelationships = inventory.Edges
             .Where(IsImplementationRelationshipEdge)
             .Where(edge => nodesById.ContainsKey(edge.FromNodeId) && nodesById.ContainsKey(edge.ToNodeId))
-            .GroupBy(edge => edge.ToNodeId, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.OrderBy(EndpointEdgeSortKey, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+            .ToArray();
+        var staticDispatchCandidates = BuildRouteFlowStaticDispatchCandidates(nodesById, implementationRelationships, scannerVersionBySourceIndexId);
+        var implementationCandidatesByInterface = staticDispatchCandidates.Edges
+            .GroupBy(edge => edge.AbstractionSymbolId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.OrderBy(StaticDispatchCandidateSortKey, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+        var implementationCandidateGapsByInterface = staticDispatchCandidates.Gaps
+            .Where(gap => !string.IsNullOrWhiteSpace(gap.NodeId))
+            .GroupBy(gap => gap.NodeId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key!, group => group.OrderBy(gap => gap.GapId, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
         var terminalNodeIds = ResolveEndpointCompositionTerminalNodeIds(options, inventory.Nodes, roots);
         if (terminalNodeIds.Count == 0)
         {
@@ -1010,11 +1018,16 @@ public static class CombinedRouteFlowReporter
                 queue.Enqueue(new EndpointTraversalState([.. state.Nodes, target], [.. state.Edges, edge]));
             }
 
-            var candidateEdges = new List<CombinedPathEdge>();
-            List<CombinedPathEdge>? incompatibleCandidateEdges = null;
+            var candidateEdges = new List<StaticDispatchCandidateEdge>();
+            List<StaticDispatchCandidateEdge>? incompatibleCandidateEdges = null;
+            foreach (var gap in implementationCandidateGapsByInterface.GetValueOrDefault(current.NodeId, []))
+            {
+                gaps.Add(RouteFlowStaticDispatchGap(gap, current));
+            }
+
             foreach (var edge in implementationCandidatesByInterface.GetValueOrDefault(current.NodeId, []))
             {
-                if (!nodesById.TryGetValue(edge.FromNodeId, out var candidate))
+                if (!nodesById.TryGetValue(edge.CandidateSymbolId, out var candidate))
                 {
                     continue;
                 }
@@ -1044,7 +1057,7 @@ public static class CombinedRouteFlowReporter
                     .OrderBy(value => value, StringComparer.Ordinal)
                     .ToArray();
                 var candidateNodeIds = candidateEdges
-                    .Select(edge => edge.FromNodeId)
+                    .Select(edge => edge.CandidateSymbolId)
                     .Distinct(StringComparer.Ordinal)
                     .OrderBy(value => value, StringComparer.Ordinal)
                     .ToArray();
@@ -1066,7 +1079,7 @@ public static class CombinedRouteFlowReporter
 
             foreach (var relationship in candidateEdges.Take(10))
             {
-                var candidate = nodesById[relationship.FromNodeId];
+                var candidate = nodesById[relationship.CandidateSymbolId];
                 if (state.Nodes.Any(node => node.NodeId == candidate.NodeId))
                 {
                     continue;
@@ -1397,6 +1410,71 @@ public static class CombinedRouteFlowReporter
         return $"{EndpointEdgeRank(edge.EdgeKind):000}|{edge.FilePath}|{edge.StartLine:000000}|{edge.ToNodeId}|{edge.EdgeId}";
     }
 
+    private static string StaticDispatchCandidateSortKey(StaticDispatchCandidateEdge edge)
+    {
+        return $"{EndpointEdgeRank(edge.ConsumerEdgeKind):000}|{edge.FilePath}|{edge.StartLine:000000}|{edge.CandidateSymbolId}|{edge.CandidateId}";
+    }
+
+    private static StaticDispatchCandidateBuildResult BuildRouteFlowStaticDispatchCandidates(
+        IReadOnlyDictionary<string, CombinedPathNode> nodesById,
+        IReadOnlyList<CombinedPathEdge> relationships,
+        IReadOnlyDictionary<string, string> scannerVersionBySourceIndexId)
+    {
+        var relationshipNodeIds = relationships
+            .Select(edge => edge.FromNodeId)
+            .Concat(relationships.Select(edge => edge.ToNodeId))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var relationshipNodes = relationshipNodeIds
+            .Where(nodesById.ContainsKey)
+            .ToDictionary(
+                id => id,
+                id =>
+                {
+                    var node = nodesById[id];
+                    return new StaticDispatchCandidateNode(
+                        node.NodeId,
+                        node.NodeKind,
+                        node.DisplayName ?? node.SymbolId ?? node.NodeId,
+                        node.SourceIndexId,
+                        node.SourceLabel,
+                        node.CommitSha,
+                        node.FilePath,
+                        node.StartLine,
+                        node.EndLine);
+                },
+                StringComparer.Ordinal);
+
+        return StaticDispatchCandidateBuilder.Build(
+            relationshipNodes,
+            relationships.Select(edge => new StaticDispatchRelationshipEdge(
+                edge.EdgeId,
+                edge.EdgeKind,
+                NormalizeStaticDispatchRelationshipKind(edge),
+                edge.FromNodeId,
+                edge.ToNodeId,
+                edge.EvidenceTier,
+                edge.SupportingFactIds,
+                edge.SupportingCombinedEdgeIds,
+                edge.FilePath,
+                edge.StartLine,
+                edge.EndLine)),
+            sourceIndexId => !string.IsNullOrWhiteSpace(sourceIndexId) && scannerVersionBySourceIndexId.TryGetValue(sourceIndexId, out var version) ? version : null);
+    }
+
+    private static string? NormalizeStaticDispatchRelationshipKind(CombinedPathEdge edge)
+    {
+        return edge.EdgeKind switch
+        {
+            "implements" => "ImplementsInterfaceMember",
+            "overrides" => "Overrides",
+            _ when edge.EdgeKind.Contains("implement", StringComparison.OrdinalIgnoreCase) => "ImplementsInterfaceMember",
+            _ when edge.EdgeKind.Contains("override", StringComparison.OrdinalIgnoreCase) => "Overrides",
+            _ => edge.EdgeKind
+        };
+    }
+
     private static IReadOnlyList<RouteFlowGap> TerminalSurfaceMissingGaps(
         IReadOnlyList<CombinedPathNode> roots,
         IReadOnlyDictionary<string, CombinedPathEdge[]> outgoing,
@@ -1598,16 +1676,15 @@ public static class CombinedRouteFlowReporter
         return $"{sourceIndexId}\0{displayName}";
     }
 
-    private static CombinedPathEdge ReverseImplementationCandidateEdge(CombinedPathEdge relationship, string interfaceNodeId, string implementationNodeId)
+    private static CombinedPathEdge ReverseImplementationCandidateEdge(StaticDispatchCandidateEdge relationship, string interfaceNodeId, string implementationNodeId)
     {
-        var supportingEdges = relationship.SupportingCombinedEdgeIds
-            .Append(relationship.EdgeId)
+        var supportingEdges = relationship.SupportingEdgeIds
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
         return new CombinedPathEdge(
-            $"route-flow-interface-bridge:{CombinedReportHelpers.Hash($"{relationship.EdgeId}:{interfaceNodeId}:{implementationNodeId}", 16)}",
-            relationship.EdgeKind is "overrides" ? "overrides" : "implements",
+            $"route-flow-interface-bridge:{CombinedReportHelpers.Hash($"{relationship.CandidateId}:{interfaceNodeId}:{implementationNodeId}", 16)}",
+            relationship.ConsumerEdgeKind == "override-candidate" ? "overrides" : "implements",
             interfaceNodeId,
             implementationNodeId,
             CombinedDependencyPathClassifications.NeedsReviewStaticPath,
@@ -1678,11 +1755,11 @@ public static class CombinedRouteFlowReporter
 
     private static RouteFlowGap RuntimeBindingNotProvenGap(
         CombinedPathNode node,
-        IReadOnlyList<CombinedPathEdge> incompatibleCandidateEdges,
+        IReadOnlyList<StaticDispatchCandidateEdge> incompatibleCandidateEdges,
         IReadOnlyDictionary<string, string> scannerVersionBySourceIndexId)
     {
         var edgeIds = incompatibleCandidateEdges
-            .Select(edge => edge.EdgeId)
+            .Select(edge => edge.CandidateId)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
@@ -1693,7 +1770,7 @@ public static class CombinedRouteFlowReporter
             .Take(20)
             .ToArray();
         var firstEdge = incompatibleCandidateEdges
-            .OrderBy(EndpointEdgeSortKey, StringComparer.Ordinal)
+            .OrderBy(StaticDispatchCandidateSortKey, StringComparer.Ordinal)
             .First();
         return new RouteFlowGap(
             $"gap:runtime-binding:cross-source:{HashCandidateSet("runtime-binding", node.NodeId, edgeIds, supportingFactIds, 16)}",
@@ -1714,6 +1791,30 @@ public static class CombinedRouteFlowReporter
             scannerVersionBySourceIndexId.TryGetValue(node.SourceIndexId, out var extractorVersion)
                 ? SafeSelector(extractorVersion) ?? "unknown"
                 : "unknown");
+    }
+
+    private static RouteFlowGap RouteFlowStaticDispatchGap(StaticDispatchCandidateGap gap, CombinedPathNode node)
+    {
+        return new RouteFlowGap(
+            $"gap:endpoint-composition:{gap.GapKind}:{CombinedReportHelpers.Hash($"{gap.GapId}:{node.NodeId}", 16)}",
+            gap.GapKind,
+            gap.Message,
+            GapRuleId,
+            gap.EvidenceTier,
+            "ReducedCoverage",
+            SafeLabel(gap.SourceLabel ?? node.SourceLabel),
+            node.NodeId,
+            node.CombinedFactId is null ? [] : [node.CombinedFactId],
+            [
+                "Static dispatch candidate fan-out is deterministically capped and remains review-tier.",
+                "Candidate implementation rows identify compiler-known candidates only and do not prove runtime dependency-injection targets."
+            ],
+            CombinedReportHelpers.SafePath(gap.FilePath ?? node.FilePath),
+            gap.StartLine ?? node.StartLine,
+            gap.EndLine ?? node.EndLine,
+            SafeCommitSha(gap.CommitSha ?? node.CommitSha),
+            ExtractorName(gap.RuleId),
+            SafeSelector(gap.ExtractorVersion) ?? "unknown");
     }
 
     private static RouteFlowGap TraversalBoundsGap(string reason, CombinedPathNode node)
@@ -3620,6 +3721,26 @@ public static class CombinedRouteFlowReporter
         gaps.RemoveAll(gap => gap.GapKind == "NoRouteFlowEvidence");
     }
 
+    private static void RemoveDuplicateDispatchCandidateFanOutGaps(List<RouteFlowGap> gaps)
+    {
+        var inheritedPathFanOutNodeIds = gaps
+            .Where(gap => gap.GapKind == "DispatchCandidateFanOut")
+            .Where(gap => gap.GapId.StartsWith("gap:path:", StringComparison.Ordinal))
+            .Select(gap => gap.AffectedRowId)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .ToHashSet(StringComparer.Ordinal);
+        if (inheritedPathFanOutNodeIds.Count == 0)
+        {
+            return;
+        }
+
+        gaps.RemoveAll(gap => gap.GapKind == "DispatchCandidateFanOut"
+            && gap.GapId.StartsWith("gap:endpoint-composition:", StringComparison.Ordinal)
+            && gap.AffectedRowId is not null
+            && inheritedPathFanOutNodeIds.Contains(gap.AffectedRowId));
+    }
+
     private static void ApplyClassificationFilter(
         string? classification,
         List<RouteFlowRow> flowRows,
@@ -3658,6 +3779,7 @@ public static class CombinedRouteFlowReporter
     private static RouteFlowGap FromPathGap(CombinedPathGap gap, string pathReportCoverage)
     {
         var gapKind = NormalizeGapKind(gap.GapKind);
+        var preserveGapSpan = gapKind == "DispatchCandidateFanOut";
         return new RouteFlowGap(
             $"gap:path:{CombinedReportHelpers.Hash(gap.GapId, 24)}",
             gapKind,
@@ -3668,11 +3790,25 @@ public static class CombinedRouteFlowReporter
             SafeSelector(gap.SourceLabel),
             gap.NodeId,
             gap.CombinedFactId is null ? [] : [gap.CombinedFactId],
-            PathGapLimitations(gapKind, pathReportCoverage));
+            PathGapLimitations(gapKind, pathReportCoverage),
+            preserveGapSpan ? CombinedReportHelpers.SafePath(gap.FilePath) : null,
+            preserveGapSpan ? gap.StartLine : null,
+            preserveGapSpan ? gap.EndLine : null,
+            preserveGapSpan ? SafeCommitSha(gap.CommitSha) : null,
+            preserveGapSpan ? ExtractorName(gap.RuleId) : null,
+            preserveGapSpan ? SafeSelector(gap.ExtractorVersion) ?? "unknown" : null);
     }
 
     private static IReadOnlyList<string> PathGapLimitations(string gapKind, string pathReportCoverage)
     {
+        if (gapKind == "DispatchCandidateFanOut")
+        {
+            return [
+                "Static dispatch candidate fan-out is deterministically capped and remains review-tier.",
+                "Candidate implementation rows identify compiler-known candidates only and do not prove runtime dependency-injection targets."
+            ];
+        }
+
         if (gapKind == "NoRouteFlowEvidence" && pathReportCoverage == "FullEvidenceAvailable")
         {
             return ["Inherited full-coverage no-evidence path gaps are static absence-of-evidence rows and do not prove runtime absence."];
@@ -3686,6 +3822,11 @@ public static class CombinedRouteFlowReporter
         if (gapKind == "NoRouteFlowEvidence")
         {
             return pathReportCoverage == "FullEvidenceAvailable" ? "FullEvidenceAvailable" : "ReducedCoverage";
+        }
+
+        if (gapKind == "DispatchCandidateFanOut")
+        {
+            return "ReducedCoverage";
         }
 
         return GapClassification(gap) == RouteFlowClassifications.UnknownAnalysisGap ? "ReducedCoverage" : "CoverageRelative";
@@ -4143,6 +4284,7 @@ public static class CombinedRouteFlowReporter
             "MissingImplementationBridge" => "MissingImplementationBridge",
             "ImplementationCandidateUnavailable" => "ImplementationCandidateUnavailable",
             "AmbiguousImplementationCandidates" => "AmbiguousImplementationCandidates",
+            "DispatchCandidateFanOut" => "DispatchCandidateFanOut",
             "DataSurfaceAttachmentMissing" => "DataSurfaceAttachmentMissing",
             "IdentityGap" => "IdentityGap",
             "TraversalBounds" => "TraversalBounds",
