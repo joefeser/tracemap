@@ -1133,6 +1133,20 @@ remaining service/data/query/dependency taxonomy.
 - `dotnet test src/dotnet/TraceMap.sln`: passed locally with 651 tests.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+- Initial ACK PR loop on PR #334 returned `actionable_findings` with one
+  unresolved review thread and `patchAuthorized=true`.
+- ACK-authorized finding patched:
+  - derived the `route-flow --to-surface` validation message from the same
+    surface-kind allow-list used for validation, so future surface additions do
+    not drift between the set and the error text.
+- Post-ACK patch validation:
+  - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+    errors.
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+    passed locally with 43 tests.
+  - `dotnet test src/dotnet/TraceMap.sln`: passed locally with 651 tests.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
 
 ### Oddities / Design Decisions For PR 6
 

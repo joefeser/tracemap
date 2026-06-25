@@ -285,8 +285,8 @@ public static class CombinedRouteFlowReporter
         RouteFlowClassifications.UnknownAnalysisGap
     };
 
-    private static readonly HashSet<string> SurfaceKinds = new(StringComparer.Ordinal)
-    {
+    private static readonly string[] SurfaceKinds =
+    [
         "sql-query",
         "sql-persistence",
         "http-route",
@@ -308,7 +308,9 @@ public static class CombinedRouteFlowReporter
         "message-event",
         "message-channel",
         "message-unknown"
-    };
+    ];
+
+    private static readonly HashSet<string> SurfaceKindSet = new(SurfaceKinds, StringComparer.Ordinal);
 
     public static async Task<CombinedRouteFlowResult> WriteAsync(CombinedRouteFlowOptions options, CancellationToken cancellationToken = default)
     {
@@ -560,9 +562,9 @@ public static class CombinedRouteFlowReporter
             throw new ArgumentException("route-flow requires one selector: --route, --client-call, --from-endpoint, --from-webforms-event, --from-symbol, or --from-source.");
         }
 
-        if (!string.IsNullOrWhiteSpace(options.ToSurface) && !SurfaceKinds.Contains(options.ToSurface.Trim()))
+        if (!string.IsNullOrWhiteSpace(options.ToSurface) && !SurfaceKindSet.Contains(options.ToSurface.Trim()))
         {
-            throw new ArgumentException("route-flow --to-surface must be one of sql-query, sql-persistence, http-route, http-client, package-config, wcf-operation, remoting-endpoint, remoting-registration, remoting-channel, remoting-object, remoting-api, legacy-data, dependency-surface, message-queue, message-topic, message-subscription, message-exchange, message-stream, message-event, message-channel, or message-unknown.");
+            throw new ArgumentException($"route-flow --to-surface must be one of {FormatAllowedValues(SurfaceKinds)}.");
         }
 
         if (!string.IsNullOrWhiteSpace(options.Classification) && !AllowedClassifications.Contains(options.Classification.Trim()))
@@ -574,6 +576,17 @@ public static class CombinedRouteFlowReporter
         {
             throw new ArgumentException("route-flow caps must be positive integers.");
         }
+    }
+
+    private static string FormatAllowedValues(IReadOnlyList<string> values)
+    {
+        return values.Count switch
+        {
+            0 => string.Empty,
+            1 => values[0],
+            2 => $"{values[0]} or {values[1]}",
+            _ => $"{string.Join(", ", values.Take(values.Count - 1))}, or {values[^1]}"
+        };
     }
 
     private static async Task ValidateCombinedOnlyAsync(string indexPath, CancellationToken cancellationToken)
