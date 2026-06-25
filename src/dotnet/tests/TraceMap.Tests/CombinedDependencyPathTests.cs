@@ -131,6 +131,89 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
+    public async Task Paths_traverse_static_override_dispatch_candidates_as_needs_review()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var abstraction = "Server.OrderProcessor.Process(System.Int32)";
+        var overrideMethod = "Server.PriorityOrderProcessor.Process(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, abstraction, "Controllers/OrdersController.cs", 14),
+            SymbolRelationshipFact(server, overrideMethod, abstraction, "Services/PriorityOrderProcessor.cs", 18, relationshipKind: "Overrides"),
+            CallFact(server, overrideMethod, repository, "Services/PriorityOrderProcessor.cs", 21),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromEndpoint: "GET /api/orders/{}",
+                FromSource: "server",
+                ToSurface: "sql-query"));
+
+        var path = Assert.Single(result.Report.Paths);
+        Assert.Equal(CombinedDependencyPathClassifications.NeedsReviewPath, path.Classification);
+        var candidate = Assert.Single(path.Edges, edge => edge.EdgeKind == "override-candidate");
+        Assert.Equal("combined.dispatch-candidate.v1", candidate.RuleId);
+        Assert.Equal(EvidenceTiers.Tier1Semantic, candidate.EvidenceTier);
+        Assert.NotEmpty(candidate.SupportingCombinedEdgeIds);
+        Assert.Contains(path.Notes, note => note.Code == "StaticDispatchCandidate");
+        Assert.Equal("sql-query", path.Nodes.Last().SurfaceKind);
+    }
+
+    [Fact]
+    public async Task Paths_static_dispatch_candidate_output_is_byte_stable()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.IOrderService.Get(System.Int32)";
+        var implementation = "Server.OrderService.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14),
+            SymbolRelationshipFact(server, implementation, service, "Services/OrderService.cs", 18),
+            CallFact(server, implementation, repository, "Services/OrderService.cs", 21),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths-first"),
+                FromEndpoint: "GET /api/orders/{}",
+                FromSource: "server",
+                ToSurface: "sql-query"));
+        await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths-second"),
+                FromEndpoint: "GET /api/orders/{}",
+                FromSource: "server",
+                ToSurface: "sql-query"));
+
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(temp.Path, "paths-first", "paths-report.md")),
+            await File.ReadAllTextAsync(Path.Combine(temp.Path, "paths-second", "paths-report.md")));
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(temp.Path, "paths-first", "paths-report.json")),
+            await File.ReadAllTextAsync(Path.Combine(temp.Path, "paths-second", "paths-report.json")));
+    }
+
+    [Fact]
     public async Task Paths_cap_static_interface_dispatch_candidate_fanout_with_gap()
     {
         using var temp = new TempDirectory();
@@ -224,6 +307,11 @@ public sealed class CombinedDependencyPathTests
             Assert.Contains("limitations:", block);
             Assert.Contains("evidenceTier:", block);
         }
+
+        var gapStart = catalog.IndexOf("- id: combined.dispatch-gap.v1", StringComparison.Ordinal);
+        Assert.True(gapStart >= 0, "Missing rule catalog entry for combined.dispatch-gap.v1.");
+        var gapBlock = catalog[gapStart..Math.Min(catalog.Length, gapStart + 900)];
+        Assert.Contains("DispatchCandidateFanOut gap", gapBlock);
     }
 
     [Fact]
@@ -1003,7 +1091,8 @@ public sealed class CombinedDependencyPathTests
         string interfaceMethodSymbol,
         string file,
         int line,
-        string evidenceTier = EvidenceTiers.Tier1Semantic)
+        string evidenceTier = EvidenceTiers.Tier1Semantic,
+        string relationshipKind = "ImplementsInterfaceMember")
     {
         return FactFactory.Create(
             manifest,
@@ -1013,10 +1102,10 @@ public sealed class CombinedDependencyPathTests
             new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
             sourceSymbol: implementationMethodSymbol,
             targetSymbol: interfaceMethodSymbol,
-            contractElement: "ImplementsInterfaceMember",
+            contractElement: relationshipKind,
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
-                ["relationshipKind"] = "ImplementsInterfaceMember",
+                ["relationshipKind"] = relationshipKind,
                 ["sourceSymbolDisplayName"] = implementationMethodSymbol,
                 ["sourceSymbolId"] = implementationMethodSymbol,
                 ["targetSymbolDisplayName"] = interfaceMethodSymbol,
