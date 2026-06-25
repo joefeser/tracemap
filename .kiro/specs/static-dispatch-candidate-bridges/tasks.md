@@ -82,15 +82,15 @@ not part of this spec-only branch.
         `inherits`.
   - [x] Derive member-level interface candidates only from
         `ImplementsInterfaceMember` evidence.
-  - [ ] Derive explicit interface implementation candidates by symbol ID, not
+  - [x] Derive explicit interface implementation candidates by symbol ID, not
         display-name equality.
-  - [ ] Derive override candidates only from `Overrides` evidence and bounded
+  - [x] Derive override candidates only from `Overrides` evidence and bounded
         override-chain traversal.
   - [ ] Keep type-level fallback candidates as `WeakerCandidate` with
         type-level-bridge-only limitations.
   - [ ] Emit gaps for missing candidates, ambiguous identities, high fan-out,
         reduced coverage, missing schema, generic caveats, and truncation.
-  - [ ] Add deterministic ordering, caps, cycle protection, and byte-stability
+  - [x] Add deterministic ordering, caps, cycle protection, and byte-stability
         tests.
 
 - [ ] 7. Add DI registration-context annotations.
