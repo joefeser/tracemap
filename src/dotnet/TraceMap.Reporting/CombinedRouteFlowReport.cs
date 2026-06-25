@@ -2336,11 +2336,10 @@ public static class CombinedRouteFlowReporter
                 ? []
                 : await ReadFactSymbolProjectionRowsAsync(connection, pathModel.SymbolCandidates, cancellationToken);
             var projected = 0;
-            var projectableFactIds = new List<string>();
             var unsupportedAttachedFactIds = new List<string>();
             foreach (var row in factSymbolRows)
             {
-                var attached = pathModel.FlowRowForSymbol(row.SourceIndexId, row.CombinedSymbolId, row.SymbolDisplayName, row.SourceSymbol);
+                var attached = pathModel.FlowRowForFactSymbol(row);
                 if (attached is null)
                 {
                     continue;
@@ -2352,7 +2351,6 @@ public static class CombinedRouteFlowReporter
                     continue;
                 }
 
-                projectableFactIds.Add(row.CombinedFactId);
                 projected++;
                 var kind = FactSymbolLogicKind(row);
                 rows.Add(new RouteFlowLogicRow(
@@ -2379,20 +2377,17 @@ public static class CombinedRouteFlowReporter
                         redactionApplied: FactSymbolRedactionApplied(row))));
             }
 
-            var sourceFactSymbolIds = factSymbolRows.Count == 0
+            var unprojectedFactSymbolIds = projected == 0
                 ? await ReadFactSymbolProjectionFactIdsAsync(connection, selectedSourceIndexIds, cancellationToken)
                 : [];
-            var factSymbolGapIds = projectableFactIds.Count > 0
-                ? projectableFactIds
-                : sourceFactSymbolIds;
-            if (factSymbolGapIds.Count > 0 && projected == 0)
+            if (unprojectedFactSymbolIds.Count > 0 && projected == 0)
             {
                 gaps.Add(ProjectionUnavailableGap(
                     "fact-symbol",
                     "FactSymbolProjectionUnavailable",
                     "Fact-symbol rows were present, but none could be connected to the selected route-flow path by source-local symbol evidence.",
                     FactSymbolProjectionRuleId,
-                    factSymbolGapIds));
+                    unprojectedFactSymbolIds));
             }
 
             if (unsupportedAttachedFactIds.Count > 0)
@@ -2464,6 +2459,16 @@ public static class CombinedRouteFlowReporter
             }
 
             return null;
+        }
+
+        public RouteFlowRow? FlowRowForFactSymbol(FactSymbolProjectionRow row)
+        {
+            if (!string.Equals(row.Role, "source", StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            return FlowRowForSymbol(row.SourceIndexId, row.SourceSymbol, row.SymbolDisplayName);
         }
     }
 
@@ -2730,12 +2735,23 @@ public static class CombinedRouteFlowReporter
         await using var command = connection.CreateCommand();
         var sourceFilter = AddSourceFilterParameters(command, sourceIndexIds);
         command.CommandText = """
-            select distinct combined_fact_id
-            from combined_fact_symbols
-            where source_index_id in (
+            select distinct links.combined_fact_id
+            from combined_fact_symbols links
+            join combined_facts facts on facts.combined_fact_id = links.combined_fact_id
+            where links.source_index_id in (
             """ + sourceFilter + """
             )
-            order by combined_fact_id
+            and links.role = 'source'
+            and facts.fact_type in (
+                'ObjectShapeInferred',
+                'QueryPatternDetected',
+                'SqlTextUsed',
+                'SqlCommandDetected',
+                'DapperCallDetected',
+                'DatabaseColumnMapping',
+                'PackageReferenced'
+            )
+            order by links.combined_fact_id
             limit 20;
             """;
         return await ReadFactIdsAsync(command, cancellationToken);
@@ -3439,7 +3455,7 @@ public static class CombinedRouteFlowReporter
             var symbolParameter = $"$symbol{index}";
             command.Parameters.AddWithValue(sourceParameter, symbolCandidates[index].SourceIndexId);
             command.Parameters.AddWithValue(symbolParameter, symbolCandidates[index].Symbol);
-            clauses.Add($"(links.source_index_id = {sourceParameter} and (links.combined_symbol_id = {symbolParameter} or symbols.display_name = {symbolParameter}))");
+            clauses.Add($"(links.source_index_id = {sourceParameter} and links.role = 'source' and (links.combined_symbol_id = {symbolParameter} or symbols.display_name = {symbolParameter}))");
         }
 
         return clauses.Count == 0
