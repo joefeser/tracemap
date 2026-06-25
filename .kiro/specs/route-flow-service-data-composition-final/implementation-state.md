@@ -1,7 +1,7 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: task-7-value-origin-precision-ready-for-review
-Readiness: task-7-value-origin-ready-for-pr-review-loop
+Status: task-7-asmx-soap-attachment-precision-ready-for-review
+Readiness: task-7-asmx-soap-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
 Target base: `dev`
@@ -78,6 +78,66 @@ explicitly closed:
 Do not reopen `route-flow-service-data-composition-next` or
 `route-flow-endpoint-stitching` as fresh implementation queues unless a future
 audit proves this final spec does not cover the needed slice.
+
+## Task 7 ASMX/SOAP Attachment Slice
+
+Branch: `codex/task7-http-wcf-attachments-20260625-182659`
+Audited base: `origin/dev` at `cb70ba7def4313cce34034421618062b60cb0c01`.
+Selected family: ASMX/SOAP dependency surfaces.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision for ASMX/SOAP surface
+  kinds already produced by the deterministic legacy ASMX extractor and shared
+  surface projection.
+- Add `asmx-service`, `asmx-operation`, `asmx-client`, `asmx-config`, and
+  `asmx-metadata` to the route-flow terminal surface selector vocabulary.
+- Attach ASMX/SOAP dependency surfaces only when the surface node is reached by
+  the selected static route-flow path via existing source-local graph evidence.
+- Preserve `DataSurfaceAttachmentMissing` when ASMX/SOAP evidence is adjacent
+  in the same combined index but not connected to the selected route-flow path.
+
+Scope decisions:
+
+- This slice does not start UI property lineage, site work, reducer behavior, or
+  scanner extraction changes.
+- This slice does not add runtime SOAP endpoint claims; all ASMX/SOAP rows stay
+  static evidence with existing rule IDs and evidence tiers.
+- WCF, remoting, package/config, legacy-data, storage, validation,
+  serializer/contract, async/callback, and flow-boundary families remain
+  follow-up Task 7 slices unless separately verified in a later PR.
+
+Oddities:
+
+- The shared surface projection already recognized ASMX/SOAP facts through the
+  `surfaceKind` property, but route-flow rejected those surface kinds in
+  `--to-surface` validation before this slice.
+- The focused tests use synthetic public-safe ASMX facts rather than invoking
+  full legacy extractors so they isolate selected-route attachment behavior.
+- ACK review found that real `LegacyAsmxExtractor` client-operation rows attach
+  the generated client type as `sourceSymbol` and the callable operation as
+  `targetSymbol`; the patch now links selected ASMX operation surfaces through
+  that callable target symbol.
+- Qodo review found that legacy projected flow terminals and CLI help also
+  needed the ASMX/SOAP surface vocabulary; the patch now preserves ASMX surface
+  kinds in legacy projection terminal nodes and lists them in `paths` and
+  `route-flow` help.
+
+Validation status:
+
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+  errors.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~CombinedRouteFlowTests|FullyQualifiedName~LegacyFlowCompositionTests"`:
+  passed locally with 73 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 658 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Follow-ups:
+
+- Continue Task 7 with one separate family at a time, such as WCF/remoting,
+  legacy-data/storage, package/config, validation/serializer, or
+  async/callback/flow-boundary.
 
 ## Summary
 
