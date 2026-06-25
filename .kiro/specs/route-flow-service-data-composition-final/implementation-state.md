@@ -1,7 +1,7 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: task-6-closed-ready-for-task-7
-Readiness: task-6-ready-for-pr-review-loop
+Status: task-7-source-symbol-attachment-precision-ready-for-review
+Readiness: task-7-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
 Target base: `dev`
@@ -1086,15 +1086,104 @@ binding proof, or attached dependency/data precision.
 
 ## Product Implementation PR 6
 
+Branch: `codex/route-flow-task7-attachment-precision-20260625163442`
+Base: `origin/dev` at `9bb459587475864cab9c484b29ab2360369c0aa3`
+
+Selected slice: first Task 7 attachment-precision slice for fact-symbol
+projection. This PR keeps the public `route-flow` report type and JSON
+version `1.0`; it does not start broad scanner extraction, site work, runtime
+DI proof, runtime endpoint reachability, AI/LLM analysis, or Task 8/9/10
+hardening beyond tests directly touched by the projection behavior.
+
+### Live Audit Notes For PR 6
+
+- `CombinedRouteFlowReport` already emits selected route-flow rows,
+  dependency surfaces, path-context logic rows, argument projection rows,
+  fact-symbol projection rows, `DataSurfaceAttachmentMissing`,
+  `ArgumentProjectionUnavailable`, `FactSymbolProjectionUnavailable`,
+  context groups, touched files/symbols, and rule-catalog resolution tests.
+- The remaining Task 7 gap selected for this small PR was fact-symbol
+  attachment precision: target-role or same-source symbol adjacency could be
+  read as projection context unless route-flow required the fact-symbol row to
+  attach through a selected source-local symbol identity.
+- Argument-flow projection and parameter-forward rows were audited as already
+  requiring selected route-flow pair/path evidence on this base, but the larger
+  parameter batching/cap follow-up remains open.
+
+### Implementation Notes For PR 6
+
+- Fact-symbol projection now attaches only through `combined_fact_symbols`
+  rows with `role = source` that match selected source-local route-flow symbol
+  identities. Target-role adjacency is not rendered as route-flow context.
+- Fact-symbol projection candidate reads now filter to source-role links, and
+  fallback `FactSymbolProjectionUnavailable` probes look for projectable
+  source-role fact types in the selected source so unsupported selected
+  symbols cannot hide adjacent unjoinable projectable facts.
+- Added a synthetic regression with an unrelated query fact that names the
+  selected repository as a target-role symbol. Route-flow now emits
+  `FactSymbolProjectionUnavailable` and does not render fact-symbol logic rows
+  or context groups for that misleading target adjacency.
+
+### Validation Log For PR 6
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_optional_projection_tables_emit_scoped_gaps_when_rows_cannot_join_selected_path|FullyQualifiedName~Route_flow_fact_symbol_projection_requires_selected_source_symbol_identity"`:
+  passed, 2 tests, with the existing `SQLitePCLRaw.lib.e_sqlite3` NuGet
+  vulnerability warnings.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed, 42 tests, with the same existing NuGet warnings.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 650 tests, with the same
+  existing NuGet warnings.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `./scripts/demo-public.sh /tmp/tracemap-route-flow-task7-demo-20260625`:
+  passed. The sample-only public demo produced route-flow/reporting artifacts
+  under the temporary output root and retained reduced coverage where the
+  checked-in samples intentionally have partial evidence.
+- Diff-scope review before commit showed only route-flow reporting code,
+  focused route-flow tests, and this spec's task/state files.
+- Initial ACK PR loop for PR #335 returned `actionable_findings` with two
+  unresolved review threads and `patchAuthorized=true`.
+- ACK-authorized findings patched:
+  - restored combined-symbol-ID matching for source-role fact-symbol
+    projection by adding deterministic combined symbol keys to the selected
+    path model and checking `row.CombinedSymbolId` after the `role = source`
+    guard;
+  - enriched `FactSymbolProjectionUnavailable` fallback gaps with source
+    label, file span, commit SHA, extractor name, and extractor version
+    metadata from the unprojected fact evidence.
+- Post-ACK focused projection validation passed:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_optional_projection_tables_emit_scoped_gaps_when_rows_cannot_join_selected_path|FullyQualifiedName~Route_flow_fact_symbol_projection_requires_selected_source_symbol_identity"`.
+- Post-ACK focused route-flow validation passed:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  with 42 tests.
+- Post-ACK `dotnet test src/dotnet/TraceMap.sln` passed with 650 tests.
+- Post-ACK `git diff --check` passed.
+- Post-ACK `./scripts/check-private-paths.sh` passed.
+- Post-ACK `./scripts/demo-public.sh /tmp/tracemap-route-flow-task7-demo-postack-20260625`
+  passed, with generated outputs kept under the temporary output root.
+
+### Follow-Ups For PR 6
+
+- Complete the rest of Task 7's broad attachment matrix for repository,
+  object/projection, SQL/query, legacy data, package/config, HTTP client, WCF,
+  ASMX/SOAP, remoting, event/message, storage, validation/guard,
+  serializer/contract, async/callback, and flow-boundary facts.
+- Add the larger attached versus path-context labeling and deterministic stable
+  ID matrix across all service/data/dependency surface families.
+- Cap or batch large argument-pair and fact-symbol projection SQL filters so
+  very large selected route-flow graphs cannot exceed SQLite parameter limits.
+
+## Product Implementation PR 7
+
 Branch: `codex/route-flow-task7-attachments`
 Base: `origin/dev` at `9bb459587475`
 
 Selected slice: Task 7 event/message terminal-surface attachment precision
-after Task 5 and Task 6 closure. This slice does not start UI property
-lineage, site work, scanner extraction, runtime execution claims, or the full
-remaining service/data/query/dependency taxonomy.
+after Task 5, Task 6, and the fact-symbol attachment slice. This slice does not
+start UI property lineage, site work, scanner extraction, runtime execution
+claims, or the full remaining service/data/query/dependency taxonomy.
 
-### Live Audit Notes
+### Live Audit Notes For PR 7
 
 - Current `dev` already contains selected-path-only route-flow traversal,
   dependency surface rendering from selected `routePaths`, argument-flow and
@@ -1109,7 +1198,7 @@ remaining service/data/query/dependency taxonomy.
   which meant route-flow could not request already-supported event/message
   terminals through `--to-surface`.
 
-### Implementation Notes
+### Implementation Notes For PR 7
 
 - Added the existing message terminal surface kinds to route-flow's
   `--to-surface` allow-list and validation message.
@@ -1124,7 +1213,7 @@ remaining service/data/query/dependency taxonomy.
     `DataSurfaceAttachmentMissing` instead of a clean no-evidence conclusion;
   - dependency surface and gap IDs are deterministic across repeated renders.
 
-### Validation Log For PR 6
+### Validation Log For PR 7
 
 - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
   errors.
@@ -1153,7 +1242,7 @@ remaining service/data/query/dependency taxonomy.
   - `./scripts/check-private-paths.sh`: passed.
   - `git diff --check`: passed.
 
-### Oddities / Design Decisions For PR 6
+### Oddities / Design Decisions For PR 7
 
 - Message terminal surfaces are rendered in `dependencySurfaces` and selected
   terminal `flowRows`; route-flow does not create extra generic logic rows for
@@ -1162,7 +1251,7 @@ remaining service/data/query/dependency taxonomy.
 - The synthetic fixtures use public-safe route strings, source labels,
   destination keys, and stable hashes only.
 
-### Follow-Ups For PR 6
+### Follow-Ups For PR 7
 
 - Continue Task 7 for the remaining taxonomy items, especially ASMX/SOAP
   route-flow selection if the path reporter gains those terminal surface kinds,
