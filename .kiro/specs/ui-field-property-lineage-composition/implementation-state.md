@@ -21,9 +21,10 @@ Evidence on `dev`:
   #318, and cycle `TraversalBounds` gaps in PR #320.
 
 This remains the active property-flow implementation spec, but the first
-implementation task must re-audit the live route-flow contract after the
-current Kepler route-flow worker completes. Do not reuse the older
-`ui-field-property-lineage-continuation` task list as the work queue.
+implementation task must re-audit the live route-flow contract after any
+in-flight route-flow branch is merged or explicitly closed and `origin/dev` is
+fetched. Do not reuse the older `ui-field-property-lineage-continuation` task
+list as the work queue.
 
 Recommended property-flow order after the route-flow contract is stable:
 

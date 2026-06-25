@@ -25,7 +25,7 @@ Merged evidence on `dev`:
 
 Remaining endpoint-stitching work should be selected from
 `.kiro/specs/route-flow-service-data-composition-final/`, not this older spec:
-direct-call/no-call reduced-coverage coverage, candidate continuation,
+direct-call/no-call reduced-coverage cases, candidate continuation,
 service/data/dependency attachment precision, and directly affected downgrade
 or safety tests.
 
