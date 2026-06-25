@@ -157,6 +157,9 @@ current `dev` code or merged PR records prove the behavior.
       path graph, attaches them only when joined through selected static
       route-flow paths, and preserves `DataSurfaceAttachmentMissing` for
       adjacent unjoined message surface evidence. Branch
+      `codex/task7-attachment-precision` audited `origin/dev` at `7ac6e1ac`
+      and added the SQL/query dependency-surface attachment precision
+      sub-slice. Branch
       `codex/route-flow-task7-value-origin-precision-20260625173937` audited
       `origin/dev` at `7ac6e1ac883998a7c09c87afc416f0c76be225f6` and closed
       the value-origin/projection sub-slice: selected argument-flow projection
@@ -168,6 +171,13 @@ current `dev` code or merged PR records prove the behavior.
         event/message, storage, validation/guard, serializer/contract,
         async/callback, and flow-boundary facts only through selected route-flow
         evidence.
+    - [x] SQL/query dependency-surface sub-slice covered by
+          `Route_flow_attaches_selected_sql_surface_with_path_context_and_stable_ids`
+          and
+          `Route_flow_does_not_infer_adjacent_sql_surface_without_selected_join`.
+          Broader taxonomy remains unchecked until covered explicitly.
+    - [x] Event/message terminal-surface attachment sub-slice covered by PR
+          #334.
   - [x] Render argument-flow and parameter-forward value-origin rows only when
         joined to selected static route-flow rows.
   - [x] Render fact-symbol context only for selected source-local symbols.
@@ -185,6 +195,11 @@ current `dev` code or merged PR records prove the behavior.
           including joined projection rows, selected parameter-forward rows,
           adjacent unjoined argument-flow gaps, and deterministic repeated
           row/gap IDs.
+    - [x] SQL/query surface attachment, adjacent-unjoinable gap behavior,
+          path-context labeling, and deterministic stable IDs covered by
+          `Route_flow_attaches_selected_sql_surface_with_path_context_and_stable_ids`
+          and
+          `Route_flow_does_not_infer_adjacent_sql_surface_without_selected_join`.
 
 - [ ] 8. Enforce coverage, classification, and gap downgrade behavior.
       Requirements: 5.
