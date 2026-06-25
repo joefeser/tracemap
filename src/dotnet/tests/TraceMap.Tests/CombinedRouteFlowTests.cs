@@ -919,6 +919,39 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_does_not_emit_clean_no_evidence_gap_when_no_direct_call_under_reduced_coverage()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15", buildStatus: "Failed");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root");
+        Assert.Empty(result.Report.FlowRows);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "ReducedCoverage"
+            && gap.RuleId == "combined.route-flow.gap.v1"
+            && gap.EvidenceTier == EvidenceTiers.Tier4Unknown
+            && gap.Coverage == "ReducedCoverage"
+            && gap.SourceLabel == "server");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "MissingCallEdge");
+        Assert.Equal("ReducedCoverage", result.Report.ReportCoverage);
+        Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
+    }
+
+    [Fact]
     public async Task Route_flow_emits_data_surface_attachment_gap_when_downstream_calls_have_no_terminal_surface()
     {
         using var temp = new TempDirectory();

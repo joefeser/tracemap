@@ -80,6 +80,9 @@ already complete on `dev`.
     - [x] Add focused cycle coverage proving source-local service-call cycles
           emit a deterministic `TraversalBounds` gap, suppress clean
           no-evidence claims, and downgrade the report.
+    - [x] Add focused no-direct-call reduced-coverage coverage proving clean
+          `NoRouteFlowEvidence` gaps are suppressed when source coverage gaps
+          prevent a clean absence conclusion.
 
 - [ ] 6. Harden implementation-candidate continuation. Requirements: 3, 5.
       Suggested boundary: PR 2.
