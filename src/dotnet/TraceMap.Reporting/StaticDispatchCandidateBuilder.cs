@@ -10,29 +10,35 @@ internal static class StaticDispatchCandidateBuilder
     public const string CandidateRuleId = "combined.dispatch-candidate.v1";
     public const string GapRuleId = "combined.dispatch-gap.v1";
     public const int DefaultCandidateLimit = 10;
+    private static readonly string[] DefaultLimitations = ["Static candidate evidence does not prove runtime dispatch or dependency-injection binding."];
 
     public static StaticDispatchCandidateBuildResult Build(
         IReadOnlyDictionary<string, StaticDispatchCandidateNode> nodes,
         IEnumerable<StaticDispatchRelationshipEdge> relationships,
+        Func<string, string?>? extractorVersionFor = null,
         StaticDispatchCandidateBuildOptions? options = null)
     {
         var candidateLimit = options?.CandidateLimit ?? DefaultCandidateLimit;
+        extractorVersionFor ??= static _ => null;
         var candidates = new List<StaticDispatchCandidateEdge>();
         var gaps = new List<StaticDispatchCandidateGap>();
-        var relationshipGroups = relationships
+        var memberRelationships = relationships
             .Where(edge => IsMemberCandidateRelationship(edge.OriginalRelationshipKind))
             .Where(edge => nodes.TryGetValue(edge.FromNodeId, out var implementation)
                 && nodes.TryGetValue(edge.ToNodeId, out var abstraction)
                 && IsMethodNode(implementation)
                 && IsMethodNode(abstraction))
+            .ToArray();
+        var relationshipGroups = memberRelationships
             .GroupBy(edge => edge.ToNodeId, StringComparer.Ordinal)
-            .OrderBy(group => nodes.TryGetValue(group.Key, out var node) ? node.SourceLabel : string.Empty, StringComparer.Ordinal)
-            .ThenBy(group => nodes.TryGetValue(group.Key, out var node) ? node.DisplayName : string.Empty, StringComparer.Ordinal)
+            .OrderBy(group => nodes[group.Key].SourceLabel, StringComparer.Ordinal)
+            .ThenBy(group => nodes[group.Key].DisplayName, StringComparer.Ordinal)
             .ThenBy(group => group.Key, StringComparer.Ordinal)
             .ToArray();
 
         foreach (var group in relationshipGroups)
         {
+            var abstractionNode = nodes[group.Key];
             var sortedRelationships = group
                 .OrderBy(edge => nodes[edge.FromNodeId].SourceLabel, StringComparer.Ordinal)
                 .ThenBy(edge => nodes[edge.FromNodeId].DisplayName, StringComparer.Ordinal)
@@ -53,8 +59,8 @@ internal static class StaticDispatchCandidateBuilder
                     $"dispatch-candidate:{Hash($"{relationship.EdgeId}:{relationship.ToNodeId}:{relationship.FromNodeId}", 16)}",
                     AlgorithmId,
                     StaticDispatchCandidateStates.SymbolBackedCandidate,
-                    nodes[relationship.ToNodeId].SourceIndexId,
-                    nodes[relationship.ToNodeId].SourceLabel,
+                    abstractionNode.SourceIndexId,
+                    abstractionNode.SourceLabel,
                     null,
                     relationship.ToNodeId,
                     relationship.FromNodeId,
@@ -77,11 +83,11 @@ internal static class StaticDispatchCandidateBuilder
                     relationship.FilePath,
                     relationship.StartLine,
                     relationship.EndLine,
-                    ["Static candidate evidence does not prove runtime dispatch or dependency-injection binding."],
+                    DefaultLimitations,
                     []));
             }
 
-            if (sortedRelationships.Length > candidateLimit && nodes.TryGetValue(group.Key, out var abstractionNode))
+            if (sortedRelationships.Length > candidateLimit)
             {
                 gaps.Add(new StaticDispatchCandidateGap(
                     $"gap:dispatch:fanout:{Hash($"{group.Key}:{sortedRelationships.Length}", 16)}",
@@ -97,7 +103,7 @@ internal static class StaticDispatchCandidateBuilder
                     abstractionNode.StartLine,
                     "dispatch-candidate-fanout",
                     abstractionNode.CommitSha,
-                    abstractionNode.ExtractorVersion,
+                    extractorVersionFor(abstractionNode.SourceIndexId),
                     "combined-symbol-relationships",
                     abstractionNode.EndLine));
             }
@@ -153,8 +159,7 @@ internal sealed record StaticDispatchCandidateNode(
     string? CommitSha,
     string? FilePath,
     int? StartLine,
-    int? EndLine,
-    string? ExtractorVersion);
+    int? EndLine);
 
 internal sealed record StaticDispatchRelationshipEdge(
     string EdgeId,

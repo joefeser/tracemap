@@ -1986,24 +1986,37 @@ public static class CombinedDependencyPathReporter
 
     private static void AddDispatchCandidateEdges(EvidenceGraph graph)
     {
+        var relationshipEdges = graph.Edges
+            .Where(edge => edge.EdgeKind is "implements" or "overrides")
+            .ToArray();
+        var relationshipNodeIds = relationshipEdges
+            .Select(edge => edge.FromNodeId)
+            .Concat(relationshipEdges.Select(edge => edge.ToNodeId))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var relationshipNodes = relationshipNodeIds
+            .Where(graph.Nodes.ContainsKey)
+            .ToDictionary(
+                id => id,
+                id =>
+                {
+                    var node = graph.Nodes[id];
+                    return new StaticDispatchCandidateNode(
+                        node.NodeId,
+                        node.NodeKind,
+                        node.DisplayName,
+                        node.SourceIndexId,
+                        node.SourceLabel,
+                        node.CommitSha,
+                        node.FilePath,
+                        node.StartLine,
+                        node.EndLine);
+                },
+                StringComparer.Ordinal);
         var candidates = StaticDispatchCandidateBuilder.Build(
-            graph.Nodes.ToDictionary(
-                pair => pair.Key,
-                pair => new StaticDispatchCandidateNode(
-                    pair.Value.NodeId,
-                    pair.Value.NodeKind,
-                    pair.Value.DisplayName,
-                    pair.Value.SourceIndexId,
-                    pair.Value.SourceLabel,
-                    pair.Value.CommitSha,
-                    pair.Value.FilePath,
-                    pair.Value.StartLine,
-                    pair.Value.EndLine,
-                    graph.ScannerVersionFor(pair.Value.SourceIndexId)),
-                StringComparer.Ordinal),
-            graph.Edges
-                .Where(edge => edge.EdgeKind is "implements" or "overrides")
-                .Select(edge => new StaticDispatchRelationshipEdge(
+            relationshipNodes,
+            relationshipEdges.Select(edge => new StaticDispatchRelationshipEdge(
                     edge.EdgeId,
                     edge.EdgeKind,
                     edge.OriginalRelationshipKind,
@@ -2014,7 +2027,8 @@ public static class CombinedDependencyPathReporter
                     edge.SupportingCombinedEdgeIds,
                     edge.FilePath,
                     edge.StartLine,
-                    edge.EndLine)));
+                    edge.EndLine)),
+            graph.ScannerVersionFor);
 
         foreach (var candidate in candidates.Edges)
         {

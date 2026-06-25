@@ -179,6 +179,9 @@ Results:
 - The combined paths/reverse smoke completed against checked-in samples and
   verified scan/combine/report/paths/reverse behavior plus repeated targeted
   paths JSON byte stability.
+- After the ACK-authorized review patch, the same focused tests, `git diff
+  --check`, private-path scan, full `.NET` test suite, and combined paths smoke
+  passed again.
 
 ## Safety Notes
 
@@ -199,20 +202,16 @@ appropriate.
 ## PR Review Loop Notes
 
 - Initial ACK run with installed `agent-control` returned
-  `environment_blocked` / `LOCAL_BUILD_STALE`.
-- Fallback through `<agent-control-kit checkout>` using
-  `npm run dev -- pr-loop ...` crashed with
-  `ReferenceError: withRunArtifactsReadback is not defined`.
-- Ran `npm run build` in `agent-control-kit` to refresh `dist`, then reran the
-  installed `agent-control pr-loop`.
-- ACK posted/observed the required Codex review request and initially returned
-  `nextAction = wait_for_required_reviewers`; no review findings were patched
-  until the follow-up status snapshot showed Codex and Qodo had both returned
-  and `patchAuthorized = true`.
-- Patched authorized review findings:
-  - aligned stable ID inputs between requirements and design;
-  - aligned deterministic sort keys between requirements and design;
-  - changed route-flow row kind from provisional `interface-bridge` to existing
-    `interface-implementation-candidate`;
-  - clarified that `WeakerCandidate` requires relationship-backed evidence and
-    does not permit registration-only candidates.
+  `environment_blocked` / `LOCAL_BUILD_STALE` because local `agent-control-kit`
+  `dist` output was stale relative to source.
+- Ran `npm run build` in `/Users/josephfeser/src/gh-joe/agent-control-kit`,
+  then reran the installed `agent-control pr-loop`.
+- ACK posted/observed the required Codex review request, waited for the
+  configured Codex/Qodo required-review batch, then returned
+  `decision=actionable_findings`, `stopReason=UNRESOLVED_REVIEW_THREADS`, and
+  `patchAuthorized=true`.
+- Patched authorized review findings by reducing the candidate node map to
+  relationship endpoint nodes only, deferring extractor-version lookup through
+  a resolver used only for gaps, using direct node lookup after filtering, and
+  reusing a static default limitations array.
+- Final ACK decision is pending after the review-fix push.
