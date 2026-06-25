@@ -42,6 +42,7 @@ import { validateReviewClaimChecklistDist } from "./review-claim-checklist.mjs";
 import { validateReleaseReviewBoundaryDist } from "./release-review-boundary.mjs";
 import { validateReviewRoomDist } from "./review-room.mjs";
 import { validateRoadmapClaimLedgerDist } from "./roadmap-claim-ledger.mjs";
+import { validateSiteClaimGuardrailsDist } from "./site-claim-guardrails.mjs";
 import { validateStaticTriageDist } from "./static-triage.mjs";
 import { validateStaticVsRuntimeDist } from "./static-vs-runtime.mjs";
 import { validateStakeholderObjectionGuideDist } from "./stakeholder-objection-guide.mjs";
@@ -130,6 +131,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateReleaseReviewBoundaryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewRoomDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateRoadmapClaimLedgerDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateSiteClaimGuardrailsDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticTriageDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticVsRuntimeDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStakeholderObjectionGuideDist({ baseUrl: normalizedBaseUrl, dist, errors });
