@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Final Tasks
 
-Status: task-5-closed-ready-for-task-6
+Status: task-6-closed-ready-for-task-7
 
 ## Spec Delivery Tasks
 
@@ -42,6 +42,12 @@ source-local service-call cycle gaps merged as PR #320 (`565d7b64`).
 Branch `codex/route-flow-task5-matrix` audited `origin/dev` at
 `625e6fef9c9a88539545334c3fcd3e979e7d3244` and closed the remaining Task 5
 direct-call/no-call/reduced-coverage/deterministic-ordering matrix.
+PR #330 hardened route-flow implementation-candidate continuation and runtime
+non-proof behavior. PR #331 added the shared static dispatch candidate builder.
+Branch `codex/route-flow-task6-gap-matrix` audited `origin/dev` at
+`086ad376e387ea8d87e430175ef2673cbc74c0f1` and closed the remaining Task 6
+candidate gap/downgrade matrix by reusing the shared builder for route-flow
+candidate derivation and emitting deterministic route-flow fan-out gaps.
 Implementation tasks below remain sequenced across the Suggested PR Boundaries
 section, not intended as one giant product PR. Checkboxes are marked only where
 current `dev` code or merged PR records prove the behavior.
@@ -109,15 +115,34 @@ current `dev` code or merged PR records prove the behavior.
           duplicate roots, cycles, and projection/truncation blocker
           suppression.
 
-- [ ] 6. Harden implementation-candidate continuation. Requirements: 3, 5.
+- [x] 6. Harden implementation-candidate continuation. Requirements: 3, 5.
       Suggested boundary: PR 2.
   - [x] Reuse source-local `combined_symbol_relationships` evidence for
         implementation candidates.
   - [x] Continue through a single compiler-backed candidate only as review-tier
         static evidence.
-  - [ ] Emit deterministic multiple-candidate, no-candidate, high-fan-out,
+  - [x] Emit deterministic multiple-candidate, no-candidate, high-fan-out,
         syntax-only, name-only, cross-source, cross-language, runtime-binding,
         and reduced-coverage gaps.
+    - [x] Multiple-candidate ambiguity:
+          `Route_flow_marks_multiple_interface_candidates_ambiguous_but_keeps_direct_concrete_edge_stronger`.
+    - [x] No-candidate gaps:
+          `Route_flow_preserves_interface_call_and_emits_candidate_unavailable_gap`.
+    - [x] High-fan-out gap:
+          `Route_flow_caps_high_fan_out_interface_candidates_at_needs_review`
+          now asserts deterministic `DispatchCandidateFanOut` under
+          `combined.route-flow.gap.v1`.
+    - [x] Syntax-only/name-only caps:
+          `Route_flow_caps_syntax_only_name_only_interface_candidate_at_needs_review`.
+    - [x] Cross-source/cross-language/runtime-binding non-proof:
+          `RuntimeBindingNotProven` handling from PR #330 plus
+          `Route_flow_runtime_binding_gap_preserves_commit_and_extractor_metadata`.
+    - [x] Runtime DI/service locator/factory/reflection/dynamic non-proof:
+          `Route_flow_does_not_treat_runtime_adjacent_facts_as_implementation_dispatch_proof`.
+    - [x] Reduced-coverage gaps:
+          `Route_flow_marks_missing_endpoint_bridge_as_reduced_coverage_when_source_is_reduced`,
+          `Route_flow_does_not_emit_clean_no_evidence_gap_when_no_direct_call_under_reduced_coverage`,
+          and `Route_flow_identity_reduced_coverage_gap_reduces_report_coverage`.
   - [x] Prove candidate bridges cannot produce `StrongStaticRouteFlow`.
   - [x] Add tests proving no runtime DI target, service locator, factory,
         reflection, or dynamic dispatch proof is claimed.

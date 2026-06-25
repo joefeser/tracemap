@@ -738,6 +738,12 @@ public sealed class CombinedRouteFlowTests
             ToSurface: "sql-query"));
 
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "AmbiguousImplementationCandidates");
+        var fanOutGap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "DispatchCandidateFanOut");
+        Assert.Equal("combined.route-flow.gap.v1", fanOutGap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, fanOutGap.EvidenceTier);
+        Assert.Equal("ReducedCoverage", fanOutGap.Coverage);
+        Assert.False(string.IsNullOrWhiteSpace(fanOutGap.AffectedRowId));
+        Assert.Contains(fanOutGap.Limitations, limitation => limitation.Contains("deterministically capped", StringComparison.OrdinalIgnoreCase));
         var candidates = result.Report.FlowRows.Where(row => row.RowKind == "interface-implementation-candidate").ToArray();
         Assert.Equal(10, candidates.Length);
         Assert.All(candidates, row => Assert.Equal(RouteFlowClassifications.NeedsReviewStaticRouteFlow, row.Classification));
@@ -926,19 +932,32 @@ public sealed class CombinedRouteFlowTests
             TextLength: null,
             PackageName: null,
             ConfigKey: null);
-        var edge = new CombinedPathEdge(
-            "edge:other:relationship",
-            "implements",
-            "node:other:implementation",
+        var edge = new StaticDispatchCandidateEdge(
+            "dispatch-candidate:other",
+            StaticDispatchCandidateBuilder.AlgorithmId,
+            StaticDispatchCandidateStates.SymbolBackedCandidate,
+            "other",
+            "other",
+            null,
             node.NodeId,
-            CombinedDependencyPathClassifications.NeedsReviewStaticPath,
-            RuleIds.CSharpSemanticSymbolRelationship,
+            "node:other:implementation",
+            "node:other:implementation",
+            null,
+            "ImplementsInterfaceMember",
+            StaticDispatchBridgeKinds.InterfaceMember,
+            "interface-candidate",
             EvidenceTiers.Tier1Semantic,
+            StaticDispatchCandidateBuilder.CandidateRuleId,
             ["other:relationship-fact"],
             ["other:relationship-edge"],
+            ["edge:other:relationship"],
+            [],
+            "none",
             "Services/OrderService.cs",
             20,
-            20);
+            20,
+            ["Static candidate evidence does not prove runtime dispatch or dependency-injection binding."],
+            []);
 
         var method = typeof(CombinedRouteFlowReporter).GetMethod(
             "RuntimeBindingNotProvenGap",
@@ -953,7 +972,7 @@ public sealed class CombinedRouteFlowTests
 
         Assert.Equal("RuntimeBindingNotProven", gap.GapKind);
         Assert.Equal("abc123", gap.CommitSha);
-        Assert.Equal("csharp", gap.ExtractorName);
+        Assert.Equal("combined", gap.ExtractorName);
         Assert.Equal("tracemap-milestone15", gap.ExtractorVersion);
         Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
         Assert.Equal("ReducedCoverage", gap.Coverage);
