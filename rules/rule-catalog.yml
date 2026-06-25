@@ -2254,6 +2254,7 @@ rules:
     evidenceTier: Tier4Unknown
     emits:
       - DispatchCandidateFanOut gap
+      - DispatchCandidateTruncatedByLimit gap
     limitations:
       - Gap rows describe limits of the current static evidence graph and must not be read as proof that no runtime target exists.
       - Candidate caps are deterministic traversal limits; omitted candidates may still be possible static review evidence outside the configured bound.

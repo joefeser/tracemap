@@ -37,6 +37,12 @@ internal static class StaticDispatchCandidateBuilder
         var overrideRelationships = memberRelationships
             .Where(edge => edge.OriginalRelationshipKind == "Overrides")
             .ToArray();
+        var overrideRelationshipsByTarget = overrideRelationships
+            .GroupBy(edge => edge.ToNodeId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => SortRelationships(group, nodes).ToArray(),
+                StringComparer.Ordinal);
 
         foreach (var group in GroupRelationshipsByAbstraction(interfaceRelationships, nodes))
         {
@@ -58,9 +64,8 @@ internal static class StaticDispatchCandidateBuilder
 
         foreach (var group in GroupRelationshipsByAbstraction(overrideRelationships, nodes))
         {
-            var overridePaths = BuildOverrideCandidatePaths(group.Key, overrideRelationships, nodes, maxOverrideDepth)
-                .ToArray();
-            foreach (var path in overridePaths.Take(candidateLimit))
+            var overrideResult = BuildOverrideCandidatePaths(group.Key, overrideRelationshipsByTarget, nodes, maxOverrideDepth);
+            foreach (var path in overrideResult.Paths.Take(candidateLimit))
             {
                 candidates.Add(CreateCandidate(
                     nodes,
@@ -72,7 +77,8 @@ internal static class StaticDispatchCandidateBuilder
                     "override-candidate"));
             }
 
-            AddFanOutGapIfNeeded(gaps, overridePaths.Length, candidateLimit, group.Key, nodes, extractorVersionFor);
+            AddFanOutGapIfNeeded(gaps, overrideResult.Paths.Count, candidateLimit, group.Key, nodes, extractorVersionFor);
+            AddOverrideDepthGapIfNeeded(gaps, overrideResult.TruncatedByDepth, maxOverrideDepth, group.Key, nodes, extractorVersionFor);
         }
 
         return new StaticDispatchCandidateBuildResult(candidates, gaps);
@@ -101,18 +107,12 @@ internal static class StaticDispatchCandidateBuilder
             .ThenBy(edge => edge.EdgeId, StringComparer.Ordinal);
     }
 
-    private static IReadOnlyList<OverrideCandidatePath> BuildOverrideCandidatePaths(
+    private static OverrideCandidatePathResult BuildOverrideCandidatePaths(
         string abstractionNodeId,
-        IReadOnlyList<StaticDispatchRelationshipEdge> overrideRelationships,
+        IReadOnlyDictionary<string, StaticDispatchRelationshipEdge[]> byTarget,
         IReadOnlyDictionary<string, StaticDispatchCandidateNode> nodes,
         int maxOverrideDepth)
     {
-        var byTarget = overrideRelationships
-            .GroupBy(edge => edge.ToNodeId, StringComparer.Ordinal)
-            .ToDictionary(
-                group => group.Key,
-                group => SortRelationships(group, nodes).ToArray(),
-                StringComparer.Ordinal);
         var results = new List<OverrideCandidatePath>();
         var seenCandidates = new HashSet<string>(StringComparer.Ordinal);
         var frontier = new List<OverrideTraversalFrame>
@@ -142,14 +142,15 @@ internal static class StaticDispatchCandidateBuilder
 
                     var chain = frame.RelationshipChain.Append(relationship).ToArray();
                     var visited = frame.VisitedNodeIds.Append(relationship.FromNodeId).ToArray();
-                    if (seenCandidates.Add(relationship.FromNodeId))
+                    if (!seenCandidates.Add(relationship.FromNodeId))
                     {
-                        results.Add(new OverrideCandidatePath(
-                            relationship.FromNodeId,
-                            relationship,
-                            chain));
+                        continue;
                     }
 
+                    results.Add(new OverrideCandidatePath(
+                        relationship.FromNodeId,
+                        relationship,
+                        chain));
                     next.Add(new OverrideTraversalFrame(
                         relationship.FromNodeId,
                         chain,
@@ -160,13 +161,17 @@ internal static class StaticDispatchCandidateBuilder
             frontier = next;
         }
 
-        return results
+        var truncatedByDepth = frontier.Any(frame =>
+            byTarget.TryGetValue(frame.CurrentNodeId, out var outgoing)
+            && outgoing.Any(relationship => !frame.VisitedNodeIds.Contains(relationship.FromNodeId)));
+        var sortedResults = results
             .OrderBy(path => nodes[path.CandidateNodeId].SourceLabel, StringComparer.Ordinal)
             .ThenBy(path => nodes[path.CandidateNodeId].DisplayName, StringComparer.Ordinal)
             .ThenBy(path => path.LeafRelationship.FilePath, StringComparer.Ordinal)
             .ThenBy(path => path.LeafRelationship.StartLine ?? 0)
             .ThenBy(path => path.CandidateNodeId, StringComparer.Ordinal)
             .ToArray();
+        return new OverrideCandidatePathResult(sortedResults, truncatedByDepth);
     }
 
     private static StaticDispatchCandidateEdge CreateCandidate(
@@ -259,6 +264,39 @@ internal static class StaticDispatchCandidateBuilder
             abstractionNode.EndLine));
     }
 
+    private static void AddOverrideDepthGapIfNeeded(
+        List<StaticDispatchCandidateGap> gaps,
+        bool truncatedByDepth,
+        int maxOverrideDepth,
+        string abstractionNodeId,
+        IReadOnlyDictionary<string, StaticDispatchCandidateNode> nodes,
+        Func<string, string?> extractorVersionFor)
+    {
+        if (!truncatedByDepth)
+        {
+            return;
+        }
+
+        var abstractionNode = nodes[abstractionNodeId];
+        gaps.Add(new StaticDispatchCandidateGap(
+            $"gap:dispatch:override-depth:{Hash($"{abstractionNodeId}:{maxOverrideDepth}", 16)}",
+            "DispatchCandidateTruncatedByLimit",
+            StaticDispatchCandidateStates.CandidateGap,
+            $"Static override candidate chain traversal for `{abstractionNode.DisplayName}` reached the max depth of {maxOverrideDepth}; deeper override candidates were not traversed.",
+            abstractionNode.SourceIndexId,
+            abstractionNode.SourceLabel,
+            abstractionNode.NodeId,
+            GapRuleId,
+            EvidenceTiers.Tier4Unknown,
+            abstractionNode.FilePath,
+            abstractionNode.StartLine,
+            "override-depth",
+            abstractionNode.CommitSha,
+            extractorVersionFor(abstractionNode.SourceIndexId),
+            "combined-symbol-relationships",
+            abstractionNode.EndLine));
+    }
+
     private static bool IsMemberCandidateRelationship(string? originalRelationshipKind)
     {
         return originalRelationshipKind is "ImplementsInterfaceMember" or "Overrides";
@@ -273,10 +311,22 @@ internal static class StaticDispatchCandidateBuilder
     private static string WeakestEvidenceTier(IReadOnlyList<StaticDispatchRelationshipEdge> relationships)
     {
         return relationships
-            .Select(edge => edge.EvidenceTier)
+            .Select(edge => NormalizeEvidenceTier(edge.EvidenceTier))
             .OrderByDescending(EvidenceTierRank)
             .ThenBy(value => value, StringComparer.Ordinal)
             .FirstOrDefault() ?? EvidenceTiers.Tier4Unknown;
+    }
+
+    private static string NormalizeEvidenceTier(string tier)
+    {
+        return tier switch
+        {
+            EvidenceTiers.Tier1Semantic
+                or EvidenceTiers.Tier2Structural
+                or EvidenceTiers.Tier3SyntaxOrTextual
+                or EvidenceTiers.Tier4Unknown => tier,
+            _ => EvidenceTiers.Tier4Unknown
+        };
     }
 
     private static int EvidenceTierRank(string tier)
@@ -324,6 +374,10 @@ internal sealed record OverrideCandidatePath(
     string CandidateNodeId,
     StaticDispatchRelationshipEdge LeafRelationship,
     IReadOnlyList<StaticDispatchRelationshipEdge> RelationshipChain);
+
+internal sealed record OverrideCandidatePathResult(
+    IReadOnlyList<OverrideCandidatePath> Paths,
+    bool TruncatedByDepth);
 
 internal sealed record OverrideTraversalFrame(
     string CurrentNodeId,
