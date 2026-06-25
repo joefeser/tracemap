@@ -322,24 +322,6 @@
     ]
   },
   {
-    "path": "/demo/troubleshooting/",
-    "title": "Public Demo Troubleshooting",
-    "summary": "Concept-level guidance for routing public demo confusion to visible checks, labels, owner roles, stop conditions, and non-claims.",
-    "publicClaimLevel": "concept",
-    "sourceType": "site-page",
-    "hintCategory": "demo",
-    "preferredProofPath": "/demo/runbook/",
-    "limitations": [
-      "The route is public demo interpretation guidance, not scanner output, reducer output, validation success, or a new proof source.",
-      "Missing, stale, private-only, reduced, unavailable, incomplete, or unsupported public signals remain visible until a public route resolves them."
-    ],
-    "nonClaims": [
-      "No support contract, response-time promise, runtime diagnosis, production proof, endpoint performance proof, release approval, operational proof, complete coverage, or absence-of-impact proof.",
-      "No AI or LLM impact-analysis claim, prompt-based classification, embedding search, vector database analysis, autonomous approval, or replacement of validation or human review.",
-      "No private or raw material is public proof without a public-safe summary route."
-    ]
-  },
-  {
     "path": "/demo/manager-script/",
     "title": "Manager Demo Script",
     "summary": "Concept-level presenter script for showing TraceMap static evidence routes, bounded answer shapes, stop conditions, and public handoff links.",

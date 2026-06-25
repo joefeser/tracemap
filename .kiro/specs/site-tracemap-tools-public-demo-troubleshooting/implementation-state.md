@@ -1,14 +1,12 @@
 # Site TraceMap Tools Public Demo Troubleshooting Implementation State
 
-Status: implemented
+Status: not-started
 Readiness: ready-for-implementation
 Public claim level: concept
 
 ## Branch
 
 Spec branch: `codex/spec-site-public-demo-troubleshooting`
-
-Implementation branch: `codex/impl-site-public-demo-troubleshooting`
 
 Base: `origin/dev`
 
@@ -17,26 +15,22 @@ Target PR base: `dev`
 Worktree: dedicated isolated spec worktree; local absolute path intentionally
 omitted from checked-in spec notes.
 
-Scope: implement the public-demo troubleshooting concept surface as a bounded
-public static-site route, with route-specific validation and spec-state
-bookkeeping.
+Scope: create a spec-only Kiro packet for a future public-demo
+troubleshooting page or section. Only this spec directory is in scope.
 
-Out of scope: generated output edits, scanner code, reducer code, runtime
-diagnostics, support workflow, primary navigation changes, production
-availability claims, and stronger demo/proof claims.
+Out of scope: site source, generated output, scanner code, reducer code,
+runtime diagnostics, support workflow, navigation changes, sitemap changes,
+existing specs, and implementation of public copy.
 
 ## Current State
 
-The implementation is in progress on a dedicated `codex/` branch. The route
-was added as a standalone concept-level public page at
-`/demo/troubleshooting/`.
+The packet is ready for future implementation. It defines future requirements,
+design, tasks, and review focus for a public demo troubleshooting surface.
 
-Site source has been changed only under public site source, site metadata,
-site validation scripts/tests, one inbound link from the demo runbook, and this
-spec-local implementation state/tasks file.
+No site code has been changed.
 
 `./scripts/check-private-paths.sh` exists on this branch and remains part of
-the required implementation validation before completion.
+the required spec-phase validation before readiness advances.
 
 ## Claim-Level Decision
 
@@ -55,72 +49,18 @@ links, and validation checks.
 
 ## Placement Decision
 
-Final placement: standalone route `/demo/troubleshooting/`.
+Final placement is intentionally not chosen in this spec-only phase.
 
-Placement rationale: the troubleshooting matrix is large enough to deserve a
-durable URL and would crowd `/demo/runbook/` or `/demo/start-here/`. The
-content answers "what should I check when public demo guidance does not line
-up?" rather than the runbook's reading sequence, start-here onboarding, result
-summary, proof-upgrades ledger, validation method, limitations catalog, or
-stakeholder objection guide.
+Allowed candidate placements:
 
-Rejected alternatives:
+- `/demo/troubleshooting/`
+- `/demo/help/`
+- Section on `/demo/runbook/`
+- Section on `/demo/start-here/`
 
-- `/demo/help/`: rejected because the spec vocabulary and matrix are about
-  troubleshooting public demo proof/wording mismatches, not general help.
-- Section on `/demo/runbook/`: rejected because the runbook remains the demo
-  reading sequence and operator checklist; the matrix would dominate it.
-- Section on `/demo/start-here/`: rejected because start-here remains
-  first-visitor orientation and should not carry a dense troubleshooting
-  table.
-
-Metadata consequences: standalone route title, description, canonical URL,
-Open Graph metadata, sitemap entry, and discovery entry were added with
-`publicClaimLevel: concept`. Primary navigation remains unchanged. A single
-bounded inbound link, `Demo troubleshooting`, was added from the demo runbook's
-bridge routes.
-
-Section-placement reconciliation: not applicable. There is no host-page
-claim-level conflict, no section anchor set, and no host crowding measurement
-because the selected placement is a standalone route.
-
-Implementation sequencing note: placement and marker choices were made during
-the implementation read-through before site edits; this checked-in state file
-was updated after the first source patch with the same decisions.
-
-## Adjacent Route Inventory
-
-All required adjacent public routes exist in this checkout and are linked with
-bounded anchor text:
-
-- `/demo/runbook/`: present; linked as `demo runbook` or `Demo runbook`.
-- `/demo/start-here/`: present; linked as `demo start-here` or
-  `Demo start-here`.
-- `/demo/result/`: present; linked as `demo result` or `Demo result`.
-- `/demo/proof-upgrades/`: present; linked as `proof upgrades` or
-  `Proof upgrades`.
-- `/validation/`: present; linked as `validation expectations` or
-  `Validation expectations`.
-- `/limitations/`: present; linked as `limitations` or
-  `Limitations and non-claims`.
-- `/questions/objections/`: present; linked as `questions and objections` or
-  `Questions and objections`.
-
-No adjacent routes were absent, moved, substituted, deferred, or omitted.
-
-## Programmatic Markers
-
-Rejected-pattern marker: `data-rejected-pattern-region` on the rejected
-wording section. The route-specific validator requires exactly one marked
-rejected-pattern region and scans forbidden affirmative claims outside this
-marker.
-
-Non-claim marker: `data-non-claim-region` on the non-claim boundary section,
-the stop/non-claim section, and each matrix `what not to conclude` and
-`non-claim` cell. This marker is distinct from the rejected-pattern marker.
-The route-specific validator excludes marked non-claim regions from
-affirmative-claim scanning while still applying hard private/raw-material
-scanning everywhere.
+The future implementation must record the selected placement, rejected
+alternatives, adjacent-route status, and metadata consequences here before
+changing site source.
 
 ## Scope Decisions
 
@@ -141,9 +81,6 @@ scanning everywhere.
   snippets, SQL, config values, secrets, local paths, raw remotes, generated
   scan directories, private sample names, command output, hidden validation
   details, or credential-like values.
-- Local-only artifact families are described only generically as private/raw
-  material in public copy; exact raw artifact names are intentionally avoided
-  on this route.
 
 ## Review Commands
 
@@ -202,33 +139,17 @@ Planned spec-phase validation:
 
 Future implementation validation:
 
-- `node --test scripts/demo-troubleshooting.test.mjs`: passed on 2026-06-25.
-- Focused validation added for visible concept claim label and shared
-  principle, required rows and fields, table header/field markers, adjacent
-  route distinctions, bounded anchor text, internal spec artifact directions,
-  standalone metadata, sitemap/discovery metadata, rejected-pattern markers,
-  non-claim markers, forbidden affirmative claims outside marked regions,
-  hard private/raw material everywhere, blame language, owner-handoff support
-  promises, and standalone word count.
-- Aggregate validation is wired through `site/scripts/validate.mjs`.
-- `cd site && npm test`: passed on 2026-06-25.
-- `cd site && npm run validate`: passed on 2026-06-25; validated 68 HTML
-  files, 2353 internal references, and 67 sitemap URLs.
-- `cd site && npm run build`: passed on 2026-06-25.
-- `git diff --check`: passed on 2026-06-25.
-- `./scripts/check-private-paths.sh`: passed on 2026-06-25 with
-  `Private path guard passed.`
-- Desktop browser sanity for `http://localhost:4173/demo/troubleshooting/`:
-  passed on 2026-06-25 using Playwright at 1440x1000. Snapshot showed visible
-  concept claim label, shared principle, semantic table headers, and required
-  matrix rows.
-- Mobile browser sanity for `http://localhost:4173/demo/troubleshooting/`:
-  passed on 2026-06-25 using Playwright at 390x844. Snapshot/eval showed no
-  body overflow, a horizontally reachable matrix overflow region, 8 required
-  rows, 1 rejected-pattern region, and 18 non-claim regions.
-- Section host metadata, duplicate section-anchor, claim-level reconciliation,
-  and host crowding checks are not applicable because the final placement is
-  standalone.
+- Focused validation for required rows and fields.
+- Focused validation for required links and adjacent-route distinctions.
+- Focused validation for metadata, sitemap metadata, and discovery metadata
+  when standalone.
+- Focused validation for section host metadata and anchors when section-based.
+- Focused validation for forbidden claims, private/raw material, blame
+  language, and word count bounds.
+- `npm test` from `site/`.
+- `npm run validate` from `site/`.
+- `npm run build` from `site/`.
+- Desktop and mobile browser sanity checks after layout changes.
 
 ## Oddities
 
@@ -238,12 +159,15 @@ Future implementation validation:
 - Some forbidden phrases may appear inside rejected-pattern or non-claim
   regions for validation purposes. Future validation should distinguish
   rejected examples from affirmative public claims.
-- Discovery metadata uses broader safe wording than the page body where the
-  global discovery safety guard already restricts denied terms outside direct
-  `nonClaims` entries.
-- The matrix is a semantic table in an overflow wrapper. Desktop/mobile sanity
-  must verify the horizontal table remains reachable on narrow viewports.
 
 ## Follow-Up Items
 
-- Create a PR to `dev` and run the required ACK PR loop.
+- Future implementation must keep this spec-local state updated as placement,
+  validation, and route decisions are made.
+- Choose final placement and record it here before changing site source.
+- Record absent, moved, or concept-only adjacent routes and their link
+  handling before changing site source.
+- Introduce and record the programmatic rejected-pattern marker if the site
+  does not already define one.
+- Introduce and record the programmatic non-claim marker if the site does not
+  already define one.
