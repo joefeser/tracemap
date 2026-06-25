@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Final Tasks
 
-Status: partial-implementation-merged-ready-for-next-slice
+Status: task-5-closed-ready-for-task-6
 
 ## Spec Delivery Tasks
 
@@ -39,6 +39,9 @@ Status: partial-implementation-merged-ready-for-next-slice
 Current state: the spec-only PR merged as PR #311 (`43426b7c`), duplicate
 endpoint/root selector ambiguity merged as PR #318 (`1e9c5660`), and
 source-local service-call cycle gaps merged as PR #320 (`565d7b64`).
+Branch `codex/route-flow-task5-matrix` audited `origin/dev` at
+`625e6fef9c9a88539545334c3fcd3e979e7d3244` and closed the remaining Task 5
+direct-call/no-call/reduced-coverage/deterministic-ordering matrix.
 Implementation tasks below remain sequenced across the Suggested PR Boundaries
 section, not intended as one giant product PR. Checkboxes are marked only where
 current `dev` code or merged PR records prove the behavior.
@@ -62,26 +65,29 @@ current `dev` code or merged PR records prove the behavior.
   - [x] Confirm no new command, report type, JSON version, traversal engine, or
         rule namespace is needed.
 
-- [ ] 5. Complete endpoint/root method to service call stitching. Requirements:
+- [x] 5. Complete endpoint/root method to service call stitching. Requirements:
       2, 5, 6.
       Suggested boundary: PR 1.
-      Status: partial. Duplicate normalized endpoint roots and source-local
-      service-call cycles are implemented on `dev`; remaining Task 5 work is
-      the narrower direct-call/no-call/reduced-coverage test matrix and any
-      missing call-edge shapes not already covered by live route-flow tests.
+      Status: complete. Duplicate normalized endpoint roots and source-local
+      service-call cycles are implemented on `dev`; branch
+      `codex/route-flow-task5-matrix` closed the narrower
+      direct-call/no-call/reduced-coverage test matrix, selector-blocker
+      suppression, and deterministic direct-call ordering remainder.
   - [x] Stitch endpoint/root methods to direct service/helper/repository calls
         only through source-local symbol, graph node, fact, or edge identity.
   - [x] Avoid same-file, directory, short-name, display-name, textual, or route
         string joins.
-  - [ ] Emit `MissingCallEdge` or an existing equivalent gap when full-coverage
+  - [x] Emit `MissingCallEdge` or an existing equivalent gap when full-coverage
         call-like evidence cannot stitch from the selected root. Partially
-        covered by current route-flow tests; keep unchecked until the remaining
-        full-coverage dead-end and zero-path shapes are audited together.
-  - [ ] Emit reduced/unknown gaps when coverage, schema, extractor, identity,
+        covered by current route-flow tests; audited as covered by
+        `Route_flow_preserves_interface_call_and_emits_candidate_unavailable_gap`,
+        `Route_flow_marks_service_call_cycles_as_traversal_bounds`, and
+        `Route_flow_emits_data_surface_attachment_gap_when_downstream_calls_have_no_terminal_surface`.
+  - [x] Emit reduced/unknown gaps when coverage, schema, extractor, identity,
         or commit evidence prevents a clean conclusion.
   - [x] Add focused duplicate-root coverage proving ambiguous normalized route
         roots emit a deterministic selector gap and downgrade the report.
-  - [ ] Add tests for direct service calls, no direct call under full coverage,
+  - [x] Add tests for direct service calls, no direct call under full coverage,
         no direct call under reduced coverage, duplicate roots, cycles, and
         deterministic ordering.
     - [x] Duplicate roots: covered by PR #318.
@@ -95,9 +101,13 @@ current `dev` code or merged PR records prove the behavior.
           `NoRouteFlowEvidence` gaps are suppressed when projection schema,
           argument projection, data-surface attachment, or traversal bounds
           blockers prevent a clean absence conclusion.
-    - [ ] Direct/no-call/reduced-coverage/deterministic-ordering remainder:
-          still valid follow-up work unless a later `origin/dev` audit proves
-          an in-flight route-flow branch completed or superseded it.
+    - [x] Direct/no-call/reduced-coverage/deterministic-ordering remainder:
+          closed by audit plus
+          `Route_flow_orders_direct_service_call_paths_deterministically` and
+          `Route_flow_suppresses_clean_no_evidence_when_no_direct_call_has_full_coverage_selector_blocker`;
+          existing tests cover direct service calls, reduced-coverage no-call,
+          duplicate roots, cycles, and projection/truncation blocker
+          suppression.
 
 - [ ] 6. Harden implementation-candidate continuation. Requirements: 3, 5.
       Suggested boundary: PR 2.
