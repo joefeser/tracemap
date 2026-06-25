@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Final Tasks
 
-Status: task-7-source-symbol-attachment-precision-ready-for-review
+Status: task-7-value-origin-precision-ready-for-review
 
 ## Spec Delivery Tasks
 
@@ -156,13 +156,19 @@ current `dev` code or merged PR records prove the behavior.
       selected message terminal surface kinds already supported by the combined
       path graph, attaches them only when joined through selected static
       route-flow paths, and preserves `DataSurfaceAttachmentMissing` for
-      adjacent unjoined message surface evidence.
+      adjacent unjoined message surface evidence. Branch
+      `codex/route-flow-task7-value-origin-precision-20260625173937` audited
+      `origin/dev` at `7ac6e1ac883998a7c09c87afc416f0c76be225f6` and closed
+      the value-origin/projection sub-slice: selected argument-flow projection
+      rows and parameter-forward value-origin rows remain attached only through
+      selected static route-flow rows, while adjacent unjoined argument-flow
+      evidence now preserves a scoped `ArgumentProjectionUnavailable` gap.
   - [ ] Attach service, repository, object/projection, query-shape, SQL-shape,
         legacy-data, package/config, HTTP client, WCF, ASMX/SOAP, remoting,
         event/message, storage, validation/guard, serializer/contract,
         async/callback, and flow-boundary facts only through selected route-flow
         evidence.
-  - [ ] Render argument-flow and parameter-forward value-origin rows only when
+  - [x] Render argument-flow and parameter-forward value-origin rows only when
         joined to selected static route-flow rows.
   - [x] Render fact-symbol context only for selected source-local symbols.
   - [x] Emit `ArgumentProjectionUnavailable`,
@@ -174,6 +180,11 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_message_surfaces_only_from_selected_static_path`
           and
           `Route_flow_does_not_infer_adjacent_message_surface_without_selected_join`.
+    - [x] Argument-flow/parameter-forward value-origin sub-slice covered by
+          `Route_flow_attaches_value_origin_rows_only_from_selected_static_path`,
+          including joined projection rows, selected parameter-forward rows,
+          adjacent unjoined argument-flow gaps, and deterministic repeated
+          row/gap IDs.
 
 - [ ] 8. Enforce coverage, classification, and gap downgrade behavior.
       Requirements: 5.
