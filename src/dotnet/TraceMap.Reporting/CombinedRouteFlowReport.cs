@@ -299,7 +299,15 @@ public static class CombinedRouteFlowReporter
         "remoting-object",
         "remoting-api",
         "legacy-data",
-        "dependency-surface"
+        "dependency-surface",
+        "message-queue",
+        "message-topic",
+        "message-subscription",
+        "message-exchange",
+        "message-stream",
+        "message-event",
+        "message-channel",
+        "message-unknown"
     };
 
     public static async Task<CombinedRouteFlowResult> WriteAsync(CombinedRouteFlowOptions options, CancellationToken cancellationToken = default)
@@ -554,7 +562,7 @@ public static class CombinedRouteFlowReporter
 
         if (!string.IsNullOrWhiteSpace(options.ToSurface) && !SurfaceKinds.Contains(options.ToSurface.Trim()))
         {
-            throw new ArgumentException("route-flow --to-surface must be one of sql-query, sql-persistence, http-route, http-client, package-config, wcf-operation, remoting-endpoint, remoting-registration, remoting-channel, remoting-object, remoting-api, legacy-data, or dependency-surface.");
+            throw new ArgumentException("route-flow --to-surface must be one of sql-query, sql-persistence, http-route, http-client, package-config, wcf-operation, remoting-endpoint, remoting-registration, remoting-channel, remoting-object, remoting-api, legacy-data, dependency-surface, message-queue, message-topic, message-subscription, message-exchange, message-stream, message-event, message-channel, or message-unknown.");
         }
 
         if (!string.IsNullOrWhiteSpace(options.Classification) && !AllowedClassifications.Contains(options.Classification.Trim()))
