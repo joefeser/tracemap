@@ -111,15 +111,15 @@ current `dev` code or merged PR records prove the behavior.
 
 - [ ] 6. Harden implementation-candidate continuation. Requirements: 3, 5.
       Suggested boundary: PR 2.
-  - [ ] Reuse source-local `combined_symbol_relationships` evidence for
+  - [x] Reuse source-local `combined_symbol_relationships` evidence for
         implementation candidates.
-  - [ ] Continue through a single compiler-backed candidate only as review-tier
+  - [x] Continue through a single compiler-backed candidate only as review-tier
         static evidence.
   - [ ] Emit deterministic multiple-candidate, no-candidate, high-fan-out,
         syntax-only, name-only, cross-source, cross-language, runtime-binding,
         and reduced-coverage gaps.
-  - [ ] Prove candidate bridges cannot produce `StrongStaticRouteFlow`.
-  - [ ] Add tests proving no runtime DI target, service locator, factory,
+  - [x] Prove candidate bridges cannot produce `StrongStaticRouteFlow`.
+  - [x] Add tests proving no runtime DI target, service locator, factory,
         reflection, or dynamic dispatch proof is claimed.
 
 - [ ] 7. Complete service/data/query/dependency attachment precision.
