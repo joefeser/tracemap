@@ -3986,12 +3986,13 @@ public static class CombinedRouteFlowReporter
         return gap.GapKind != "NoRouteFlowEvidence"
             && (IsNoEvidenceBlockingCompositionGap(gap)
                 || gap.GapKind is "DataSurfaceAttachmentMissing"
-                    or "ArgumentProjectionUnavailable"
+                || gap.GapKind is "ArgumentProjectionUnavailable"
                     or "FactSymbolProjectionUnavailable"
                     or "SchemaMissing"
                     or "ExtractorUnavailable"
                     or "UnknownCommitSha"
                     or "UnknownAnalysisGap"
+                    or "TruncatedByLimit"
                     or "ReducedCoverage");
     }
 

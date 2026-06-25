@@ -890,7 +890,7 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
-    public async Task Route_flow_emits_no_route_flow_evidence_only_after_clean_bridge_checks()
+    public async Task Route_flow_does_not_emit_clean_no_evidence_gap_when_path_truncation_blocks_absence()
     {
         using var temp = new TempDirectory();
         var serverIndex = Path.Combine(temp.Path, "server.sqlite");
@@ -913,8 +913,10 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root");
         Assert.Empty(result.Report.FlowRows);
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "MissingRouteRoot" or "MissingMethodSymbolBridge" or "MissingCallEdge");
-        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "TruncatedByLimit");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
         Assert.All(result.Report.ContextGroups!, group => Assert.Equal("gap", group.GroupKind));
+        Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
         Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
     }
 
