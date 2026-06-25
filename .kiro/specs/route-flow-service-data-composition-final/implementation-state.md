@@ -753,7 +753,29 @@ subcase, plus the directly touched Task 8 guard that clean
 - `dotnet test src/dotnet/TraceMap.sln`: passed, 640 tests.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
-- Push, PR creation, and ACK loop are pending in this pass.
+- PR #325 opened against `dev` from
+  `codex/route-flow-service-data-stitching`.
+- Initial ACK PR loop returned `actionable_findings` with two unresolved
+  review threads and `patchAuthorized=true`.
+- ACK-authorized findings patched:
+  - removed a redundant `DataSurfaceAttachmentMissing` branch from the clean
+    no-evidence blocker predicate because it is already covered by endpoint
+    composition blocker handling;
+  - treated `TruncatedByLimit` gaps as blockers for clean
+    `NoRouteFlowEvidence` and updated the truncation-adjacent fixture to assert
+    the safer unknown conclusion.
+- Focused validation after the ACK patch:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`
+  passed, 37 tests.
+- Post-ACK `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and
+  0 errors.
+- First post-ACK `dotnet test src/dotnet/TraceMap.sln` had one known
+  intermittent diagnostic artifact assertion miss for `NuGetRestoreFailed`.
+  The single diagnostic test passed in isolation, and the full solution rerun
+  passed, 640 tests.
+- Post-ACK `./scripts/check-private-paths.sh`: passed.
+- Post-ACK `git diff --check`: passed.
+- Follow-up push and ACK rerun are pending in this pass.
 
 ### Oddities / Design Decisions For PR 3
 
