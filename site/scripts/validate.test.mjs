@@ -52,6 +52,7 @@ import { releaseReviewBoundaryRoute } from "./release-review-boundary.mjs";
 import { reviewMeetingAgendaRoute } from "./review-meeting-agenda.mjs";
 import { reviewRoomRoute } from "./review-room.mjs";
 import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
+import { siteClaimGuardrailsRoute } from "./site-claim-guardrails.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
 import {
@@ -218,6 +219,7 @@ async function createDistFixture({
       reviewMeetingAgendaRoute,
       reviewRoomRoute,
       roadmapClaimLedgerRoute,
+      siteClaimGuardrailsRoute,
       staticTriageRoute,
       staticVsRuntimeRoute,
       stakeholderObjectionGuideRoute,
@@ -276,6 +278,7 @@ async function createDistFixture({
     reviewMeetingAgendaRoute,
     reviewRoomRoute,
     roadmapClaimLedgerRoute,
+    siteClaimGuardrailsRoute,
     staticTriageRoute,
     staticVsRuntimeRoute,
     stakeholderObjectionGuideRoute,
@@ -534,6 +537,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === roadmapClaimLedgerRoute) {
     return roadmapClaimLedgerPage();
+  }
+
+  if (route === siteClaimGuardrailsRoute) {
+    return readFile(new URL("../src/site-claim-guardrails/index.html", import.meta.url), "utf8");
   }
 
   if (route === staticTriageRoute) {
@@ -1116,6 +1123,23 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture roadmap ledger limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: siteClaimGuardrailsRoute,
+        title: "Site Claim Guardrails",
+        summary: "Concept-level TraceMap site claim guardrails for public wording, proof paths, limitations, downgrade rules, hidden states, and review handoff.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/review-claim-checklist/",
+        limitations: [
+          "The route is copy-governance guidance, not scanner output, reducer output, validation success, or a new proof source.",
+          "Claims still need their own public-safe proof path, rule basis, evidence tier when applicable, coverage label, limitation, and source context."
+        ],
+        nonClaims: [
+          "No runtime proof, production traffic proof, endpoint performance proof, outage-cause proof, release approval, release safety, operational safety, complete coverage, AI impact analysis, LLM analysis, autonomous approval, or replacement of human review.",
+          "No raw facts, raw SQLite content, analyzer logs, source snippets, raw SQL, config values, secrets, local paths, remotes, generated scan directories, private sample names, command output, hidden validation details, or credential-like values are public guardrails material."
+        ]
       },
       {
         path: staticTriageRoute,
