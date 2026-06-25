@@ -2725,7 +2725,7 @@ public static class CombinedRouteFlowReporter
         }
 
         await using var command = connection.CreateCommand();
-        var sourceFilter = AddSourceFilterParameters(command, sourceIndexIds);
+        var selectedSourceIndexIds = sourceIndexIds.ToHashSet(StringComparer.Ordinal);
         var selectedPairKeys = pairCandidates
             .Select(candidate => SymbolPairKey(candidate.SourceIndexId, candidate.CallerSymbol, candidate.CalleeSymbol))
             .ToHashSet(StringComparer.Ordinal);
@@ -2743,9 +2743,6 @@ public static class CombinedRouteFlowReporter
                    sources.scanner_version
             from combined_argument_flows flows
             join index_sources sources on sources.source_index_id = flows.source_index_id
-            where flows.source_index_id in (
-            """ + sourceFilter + """
-            )
             order by flows.source_index_id, flows.caller_symbol, flows.callee_symbol, flows.parameter_ordinal, flows.combined_fact_id
             """;
         var values = new List<ProjectionGapEvidence>();
@@ -2753,6 +2750,11 @@ public static class CombinedRouteFlowReporter
         while (await reader.ReadAsync(cancellationToken))
         {
             var sourceIndexId = reader.GetString(1);
+            if (!selectedSourceIndexIds.Contains(sourceIndexId))
+            {
+                continue;
+            }
+
             var callerSymbol = reader.IsDBNull(2) ? null : reader.GetString(2);
             var calleeSymbol = reader.IsDBNull(3) ? null : reader.GetString(3);
             if (!string.IsNullOrWhiteSpace(callerSymbol)
