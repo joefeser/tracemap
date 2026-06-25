@@ -959,6 +959,9 @@ extraction, or broader Task 7/8/9/10 work.
     redundant LINQ allocations and repeated node lookups;
   - populated `RuntimeBindingNotProven` gaps with commit SHA, extractor name,
     and extractor version metadata;
+  - suppressed contradictory `MissingImplementationBridge` and
+    `ImplementationCandidateUnavailable` gaps when incompatible candidate
+    evidence exists and `RuntimeBindingNotProven` explains the blocked bridge;
   - added focused regression coverage for runtime-binding gap metadata.
 - Post-ACK patch validation:
   - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
