@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level TraceMap public demo troubleshooting guidance for route, summary, proof, coverage, evidence, wording, validation, and owner handoff questions."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Demo Troubleshooting | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/demo/troubleshooting/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Public Demo Troubleshooting">
+    <meta
+      property="og:description"
+      content="Concept-level guidance for keeping public demo troubleshooting attached to visible evidence boundaries, stop conditions, and owner handoffs."
+    >
+    <meta property="og:url" content="https://tracemap.tools/demo/troubleshooting/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Public demo troubleshooting</p>
+        <h1>When demo guidance does not line up, keep the claim smaller.</h1>
+        <p class="hero-subhead">
+          This concept page helps a visitor route public demo confusion to the
+          right public check, owner role, stop condition, and non-claim.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          Missing, stale, private-only, reduced, unavailable, incomplete, or
+          unsupported public signals stay visible until a public route resolves
+          them.
+        </p>
+        <nav class="hero-actions" aria-label="Demo troubleshooting links">
+          <a class="button primary" href="/demo/runbook/">Demo runbook</a>
+          <a class="button secondary" href="/validation/">Validation expectations</a>
+          <a class="button secondary" href="/limitations/">Limitations and non-claims</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" data-demo-troubleshooting-section="when-to-use">
+        <div>
+          <p class="section-kicker">When to use it</p>
+          <h2>Use this when a public demo signal is confusing, stale, or incomplete.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Route confusion</strong><span>A public demo, proof, or adjacent route is missing, moved, or hard to connect to the claim.</span></div>
+          <div><strong>Summary drift</strong><span>Demo summary wording appears older than the visible proof expectation or route metadata.</span></div>
+          <div><strong>Proof mismatch</strong><span>The page points to proof a public visitor cannot follow through public routes.</span></div>
+          <div><strong>Coverage boundary</strong><span>A reduced, partial, unavailable, or unknown label needs to remain visible.</span></div>
+          <div><strong>Private-only material</strong><span>Evidence may exist outside the public site but has no public summary yet.</span></div>
+          <div><strong>Wording concern</strong><span>Copy needs downgrading, removal, validation context, or limitations context before it is repeated.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" data-demo-troubleshooting-section="what-it-is-not" data-non-claim-region="demo-troubleshooting-boundary">
+        <div>
+          <p class="section-kicker">What it is not</p>
+          <h2>This is guidance for reading the public demo, not a stronger proof surface.</h2>
+        </div>
+        <ul>
+          <li>Not a support contract, response-time promise, ticketing channel, or guaranteed answer path.</li>
+          <li>Not runtime diagnosis, production proof, endpoint performance proof, release approval, operational proof, or complete coverage.</li>
+          <li>Not an AI or LLM impact-analysis claim, prompt-based classification, embedding search, or vector database analysis.</li>
+          <li>Not a replacement for validation, tests, owner review, or human review.</li>
+          <li>Not a way to turn private or raw material into public proof without a public summary route.</li>
+        </ul>
+      </section>
+
+      <section class="section" data-demo-troubleshooting-section="matrix">
+        <div class="section-header">
+          <p class="section-kicker">Troubleshooting matrix</p>
+          <h2>Each row keeps the public symptom, check, owner, stop condition, and non-claim attached.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table troubleshooting-matrix" data-demo-troubleshooting-matrix>
+            <caption>
+              Public demo troubleshooting rows. The final two columns are marked
+              as non-claims because they say what the public route cannot prove.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Scenario</th>
+                <th scope="col">Symptom</th>
+                <th scope="col">Likely public-safe cause</th>
+                <th scope="col">What to check</th>
+                <th scope="col">What not to conclude</th>
+                <th scope="col">Next owner/route</th>
+                <th scope="col">Stop condition</th>
+                <th scope="col">Non-claim</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-demo-troubleshooting-row="missing route">
+                <th scope="row">Missing route</th>
+                <td data-field="symptom">A linked public demo or proof route is missing, redirects unexpectedly, or is absent from discovery.</td>
+                <td data-field="likely public-safe cause">Route not implemented yet, moved, intentionally omitted, or not published in the current public build.</td>
+                <td data-field="what to check">Check the <a href="/demo/runbook/">demo runbook</a>, <a href="/demo/start-here/">demo start-here</a>, sitemap or discovery metadata, and visible deferral labels.</td>
+                <td data-field="what not to conclude" data-non-claim-region="matrix-not-conclude">Do not conclude the evidence exists, does not exist, proves the claim, or disproves the claim.</td>
+                <td data-field="next owner/route">Site owner or demo owner; route to <a href="/demo/runbook/">demo runbook</a>, <a href="/demo/start-here/">demo start-here</a>, or <a href="/limitations/">limitations</a>.</td>
+                <td data-field="stop condition">Stop before repeating proof wording until a resolving public route or explicit deferral exists.</td>
+                <td data-field="non-claim" data-non-claim-region="matrix-non-claim">Missing route is not proof, runtime diagnosis, release approval, or complete coverage.</td>
+              </tr>
+              <tr data-demo-troubleshooting-row="outdated demo summary">
+                <th scope="row">Outdated demo summary</th>
+                <td data-field="symptom">Public summary text appears older than surrounding demo routes or proof wording.</td>
+                <td data-field="likely public-safe cause">Summary copy may be stale, a proof upgrade may be planned, or validation language may have changed.</td>
+                <td data-field="what to check">Check <a href="/demo/result/">demo result</a>, <a href="/demo/proof-upgrades/">proof upgrades</a>, <a href="/validation/">validation expectations</a>, visible date metadata, and visible claim-level metadata.</td>
+                <td data-field="what not to conclude" data-non-claim-region="matrix-not-conclude">Do not conclude current-head, current-release, current-proof, or live production state.</td>
+                <td data-field="next owner/route">Demo owner or site owner; route to <a href="/demo/result/">demo result</a>, <a href="/demo/proof-upgrades/">proof upgrades</a>, or <a href="/validation/">validation expectations</a>.</td>
+                <td data-field="stop condition">Stop before current wording until the public summary and proof expectation match.</td>
+                <td data-field="non-claim" data-non-claim-region="matrix-non-claim">Stale summary is not current proof or a clean-demo claim.</td>
+              </tr>
+              <tr data-demo-troubleshooting-row="broken proof expectation">
+                <th scope="row">Broken proof expectation</th>
+                <td data-field="symptom">A page promises proof that a public visitor cannot follow or validate.</td>
+                <td data-field="likely public-safe cause">Link, label, route, artifact summary, or explanation may be incomplete or intentionally deferred.</td>
+                <td data-field="what to check">Check the named proof route, <a href="/validation/">validation expectations</a>, <a href="/limitations/">limitations</a>, and any visible deferred or unavailable label.</td>
+                <td data-field="what not to conclude" data-non-claim-region="matrix-not-conclude">Do not conclude public proof exists or that private or raw material may stand in for public proof.</td>
+                <td data-field="next owner/route">Demo owner, validation owner, or site owner; route to <a href="/validation/">validation expectations</a> or <a href="/limitations/">limitations</a>.</td>
+                <td data-field="stop condition">Stop before public proof wording until the proof path is public and resolvable.</td>
+                <td data-field="non-claim" data-non-claim-region="matrix-non-claim">Incomplete proof path is not production proof, runtime proof, or release safety.</td>
+              </tr>
+              <tr data-demo-troubleshooting-row="reduced coverage label">
+                <th scope="row">Reduced coverage label</th>
+                <td data-field="symptom">Demo copy shows reduced, partial, syntax fallback, unavailable, or unknown coverage.</td>
+                <td data-field="likely public-safe cause">The public demo may be preserving a real evidence boundary rather than hiding a result.</td>
+                <td data-field="what to check">Check the coverage label, evidence tier wording, limitation, validation expectation, and adjacent explanation.</td>
+                <td data-field="what not to conclude" data-non-claim-region="matrix-not-conclude">Do not conclude complete coverage, absence of impact, clean repo, release safety, or Tier1 semantic certainty.</td>
+                <td data-field="next owner/route">Validation owner or limitations route; route to <a href="/validation/">validation expectations</a> and <a href="/limitations/">limitations</a>.</td>
+                <td data-field="stop condition">Stop before strengthening the claim or removing the reduced label.</td>
+                <td data-field="non-claim" data-non-claim-region="matrix-non-claim">Reduced coverage is review input, not complete proof.</td>
+              </tr>
+              <tr data-demo-troubleshooting-row="private-only evidence">
+                <th scope="row">Private-only evidence</th>
+                <td data-field="symptom">The demo refers to internal support, private-only evidence, or unavailable details.</td>
+                <td data-field="likely public-safe cause">Evidence may exist outside the public site but lacks a public summary.</td>
+                <td data-field="what to check">Check for a public summary, limitations note, proof-upgrades plan, or owner handoff.</td>
+                <td data-field="what not to conclude" data-non-claim-region="matrix-not-conclude">Do not cite private-only material as public proof or publish private details.</td>
+                <td data-field="next owner/route">Site owner or reviewer; route to <a href="/limitations/">limitations</a> or <a href="/demo/proof-upgrades/">proof upgrades</a>.</td>
+                <td data-field="stop condition">Stop before public proof wording until a public summary exists.</td>
+                <td data-field="non-claim" data-non-claim-region="matrix-non-claim">Private-only evidence is not public proof.</td>
+              </tr>
+              <tr data-demo-troubleshooting-row="unsupported claim wording">
+                <th scope="row">Unsupported claim wording</th>
+                <td data-field="symptom">Copy implies stronger proof than the visible public evidence supports.</td>
+                <td data-field="likely public-safe cause">Claim wording may have drifted ahead of the proof route, validation state, or limitation.</td>
+                <td data-field="what to check">Check the exact wording against the visible proof route, <a href="/validation/">validation expectations</a>, <a href="/limitations/">limitations</a>, and public claim level.</td>
+                <td data-field="what not to conclude" data-non-claim-region="matrix-not-conclude">Do not repeat support SLA, runtime diagnosis, production proof, release approval, endpoint performance, complete coverage, AI/LLM, or replacement-of-review claims.</td>
+                <td data-field="next owner/route">Site owner or reviewer; route to <a href="/limitations/">limitations</a>, <a href="/validation/">validation expectations</a>, or <a href="/questions/objections/">questions and objections</a>.</td>
+                <td data-field="stop condition">Stop, downgrade, or remove wording until evidence and non-claims match.</td>
+                <td data-field="non-claim" data-non-claim-region="matrix-non-claim">Unsupported wording is not evidence.</td>
+              </tr>
+              <tr data-demo-troubleshooting-row="validation mismatch">
+                <th scope="row">Validation mismatch</th>
+                <td data-field="symptom">Demo text and validation route describe different expectations or status.</td>
+                <td data-field="likely public-safe cause">Validation copy, demo copy, or discovery metadata may be stale or scoped differently.</td>
+                <td data-field="what to check">Check <a href="/validation/">validation expectations</a>, route metadata, sitemap or discovery metadata, and the demo page's visible validation expectation.</td>
+                <td data-field="what not to conclude" data-non-claim-region="matrix-not-conclude">Do not claim validation passed, failed, or covers the demo unless the public validation surface says so.</td>
+                <td data-field="next owner/route">Validation owner or site owner; route to <a href="/validation/">validation expectations</a>.</td>
+                <td data-field="stop condition">Stop before validation-pass wording until the public validation expectation is aligned.</td>
+                <td data-field="non-claim" data-non-claim-region="matrix-non-claim">Mismatch is not validation evidence or runtime proof.</td>
+              </tr>
+              <tr data-demo-troubleshooting-row="where to ask next">
+                <th scope="row">Where to ask next</th>
+                <td data-field="symptom">The visitor cannot tell which public page or owner should resolve the question.</td>
+                <td data-field="likely public-safe cause">The route may need a clearer handoff, owner label, or adjacent-route pointer.</td>
+                <td data-field="what to check">Check owner labels, adjacent route links, non-claims, and whether the question belongs to demo, validation, limitations, or objections.</td>
+                <td data-field="what not to conclude" data-non-claim-region="matrix-not-conclude">Do not conclude the question is resolved, approved, or diagnosed because it was handed off.</td>
+                <td data-field="next owner/route">Demo owner, site owner, validation owner, or reviewer; route to the most specific public adjacent page.</td>
+                <td data-field="stop condition">Stop after recording the evidence question, requested public next check, and non-claim.</td>
+                <td data-field="non-claim" data-non-claim-region="matrix-non-claim">Asking next transfers the question; it does not prove or approve anything.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section" data-demo-troubleshooting-section="safe-wording">
+        <div>
+          <p class="section-kicker">Safe wording</p>
+          <h2>Use phrasing that preserves labels, routes, and stop conditions.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Missing route</strong><span>The public route is missing or moved; wait for a resolving route or recorded deferral before repeating proof wording.</span></div>
+          <div><strong>Stale summary</strong><span>The demo summary may be stale, so current-proof wording should wait.</span></div>
+          <div><strong>Incomplete proof</strong><span>The proof expectation is incomplete and needs a public route or summary.</span></div>
+          <div><strong>Reduced coverage</strong><span>Coverage is reduced, so the label stays visible.</span></div>
+          <div><strong>Private-only evidence</strong><span>Private-only evidence needs a public summary before it can support public copy.</span></div>
+          <div><strong>Unsupported wording</strong><span>This wording should be downgraded, removed, or routed to limitations and validation.</span></div>
+          <div><strong>Validation mismatch</strong><span>The validation expectation does not match yet, so passed-validation wording should wait.</span></div>
+          <div><strong>Owner handoff</strong><span>Ask the named owner for the next public check; the handoff is not a conclusion.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" data-demo-troubleshooting-section="rejected-wording" data-rejected-pattern-region="demo-troubleshooting-rejected">
+        <div>
+          <p class="section-kicker">Rejected wording</p>
+          <h2>Unsupported patterns may appear only as rejected examples.</h2>
+        </div>
+        <ul>
+          <li>The demo route is missing, so the claim is proven.</li>
+          <li>The summary is probably fine, so current release wording is safe.</li>
+          <li>Private-only evidence is enough public proof.</li>
+          <li>Reduced coverage proves no impact.</li>
+          <li>The proof route is confusing, but the release is approved.</li>
+          <li>The page diagnoses runtime behavior or endpoint performance.</li>
+          <li>TraceMap provides AI or LLM impact analysis.</li>
+          <li>The demo uses prompt-based classification, embedding search, or vector database analysis.</li>
+          <li>Troubleshooting replaces validation, tests, owner review, or human review.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" data-demo-troubleshooting-section="adjacent-routes">
+        <div>
+          <p class="section-kicker">Adjacent routes</p>
+          <h2>This page routes confusion; neighboring pages keep their own jobs.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong><a href="/demo/runbook/">Demo runbook</a></strong><span>Intended demo reading sequence and operator checklist.</span></div>
+          <div><strong><a href="/demo/start-here/">Demo start-here</a></strong><span>First-visitor orientation before troubleshooting begins.</span></div>
+          <div><strong><a href="/demo/result/">Demo result</a></strong><span>Public result surface for bounded demo rows.</span></div>
+          <div><strong><a href="/demo/proof-upgrades/">Proof upgrades</a></strong><span>Planned and completed public proof improvements without implying planned proof already exists.</span></div>
+          <div><strong><a href="/validation/">Validation expectations</a></strong><span>Validation method and check-result orientation.</span></div>
+          <div><strong><a href="/limitations/">Limitations and non-claims</a></strong><span>Canonical boundary surface for what public static evidence cannot prove.</span></div>
+          <div><strong><a href="/questions/objections/">Questions and objections</a></strong><span>Broader stakeholder concerns beyond route-level demo troubleshooting.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" data-demo-troubleshooting-section="owner-handoff">
+        <div>
+          <p class="section-kicker">Owner handoff</p>
+          <h2>Hand off the evidence question without adding a service promise.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Demo owner</strong><span>Symptom: demo summary or proof wording drift. Requested next check: public summary, proof route, and stop condition.</span></div>
+          <div><strong>Site owner</strong><span>Symptom: route, metadata, sitemap, or discovery confusion. Requested next check: public route status and bounded link text.</span></div>
+          <div><strong>Validation owner</strong><span>Symptom: validation expectation mismatch. Requested next check: public validation wording and route alignment.</span></div>
+          <div><strong>Reviewer</strong><span>Symptom: unsupported wording. Requested next check: downgrade, remove, or route to limitations before repetition.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" data-demo-troubleshooting-section="stop-conditions" data-non-claim-region="demo-troubleshooting-stop-non-claims">
+        <div>
+          <p class="section-kicker">Stop conditions and non-claims</p>
+          <h2>Stop when public evidence is missing, private-only, reduced, or mismatched.</h2>
+        </div>
+        <ul>
+          <li>Stop before repeating proof wording when the public route is missing, broken, or deferred.</li>
+          <li>Stop before current wording when the summary and proof expectation do not match.</li>
+          <li>Stop before strengthening coverage wording when a reduced, partial, unavailable, or unknown label is visible.</li>
+          <li>Stop before public proof wording when the only support is private-only or raw material.</li>
+          <li>Stop before passed-validation wording when validation expectations conflict.</li>
+          <li>These stops do not prove, approve, diagnose, certify, guarantee, or replace human review.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Continue with the
+        <a href="/demo/runbook/">demo runbook</a>,
+        <a href="/validation/">validation expectations</a>,
+        or
+        <a href="/limitations/">limitations and non-claims</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

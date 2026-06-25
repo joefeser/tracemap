@@ -17,6 +17,7 @@ import { claimReviewDrillRoute } from "./claim-review-drill.mjs";
 import { createDiscoveryOutputs } from "./discovery.mjs";
 import { demoEvidenceTrailRoute } from "./demo-evidence-trail.mjs";
 import { demoRunbookInboundLinkRoutes, demoRunbookRoute } from "./demo-runbook.mjs";
+import { demoTroubleshootingRoute } from "./demo-troubleshooting.mjs";
 import { deployAuditRequiredRoutes } from "./deploy-audit.mjs";
 import { evidenceDecisionRecordRoute } from "./evidence-decision-record.mjs";
 import { evidenceGapRegisterRoute } from "./evidence-gap-register.mjs";
@@ -183,6 +184,7 @@ async function createDistFixture({
       blogProofPathSeriesRoute,
       demoEvidenceTrailRoute,
       demoRunbookRoute,
+      demoTroubleshootingRoute,
       evidenceDecisionRecordRoute,
       evidenceGapRegisterRoute,
       evidenceHandoffTemplateRoute,
@@ -237,6 +239,7 @@ async function createDistFixture({
     "/demo/proof-assets/",
     demoEvidenceTrailRoute,
     demoRunbookRoute,
+    demoTroubleshootingRoute,
     evidenceDecisionRecordRoute,
     evidenceGapRegisterRoute,
     evidenceHandoffTemplateRoute,
@@ -411,6 +414,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === demoRunbookRoute) {
     return demoRunbookPage();
+  }
+
+  if (route === demoTroubleshootingRoute) {
+    return readFile(new URL("../src/demo/troubleshooting/index.html", import.meta.url), "utf8");
   }
 
   if (route === evidenceDecisionRecordRoute) {
@@ -648,6 +655,17 @@ async function writeDiscoveryFiles(dist) {
         hintCategory: "demo",
         preferredProofPath: "/proof-paths/",
         limitations: ["Fixture runbook limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: demoTroubleshootingRoute,
+        title: "Public Demo Troubleshooting",
+        summary: "Concept-level guidance for routing public demo confusion to visible checks, labels, owner roles, stop conditions, and non-claims.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "demo",
+        preferredProofPath: "/demo/runbook/",
+        limitations: ["Fixture demo troubleshooting limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
