@@ -1141,6 +1141,26 @@ hardening beyond tests directly touched by the projection behavior.
   checked-in samples intentionally have partial evidence.
 - Diff-scope review before commit showed only route-flow reporting code,
   focused route-flow tests, and this spec's task/state files.
+- Initial ACK PR loop for PR #335 returned `actionable_findings` with two
+  unresolved review threads and `patchAuthorized=true`.
+- ACK-authorized findings patched:
+  - restored combined-symbol-ID matching for source-role fact-symbol
+    projection by adding deterministic combined symbol keys to the selected
+    path model and checking `row.CombinedSymbolId` after the `role = source`
+    guard;
+  - enriched `FactSymbolProjectionUnavailable` fallback gaps with source
+    label, file span, commit SHA, extractor name, and extractor version
+    metadata from the unprojected fact evidence.
+- Post-ACK focused projection validation passed:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_optional_projection_tables_emit_scoped_gaps_when_rows_cannot_join_selected_path|FullyQualifiedName~Route_flow_fact_symbol_projection_requires_selected_source_symbol_identity"`.
+- Post-ACK focused route-flow validation passed:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  with 42 tests.
+- Post-ACK `dotnet test src/dotnet/TraceMap.sln` passed with 650 tests.
+- Post-ACK `git diff --check` passed.
+- Post-ACK `./scripts/check-private-paths.sh` passed.
+- Post-ACK `./scripts/demo-public.sh /tmp/tracemap-route-flow-task7-demo-postack-20260625`
+  passed, with generated outputs kept under the temporary output root.
 
 ### Follow-Ups For PR 6
 
