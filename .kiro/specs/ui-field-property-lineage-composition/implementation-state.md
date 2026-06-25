@@ -1,11 +1,36 @@
 # UI Field Property Lineage Composition Implementation State
 
-Status: ready-for-implementation
-Readiness: ready-for-implementation
+Status: ready-for-implementation-after-route-flow-contract
+Readiness: ready-after-current-route-flow-worker
 Spec branch: `codex/spec-ui-field-property-lineage-composition`
 Target base: `dev`
 Primary issue: `#165`
 Public claim level: hidden
+
+## Reconciliation State
+
+Reconciled against `origin/dev` on 2026-06-25 at `87fe78a3`.
+
+Evidence on `dev`:
+
+- PR #309 merged this composition spec (`848e76f7`).
+- The older continuation implementation PR #293 merged
+  `RouteFlowNoPropertyContext` / route-flow signal hardening (`e0c91f30`).
+- Route-flow successor work has also landed after this spec was drafted:
+  service/data context groups in PR #292, duplicate-root selector gaps in PR
+  #318, and cycle `TraversalBounds` gaps in PR #320.
+
+This remains the active property-flow implementation spec, but the first
+implementation task must re-audit the live route-flow contract after the
+current Kepler route-flow worker completes. Do not reuse the older
+`ui-field-property-lineage-continuation` task list as the work queue.
+
+Recommended property-flow order after the route-flow contract is stable:
+
+1. Task 1 contract audit and Task 2 gap/rule hardening.
+2. Tasks 3-5 Angular/Razor to backend property bridges.
+3. Tasks 6-8 backend terminal context and route-flow reuse.
+4. Tasks 9-10 consumer/export compatibility and safety validation.
 
 ## Scope
 
@@ -161,6 +186,7 @@ ACK PR loop:
   emit a gap and no hop across that dynamic boundary, and added
   `ObservedDemoContext` for observed evidence metadata rows only with explicit
   non-upgrading semantics.
+- PR #309 merged to `dev` as `848e76f7` on 2026-06-24.
 
 ## Follow-Ups For Implementation
 

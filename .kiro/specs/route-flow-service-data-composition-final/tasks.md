@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Final Tasks
 
-Status: ready-for-implementation
+Status: partial-implementation-merged-ready-for-next-slice
 
 ## Spec Delivery Tasks
 
@@ -36,11 +36,12 @@ Status: ready-for-implementation
 
 ## Next Implementation PR Tasks
 
-Current state: product implementation has not started for this final spec.
-Implementation tasks below are sequenced across the Suggested PR Boundaries
-section, not intended as one giant product PR. Do not check them off in this
-spec-only PR unless live audit during a future implementation proves they are
-already complete on `dev`.
+Current state: the spec-only PR merged as PR #311 (`43426b7c`), duplicate
+endpoint/root selector ambiguity merged as PR #318 (`1e9c5660`), and
+source-local service-call cycle gaps merged as PR #320 (`565d7b64`).
+Implementation tasks below remain sequenced across the Suggested PR Boundaries
+section, not intended as one giant product PR. Checkboxes are marked only where
+current `dev` code or merged PR records prove the behavior.
 
 - [x] 4. Audit live route-flow composition state. Requirements: 1.
       Suggested boundary: PR 1 prerequisite.
@@ -64,12 +65,18 @@ already complete on `dev`.
 - [ ] 5. Complete endpoint/root method to service call stitching. Requirements:
       2, 5, 6.
       Suggested boundary: PR 1.
-  - [ ] Stitch endpoint/root methods to direct service/helper/repository calls
+      Status: partial. Duplicate normalized endpoint roots and source-local
+      service-call cycles are implemented on `dev`; remaining Task 5 work is
+      the narrower direct-call/no-call/reduced-coverage test matrix and any
+      missing call-edge shapes not already covered by live route-flow tests.
+  - [x] Stitch endpoint/root methods to direct service/helper/repository calls
         only through source-local symbol, graph node, fact, or edge identity.
-  - [ ] Avoid same-file, directory, short-name, display-name, textual, or route
+  - [x] Avoid same-file, directory, short-name, display-name, textual, or route
         string joins.
   - [ ] Emit `MissingCallEdge` or an existing equivalent gap when full-coverage
-        call-like evidence cannot stitch from the selected root.
+        call-like evidence cannot stitch from the selected root. Partially
+        covered by current route-flow tests; keep unchecked until the remaining
+        full-coverage dead-end and zero-path shapes are audited together.
   - [ ] Emit reduced/unknown gaps when coverage, schema, extractor, identity,
         or commit evidence prevents a clean conclusion.
   - [x] Add focused duplicate-root coverage proving ambiguous normalized route
@@ -77,9 +84,13 @@ already complete on `dev`.
   - [ ] Add tests for direct service calls, no direct call under full coverage,
         no direct call under reduced coverage, duplicate roots, cycles, and
         deterministic ordering.
+    - [x] Duplicate roots: covered by PR #318.
     - [x] Add focused cycle coverage proving source-local service-call cycles
           emit a deterministic `TraversalBounds` gap, suppress clean
           no-evidence claims, and downgrade the report.
+    - [ ] Direct/no-call/reduced-coverage/deterministic-ordering remainder:
+          still valid follow-up work unless the current Kepler route-flow
+          worker completes or supersedes it.
 
 - [ ] 6. Harden implementation-candidate continuation. Requirements: 3, 5.
       Suggested boundary: PR 2.
