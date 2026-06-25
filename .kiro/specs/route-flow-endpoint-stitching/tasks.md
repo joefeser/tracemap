@@ -1,5 +1,14 @@
 # Route Flow Endpoint Stitching Tasks
 
+Status: partial-implementation-merged-superseded-for-new-work
+
+Reconciliation note: the first endpoint bridge-state slice merged as PR #289
+(`bc7c2369`). Later duplicate-root and cycle-gap route-flow slices merged under
+`.kiro/specs/route-flow-service-data-composition-final/` as PR #318
+(`1e9c5660`) and PR #320 (`565d7b64`). Do not use this older spec as the next
+fresh implementation queue; use the final route-flow spec for remaining
+direct-call, candidate, attachment, downgrade, and safety work.
+
 ## Spec Delivery Tasks
 
 - [x] 1. Create the Kiro spec packet for issue #201.
@@ -26,9 +35,10 @@
 
 ## Implementation Tasks
 
-Current state: product implementation has not started for this spec. The tasks
-below are intended follow-up implementation slices. Do not check them off in a
-spec-only PR.
+Current state: product implementation started and the first bridge-state slice
+merged. The tasks below preserve history plus still-valid follow-up slices.
+Unchecked items remain implementation work only when not superseded by the
+final route-flow spec.
 
 - [x] 4. Audit live route-flow endpoint stitching behavior. Requirements: 1, 2, 5.
   - [x] Inspect current `CombinedRouteFlowReport` root selection, selector
@@ -52,14 +62,24 @@ spec-only PR.
   - [x] Reuse existing `MissingMethodSymbolBridge` when route evidence cannot
         bridge to a method/root node, unless the audit proves a new closed-set
         root-specific gap is required.
-  - [ ] Emit duplicate/ambiguous root gaps for duplicate normalized selectors.
+  - [x] Emit duplicate/ambiguous root gaps for duplicate normalized selectors.
+        Covered by PR #318 under
+        `route-flow-service-data-composition-final`.
   - [x] Preserve supporting facts, file spans, source labels, commit SHAs,
         extractor identities, and limitations.
   - [ ] Add tests for success, missing bridge, duplicate route roots, dynamic
         route selectors, reduced coverage, and unknown source identity.
+    - [x] Success, missing bridge, reduced coverage, and additive JSON/Markdown
+          bridge-state tests: covered by PR #289.
+    - [x] Duplicate route roots: covered by PR #318.
+    - [ ] Dynamic route selectors and unknown source identity: still valid
+          follow-up coverage if selected by the final route-flow spec.
 
 - [ ] 6. Implement endpoint method to direct call-edge stitching. Requirements:
       2, 5, 6.
+      Superseded/deferred: use
+      `route-flow-service-data-composition-final` for remaining direct-call,
+      no-call, reduced-coverage, and deterministic-ordering work.
   - [ ] Stitch from endpoint method/root node to source-local call, creation,
         parameter-forward, or path graph edges using symbol or graph identity.
   - [ ] Avoid same-file, directory, text, or short-name-only joins.
@@ -70,8 +90,14 @@ spec-only PR.
   - [ ] Emit reduced/unknown gap under reduced coverage.
   - [ ] Add tests for direct call, no direct call under full coverage, no direct
         call under reduced coverage, cycle safety, and deterministic ordering.
+    - [x] Cycle safety: covered by PR #320.
+    - [ ] Remaining direct/no-call/reduced-coverage/deterministic-ordering
+          cases: defer to the final route-flow spec.
 
 - [ ] 7. Harden interface implementation bridge behavior. Requirements: 3, 5.
+      Superseded/deferred: use
+      `route-flow-service-data-composition-final` Task 6 for candidate
+      continuation.
   - [ ] Reuse existing `combined_symbol_relationships` evidence and route-flow
         interface bridge rows where already implemented.
   - [ ] Add or extract shared candidate helper only if live code duplicates
@@ -83,6 +109,9 @@ spec-only PR.
         classification is blocked by candidate bridges.
 
 - [ ] 8. Add service/data/dependency attachment precision. Requirements: 4, 5, 6.
+      Superseded/deferred: use
+      `route-flow-service-data-composition-final` Task 7 for attachment
+      precision.
   - [ ] Attach service, repository, query, SQL-shape, object/projection,
         legacy-data, package/config, HTTP client, WCF, ASMX/SOAP, remoting,
         event/message, storage, and other dependency surfaces only through
@@ -93,6 +122,8 @@ spec-only PR.
         hashing, and deterministic stable IDs.
 
 - [ ] 9. Tighten classification and gap rollup. Requirements: 5.
+      Superseded/deferred: use the selected final route-flow spec slice for
+      any remaining downgrade behavior.
   - [ ] Require full coverage for `StrongStaticRouteFlow` and clean
         `NoRouteFlowEvidence`.
   - [ ] Ensure `UnknownAnalysisGap` wins over no-evidence conclusions when

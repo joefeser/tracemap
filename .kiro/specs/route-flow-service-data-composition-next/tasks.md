@@ -1,6 +1,12 @@
 # Route Flow Service/Data Composition Next Tasks
 
-Status: implemented-pr1-followups-deferred
+Status: implemented-pr1-merged-followups-superseded
+
+Reconciliation note: PR 1 from this continuation spec merged as PR #292
+(`050a9f84`). Do not start new implementation work from this task list. The
+remaining unchecked follow-ups are superseded by
+`.kiro/specs/route-flow-service-data-composition-final/`, whose later merged
+implementation slices added duplicate-root and cycle-gap route-flow behavior.
 
 ## Spec Delivery Tasks
 
@@ -65,6 +71,9 @@ Status: implemented-pr1-followups-deferred
 
 - [ ] 6. Harden data/query/dependency and value-origin composition.
       Requirements: 3, 4.
+      Superseded/deferred: use
+      `route-flow-service-data-composition-final` for any remaining
+      service/data/query/dependency/value-origin precision work.
   - [x] Render object-shape, DTO/projection, query-shape, repository/data,
         package/config, HTTP, queue/event, storage, WCF, ASMX, Remoting,
         legacy-data, SQL/persistence, and generic dependency evidence only
@@ -80,6 +89,9 @@ Status: implemented-pr1-followups-deferred
 
 - [ ] 7. Enforce coverage, gap, and classification downgrades.
       Requirements: 4.
+      Superseded/deferred: use
+      `route-flow-service-data-composition-final` for any remaining downgrade,
+      missing-schema, truncation, or coverage work.
   - [ ] Require full relevant route-flow coverage before strong or clean
         no-evidence conclusions. Deferred beyond PR 1; see
         `implementation-state.md`.
@@ -112,6 +124,9 @@ Status: implemented-pr1-followups-deferred
         uncertainty.
 
 - [ ] 9. Add focused tests and validation. Requirements: 6.
+      Superseded/deferred: this spec's implemented PR 1 tests landed in PR
+      #292. Remaining route-flow validation belongs with the selected final
+      spec slice, not this continuation packet.
   - [x] Add route-flow tests for direct service/repository grouping.
   - [ ] Add tests for interface single candidate, multiple candidate, no
         candidate, syntax-only candidate, and high fan-out cases where the

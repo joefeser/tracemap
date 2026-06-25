@@ -1,7 +1,12 @@
 # UI Field Property Lineage Composition Tasks
 
-Status: ready-for-implementation
-Readiness: ready-for-implementation
+Status: ready-for-implementation-after-route-flow-contract
+Readiness: ready-after-current-route-flow-worker
+
+Reconciliation note: this is the active property-flow implementation spec after
+the older continuation packet. Start here only after any in-flight route-flow
+branch is merged or explicitly closed, `origin/dev` is fetched, and the
+route-flow contract is re-audited against that commit.
 
 ## Spec-Only PR Scope
 
@@ -24,7 +29,7 @@ Readiness: ready-for-implementation
 - [x] Run any existing spec lint/check if present, or record that none exists.
 - [x] Confirm the committed diff is limited to this spec folder.
 - [x] Open a ready PR into `dev`.
-- [ ] Run ACK PR loop and record the final decision/stop reason.
+- [x] Run ACK PR loop and record the final decision/stop reason.
 
 ## Recommended Implementation Slices
 
