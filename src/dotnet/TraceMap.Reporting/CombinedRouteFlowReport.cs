@@ -2309,17 +2309,25 @@ public static class CombinedRouteFlowReporter
                         redactionApplied: parameterNameRedacted || !string.IsNullOrWhiteSpace(row.ArgumentSymbol))));
             }
 
-            var unprojectedArgumentFactIds = argumentRows.Count > 0
-                ? argumentRows.Select(row => row.CombinedFactId).ToArray()
-                : await ReadArgumentFlowProjectionFactIdsAsync(connection, selectedSourceIndexIds, cancellationToken);
-            if (unprojectedArgumentFactIds.Count > 0 && projected == 0)
+            var unprojectedArgumentEvidence = await ReadArgumentFlowProjectionGapEvidenceAsync(
+                connection,
+                selectedSourceIndexIds,
+                pathModel.PairCandidates,
+                cancellationToken);
+            if (unprojectedArgumentEvidence.Count > 0)
             {
-                gaps.Add(ProjectionUnavailableGap(
-                    "argument",
-                    "ArgumentProjectionUnavailable",
-                    "Argument-flow rows were present, but none could be connected to the selected route-flow path by direct static call evidence.",
-                    ArgumentProjectionRuleId,
-                    unprojectedArgumentFactIds));
+                var message = projected == 0
+                    ? "Argument-flow rows were present, but none could be connected to the selected route-flow path by direct static call evidence."
+                    : "Additional argument-flow rows were present, but they could not be connected to the selected route-flow path by direct static call evidence.";
+                foreach (var evidenceGroup in ProjectionGapEvidenceByLocation(unprojectedArgumentEvidence))
+                {
+                    gaps.Add(ProjectionUnavailableGap(
+                        "argument",
+                        "ArgumentProjectionUnavailable",
+                        message,
+                        ArgumentProjectionRuleId,
+                        evidenceGroup));
+                }
             }
         }
 
@@ -2709,7 +2717,11 @@ public static class CombinedRouteFlowReporter
         return rows;
     }
 
-    private static async Task<IReadOnlyList<string>> ReadArgumentFlowProjectionFactIdsAsync(SqliteConnection connection, IReadOnlyList<string> sourceIndexIds, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<ProjectionGapEvidence>> ReadArgumentFlowProjectionGapEvidenceAsync(
+        SqliteConnection connection,
+        IReadOnlyList<string> sourceIndexIds,
+        IReadOnlyList<SymbolPairCandidate> pairCandidates,
+        CancellationToken cancellationToken)
     {
         if (sourceIndexIds.Count == 0)
         {
@@ -2717,17 +2729,61 @@ public static class CombinedRouteFlowReporter
         }
 
         await using var command = connection.CreateCommand();
-        var sourceFilter = AddSourceFilterParameters(command, sourceIndexIds);
+        var selectedSourceIndexIds = sourceIndexIds.ToHashSet(StringComparer.Ordinal);
+        var selectedPairKeys = pairCandidates
+            .Select(candidate => SymbolPairKey(candidate.SourceIndexId, candidate.CallerSymbol, candidate.CalleeSymbol))
+            .ToHashSet(StringComparer.Ordinal);
         command.CommandText = """
-            select combined_fact_id
-            from combined_argument_flows
-            where source_index_id in (
-            """ + sourceFilter + """
-            )
-            order by source_index_id, caller_symbol, callee_symbol, parameter_ordinal, combined_fact_id
-            limit 20;
+            select flows.combined_fact_id,
+                   flows.source_index_id,
+                   flows.caller_symbol,
+                   flows.callee_symbol,
+                   sources.label,
+                   flows.commit_sha,
+                   flows.rule_id,
+                   flows.file_path,
+                   flows.start_line,
+                   flows.end_line,
+                   sources.scanner_version
+            from combined_argument_flows flows
+            join index_sources sources on sources.source_index_id = flows.source_index_id
+            order by flows.source_index_id, flows.caller_symbol, flows.callee_symbol, flows.parameter_ordinal, flows.combined_fact_id
             """;
-        return await ReadFactIdsAsync(command, cancellationToken);
+        var values = new List<ProjectionGapEvidence>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var sourceIndexId = reader.GetString(1);
+            if (!selectedSourceIndexIds.Contains(sourceIndexId))
+            {
+                continue;
+            }
+
+            var callerSymbol = reader.IsDBNull(2) ? null : reader.GetString(2);
+            var calleeSymbol = reader.IsDBNull(3) ? null : reader.GetString(3);
+            if (!string.IsNullOrWhiteSpace(callerSymbol)
+                && !string.IsNullOrWhiteSpace(calleeSymbol)
+                && selectedPairKeys.Contains(SymbolPairKey(sourceIndexId, callerSymbol!, calleeSymbol!)))
+            {
+                continue;
+            }
+
+            values.Add(new ProjectionGapEvidence(
+                reader.GetString(0),
+                reader.GetString(4),
+                reader.GetString(5),
+                reader.GetString(6),
+                reader.GetString(7),
+                reader.GetInt32(8),
+                reader.GetInt32(9),
+                reader.GetString(10)));
+            if (values.Count == 20)
+            {
+                break;
+            }
+        }
+
+        return values;
     }
 
     private static async Task<IReadOnlyList<ProjectionGapEvidence>> ReadFactSymbolProjectionGapEvidenceAsync(SqliteConnection connection, IReadOnlyList<string> sourceIndexIds, CancellationToken cancellationToken)
@@ -3661,6 +3717,21 @@ public static class CombinedRouteFlowReporter
             SafeCommitSha(first?.CommitSha),
             ExtractorName(first?.RuleId),
             SafeSelector(first?.ExtractorVersion) ?? "unknown");
+    }
+
+    private static IReadOnlyList<IReadOnlyList<ProjectionGapEvidence>> ProjectionGapEvidenceByLocation(IReadOnlyList<ProjectionGapEvidence> evidenceRows)
+    {
+        return evidenceRows
+            .GroupBy(row => $"{row.SourceLabel}\0{row.CommitSha}\0{row.RuleId}\0{row.FilePath}\0{row.StartLine}\0{row.EndLine}\0{row.ExtractorVersion}", StringComparer.Ordinal)
+            .OrderBy(group => group.Select(row => row.SourceLabel).First(), StringComparer.Ordinal)
+            .ThenBy(group => group.Select(row => row.FilePath).First(), StringComparer.Ordinal)
+            .ThenBy(group => group.Select(row => row.StartLine).First())
+            .ThenBy(group => group.Select(row => row.EndLine).First())
+            .ThenBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => group
+                .OrderBy(row => row.CombinedFactId, StringComparer.Ordinal)
+                .ToArray())
+            .ToArray();
     }
 
     private static RouteFlowEvidenceRef EvidenceFromProjection(
