@@ -2785,6 +2785,7 @@ public static class CombinedDependencyPathReporter
         return new[]
             {
                 fact.SourceSymbol,
+                IsAsmxOperationSurfaceFact(fact) ? fact.TargetSymbol : null,
                 CombinedDependencyReporter.FirstValue(
                     fact.Properties,
                     "methodSymbol",
@@ -2798,6 +2799,14 @@ public static class CombinedDependencyPathReporter
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static bool IsAsmxOperationSurfaceFact(CombinedFactRow fact)
+    {
+        return fact.FactType is FactTypes.AsmxOperationDeclared
+            or FactTypes.AsmxSoapOperationDeclared
+            or FactTypes.AsmxClientOperationDeclared
+            or FactTypes.AsmxServiceReferenceMapping;
     }
 
     private static GraphNode ToRemotingNode(CombinedFactRow fact)
