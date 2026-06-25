@@ -1376,6 +1376,91 @@ public sealed class CombinedRouteFlowTests
         Assert.DoesNotContain(temp.Path, json, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Route_flow_attaches_message_surfaces_only_from_selected_static_path()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Post(System.Int32)";
+        var publisher = "Server.OrderPublisher.Publish(System.Int32)";
+        var unrelatedPublisher = "Server.OtherPublisher.Publish(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "POST", "/api/orders/{id}/publish", "/api/orders/{}/publish", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, publisher, "Controllers/OrdersController.cs", 15),
+            MessageSurfaceFact(server, publisher, "message-stream", "publish", "orders.events", "Services/OrderPublisher.cs", 24),
+            MessageSurfaceFact(server, unrelatedPublisher, "message-queue", "publish", "audit.jobs", "Services/OtherPublisher.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "POST /api/orders/{id}/publish",
+            ToSurface: "message-stream"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "POST /api/orders/{id}/publish",
+            ToSurface: "message-stream"));
+
+        var surface = Assert.Single(result.Report.DependencySurfaces);
+        Assert.Equal("message-stream", surface.SurfaceKind);
+        Assert.Contains("orders.events", surface.DisplayName, StringComparison.Ordinal);
+        Assert.Equal(surface.SurfaceId, Assert.Single(repeated.Report.DependencySurfaces).SurfaceId);
+        Assert.Equal("combined.route-flow.dependency-surface.v1", surface.Evidence.RuleId);
+        Assert.Contains(RuleIds.MessageSurfacePublish, surface.Evidence.SupportingRuleIds);
+        Assert.DoesNotContain(result.Report.DependencySurfaces, item => item.SurfaceKind == "message-queue");
+
+        var terminal = result.Report.FlowRows.Single(row => row.EdgeKind == "terminal-surface"
+            && row.TargetSymbol?.Contains("orders.events", StringComparison.Ordinal) == true);
+        Assert.Equal("terminal-surface", terminal.RowKind);
+        Assert.Equal(RouteFlowClassifications.NeedsReviewStaticRouteFlow, terminal.Classification);
+        Assert.DoesNotContain(result.Report.LogicRows, row => row.DisplayName.Contains("audit.jobs", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "DataSurfaceAttachmentMissing" or "NoRouteFlowEvidence");
+    }
+
+    [Fact]
+    public async Task Route_flow_does_not_infer_adjacent_message_surface_without_selected_join()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Post(System.Int32)";
+        var publisher = "Server.OrderPublisher.Publish(System.Int32)";
+        var unrelatedPublisher = "Server.OtherPublisher.Publish(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "POST", "/api/orders/{id}/publish", "/api/orders/{}/publish", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, publisher, "Controllers/OrdersController.cs", 15),
+            MessageSurfaceFact(server, unrelatedPublisher, "message-stream", "publish", "orders.events", "Services/OtherPublisher.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "POST /api/orders/{id}/publish",
+            ToSurface: "message-stream"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "POST /api/orders/{id}/publish",
+            ToSurface: "message-stream"));
+
+        Assert.Empty(result.Report.DependencySurfaces);
+        var gap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "DataSurfaceAttachmentMissing");
+        Assert.Equal("combined.route-flow.gap.v1", gap.RuleId);
+        Assert.Equal(gap.GapId, Assert.Single(repeated.Report.Gaps, item => item.GapKind == "DataSurfaceAttachmentMissing").GapId);
+        Assert.DoesNotContain(result.Report.FlowRows, row => row.EdgeKind == "terminal-surface"
+            && row.TargetSymbol?.Contains("orders.events", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+    }
+
 
     [Fact]
     public async Task Route_flow_json_file_output_and_classification_filter_empty_rows_yields_selector_gap()
@@ -2037,6 +2122,41 @@ public sealed class CombinedRouteFlowTests
                 ["sourceSymbolKind"] = "Method",
                 ["sourceSymbolLanguage"] = "csharp",
                 ["value"] = "Server=private;Password=secret;"
+            });
+    }
+
+    private static CodeFact MessageSurfaceFact(
+        ScanManifest manifest,
+        string sourceSymbol,
+        string surfaceKind,
+        string operationDirection,
+        string destination,
+        string file,
+        int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.MessagePublisherSurface,
+            RuleIds.MessageSurfacePublish,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: destination,
+            contractElement: destination,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["destinationIdentityStatus"] = "static",
+                ["frameworkFamily"] = "test-message",
+                ["normalizedDestinationKey"] = destination,
+                ["operationDirection"] = operationDirection,
+                ["operationKind"] = operationDirection,
+                ["safeMetadataHash"] = FactFactory.Hash($"{surfaceKind}:{destination}:metadata", 32),
+                ["sourceSymbolDisplayName"] = sourceSymbol,
+                ["sourceSymbolId"] = sourceSymbol,
+                ["sourceSymbolKind"] = "Method",
+                ["sourceSymbolLanguage"] = "csharp",
+                ["stableMessageSurfaceKey"] = FactFactory.Hash($"{surfaceKind}:{destination}", 32),
+                ["surfaceKind"] = surfaceKind
             });
     }
 

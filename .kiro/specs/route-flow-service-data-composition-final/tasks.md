@@ -150,6 +150,13 @@ current `dev` code or merged PR records prove the behavior.
 - [ ] 7. Complete service/data/query/dependency attachment precision.
       Requirements: 4, 5, 6.
       Suggested boundary: PR 3.
+      Status: in progress. Branch `codex/route-flow-task7-attachments`
+      audited `origin/dev` at `9bb459587475` and implemented the smallest
+      coherent event/message terminal-surface sub-slice: route-flow now accepts
+      selected message terminal surface kinds already supported by the combined
+      path graph, attaches them only when joined through selected static
+      route-flow paths, and preserves `DataSurfaceAttachmentMissing` for
+      adjacent unjoined message surface evidence.
   - [ ] Attach service, repository, object/projection, query-shape, SQL-shape,
         legacy-data, package/config, HTTP client, WCF, ASMX/SOAP, remoting,
         event/message, storage, validation/guard, serializer/contract,
@@ -163,6 +170,10 @@ current `dev` code or merged PR records prove the behavior.
         shipped equivalents for adjacent but unjoinable facts.
   - [ ] Add tests for attached surfaces, unjoinable surfaces, attached versus
         path-context labeling, and deterministic stable IDs.
+    - [x] Event/message terminal-surface attachment sub-slice covered by
+          `Route_flow_attaches_message_surfaces_only_from_selected_static_path`
+          and
+          `Route_flow_does_not_infer_adjacent_message_surface_without_selected_join`.
 
 - [ ] 8. Enforce coverage, classification, and gap downgrade behavior.
       Requirements: 5.

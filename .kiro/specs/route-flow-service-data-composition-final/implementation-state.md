@@ -1083,3 +1083,72 @@ binding proof, or attached dependency/data precision.
 - Task 7 remains the next implementation task: attached versus unjoinable
   service/data/query/dependency/value-origin precision. Do not start it from
   this Task 6 branch.
+
+## Product Implementation PR 6
+
+Branch: `codex/route-flow-task7-attachments`
+Base: `origin/dev` at `9bb459587475`
+
+Selected slice: Task 7 event/message terminal-surface attachment precision
+after Task 5 and Task 6 closure. This slice does not start UI property
+lineage, site work, scanner extraction, runtime execution claims, or the full
+remaining service/data/query/dependency taxonomy.
+
+### Live Audit Notes
+
+- Current `dev` already contains selected-path-only route-flow traversal,
+  dependency surface rendering from selected `routePaths`, argument-flow and
+  fact-symbol projection joins through selected route-flow rows, schema gaps,
+  `ArgumentProjectionUnavailable`, `FactSymbolProjectionUnavailable`,
+  `FactSymbolUnsupportedTypeSkipped`, and `DataSurfaceAttachmentMissing`.
+- `CombinedDependencyPathReporter` already supports message terminal surface
+  kinds (`message-queue`, `message-topic`, `message-subscription`,
+  `message-exchange`, `message-stream`, `message-event`, `message-channel`,
+  and `message-unknown`) as selected static path terminals.
+- `CombinedRouteFlowReport` still rejected those message surface selectors,
+  which meant route-flow could not request already-supported event/message
+  terminals through `--to-surface`.
+
+### Implementation Notes
+
+- Added the existing message terminal surface kinds to route-flow's
+  `--to-surface` allow-list and validation message.
+- No new traversal rule, report type, JSON version, rule ID, scanner
+  extractor, or graph edge kind was added.
+- Added focused synthetic route-flow coverage proving:
+  - selected message terminal surfaces render as dependency surfaces only when
+    joined through the selected route-flow static path;
+  - adjacent same-source message surface evidence for an unrelated publisher is
+    not inferred as a selected terminal;
+  - unjoined adjacent message surface evidence preserves
+    `DataSurfaceAttachmentMissing` instead of a clean no-evidence conclusion;
+  - dependency surface and gap IDs are deterministic across repeated renders.
+
+### Validation Log For PR 6
+
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+  errors.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 43 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 651 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+### Oddities / Design Decisions For PR 6
+
+- Message terminal surfaces are rendered in `dependencySurfaces` and selected
+  terminal `flowRows`; route-flow does not create extra generic logic rows for
+  message terminals because `LogicKind` currently only projects SQL/object-ish
+  shapes as path-context logic rows.
+- The synthetic fixtures use public-safe route strings, source labels,
+  destination keys, and stable hashes only.
+
+### Follow-Ups For PR 6
+
+- Continue Task 7 for the remaining taxonomy items, especially ASMX/SOAP
+  route-flow selection if the path reporter gains those terminal surface kinds,
+  plus storage, validation/guard, serializer/contract, async/callback, and any
+  broader attached-versus-path-context labeling coverage not already proven by
+  existing projection tests.
+- Keep Task 8/9/10 unchecked except for validation/safety behavior directly
+  touched by this event/message sub-slice.
