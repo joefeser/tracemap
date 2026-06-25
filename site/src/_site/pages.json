@@ -215,6 +215,11 @@
     "priority": "0.8"
   },
   {
+    "path": "/demo/troubleshooting/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/demo/manager-script/",
     "changefreq": "monthly",
     "priority": "0.7"
