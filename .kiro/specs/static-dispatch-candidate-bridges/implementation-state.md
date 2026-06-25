@@ -204,7 +204,7 @@ appropriate.
 - Initial ACK run with installed `agent-control` returned
   `environment_blocked` / `LOCAL_BUILD_STALE` because local `agent-control-kit`
   `dist` output was stale relative to source.
-- Ran `npm run build` in `/Users/josephfeser/src/gh-joe/agent-control-kit`,
+- Ran `npm run build` in `<agent-control-kit checkout>`,
   then reran the installed `agent-control pr-loop`.
 - ACK posted/observed the required Codex review request, waited for the
   configured Codex/Qodo required-review batch, then returned
