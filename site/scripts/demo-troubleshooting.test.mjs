@@ -73,6 +73,32 @@ test("validateDemoTroubleshootingDist rejects unsupported claims outside marked 
   assert.match(errors.join("\n"), /unsupported affirmative claim outside marked regions/);
 });
 
+test("validateDemoTroubleshootingDist rejects tag-split unsupported claims", async (t) => {
+  const pageHtml = (await demoTroubleshootingPage()).replace(
+    "</main>",
+    "<p>The release <span>is</span> approved.</p></main>"
+  );
+  const root = await createManagedDemoTroubleshootingDistFixture(t, { pageHtml });
+  const errors = [];
+
+  await validateDemoTroubleshootingDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /unsupported affirmative claim outside marked regions/);
+});
+
+test("validateDemoTroubleshootingDist rejects explicit support service wording outside marked regions", async (t) => {
+  const pageHtml = (await demoTroubleshootingPage()).replace(
+    "</main>",
+    "<p>This route provides a support SLA and ticketing channel.</p></main>"
+  );
+  const root = await createManagedDemoTroubleshootingDistFixture(t, { pageHtml });
+  const errors = [];
+
+  await validateDemoTroubleshootingDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /unsupported affirmative claim outside marked regions/);
+});
+
 test("validateDemoTroubleshootingDist rejects internal spec artifact row links by path segment", async (t) => {
   const pageHtml = (await demoTroubleshootingPage()).replace(
     'Check the <a href="/demo/runbook/">demo runbook</a>',
@@ -116,6 +142,45 @@ test("validateDemoTroubleshootingDist rejects hard private values inside marked 
   await validateDemoTroubleshootingDist({ dist: join(root, "dist"), errors });
 
   assert.match(errors.join("\n"), /forbidden private or credential-like text: home directory path/);
+});
+
+test("validateDemoTroubleshootingDist rejects tag-split hard private values", async (t) => {
+  const pageHtml = (await demoTroubleshootingPage()).replace(
+    "Private-only evidence is enough public proof.",
+    ["/", "Us", "<span>ers</span>", "/private-demo is enough public proof."].join("")
+  );
+  const root = await createManagedDemoTroubleshootingDistFixture(t, { pageHtml });
+  const errors = [];
+
+  await validateDemoTroubleshootingDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden private or credential-like text: home directory path/);
+});
+
+test("validateDemoTroubleshootingDist reads metadata content regardless of attribute order", async (t) => {
+  const pageHtml = (await demoTroubleshootingPage()).replace(
+    /<meta\s+name="description"\s+content="[^"]+"\s+>/s,
+    '<meta content="Concept-level TraceMap public demo troubleshooting guidance for route, summary, proof, coverage, evidence, wording, validation, and owner handoff questions." name="description">'
+  );
+  const root = await createManagedDemoTroubleshootingDistFixture(t, { pageHtml });
+  const errors = [];
+
+  await validateDemoTroubleshootingDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
+test("validateDemoTroubleshootingDist scans route metadata for hard-private material", async (t) => {
+  const root = await createManagedDemoTroubleshootingDistFixture(t);
+  await rewriteDemoTroubleshootingRoutesIndexEntry(join(root, "dist"), {
+    limitations: [["/", "home", "/private-demo"].join("")]
+  });
+  const errors = [];
+
+  await validateDemoTroubleshootingDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden private or credential-like text: home directory path/);
+  assert.match(errors.join("\n"), /routes-index\.json/);
 });
 
 async function createManagedDemoTroubleshootingDistFixture(t, options = {}) {
