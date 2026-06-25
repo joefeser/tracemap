@@ -2309,17 +2309,21 @@ public static class CombinedRouteFlowReporter
                         redactionApplied: parameterNameRedacted || !string.IsNullOrWhiteSpace(row.ArgumentSymbol))));
             }
 
-            var unprojectedArgumentFactIds = argumentRows.Count > 0
-                ? argumentRows.Select(row => row.CombinedFactId).ToArray()
-                : await ReadArgumentFlowProjectionFactIdsAsync(connection, selectedSourceIndexIds, cancellationToken);
-            if (unprojectedArgumentFactIds.Count > 0 && projected == 0)
+            var unprojectedArgumentEvidence = await ReadArgumentFlowProjectionGapEvidenceAsync(
+                connection,
+                selectedSourceIndexIds,
+                pathModel.PairCandidates,
+                cancellationToken);
+            if (unprojectedArgumentEvidence.Count > 0)
             {
                 gaps.Add(ProjectionUnavailableGap(
                     "argument",
                     "ArgumentProjectionUnavailable",
-                    "Argument-flow rows were present, but none could be connected to the selected route-flow path by direct static call evidence.",
+                    projected == 0
+                        ? "Argument-flow rows were present, but none could be connected to the selected route-flow path by direct static call evidence."
+                        : "Additional argument-flow rows were present, but they could not be connected to the selected route-flow path by direct static call evidence.",
                     ArgumentProjectionRuleId,
-                    unprojectedArgumentFactIds));
+                    unprojectedArgumentEvidence));
             }
         }
 
@@ -2709,7 +2713,11 @@ public static class CombinedRouteFlowReporter
         return rows;
     }
 
-    private static async Task<IReadOnlyList<string>> ReadArgumentFlowProjectionFactIdsAsync(SqliteConnection connection, IReadOnlyList<string> sourceIndexIds, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<ProjectionGapEvidence>> ReadArgumentFlowProjectionGapEvidenceAsync(
+        SqliteConnection connection,
+        IReadOnlyList<string> sourceIndexIds,
+        IReadOnlyList<SymbolPairCandidate> pairCandidates,
+        CancellationToken cancellationToken)
     {
         if (sourceIndexIds.Count == 0)
         {
@@ -2718,16 +2726,43 @@ public static class CombinedRouteFlowReporter
 
         await using var command = connection.CreateCommand();
         var sourceFilter = AddSourceFilterParameters(command, sourceIndexIds);
+        var pairExclusion = pairCandidates.Count == 0
+            ? string.Empty
+            : $"{Environment.NewLine}              and not ({AddArgumentPairFilterParameters(command, pairCandidates)})";
         command.CommandText = """
-            select combined_fact_id
-            from combined_argument_flows
-            where source_index_id in (
+            select flows.combined_fact_id,
+                   sources.label,
+                   flows.commit_sha,
+                   flows.rule_id,
+                   flows.file_path,
+                   flows.start_line,
+                   flows.end_line,
+                   sources.scanner_version
+            from combined_argument_flows flows
+            join index_sources sources on sources.source_index_id = flows.source_index_id
+            where flows.source_index_id in (
             """ + sourceFilter + """
             )
-            order by source_index_id, caller_symbol, callee_symbol, parameter_ordinal, combined_fact_id
+            """ + pairExclusion + """
+            order by flows.source_index_id, flows.caller_symbol, flows.callee_symbol, flows.parameter_ordinal, flows.combined_fact_id
             limit 20;
             """;
-        return await ReadFactIdsAsync(command, cancellationToken);
+        var values = new List<ProjectionGapEvidence>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            values.Add(new ProjectionGapEvidence(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.GetInt32(5),
+                reader.GetInt32(6),
+                reader.GetString(7)));
+        }
+
+        return values;
     }
 
     private static async Task<IReadOnlyList<ProjectionGapEvidence>> ReadFactSymbolProjectionGapEvidenceAsync(SqliteConnection connection, IReadOnlyList<string> sourceIndexIds, CancellationToken cancellationToken)
