@@ -2,22 +2,24 @@
 
 ## Branch
 
-- Branch: `codex/spec-static-dispatch-candidate-bridges`
+- Branch: `codex/impl-static-dispatch-candidate-bridges`
 - Base: `origin/dev`
-- Scope: spec-only creation loop
+- Scope: first product slice for paths behavior preservation and shared static
+  dispatch candidate builder extraction
 - Suggested PR target: `dev`
 
 ## Current Status
 
-Status: `ready-for-implementation`
+Status: `implementation-slice-complete-awaiting-pr-loop`
 
-This spec narrows the broad interface/override/DI approximation backlog into a
-reviewable next slice: shared static dispatch candidate bridges derived from
-existing call edges, symbol relationships, and optional DI registration
-evidence, then consumed conservatively by route-flow, reverse, impact, report,
-vault export, and docs-export/RAG-oriented artifacts.
+This branch implements a coherent first product slice: it preserves existing
+`tracemap paths` candidate behavior while extracting the in-memory interface
+and override candidate derivation into an internal reporting-layer
+`StaticDispatchCandidateBuilder` model that future consumers can adapt.
 
-No product code is implemented on this branch.
+The slice intentionally does not add DI registration annotations, type-level
+fallback candidates, reverse/impact/report/vault/docs-export consumption, new
+persisted candidate tables, or new scanner behavior.
 
 ## Scope Decisions
 
@@ -40,11 +42,39 @@ No product code is implemented on this branch.
 
 ## Files
 
+- `src/dotnet/TraceMap.Reporting/StaticDispatchCandidateBuilder.cs`
+- `src/dotnet/TraceMap.Reporting/CombinedDependencyPaths.cs`
+- `src/dotnet/tests/TraceMap.Tests/CombinedDependencyPathTests.cs`
 - `.kiro/specs/static-dispatch-candidate-bridges/requirements.md`
 - `.kiro/specs/static-dispatch-candidate-bridges/design.md`
 - `.kiro/specs/static-dispatch-candidate-bridges/tasks.md`
 - `.kiro/specs/static-dispatch-candidate-bridges/implementation-state.md`
 - `.kiro/specs/static-dispatch-candidate-bridges/review-prompts.md`
+
+## Implementation Slice Notes
+
+- Audited the existing `tracemap paths` implementation in
+  `CombinedDependencyPaths.cs`: it derived in-memory `interface-candidate` and
+  `override-candidate` graph edges from method-level symbol relationship
+  evidence, capped fan-out at 10, emitted `DispatchCandidateFanOut` gaps, and
+  capped candidate paths at `NeedsReviewPath`.
+- Added `StaticDispatchCandidateBuilder` with internal candidate edge/gap
+  records carrying stable IDs, algorithm ID, state, source labels, supporting
+  edge IDs, relationship IDs, registration fact ID slots, file spans, rule IDs,
+  evidence tiers, registration context, limitations, and gap metadata.
+- Preserved current paths output shape by adapting builder results back into
+  the existing `CombinedPathEdge` and `CombinedPathGap` records. No public
+  paths JSON or Markdown field was added.
+- Preserved the original relationship kind from combined dependency edge rows
+  before normalization, so candidate derivation filters on
+  `ImplementsInterfaceMember` and `Overrides` rather than inferred
+  `implements` or `overrides` graph kinds.
+- Added focused tests for override candidate traversal, candidate output
+  byte-stability, and documented `DispatchCandidateFanOut` catalog coverage.
+  Existing interface traversal and fan-out tests were preserved.
+- Audited `combined.dispatch-gap.v1`: the shared builder currently emits only
+  `DispatchCandidateFanOut`, which is already documented in the rule catalog.
+  No broader gap vocabulary is emitted in this slice.
 
 ## Kiro Review State
 
@@ -123,20 +153,32 @@ Medium+ findings patched:
 
 ## Validation State
 
-Spec-only validation completed:
+Current implementation validation:
 
 ```bash
-git diff --cached --check
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedDependencyPathTests
+git diff --check
 ./scripts/check-private-paths.sh
-git diff --cached --name-only | rg -v '^\.kiro/specs/static-dispatch-candidate-bridges/' || true
+dotnet test src/dotnet/TraceMap.sln
+./scripts/smoke-combined-paths.sh
 ```
 
 Results:
 
-- `git diff --cached --check`: passed.
+- Focused `CombinedDependencyPathTests`: passed, 27 tests.
+- `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
-- Staged diff scope check: passed; no staged paths outside
-  `.kiro/specs/static-dispatch-candidate-bridges/`.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 644 tests.
+- `./scripts/smoke-combined-paths.sh`: initially stopped because `tsc` was
+  unavailable. `node`/`npm` were present, Homebrew `typescript` was not
+  installed, and `src/typescript/node_modules` was missing. Restored pinned
+  dependencies with `npm ci --prefix src/typescript`, then reran the smoke
+  successfully.
+- NuGet emitted the existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 high-severity
+  advisory warning during restore/build.
+- The combined paths/reverse smoke completed against checked-in samples and
+  verified scan/combine/report/paths/reverse behavior plus repeated targeted
+  paths JSON byte stability.
 
 ## Safety Notes
 
@@ -147,10 +189,12 @@ appropriate.
 
 ## Follow-Up Items
 
-- Patch Medium+ Kiro review findings before opening the implementation-ready
-  spec PR.
-- Use the PR loop after PR creation and record the terminal ACK decision in the
-  final handoff.
+- DI registration-context annotations remain deferred to implementation task 7.
+- Type-level fallback candidates, generic/reduced-coverage/schema/identity gaps,
+  and broader gap vocabulary remain deferred.
+- Route-flow, reverse, impact, report/portfolio, vault, and docs-export
+  consumption remain deferred to later slices.
+- Record the final PR-loop ACK decision in the handoff.
 
 ## PR Review Loop Notes
 
