@@ -896,3 +896,98 @@ subcase, plus the directly touched Task 8 guard that clean
 - Remaining Task 5 backlog after this slice: MissingCallEdge-specific
   full-coverage dead-end coverage and deterministic ordering coverage.
 - Broader Task 6/7 candidate and attachment precision work remains deferred.
+
+## Product Implementation PR 4
+
+Branch: `codex/task6-route-flow-candidates`
+Base: `origin/dev` at `80afdc3bd4b9`
+
+Selected slice: Task 6 implementation-candidate continuation audit plus the
+smallest downgrade-hardening patch after PR #328 closed Task 5. This slice
+does not start UI property lineage, site work, attachment precision, scanner
+extraction, or broader Task 7/8/9/10 work.
+
+### Live Audit Notes
+
+- `CombinedRouteFlowReport` already consumes source-local
+  `combined_symbol_relationships` through the combined dependency graph and
+  emits `interface-implementation-candidate` rows from implementation
+  relationships.
+- Existing focused route-flow coverage already proves single compiler-backed
+  implementation candidates continue to downstream surfaces only as
+  `NeedsReviewStaticRouteFlow`; candidate paths and summaries do not upgrade to
+  `StrongStaticRouteFlow` or `ProbableStaticRouteFlow`.
+- Existing tests cover no-candidate `ImplementationCandidateUnavailable`,
+  multiple-candidate ambiguity, high fan-out capped candidate traversal,
+  syntax/name-only candidate caps, Tier3 downstream caps, and reduced-coverage
+  clean-absence suppression.
+- The remaining broad Task 6 matrix item stays open because cross-source and
+  cross-language candidate fixtures need a dedicated follow-up. The live graph
+  builder source-scopes symbol relationships, so this PR avoids corrupting
+  combined-index source identity merely to manufacture that fixture.
+
+### Implementation Notes
+
+- Route-flow now separates all implementation-candidate relationship edges from
+  source-compatible candidates. If the graph contains incompatible
+  cross-source/cross-language implementation candidate evidence for the
+  selected interface node, it emits a deterministic `RuntimeBindingNotProven`
+  gap and does not traverse that candidate.
+- Ambiguous implementation-candidate gap IDs now use incremental SHA-256 over
+  deterministic candidate/supporting-evidence sequences instead of joining the
+  full candidate set into one allocation.
+- Added a focused regression proving runtime-adjacent facts such as dependency
+  registration, service-locator-style resolution evidence, reflection target
+  evidence, and dynamic dispatch candidate evidence do not become route-flow
+  implementation candidates, terminal dependency surfaces, stronger summary
+  classifications, or runtime-proof wording.
+
+### Validation Log For PR 4
+
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+  errors.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
+  passed, 40 tests before the ACK patch and 41 tests after the ACK patch.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 643 tests before the ACK
+  patch and 644 tests after the ACK patch.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Initial ACK PR loop for PR #330 returned `actionable_findings` with two
+  unresolved review threads and `patchAuthorized=true`.
+- ACK-authorized findings patched:
+  - partitioned implementation candidate edges in a single pass to avoid
+    redundant LINQ allocations and repeated node lookups;
+  - populated `RuntimeBindingNotProven` gaps with commit SHA, extractor name,
+    and extractor version metadata;
+  - suppressed contradictory `MissingImplementationBridge` and
+    `ImplementationCandidateUnavailable` gaps when incompatible candidate
+    evidence exists and `RuntimeBindingNotProven` explains the blocked bridge;
+  - added focused regression coverage for runtime-binding gap metadata.
+- Post-ACK patch validation:
+  - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+    errors.
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
+    passed, 41 tests.
+  - `dotnet test src/dotnet/TraceMap.sln`: passed, 644 tests.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
+
+### Oddities / Design Decisions For PR 4
+
+- The `RuntimeBindingNotProven` gap path is intentionally conservative: it
+  labels incompatible candidate evidence as reduced coverage and static review
+  context only. It does not infer runtime dependency-injection targets,
+  service-locator targets, factory outputs, reflection targets, or dynamic
+  dispatch targets.
+- No new rule ID or gap code was added; the existing
+  `combined.route-flow.gap.v1` and `combined.route-flow.interface-bridge.v1`
+  limitations already document this boundary.
+
+### Follow-Ups For PR 4
+
+- Add dedicated, non-corrupt cross-source/cross-language route-flow candidate
+  fixtures if the combined graph gains an explicit persisted bridge contract
+  that can represent those relationships without violating source-local symbol
+  identity.
+- Finish the remaining Task 6 deterministic gap matrix item before marking
+  Task 6 complete.
