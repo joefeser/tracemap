@@ -3577,7 +3577,17 @@ public static class CombinedRouteFlowReporter
             SafeSelector(gap.SourceLabel),
             gap.NodeId,
             gap.CombinedFactId is null ? [] : [gap.CombinedFactId],
-            ["Path gaps are inherited as route-flow analysis gaps and remain coverage-relative."]);
+            PathGapLimitations(gapKind, pathReportCoverage));
+    }
+
+    private static IReadOnlyList<string> PathGapLimitations(string gapKind, string pathReportCoverage)
+    {
+        if (gapKind == "NoRouteFlowEvidence" && pathReportCoverage == "FullEvidenceAvailable")
+        {
+            return ["Inherited full-coverage no-evidence path gaps are static absence-of-evidence rows and do not prove runtime absence."];
+        }
+
+        return ["Path gaps are inherited as route-flow analysis gaps and remain coverage-relative."];
     }
 
     private static string CoverageForPathGap(CombinedPathGap gap, string gapKind, string pathReportCoverage)
