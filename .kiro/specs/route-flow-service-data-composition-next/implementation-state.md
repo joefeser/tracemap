@@ -1,12 +1,30 @@
 # Route Flow Service/Data Composition Next Implementation State
 
-Status: implemented-pr1-followups-deferred
-Readiness: ready-for-implementation
+Status: implemented-pr1-merged-followups-superseded
+Readiness: no-new-work-from-this-spec
 Spec branch: `codex/spec-route-flow-service-data-composition-next`
 Implementation branch: `codex/implement-route-flow-service-data-composition`
 Target base: `dev`
 Primary issue: `#179`
 Public claim level: hidden
+
+## Reconciliation State
+
+Reconciled against `origin/dev` on 2026-06-25 at `87fe78a3`.
+
+Evidence on `dev`:
+
+- PR #287 merged this continuation spec (`77ced02d`).
+- PR #292 merged the PR 1 implementation slice for route-flow service/data
+  context groups (`050a9f84`).
+- Current code contains additive `RouteFlowReport.contextGroups`, Markdown
+  Context Groups rendering, route-flow rule-catalog documentation, and focused
+  route-flow tests for those emitted rule IDs and context rows.
+
+Do not use this spec as the next implementation queue. Its remaining unchecked
+follow-ups were intentionally deferred beyond PR 1 and are now superseded by
+`.kiro/specs/route-flow-service-data-composition-final/`, which is the current
+authority for remaining route-flow service/data composition work.
 
 ## Implementation Slice
 

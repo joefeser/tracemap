@@ -1,7 +1,13 @@
 # UI Field Property Lineage Continuation Tasks
 
-Status: partial-implementation-in-progress
-Readiness: implementation-partial
+Status: implemented-pr1-merged-followups-superseded
+Readiness: no-new-work-from-this-spec
+
+Reconciliation note: PR 1 from this continuation spec merged as PR #293
+(`e0c91f30`) and added the property-flow route-flow context/no-property
+context gap slice. New property-flow implementation work should start from
+`.kiro/specs/ui-field-property-lineage-composition/`, not this older
+continuation packet.
 
 ## Spec-Only PR Scope
 
@@ -26,7 +32,7 @@ Readiness: implementation-partial
 
 ### PR 1: Route-Flow And Endpoint Downstream Context
 
-- [ ] 1. Verify current property-flow and route-flow schema contracts.
+- [x] 1. Verify current property-flow and route-flow schema contracts.
   Requirements: 1, 2, 4.
   - [x] Inventory current `PropertyFlowReporter` route-flow checks and gaps.
   - [x] Inventory current route-flow output/tables available in combined
@@ -37,11 +43,16 @@ Readiness: implementation-partial
 
 - [ ] 2. Reuse route-flow evidence where property-specific context exists.
   Requirements: 2, 3, 4.
+  Status: partial. PR #293 added the route-flow availability/no-property
+  context gap behavior, but did not attach real property-specific route-flow
+  rows. Remaining route-flow reuse is superseded by
+  `ui-field-property-lineage-composition` Task 6.
   - [x] Add or confirm catalogued rule IDs before emitting any new route-flow
     context or gap classifications.
   - [ ] Inspect docs-export, vault, evidence-pack, and static explorer behavior
     when this slice adds new route-flow context row kinds, even if those
-    consumers are not otherwise edited.
+    consumers are not otherwise edited. Deferred to
+    `ui-field-property-lineage-composition` consumer-compatibility tasks.
   - [ ] Connect property-flow roots to route-flow context only through
     rule-backed endpoint/model/value-origin evidence.
   - [ ] Add route-flow context nodes/edges or supporting rows with supporting
@@ -52,6 +63,9 @@ Readiness: implementation-partial
 
 - [ ] 3. Add endpoint composition tests.
   Requirements: 2, 4, 7.
+  Status: partial. Route-flow missing/empty/reduced/no-property-context gaps
+  are covered by PR #293. Angular/Razor endpoint-to-route-flow composition and
+  byte-stability remain superseded by `ui-field-property-lineage-composition`.
   - [ ] Test Angular event/control/payload/HTTP/endpoint/route-flow context.
   - [ ] Test Razor form/binding/action-or-handler/model-binding/route-flow
     context.
@@ -63,6 +77,7 @@ Readiness: implementation-partial
 
 - [ ] 4. Add terminal context composition from existing facts.
   Requirements: 3, 4.
+  Superseded/deferred: use `ui-field-property-lineage-composition` Tasks 7-8.
   - [ ] Add or confirm catalogued rule IDs before emitting any new terminal
     context rows or gap classifications.
   - [ ] Inspect docs-export, vault, evidence-pack, and static explorer behavior
@@ -80,6 +95,7 @@ Readiness: implementation-partial
 
 - [ ] 5. Add terminal context tests.
   Requirements: 3, 4, 7.
+  Superseded/deferred: use `ui-field-property-lineage-composition` Tasks 7-8.
   - [ ] Test supported service/data/query/dependency terminal rows.
   - [ ] Test broad endpoint reachability does not attach unrelated terminal
     rows.
@@ -91,6 +107,7 @@ Readiness: implementation-partial
 
 - [ ] 6. Preserve generated artifact compatibility.
   Requirements: 1, 6.
+  Superseded/deferred: use `ui-field-property-lineage-composition` Tasks 9-10.
   - [ ] Inspect docs-export, vault, evidence-pack, and static explorer
     consumers for property-flow row assumptions.
   - [ ] Patch consumers in the same PR or document a report version bump when a
@@ -102,6 +119,7 @@ Readiness: implementation-partial
 
 - [ ] 7. Add consumer compatibility tests.
   Requirements: 6, 7.
+  Superseded/deferred: use `ui-field-property-lineage-composition` Tasks 9-10.
   - [ ] Test docs-export/vault/evidence-pack/static explorer behavior for new
     property-flow rows when touched.
   - [ ] Test deterministic output and private-path guard compatibility.

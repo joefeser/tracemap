@@ -1,12 +1,54 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: implementation-pr2-cycle-gap-second-ack-patch-ready-to-push
-Readiness: focused-cycle-slice-implemented-reviewed-ack-patched-and-validated
+Status: partial-implementation-merged-ready-for-next-slice
+Readiness: ready-for-next-focused-slice-after-kepler
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
 Target base: `dev`
 Primary issues: `#159`, `#179`, `#201`
 Public claim level: static evidence only
+
+## Reconciliation State
+
+Reconciled against `origin/dev` on 2026-06-25 at `87fe78a3`.
+
+Merged evidence on `dev`:
+
+- PR #311 merged this final spec packet (`43426b7c`).
+- PR #318 merged duplicate normalized endpoint/root selector ambiguity handling
+  (`1e9c5660`).
+- PR #320 merged source-local service-call cycle `TraversalBounds` gap
+  handling (`565d7b64`).
+- Current code contains `RouteFlowReport.contextGroups`, entry
+  `bridgeState`, bounded duplicate-root supporting evidence, cycle-gap
+  metadata, `MissingCallEdge`/`DataSurfaceAttachmentMissing`/projection schema
+  gaps, route-flow CLI exit-code tests, and focused `CombinedRouteFlowTests`
+  coverage for the merged slices.
+
+Remaining slices after reconciliation:
+
+- Task 5 remainder: audit and close the direct-call/no-call/reduced-coverage
+  matrix, including any still-missing `MissingCallEdge` full-coverage
+  dead-end or zero-path shapes and deterministic-ordering coverage.
+- Task 6: implementation-candidate continuation and downgrade hardening.
+- Task 7: attached versus unjoinable service/data/query/dependency/value-origin
+  precision, including the large projection SQL parameter cap noted below.
+- Task 8/9/10: only the downgrade, compatibility, exit-code, rule-catalog, and
+  safety checks directly affected by the selected product slice.
+
+Recommended next order after the current Kepler route-flow worker completes:
+
+1. Re-audit this spec's Task 5 remainder against Kepler's merged head and
+   either close it with evidence or pick the smallest still-missing route-flow
+   direct-call/gap slice.
+2. Then move to Task 6 candidate continuation if Task 5 is closed.
+3. Then move to Task 7 service/data/query/dependency attachment precision.
+4. Only after the route-flow contract is stable, start
+   `.kiro/specs/ui-field-property-lineage-composition/` PR 1.
+
+Do not reopen `route-flow-service-data-composition-next` or
+`route-flow-endpoint-stitching` as fresh implementation queues unless a future
+audit proves this final spec does not cover the needed slice.
 
 ## Summary
 
@@ -17,10 +59,10 @@ stitch into service methods, continue through review-tier implementation
 candidates where rule-backed static evidence allows, and render data/query/
 dependency/value-origin rows or narrower gaps with evidence provenance.
 
-The product implementation PR for this spec currently changes route-flow
+The merged product implementation PRs for this spec changed route-flow
 reporting code, focused route-flow tests, and this spec state/task tracking.
-No site files, generated outputs, rule catalog entries, scanner extraction
-logic, LLM/vector/prompt logic, or sample artifacts are changed by this branch.
+No site files, generated outputs, scanner extraction logic, LLM/vector/prompt
+logic, or sample artifacts were part of those route-flow slices.
 
 ## Source Material Reviewed
 
@@ -631,7 +673,9 @@ Takeover notes:
   artifacts found no raw local workspace path, raw SQL wildcard, private
   connection-string sample, password token, raw URL, raw GitHub remote, private
   feed, secret-token, query-token, or connection-string key matches.
-- Push and ACK rerun are pending in this takeover pass.
+- The second ACK patch was pushed, ACK was rerun by the implementation worker,
+  and PR #320 merged to `dev` as `565d7b64`. This reconciliation pass found no
+  remaining PR #320-specific local action to push.
 
 ### Kiro Implementation Review For PR 2
 
