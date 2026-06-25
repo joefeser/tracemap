@@ -376,6 +376,7 @@ public static class CombinedRouteFlowReporter
             .Concat(sourceIdentityGaps)
             .Concat(endpointComposition.Gaps)
             .ToList();
+        RemoveDuplicateDispatchCandidateFanOutGaps(gaps);
         RemoveCleanNoEvidenceGapsWhenBlocked(gaps);
         if (entryEvidence.Length == 0 && !endpointMissingRouteRoot)
         {
@@ -1459,7 +1460,7 @@ public static class CombinedRouteFlowReporter
                 edge.FilePath,
                 edge.StartLine,
                 edge.EndLine)),
-            sourceIndexId => scannerVersionBySourceIndexId.TryGetValue(sourceIndexId, out var version) ? version : null);
+            sourceIndexId => !string.IsNullOrWhiteSpace(sourceIndexId) && scannerVersionBySourceIndexId.TryGetValue(sourceIndexId, out var version) ? version : null);
     }
 
     private static string? NormalizeStaticDispatchRelationshipKind(CombinedPathEdge edge)
@@ -1812,7 +1813,7 @@ public static class CombinedRouteFlowReporter
             gap.StartLine ?? node.StartLine,
             gap.EndLine ?? node.EndLine,
             SafeCommitSha(gap.CommitSha ?? node.CommitSha),
-            SafeSelector(gap.EvidenceScope) ?? "combined-symbol-relationships",
+            ExtractorName(gap.RuleId),
             SafeSelector(gap.ExtractorVersion) ?? "unknown");
     }
 
@@ -3720,6 +3721,26 @@ public static class CombinedRouteFlowReporter
         gaps.RemoveAll(gap => gap.GapKind == "NoRouteFlowEvidence");
     }
 
+    private static void RemoveDuplicateDispatchCandidateFanOutGaps(List<RouteFlowGap> gaps)
+    {
+        var inheritedPathFanOutNodeIds = gaps
+            .Where(gap => gap.GapKind == "DispatchCandidateFanOut")
+            .Where(gap => gap.GapId.StartsWith("gap:path:", StringComparison.Ordinal))
+            .Select(gap => gap.AffectedRowId)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .ToHashSet(StringComparer.Ordinal);
+        if (inheritedPathFanOutNodeIds.Count == 0)
+        {
+            return;
+        }
+
+        gaps.RemoveAll(gap => gap.GapKind == "DispatchCandidateFanOut"
+            && gap.GapId.StartsWith("gap:endpoint-composition:", StringComparison.Ordinal)
+            && gap.AffectedRowId is not null
+            && inheritedPathFanOutNodeIds.Contains(gap.AffectedRowId));
+    }
+
     private static void ApplyClassificationFilter(
         string? classification,
         List<RouteFlowRow> flowRows,
@@ -3758,6 +3779,7 @@ public static class CombinedRouteFlowReporter
     private static RouteFlowGap FromPathGap(CombinedPathGap gap, string pathReportCoverage)
     {
         var gapKind = NormalizeGapKind(gap.GapKind);
+        var preserveGapSpan = gapKind == "DispatchCandidateFanOut";
         return new RouteFlowGap(
             $"gap:path:{CombinedReportHelpers.Hash(gap.GapId, 24)}",
             gapKind,
@@ -3768,11 +3790,25 @@ public static class CombinedRouteFlowReporter
             SafeSelector(gap.SourceLabel),
             gap.NodeId,
             gap.CombinedFactId is null ? [] : [gap.CombinedFactId],
-            PathGapLimitations(gapKind, pathReportCoverage));
+            PathGapLimitations(gapKind, pathReportCoverage),
+            preserveGapSpan ? CombinedReportHelpers.SafePath(gap.FilePath) : null,
+            preserveGapSpan ? gap.StartLine : null,
+            preserveGapSpan ? gap.EndLine : null,
+            preserveGapSpan ? SafeCommitSha(gap.CommitSha) : null,
+            preserveGapSpan ? ExtractorName(gap.RuleId) : null,
+            preserveGapSpan ? SafeSelector(gap.ExtractorVersion) ?? "unknown" : null);
     }
 
     private static IReadOnlyList<string> PathGapLimitations(string gapKind, string pathReportCoverage)
     {
+        if (gapKind == "DispatchCandidateFanOut")
+        {
+            return [
+                "Static dispatch candidate fan-out is deterministically capped and remains review-tier.",
+                "Candidate implementation rows identify compiler-known candidates only and do not prove runtime dependency-injection targets."
+            ];
+        }
+
         if (gapKind == "NoRouteFlowEvidence" && pathReportCoverage == "FullEvidenceAvailable")
         {
             return ["Inherited full-coverage no-evidence path gaps are static absence-of-evidence rows and do not prove runtime absence."];
@@ -3786,6 +3822,11 @@ public static class CombinedRouteFlowReporter
         if (gapKind == "NoRouteFlowEvidence")
         {
             return pathReportCoverage == "FullEvidenceAvailable" ? "FullEvidenceAvailable" : "ReducedCoverage";
+        }
+
+        if (gapKind == "DispatchCandidateFanOut")
+        {
+            return "ReducedCoverage";
         }
 
         return GapClassification(gap) == RouteFlowClassifications.UnknownAnalysisGap ? "ReducedCoverage" : "CoverageRelative";
@@ -4243,6 +4284,7 @@ public static class CombinedRouteFlowReporter
             "MissingImplementationBridge" => "MissingImplementationBridge",
             "ImplementationCandidateUnavailable" => "ImplementationCandidateUnavailable",
             "AmbiguousImplementationCandidates" => "AmbiguousImplementationCandidates",
+            "DispatchCandidateFanOut" => "DispatchCandidateFanOut",
             "DataSurfaceAttachmentMissing" => "DataSurfaceAttachmentMissing",
             "IdentityGap" => "IdentityGap",
             "TraversalBounds" => "TraversalBounds",
