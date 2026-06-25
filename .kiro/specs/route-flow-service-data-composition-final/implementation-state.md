@@ -36,14 +36,16 @@ Remaining slices after reconciliation:
 - Task 8/9/10: only the downgrade, compatibility, exit-code, rule-catalog, and
   safety checks directly affected by the selected product slice.
 
-Recommended next order after the current Kepler route-flow worker completes:
+Recommended next order after any in-flight route-flow branch is merged or
+explicitly closed:
 
-1. Re-audit this spec's Task 5 remainder against Kepler's merged head and
-   either close it with evidence or pick the smallest still-missing route-flow
-   direct-call/gap slice.
-2. Then move to Task 6 candidate continuation if Task 5 is closed.
-3. Then move to Task 7 service/data/query/dependency attachment precision.
-4. Only after the route-flow contract is stable, start
+1. Fetch `origin/dev`, record the audited commit SHA, and re-audit this spec's
+   Task 5 remainder against that head.
+2. Either close Task 5 with evidence or pick the smallest still-missing
+   route-flow direct-call/gap slice.
+3. Then move to Task 6 candidate continuation if Task 5 is closed.
+4. Then move to Task 7 service/data/query/dependency attachment precision.
+5. Only after the route-flow contract is stable, start
    `.kiro/specs/ui-field-property-lineage-composition/` PR 1.
 
 Do not reopen `route-flow-service-data-composition-next` or

@@ -89,8 +89,8 @@ current `dev` code or merged PR records prove the behavior.
           emit a deterministic `TraversalBounds` gap, suppress clean
           no-evidence claims, and downgrade the report.
     - [ ] Direct/no-call/reduced-coverage/deterministic-ordering remainder:
-          still valid follow-up work unless the current Kepler route-flow
-          worker completes or supersedes it.
+          still valid follow-up work unless a later `origin/dev` audit proves
+          an in-flight route-flow branch completed or superseded it.
 
 - [ ] 6. Harden implementation-candidate continuation. Requirements: 3, 5.
       Suggested boundary: PR 2.
