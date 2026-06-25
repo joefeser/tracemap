@@ -486,6 +486,18 @@ h3 {
   margin: 1px 0;
 }
 
+.troubleshooting-matrix {
+  min-width: 1380px;
+}
+
+[data-non-claim-region] {
+  border-left: 4px solid #6e5d1c;
+}
+
+[data-rejected-pattern-region] {
+  border-left: 4px solid #9d3f32;
+}
+
 .claim-ledger-note {
   max-width: 840px;
   margin: 18px 0 0;
