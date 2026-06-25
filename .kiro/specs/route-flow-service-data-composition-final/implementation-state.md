@@ -1429,6 +1429,18 @@ AI/LLM analysis, vector search, or scanner extraction changes.
   `./scripts/check-private-paths.sh` passed, and
   `dotnet test src/dotnet/TraceMap.sln` passed locally with 655 tests. NuGet
   emitted the same existing `SQLitePCLRaw.lib.e_sqlite3` warning.
+- Third ACK-authorized patch groups unjoined argument-flow projection gap
+  evidence by source label, file span, commit SHA, rule ID, and extractor
+  version before emitting `ArgumentProjectionUnavailable`, so each gap's
+  metadata matches its supporting evidence location.
+- Post-third-ACK patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_value_origin_rows_only_from_selected_static_path"`
+  passed locally with 1 test,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 47 tests, `git diff --check` passed,
+  `./scripts/check-private-paths.sh` passed, and
+  `dotnet test src/dotnet/TraceMap.sln` passed locally with 655 tests. NuGet
+  emitted the same existing `SQLitePCLRaw.lib.e_sqlite3` warning.
 
 ### Follow-Ups For PR 9
 

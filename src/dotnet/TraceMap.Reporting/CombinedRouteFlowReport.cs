@@ -2316,14 +2316,18 @@ public static class CombinedRouteFlowReporter
                 cancellationToken);
             if (unprojectedArgumentEvidence.Count > 0)
             {
-                gaps.Add(ProjectionUnavailableGap(
-                    "argument",
-                    "ArgumentProjectionUnavailable",
-                    projected == 0
-                        ? "Argument-flow rows were present, but none could be connected to the selected route-flow path by direct static call evidence."
-                        : "Additional argument-flow rows were present, but they could not be connected to the selected route-flow path by direct static call evidence.",
-                    ArgumentProjectionRuleId,
-                    unprojectedArgumentEvidence));
+                var message = projected == 0
+                    ? "Argument-flow rows were present, but none could be connected to the selected route-flow path by direct static call evidence."
+                    : "Additional argument-flow rows were present, but they could not be connected to the selected route-flow path by direct static call evidence.";
+                foreach (var evidenceGroup in ProjectionGapEvidenceByLocation(unprojectedArgumentEvidence))
+                {
+                    gaps.Add(ProjectionUnavailableGap(
+                        "argument",
+                        "ArgumentProjectionUnavailable",
+                        message,
+                        ArgumentProjectionRuleId,
+                        evidenceGroup));
+                }
             }
         }
 
@@ -3713,6 +3717,21 @@ public static class CombinedRouteFlowReporter
             SafeCommitSha(first?.CommitSha),
             ExtractorName(first?.RuleId),
             SafeSelector(first?.ExtractorVersion) ?? "unknown");
+    }
+
+    private static IReadOnlyList<IReadOnlyList<ProjectionGapEvidence>> ProjectionGapEvidenceByLocation(IReadOnlyList<ProjectionGapEvidence> evidenceRows)
+    {
+        return evidenceRows
+            .GroupBy(row => $"{row.SourceLabel}\0{row.CommitSha}\0{row.RuleId}\0{row.FilePath}\0{row.StartLine}\0{row.EndLine}\0{row.ExtractorVersion}", StringComparer.Ordinal)
+            .OrderBy(group => group.Select(row => row.SourceLabel).First(), StringComparer.Ordinal)
+            .ThenBy(group => group.Select(row => row.FilePath).First(), StringComparer.Ordinal)
+            .ThenBy(group => group.Select(row => row.StartLine).First())
+            .ThenBy(group => group.Select(row => row.EndLine).First())
+            .ThenBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => group
+                .OrderBy(row => row.CombinedFactId, StringComparer.Ordinal)
+                .ToArray())
+            .ToArray();
     }
 
     private static RouteFlowEvidenceRef EvidenceFromProjection(
