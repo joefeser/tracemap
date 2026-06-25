@@ -285,23 +285,6 @@ public static class CombinedRouteFlowReporter
         RouteFlowClassifications.UnknownAnalysisGap
     };
 
-    private static readonly HashSet<string> SurfaceKinds = new(StringComparer.Ordinal)
-    {
-        "sql-query",
-        "sql-persistence",
-        "http-route",
-        "http-client",
-        "package-config",
-        "wcf-operation",
-        "remoting-endpoint",
-        "remoting-registration",
-        "remoting-channel",
-        "remoting-object",
-        "remoting-api",
-        "legacy-data",
-        "dependency-surface"
-    };
-
     public static async Task<CombinedRouteFlowResult> WriteAsync(CombinedRouteFlowOptions options, CancellationToken cancellationToken = default)
     {
         var report = await BuildReportAsync(options, cancellationToken);
@@ -552,9 +535,9 @@ public static class CombinedRouteFlowReporter
             throw new ArgumentException("route-flow requires one selector: --route, --client-call, --from-endpoint, --from-webforms-event, --from-symbol, or --from-source.");
         }
 
-        if (!string.IsNullOrWhiteSpace(options.ToSurface) && !SurfaceKinds.Contains(options.ToSurface.Trim()))
+        if (!string.IsNullOrWhiteSpace(options.ToSurface) && !CombinedTerminalSurfaceKinds.AllSet.Contains(options.ToSurface.Trim()))
         {
-            throw new ArgumentException("route-flow --to-surface must be one of sql-query, sql-persistence, http-route, http-client, package-config, wcf-operation, remoting-endpoint, remoting-registration, remoting-channel, remoting-object, remoting-api, legacy-data, or dependency-surface.");
+            throw new ArgumentException($"route-flow --to-surface must be one of {CombinedTerminalSurfaceKinds.ValidationList}.");
         }
 
         if (!string.IsNullOrWhiteSpace(options.Classification) && !AllowedClassifications.Contains(options.Classification.Trim()))

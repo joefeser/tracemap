@@ -1172,3 +1172,91 @@ hardening beyond tests directly touched by the projection behavior.
   ID matrix across all service/data/dependency surface families.
 - Cap or batch large argument-pair and fact-symbol projection SQL filters so
   very large selected route-flow graphs cannot exceed SQLite parameter limits.
+
+## Product Implementation PR 7
+
+Branch: `codex/route-flow-task7-attachments`
+Base: `origin/dev` at `9bb459587475`
+
+Selected slice: Task 7 event/message terminal-surface attachment precision
+after Task 5, Task 6, and the fact-symbol attachment slice. This slice does not
+start UI property lineage, site work, scanner extraction, runtime execution
+claims, or the full remaining service/data/query/dependency taxonomy.
+
+### Live Audit Notes For PR 7
+
+- Current `dev` already contains selected-path-only route-flow traversal,
+  dependency surface rendering from selected `routePaths`, argument-flow and
+  fact-symbol projection joins through selected route-flow rows, schema gaps,
+  `ArgumentProjectionUnavailable`, `FactSymbolProjectionUnavailable`,
+  `FactSymbolUnsupportedTypeSkipped`, and `DataSurfaceAttachmentMissing`.
+- `CombinedDependencyPathReporter` already supports message terminal surface
+  kinds (`message-queue`, `message-topic`, `message-subscription`,
+  `message-exchange`, `message-stream`, `message-event`, `message-channel`,
+  and `message-unknown`) as selected static path terminals.
+- `CombinedRouteFlowReport` still rejected those message surface selectors,
+  which meant route-flow could not request already-supported event/message
+  terminals through `--to-surface`.
+
+### Implementation Notes For PR 7
+
+- Added the existing message terminal surface kinds to route-flow's
+  `--to-surface` allow-list and validation message.
+- No new traversal rule, report type, JSON version, rule ID, scanner
+  extractor, or graph edge kind was added.
+- Added focused synthetic route-flow coverage proving:
+  - selected message terminal surfaces render as dependency surfaces only when
+    joined through the selected route-flow static path;
+  - adjacent same-source message surface evidence for an unrelated publisher is
+    not inferred as a selected terminal;
+  - unjoined adjacent message surface evidence preserves
+    `DataSurfaceAttachmentMissing` instead of a clean no-evidence conclusion;
+  - dependency surface and gap IDs are deterministic across repeated renders.
+
+### Validation Log For PR 7
+
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+  errors.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 43 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 651 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Initial ACK PR loop on PR #334 returned `actionable_findings` with one
+  unresolved review thread and `patchAuthorized=true`.
+- ACK-authorized finding patched:
+  - added a reporting-internal terminal surface kind contract shared by
+    `CombinedDependencyPathReporter` and `CombinedRouteFlowReporter`;
+  - derived both `paths --to-surface` and `route-flow --to-surface`
+    validation messages from the shared surface-kind allow-list, so future
+    surface additions do not drift between the path engine, route-flow
+    selector validation, and error text.
+- Post-ACK patch validation:
+  - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+    errors.
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+    passed locally with 43 tests.
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedDependencyPathTests`:
+    passed locally with 30 tests.
+  - `dotnet test src/dotnet/TraceMap.sln`: passed locally with 651 tests.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
+
+### Oddities / Design Decisions For PR 7
+
+- Message terminal surfaces are rendered in `dependencySurfaces` and selected
+  terminal `flowRows`; route-flow does not create extra generic logic rows for
+  message terminals because `LogicKind` currently only projects SQL/object-ish
+  shapes as path-context logic rows.
+- The synthetic fixtures use public-safe route strings, source labels,
+  destination keys, and stable hashes only.
+
+### Follow-Ups For PR 7
+
+- Continue Task 7 for the remaining taxonomy items, especially ASMX/SOAP
+  route-flow selection if the path reporter gains those terminal surface kinds,
+  plus storage, validation/guard, serializer/contract, async/callback, and any
+  broader attached-versus-path-context labeling coverage not already proven by
+  existing projection tests.
+- Keep Task 8/9/10 unchecked except for validation/safety behavior directly
+  touched by this event/message sub-slice.
