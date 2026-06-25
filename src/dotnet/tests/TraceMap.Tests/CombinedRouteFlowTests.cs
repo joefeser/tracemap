@@ -954,6 +954,93 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_suppresses_clean_no_evidence_when_no_direct_call_has_full_coverage_selector_blocker()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+        await SetCombinedSourceLanguageAsync(combinedPath, "csharp");
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}"));
+
+        Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root"
+            && row.BridgeState == "method-symbol");
+        Assert.Empty(result.Report.FlowRows);
+        var selectorGap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "SelectorNoMatch");
+        Assert.Equal("combined.route-flow.gap.v1", selectorGap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, selectorGap.EvidenceTier);
+        Assert.Equal("ReducedCoverage", selectorGap.Coverage);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "MissingCallEdge" or "ReducedCoverage");
+        Assert.Equal("ReducedCoverage", result.Report.ReportCoverage);
+        Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
+    }
+
+    [Fact]
+    public async Task Route_flow_orders_direct_service_call_paths_deterministically()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var alphaService = "Server.AlphaOrderService.Get(System.Int32)";
+        var betaService = "Server.BetaOrderService.Get(System.Int32)";
+        var alphaRepository = "Server.AlphaOrderRepository.Query(System.Int32)";
+        var betaRepository = "Server.BetaOrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, betaService, "Controllers/OrdersController.cs", 16),
+            CallFact(server, controller, alphaService, "Controllers/OrdersController.cs", 14),
+            CallFact(server, betaService, betaRepository, "Services/BetaOrderService.cs", 24),
+            CallFact(server, alphaService, alphaRepository, "Services/AlphaOrderService.cs", 22),
+            QueryPatternFact(server, betaRepository, "Infrastructure/BetaOrderRepository.cs", 34, attachSymbol: true),
+            QueryPatternFact(server, alphaRepository, "Infrastructure/AlphaOrderRepository.cs", 32, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+        await SetCombinedSourceLanguageAsync(combinedPath, "csharp");
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        var controllerCalls = result.Report.FlowRows
+            .Where(row => row.EdgeKind == "direct-call"
+                && row.SourceSymbol.Contains(controller, StringComparison.Ordinal))
+            .ToArray();
+        Assert.Equal([alphaService, betaService], controllerCalls.Select(row => Assert.IsType<string>(row.TargetSymbol)).ToArray());
+        Assert.Equal(controllerCalls.Select(row => row.RowId), repeated.Report.FlowRows
+            .Where(row => row.EdgeKind == "direct-call"
+                && row.SourceSymbol.Contains(controller, StringComparison.Ordinal))
+            .Select(row => row.RowId));
+        Assert.All(controllerCalls, row =>
+        {
+            Assert.Equal("combined.route-flow.path.v1", row.Evidence.RuleId);
+            Assert.Equal(EvidenceTiers.Tier1Semantic, row.Evidence.EvidenceTier);
+        });
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "MissingCallEdge" or "NoRouteFlowEvidence");
+        Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query");
+    }
+
+    [Fact]
     public async Task Route_flow_emits_data_surface_attachment_gap_when_downstream_calls_have_no_terminal_surface()
     {
         using var temp = new TempDirectory();
@@ -1859,6 +1946,21 @@ public sealed class CombinedRouteFlowTests
         }
 
         return values.ToArray();
+    }
+
+    private static async Task SetCombinedSourceLanguageAsync(string path, string language)
+    {
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = path
+        }.ToString();
+        await using var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "update index_sources set language = $language;";
+        command.Parameters.AddWithValue("$language", language);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task<long> CountRowsAsync(SqliteConnection connection, string tableName)

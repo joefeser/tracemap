@@ -368,7 +368,7 @@ public static class CombinedRouteFlowReporter
         var endpointCompositionHasPaths = endpointComposition.Paths.Count > 0;
         var endpointCompositionHasBlockingGaps = endpointComposition.Gaps.Any(IsNoEvidenceBlockingCompositionGap);
         var pathGaps = pathReport.Gaps
-            .Select(FromPathGap)
+            .Select(gap => FromPathGap(gap, pathReport.ReportCoverage))
             .Where(gap => !endpointMissingRouteRoot || gap.GapKind != "SelectorNoMatch")
             .Where(gap => !(endpointCompositionHasPaths || endpointCompositionHasBlockingGaps) || gap.GapKind != "NoRouteFlowEvidence");
         var gaps = pathGaps
@@ -3564,19 +3564,30 @@ public static class CombinedRouteFlowReporter
         }
     }
 
-    private static RouteFlowGap FromPathGap(CombinedPathGap gap)
+    private static RouteFlowGap FromPathGap(CombinedPathGap gap, string pathReportCoverage)
     {
+        var gapKind = NormalizeGapKind(gap.GapKind);
         return new RouteFlowGap(
             $"gap:path:{CombinedReportHelpers.Hash(gap.GapId, 24)}",
-            NormalizeGapKind(gap.GapKind),
+            gapKind,
             SafeSelector(gap.Message) ?? "Route-flow analysis gap.",
             GapRuleId,
             gap.EvidenceTier ?? EvidenceTiers.Tier4Unknown,
-            GapClassification(gap) == RouteFlowClassifications.UnknownAnalysisGap ? "ReducedCoverage" : "CoverageRelative",
+            CoverageForPathGap(gap, gapKind, pathReportCoverage),
             SafeSelector(gap.SourceLabel),
             gap.NodeId,
             gap.CombinedFactId is null ? [] : [gap.CombinedFactId],
             ["Path gaps are inherited as route-flow analysis gaps and remain coverage-relative."]);
+    }
+
+    private static string CoverageForPathGap(CombinedPathGap gap, string gapKind, string pathReportCoverage)
+    {
+        if (gapKind == "NoRouteFlowEvidence")
+        {
+            return pathReportCoverage == "FullEvidenceAvailable" ? "FullEvidenceAvailable" : "ReducedCoverage";
+        }
+
+        return GapClassification(gap) == RouteFlowClassifications.UnknownAnalysisGap ? "ReducedCoverage" : "CoverageRelative";
     }
 
     private static IEnumerable<RouteFlowGap> SourceIdentityGaps(IReadOnlyList<RouteFlowSource> sources)
@@ -3987,6 +3998,7 @@ public static class CombinedRouteFlowReporter
         return gap.GapKind != "NoRouteFlowEvidence"
             && (IsNoEvidenceBlockingCompositionGap(gap)
                 || gap.GapKind is "DataSurfaceAttachmentMissing"
+                || gap.GapKind is "SelectorNoMatch"
                 || gap.GapKind is "ArgumentProjectionUnavailable"
                     or "FactSymbolProjectionUnavailable"
                     or "SchemaMissing"
