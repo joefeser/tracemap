@@ -2245,6 +2245,7 @@ rules:
     limitations:
       - Candidate edges are static review evidence only and do not prove runtime dispatch, dependency-injection target selection, object lifetime, branch feasibility, or production execution.
       - Candidates are derived only from source-local method-level relationship evidence; type-level inheritance or interface relationships do not substitute for member-level evidence in v1.
+      - Override candidate chain traversal follows only `Overrides` relationship evidence and is bounded to a maximum depth of 5 with cycle protection.
       - Syntax-only, fallback, reduced-coverage, ambiguous, generated-code uncertain, or high fan-out candidates remain review-tier and must not strengthen downstream classifications.
 
   - id: combined.dispatch-gap.v1
@@ -2253,6 +2254,7 @@ rules:
     evidenceTier: Tier4Unknown
     emits:
       - DispatchCandidateFanOut gap
+      - DispatchCandidateTruncatedByLimit gap
     limitations:
       - Gap rows describe limits of the current static evidence graph and must not be read as proof that no runtime target exists.
       - Candidate caps are deterministic traversal limits; omitted candidates may still be possible static review evidence outside the configured bound.
