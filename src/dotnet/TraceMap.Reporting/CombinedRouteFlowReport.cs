@@ -3114,7 +3114,7 @@ public static class CombinedRouteFlowReporter
             "sql-persistence" => "data-surface",
             "legacy-data" => "legacy-data",
             "package-config" => "dependency",
-            "http-route" or "http-client" or "wcf-operation" or "remoting-endpoint" or "remoting-registration" or "remoting-channel" or "remoting-object" or "remoting-api" => "dependency",
+            "http-route" or "http-client" or "wcf-operation" or "asmx-service" or "asmx-operation" or "asmx-client" or "asmx-config" or "asmx-metadata" or "remoting-endpoint" or "remoting-registration" or "remoting-channel" or "remoting-object" or "remoting-api" => "dependency",
             _ => "dependency"
         };
     }
