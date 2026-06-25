@@ -2248,6 +2248,16 @@ public static class CombinedRouteFlowReporter
         int EndLine,
         IReadOnlyDictionary<string, string> Properties);
 
+    private sealed record ProjectionGapEvidence(
+        string CombinedFactId,
+        string SourceLabel,
+        string CommitSha,
+        string RuleId,
+        string FilePath,
+        int StartLine,
+        int EndLine,
+        string ExtractorVersion);
+
     private static async Task<ProjectionResult> BuildProjectionRowsAsync(
         string indexPath,
         IReadOnlyList<CombinedPath> selectedPaths,
@@ -2377,17 +2387,17 @@ public static class CombinedRouteFlowReporter
                         redactionApplied: FactSymbolRedactionApplied(row))));
             }
 
-            var unprojectedFactSymbolIds = projected == 0
-                ? await ReadFactSymbolProjectionFactIdsAsync(connection, selectedSourceIndexIds, cancellationToken)
+            var unprojectedFactSymbolEvidence = projected == 0
+                ? await ReadFactSymbolProjectionGapEvidenceAsync(connection, selectedSourceIndexIds, cancellationToken)
                 : [];
-            if (unprojectedFactSymbolIds.Count > 0 && projected == 0)
+            if (unprojectedFactSymbolEvidence.Count > 0 && projected == 0)
             {
                 gaps.Add(ProjectionUnavailableGap(
                     "fact-symbol",
                     "FactSymbolProjectionUnavailable",
                     "Fact-symbol rows were present, but none could be connected to the selected route-flow path by source-local symbol evidence.",
                     FactSymbolProjectionRuleId,
-                    unprojectedFactSymbolIds));
+                    unprojectedFactSymbolEvidence));
             }
 
             if (unsupportedAttachedFactIds.Count > 0)
@@ -2468,7 +2478,7 @@ public static class CombinedRouteFlowReporter
                 return null;
             }
 
-            return FlowRowForSymbol(row.SourceIndexId, row.SourceSymbol, row.SymbolDisplayName);
+            return FlowRowForSymbol(row.SourceIndexId, row.CombinedSymbolId, row.SourceSymbol, row.SymbolDisplayName);
         }
     }
 
@@ -2576,6 +2586,13 @@ public static class CombinedRouteFlowReporter
         {
             candidates.Add(new SymbolCandidate(sourceIndexId, symbol!));
         }
+
+        var combinedSymbolId = CombinedSymbolId(sourceIndexId, symbol!);
+        if (!string.Equals(combinedSymbolId, symbol, StringComparison.Ordinal)
+            && values.TryAdd(SymbolKey(sourceIndexId, combinedSymbolId), row))
+        {
+            candidates.Add(new SymbolCandidate(sourceIndexId, combinedSymbolId));
+        }
     }
 
     private static string SymbolPairKey(string sourceIndexId, string sourceSymbol, string targetSymbol)
@@ -2586,6 +2603,11 @@ public static class CombinedRouteFlowReporter
     private static string SymbolKey(string sourceIndexId, string symbol)
     {
         return $"{sourceIndexId}\0{symbol}";
+    }
+
+    private static string CombinedSymbolId(string sourceIndexId, string symbol)
+    {
+        return $"{sourceIndexId}:{symbol}";
     }
 
     private static async Task<IReadOnlyList<ArgumentFlowProjectionRow>> ReadArgumentFlowProjectionRowsAsync(SqliteConnection connection, IReadOnlyList<SymbolPairCandidate> pairCandidates, CancellationToken cancellationToken)
@@ -2725,7 +2747,7 @@ public static class CombinedRouteFlowReporter
         return await ReadFactIdsAsync(command, cancellationToken);
     }
 
-    private static async Task<IReadOnlyList<string>> ReadFactSymbolProjectionFactIdsAsync(SqliteConnection connection, IReadOnlyList<string> sourceIndexIds, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<ProjectionGapEvidence>> ReadFactSymbolProjectionGapEvidenceAsync(SqliteConnection connection, IReadOnlyList<string> sourceIndexIds, CancellationToken cancellationToken)
     {
         if (sourceIndexIds.Count == 0)
         {
@@ -2735,9 +2757,17 @@ public static class CombinedRouteFlowReporter
         await using var command = connection.CreateCommand();
         var sourceFilter = AddSourceFilterParameters(command, sourceIndexIds);
         command.CommandText = """
-            select distinct links.combined_fact_id
+            select distinct links.combined_fact_id,
+                   sources.label,
+                   facts.commit_sha,
+                   facts.rule_id,
+                   facts.file_path,
+                   facts.start_line,
+                   facts.end_line,
+                   sources.scanner_version
             from combined_fact_symbols links
             join combined_facts facts on facts.combined_fact_id = links.combined_fact_id
+            join index_sources sources on sources.source_index_id = links.source_index_id
             where links.source_index_id in (
             """ + sourceFilter + """
             )
@@ -2754,7 +2784,22 @@ public static class CombinedRouteFlowReporter
             order by links.combined_fact_id
             limit 20;
             """;
-        return await ReadFactIdsAsync(command, cancellationToken);
+        var values = new List<ProjectionGapEvidence>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            values.Add(new ProjectionGapEvidence(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.GetInt32(5),
+                reader.GetInt32(6),
+                reader.GetString(7)));
+        }
+
+        return values;
     }
 
     private static async Task<IReadOnlyList<string>> ReadFactIdsAsync(SqliteCommand command, CancellationToken cancellationToken)
@@ -3595,6 +3640,44 @@ public static class CombinedRouteFlowReporter
             null,
             support,
             [$"{ruleId} requires source-local static joins; unjoined projection evidence is reported as a gap, not inferred flow."]);
+    }
+
+    private static RouteFlowGap ProjectionUnavailableGap(
+        string scope,
+        string gapKind,
+        string message,
+        string ruleId,
+        IReadOnlyList<ProjectionGapEvidence> evidenceRows)
+    {
+        var ordered = evidenceRows
+            .OrderBy(row => row.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(row => row.FilePath, StringComparer.Ordinal)
+            .ThenBy(row => row.StartLine)
+            .ThenBy(row => row.CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+        var support = ordered
+            .Select(row => row.CombinedFactId)
+            .Distinct(StringComparer.Ordinal)
+            .Take(20)
+            .ToArray();
+        var first = ordered.FirstOrDefault();
+        return new RouteFlowGap(
+            $"gap:projection:{scope}:{CombinedReportHelpers.Hash(string.Join("|", support), 16)}",
+            gapKind,
+            message,
+            GapRuleId,
+            EvidenceTiers.Tier4Unknown,
+            "ReducedCoverage",
+            SafeLabel(first?.SourceLabel),
+            null,
+            support,
+            [$"{ruleId} requires source-local static joins; unjoined projection evidence is reported as a gap, not inferred flow."],
+            CombinedReportHelpers.SafePath(first?.FilePath),
+            first?.StartLine,
+            first?.EndLine,
+            SafeCommitSha(first?.CommitSha),
+            ExtractorName(first?.RuleId),
+            SafeSelector(first?.ExtractorVersion) ?? "unknown");
     }
 
     private static RouteFlowEvidenceRef EvidenceFromProjection(

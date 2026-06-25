@@ -1589,6 +1589,12 @@ public sealed class CombinedRouteFlowTests
             Route: "GET /api/orders/{id}"));
 
         Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query");
+        var factSymbolGap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "FactSymbolProjectionUnavailable");
+        Assert.True(factSymbolGap.SupportingFactIds.Count > 0);
+        Assert.Equal("server", factSymbolGap.SourceLabel);
+        Assert.Equal("abc123", factSymbolGap.CommitSha);
+        Assert.Equal("Infrastructure/MisleadingTarget.cs", factSymbolGap.FilePath);
+        Assert.Equal("tracemap-milestone15", factSymbolGap.ExtractorVersion);
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "FactSymbolProjectionUnavailable"
             && gap.RuleId == "combined.route-flow.gap.v1");
         Assert.DoesNotContain(result.Report.LogicRows, row => row.AttachmentKind == "fact-symbol-projection");
