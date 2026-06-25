@@ -1,7 +1,7 @@
 # Site TraceMap Tools Public Demo Troubleshooting Implementation State
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Public claim level: concept
 
 ## Branch
@@ -27,8 +27,8 @@ availability claims, and stronger demo/proof claims.
 
 ## Current State
 
-The implementation is in progress on a dedicated `codex/` branch. The route
-was added as a standalone concept-level public page at
+The implementation is complete on a dedicated `codex/` branch. The route was
+added as a standalone concept-level public page at
 `/demo/troubleshooting/`.
 
 Site source has been changed only under public site source, site metadata,
@@ -218,6 +218,12 @@ Future implementation validation:
 - `git diff --check`: passed on 2026-06-25.
 - `./scripts/check-private-paths.sh`: passed on 2026-06-25 with
   `Private path guard passed.`
+- PR review fix validation on 2026-06-25:
+  `npm test -- demo-troubleshooting`, `npm run validate`, `npm run build`,
+  `git diff --check`, and `./scripts/check-private-paths.sh` passed after
+  broadening the route-specific safety scanner for tag-split forbidden claims,
+  support-SLA wording, metadata attribute order, and route-metadata private
+  material.
 - Desktop browser sanity for `http://localhost:4173/demo/troubleshooting/`:
   passed on 2026-06-25 using Playwright at 1440x1000. Snapshot showed visible
   concept claim label, shared principle, semantic table headers, and required

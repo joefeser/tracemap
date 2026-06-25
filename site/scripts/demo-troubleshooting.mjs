@@ -106,7 +106,7 @@ const rejectedExamples = [
 ];
 
 const forbiddenAffirmativePatterns = [
-  /\b(?:support contract|response-time promise|ticketing channel|guaranteed answer path)\b/i,
+  /\b(?:support contract|support SLA|SLA promise|response-time promise|ticketing channel|support channel|on-call path|guaranteed answer path)\b/i,
   /\b(?:diagnoses?|proves?|certif(?:y|ies|ied)|guarantees?|approves?)\s+(?:runtime|production|endpoint|release|operational|complete coverage|absence of impact)\b/i,
   /\b(?:release is approved|release wording is safe|enough public proof|proves no impact|claim is proven)\b/i,
   /\bTraceMap provides AI or LLM impact analysis\b/i,
@@ -161,6 +161,8 @@ function validatePage({ html, errors }) {
   const mainHtml = extractMainHtml(decodedHtml);
   const unmarkedHtml = stripMarkedRegions(mainHtml);
   const unmarkedText = normalizeRenderedText(unmarkedHtml);
+  const unmarkedCollapsedText = collapseTagSplitText(unmarkedHtml);
+  const fullCollapsedText = collapseTagSplitText(decodedHtml);
 
   for (const phrase of requiredText) {
     if (!pageText.includes(phrase)) {
@@ -184,8 +186,8 @@ function validatePage({ html, errors }) {
   validateOwnerHandoff({ decodedHtml, errors });
   validateWordCount({ decodedHtml, errors });
   validateNoInternalArtifactDirections(decodedHtml, errors);
-  validateHardPrivateMaterial(`${decodedHtml} ${pageText} ${metadataText} ${attributeText}`, errors);
-  validateForbiddenClaims(`${unmarkedHtml} ${unmarkedText} ${metadataText} ${attributeText}`, errors);
+  validateHardPrivateMaterial(`${decodedHtml} ${pageText} ${fullCollapsedText} ${metadataText} ${attributeText}`, errors);
+  validateForbiddenClaims(`${unmarkedHtml} ${unmarkedText} ${unmarkedCollapsedText} ${metadataText} ${attributeText}`, errors);
   validateBlameLanguage(`${pageText} ${metadataText} ${attributeText}`, errors);
 }
 
@@ -414,23 +416,28 @@ async function validateRoutesIndex({ dist, errors }) {
   for (const field of ["limitations", "nonClaims"]) {
     if (!Array.isArray(routeEntry[field]) || routeEntry[field].length === 0) {
       errors.push(withEvidence(`Demo troubleshooting routes-index.json is missing non-empty ${field}.`, routesIndexArtifact));
+      continue;
     }
+
+    validateHardPrivateMaterial(routeEntry[field].join(" "), errors, routesIndexArtifact);
   }
+
+  validateHardPrivateMaterial(JSON.stringify(routeEntry), errors, routesIndexArtifact);
 }
 
-function validateForbiddenClaims(text, errors) {
+function validateForbiddenClaims(text, errors, artifact = pageArtifact) {
   for (const pattern of forbiddenAffirmativePatterns) {
     const match = text.match(pattern);
     if (match) {
-      errors.push(withEvidence(`Demo troubleshooting page contains unsupported affirmative claim outside marked regions: ${match[0]}`, pageArtifact));
+      errors.push(withEvidence(`Demo troubleshooting page contains unsupported affirmative claim outside marked regions: ${match[0]}`, artifact));
     }
   }
 }
 
-function validateHardPrivateMaterial(text, errors) {
+function validateHardPrivateMaterial(text, errors, artifact = pageArtifact) {
   for (const { label, pattern } of hardPrivatePatterns) {
     if (pattern.test(text)) {
-      errors.push(withEvidence(`Demo troubleshooting page contains forbidden private or credential-like text: ${label}`, pageArtifact));
+      errors.push(withEvidence(`Demo troubleshooting page contains forbidden private or credential-like text: ${label}`, artifact));
     }
   }
 }
@@ -459,8 +466,9 @@ function extractMainHtml(html) {
 }
 
 function collectMetadataText(html) {
-  return [...html.matchAll(/<meta\b[^>]*(?:name|property)\s*=\s*["'][^"']+["'][^>]*\bcontent\s*=\s*["']([^"']*)["'][^>]*>/gi)]
-    .map((match) => match[1])
+  return [...html.matchAll(/<meta\b[^>]*>/gi)]
+    .map((match) => getHtmlAttribute(match[0], "content") ?? "")
+    .filter(Boolean)
     .join(" ");
 }
 
@@ -507,6 +515,15 @@ function extractAnchorTexts(html) {
   return [...html.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi)].map((match) => normalizeRenderedText(match[1]));
 }
 
+function collapseTagSplitText(html) {
+  return normalizeRenderedText(String(html).replace(/<[^>]+>/g, ""));
+}
+
+function getHtmlAttribute(html, name) {
+  const match = html.match(new RegExp(`\\b${escapeRegExp(name)}\\s*=\\s*(["'])(.*?)\\1`, "i"));
+  return match ? match[2] : null;
+}
+
 function extractHrefs(html) {
   return [...html.matchAll(/\bhref\s*=\s*["']([^"']+)["']/gi)].map((match) => match[1]);
 }
@@ -519,7 +536,9 @@ function hasCanonical(html, route) {
 }
 
 function hasMetaDescription(html) {
-  return /<meta\b(?=[^>]*\bname\s*=\s*["']description["'])(?=[^>]*\bcontent\s*=\s*["'][^"']+["'])[^>]*>/i.test(html);
+  return [...html.matchAll(/<meta\b[^>]*>/gi)].some(
+    (match) => getHtmlAttribute(match[0], "name") === "description" && Boolean(getHtmlAttribute(match[0], "content"))
+  );
 }
 
 function hasOgTypeArticle(html) {
