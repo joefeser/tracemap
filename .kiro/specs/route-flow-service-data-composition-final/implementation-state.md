@@ -787,6 +787,20 @@ subcase, plus the directly touched Task 8 guard that clean
   - `dotnet test src/dotnet/TraceMap.sln`: passed, 640 tests.
   - `./scripts/check-private-paths.sh`: passed.
   - `git diff --check`: passed.
+- ACK rerun after cleanup showed the two review threads resolved but one Qodo
+  top-level actionable finding remained: inherited clean no-evidence gaps were
+  cleaned before projection gaps were appended.
+- Patched the Qodo finding by rerunning clean no-evidence gap cleanup after
+  projection gaps are appended, and added projection-gap coverage asserting
+  `NoRouteFlowEvidence` is absent when projection blockers exist.
+- Post-Qodo validation:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
+    passed, 37 tests.
+  - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+    errors.
+  - `dotnet test src/dotnet/TraceMap.sln`: passed, 640 tests.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
 - Follow-up push and ACK rerun are pending in this pass.
 
 ### Oddities / Design Decisions For PR 3

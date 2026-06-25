@@ -1353,6 +1353,7 @@ public sealed class CombinedRouteFlowTests
         // fact-symbol shapes must be reported as skipped context rather than rendered as projection rows.
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "FactSymbolUnsupportedTypeSkipped");
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "FactSymbolProjectionUnavailable");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "ExtractorUnavailable");
         Assert.DoesNotContain(result.Report.LogicRows, row => row.Evidence.RuleId is "combined.route-flow.argument-projection.v1" or "combined.route-flow.fact-symbol-projection.v1");
     }
