@@ -114,6 +114,10 @@ Oddities:
   `--to-surface` validation before this slice.
 - The focused tests use synthetic public-safe ASMX facts rather than invoking
   full legacy extractors so they isolate selected-route attachment behavior.
+- ACK review found that real `LegacyAsmxExtractor` client-operation rows attach
+  the generated client type as `sourceSymbol` and the callable operation as
+  `targetSymbol`; the patch now links selected ASMX operation surfaces through
+  that callable target symbol.
 
 Validation status:
 

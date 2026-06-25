@@ -1682,14 +1682,16 @@ public sealed class CombinedRouteFlowTests
         var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
         var server = Manifest("server", "tracemap-milestone15");
         var controller = "Server.OrdersController.Post(System.Int32)";
-        var soapClient = "Server.LegacyRatingClient.Rate(System.Int32)";
-        var unrelatedClient = "Server.OtherLegacyClient.Rate(System.Int32)";
+        var soapClientType = "Server.LegacyRatingClient";
+        var soapClient = "Server.LegacyRatingClient.Rate";
+        var unrelatedClientType = "Server.OtherLegacyClient";
+        var unrelatedClient = "Server.OtherLegacyClient.Rate";
 
         SqliteIndexWriter.Write(serverIndex, server, [
             RouteFact(server, "POST", "/api/orders/{id}/rate", "/api/orders/{}/rate", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
             CallFact(server, controller, soapClient, "Controllers/OrdersController.cs", 15),
-            AsmxSurfaceFact(server, soapClient, FactTypes.AsmxClientOperationDeclared, RuleIds.LegacyAsmxClient, "asmx-client", "Rate", "Services/RatingReference.cs", 24),
-            AsmxSurfaceFact(server, unrelatedClient, FactTypes.AsmxClientOperationDeclared, RuleIds.LegacyAsmxClient, "asmx-client", "Rate", "Services/OtherRatingReference.cs", 31)
+            AsmxSurfaceFact(server, soapClientType, soapClient, FactTypes.AsmxClientOperationDeclared, RuleIds.LegacyAsmxClient, "asmx-client", "Rate", "Services/RatingReference.cs", 24),
+            AsmxSurfaceFact(server, unrelatedClientType, unrelatedClient, FactTypes.AsmxClientOperationDeclared, RuleIds.LegacyAsmxClient, "asmx-client", "Rate", "Services/OtherRatingReference.cs", 31)
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
 
@@ -1735,12 +1737,13 @@ public sealed class CombinedRouteFlowTests
         var server = Manifest("server", "tracemap-milestone15");
         var controller = "Server.OrdersController.Post(System.Int32)";
         var service = "Server.OrderRatingService.Rate(System.Int32)";
-        var unrelatedClient = "Server.OtherLegacyClient.Rate(System.Int32)";
+        var unrelatedClientType = "Server.OtherLegacyClient";
+        var unrelatedClient = "Server.OtherLegacyClient.Rate";
 
         SqliteIndexWriter.Write(serverIndex, server, [
             RouteFact(server, "POST", "/api/orders/{id}/rate", "/api/orders/{}/rate", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
             CallFact(server, controller, service, "Controllers/OrdersController.cs", 15),
-            AsmxSurfaceFact(server, unrelatedClient, FactTypes.AsmxClientOperationDeclared, RuleIds.LegacyAsmxClient, "asmx-client", "Rate", "Services/OtherRatingReference.cs", 31)
+            AsmxSurfaceFact(server, unrelatedClientType, unrelatedClient, FactTypes.AsmxClientOperationDeclared, RuleIds.LegacyAsmxClient, "asmx-client", "Rate", "Services/OtherRatingReference.cs", 31)
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
 
@@ -2513,6 +2516,7 @@ public sealed class CombinedRouteFlowTests
     private static CodeFact AsmxSurfaceFact(
         ScanManifest manifest,
         string sourceSymbol,
+        string targetSymbol,
         string factType,
         string ruleId,
         string surfaceKind,
@@ -2527,7 +2531,7 @@ public sealed class CombinedRouteFlowTests
             EvidenceTiers.Tier3SyntaxOrTextual,
             new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
             sourceSymbol: sourceSymbol,
-            targetSymbol: operationName,
+            targetSymbol: targetSymbol,
             contractElement: operationName,
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
@@ -2536,7 +2540,7 @@ public sealed class CombinedRouteFlowTests
                 ["operationName"] = operationName,
                 ["sourceSymbolDisplayName"] = sourceSymbol,
                 ["sourceSymbolId"] = sourceSymbol,
-                ["sourceSymbolKind"] = "Method",
+                ["sourceSymbolKind"] = "Type",
                 ["sourceSymbolLanguage"] = "csharp",
                 ["surfaceKind"] = surfaceKind
             });
