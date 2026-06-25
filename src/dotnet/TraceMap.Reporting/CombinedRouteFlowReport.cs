@@ -3113,8 +3113,6 @@ public static class CombinedRouteFlowReporter
             "sql-query" => "query",
             "sql-persistence" => "data-surface",
             "legacy-data" => "legacy-data",
-            "package-config" => "dependency",
-            "http-route" or "http-client" or "wcf-operation" or "remoting-endpoint" or "remoting-registration" or "remoting-channel" or "remoting-object" or "remoting-api" => "dependency",
             _ => "dependency"
         };
     }

@@ -251,7 +251,12 @@ public static class CombinedDependencyPathReporter
         "remoting-api",
         "legacy-data",
         "dependency-surface",
-        "package-config"
+        "package-config",
+        "asmx-service",
+        "asmx-operation",
+        "asmx-client",
+        "asmx-config",
+        "asmx-metadata"
     };
 
     public static async Task<CombinedDependencyPathResult> WriteAsync(CombinedDependencyPathOptions options, CancellationToken cancellationToken = default)
@@ -1631,6 +1636,11 @@ public static class CombinedDependencyPathReporter
             safeKind switch
             {
                 "wcf-operation" => "wcf-operation",
+                "asmx-service" => "asmx-service",
+                "asmx-operation" => "asmx-operation",
+                "asmx-client" => "asmx-client",
+                "asmx-config" => "asmx-config",
+                "asmx-metadata" => "asmx-metadata",
                 "remoting-endpoint" => "remoting-endpoint",
                 "remoting-registration" => "remoting-registration",
                 "remoting-channel" => "remoting-channel",
@@ -2785,6 +2795,7 @@ public static class CombinedDependencyPathReporter
         return new[]
             {
                 fact.SourceSymbol,
+                IsAsmxOperationSurfaceFact(fact) ? fact.TargetSymbol : null,
                 CombinedDependencyReporter.FirstValue(
                     fact.Properties,
                     "methodSymbol",
@@ -2798,6 +2809,14 @@ public static class CombinedDependencyPathReporter
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static bool IsAsmxOperationSurfaceFact(CombinedFactRow fact)
+    {
+        return fact.FactType is FactTypes.AsmxOperationDeclared
+            or FactTypes.AsmxSoapOperationDeclared
+            or FactTypes.AsmxClientOperationDeclared
+            or FactTypes.AsmxServiceReferenceMapping;
     }
 
     private static GraphNode ToRemotingNode(CombinedFactRow fact)
