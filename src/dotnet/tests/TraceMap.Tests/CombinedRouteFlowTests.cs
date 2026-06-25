@@ -742,6 +742,7 @@ public sealed class CombinedRouteFlowTests
         Assert.Equal("combined.route-flow.gap.v1", fanOutGap.RuleId);
         Assert.Equal(EvidenceTiers.Tier4Unknown, fanOutGap.EvidenceTier);
         Assert.Equal("ReducedCoverage", fanOutGap.Coverage);
+        Assert.Equal("combined", fanOutGap.ExtractorName);
         Assert.False(string.IsNullOrWhiteSpace(fanOutGap.AffectedRowId));
         Assert.Contains(fanOutGap.Limitations, limitation => limitation.Contains("deterministically capped", StringComparison.OrdinalIgnoreCase));
         var candidates = result.Report.FlowRows.Where(row => row.RowKind == "interface-implementation-candidate").ToArray();

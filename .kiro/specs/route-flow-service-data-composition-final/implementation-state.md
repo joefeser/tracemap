@@ -1045,6 +1045,28 @@ binding proof, or attached dependency/data precision.
 - `dotnet test src/dotnet/TraceMap.sln`: passed, 646 tests.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+- ACK rerun on PR #332 returned `actionable_findings` with four unresolved
+  review threads and `patchAuthorized=true`.
+- ACK-authorized findings patched:
+  - added a null/whitespace guard around static-dispatch extractor-version
+    lookup;
+  - changed route-flow static-dispatch gap extractor metadata from evidence
+    scope to extractor name;
+  - normalized inherited path `DispatchCandidateFanOut` gaps as route-flow
+    fan-out gaps and removed duplicate endpoint-composition fan-out gaps when
+    the inherited path gap already exists for the same candidate node;
+  - preserved fan-out span/commit/extractor metadata only for the reviewed
+    dispatch fan-out path to avoid unrelated touched-file duplication.
+- Post-ACK patch validation:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+    passed, 41 tests.
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedDependencyPathTests`:
+    passed, 27 tests.
+  - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+    errors.
+  - `dotnet test src/dotnet/TraceMap.sln`: passed, 646 tests.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
 
 ### Oddities / Design Decisions For PR 5
 
