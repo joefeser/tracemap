@@ -1,7 +1,7 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: task-7-legacy-data-storage-attachment-precision-ready-for-review
-Readiness: task-7-legacy-data-storage-ready-for-pr-review-loop
+Status: task-7-async-callback-flow-boundary-attachment-precision-ready-for-review
+Readiness: task-7-async-callback-flow-boundary-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
 Target base: `dev`
@@ -39,6 +39,12 @@ Task 5 validation status:
 - `dotnet test src/dotnet/TraceMap.sln`: passed locally with 642 tests.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+- ACK-authorized Qodo patch normalized the rule-catalog `evidenceTier` field
+  back to inherited evidence-tier wording and moved route-flow classification
+  caps into limitations. Post-patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 61 tests, `./scripts/check-private-paths.sh` passed, and
+  `git diff --check` passed. NuGet emitted the same existing NU1903 warning.
 
 Merged evidence on `dev`:
 
@@ -1898,3 +1904,74 @@ AI/LLM analysis, vector search, or scanner extraction changes.
   follow-up open for a dedicated performance/scale slice.
 - Keep Task 8/9/10 unchecked except for the validation and safety behavior
   directly touched by this value-origin sub-slice.
+
+## Task 7 Async/Callback Flow-Boundary Attachment Slice
+
+Branch: `codex/task7-validation-guard-attachments`
+Audited base: `origin/dev` at
+`825834304185f6934f27eeeb1b07cae06b7d22bd`.
+Final PR base after unrelated site/spec cleanup rebase: `origin/dev` at
+`419cfeb1a46f6ffcfac954e8d2b2a7868d39f113`.
+Selected family: async/callback flow-boundary fact-symbol projection.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision for
+  `CallbackBoundary` and `AsyncBoundary` facts already emitted by the
+  deterministic C# semantic extractor.
+- Project selected async/callback boundary fact-symbol rows as
+  `flow-boundary` logic context only when joined to selected source-local
+  route-flow symbols.
+- Cap async/callback boundary logic rows at `NeedsReviewStaticRouteFlow`,
+  because they are static boundary context and do not prove scheduling,
+  callback invocation, ordering, completion, closure lifetime, or mutation
+  safety.
+- Preserve `FactSymbolProjectionUnavailable` when same-source async/callback
+  boundary fact-symbol evidence exists but cannot join the selected static
+  route-flow path.
+
+Scope decisions:
+
+- This slice does not add terminal dependency surface kinds for
+  async/callback, validation/guard, or serializer/contract facts.
+- This slice does not start UI property lineage, site work, reducer behavior,
+  scanner extraction, runtime execution claims, or broader Task 8/9/10
+  compatibility work.
+- Validation/guard, serializer/contract, and broader
+  service/repository/object/projection breadth remain follow-up Task 7 slices.
+
+Oddities:
+
+- The synthetic route-flow fixtures may still surface the pre-existing
+  `FactSymbolUnsupportedTypeSkipped` gap for route/root fact-symbol rows. This
+  slice leaves that behavior unchanged and asserts only the async/callback
+  projection contract.
+- The unjoined async/callback coverage uses the existing fact-symbol projection
+  gap path, so no new route-flow rule ID or JSON schema field is required.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_async_callback_boundaries_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_async_callback_boundary_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 61 tests and the existing NU1903 warning.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 671 tests and the
+  existing NU1903 warning.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-async-callback-modern-sample`:
+  passed with 27 facts at `Level1SemanticAnalysis`; required outputs
+  `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
+  `logs/analyzer.log` were present.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Follow-ups:
+
+- Continue Task 7 with validation/guard, serializer/contract, and broader
+  service/repository/object/projection breadth in separate small slices.
+- Keep the large argument-pair and fact-symbol projection SQL batching/cap
+  follow-up open for a dedicated performance/scale slice.
+- Keep Task 8/9/10 unchecked except for validation and safety behavior directly
+  touched by this async/callback flow-boundary sub-slice.
