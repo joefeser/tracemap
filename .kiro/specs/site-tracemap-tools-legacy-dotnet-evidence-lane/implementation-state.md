@@ -233,3 +233,15 @@ Results:
   material.
 - Future implementation must run site tests, site validation, build, and
   browser sanity checks if layout or interaction changes are made.
+
+## PR Review-Loop Findings
+
+Initial ACK on PR review returned `actionable_findings` for two unresolved
+review threads.
+
+Patched:
+
+- Tightened `demo` row proof wording so generated summaries and validation
+  output must also be checked in and public-safe.
+- Expanded branch-status validation wording from `dev` rows to both `dev` and
+  `dev-only` rows.
