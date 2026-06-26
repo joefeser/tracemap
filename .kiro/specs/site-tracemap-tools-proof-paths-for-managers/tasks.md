@@ -1,7 +1,7 @@
 # Site TraceMap Tools Proof Paths For Managers Tasks
 
-Status: implemented-pending-pr-loop
-Readiness: implemented-pending-pr-loop
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 This packet began as a spec-only packet and now tracks the site
@@ -123,8 +123,8 @@ the matching site work or validation step is complete.
 - [x] If implemented as a standalone route, add title, description, canonical
   metadata, Open Graph metadata, route metadata, discovery metadata, and
   sitemap metadata with concept-level wording.
-- [ ] If implemented as a section, add stable anchors and record host-page
-  metadata compatibility in `implementation-state.md`.
+- [x] N/A: standalone `/proof-paths/for-managers/` route was selected, so
+  host-page stable anchors and metadata compatibility were not applicable.
 - [x] Add safe inbound links from adjacent manager, packet, proof-path,
   question, limitation, static-vs-runtime, or review-checklist pages when they
   help readers choose the correct surface and preserve claim boundaries.
@@ -158,7 +158,7 @@ the matching site work or validation step is complete.
 - [x] Run `npm run build` from `site/`.
 - [x] Run desktop and mobile browser sanity checks for layout or interaction
   changes.
-- [ ] Update `implementation-state.md` with final placement decisions,
+- [x] Update `implementation-state.md` with final placement decisions,
   substitutions, validation results, review findings, claim-boundary
   decisions, oddities, unresolved gaps, PR-loop outcomes, residual risk, and
   follow-up items.
