@@ -1819,6 +1819,100 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_attaches_remoting_endpoint_surface_only_from_selected_static_path()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Post(System.Int32)";
+        var configure = "Server.Legacy.RemotingHost.Configure()";
+        var unrelatedConfigure = "Server.Legacy.OtherRemotingHost.Configure()";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "POST", "/api/orders/{id}/remoting", "/api/orders/{}/remoting", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, configure, "Controllers/OrdersController.cs", 15),
+            RemotingEndpointFact(server, configure, "App.config", 24, "Server.Legacy.RemoteService", "abcdef1234567890"),
+            RemotingEndpointFact(server, unrelatedConfigure, "Other.config", 31, "Server.Legacy.OtherRemoteService", "fedcba0987654321")
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "POST /api/orders/{id}/remoting",
+            ToSurface: "remoting-endpoint"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "POST /api/orders/{id}/remoting",
+            ToSurface: "remoting-endpoint"));
+
+        var surface = Assert.Single(result.Report.DependencySurfaces);
+        Assert.Equal("remoting-endpoint", surface.SurfaceKind);
+        Assert.Equal("objectUri-abcdef12", surface.DisplayName);
+        Assert.Equal("combined.route-flow.dependency-surface.v1", surface.Evidence.RuleId);
+        Assert.Contains(RuleIds.LegacyRemotingConfig, surface.Evidence.SupportingRuleIds);
+        Assert.Equal(surface.SurfaceId, Assert.Single(repeated.Report.DependencySurfaces).SurfaceId);
+        Assert.Equal(surface.StableKey, Assert.Single(repeated.Report.DependencySurfaces).StableKey);
+        Assert.StartsWith("surface-key-hash:", surface.StableKey, StringComparison.Ordinal);
+
+        var terminal = Assert.Single(result.Report.FlowRows, row => row.EdgeKind == "terminal-surface");
+        Assert.Equal("terminal-surface", terminal.RowKind);
+        Assert.Contains(configure, terminal.SourceSymbol, StringComparison.Ordinal);
+        Assert.Contains("objectUri-abcdef12", terminal.TargetSymbol!, StringComparison.Ordinal);
+        Assert.Equal(terminal.RowId, Assert.Single(repeated.Report.FlowRows, row => row.EdgeKind == "terminal-surface").RowId);
+
+        Assert.DoesNotContain(result.Report.FlowRows, row => row.SourceSymbol.Contains("OtherRemotingHost", StringComparison.Ordinal)
+            || row.TargetSymbol?.Contains("OtherRemoteService", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(result.Report.DependencySurfaces, item => item.Evidence.FilePath == "Other.config");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "DataSurfaceAttachmentMissing" or "NoRouteFlowEvidence");
+        Assert.Contains(result.Report.ContextGroups!, group => group.GroupKind == "dependency"
+            && group.MatchKind == "dependency-surface"
+            && group.SupportingRowIds.Contains(surface.SurfaceId));
+    }
+
+    [Fact]
+    public async Task Route_flow_does_not_infer_adjacent_remoting_endpoint_without_selected_join()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Post(System.Int32)";
+        var service = "Server.OrderRatingService.Rate(System.Int32)";
+        var unrelatedConfigure = "Server.Legacy.OtherRemotingHost.Configure()";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "POST", "/api/orders/{id}/remoting", "/api/orders/{}/remoting", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 15),
+            RemotingEndpointFact(server, unrelatedConfigure, "Other.config", 31, "Server.Legacy.OtherRemoteService", "fedcba0987654321")
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "POST /api/orders/{id}/remoting",
+            ToSurface: "remoting-endpoint"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "POST /api/orders/{id}/remoting",
+            ToSurface: "remoting-endpoint"));
+
+        Assert.Empty(result.Report.DependencySurfaces);
+        var gap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "DataSurfaceAttachmentMissing");
+        Assert.Equal("combined.route-flow.gap.v1", gap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal(gap.GapId, Assert.Single(repeated.Report.Gaps, item => item.GapKind == "DataSurfaceAttachmentMissing").GapId);
+        Assert.DoesNotContain(result.Report.FlowRows, row => row.EdgeKind == "terminal-surface"
+            && row.TargetSymbol?.Contains("objectUri-fedcba09", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+    }
+
+    [Fact]
     public async Task Route_flow_attaches_asmx_client_surface_only_from_selected_static_path()
     {
         using var temp = new TempDirectory();
@@ -2712,6 +2806,34 @@ public sealed class CombinedRouteFlowTests
                 ["mappingKind"] = "GeneratedClientToMetadataOperation",
                 ["normalizedOperationName"] = operationName,
                 ["supportingFactIds"] = "wcf-client,wcf-operation"
+            });
+    }
+
+    private static CodeFact RemotingEndpointFact(
+        ScanManifest manifest,
+        string sourceSymbol,
+        string file,
+        int line,
+        string typeName,
+        string objectUriHash)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.RemotingConfigServiceDeclared,
+            RuleIds.LegacyRemotingConfig,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", ScannerVersions.LegacyRemotingExtractor),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: typeName,
+            contractElement: "well-known-service",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverage"] = "static-xml-config",
+                ["limitation"] = "Static Remoting config service evidence only; runtime hosting, activation, reachability, deployment, and production usage are not proven.",
+                ["objectUriHash"] = objectUriHash,
+                ["registrationKind"] = "well-known-service",
+                ["sourceKind"] = "config",
+                ["typeName"] = typeName
             });
     }
 

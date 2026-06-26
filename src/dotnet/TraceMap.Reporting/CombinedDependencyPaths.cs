@@ -650,6 +650,11 @@ public static class CombinedDependencyPathReporter
                 continue;
             }
 
+            if (includeLegacyRoots && IsRemotingSurface(surface.SurfaceKind))
+            {
+                continue;
+            }
+
             var surfaceNode = ToSurfaceNode(surface);
             graph.AddNode(surfaceNode);
             var attached = false;
