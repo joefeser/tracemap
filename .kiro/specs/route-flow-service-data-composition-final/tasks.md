@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Final Tasks
 
-Status: task-7-serializer-contract-attachment-precision-ready-for-review
+Status: task-7-service-repository-object-projection-breadth-ready-for-review
 
 ## Spec Delivery Tasks
 
@@ -148,7 +148,7 @@ current `dev` code or merged PR records prove the behavior.
   - [x] Add tests proving no runtime DI target, service locator, factory,
         reflection, or dynamic dispatch proof is claimed.
 
-- [ ] 7. Complete service/data/query/dependency attachment precision.
+- [x] 7. Complete service/data/query/dependency attachment precision.
       Requirements: 4, 5, 6.
       Suggested boundary: PR 3.
       Status: in progress. Branch `codex/route-flow-task7-attachments`
@@ -227,8 +227,16 @@ current `dev` code or merged PR records prove the behavior.
       `SerializerContractMember` rows now project as review-tier
       `serializer-contract` logic context only when joined to selected
       source-local route-flow symbols, while adjacent unjoined serializer
-      contract evidence preserves `FactSymbolProjectionUnavailable`.
-  - [ ] Attach service, repository, object/projection, query-shape, SQL-shape,
+      contract evidence preserves `FactSymbolProjectionUnavailable`. Branch
+      `codex/task7-service-projection-breadth-20260626` audited `origin/dev`
+      at `36eedb1039eb98d75ed49c3d3c7161cc44e67424` and selected the final
+      service/repository/object/projection breadth sub-slice: existing
+      source-local service and repository context grouping remains selected by
+      route-flow path rows, selected `ObjectShapeInferred` rows now have
+      focused object-shape projection coverage and data-surface context
+      grouping, and adjacent unjoined object-shape evidence preserves
+      `FactSymbolProjectionUnavailable`.
+  - [x] Attach service, repository, object/projection, query-shape, SQL-shape,
         legacy-data, package/config, HTTP client, WCF, ASMX/SOAP, remoting,
         event/message, storage, validation/guard, serializer/contract,
         async/callback, and flow-boundary facts only through selected route-flow
@@ -279,13 +287,18 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_serializer_contract_members_only_from_selected_static_path`
           and
           `Route_flow_does_not_infer_adjacent_serializer_contract_without_selected_join`.
+    - [x] Service/repository/object/projection breadth sub-slice covered by
+          `Route_flow_writes_route_centered_markdown_and_json_without_mutating_combined_index`,
+          `Route_flow_attaches_object_shape_projection_only_from_selected_static_path`,
+          and
+          `Route_flow_does_not_infer_adjacent_object_shape_without_selected_join`.
   - [x] Render argument-flow and parameter-forward value-origin rows only when
         joined to selected static route-flow rows.
   - [x] Render fact-symbol context only for selected source-local symbols.
   - [x] Emit `ArgumentProjectionUnavailable`,
         `FactSymbolProjectionUnavailable`, `DataSurfaceAttachmentMissing`, or
         shipped equivalents for adjacent but unjoinable facts.
-  - [ ] Add tests for attached surfaces, unjoinable surfaces, attached versus
+  - [x] Add tests for attached surfaces, unjoinable surfaces, attached versus
         path-context labeling, and deterministic stable IDs.
     - [x] Event/message terminal-surface attachment sub-slice covered by
           `Route_flow_attaches_message_surfaces_only_from_selected_static_path`
@@ -360,6 +373,15 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_serializer_contract_members_only_from_selected_static_path`
           and
           `Route_flow_does_not_infer_adjacent_serializer_contract_without_selected_join`.
+    - [x] Service/repository context grouping plus selected object-shape
+          projection, adjacent-unjoinable fact-symbol gap behavior,
+          data-surface context grouping, safe field-name omission,
+          deterministic stable IDs, and Tier3 review-tier classification cap
+          covered by
+          `Route_flow_writes_route_centered_markdown_and_json_without_mutating_combined_index`,
+          `Route_flow_attaches_object_shape_projection_only_from_selected_static_path`,
+          and
+          `Route_flow_does_not_infer_adjacent_object_shape_without_selected_join`.
 
 - [ ] 8. Enforce coverage, classification, and gap downgrade behavior.
       Requirements: 5.

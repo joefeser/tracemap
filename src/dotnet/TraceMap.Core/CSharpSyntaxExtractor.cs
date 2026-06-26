@@ -873,23 +873,33 @@ public static class CSharpSyntaxExtractor
 
     private static CodeFact CreateObjectShapeFact(ScanManifest manifest, string filePath, SyntaxNode node, string objectKind, IReadOnlyList<string> fields)
     {
+        var sourceSymbol = GetContainingMemberName(node);
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["objectKind"] = objectKind,
+            ["fieldNames"] = string.Join(";", fields),
+            ["fieldCount"] = fields.Count.ToString(),
+            ["shapeHash"] = FactFactory.Hash(string.Join("|", fields), 32),
+            ["expressionHash"] = FactFactory.Hash(node.ToString(), 32)
+        };
+        if (!string.IsNullOrWhiteSpace(sourceSymbol))
+        {
+            properties["sourceSymbolId"] = sourceSymbol!;
+            properties["sourceSymbolDisplayName"] = sourceSymbol!;
+            properties["sourceSymbolKind"] = "Method";
+            properties["sourceSymbolLanguage"] = "csharp";
+        }
+
         return FactFactory.Create(
             manifest,
             FactTypes.ObjectShapeInferred,
             RuleIds.CSharpSyntaxObjectShape,
             EvidenceTiers.Tier3SyntaxOrTextual,
             ToEvidenceSpan(filePath, node),
-            sourceSymbol: GetContainingMemberName(node),
+            sourceSymbol: sourceSymbol,
             targetSymbol: objectKind,
             contractElement: objectKind,
-            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["objectKind"] = objectKind,
-                ["fieldNames"] = string.Join(";", fields),
-                ["fieldCount"] = fields.Count.ToString(),
-                ["shapeHash"] = FactFactory.Hash(string.Join("|", fields), 32),
-                ["expressionHash"] = FactFactory.Hash(node.ToString(), 32)
-            });
+            properties: properties);
     }
 
     private static string GetInvocationName(ExpressionSyntax expression)
