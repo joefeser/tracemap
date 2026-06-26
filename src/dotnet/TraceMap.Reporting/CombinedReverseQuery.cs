@@ -259,6 +259,10 @@ public static class CombinedReverseReporter
         }
 
         var selectedSurfaceNodes = SelectSurfaceNodes(graph.Nodes, sourceFilter, surfaceKind, surfaceName, messageDirection);
+        var ambiguousLegacyDataSelectorNodes = AmbiguousLegacyDataSelectorNodes(selectedSurfaceNodes, surfaceName);
+        var ambiguousLegacyDataSelectorNodeIds = ambiguousLegacyDataSelectorNodes
+            .Select(node => node.NodeId)
+            .ToHashSet(StringComparer.Ordinal);
         var selectedSurfaceTotal = selectedSurfaceNodes.Length;
         var truncated = false;
         if (selectedSurfaceNodes.Length > options.MaxSurfaces)
@@ -286,17 +290,16 @@ public static class CombinedReverseReporter
             selectedSurfaceNodes = selectedSurfaceNodes.Take(options.MaxSurfaces).ToArray();
         }
 
-        var ambiguousLegacyDataSelectorNodeIds = AmbiguousLegacyDataSelectorNodeIds(selectedSurfaceNodes, surfaceKind, surfaceName);
-        if (ambiguousLegacyDataSelectorNodeIds.Count > 0)
+        if (ambiguousLegacyDataSelectorNodes.Count > 0)
         {
-            var first = selectedSurfaceNodes.First(node => ambiguousLegacyDataSelectorNodeIds.Contains(node.NodeId));
+            var first = ambiguousLegacyDataSelectorNodes[0];
             gaps.Add(new CombinedReverseGap(
                 $"gap:legacy-data-selector:{CombinedReportHelpers.Hash(string.Join(";", ambiguousLegacyDataSelectorNodeIds.Order(StringComparer.Ordinal)), 24)}",
                 "AmbiguousLegacyDataModelSelector",
                 CombinedReverseClassifications.NeedsReviewSurfaceEvidence,
                 RuleIds.LegacyDataModelSurface,
                 EvidenceTiers.Tier4Unknown,
-                $"Legacy-data selector matched {ambiguousLegacyDataSelectorNodeIds.Count} model surfaces; narrow by source or stable evidence before treating the selector as a single model.",
+                $"Legacy-data selector matched {ambiguousLegacyDataSelectorNodes.Count} model surfaces; narrow by source or stable evidence before treating the selector as a single model.",
                 first.SourceIndexId,
                 first.SourceLabel,
                 null,
@@ -709,23 +712,21 @@ public static class CombinedReverseReporter
             || string.Equals(node.NormalizedPathKey, selector, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static IReadOnlySet<string> AmbiguousLegacyDataSelectorNodeIds(
+    private static IReadOnlyList<CombinedPathNode> AmbiguousLegacyDataSelectorNodes(
         IReadOnlyList<CombinedPathNode> selectedSurfaceNodes,
-        string? surfaceKind,
         string? surfaceName)
     {
-        if (string.IsNullOrWhiteSpace(surfaceName)
-            || !string.Equals(surfaceKind, "legacy-data", StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(surfaceName))
         {
-            return new HashSet<string>(StringComparer.Ordinal);
+            return [];
         }
 
         var matches = selectedSurfaceNodes
             .Where(node => string.Equals(node.SurfaceKind, "legacy-data", StringComparison.Ordinal))
             .ToArray();
         return matches.Length > 1
-            ? matches.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal)
-            : new HashSet<string>(StringComparer.Ordinal);
+            ? matches
+            : [];
     }
 
     private static CombinedReverseSurface ToSurface(

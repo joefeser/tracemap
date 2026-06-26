@@ -531,6 +531,29 @@ public sealed class CombinedReverseQueryTests
         Assert.Equal(CombinedReverseClassifications.NeedsReviewSurfaceEvidence, gap.Classification);
         Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
 
+        var inferredSurface = await CombinedReverseReporter.WriteAsync(
+            new CombinedReverseOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "reverse-inferred"),
+                SurfaceName: "entity:hash:customerselector",
+                To: "all"));
+        Assert.Equal(2, inferredSurface.Report.SelectedSurfaces.Count);
+        Assert.Contains(inferredSurface.Report.Gaps, gap => gap.GapKind == "AmbiguousLegacyDataModelSelector");
+
+        var capped = await CombinedReverseReporter.WriteAsync(
+            new CombinedReverseOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "reverse-capped"),
+                Surface: "legacy-data",
+                SurfaceName: "entity:hash:customerselector",
+                To: "all",
+                MaxSurfaces: 1));
+        var cappedSurface = Assert.Single(capped.Report.SelectedSurfaces);
+        Assert.Equal(CombinedReverseClassifications.NeedsReviewSurfaceEvidence, cappedSurface.Classification);
+        Assert.Contains(capped.Report.Gaps, gap =>
+            gap.GapKind == "AmbiguousLegacyDataModelSelector"
+            && gap.Message.Contains("2 model surfaces", StringComparison.Ordinal));
+
         var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "reverse-report.md"));
         var json = await File.ReadAllTextAsync(Path.Combine(outDir, "reverse-report.json"));
         Assert.Contains("AmbiguousLegacyDataModelSelector", markdown);

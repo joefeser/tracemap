@@ -40,6 +40,20 @@ Validation so far:
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "CombinedReverseQueryTests|LegacyDataModelRuleCatalogTests"`:
   passed, 16 tests, with the existing `SQLitePCLRaw.lib.e_sqlite3` NU1903
   advisory warning.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with the same existing
+  NU1903 advisory warning.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+
+PR review-loop fix notes:
+
+- Patched review findings by detecting ambiguous legacy-data model selectors
+  before `MaxSurfaces` truncation, by treating omitted `--surface` as still
+  eligible for legacy-data ambiguity when multiple legacy-data model surfaces
+  match the selector, and by simplifying the helper to return the matched nodes
+  directly.
+- Added regression coverage for both omitted `--surface` and capped
+  `MaxSurfaces = 1` selector ambiguity.
 
 Deferred:
 
