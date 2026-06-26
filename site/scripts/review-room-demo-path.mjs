@@ -338,17 +338,27 @@ function validateVisibleText(pageText, errors) {
 
 function validateMetadata(html, errors) {
   const checks = [
-    /<title>Review Room Demo Path \| TraceMap<\/title>/i,
-    /<link\b[^>]*rel=["']canonical["'][^>]*href=["']https:\/\/tracemap\.tools\/review-room\/demo-path\/["']/i,
-    /<meta\b[^>]*property=["']og:type["'][^>]*content=["']article["']/i,
-    /<meta\b[^>]*property=["']og:title["'][^>]*content=["']TraceMap Review Room Demo Path["']/i,
-    /<meta\b[^>]*property=["']og:url["'][^>]*content=["']https:\/\/tracemap\.tools\/review-room\/demo-path\/["']/i
+    /<title>\s*Review Room Demo Path \| TraceMap\s*<\/title>/i.test(html),
+    hasElementWithAttributes(html, "link", {
+      rel: "canonical",
+      href: "https://tracemap.tools/review-room/demo-path/"
+    }),
+    hasElementWithAttributes(html, "meta", {
+      property: "og:type",
+      content: "article"
+    }),
+    hasElementWithAttributes(html, "meta", {
+      property: "og:title",
+      content: "TraceMap Review Room Demo Path"
+    }),
+    hasElementWithAttributes(html, "meta", {
+      property: "og:url",
+      content: "https://tracemap.tools/review-room/demo-path/"
+    })
   ];
 
-  for (const pattern of checks) {
-    if (!pattern.test(html)) {
-      errors.push(withEvidence("Review room demo path is missing required standalone route metadata.", pageArtifact));
-    }
+  if (checks.some((passed) => !passed)) {
+    errors.push(withEvidence("Review room demo path is missing required standalone route metadata.", pageArtifact));
   }
 }
 
@@ -368,7 +378,7 @@ function validateGuidedPathTable(html, errors) {
     "Next owner or next route",
     "Stop condition"
   ]) {
-    const pattern = new RegExp(`<th\\b[^>]*\\bscope=["']col["'][^>]*>\\s*${escapeForPattern(header)}\\s*</th>`, "i");
+    const pattern = new RegExp(`<th\\b[^>]*\\bscope\\s*=\\s*["']col["'][^>]*>\\s*${escapeForPattern(header)}\\s*</th>`, "i");
     if (!pattern.test(table)) {
       errors.push(withEvidence(`Review room demo path table is missing column header: ${header}`, pageArtifact));
     }
@@ -486,7 +496,7 @@ function validateBoundaryRegions(html, errors) {
     ["stop-conditions", "stop-conditions"],
     ["non-claims", "non-claims"]
   ]) {
-    const pattern = new RegExp(`<section\\b(?=[^>]*\\bid=["']${escapeForPattern(id)}["'])(?=[^>]*\\bdata-review-demo-path-boundary=["']${escapeForPattern(boundary)}["'])[^>]*>`, "i");
+    const pattern = new RegExp(`<section\\b(?=[^>]*\\bid\\s*=\\s*["']${escapeForPattern(id)}["'])(?=[^>]*\\bdata-review-demo-path-boundary\\s*=\\s*["']${escapeForPattern(boundary)}["'])[^>]*>`, "i");
     if (!pattern.test(html)) {
       errors.push(withEvidence(`Review room demo path section ${id} must use data-review-demo-path-boundary="${boundary}".`, pageArtifact));
     }
@@ -608,7 +618,7 @@ function privateMaterialScanValues(value) {
 
 function publicSafetyScanValues(scopedHtml, scopedText) {
   const values = [scopedText];
-  for (const match of scopedHtml.matchAll(/\b(?:content|title|aria-label|alt)=["']([^"']*)["']/gi)) {
+  for (const match of scopedHtml.matchAll(/\b(?:content|title|aria-label|alt)\s*=\s*["']([^"']*)["']/gi)) {
     values.push(normalizeRenderedText(decodeHtmlEntities(match[1])));
   }
   for (const match of scopedHtml.matchAll(/<title\b[^>]*>([\s\S]*?)<\/title>/gi)) {
@@ -627,7 +637,7 @@ function stripAllowedBoundaryRegions(html) {
 
 function stripElementsWithAttribute(html, attribute, value) {
   let output = html;
-  const openPattern = new RegExp(`<([a-z][a-z0-9-]*)\\b(?=[^>]*\\b${attribute}=["']${escapeForPattern(value)}["'])[^>]*>`, "i");
+  const openPattern = new RegExp(`<([a-z][a-z0-9-]*)\\b(?=[^>]*\\b${attribute}\\s*=\\s*["']${escapeForPattern(value)}["'])[^>]*>`, "i");
   let match;
 
   while ((match = output.match(openPattern))) {
@@ -708,16 +718,25 @@ function parseTagToken(token) {
 }
 
 function extractTaggedElements(html, tagName, attributeName) {
-  const pattern = new RegExp(`<${tagName}\\b(?=[^>]*\\b${attributeName}=)([^>]*)>[\\s\\S]*?<\\/${tagName}>`, "gi");
-  return [...html.matchAll(pattern)].map((match) => ({
-    attributes: match[1],
-    full: match[0]
-  }));
+  const elements = [];
+  const openPattern = new RegExp(`<${tagName}\\b(?=[^>]*\\b${attributeName}\\s*=\\s*)[^>]*>`, "gi");
+  let match;
+
+  while ((match = openPattern.exec(html))) {
+    const start = match.index;
+    const end = findElementEnd(html, start, tagName);
+    const full = html.slice(start, end);
+    const attributes = full.match(new RegExp(`^<${tagName}\\b([^>]*)>`, "i"))?.[1] ?? "";
+    elements.push({ attributes, full });
+    openPattern.lastIndex = Math.max(end, start + match[0].length);
+  }
+
+  return elements;
 }
 
 function extractFieldValues(html) {
   const values = new Map();
-  const fieldPattern = /<(?:td|th)\b(?=[^>]*\bdata-field=["']([^"']+)["'])[^>]*>([\s\S]*?)<\/(?:td|th)>/gi;
+  const fieldPattern = /<(?:td|th)\b(?=[^>]*\bdata-field\s*=\s*["']([^"']+)["'])[^>]*>([\s\S]*?)<\/(?:td|th)>/gi;
 
   for (const match of html.matchAll(fieldPattern)) {
     values.set(decodeHtmlEntities(match[1]), normalizeRenderedText(match[2]));
@@ -727,7 +746,7 @@ function extractFieldValues(html) {
 }
 
 function extractSectionById(html, id) {
-  const openPattern = new RegExp(`<section\\b(?=[^>]*\\bid=["']${escapeForPattern(id)}["'])[^>]*>`, "i");
+  const openPattern = new RegExp(`<section\\b(?=[^>]*\\bid\\s*=\\s*["']${escapeForPattern(id)}["'])[^>]*>`, "i");
   const match = html.match(openPattern);
   if (!match) {
     return "";
@@ -738,11 +757,28 @@ function extractSectionById(html, id) {
 }
 
 function getAttribute(attributes, name) {
-  return decodeHtmlEntities(attributes.match(new RegExp(`\\b${escapeForPattern(name)}=["']([^"']+)["']`, "i"))?.[1] ?? "");
+  return decodeHtmlEntities(attributes.match(new RegExp(`\\b${escapeForPattern(name)}\\s*=\\s*["']([^"']+)["']`, "i"))?.[1] ?? "");
 }
 
 function hasHref(html, href) {
   return new RegExp(`<a\\b[^>]*\\bhref\\s*=\\s*["']${escapeForPattern(href)}["']`, "i").test(html);
+}
+
+function hasElementWithAttributes(html, tagName, expectedAttributes) {
+  const pattern = new RegExp(`<${tagName}\\b([^>]*)>`, "gi");
+
+  for (const match of html.matchAll(pattern)) {
+    const attributes = match[1] ?? "";
+    const found = Object.entries(expectedAttributes).every(
+      ([name, value]) => getAttribute(attributes, name) === value
+    );
+
+    if (found) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function normalizeRouteHref(value) {
