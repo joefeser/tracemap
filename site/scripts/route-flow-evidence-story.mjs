@@ -29,6 +29,11 @@ const pageArtifact = "proof-paths/route-flow/index.html";
 const sitemapArtifact = "sitemap.xml";
 const routesIndexArtifact = "routes-index.json";
 const stateArtifact = ".kiro/specs/site-tracemap-tools-route-flow-evidence-story/implementation-state.md";
+const allowedBoundarySections = new Map([
+  ["route-flow-story-static-boundary", "route-flow-static-boundary"],
+  ["route-flow-story-rejected-patterns", "route-flow-rejected-patterns"],
+  ["route-flow-story-stop-conditions", "route-flow-stop-conditions"]
+]);
 
 const requiredText = [
   "Public claim level: concept",
@@ -401,6 +406,7 @@ async function validateRouteFlowEvidenceStoryPage({ pagePath, routeContext, erro
   }
 
   validateIllustrativePatterns(html, errors);
+  validateBoundarySections(html, errors);
   validatePageMetadata(html, errors);
   validateInternalRouteLinks(html, routeContext, errors);
 
@@ -454,6 +460,36 @@ function validateIllustrativePatterns(html, errors) {
 
   if (!/data-tm-boundary\s*=\s*["']route-flow-rejected-patterns["']/i.test(rejectedSection[0])) {
     errors.push(withEvidence("Route-flow evidence story rejected patterns must be inside a sanctioned boundary section.", pageArtifact));
+  }
+}
+
+function validateBoundarySections(html, errors) {
+  const seen = new Map();
+
+  for (const section of findSectionTags(html)) {
+    const id = getAttribute(section.attributes, "id");
+    const boundary = getAttribute(section.attributes, "data-tm-boundary");
+    if (!boundary) {
+      continue;
+    }
+
+    if (!id || allowedBoundarySections.get(id) !== boundary) {
+      errors.push(
+        withEvidence(
+          `Route-flow evidence story has unsupported boundary section: id=${String(id)} data-tm-boundary=${boundary}`,
+          pageArtifact
+        )
+      );
+      continue;
+    }
+
+    seen.set(id, boundary);
+  }
+
+  for (const [id, boundary] of allowedBoundarySections) {
+    if (seen.get(id) !== boundary) {
+      errors.push(withEvidence(`Route-flow evidence story is missing sanctioned boundary section: #${id}`, pageArtifact));
+    }
   }
 }
 
@@ -511,8 +547,9 @@ async function validateInboundLinks({ dist, errors }) {
 }
 
 async function validateImplementationState({ root, errors }) {
-  const statePath = resolve(root, "..", stateArtifact);
+  const statePath = await firstExistingPath([resolve(root, "..", stateArtifact), resolve(root, stateArtifact)]);
   if (!(await fileExists(statePath))) {
+    errors.push(withEvidence("Route-flow evidence story implementation-state file is missing.", stateArtifact));
     return;
   }
 
@@ -530,6 +567,16 @@ async function validateImplementationState({ root, errors }) {
       errors.push(withEvidence(`Route-flow evidence story implementation-state is missing required record: ${phrase}`, stateArtifact));
     }
   }
+}
+
+async function firstExistingPath(paths) {
+  for (const path of paths) {
+    if (await fileExists(path)) {
+      return path;
+    }
+  }
+
+  return paths[0];
 }
 
 function validateInternalRouteLinks(html, { routes, sitemapRoutes }, errors) {
@@ -747,6 +794,23 @@ function findTagAttributes(html, tagName) {
     }
 
     tags.push(tag.attributes);
+    from = tag.end;
+  }
+
+  return tags;
+}
+
+function findSectionTags(html) {
+  const tags = [];
+  let from = 0;
+
+  while (from < html.length) {
+    const tag = findNextTag(html, "section", from);
+    if (!tag) {
+      break;
+    }
+
+    tags.push(tag);
     from = tag.end;
   }
 

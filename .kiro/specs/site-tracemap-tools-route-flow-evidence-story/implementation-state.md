@@ -296,6 +296,9 @@ Site implementation validation status:
   23 internal main links, and no horizontal overflow. Mobile viewport
   `390x844` loaded the same route, confirmed concept label, required anchors,
   card width within viewport, and no horizontal overflow.
+- ACK patch validation after PR review findings: `npm test` from `site/`
+  passed; `npm run validate` followed by `npm run build` from `site/` passed;
+  `git diff --check` passed; `./scripts/check-private-paths.sh` passed.
 
 ## Future Implementation Notes
 
@@ -317,6 +320,19 @@ Site implementation validation status:
 - The spec-local implementation-state note was updated after the first site
   source patch rather than before site code changed, so the corresponding
   task remains unchecked.
+
+## Review Loop Notes
+
+- Initial ACK on PR #359 returned `actionable_findings` with three unresolved
+  review threads. Qodo flagged the public `impacted` token in rejected-pattern
+  copy and a boundary-section bypass in the focused validator. Codex flagged
+  that root-aware validation did not fail when this spec-local
+  `implementation-state.md` file was missing.
+- Patch response removed the public `impacted` token by changing the visible
+  rejected pattern to unqualified impact wording, constrained
+  `data-tm-boundary` stripping to exact route-flow boundary sections, added a
+  focused unsupported-boundary test, and made missing implementation-state
+  fail when validation is given a repo/site root.
 
 ## Follow-Ups
 
