@@ -1829,11 +1829,14 @@ public static class TraceMapCommand
               --from-webforms-event <id>  Start from a WebForms event/root fact or selector.
               --from-source <label>      Constrain start evidence to a source label.
               --to-surface <kind>        sql-query, sql-persistence, http-route, http-client,
-                                          package-config, wcf-operation, legacy-data,
-                                          dependency-surface, message-queue, message-topic,
-                                          message-subscription, message-exchange,
-                                          message-stream, message-event, message-channel,
-                                          message-unknown.
+                                          package-config, wcf-operation, asmx-service,
+                                          asmx-operation, asmx-client, asmx-config,
+                                          asmx-metadata, legacy-data, dependency-surface,
+                                          remoting-endpoint, remoting-registration,
+                                          remoting-channel, remoting-object, remoting-api,
+                                          message-queue, message-topic, message-subscription,
+                                          message-exchange, message-stream, message-event,
+                                          message-channel, message-unknown.
               --surface-name <text>      Exact name, or leading/trailing * wildcard.
               --message-direction <dir>  For message surfaces: publish, consume, bind, declare, or all.
               --source-pair <a>:<b>      Constrain endpoint crossing; escape literal colons as \:.
@@ -1873,8 +1876,15 @@ public static class TraceMapCommand
               --from-symbol <symbol>     Reuse paths symbol selector grammar.
               --from-source <label>      Constrain entry evidence to a source label.
               --to-surface <kind>        sql-query, sql-persistence, http-route, http-client,
-                                          package-config, wcf-operation, remoting endpoint/object/API,
-                                          legacy-data, or dependency-surface.
+                                          package-config, wcf-operation, asmx-service,
+                                          asmx-operation, asmx-client, asmx-config,
+                                          asmx-metadata, remoting-endpoint,
+                                          remoting-registration, remoting-channel,
+                                          remoting-object, remoting-api, legacy-data,
+                                          dependency-surface, message-queue, message-topic,
+                                          message-subscription, message-exchange,
+                                          message-stream, message-event, message-channel,
+                                          or message-unknown.
               --surface-name <text>      Exact name, or leading/trailing * wildcard.
               --classification <value>   StrongStaticRouteFlow, ProbableStaticRouteFlow,
                                           NeedsReviewStaticRouteFlow, NoRouteFlowEvidence,

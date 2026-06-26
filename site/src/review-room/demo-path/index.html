@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level TraceMap review-room demo path for moving one public-safe static question through proof paths, packet fields, limitations, owner routing, and an evidence stop."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Review Room Demo Path | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/review-room/demo-path/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Review Room Demo Path">
+    <meta
+      property="og:description"
+      content="A concept-level guided path for reading public-safe static evidence without turning a review conversation into a live workflow or approval surface."
+    >
+    <meta property="og:url" content="https://tracemap.tools/review-room/demo-path/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Review room demo path</p>
+        <h1>Walk one static question until the evidence says stop.</h1>
+        <p class="hero-subhead">
+          This concept-level path shows how a visitor can move through the
+          existing review room, agenda, proof-path, packet, checklist,
+          limitation, validation, and owner follow-up surfaces without
+          inferring a live product workflow.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          The path is an authored reading flow for deterministic static
+          evidence. It is not a queue, packet generator, proof engine, or
+          self-running review surface.
+        </p>
+        <nav class="hero-actions" aria-label="Review room demo path links">
+          <a class="button primary" href="#guided-path">Start guided path</a>
+          <a class="button secondary" href="/review-room/">Review room</a>
+          <a class="button secondary" href="/review-room/agenda/">Meeting agenda</a>
+          <a class="button secondary" href="/proof-paths/">Proof paths</a>
+          <a class="button secondary" href="/packets/">Evidence packet</a>
+          <a class="button secondary" href="/review-claim-checklist/">Claim checklist</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="static-question">
+        <div>
+          <p class="section-kicker">Static question</p>
+          <h2>Use the path for one authored public-safe question.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Question shape</strong><span>Can this public claim be repeated from visible static evidence, or should it be downgraded, kept internal, routed to an owner, or stopped?</span></div>
+          <div><strong>Evidence shape</strong><span>Each conclusion needs a proof path, rule ID or rule family, evidence tier, coverage label, limitation, non-claim, public claim level, public-safe source context, next owner, and validation evidence.</span></div>
+          <div><strong>Boundary shape</strong><span>Questions about live behavior, release decisions, operations, incidents, endpoint measurements, or private material leave this public path and become owner follow-up. The path keeps the visitor inside public-safe reading steps until a missing field or unsupported claim requires a handoff.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="guided-path" aria-labelledby="guided-path-heading">
+        <div class="section-header">
+          <p class="section-kicker">Guided path</p>
+          <h2 id="guided-path-heading">Nine steps stay together from question to stop.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table guided-path-table" data-review-demo-path-table>
+            <caption>
+              Each step carries the same fields so a visitor can see the
+              action, required evidence route or field, allowed outcome,
+              limitation, next owner or route, and stop condition before
+              repeating any public wording.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Step label</th>
+                <th scope="col">Visitor action</th>
+                <th scope="col">Required evidence field or route</th>
+                <th scope="col">Allowed outcome</th>
+                <th scope="col">Limitation</th>
+                <th scope="col">Next owner or next route</th>
+                <th scope="col">Stop condition</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-review-demo-step="choose a static question">
+                <th scope="row" data-field="step label">choose a static question</th>
+                <td data-field="visitor action">Choose one public-safe static question about whether a claim has visible evidence.</td>
+                <td data-field="required evidence field or route">Public claim level, public-safe source context, and a draft claim label.</td>
+                <td data-field="allowed outcome">continue</td>
+                <td data-field="limitation">The question cannot ask whether a live system is acceptable or whether a release can proceed.</td>
+                <td data-field="next owner or next route">documentation owner prepares the wording; next route is the review room.</td>
+                <td data-field="stop condition">Stop if the question needs private-only support, raw material, or an operational answer.</td>
+              </tr>
+              <tr data-review-demo-step="open the review room">
+                <th scope="row" data-field="step label">open the review room</th>
+                <td data-field="visitor action">Open the <a href="/review-room/">review room</a> to keep known, partial, and missing static evidence separate.</td>
+                <td data-field="required evidence field or route"><a href="/review-room/">Review room</a>, proof path, coverage label, limitation, and next owner.</td>
+                <td data-field="allowed outcome">continue</td>
+                <td data-field="limitation">The room frames a concept-level conversation and does not create a shipped workflow.</td>
+                <td data-field="next owner or next route">evidence owner carries the question to the meeting agenda.</td>
+                <td data-field="stop condition">Stop if no public proof path or coverage label can be named for the question.</td>
+              </tr>
+              <tr data-review-demo-step="inspect the agenda">
+                <th scope="row" data-field="step label">inspect the agenda</th>
+                <td data-field="visitor action">Use the <a href="/review-room/agenda/">meeting agenda</a> to preserve question, proof, tier, coverage, limitation, gap, owner, and handoff fields.</td>
+                <td data-field="required evidence field or route"><a href="/review-room/agenda/">Meeting agenda</a>, rule ID or rule family, evidence tier, coverage label, limitation, and validation evidence.</td>
+                <td data-field="allowed outcome">continue</td>
+                <td data-field="limitation">Agenda rows organize human review; they cannot strengthen missing or private evidence.</td>
+                <td data-field="next owner or next route">manager/reviewer owner sends the question to proof paths.</td>
+                <td data-field="stop condition">Stop if the agenda cannot keep rule, tier, limitation, and owner fields attached.</td>
+              </tr>
+              <tr data-review-demo-step="inspect proof paths">
+                <th scope="row" data-field="step label">inspect proof paths</th>
+                <td data-field="visitor action">Inspect <a href="/proof-paths/">proof paths</a> and the <a href="/proof-paths/tour/">guided proof-path tour</a> for the cited claim.</td>
+                <td data-field="required evidence field or route"><a href="/proof-paths/">Proof paths</a>, <a href="/proof-paths/tour/">tour</a>, rule ID or rule family, evidence tier, and proof-path status.</td>
+                <td data-field="allowed outcome">downgrade</td>
+                <td data-field="limitation">Proof-path status must stay visible; syntax-only, unknown, or reduced coverage cannot be upgraded.</td>
+                <td data-field="next owner or next route">source owner or validation owner resolves missing proof before packet review.</td>
+                <td data-field="stop condition">Stop if proof path, rule family, evidence tier, or validation evidence is absent.</td>
+              </tr>
+              <tr data-review-demo-step="inspect an evidence packet">
+                <th scope="row" data-field="step label">inspect an evidence packet</th>
+                <td data-field="visitor action">Inspect the public-safe <a href="/packets/">evidence packet</a>, <a href="/packets/assembly/">packet assembly checklist</a>, and <a href="/packets/examples/">packet examples</a>.</td>
+                <td data-field="required evidence field or route"><a href="/packets/">Packet guide</a>, <a href="/packets/assembly/">assembly checklist</a>, or <a href="/packets/examples/">examples</a> with proof path, tier, coverage, limitation, owner, and validation evidence.</td>
+                <td data-field="allowed outcome">internal only</td>
+                <td data-field="limitation">Packet language describes human-readable public-safe packet surfaces, not raw artifacts or generated packet-builder behavior.</td>
+                <td data-field="next owner or next route">demo owner and evidence owner keep public-safe packet fields visible.</td>
+                <td data-field="stop condition">Stop if no public-safe packet route or substitute exists for the claim.</td>
+              </tr>
+              <tr data-review-demo-step="run the claim checklist">
+                <th scope="row" data-field="step label">run the claim checklist</th>
+                <td data-field="visitor action">Run the <a href="/review-claim-checklist/">claim checklist</a> before reusing the wording.</td>
+                <td data-field="required evidence field or route"><a href="/review-claim-checklist/">Claim checklist</a>, non-claim, public claim level, coverage label, limitation, and next owner.</td>
+                <td data-field="allowed outcome">downgrade</td>
+                <td data-field="limitation">The checklist can downgrade or route unsupported wording, but it cannot upgrade unsupported evidence.</td>
+                <td data-field="next owner or next route">documentation owner updates wording; validation owner supplies missing evidence.</td>
+                <td data-field="stop condition">Stop if the checklist finds missing limitation, missing coverage label, or unsupported wording.</td>
+              </tr>
+              <tr data-review-demo-step="check limitations and non-claims">
+                <th scope="row" data-field="step label">check limitations and non-claims</th>
+                <td data-field="visitor action">Check <a href="/limitations/">limitations</a> and <a href="/validation/">validation</a> before carrying the claim forward.</td>
+                <td data-field="required evidence field or route"><a href="/limitations/">Limitations</a>, <a href="/validation/">validation</a>, non-claim, validation evidence, and public-safe source context.</td>
+                <td data-field="allowed outcome">owner follow-up</td>
+                <td data-field="limitation">Unsupported runtime, production, release, safety, AI/LLM, broad-coverage, and private/raw claims must be downgraded, removed, or routed.</td>
+                <td data-field="next owner or next route">runtime owner, release reviewer, validation owner, or service owner takes the next question outside this public path.</td>
+                <td data-field="stop condition">Stop if wording depends on unsupported live, release, operational, private, or AI/LLM claims.</td>
+              </tr>
+              <tr data-review-demo-step="route unresolved questions to owners">
+                <th scope="row" data-field="step label">route unresolved questions to owners</th>
+                <td data-field="visitor action">Route unresolved questions through <a href="/owners/follow-up/">owner follow-up</a> using role labels only.</td>
+                <td data-field="required evidence field or route"><a href="/owners/follow-up/">Owner follow-up</a>, next owner, limitation, gap, and stop condition.</td>
+                <td data-field="allowed outcome">owner follow-up</td>
+                <td data-field="limitation">Routing transfers responsibility for the next review step; it does not prove, approve, diagnose, validate, or clear a claim.</td>
+                <td data-field="next owner or next route">evidence owner, site owner, demo owner, source owner, test owner, runtime owner, service owner, database owner, release reviewer, validation owner, documentation owner, or manager/reviewer owner.</td>
+                <td data-field="stop condition">Stop if there is no role-based next owner for an unresolved question.</td>
+              </tr>
+              <tr data-review-demo-step="stop when evidence is insufficient">
+                <th scope="row" data-field="step label">stop when evidence is insufficient</th>
+                <td data-field="visitor action">End the public path and record the missing evidence instead of finishing the story.</td>
+                <td data-field="required evidence field or route">Stop condition, limitation, non-claim, public claim level, and owner route.</td>
+                <td data-field="allowed outcome">stop</td>
+                <td data-field="limitation">Insufficient evidence prevents a public conclusion, even when the path would be easier to finish.</td>
+                <td data-field="next owner or next route">manager/reviewer owner chooses whether to wait, keep the question internal, or ask an evidence owner for a public-safe summary.</td>
+                <td data-field="stop condition">Final stop: missing proof path, rule family, tier, coverage label, limitation, validation evidence, public-safe packet route, or next owner prevents a public conclusion.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section" id="proof-packet-fields">
+        <div>
+          <p class="section-kicker">Proof and packet fields</p>
+          <h2>Every conclusion carries its evidence fields or stops.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>proof path</code><span>Public route or checked public demo path that a visitor can inspect.</span></div>
+          <div><code>rule ID or rule family</code><span>Deterministic rule context behind the static evidence.</span></div>
+          <div><code>evidence tier</code><span>Use only <code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code>.</span></div>
+          <div><code>coverage label</code><span>Carry the label from the cited public-safe surface without strengthening it.</span></div>
+          <div><code>limitation</code><span>Visible boundary for what the evidence cannot support.</span></div>
+          <div><code>non-claim</code><span>Specific wording the path refuses to repeat from static evidence.</span></div>
+          <div><code>public claim level</code><span>Concept remains concept unless a future public-safe proof packet justifies a different level.</span></div>
+          <div><code>public-safe source context</code><span>Commit SHA, extractor version, public route, report-family name, sanitized file path, and line span only when already public-safe.</span></div>
+          <div><code>next owner</code><span>Role label that owns the next question, not a private person or team name.</span></div>
+          <div><code>validation evidence</code><span>Checked public validation category or visible limitation when evidence is unavailable.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="stop-conditions" data-review-demo-path-boundary="stop-conditions">
+        <div>
+          <p class="section-kicker">Stop conditions</p>
+          <h2>Stopping is a valid review outcome.</h2>
+        </div>
+        <ul>
+          <li>Stop when proof path, rule ID or rule family, evidence tier, coverage label, limitation, or validation evidence is missing.</li>
+          <li>Stop when support is private-only without a public-safe summary.</li>
+          <li>Stop when the public path would expose raw artifact material, raw facts streams, SQLite databases, analyzer logs, source snippets, SQL, configuration values, secrets, local paths, raw remotes, generated directories, private names, hidden validation detail, or credential-like values.</li>
+          <li>Stop before unsupported runtime behavior, production traffic, endpoint performance, outage cause, live diagnosis, production proof, release approval, release safety, operational safety, safe-to-ship, absence-of-impact, complete coverage, AI impact analysis, LLM analysis, prompt classification, embeddings, vector databases, intelligent impact, or smart impact wording.</li>
+          <li>Stop when no next owner is assigned or no public-safe packet route or substitute exists.</li>
+        </ul>
+      </section>
+
+      <section class="section boundary-section" id="non-claims" data-review-demo-path-boundary="non-claims">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>The path is a public reading guide, not a decision system.</h2>
+        </div>
+        <ul>
+          <li>It does not prove runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, production proof, live workflow completeness, or complete product coverage.</li>
+          <li>It does not provide AI impact analysis, LLM analysis, prompt-based proof, embeddings, vector database reasoning, autonomous review, autonomous approval, or automated management decisions.</li>
+          <li>It does not replace source review, ownership decisions, tests, telemetry, logs, traces, incident response, release controls, manager judgment, service ownership, database ownership, site author review, or human validation.</li>
+          <li>It does not publish raw source, SQL, configuration values, secrets, local absolute paths, raw repository remotes, generated scan directories, private sample names, hidden validation detail, private owner names, raw command output, or ignored output paths.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" id="adjacent-routes">
+        <div>
+          <p class="section-kicker">Adjacent routes</p>
+          <h2>Follow existing public-safe surfaces only.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong><a href="/review-room/">review room</a></strong><span>Concept-level static evidence room and boundary framing.</span></div>
+          <div><strong><a href="/review-room/agenda/">meeting agenda</a></strong><span>Meeting script for question, proof path, tier, coverage, limitation, gap, owner, and handoff fields.</span></div>
+          <div><strong><a href="/proof-paths/">proof paths</a> and <a href="/proof-paths/tour/">guided proof-path tour</a></strong><span>Proof inspection routes that keep status, rule context, tiers, and limitations visible.</span></div>
+          <div><strong><a href="/packets/">evidence packet</a>, <a href="/packets/assembly/">packet assembly</a>, and <a href="/packets/examples/">packet examples</a></strong><span>Public-safe packet surfaces for human-readable fields.</span></div>
+          <div><strong><a href="/review-claim-checklist/">claim checklist</a></strong><span>Repeat, downgrade, route, internal-only, or stop decision support for wording.</span></div>
+          <div><strong><a href="/limitations/">limitations</a> and <a href="/validation/">validation</a></strong><span>Boundary and validation context for unsupported claims and missing evidence.</span></div>
+          <div><strong><a href="/owners/follow-up/">owner follow-up</a></strong><span>Role-based routing for unresolved questions.</span></div>
+          <div><strong><a href="/demo/">demo orientation</a>, <a href="/demo/start-here/">demo start here</a>, <a href="/demo/evidence-trail/">demo evidence trail</a>, <a href="/demo/proof-assets/">demo proof assets</a>, <a href="/demo/result/">demo result</a>, <a href="/demo/runbook/">demo runbook</a>, and <a href="/demo/troubleshooting/">demo troubleshooting</a></strong><span>Demo-safe context without claims about live product scope.</span></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Continue with the
+        <a href="/review-room/">review room</a>,
+        <a href="/review-room/agenda/">meeting agenda</a>,
+        <a href="/proof-paths/">proof paths</a>,
+        <a href="/packets/">evidence packet guide</a>,
+        or
+        <a href="/owners/follow-up/">owner follow-up</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

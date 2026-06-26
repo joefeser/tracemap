@@ -1,7 +1,7 @@
 # Site TraceMap Tools Evidence Gap Register Implementation State
 
-Status: implemented-pending-pr-loop
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Branch

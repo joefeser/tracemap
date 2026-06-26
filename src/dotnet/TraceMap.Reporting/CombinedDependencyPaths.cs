@@ -219,35 +219,7 @@ public static class CombinedDependencyPathReporter
     private const string QueryGapRuleId = "combined.paths.query-gap.v1";
     private const string TruncationGapRuleId = "combined.paths.truncation-gap.v1";
     private const string SymbolReconciliationRuleId = "combined.paths.symbol-reconciliation.v1";
-    private const string DispatchCandidateRuleId = "combined.dispatch-candidate.v1";
-    private const string DispatchGapRuleId = "combined.dispatch-gap.v1";
     private const int SelectorCandidateLimit = 250;
-    private const int DispatchCandidateLimit = 10;
-
-    private static readonly HashSet<string> TerminalSurfaceKinds = new(StringComparer.Ordinal)
-    {
-        "sql-query",
-        "sql-persistence",
-        "http-route",
-        "http-client",
-        "package-config",
-        "wcf-operation",
-        "remoting-endpoint",
-        "remoting-registration",
-        "remoting-channel",
-        "remoting-object",
-        "remoting-api",
-        "legacy-data",
-        "dependency-surface",
-        "message-queue",
-        "message-topic",
-        "message-subscription",
-        "message-exchange",
-        "message-stream",
-        "message-event",
-        "message-channel",
-        "message-unknown"
-    };
 
     private static readonly HashSet<string> EdgeKindTerms = new(StringComparer.Ordinal)
     {
@@ -279,7 +251,12 @@ public static class CombinedDependencyPathReporter
         "remoting-api",
         "legacy-data",
         "dependency-surface",
-        "package-config"
+        "package-config",
+        "asmx-service",
+        "asmx-operation",
+        "asmx-client",
+        "asmx-config",
+        "asmx-metadata"
     };
 
     public static async Task<CombinedDependencyPathResult> WriteAsync(CombinedDependencyPathOptions options, CancellationToken cancellationToken = default)
@@ -388,9 +365,9 @@ public static class CombinedDependencyPathReporter
                 throw new ArgumentException($"paths --to-surface '{surfaceKind}' is an edge kind, not a terminal surface.");
             }
 
-            if (!TerminalSurfaceKinds.Contains(surfaceKind))
+            if (!CombinedTerminalSurfaceKinds.AllSet.Contains(surfaceKind))
             {
-                throw new ArgumentException("paths --to-surface must be one of sql-query, sql-persistence, http-route, http-client, package-config, wcf-operation, remoting-endpoint, remoting-registration, remoting-channel, remoting-object, remoting-api, legacy-data, dependency-surface, message-queue, message-topic, message-subscription, message-exchange, message-stream, message-event, message-channel, or message-unknown.");
+                throw new ArgumentException($"paths --to-surface must be one of {CombinedTerminalSurfaceKinds.ValidationList}.");
             }
         }
 
@@ -657,8 +634,19 @@ public static class CombinedDependencyPathReporter
                 [edge.EdgeId],
                 SafePath(edge.FilePath),
                 edge.StartLine,
-                edge.EndLine));
+                edge.EndLine,
+                edge.EdgeKind));
         }
+
+        var remotingFacts = read.Facts
+            .Where(IsRemotingFact)
+            .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+        var callFacts = read.Facts
+            .Where(fact => fact.FactType == FactTypes.CallEdge)
+            .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+        var configureCallersByConfig = RemotingConfigureCallersByConfig(remotingFacts, callFacts);
 
         foreach (var surface in surfaces)
         {
@@ -667,10 +655,20 @@ public static class CombinedDependencyPathReporter
                 continue;
             }
 
+            if (includeLegacyRoots && fact.FactType == FactTypes.WcfServiceReferenceMapping)
+            {
+                continue;
+            }
+
+            if (includeLegacyRoots && IsRemotingSurface(surface.SurfaceKind))
+            {
+                continue;
+            }
+
             var surfaceNode = ToSurfaceNode(surface);
             graph.AddNode(surfaceNode);
             var attached = false;
-            foreach (var symbol in SurfaceAttachmentSymbols(fact))
+            foreach (var symbol in SurfaceAttachmentSymbols(fact, callFacts, configureCallersByConfig))
             {
                 if (IsLegacyDataFact(fact)
                     && !string.Equals(symbol, fact.SourceSymbol?.Trim(), StringComparison.Ordinal)
@@ -1658,6 +1656,11 @@ public static class CombinedDependencyPathReporter
             safeKind switch
             {
                 "wcf-operation" => "wcf-operation",
+                "asmx-service" => "asmx-service",
+                "asmx-operation" => "asmx-operation",
+                "asmx-client" => "asmx-client",
+                "asmx-config" => "asmx-config",
+                "asmx-metadata" => "asmx-metadata",
                 "remoting-endpoint" => "remoting-endpoint",
                 "remoting-registration" => "remoting-registration",
                 "remoting-channel" => "remoting-channel",
@@ -1988,78 +1991,89 @@ public static class CombinedDependencyPathReporter
 
     private static void AddDispatchCandidateEdges(EvidenceGraph graph)
     {
-        var relationshipGroups = graph.Edges
+        var relationshipEdges = graph.Edges
             .Where(edge => edge.EdgeKind is "implements" or "overrides")
-            .Where(edge => graph.Nodes.TryGetValue(edge.FromNodeId, out var implementation)
-                && graph.Nodes.TryGetValue(edge.ToNodeId, out var abstraction)
-                && IsMethodNode(implementation)
-                && IsMethodNode(abstraction))
-            .GroupBy(edge => edge.ToNodeId, StringComparer.Ordinal)
-            .OrderBy(group => graph.Nodes.TryGetValue(group.Key, out var node) ? node.SourceLabel : string.Empty, StringComparer.Ordinal)
-            .ThenBy(group => graph.Nodes.TryGetValue(group.Key, out var node) ? node.DisplayName : string.Empty, StringComparer.Ordinal)
-            .ThenBy(group => group.Key, StringComparer.Ordinal)
             .ToArray();
+        var relationshipNodeIds = relationshipEdges
+            .Select(edge => edge.FromNodeId)
+            .Concat(relationshipEdges.Select(edge => edge.ToNodeId))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var relationshipNodes = relationshipNodeIds
+            .Where(graph.Nodes.ContainsKey)
+            .ToDictionary(
+                id => id,
+                id =>
+                {
+                    var node = graph.Nodes[id];
+                    return new StaticDispatchCandidateNode(
+                        node.NodeId,
+                        node.NodeKind,
+                        node.DisplayName,
+                        node.SourceIndexId,
+                        node.SourceLabel,
+                        node.CommitSha,
+                        node.FilePath,
+                        node.StartLine,
+                        node.EndLine);
+                },
+                StringComparer.Ordinal);
+        var candidates = StaticDispatchCandidateBuilder.Build(
+            relationshipNodes,
+            relationshipEdges.Select(edge => new StaticDispatchRelationshipEdge(
+                    edge.EdgeId,
+                    edge.EdgeKind,
+                    edge.OriginalRelationshipKind,
+                    edge.FromNodeId,
+                    edge.ToNodeId,
+                    edge.EvidenceTier,
+                    edge.SupportingFactIds,
+                    edge.SupportingCombinedEdgeIds,
+                    edge.FilePath,
+                    edge.StartLine,
+                    edge.EndLine)),
+            graph.ScannerVersionFor);
 
-        foreach (var group in relationshipGroups)
+        foreach (var candidate in candidates.Edges)
         {
-            var candidates = group
-                .OrderBy(edge => graph.Nodes[edge.FromNodeId].SourceLabel, StringComparer.Ordinal)
-                .ThenBy(edge => graph.Nodes[edge.FromNodeId].DisplayName, StringComparer.Ordinal)
-                .ThenBy(edge => edge.FilePath, StringComparer.Ordinal)
-                .ThenBy(edge => edge.StartLine ?? 0)
-                .ThenBy(edge => edge.EdgeId, StringComparer.Ordinal)
-                .ToArray();
-
-            foreach (var relationship in candidates.Take(DispatchCandidateLimit))
-            {
-                var edgeKind = relationship.EdgeKind == "overrides" ? "override-candidate" : "interface-candidate";
-                graph.AddEdge(new GraphEdge(
-                    $"dispatch-candidate:{Hash($"{relationship.EdgeId}:{relationship.ToNodeId}:{relationship.FromNodeId}", 16)}",
-                    edgeKind,
-                    relationship.ToNodeId,
-                    relationship.FromNodeId,
-                    CombinedDependencyPathClassifications.NeedsReviewPath,
-                    DispatchCandidateRuleId,
-                    relationship.EvidenceTier,
-                    relationship.SupportingFactIds,
-                    relationship.SupportingCombinedEdgeIds
-                        .Append(relationship.EdgeId)
-                        .Distinct(StringComparer.Ordinal)
-                        .OrderBy(value => value, StringComparer.Ordinal)
-                        .ToArray(),
-                    relationship.FilePath,
-                    relationship.StartLine,
-                    relationship.EndLine));
-            }
-
-            if (candidates.Length > DispatchCandidateLimit && graph.Nodes.TryGetValue(group.Key, out var abstractionNode))
-            {
-                graph.Gaps.Add(new CombinedPathGap(
-                    $"gap:dispatch:fanout:{Hash($"{group.Key}:{candidates.Length}", 16)}",
-                    "DispatchCandidateFanOut",
-                    CombinedDependencyPathClassifications.NeedsReviewPath,
-                    $"Static dispatch candidate derivation found {candidates.Length} candidates for `{abstractionNode.DisplayName}`; only the first {DispatchCandidateLimit} deterministic candidates were traversed.",
-                    abstractionNode.SourceIndexId,
-                    abstractionNode.SourceLabel,
-                    abstractionNode.NodeId,
-                    null,
-                    DispatchGapRuleId,
-                    EvidenceTiers.Tier4Unknown,
-                    abstractionNode.FilePath,
-                    abstractionNode.StartLine,
-                    "dispatch-candidate-fanout",
-                    abstractionNode.CommitSha,
-                    graph.ScannerVersionFor(abstractionNode.SourceIndexId),
-                    "combined-symbol-relationships",
-                    abstractionNode.EndLine));
-            }
+            graph.AddEdge(new GraphEdge(
+                candidate.CandidateId,
+                candidate.ConsumerEdgeKind,
+                candidate.AbstractionSymbolId,
+                candidate.CandidateSymbolId,
+                CombinedDependencyPathClassifications.NeedsReviewPath,
+                candidate.RuleId,
+                candidate.EvidenceTier,
+                candidate.SupportingFactIds,
+                candidate.SupportingEdgeIds,
+                candidate.FilePath,
+                candidate.StartLine,
+                candidate.EndLine,
+                candidate.RelationshipKind));
         }
-    }
 
-    private static bool IsMethodNode(GraphNode node)
-    {
-        return string.Equals(node.NodeKind, "Method", StringComparison.Ordinal)
-            || node.DisplayName.IndexOf('(', StringComparison.Ordinal) >= 0;
+        foreach (var gap in candidates.Gaps)
+        {
+            graph.Gaps.Add(new CombinedPathGap(
+                gap.GapId,
+                gap.GapKind,
+                CombinedDependencyPathClassifications.NeedsReviewPath,
+                gap.Message,
+                gap.SourceIndexId,
+                gap.SourceLabel,
+                gap.NodeId,
+                null,
+                gap.RuleId,
+                gap.EvidenceTier,
+                gap.FilePath,
+                gap.StartLine,
+                gap.Reason,
+                gap.CommitSha,
+                gap.ExtractorVersion,
+                gap.EvidenceScope,
+                gap.EndLine));
+        }
     }
 
     private static SymbolAlias? TryCreateSymbolAlias(string displayName)
@@ -2791,16 +2805,25 @@ public static class CombinedDependencyPathReporter
         return sourceIds;
     }
 
-    private static IReadOnlyList<string> SurfaceAttachmentSymbols(CombinedFactRow fact)
+    private static IReadOnlyList<string> SurfaceAttachmentSymbols(
+        CombinedFactRow fact,
+        IReadOnlyList<CombinedFactRow> callFacts,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> configureCallersByConfig)
     {
         if (IsLegacyDataFact(fact))
         {
             return LegacyDataAttachmentSymbols(fact).ToArray();
         }
 
+        if (IsRemotingFact(fact))
+        {
+            return RemotingAttachmentSymbols(fact, callFacts, configureCallersByConfig).ToArray();
+        }
+
         return new[]
             {
                 fact.SourceSymbol,
+                IsAsmxOperationSurfaceFact(fact) ? fact.TargetSymbol : null,
                 CombinedDependencyReporter.FirstValue(
                     fact.Properties,
                     "methodSymbol",
@@ -2814,6 +2837,14 @@ public static class CombinedDependencyPathReporter
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static bool IsAsmxOperationSurfaceFact(CombinedFactRow fact)
+    {
+        return fact.FactType is FactTypes.AsmxOperationDeclared
+            or FactTypes.AsmxSoapOperationDeclared
+            or FactTypes.AsmxClientOperationDeclared
+            or FactTypes.AsmxServiceReferenceMapping;
     }
 
     private static GraphNode ToRemotingNode(CombinedFactRow fact)
@@ -4129,7 +4160,8 @@ public static class CombinedDependencyPathReporter
         IReadOnlyList<string> SupportingCombinedEdgeIds,
         string? FilePath,
         int? StartLine,
-        int? EndLine)
+        int? EndLine,
+        string? OriginalRelationshipKind = null)
     {
         public CombinedPathEdge ToReportEdge()
         {

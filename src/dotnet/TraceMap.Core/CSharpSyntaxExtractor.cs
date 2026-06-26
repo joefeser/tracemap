@@ -873,23 +873,36 @@ public static class CSharpSyntaxExtractor
 
     private static CodeFact CreateObjectShapeFact(ScanManifest manifest, string filePath, SyntaxNode node, string objectKind, IReadOnlyList<string> fields)
     {
+        var sourceSymbol = GetContainingMemberName(node);
+        var sourceSymbolId = string.IsNullOrWhiteSpace(sourceSymbol)
+            ? null
+            : CreateSyntaxSymbolId(filePath, node, sourceSymbol!);
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["objectKind"] = objectKind,
+            ["fieldNames"] = string.Join(";", fields),
+            ["fieldCount"] = fields.Count.ToString(),
+            ["shapeHash"] = FactFactory.Hash(string.Join("|", fields), 32),
+            ["expressionHash"] = FactFactory.Hash(node.ToString(), 32)
+        };
+        if (!string.IsNullOrWhiteSpace(sourceSymbol) && !string.IsNullOrWhiteSpace(sourceSymbolId))
+        {
+            properties["sourceSymbolId"] = sourceSymbolId!;
+            properties["sourceSymbolDisplayName"] = sourceSymbol!;
+            properties["sourceSymbolKind"] = "Method";
+            properties["sourceSymbolLanguage"] = "csharp";
+        }
+
         return FactFactory.Create(
             manifest,
             FactTypes.ObjectShapeInferred,
             RuleIds.CSharpSyntaxObjectShape,
             EvidenceTiers.Tier3SyntaxOrTextual,
             ToEvidenceSpan(filePath, node),
-            sourceSymbol: GetContainingMemberName(node),
+            sourceSymbol: sourceSymbol,
             targetSymbol: objectKind,
             contractElement: objectKind,
-            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["objectKind"] = objectKind,
-                ["fieldNames"] = string.Join(";", fields),
-                ["fieldCount"] = fields.Count.ToString(),
-                ["shapeHash"] = FactFactory.Hash(string.Join("|", fields), 32),
-                ["expressionHash"] = FactFactory.Hash(node.ToString(), 32)
-            });
+            properties: properties);
     }
 
     private static string GetInvocationName(ExpressionSyntax expression)
@@ -1006,6 +1019,49 @@ public static class CSharpSyntaxExtractor
         }
 
         return null;
+    }
+
+    private static string CreateSyntaxSymbolId(string filePath, SyntaxNode node, string displayName)
+    {
+        return $"syntax:csharp:{FactFactory.Hash($"{filePath}|{GetContainingMemberIdentity(node) ?? displayName}", 32)}";
+    }
+
+    private static string? GetContainingMemberIdentity(SyntaxNode node)
+    {
+        if (node.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault() is { } method)
+        {
+            return QualifyContainingMember(method, method.Identifier.ValueText, ParameterCount(method.ParameterList));
+        }
+
+        if (node.Ancestors().OfType<ConstructorDeclarationSyntax>().FirstOrDefault() is { } constructor)
+        {
+            return QualifyContainingMember(constructor, constructor.Identifier.ValueText, ParameterCount(constructor.ParameterList));
+        }
+
+        if (node.Ancestors().OfType<PropertyDeclarationSyntax>().FirstOrDefault() is { } property)
+        {
+            return QualifyContainingMember(property, property.Identifier.ValueText, 0);
+        }
+
+        return null;
+    }
+
+    private static string QualifyContainingMember(SyntaxNode member, string memberName, int parameterCount)
+    {
+        var typeNames = member
+            .Ancestors()
+            .OfType<TypeDeclarationSyntax>()
+            .Select(type => type.Identifier.ValueText)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Reverse()
+            .ToArray();
+        var typePrefix = typeNames.Length == 0 ? "global" : string.Join(".", typeNames);
+        return $"{typePrefix}.{memberName}/{parameterCount}";
+    }
+
+    private static int ParameterCount(BaseParameterListSyntax? parameterList)
+    {
+        return parameterList?.Parameters.Count ?? 0;
     }
 
     private static string? GetAssignedVariableName(ObjectCreationExpressionSyntax creation)

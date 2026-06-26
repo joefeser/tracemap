@@ -1,7 +1,7 @@
 # Site TraceMap Tools Change-Risk Language Guide Tasks
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Public claim level: concept
 
 Ordering note: run available Kiro spec reviews before implementation, patch or

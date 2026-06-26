@@ -1,8 +1,9 @@
 # Site TraceMap Tools Reviewer Quickstart Implementation State
 
 Status: implemented
-Readiness: pr-loop-merge-ready-before-bookkeeping
+Readiness: implemented
 Public claim level: concept
+
 Last updated: 2026-06-21
 Branch: codex/impl-site-reviewer-quickstart
 Worktree: isolated implementation worktree; local absolute path omitted from

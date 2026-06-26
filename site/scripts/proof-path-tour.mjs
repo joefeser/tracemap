@@ -12,6 +12,7 @@ import {
 export const proofPathTourRoute = "/proof-paths/tour/";
 export const proofPathTourRequiredLinks = [
   "/proof-paths/",
+  "/proof-paths/for-managers/",
   "/proof-source-catalog/",
   "/demo/evidence-trail/",
   "/review-room/",

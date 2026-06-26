@@ -135,6 +135,21 @@
     "priority": "0.7"
   },
   {
+    "path": "/legacy-modernization/review-handoff/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/legacy-dotnet/evidence/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/legacy-data-surface/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/deploy-audit/",
     "changefreq": "monthly",
     "priority": "0.7"
@@ -215,6 +230,11 @@
     "priority": "0.8"
   },
   {
+    "path": "/demo/troubleshooting/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/demo/manager-script/",
     "changefreq": "monthly",
     "priority": "0.7"
@@ -225,7 +245,22 @@
     "priority": "0.8"
   },
   {
+    "path": "/proof-paths/for-managers/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/proof-path-stories/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/proof-paths/tour/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/proof-paths/route-flow/",
     "changefreq": "monthly",
     "priority": "0.7"
   },
@@ -236,6 +271,11 @@
   },
   {
     "path": "/proof-source-catalog/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/site-claim-guardrails/",
     "changefreq": "monthly",
     "priority": "0.7"
   },
@@ -286,6 +326,11 @@
   },
   {
     "path": "/review-room/agenda/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/review-room/demo-path/",
     "changefreq": "monthly",
     "priority": "0.7"
   },

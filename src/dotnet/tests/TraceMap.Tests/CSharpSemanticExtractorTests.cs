@@ -348,6 +348,14 @@ public sealed class CSharpSemanticExtractorTests
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.BranchCondition && fact.RuleId == RuleIds.CSharpSemanticFlowBoundary);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.DependencyRegistered && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.SerializerContractMember && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence && fact.ContractElement == "customer_name");
+        var serializerMember = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.SerializerContractMember
+            && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence
+            && fact.ContractElement == "customer_name");
+        Assert.StartsWith("csharp type ", serializerMember.Properties["sourceSymbolId"], StringComparison.Ordinal);
+        Assert.StartsWith("csharp property ", serializerMember.Properties["targetSymbolId"], StringComparison.Ordinal);
+        Assert.NotEqual(serializerMember.Properties["containingType"], serializerMember.Properties["sourceSymbolId"]);
+        Assert.NotEqual(serializerMember.Properties["memberSymbol"], serializerMember.Properties["targetSymbolId"]);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.ReflectionTarget && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence && fact.ContractElement == "Handle");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.DynamicDispatchCandidate && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence && fact.ContractElement == "Query");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.CollectionElementFlow && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence);

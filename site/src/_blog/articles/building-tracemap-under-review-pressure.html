@@ -1,0 +1,206 @@
+<p>
+  <strong>Public claim level: concept</strong><br>
+  <strong>No public conclusion without evidence</strong>
+</p>
+
+<p>
+  This is a process story about building TraceMap, not a claim about what the
+  scanner or reducer can prove. It describes a workflow for keeping public
+  wording, implementation work, review pressure, and validation evidence close
+  enough that future contributors can inspect the trail instead of trusting a
+  summary.
+</p>
+
+<p>
+  For background on the basic Codex, Kiro, and Qodo workflow, read
+  <a href="/blog/building-tracemap-with-codex-kiro-qodo/">Building TraceMap
+  With Codex, Kiro, and Qodo</a>. This note starts one layer later: what
+  happens when the workflow has to carry claim levels, public-safe wording,
+  review-loop stop reasons, and deterministic validation without turning any
+  of that pressure into product proof.
+</p>
+
+<section data-build-review-block="claim-level-note">
+  <h2>Claim-level note</h2>
+
+  <p>
+    Concept-level is the right label for this article because the subject is
+    how the project is being built. A build workflow can teach useful habits:
+    write specs before implementation when the public boundary matters, keep
+    changes reviewable, record limitations, and validate generated output.
+    Those habits do not upgrade a TraceMap behavior claim into shipped or
+    demo-backed evidence.
+  </p>
+
+  <p>
+    Claim levels keep different kinds of statements apart. Future-looking
+    workflow lessons stay concept-level. Demo-backed statements need public
+    demo proof. Shipped statements need source behavior or source-document
+    support that can be followed through a
+    <a href="/proof-paths/">public-safe proof path</a>. If a sentence about
+    TraceMap behavior cannot name evidence, rule context, coverage label, and
+    limitation, the sentence should stay out of public copy.
+  </p>
+</section>
+
+<section data-build-review-block="pressure-shaped-workflow">
+  <h2>The pressure that shaped the workflow</h2>
+
+  <p>
+    Review pressure is useful when it makes the work smaller and the evidence
+    clearer. In TraceMap site work, pressure usually asks the same questions:
+    what claim level is this, which route supports it, where are the
+    limitations, what validation ran, and what remains a human judgment call?
+  </p>
+
+  <p>
+    That mirrors TraceMap's project principles. No public conclusion without
+    evidence. No evidence without a rule ID or documented rule-family
+    limitation. Partial states stay labeled. Deterministic validation earns
+    stronger wording only inside the exact scope it checked. A clean-sounding
+    paragraph is not enough; the reader needs a trail.
+  </p>
+</section>
+
+<section data-build-review-block="specs-before-implementation">
+  <h2>Specs before implementation</h2>
+
+  <p>
+    Specs are most valuable before implementation when a change touches public
+    wording, navigation, claim level, validation, or handoff expectations. A
+    useful spec packet names acceptance criteria before code exists. It also
+    records what the future page must not imply, which adjacent routes should
+    be checked, and how validators should distinguish non-claims from positive
+    claims.
+  </p>
+
+  <p>
+    Kiro can add spec-review pressure by challenging ambiguous requirements
+    before the implementation diff exists. That pressure is not certification
+    and it is not endorsement. It is a way to make the packet sharper: fewer
+    hidden assumptions, clearer task checkboxes, and better boundaries for the
+    public sentence that will eventually ship.
+  </p>
+</section>
+
+<section data-build-review-block="reviewable-diffs">
+  <h2>Implementation with reviewable diffs</h2>
+
+  <p>
+    Codex is useful in this workflow as implementation assistance. It can work
+    from a dedicated worktree, read the site patterns, add a scoped article,
+    update focused validators, run checks, and keep the spec state current.
+    That does not make Codex a TraceMap scanner feature, reducer feature, or
+    source of product proof.
+  </p>
+
+  <p>
+    The diff still has to be reviewable by a person. Small changes help:
+    article source in one place, metadata in the blog index, validator coverage
+    near similar validators, and spec-state edits that explain placement,
+    rejected alternatives, and validation. The implementation should be easy to
+    inspect without reading a private transcript or reconstructing a chat.
+  </p>
+</section>
+
+<section data-build-review-block="review-loop-coordination">
+  <h2>Kiro, Qodo, and review-loop coordination</h2>
+
+  <p>
+    After the implementation exists, Qodo can add PR-review pressure by
+    surfacing actionable findings in the submitted diff. As with Kiro, that
+    pressure is not final approval and not product validation. The project
+    still decides whether a finding is current, actionable, already handled,
+    or outside the public boundary.
+  </p>
+
+  <p>
+    A review-loop coordination layer can organize the state around that
+    pressure: required reviewers, stop reasons, patch passes, validation
+    evidence, stale findings, and merge-readiness handoff. The important part
+    is not automation theater. The useful part is the typed stop: patch this
+    finding, wait for that review, record this disposition, or hand the
+    unresolved judgment to a human owner.
+  </p>
+
+  <p>
+    Human ownership remains necessary for merge, publication, product claims,
+    and unresolved judgment calls. A review loop can structure evidence and
+    reduce ambiguity. It cannot make the public claim true by itself.
+  </p>
+</section>
+
+<section
+  data-build-review-block="workflow-does-not-prove"
+  data-non-claim-region="workflow-does-not-prove"
+>
+  <h2>What the workflow does not prove</h2>
+
+  <p>
+    This workflow does not prove runtime behavior, production traffic, endpoint
+    performance, outage cause, release approval, release safety, operational
+    safety, complete coverage, AI impact analysis, LLM impact analysis, vendor
+    endorsement, autonomous review, or autonomous merge authority.
+  </p>
+
+  <p>
+    It does not replace telemetry, logs, traces, tests, source review, code
+    ownership, release controls, incident response, or human judgment. It also
+    does not mean external workflow tools consume TraceMap output as a product
+    feature, certify TraceMap behavior, approve TraceMap claims, or validate
+    release decisions.
+  </p>
+
+  <p>
+    Public process writing should not expose private session IDs, hidden run
+    IDs, raw bot transcripts, raw review logs, raw source snippets, raw facts,
+    raw SQLite content, analyzer logs, SQL or configuration values, generated
+    scan directories, secrets, credential-like values, local paths, raw
+    remotes, private sample names, or hidden validation details.
+  </p>
+</section>
+
+<section data-build-review-block="lessons-evidence-led-specs">
+  <h2>Lessons for evidence-led specs</h2>
+
+  <ul>
+    <li>State the public claim level before drafting the public sentence.</li>
+    <li>Keep acceptance criteria tied to observable evidence.</li>
+    <li>Treat review findings as pressure to clarify, not proof by themselves.</li>
+    <li>Attach limitations and reduced-coverage labels to the claim they bound.</li>
+    <li>Keep public-safe summaries separate from raw private artifacts.</li>
+    <li>Record validation commands and browser checks in the handoff.</li>
+  </ul>
+
+  <p>
+    A synthetic example is enough: "This article is concept-level process
+    writing supported by blog metadata, generated route output, validator
+    checks, and spec-state notes." That sentence stays bounded because it names
+    the kind of evidence and does not pretend the workflow proves TraceMap
+    runtime behavior.
+  </p>
+</section>
+
+<section data-build-review-block="validation-publication-checklist">
+  <h2>Validation and publication checklist</h2>
+
+  <p>
+    Before publishing a similar process article, check the visible concept
+    label, the shared evidence principle, required sections, route output,
+    canonical and Open Graph metadata, blog index card, sitemap entry, internal
+    links, word count, forbidden wording, and private-material filters. Then
+    compare the wording against the
+    <a href="/site-claim-guardrails/">site claim guardrails</a>, the
+    <a href="/review-claim-checklist/">review claim checklist</a>,
+    <a href="/validation/">validation expectations</a>, and
+    <a href="/limitations/">limitations</a>. Record the validation results and
+    any follow-up in the spec-local implementation state.
+  </p>
+
+  <p>
+    The checklist is intentionally plain. The article should leave readers
+    with a better way to inspect the process, not a bigger product claim.
+    Review pressure earns trust only when it leaves evidence, limitations, and
+    human ownership visible.
+  </p>
+</section>
