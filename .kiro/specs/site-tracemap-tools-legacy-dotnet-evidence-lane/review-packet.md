@@ -1,12 +1,11 @@
 # TraceMap Legacy .NET Evidence Lane Kiro Review Packet
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
-Review the `site-tracemap-tools-legacy-dotnet-evidence-lane` spec for future
-implementation readiness. This is a spec-only public-site phase; it must not
-implement site code.
+This review packet records the spec-review orientation for the implemented
+`site-tracemap-tools-legacy-dotnet-evidence-lane` site phase.
 
 ## Review Orientation
 
@@ -53,8 +52,8 @@ Please inspect:
 
 ## Required Review Focus
 
-- Is the packet clearly spec-only?
-- Are `Status: not-started`, current `Readiness`, and
+- Is the packet lifecycle state consistent after implementation?
+- Are `Status: implemented`, `Readiness: implemented`, and
   `Public claim level: concept` present and consistent?
 - Does the future lane require visible `Public claim level: concept` and
   visible `No public conclusion without evidence`?
@@ -91,7 +90,8 @@ Please inspect:
   validation details, hidden capability counts, and unreleased sequencing?
 - Does it define navigation, metadata, discovery, cross-link, and focused
   validation expectations without inflating claim maturity?
-- Are future implementation tasks unchecked and sufficiently specific?
+- Are completed implementation tasks checked only where existing implementation
+  evidence supports them?
 - Are spec-only validation requirements limited to `git diff --check`,
   `./scripts/check-private-paths.sh`, and diff-scope confirmation?
 - Are future site implementation validation requirements specific enough for

@@ -1,13 +1,13 @@
 # TraceMap Kiro Review Packet
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 Review the `site-tracemap-tools-proof-path-story-gallery` spec for
 spec-review findings first.
 
-This is a spec-only public-site phase. It should define a future
+This review packet records the spec-review orientation for the implemented
 `tracemap.tools` proof-path story gallery: short public-safe story cards and
 walkthroughs that start from a static question and follow deterministic
 evidence from source/root surfaces to endpoint, service, data, package,
@@ -24,11 +24,10 @@ Please inspect:
 
 Review focus:
 
-- Does the spec stay implementation-free and leave future implementation tasks
-  unchecked?
-- Are `Status: not-started`, `Readiness: ready-for-implementation`, and
-  `Public claim level: concept` present after review patches, with
-  `implementation-state.md` recording that the packet started at
+- Does the packet lifecycle state stay consistent after implementation?
+- Are `Status: implemented`, `Readiness: implemented`, and
+  `Public claim level: concept` present after implementation normalization,
+  with `implementation-state.md` recording that the packet started at
   `spec-review` and moved only after Medium+ findings were patched?
 - Is `Public claim level: concept` justified because concrete demo-level story
   cards are not proven by checked-in public-safe generated summaries?
