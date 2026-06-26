@@ -459,10 +459,16 @@ function validateEvidenceReferences(html, errors) {
         errors.push(withEvidence(`Proof-path evidence reference is missing term: ${term}`, pageArtifact));
       }
     }
-    for (const id of [...text.matchAll(/\b[A-Z]{2}-C\d{2}\b/g)].map((match) => match[0])) {
-      if (!/^[A-Z]{2}-C\d{2}$/.test(id)) {
-        errors.push(withEvidence(`Proof-path evidence reference has non-public-safe supporting ID: ${id}`, pageArtifact));
-      }
+
+    const supportingIdMatch = text.match(/\bsupporting ID\s*:?\s*([^;.,]+)/i);
+    const supportingIdValue = supportingIdMatch?.[1]?.trim() ?? "";
+    if (!supportingIdValue) {
+      errors.push(withEvidence("Proof-path evidence reference is missing a concrete supporting ID value.", pageArtifact));
+      continue;
+    }
+
+    if (!/^[A-Z]{2}-C\d{2}(?:\s*(?:,|and)\s*[A-Z]{2}-C\d{2})*$/.test(supportingIdValue)) {
+      errors.push(withEvidence(`Proof-path evidence reference has non-public-safe supporting ID value: ${supportingIdValue}`, pageArtifact));
     }
   }
 }

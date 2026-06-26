@@ -108,6 +108,18 @@ test("validateProofPathStoriesDist rejects raw material outside marked boundary 
   assert.match(errors.join("\n"), /forbidden raw\/private material/);
 });
 
+test("validateProofPathStoriesDist rejects unsafe supporting ID values", async (t) => {
+  const sourceHtml = await readSourcePage();
+  const root = await createManagedProofPathStoriesFixture(t, {
+    pageHtml: sourceHtml.replace("supporting ID <code>EP-C01</code>", "supporting ID <code>private-repo-name</code>")
+  });
+  const errors = [];
+
+  await validateProofPathStoriesDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /non-public-safe supporting ID value: private-repo-name/);
+});
+
 test("validateProofPathStoriesDist rejects missing stop routing", async (t) => {
   const sourceHtml = await readSourcePage();
   const root = await createManagedProofPathStoriesFixture(t, {

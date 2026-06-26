@@ -191,7 +191,8 @@ Implementation validation:
 
 - Passed: `node --test scripts/proof-path-stories.test.mjs
   scripts/validate.test.mjs`.
-- Passed: `npm test` from `site/` (532 tests).
+- Passed: `npm test` from `site/` (532 tests before PR review fixes; 533
+  tests after adding the supporting-ID regression).
 - Passed: `npm run validate` from `site/` (built static site and validated 71
   HTML files, 2444 internal references, and 70 sitemap URLs).
 - Passed: `npm run build` from `site/`.
@@ -214,8 +215,38 @@ Implementation validation:
   Disposition: patched to describe the dedicated temporary worktree without
   tracking the absolute path.
 
-Implementation PR review loop: pending until the implementation PR is created
-and ACK is run.
+Implementation PR: `https://github.com/joefeser/tracemap/pull/347`.
+
+Initial ACK result for implementation head `0700e82e`: `actionable_findings`,
+stop reason `UNRESOLVED_REVIEW_THREADS`, next action
+`patch_actionable_findings`. Qodo and Codex both returned on the same head, and
+patching was authorized by the required-review batch.
+
+Patched implementation review findings:
+
+- Qodo/Codex: rejected-example copy used `impacted` in the public gallery.
+  Disposition: replaced the rejected example with wording that avoids
+  `impacted` while keeping the boundary example concept-level.
+- Qodo/Codex: supporting-ID validation only inspected values that already
+  matched the safe ID pattern. Disposition: changed
+  `validateEvidenceReferences()` to parse the value after `supporting ID` and
+  reject missing or non-public-safe values; added a regression test for an
+  unsafe supporting ID.
+- Codex: `tasks.md` header still said `Status: not-started` after
+  implementation tasks were checked. Disposition: updated the header to
+  `Status: implemented`.
+
+Post-patch validation:
+
+- Passed: `node --test scripts/proof-path-stories.test.mjs
+  scripts/validate.test.mjs`.
+- Passed: `npm test` from `site/` (533 tests).
+- Passed: `npm run validate` from `site/`.
+- Passed: `npm run build` from `site/`.
+- Passed: `git diff --check`.
+- Passed: `./scripts/check-private-paths.sh`.
+
+Final ACK result: pending after pushing the review-fix commit.
 
 Future site implementation validation:
 
