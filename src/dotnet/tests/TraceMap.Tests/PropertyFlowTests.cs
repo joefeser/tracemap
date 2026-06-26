@@ -738,7 +738,7 @@ public sealed class PropertyFlowTests
         {
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
-            command.CommandText = "create table combined_route_flow_edges(edge_id text);";
+            command.CommandText = "create table combined_route_flow_edges(edge_id text, normalized_path_key text, http_method text);";
             await command.ExecuteNonQueryAsync();
         }
         var emptyRouteFlow = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
@@ -749,6 +749,50 @@ public sealed class PropertyFlowTests
             MaxRoots: 25));
         Assert.Equal("empty", emptyRouteFlow.Snapshot.Schema.RouteFlowSignal);
         Assert.Contains(emptyRouteFlow.Gaps, gap => gap.GapKind == "RouteFlowUnavailable");
+    }
+
+    [Fact]
+    public async Task Property_flow_marks_incompatible_route_flow_schema_as_unsupported()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone16");
+        SqliteIndexWriter.Write(index, server, [
+            RazorBindingFact(server, "ProfileModel", "email", "Views/Profile/Edit.cshtml", 3),
+            PropertyFact(server, "ProfileModel", "Email", "model", "Models/ProfileModel.cs", 4)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        await using (var connection = new SqliteConnection($"Data Source={combinedPath}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                create table combined_route_flow_edges(edge_id text, unrelated_endpoint text);
+                insert into combined_route_flow_edges(edge_id, unrelated_endpoint) values ('route-flow:path:legacy', '/Profile/Edit');
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var report = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "unsupported-route-flow-out"),
+            "field:email",
+            Framework: "razor"));
+
+        Assert.Equal("unsupported", report.Snapshot.Schema.RouteFlowSignal);
+        var gap = Assert.Single(report.Gaps, gap => gap.GapKind == "UnsupportedRouteFlowSchema");
+        Assert.Equal("property-flow.schema.v1", gap.RuleId);
+        Assert.Equal(PropertyFlowClassifications.UnknownAnalysisGap, gap.Classification);
+        Assert.Contains("edge_id", gap.Message);
+        Assert.Contains("unrelated_endpoint", gap.Message);
+        Assert.NotNull(gap.CommitSha);
+        Assert.NotEmpty(gap.CommitShas);
+        Assert.NotEmpty(gap.SupportingFactIds);
+        Assert.NotNull(gap.FilePath);
+        Assert.NotNull(gap.LineSpan);
+        Assert.DoesNotContain(report.Gaps, gap => gap.GapKind == "RouteFlowUnavailable");
     }
 
     private static async Task<(string CombinedPath, string RootFactId)> CreatePropertyFlowCombinedIndexAsync(TempDirectory temp)

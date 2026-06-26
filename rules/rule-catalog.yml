@@ -653,9 +653,11 @@ rules:
       - missing required schema rejection
       - missing optional schema gap
       - route-flow unavailable gap
+      - unsupported route-flow schema gap
     limitations:
       - Schema gaps describe evidence availability only; they do not prove source behavior or source evidence absence.
       - Missing optional route-flow schema prevents route-flow-specific promotion but does not discard existing combined path evidence.
+      - Unsupported route-flow schema means property-flow could not find the normalized route key contract it needs for route-flow-specific context; it does not prove route-flow evidence is absent.
 
   - id: property-flow.truncation.v1
     name: Property flow truncation
