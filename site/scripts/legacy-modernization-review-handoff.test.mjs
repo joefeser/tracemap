@@ -111,6 +111,18 @@ test("validateLegacyModernizationReviewHandoffDist rejects missing matrix rows a
   assert.match(errors.join("\n"), /missing required header: Stop condition/);
 });
 
+test("validateLegacyModernizationReviewHandoffDist accepts spaced row and anchor attributes", async (t) => {
+  const html = (await sourcePage())
+    .replace('data-handoff-row="route-api"', 'data-handoff-row = "route-api"')
+    .replaceAll('href="/docs/"', 'href = "/docs/"');
+  const root = await createManagedFixture(t, { handoffHtml: html });
+  const errors = [];
+
+  await validateLegacyModernizationReviewHandoffDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateLegacyModernizationReviewHandoffDist reports missing adjacent links", async (t) => {
   const root = await createManagedFixture(t, {
     handoffHtml: (await sourcePage()).replaceAll('href="/docs/"', 'href="/docs-removed/"')
@@ -120,6 +132,21 @@ test("validateLegacyModernizationReviewHandoffDist reports missing adjacent link
   await validateLegacyModernizationReviewHandoffDist({ dist: join(root, "dist"), errors });
 
   assert.match(errors.join("\n"), /missing required adjacent link: \/docs\//);
+});
+
+test("validateLegacyModernizationReviewHandoffDist accepts mixed-case route nonClaims", async (t) => {
+  const root = await createManagedFixture(t, {
+    routeEntryPatch: {
+      nonClaims: [
+        "No Runtime Behavior, Production Traffic, Endpoint Performance, Release Safety, Operational Safety, Migration Success, Database Execution, AI Impact Analysis, LLM Analysis, or Complete Coverage proof."
+      ]
+    }
+  });
+  const errors = [];
+
+  await validateLegacyModernizationReviewHandoffDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
 });
 
 async function createManagedFixture(t, options = {}) {
