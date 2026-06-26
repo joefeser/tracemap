@@ -55,6 +55,8 @@ test("legacy .NET evidence lane guard rejects private material and unsupported w
   const localPathLeak = `${String.fromCharCode(47)}Users/example/private-sample`;
   const cases = [
     [`<p>See ${localPathLeak}.</p>`, /local-absolute-path/],
+    ["<p>&#47;Users/example/private-sample</p>", /local-absolute-path/],
+    ["<p>&#x2f;home/example/private-sample</p>", /local-absolute-path/],
     ["<p>Server=db;Database=orders;User ID=sa;Password=pw;</p>", /connection-string/],
     ["<p>api_key = &apos;hidden-value&apos;</p>", /credential-assignment/],
     ["<p>The service is impacted.</p>", /unsupported support wording/],
@@ -77,4 +79,13 @@ test("legacy .NET evidence lane guard redacts sensitive evidence in errors", asy
 
   assert.match(message, /redacted connection-string/);
   assert.doesNotMatch(message, /Password=secret/);
+});
+
+test("legacy .NET evidence lane guard scans public metadata for unsupported claims", async () => {
+  const html = (await readFile(pageSource, "utf8")).replace(
+    "</head>",
+    '<meta property="og:description" content="TraceMap validates runtime behavior"></head>'
+  );
+
+  assert.match(validateLegacyDotnetEvidenceLaneHtml(html).join("\n"), /unsupported support wording/);
 });

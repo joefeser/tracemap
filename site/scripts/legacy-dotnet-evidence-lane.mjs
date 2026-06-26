@@ -222,7 +222,7 @@ export function validateLegacyDotnetEvidenceLaneHtml(html, { label = legacyDotne
   }
 
   for (const pattern of forbiddenSupportClaims) {
-    if (pattern.test(text)) {
+    if (pattern.test(text) || pattern.test(raw) || pattern.test(tightText)) {
       errors.push(`${label} contains forbidden unsupported support wording: ${pattern}`);
     }
   }
@@ -310,12 +310,26 @@ function stripTagsWithSeparator(html, separator) {
 
 function decodeHtmlEntities(value) {
   return value
+    .replace(/&#x([0-9a-f]+);?/gi, (_, hex) => decodeNumericHtmlEntity(Number.parseInt(hex, 16)))
+    .replace(/&#([0-9]+);?/g, (_, decimal) => decodeNumericHtmlEntity(Number.parseInt(decimal, 10)))
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;|&apos;/gi, "'");
+}
+
+function decodeNumericHtmlEntity(codePoint) {
+  if (!Number.isSafeInteger(codePoint) || codePoint < 0) {
+    return "";
+  }
+
+  try {
+    return String.fromCodePoint(codePoint);
+  } catch {
+    return "";
+  }
 }
 
 function escapeRegExp(value) {
