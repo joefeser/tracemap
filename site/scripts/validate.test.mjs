@@ -46,6 +46,7 @@ import {
   ownerFollowupMapRoute
 } from "./owner-followup-map.mjs";
 import { proofPathFaqRoute } from "./proof-path-faq.mjs";
+import { proofPathsForManagersRoute } from "./proof-paths-for-managers.mjs";
 import { proofPathStoriesRoute } from "./proof-path-stories.mjs";
 import { proofPathTourRoute } from "./proof-path-tour.mjs";
 import { routeFlowEvidenceStoryRoute } from "./route-flow-evidence-story.mjs";
@@ -214,6 +215,7 @@ async function createDistFixture({
       ownerFollowupMapRoute,
       ...ownerFollowupMapRequiredLinks,
       proofPathFaqRoute,
+      proofPathsForManagersRoute,
       routeFlowEvidenceStoryRoute,
       proofPathStoriesRoute,
       proofPathTourRoute,
@@ -275,6 +277,7 @@ async function createDistFixture({
     ownerFollowupMapRoute,
     ...ownerFollowupMapRequiredLinks,
     proofPathFaqRoute,
+    proofPathsForManagersRoute,
     routeFlowEvidenceStoryRoute,
     proofPathStoriesRoute,
     proofPathTourRoute,
@@ -558,6 +561,10 @@ async function fixturePageHtml(route, path) {
     return readFile(new URL("../src/proof-paths/faq/index.html", import.meta.url), "utf8");
   }
 
+  if (route === proofPathsForManagersRoute) {
+    return readFile(new URL("../src/proof-paths/for-managers/index.html", import.meta.url), "utf8");
+  }
+
   if (route === proofSourceCatalogRoute) {
     return proofSourceCatalogPage();
   }
@@ -623,7 +630,7 @@ async function fixturePageHtml(route, path) {
   }
 
   return page(
-    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/limitations/" ? `<a href="${reducedCoveragePlaybookRoute}">Reduced coverage playbook</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a><a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === reviewPacketAssemblyRoute ? `<a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === "/proof-paths/" ? `<a href="${proofPathTourRoute}">Guided proof-path tour</a><a href="${routeFlowEvidenceStoryRoute}">Route-flow evidence story</a><a href="${proofPathStoriesRoute}">Proof-path story gallery</a><a href="${proofPathFaqRoute}">Proof path FAQ</a>` : ""}`
+    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/limitations/" ? `<a href="${reducedCoveragePlaybookRoute}">Reduced coverage playbook</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a><a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === "/manager-packet/" ? `<a href="${proofPathsForManagersRoute}">Manager proof-path guide</a>` : ""}${route === reviewPacketAssemblyRoute ? `<a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === "/proof-paths/" ? `<a href="${proofPathTourRoute}">Guided proof-path tour</a><a href="${proofPathsForManagersRoute}">Manager proof-path guide</a><a href="${routeFlowEvidenceStoryRoute}">Route-flow evidence story</a><a href="${proofPathStoriesRoute}">Proof-path story gallery</a><a href="${proofPathFaqRoute}">Proof path FAQ</a>` : ""}`
   );
 }
 
@@ -1097,6 +1104,24 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: [
           "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, complete coverage, autonomous approval, AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, or replacement for tests, code review, source review, runtime observability, service-owner judgment, or human judgment.",
           "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public FAQ material."
+        ]
+      },
+      {
+        path: proofPathsForManagersRoute,
+        title: "Proof Paths for Managers",
+        summary: "Concept-level manager and reviewer guide for reading deterministic static proof paths as evidence packets with coverage labels, limitations, stop conditions, and next-owner routing.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The route translates proof paths into decision questions and owner routing; it is not a new scanner result, reducer result, proof source, validation result, packet generator, or approval workflow.",
+          "Manager and reviewer wording must preserve the rule or rule family, evidence tier, coverage label, limitation, non-claim, public claim level, source context, and next-owner handoff."
+        ],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, complete coverage, autonomous approval, automated management decision, product behavior proof, or customer impact proof.",
+          "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, confidence scoring, replacement for tests, source review, human review, runtime observability, telemetry, logs, traces, product judgment, service-owner judgment, release process, or manager judgment.",
+          "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public manager proof-path material."
         ]
       },
       {
@@ -1847,6 +1872,7 @@ function managerFaqPage() {
     <meta property="og:type" content="article">
     <a href="/manager-brief/">Manager brief</a>
     <a href="/manager-packet/">Manager packet</a>
+    <a href="${proofPathsForManagersRoute}">Manager proof-path guide</a>
     <a href="/review-room/">Review room</a>
     <a href="${evidenceDecisionRecordRoute}">Evidence decision record</a>
     <a href="/review-claim-checklist/">Review claim checklist</a>
