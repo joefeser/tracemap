@@ -142,8 +142,9 @@ Acceptance criteria:
 - Every matrix row has limitation text adjacent to the status.
 - Rows labeled `shipped` require public-safe proof that the exact wording is
   true on `main`.
-- Rows labeled `demo` require checked-in public-safe demo artifacts, generated
-  summaries, or validation output that support the exact public wording.
+- Rows labeled `demo` require checked-in public-safe demo artifacts, checked-in
+  public-safe generated summaries, or checked-in public-safe validation output
+  that supports the exact public wording.
 - Rows labeled `dev` or `dev-only` require proof that the exact wording is true
   on `dev` and must not imply main availability.
 - Rows labeled `future` may describe reviewer questions and evidence shapes,
@@ -297,8 +298,8 @@ Acceptance criteria:
   `No public conclusion without evidence`.
 - Validation checks required matrix statuses, required row fields, required
   surface families, proof-path requirements, and adjacent limitation text.
-- Validation checks that `shipped`, `demo`, and `dev` rows include qualifying
-  proof status and do not overstate branch availability.
+- Validation checks that `shipped`, `demo`, `dev`, and `dev-only` rows include
+  qualifying proof status and do not overstate branch availability.
 - Validation checks forbidden runtime, production, migration-safety, AI/LLM,
   complete coverage, and unsupported `impacted` wording.
 - Validation checks forbidden raw/private material and generated-artifact
