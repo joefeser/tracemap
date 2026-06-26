@@ -271,6 +271,23 @@
     ]
   },
   {
+    "path": "/demo/",
+    "title": "Public Demo",
+    "summary": "Demo-level public entry point for checked-in TraceMap samples, scrubbed result summaries, runbook guidance, troubleshooting, and proof asset routes.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "demo",
+    "preferredProofPath": "/demo/result/",
+    "limitations": [
+      "The demo hub is navigation over public-safe demo surfaces; individual proof routes carry the evidence fields, limitations, and validation details.",
+      "Demo copy must stay attached to checked-in samples or generated public-safe summaries instead of upgrading into product-completeness claims."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage-cause proof, release approval, release safety, operational safety, or complete coverage proof.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, AI impact analysis, LLM analysis, prompt classification, embeddings, or vector databases."
+    ]
+  },
+  {
     "path": "/demo/result/",
     "title": "Public Demo Result",
     "summary": "Current demo result guide with generated summary rows, rule IDs, evidence tiers, coverage labels, counts, and reasons.",

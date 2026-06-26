@@ -469,7 +469,7 @@ function validateAdjacentLinks(html, routeContext, errors) {
       errors.push(withEvidence(`Review room demo path is missing required link: ${href}`, pageArtifact));
     }
 
-    if (!routeContext.sitemapRoutes.has(href)) {
+    if (!routeContext.routes.has(href) || !routeContext.sitemapRoutes.has(href)) {
       errors.push(withEvidence(`Review room demo path required link does not resolve in generated output: ${href}`, pageArtifact));
     }
   }

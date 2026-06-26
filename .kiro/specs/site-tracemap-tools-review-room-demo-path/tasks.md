@@ -74,13 +74,13 @@ work completes. Check only work that has actually landed.
 
 ## Publish And ACK Tasks
 
-- [ ] Commit the implementation.
-- [ ] Push the branch.
-- [ ] Create a ready pull request into `dev`.
-- [ ] Wait about 3 minutes after PR creation.
-- [ ] Run ACK with
+- [x] Commit the implementation.
+- [x] Push the branch.
+- [x] Create a ready pull request into `dev`.
+- [x] Wait about 3 minutes after PR creation.
+- [x] Run ACK with
   `agent-control pr-loop --repo joefeser/tracemap --pr <PR> --base dev --require-codex-review --quiet --json`.
-- [ ] Follow ACK instructions without merging.
-- [ ] Record ACK decision, stop reason, next action, checks state,
+- [x] Follow ACK instructions without merging.
+- [x] Record ACK decision, stop reason, next action, checks state,
   unresolved threads count, actionable findings count, reviewer state, and
   owner answer in `implementation-state.md`.

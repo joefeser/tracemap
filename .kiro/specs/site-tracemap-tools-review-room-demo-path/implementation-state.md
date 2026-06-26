@@ -139,8 +139,46 @@ errors.
 
 ## Review Loop Notes
 
-ACK pending until the implementation is validated, committed, pushed, and a
-ready PR into `dev` exists.
+PR: `https://github.com/joefeser/tracemap/pull/363`
+
+Initial implementation commit: `9d430ee9df7f98664084a2c9f1c8f5bdecee3d90`
+
+ACK after initial PR creation returned required-review non-return on the exact
+head after checks were clean and unresolved threads/actionable findings were
+zero.
+
+ACK later observed Codex and Qodo on the current head and granted patch
+authority with:
+
+- Decision: `actionable_findings`
+- Stop reason: `UNRESOLVED_REVIEW_THREADS`
+- Next action: `patch_actionable_findings`
+- Merge state: `CLEAN`
+- Checks: clean
+- Unresolved threads: `12`
+- Actionable bot findings: `qodo:qodo-code-review`
+- Held findings: none
+
+Patched authorized findings:
+
+- Marked commit, push, PR creation, wait, ACK, ACK-follow-up, and ACK-recording
+  publish tasks complete because the branch is already committed, pushed, and
+  represented by PR #363.
+- Updated `validateAdjacentLinks()` so a required route is treated as resolved
+  only when it appears in both `routes-index.json` and `sitemap.xml`.
+- Added a focused negative test where `/owners/follow-up/` exists on disk and
+  in the sitemap but is absent from discovery/routes-index output.
+
+Inbound-link disposition: no additional public-site inbound link is added for
+this concept route before publishing. Evidence: the route is registered in
+`site/src/_site/pages.json` for sitemap publication, registered in
+`site/src/_site/discovery.json` with `publicClaimLevel: concept`, has canonical
+and Open Graph metadata on the page, and the spec explicitly records "Primary
+navigation remains unchanged." Reason: this page is an authored concept-level
+review path, not a shipped product journey or demo-completeness claim. Keeping
+the route discoverable through sitemap/discovery without primary or adjacent
+public promotion preserves the public-claim boundary until a later spec chooses
+to promote it intentionally.
 
 ## Oddities
 
