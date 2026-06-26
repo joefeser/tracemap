@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap proof-path story gallery: concept-level synthetic cards for reading deterministic static evidence paths with rule families, evidence tiers, coverage labels, limitations, and stop conditions."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Proof-Path Story Gallery | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/proof-path-stories/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Proof-Path Story Gallery">
+    <meta
+      property="og:description"
+      content="Concept-level public-safe story cards that show how to read a static evidence path without upgrading it into a stronger claim."
+    >
+    <meta property="og:url" content="https://tracemap.tools/proof-path-stories/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Proof-path story gallery</p>
+        <h1>Read a static question as a bounded evidence story.</h1>
+        <p class="hero-subhead">
+          This concept-level gallery shows synthetic, public-safe story cards
+          that start with one static question, follow deterministic evidence
+          through rule-backed steps, and stop with coverage, limitation, and
+          owner routing still visible.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          The gallery is a story-oriented reading aid, not the canonical proof
+          ledger, source catalog, claim checklist, roadmap, or limitations page.
+        </p>
+        <nav class="hero-actions" aria-label="Proof-path story gallery links">
+          <a class="button primary" href="#story-contract">Review the contract</a>
+          <a class="button secondary" href="/proof-paths/">Proof path index</a>
+          <a class="button secondary" href="/proof-source-catalog/">Source catalog</a>
+          <a class="button secondary" href="/proof-paths/tour/">Guided tour</a>
+          <a class="button secondary" href="/packets/examples/">Packet examples</a>
+          <a class="button secondary" href="/review-claim-checklist/">Claim checklist</a>
+          <a class="button secondary" href="/limitations/">Limitations</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="story-contract">
+        <div>
+          <p class="section-kicker">Story contract</p>
+          <h2>Every card keeps the question, evidence, and stopping point together.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Static question</strong><span>One public-safe question starts the story before any path language appears.</span></div>
+          <div><strong>Category and claim level</strong><span>Each card names a supported category and stays at <code>concept</code> unless checked-in public-safe demo evidence supports a stricter label.</span></div>
+          <div><strong>Proof path steps</strong><span>Ordered category labels move from source surface to destination or static evidence stop.</span></div>
+          <div><strong>Evidence packet references</strong><span>References carry packet or report-family label, rule ID or rule family, evidence tier, coverage label, source context, public-safe supporting ID, limitation, and stop condition.</span></div>
+          <div><strong>Routing</strong><span>The next owner or next question stays visible where static evidence stops.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="proof-path-anatomy">
+        <div class="section-header">
+          <p class="section-kicker">Proof path anatomy</p>
+          <h2>The gallery uses the same repeatable shape for every story.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>1. Ask</h3>
+            <p>Start with one static question and one source/root surface.</p>
+          </article>
+          <article>
+            <h3>2. Follow</h3>
+            <p>Walk through source, route, service, data, package, config, project, report-family, or static evidence stop surfaces.</p>
+          </article>
+          <article>
+            <h3>3. Attach</h3>
+            <p>Name rule families, evidence tiers, coverage labels, source context, and public-safe supporting IDs.</p>
+          </article>
+          <article>
+            <h3>4. Bound</h3>
+            <p>Place the limitation next to the story conclusion so the reader cannot detach it.</p>
+          </article>
+          <article>
+            <h3>5. Stop</h3>
+            <p>Use the stop condition when the path reaches reduced, unknown, private-only, hidden, missing-rule, or reducer-required evidence.</p>
+          </article>
+          <article>
+            <h3>6. Route</h3>
+            <p>Send the next question to a generic reviewer, code owner, product owner, security owner, data owner, or package owner.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="evidence-packet-references">
+        <div class="section-header">
+          <p class="section-kicker">Evidence packet references</p>
+          <h2>References are public-safe handles, not raw artifact publication.</h2>
+        </div>
+        <div class="detail-list">
+          <div data-evidence-reference="concept-endpoint-packet"><strong>concept-endpoint-packet</strong><span>Rule family <code>endpoint.route.static</code>; tier <code>Tier2Structural</code>; coverage <code>reduced</code>; source context <code>concept</code>; supporting ID <code>EP-C01</code>; limitation: route-shaped evidence only; stop condition: <code>requires reducer evidence</code>.</span></div>
+          <div data-evidence-reference="concept-data-packet"><strong>concept-data-packet</strong><span>Rule family <code>data.config.static</code>; tier <code>Tier3SyntaxOrTextual</code>; coverage <code>partial</code>; source context <code>concept</code>; supporting ID <code>DC-C02</code>; limitation: category labels only; stop condition: <code>syntax-only fallback</code>.</span></div>
+          <div data-evidence-reference="concept-package-packet"><strong>concept-package-packet</strong><span>Rule family <code>package.reference.static</code>; tier <code>Tier2Structural</code>; coverage <code>gap-labeled</code>; source context <code>concept</code>; supporting ID <code>PK-C03</code>; limitation: dependency reference only; stop condition: <code>private-only evidence</code>.</span></div>
+          <div data-evidence-reference="concept-artifact-packet"><strong>concept-artifact-packet</strong><span>Rule family <code>public.report.family</code>; tier <code>Tier2Structural</code>; coverage <code>mixed</code>; source context <code>future-only</code>; supporting ID <code>RF-C04</code>; limitation: report-family orientation; stop condition: <code>no public-safe evidence</code>.</span></div>
+          <div data-evidence-reference="concept-gap-packet"><strong>concept-gap-packet</strong><span>Rule family <code>analysis.gap.static</code>; tier <code>Tier4Unknown</code>; coverage <code>unknown</code>; source context <code>concept</code>; supporting ID <code>AG-C05</code>; limitation: gap label is the evidence; stop condition: <code>semantic gap</code>.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Story cards</p>
+          <h2>Synthetic concept cards show the required fields without private details.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article data-proof-story-card data-story-category="endpoint/service orientation" data-claim-level="concept" data-coverage-label="reduced">
+            <h3>Endpoint/service orientation</h3>
+            <p data-story-field="static question"><strong>Static question:</strong> Which public-safe source surface leads toward an endpoint-shaped surface?</p>
+            <p data-story-field="story category"><strong>Story category:</strong> endpoint/service orientation.</p>
+            <p data-story-field="claim level"><strong>Claim level:</strong> concept.</p>
+            <p data-story-field="coverage label"><strong>Coverage label:</strong> reduced.</p>
+            <p data-story-field="proof path steps"><strong>Proof path steps:</strong> source surface to route surface to service surface to static evidence stop.</p>
+            <p data-story-field="evidence packet references"><strong>Evidence packet references:</strong> concept-endpoint-packet.</p>
+            <p data-story-field="rule IDs or rule families"><strong>Rule IDs or rule families:</strong> <code>endpoint.route.static</code>, <code>service.call.static</code>.</p>
+            <p data-story-field="evidence tiers"><strong>Evidence tiers:</strong> <code>Tier2Structural</code>, <code>Tier4Unknown</code>.</p>
+            <p data-story-field="supporting IDs"><strong>Supporting IDs:</strong> <code>EP-C01</code>.</p>
+            <p data-story-field="limitation or non-claim"><strong>Limitation/non-claim:</strong> route-shaped static evidence does not create a stronger service conclusion.</p>
+            <p data-story-field="stop condition"><strong>Stop condition:</strong> requires reducer evidence.</p>
+            <p data-story-field="next owner or next question"><strong>Next owner/question:</strong> reviewer asks whether a public-safe reducer summary exists.</p>
+          </article>
+          <article data-proof-story-card data-story-category="data/config orientation" data-claim-level="concept" data-coverage-label="partial">
+            <h3>Data/config orientation</h3>
+            <p data-story-field="static question"><strong>Static question:</strong> Where does a public-safe config category path stop?</p>
+            <p data-story-field="story category"><strong>Story category:</strong> data/config orientation.</p>
+            <p data-story-field="claim level"><strong>Claim level:</strong> concept.</p>
+            <p data-story-field="coverage label"><strong>Coverage label:</strong> partial.</p>
+            <p data-story-field="proof path steps"><strong>Proof path steps:</strong> source surface to config surface to data surface to syntax-only stop.</p>
+            <p data-story-field="evidence packet references"><strong>Evidence packet references:</strong> concept-data-packet.</p>
+            <p data-story-field="rule IDs or rule families"><strong>Rule IDs or rule families:</strong> <code>data.config.static</code>, <code>sql.category.static</code>.</p>
+            <p data-story-field="evidence tiers"><strong>Evidence tiers:</strong> <code>Tier3SyntaxOrTextual</code>.</p>
+            <p data-story-field="supporting IDs"><strong>Supporting IDs:</strong> <code>DC-C02</code>.</p>
+            <p data-story-field="limitation or non-claim"><strong>Limitation/non-claim:</strong> category evidence keeps private values abstracted.</p>
+            <p data-story-field="stop condition"><strong>Stop condition:</strong> syntax-only fallback.</p>
+            <p data-story-field="next owner or next question"><strong>Next owner/question:</strong> data owner asks for a public-safe aggregate before publication.</p>
+          </article>
+          <article data-proof-story-card data-story-category="package/dependency orientation" data-claim-level="concept" data-coverage-label="gap-labeled">
+            <h3>Package/dependency orientation</h3>
+            <p data-story-field="static question"><strong>Static question:</strong> Where does this package reference stop in static evidence?</p>
+            <p data-story-field="story category"><strong>Story category:</strong> package/dependency orientation.</p>
+            <p data-story-field="claim level"><strong>Claim level:</strong> concept.</p>
+            <p data-story-field="coverage label"><strong>Coverage label:</strong> gap-labeled.</p>
+            <p data-story-field="proof path steps"><strong>Proof path steps:</strong> project surface to package surface to private-only evidence stop.</p>
+            <p data-story-field="evidence packet references"><strong>Evidence packet references:</strong> concept-package-packet.</p>
+            <p data-story-field="rule IDs or rule families"><strong>Rule IDs or rule families:</strong> <code>package.reference.static</code>, <code>project.file.static</code>.</p>
+            <p data-story-field="evidence tiers"><strong>Evidence tiers:</strong> <code>Tier2Structural</code>.</p>
+            <p data-story-field="supporting IDs"><strong>Supporting IDs:</strong> <code>PK-C03</code>.</p>
+            <p data-story-field="limitation or non-claim"><strong>Limitation/non-claim:</strong> static package references do not answer package-health questions.</p>
+            <p data-story-field="stop condition"><strong>Stop condition:</strong> private-only evidence.</p>
+            <p data-story-field="next owner or next question"><strong>Next owner/question:</strong> package owner decides whether a public-safe summary can be created.</p>
+          </article>
+          <article data-proof-story-card data-story-category="generated artifact orientation" data-claim-level="concept" data-coverage-label="mixed">
+            <h3>Generated artifact orientation</h3>
+            <p data-story-field="static question"><strong>Static question:</strong> Which public-safe report family can orient this evidence packet?</p>
+            <p data-story-field="story category"><strong>Story category:</strong> generated artifact orientation.</p>
+            <p data-story-field="claim level"><strong>Claim level:</strong> concept.</p>
+            <p data-story-field="coverage label"><strong>Coverage label:</strong> mixed.</p>
+            <p data-story-field="proof path steps"><strong>Proof path steps:</strong> public-safe report family to packet reference to no public-safe evidence stop.</p>
+            <p data-story-field="evidence packet references"><strong>Evidence packet references:</strong> concept-artifact-packet.</p>
+            <p data-story-field="rule IDs or rule families"><strong>Rule IDs or rule families:</strong> <code>public.report.family</code>, <code>artifact.reference.static</code>.</p>
+            <p data-story-field="evidence tiers"><strong>Evidence tiers:</strong> <code>Tier2Structural</code>, <code>Tier4Unknown</code>.</p>
+            <p data-story-field="supporting IDs"><strong>Supporting IDs:</strong> <code>RF-C04</code>.</p>
+            <p data-story-field="limitation or non-claim"><strong>Limitation/non-claim:</strong> report-family labels are orientation handles, not raw generated output.</p>
+            <p data-story-field="stop condition"><strong>Stop condition:</strong> no public-safe evidence.</p>
+            <p data-story-field="next owner or next question"><strong>Next owner/question:</strong> do not publish until a public-safe summary exists.</p>
+          </article>
+          <article data-proof-story-card data-story-category="reduced-coverage orientation" data-claim-level="concept" data-coverage-label="unknown">
+            <h3>Reduced-coverage orientation</h3>
+            <p data-story-field="static question"><strong>Static question:</strong> Which analysis gap stops this static path?</p>
+            <p data-story-field="story category"><strong>Story category:</strong> reduced-coverage orientation.</p>
+            <p data-story-field="claim level"><strong>Claim level:</strong> concept.</p>
+            <p data-story-field="coverage label"><strong>Coverage label:</strong> unknown.</p>
+            <p data-story-field="proof path steps"><strong>Proof path steps:</strong> source surface to semantic evidence attempt to analysis gap surface.</p>
+            <p data-story-field="evidence packet references"><strong>Evidence packet references:</strong> concept-gap-packet.</p>
+            <p data-story-field="rule IDs or rule families"><strong>Rule IDs or rule families:</strong> <code>analysis.gap.static</code>, <code>semantic.load.gap</code>.</p>
+            <p data-story-field="evidence tiers"><strong>Evidence tiers:</strong> <code>Tier4Unknown</code>.</p>
+            <p data-story-field="supporting IDs"><strong>Supporting IDs:</strong> <code>AG-C05</code>.</p>
+            <p data-story-field="limitation or non-claim"><strong>Limitation/non-claim:</strong> the gap label is useful evidence, but it is still a stop.</p>
+            <p data-story-field="stop condition"><strong>Stop condition:</strong> semantic gap.</p>
+            <p data-story-field="next owner or next question"><strong>Next owner/question:</strong> code owner or reviewer decides whether a narrower public claim remains supportable.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="coverage-and-limitations">
+        <div class="section-header">
+          <p class="section-kicker">Coverage and limitations</p>
+          <h2>Coverage labels are part of the story, not a footnote.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Semantic</strong><span><code>Tier1Semantic</code> evidence can support compiler-resolved static relationships when the public-safe packet names the rule and source context.</span></div>
+          <div><strong>Structural</strong><span><code>Tier2Structural</code> evidence can support known framework or project-structure patterns with limitations attached.</span></div>
+          <div><strong>Syntax/textual</strong><span><code>Tier3SyntaxOrTextual</code> evidence stays lower-tier and keeps fallback wording visible.</span></div>
+          <div><strong>Unknown</strong><span><code>Tier4Unknown</code> marks an analysis gap or unable-to-prove state.</span></div>
+          <div><strong>Mixed or reduced</strong><span>Mixed, partial, reduced, unknown, unavailable, and gap-labeled coverage remain visible at the card and reference level.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="stop-conditions-and-routing">
+        <div class="section-header">
+          <p class="section-kicker">Stop conditions and routing</p>
+          <h2>When evidence stops, the gallery routes the next question.</h2>
+        </div>
+        <div class="detail-list">
+          <div data-stop-condition="no public-safe evidence" data-owner-route="public-safe summary"><strong>no public-safe evidence</strong><span>Do not publish until a public-safe summary exists.</span></div>
+          <div data-stop-condition="reduced coverage" data-owner-route="reviewer"><strong>reduced coverage</strong><span>Reviewer narrows the public claim or keeps the coverage label visible.</span></div>
+          <div data-stop-condition="semantic gap" data-owner-route="code owner"><strong>semantic gap</strong><span>Code owner or reviewer supplies follow-up evidence or keeps the gap label.</span></div>
+          <div data-stop-condition="syntax-only fallback" data-owner-route="reviewer"><strong>syntax-only fallback</strong><span>Reviewer keeps the lower tier visible and avoids stronger conclusions.</span></div>
+          <div data-stop-condition="private-only evidence" data-owner-route="product owner"><strong>private-only evidence</strong><span>Product owner decides whether an aggregate public-safe summary is possible.</span></div>
+          <div data-stop-condition="hidden detail" data-owner-route="security owner"><strong>hidden detail</strong><span>Security owner or reviewer abstracts or omits the detail.</span></div>
+          <div data-stop-condition="missing rule ID" data-owner-route="reviewer"><strong>missing rule ID</strong><span>Reviewer adds a rule ID or removes the conclusion.</span></div>
+          <div data-stop-condition="requires reducer evidence" data-owner-route="reviewer"><strong>requires reducer evidence</strong><span>Reviewer avoids impact wording until reducer evidence is public-safe.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header">
+          <p class="section-kicker">Walkthroughs</p>
+          <h2>Each walkthrough begins with a static question and ends in a bounded state.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article data-proof-walkthrough data-walkthrough-ending="evidence-backed static path">
+            <h3>Static route story</h3>
+            <p data-walkthrough-field="static question"><strong>Static question:</strong> Which route-shaped public surface has rule-backed static support?</p>
+            <p data-walkthrough-field="root/source surface"><strong>Root/source surface:</strong> public-safe source surface.</p>
+            <p data-walkthrough-field="destination or stopping surface"><strong>Destination/stopping surface:</strong> endpoint-shaped surface.</p>
+            <p data-walkthrough-field="rule IDs or rule families"><strong>Rule IDs or rule families:</strong> <code>endpoint.route.static</code>.</p>
+            <p data-walkthrough-field="evidence tiers"><strong>Evidence tiers:</strong> <code>Tier2Structural</code>.</p>
+            <p data-walkthrough-field="coverage labels"><strong>Coverage labels:</strong> reduced.</p>
+            <p data-walkthrough-field="supporting IDs"><strong>Supporting IDs:</strong> <code>EP-C01</code>.</p>
+            <p data-walkthrough-field="limitation or non-claim"><strong>Limitation/non-claim:</strong> static orientation only.</p>
+            <p data-walkthrough-field="stop condition"><strong>Stop condition:</strong> none beyond visible limitation.</p>
+            <p data-walkthrough-field="next owner or next question"><strong>Next owner/question:</strong> reviewer checks wording.</p>
+            <p><strong>Ending:</strong> evidence-backed static path.</p>
+          </article>
+          <article data-proof-walkthrough data-walkthrough-ending="reduced coverage">
+            <h3>Gap story</h3>
+            <p data-walkthrough-field="static question"><strong>Static question:</strong> Where does semantic evidence stop?</p>
+            <p data-walkthrough-field="root/source surface"><strong>Root/source surface:</strong> project surface.</p>
+            <p data-walkthrough-field="destination or stopping surface"><strong>Destination/stopping surface:</strong> analysis gap surface.</p>
+            <p data-walkthrough-field="rule IDs or rule families"><strong>Rule IDs or rule families:</strong> <code>semantic.load.gap</code>.</p>
+            <p data-walkthrough-field="evidence tiers"><strong>Evidence tiers:</strong> <code>Tier4Unknown</code>.</p>
+            <p data-walkthrough-field="coverage labels"><strong>Coverage labels:</strong> unknown.</p>
+            <p data-walkthrough-field="supporting IDs"><strong>Supporting IDs:</strong> <code>AG-C05</code>.</p>
+            <p data-walkthrough-field="limitation or non-claim"><strong>Limitation/non-claim:</strong> gap evidence cannot support stronger path wording.</p>
+            <p data-walkthrough-field="stop condition"><strong>Stop condition:</strong> semantic gap.</p>
+            <p data-walkthrough-field="next owner or next question"><strong>Next owner/question:</strong> code owner reviews the gap.</p>
+            <p><strong>Ending:</strong> reduced coverage.</p>
+          </article>
+          <article data-proof-walkthrough data-walkthrough-ending="needs owner follow-up">
+            <h3>Package story</h3>
+            <p data-walkthrough-field="static question"><strong>Static question:</strong> Which package surface needs a public-safe summary?</p>
+            <p data-walkthrough-field="root/source surface"><strong>Root/source surface:</strong> project surface.</p>
+            <p data-walkthrough-field="destination or stopping surface"><strong>Destination/stopping surface:</strong> package surface.</p>
+            <p data-walkthrough-field="rule IDs or rule families"><strong>Rule IDs or rule families:</strong> <code>package.reference.static</code>.</p>
+            <p data-walkthrough-field="evidence tiers"><strong>Evidence tiers:</strong> <code>Tier2Structural</code>.</p>
+            <p data-walkthrough-field="coverage labels"><strong>Coverage labels:</strong> gap-labeled.</p>
+            <p data-walkthrough-field="supporting IDs"><strong>Supporting IDs:</strong> <code>PK-C03</code>.</p>
+            <p data-walkthrough-field="limitation or non-claim"><strong>Limitation/non-claim:</strong> package reference evidence is not package-health evidence.</p>
+            <p data-walkthrough-field="stop condition"><strong>Stop condition:</strong> private-only evidence.</p>
+            <p data-walkthrough-field="next owner or next question"><strong>Next owner/question:</strong> package owner decides next evidence step.</p>
+            <p><strong>Ending:</strong> needs owner follow-up.</p>
+          </article>
+          <article data-proof-walkthrough data-walkthrough-ending="internal only">
+            <h3>Private evidence story</h3>
+            <p data-walkthrough-field="static question"><strong>Static question:</strong> What if the only support is not public-safe?</p>
+            <p data-walkthrough-field="root/source surface"><strong>Root/source surface:</strong> source surface.</p>
+            <p data-walkthrough-field="destination or stopping surface"><strong>Destination/stopping surface:</strong> private-only evidence boundary.</p>
+            <p data-walkthrough-field="rule IDs or rule families"><strong>Rule IDs or rule families:</strong> <code>private.evidence.boundary</code>.</p>
+            <p data-walkthrough-field="evidence tiers"><strong>Evidence tiers:</strong> <code>Tier4Unknown</code>.</p>
+            <p data-walkthrough-field="coverage labels"><strong>Coverage labels:</strong> hidden.</p>
+            <p data-walkthrough-field="supporting IDs"><strong>Supporting IDs:</strong> none public-safe.</p>
+            <p data-walkthrough-field="limitation or non-claim"><strong>Limitation/non-claim:</strong> keep the detail abstracted.</p>
+            <p data-walkthrough-field="stop condition"><strong>Stop condition:</strong> private-only evidence.</p>
+            <p data-walkthrough-field="next owner or next question"><strong>Next owner/question:</strong> product owner requests a safe aggregate.</p>
+            <p><strong>Ending:</strong> internal only.</p>
+          </article>
+          <article data-proof-walkthrough data-walkthrough-ending="hidden">
+            <h3>Hidden detail story</h3>
+            <p data-walkthrough-field="static question"><strong>Static question:</strong> Which detail must remain abstracted?</p>
+            <p data-walkthrough-field="root/source surface"><strong>Root/source surface:</strong> config category surface.</p>
+            <p data-walkthrough-field="destination or stopping surface"><strong>Destination/stopping surface:</strong> hidden detail boundary.</p>
+            <p data-walkthrough-field="rule IDs or rule families"><strong>Rule IDs or rule families:</strong> <code>hidden.detail.boundary</code>.</p>
+            <p data-walkthrough-field="evidence tiers"><strong>Evidence tiers:</strong> <code>Tier3SyntaxOrTextual</code>.</p>
+            <p data-walkthrough-field="coverage labels"><strong>Coverage labels:</strong> partial.</p>
+            <p data-walkthrough-field="supporting IDs"><strong>Supporting IDs:</strong> <code>DC-C02</code>.</p>
+            <p data-walkthrough-field="limitation or non-claim"><strong>Limitation/non-claim:</strong> category labels are the public boundary.</p>
+            <p data-walkthrough-field="stop condition"><strong>Stop condition:</strong> hidden detail.</p>
+            <p data-walkthrough-field="next owner or next question"><strong>Next owner/question:</strong> security owner reviews abstraction.</p>
+            <p><strong>Ending:</strong> hidden.</p>
+          </article>
+          <article data-proof-walkthrough data-walkthrough-ending="stop: no public-safe evidence">
+            <h3>Missing public proof story</h3>
+            <p data-walkthrough-field="static question"><strong>Static question:</strong> Can this report-family label be published?</p>
+            <p data-walkthrough-field="root/source surface"><strong>Root/source surface:</strong> public-safe report family.</p>
+            <p data-walkthrough-field="destination or stopping surface"><strong>Destination/stopping surface:</strong> no public-safe evidence boundary.</p>
+            <p data-walkthrough-field="rule IDs or rule families"><strong>Rule IDs or rule families:</strong> <code>public.report.family</code>.</p>
+            <p data-walkthrough-field="evidence tiers"><strong>Evidence tiers:</strong> <code>Tier4Unknown</code>.</p>
+            <p data-walkthrough-field="coverage labels"><strong>Coverage labels:</strong> future-only.</p>
+            <p data-walkthrough-field="supporting IDs"><strong>Supporting IDs:</strong> none public-safe.</p>
+            <p data-walkthrough-field="limitation or non-claim"><strong>Limitation/non-claim:</strong> future-only references stay unpublished.</p>
+            <p data-walkthrough-field="stop condition"><strong>Stop condition:</strong> no public-safe evidence.</p>
+            <p data-walkthrough-field="next owner or next question"><strong>Next owner/question:</strong> do not publish until a public-safe summary exists.</p>
+            <p><strong>Ending:</strong> stop: no public-safe evidence.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="non-claims-and-forbidden-wording" data-boundary="rejected-example">
+        <div>
+          <p class="section-kicker">Non-claims and forbidden wording</p>
+          <h2>The gallery cannot upgrade a story beyond its public evidence.</h2>
+        </div>
+        <ul>
+          <li>Do not claim runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, complete coverage, automated approval, product behavior proof, release-ready status, or endpoint safety from these cards.</li>
+          <li>Do not present the gallery as AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, autonomous review, or a replacement for tests, code review, source review, telemetry, logs, traces, APM, or human review.</li>
+          <li>Do not publish raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, private labels, command output, hidden validation details, or credential-like values.</li>
+          <li>Rejected example: "TraceMap found this changed surface and it is ready." The gallery instead says which static path exists, which rule family supports it, what coverage label applies, where it stops, and who owns the next question.</li>
+        </ul>
+      </section>
+
+      <section class="section" id="gallery-validation">
+        <div class="section-header">
+          <p class="section-kicker">Gallery validation</p>
+          <h2>Validation checks the public contract, not hidden evidence.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Markers</strong><span>Check visible claim level, shared principle, required anchors, required story-card fields, and required walkthrough fields.</span></div>
+          <div><strong>Metadata</strong><span>Check concept-level title, description, canonical URL, Open Graph fields, route-index entry, sitemap entry, and discovery entry.</span></div>
+          <div><strong>Safety</strong><span>Check forbidden wording outside boundary wrappers and private/raw material across rendered text, decoded attributes, raw HTML, metadata, sitemap output, route index, examples, and validation fixtures.</span></div>
+          <div><strong>Routing</strong><span>Check the bounded category set, stop-condition set, owner/question labels, and public-safe supporting IDs.</span></div>
+        </div>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Continue</p>
+          <h2>Use the canonical surfaces for source-of-truth review.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/proof-paths/">Proof path index</a>
+          <a href="/proof-source-catalog/">Proof source catalog</a>
+          <a href="/proof-paths/tour/">Guided proof-path tour</a>
+          <a href="/packets/examples/">Packet examples</a>
+          <a href="/glossary/">Evidence glossary</a>
+          <a href="/review-claim-checklist/">Review claim checklist</a>
+          <a href="/roadmap/">Roadmap</a>
+          <a href="/limitations/">Limitations</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Continue with the
+        <a href="/proof-paths/">proof path index</a>,
+        <a href="/proof-source-catalog/">proof source catalog</a>,
+        or
+        <a href="/review-claim-checklist/">review claim checklist</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
