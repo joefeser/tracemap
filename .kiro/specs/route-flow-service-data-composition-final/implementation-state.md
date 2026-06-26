@@ -1,9 +1,9 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: task-7-validation-guard-attachment-precision-ready-for-review
-Readiness: task-7-validation-guard-ready-for-pr-review-loop
+Status: task-7-serializer-contract-attachment-precision-ready-for-review
+Readiness: task-7-serializer-contract-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
-Implementation branch: `codex/task7-guard-serializer-attachments`
+Implementation branch: `codex/task7-serializer-contract-precision`
 Target base: `dev`
 Primary issues: `#159`, `#179`, `#201`
 Public claim level: static evidence only
@@ -2060,3 +2060,74 @@ Follow-ups:
   follow-up open for a dedicated performance/scale slice.
 - Keep Task 8/9/10 unchecked except for validation and safety behavior directly
   touched by this validation/guard sub-slice.
+
+## Task 7 Serializer/Contract Attachment Slice
+
+Branch: `codex/task7-serializer-contract-precision`
+Audited base: `origin/dev` at
+`b302c0ab5f9284b983cb3210ee6c0bc5f2d0ad27`.
+Selected family: serializer/contract fact-symbol projection.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision for
+  `SerializerContractMember` facts already emitted by the deterministic C#
+  semantic runtime-evidence extractor.
+- Project selected serializer contract member fact-symbol rows as
+  `serializer-contract` logic context only when joined to selected source-local
+  route-flow symbols, including selected DTO/type symbols reached by static
+  object-creation path evidence.
+- Cap serializer contract logic rows at `NeedsReviewStaticRouteFlow`, because
+  they are static contract context and do not prove serialization execution,
+  formatter selection, runtime payload shape, binary compatibility, client
+  compatibility, or production use.
+- Preserve `FactSymbolProjectionUnavailable` when same-source serializer
+  contract fact-symbol evidence exists but cannot join the selected static
+  route-flow path.
+
+Scope decisions:
+
+- This slice does not add terminal dependency surface kinds for serializer or
+  contract facts.
+- This slice does not start UI property lineage, site work, reducer behavior,
+  scanner extraction, runtime execution claims, serializer alias expansion, or
+  broader Task 8/9/10 compatibility work.
+- Broader service/repository/object/projection breadth remains follow-up Task 7
+  work; Task 7 stays unchecked.
+
+Oddities:
+
+- Real `SerializerContractMember` facts attach `sourceSymbol` to the containing
+  DTO/type and `targetSymbol` to the member. The focused selected-path test
+  therefore uses a selected object-creation edge to place the DTO/type symbol on
+  the route-flow path before projecting serializer contract context.
+- Contract name, member name, member type, containing type, source symbol, and
+  target symbol values are rendered only as hashes; raw serializer contract and
+  member names are not exposed in route-flow safe metadata.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_serializer_contract_members_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_serializer_contract_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 65 tests and the existing NU1903 warning.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 675 tests and the
+  existing NU1903 warning.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-serializer-contract-modern-sample`:
+  passed with 27 facts at `Level1SemanticAnalysis`; required outputs
+  `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
+  `logs/analyzer.log` were present.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Follow-ups:
+
+- Continue Task 7 with broader service/repository/object/projection breadth in
+  separate small slices.
+- Keep the large argument-pair and fact-symbol projection SQL batching/cap
+  follow-up open for a dedicated performance/scale slice.
+- Keep Task 8/9/10 unchecked except for validation and safety behavior directly
+  touched by this serializer/contract sub-slice.

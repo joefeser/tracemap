@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Final Tasks
 
-Status: task-7-validation-guard-attachment-precision-ready-for-review
+Status: task-7-serializer-contract-attachment-precision-ready-for-review
 
 ## Spec Delivery Tasks
 
@@ -221,6 +221,13 @@ current `dev` code or merged PR records prove the behavior.
       `validation-guard` logic context only when joined to selected
       source-local route-flow symbols, while adjacent unjoined guard evidence
       preserves `FactSymbolProjectionUnavailable`.
+      Branch `codex/task7-serializer-contract-precision` audited
+      `origin/dev` at `b302c0ab5f9284b983cb3210ee6c0bc5f2d0ad27` and selected
+      the serializer/contract fact-symbol projection sub-slice: selected
+      `SerializerContractMember` rows now project as review-tier
+      `serializer-contract` logic context only when joined to selected
+      source-local route-flow symbols, while adjacent unjoined serializer
+      contract evidence preserves `FactSymbolProjectionUnavailable`.
   - [ ] Attach service, repository, object/projection, query-shape, SQL-shape,
         legacy-data, package/config, HTTP client, WCF, ASMX/SOAP, remoting,
         event/message, storage, validation/guard, serializer/contract,
@@ -268,6 +275,10 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_validation_guard_branches_only_from_selected_static_path`
           and
           `Route_flow_does_not_infer_adjacent_validation_guard_without_selected_join`.
+    - [x] Serializer/contract fact-symbol projection sub-slice covered by
+          `Route_flow_attaches_serializer_contract_members_only_from_selected_static_path`
+          and
+          `Route_flow_does_not_infer_adjacent_serializer_contract_without_selected_join`.
   - [x] Render argument-flow and parameter-forward value-origin rows only when
         joined to selected static route-flow rows.
   - [x] Render fact-symbol context only for selected source-local symbols.
@@ -342,6 +353,13 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_validation_guard_branches_only_from_selected_static_path`
           and
           `Route_flow_does_not_infer_adjacent_validation_guard_without_selected_join`.
+    - [x] Serializer/contract member attachment, adjacent-unjoinable
+          fact-symbol gap behavior, data-surface context grouping,
+          safe contract/member hashing, deterministic stable IDs, and
+          review-tier classification cap covered by
+          `Route_flow_attaches_serializer_contract_members_only_from_selected_static_path`
+          and
+          `Route_flow_does_not_infer_adjacent_serializer_contract_without_selected_join`.
 
 - [ ] 8. Enforce coverage, classification, and gap downgrade behavior.
       Requirements: 5.
