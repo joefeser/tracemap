@@ -39,6 +39,12 @@ Task 5 validation status:
 - `dotnet test src/dotnet/TraceMap.sln`: passed locally with 642 tests.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+- ACK-authorized Qodo patch normalized the rule-catalog `evidenceTier` field
+  back to inherited evidence-tier wording and moved route-flow classification
+  caps into limitations. Post-patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 61 tests, `./scripts/check-private-paths.sh` passed, and
+  `git diff --check` passed. NuGet emitted the same existing NU1903 warning.
 
 Merged evidence on `dev`:
 
