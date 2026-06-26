@@ -311,7 +311,10 @@ public static class CombinedReverseReporter
                 first.StartLine,
                 first.EndLine,
                 "legacy-data-selector",
-                EmptyMetadata()));
+                SortedMetadata([
+                    new("commitSha", first.CommitSha),
+                    new("selectedLegacyDataSurfaceCount", ambiguousLegacyDataSelectorNodes.Count.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                ])));
         }
 
         var duplicateSurfaceKeys = selectedSurfaceNodes
