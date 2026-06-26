@@ -219,12 +219,17 @@ async function validateMetadata({ errors, root }) {
     if (typeof article[field] !== "string" || article[field].length > 180) {
       errors.push(withEvidence(`Build-review workflow story metadata ${field} must be 180 characters or fewer.`, metadataArtifact));
     }
+  }
 
-    if (typeof article[field] === "string") {
-      validateForbiddenClaims(article[field], errors, metadataArtifact);
-      validatePrivateMaterial(article[field], errors, metadataArtifact);
-      validateHardPrivateMaterial(article[field], errors, metadataArtifact);
+  for (const [field, value] of Object.entries(article)) {
+    if (typeof value !== "string") {
+      continue;
     }
+
+    const text = normalizeRenderedText(decodeHtmlEntities(value));
+    validateForbiddenClaims(text, errors, metadataArtifact);
+    validatePrivateMaterial(text, errors, metadataArtifact);
+    validateHardPrivateMaterial(text, errors, metadataArtifact);
   }
 
   if (!/concept-level|concept/i.test(`${article.description} ${article.ogDescription} ${article.cardDescription} ${article.hero}`)) {
@@ -284,11 +289,12 @@ async function validateArticlePage({ pagePath, errors }) {
   const renderedText = normalizeRenderedText(decodedHtml);
   const metadataText = collectMetadataText(decodedHtml);
   const attributeText = collectAttributeText(decodedHtml);
-  const articleBodyHtml = extractArticleBody(decodedHtml);
-  const unmarkedHtml = stripMarkedRegions(articleBodyHtml);
+  const articleBodyHtml = extractArticleBody(html);
+  const decodedArticleBodyHtml = decodeHtmlEntities(articleBodyHtml);
+  const unmarkedHtml = decodeHtmlEntities(stripMarkedRegions(articleBodyHtml));
   const unmarkedText = normalizeRenderedText(unmarkedHtml);
   const unmarkedCollapsedText = collapseTagSplitText(unmarkedHtml);
-  const wordCount = countWords(normalizeRenderedText(articleBodyHtml));
+  const wordCount = countWords(normalizeRenderedText(decodedArticleBodyHtml));
 
   if (!html.includes('<meta property="og:type" content="article">')) {
     errors.push(withEvidence('Build-review workflow story must include <meta property="og:type" content="article">.', pageArtifact));

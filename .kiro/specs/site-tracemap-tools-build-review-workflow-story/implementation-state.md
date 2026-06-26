@@ -235,6 +235,27 @@ release approval, vendor endorsement, or AI/LLM impact-analysis claim.
   The local implementation pass intentionally records validation and branch
   evidence here before PR creation; final ACK decision is reported from the
   PR-loop readback.
+- PR #350 initial ACK run against head
+  `e9589eb5886f70c3acc411cc7d7265bce90e1f2b` returned
+  `actionable_findings` / `UNRESOLVED_REVIEW_THREADS` with patch authorization.
+  Current findings were:
+  - Qodo: marked-region stripping could be bypassed because the validator
+    decoded HTML entities before stripping marked non-claim regions.
+  - Codex: metadata forbidden/private-material scanning covered preview
+    descriptions but not all article metadata string fields such as `hero` and
+    `calloutHtml`.
+- Local review patch: strip marked regions from raw HTML before decoding, scan
+  all article metadata string fields, and add regression tests for encoded
+  closing-tag non-claim text plus `hero`/`calloutHtml` metadata.
+- Post-review-patch validation on 2026-06-26:
+  - `node --test scripts/build-review-workflow-story.test.mjs`: passed, 9
+    tests.
+  - `npm test` from `site/`: passed, 546 tests.
+  - `npm run validate` from `site/`: passed; generated-site validator reported
+    72 HTML files, 2469 internal references, and 71 sitemap URLs.
+  - `npm run build` from `site/`: passed.
+  - `git diff --check`: passed.
+  - `./scripts/check-private-paths.sh`: passed.
 
 ## Oddities
 

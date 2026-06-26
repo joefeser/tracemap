@@ -53,6 +53,20 @@ test("validateBuildReviewWorkflowStoryDist rejects forbidden claims outside mark
   assert.match(errors.join("\n"), /forbidden claim outside marked regions: TraceMap uses AI/);
 });
 
+test("validateBuildReviewWorkflowStoryDist strips marked regions before decoding entities", async (t) => {
+  const root = await createBuildReviewWorkflowFixture(t, {
+    articleHtml: articlePage().replace(
+      "This workflow does not prove production traffic",
+      "Boundary text &lt;/section&gt; TraceMap uses AI inside a marked non-claim. This workflow does not prove production traffic"
+    )
+  });
+  const errors = [];
+
+  await validateBuildReviewWorkflowStoryDist({ dist: join(root, "dist"), errors, root: join(root, "src") });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateBuildReviewWorkflowStoryDist rejects private material outside marked regions", async (t) => {
   const root = await createBuildReviewWorkflowFixture(t, {
     articleHtml: articlePage("<p>The story can publish raw review logs.</p>")
@@ -61,6 +75,23 @@ test("validateBuildReviewWorkflowStoryDist rejects private material outside mark
 
   await validateBuildReviewWorkflowStoryDist({ dist: join(root, "dist"), errors, root: join(root, "src") });
 
+  assert.match(errors.join("\n"), /forbidden private\/raw material outside marked regions: raw review logs/);
+});
+
+test("validateBuildReviewWorkflowStoryDist scans hero and callout metadata", async (t) => {
+  const root = await createBuildReviewWorkflowFixture(t, {
+    articles: [
+      articleMetadata({
+        hero: "TraceMap uses AI for public workflow claims.",
+        calloutHtml: "Open raw review logs before publishing."
+      })
+    ]
+  });
+  const errors = [];
+
+  await validateBuildReviewWorkflowStoryDist({ dist: join(root, "dist"), errors, root: join(root, "src") });
+
+  assert.match(errors.join("\n"), /forbidden claim outside marked regions: TraceMap uses AI/);
   assert.match(errors.join("\n"), /forbidden private\/raw material outside marked regions: raw review logs/);
 });
 
