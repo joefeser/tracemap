@@ -29,6 +29,7 @@ import { validateIncidentEvidenceHandoffDist } from "./incident-evidence-handoff
 import { validateLegacyDataSurface } from "./legacy-data-surface.mjs";
 import { validateLegacyDotnetEvidenceLane } from "./legacy-dotnet-evidence-lane.mjs";
 import { validateLegacyModernizationEvidenceMap } from "./legacy-modernization-evidence-map.mjs";
+import { validateLegacyModernizationReviewHandoffDist } from "./legacy-modernization-review-handoff.mjs";
 import { validateLegacyStorySafety } from "./legacy-story-safety.mjs";
 import { validateManagerBriefDist } from "./manager-brief.mjs";
 import { validateManagerDemoScriptDist } from "./manager-demo-script.mjs";
@@ -131,6 +132,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateBlogProofPathSeriesDist({ baseUrl: normalizedBaseUrl, dist, errors, root: resolve(root, "src") });
     await validateIncidentCallDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateIncidentEvidenceHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateLegacyModernizationReviewHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerBriefDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerDemoScriptDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerFaqDist({ baseUrl: normalizedBaseUrl, dist, errors });

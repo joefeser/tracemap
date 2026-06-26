@@ -682,6 +682,23 @@
     ]
   },
   {
+    "path": "/legacy-modernization/review-handoff/",
+    "title": "Legacy Modernization Review Handoff",
+    "summary": "Concept-level handoff for carrying deterministic static legacy evidence into modernization owner questions with proof fields, limitations, allowed wording, and stop conditions attached.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/legacy-modernization/evidence-map/",
+    "limitations": [
+      "The route is a public-safe handoff checklist over existing static evidence surfaces, not a modernization decision, migration tool, runtime telemetry source, ownership record, or release approval surface.",
+      "Every matrix row must keep rule context, evidence tier, coverage label, proof path, limitation, owner question, allowed wording, and stop condition attached."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, migration success, schema compatibility, database connectivity, database execution, raw data access, AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, autonomous approval, or complete coverage proof.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, raw config values, secrets, tokens, connection strings, database contents, raw remotes, local paths, generated scan directories, private sample names, raw command output, private URLs, hidden validation details, credential-like values, or replacement of human owner review."
+    ]
+  },
+  {
     "path": "/legacy-dotnet/evidence/",
     "title": "Legacy .NET Evidence Lane",
     "summary": "Concept-level status matrix for legacy .NET static evidence questions, proof-path requirements, row limitations, and conservative hidden defaults.",
