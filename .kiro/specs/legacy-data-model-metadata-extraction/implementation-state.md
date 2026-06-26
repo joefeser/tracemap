@@ -1,8 +1,8 @@
 # Legacy Data Model Metadata Extraction Implementation State
 
-Status: implementation-slice-ready-for-pr
+Status: implementation-slice-11-merged-with-follow-ups
 Spec authoring branch: codex/spec-legacy-data-model-metadata-extraction
-Current implementation branch: codex/implement-legacy-data-model-portfolio-safety
+Previous implementation branch: codex/implement-legacy-data-model-portfolio-safety
 Latest implementation branch: codex/legacy-data-model-selector-slice
 Public claim level: hidden
 
@@ -15,6 +15,7 @@ work after the current continuation slice.
 
 Branch: `codex/legacy-data-model-selector-slice`
 Base: `origin/dev` after PR #373
+Merged PR: #374 at `b61fcaed`
 
 Selected scope: partial Task 3/7 reverse-query selector downgrade behavior for
 projected `legacy-data` model surfaces. This slice does not add new scanner

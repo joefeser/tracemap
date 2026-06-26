@@ -1,6 +1,6 @@
 # Legacy Data Model ORM Mapping Completion Implementation State
 
-Status: implementation-slice-ready-for-pr
+Status: implementation-slice-1-merged-with-follow-ups
 Spec authoring branch: codex/spec-legacy-data-model-orm-mapping-completion
 Implementation branch: codex/legacy-orm-mapping-slice
 Target base: dev
@@ -13,6 +13,8 @@ No product code is implemented here.
 
 2026-06-26 implementation slice:
 
+- Merged PR #373 to `dev` at `c70d60e6` from branch
+  `codex/legacy-orm-mapping-slice`.
 - Confirmed existing NHibernate, unsupported ORM, generated-link, descriptor
   projection, report/export, and rule catalog behavior already covers a large
   portion of this broad spec on `dev`.
