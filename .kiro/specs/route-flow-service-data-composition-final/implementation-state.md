@@ -415,10 +415,16 @@ Validation status:
 - `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke-http-client-20260626`:
   passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
   `report.md`, and `logs/analyzer.log`.
+- Post-Qodo doc-drift patch
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_http_client_surface_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_http_client_surface_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning.
+- Post-Qodo doc-drift patch `./scripts/check-private-paths.sh`: passed.
+- Post-Qodo doc-drift patch `git diff --check`: passed.
 
 ## Summary
 
-This is a spec-only completion packet for the remaining route-centered static
+This packet now tracks both the original spec-only delivery and subsequent
+focused implementation/test slices for the remaining route-centered static
 service/data composition work. The target product behavior is a conservative
 `tracemap route-flow` trace that can start at endpoint/root method evidence,
 stitch into service methods, continue through review-tier implementation
