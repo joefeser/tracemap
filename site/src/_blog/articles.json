@@ -1,5 +1,20 @@
 [
   {
+    "slug": "building-tracemap-under-review-pressure",
+    "category": "Workflow governance",
+    "title": "Building TraceMap Under Review Pressure",
+    "h1": "Building TraceMap Under Review Pressure",
+    "description": "A concept-level workflow story about using specs, review loops, and deterministic validation to keep TraceMap public claims attached to evidence.",
+    "ogDescription": "How TraceMap site work uses specs, review pressure, claim levels, and validation evidence without turning workflow pressure into product proof.",
+    "cardDescription": "A process story about review pressure, claim levels, validation evidence, non-claims, and human ownership in TraceMap site work.",
+    "hero": "A concept-level note on using specs, review loops, and deterministic validation to keep public claims attached to evidence.",
+    "published": "2026-06-26",
+    "publishedDisplay": "June 26, 2026",
+    "body": "articles/building-tracemap-under-review-pressure.html",
+    "calloutHeading": "Want the baseline workflow first?",
+    "calloutHtml": "Read <a href=\"/blog/building-tracemap-with-codex-kiro-qodo/\">Building TraceMap With Codex, Kiro, and Qodo</a>, then use the <a href=\"/review-claim-checklist/\">review claim checklist</a>."
+  },
+  {
     "slug": "what-a-proof-path-is",
     "category": "Proof paths",
     "title": "What a Proof Path Is",
