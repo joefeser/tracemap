@@ -613,6 +613,23 @@
     ]
   },
   {
+    "path": "/legacy-dotnet/evidence/",
+    "title": "Legacy .NET Evidence Lane",
+    "summary": "Concept-level status matrix for legacy .NET static evidence questions, proof-path requirements, row limitations, and conservative hidden defaults.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/legacy-evidence/",
+    "limitations": [
+      "The lane is a concept-level reviewer matrix, not a scanner coverage page or modernization decision surface.",
+      "Legacy .NET surface rows remain hidden or future until branch-appropriate public-safe proof supports stronger exact wording."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, live endpoint existence, endpoint performance, service reachability, UI reachability, user workflow execution, outage cause, release approval, release safety, operational safety, security posture, exploitability, database existence, query execution, schema compatibility, package compatibility, migration feasibility, migration completeness, or complete product coverage proof.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, production identifiers, hidden validation details, hidden capability counts, AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, or credential-like values are public lane material."
+    ]
+  },
+  {
     "path": "/use-cases/incident-review/",
     "title": "Incident Review Orientation",
     "summary": "Describes how static evidence can orient incident-adjacent code questions while operational proof stays outside TraceMap.",
