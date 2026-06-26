@@ -1,9 +1,9 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: task-7-service-repository-object-projection-breadth-ready-for-review
-Readiness: task-7-service-repository-object-projection-ready-for-pr-review-loop
+Status: task-8-coverage-classification-gap-downgrade-ready-for-review
+Readiness: task-8-coverage-classification-gap-downgrade-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
-Implementation branch: `codex/task7-service-projection-breadth-20260626`
+Implementation branch: `codex/route-flow-task8-coverage`
 Target base: `dev`
 Primary issues: `#159`, `#179`, `#201`
 Public claim level: static evidence only
@@ -2237,3 +2237,73 @@ Follow-ups:
   follow-up open for a dedicated performance/scale slice.
 - Keep Task 8/9/10 unchecked except for validation and safety behavior directly
   touched by this serializer/contract sub-slice.
+
+## Task 8 Coverage, Classification, And Gap Downgrade Slice
+
+Branch: `codex/route-flow-task8-coverage`
+Audited base: `origin/dev` at `10bf8a93`.
+Selected slice: final route-flow coverage/classification/gap-downgrade
+contract for Requirement 5.
+
+Scope:
+
+- Keep this PR limited to route-flow core/reporting tests and spec state.
+- Emit an explicit computed `classification` field on every route-flow gap so
+  gap rows carry rule ID, evidence tier, classification, coverage, safe
+  message/scope metadata, supporting IDs where available, and limitations.
+- Share route-flow gap classification through one helper so JSON, classification
+  filtering, and summary/gap assertions do not drift.
+- Treat `TruncatedByLimit` route-flow gaps as `UnknownAnalysisGap`, preserving
+  the spec rule that truncation blocks a credible clean-absence conclusion.
+- Preserve existing downgrade behavior already covered on `dev`: full coverage
+  is required for `StrongStaticRouteFlow`; clean `NoRouteFlowEvidence` is
+  suppressed by selector, identity, schema/extractor, projection, attachment,
+  reduced-coverage, and traversal blockers; syntax/name-only/Tier3,
+  high-fan-out, candidate, dynamic/runtime-adjacent, unjoined, and
+  reduced-coverage evidence remains review-tier or unknown.
+
+Scope decisions:
+
+- This slice does not start Task 9 deterministic JSON/Markdown compatibility
+  beyond the directly touched additive gap field and existing deterministic
+  report tests.
+- This slice does not start Task 10 redaction/public-safety work beyond
+  preserving existing safe rendering assertions.
+- No scanner extraction, reducer behavior, site work, UI property lineage,
+  runtime execution claims, new command, new report type, new rule namespace, or
+  new gap code was added.
+
+Oddities:
+
+- `RouteFlowGap` classification is derived from closed-set `gapKind` rather
+  than stored separately in constructors. This keeps existing gap construction
+  stable while making the classification explicit in JSON.
+- Projection and data-surface attachment gaps remain
+  `NeedsReviewStaticRouteFlow` because they are unjoined static context gaps;
+  they still suppress clean absence through the existing clean no-evidence
+  blocker path.
+- Truncation already reduced report coverage through `IsBlockingGap`; this
+  slice aligns the per-gap classification with the same unknown conclusion.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 67 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 677 tests and the
+  existing NU1903 warning.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task8-coverage-modern-sample`:
+  passed with 27 facts at `Level1SemanticAnalysis`; required outputs
+  `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
+  `logs/analyzer.log` were present.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Follow-ups:
+
+- Task 9 remains unchecked for broader byte-stable JSON/Markdown compatibility,
+  exit-code matrix, and route-flow rule-catalog resolution coverage not
+  otherwise touched by this additive field.
+- Task 10 remains unchecked for broader redaction/public-safe negative tests.

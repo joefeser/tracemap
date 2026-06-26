@@ -142,6 +142,30 @@ public sealed class CombinedRouteFlowTests
 
         var parsed = JsonSerializer.Deserialize<RouteFlowReport>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         Assert.NotNull(parsed);
+        var parsedJson = JsonNode.Parse(json);
+        var gapNodes = parsedJson?["gaps"]?.AsArray();
+        Assert.NotNull(gapNodes);
+        Assert.NotEmpty(gapNodes!);
+        Assert.All(gapNodes!, node =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(node?["ruleId"]?.GetValue<string>()));
+            Assert.False(string.IsNullOrWhiteSpace(node?["evidenceTier"]?.GetValue<string>()));
+            Assert.False(string.IsNullOrWhiteSpace(node?["classification"]?.GetValue<string>()));
+            Assert.False(string.IsNullOrWhiteSpace(node?["coverage"]?.GetValue<string>()));
+            Assert.False(string.IsNullOrWhiteSpace(node?["message"]?.GetValue<string>()));
+            Assert.True(node?["limitations"]?.AsArray().Count > 0);
+        });
+        Assert.All(parsed!.Gaps, gap =>
+        {
+            Assert.True(gap.Classification is RouteFlowClassifications.NeedsReviewStaticRouteFlow
+                or RouteFlowClassifications.NoRouteFlowEvidence
+                or RouteFlowClassifications.UnknownAnalysisGap);
+            Assert.StartsWith("combined.route-flow.", gap.RuleId, StringComparison.Ordinal);
+            Assert.NotEmpty(gap.EvidenceTier);
+            Assert.NotEmpty(gap.Coverage);
+            Assert.NotEmpty(gap.Message);
+            Assert.NotEmpty(gap.Limitations);
+        });
         Assert.Contains(parsed!.EntryEvidence, row => row.EntryKind == "route-root"
             && row.BridgeState == "method-symbol"
             && row.Evidence.RuleId == "combined.route-flow.entry.v1");
@@ -1451,7 +1475,8 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(result.Report.EntryEvidence, row => row.EntryKind == "route-root");
         Assert.Empty(result.Report.FlowRows);
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "MissingRouteRoot" or "MissingMethodSymbolBridge" or "MissingCallEdge");
-        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "TruncatedByLimit");
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "TruncatedByLimit"
+            && gap.Classification == RouteFlowClassifications.UnknownAnalysisGap);
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
         Assert.All(result.Report.ContextGroups!, group => Assert.Equal("gap", group.GroupKind));
         Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, result.Report.Summary.Classification);
@@ -2973,6 +2998,8 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "FactSymbolUnsupportedTypeSkipped");
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "ExtractorUnavailable");
+        Assert.All(result.Report.Gaps.Where(gap => gap.GapKind is "ArgumentProjectionUnavailable" or "FactSymbolProjectionUnavailable" or "FactSymbolUnsupportedTypeSkipped"),
+            gap => Assert.Equal(RouteFlowClassifications.NeedsReviewStaticRouteFlow, gap.Classification));
         Assert.DoesNotContain(result.Report.LogicRows, row => row.Evidence.RuleId is "combined.route-flow.argument-projection.v1" or "combined.route-flow.fact-symbol-projection.v1");
     }
 

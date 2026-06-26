@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Final Tasks
 
-Status: task-7-service-repository-object-projection-breadth-ready-for-review
+Status: task-8-coverage-classification-gap-downgrade-ready-for-review
 
 ## Spec Delivery Tasks
 
@@ -383,23 +383,30 @@ current `dev` code or merged PR records prove the behavior.
           and
           `Route_flow_does_not_infer_adjacent_object_shape_without_selected_join`.
 
-- [ ] 8. Enforce coverage, classification, and gap downgrade behavior.
+- [x] 8. Enforce coverage, classification, and gap downgrade behavior.
       Requirements: 5.
       Suggested boundary: PR 1 for rows touched by Task 5; otherwise PR 4.
-  - [ ] Require full relevant route-flow coverage for
+      Status: complete. Branch `codex/route-flow-task8-coverage` audited
+      `origin/dev` at `10bf8a93` and closed the final downgrade/provenance
+      slice by emitting explicit gap classifications, sharing the gap
+      classifier used by JSON/filter behavior, preserving Unknown for
+      truncation blockers, and adding focused coverage over full/reduced
+      coverage, selector, identity, projection, no-evidence, Tier3/review-tier,
+      and route-flow-specific gap downgrade behavior.
+  - [x] Require full relevant route-flow coverage for
         `StrongStaticRouteFlow`.
-  - [ ] Require full relevant route-flow coverage and no unresolved bridge,
+  - [x] Require full relevant route-flow coverage and no unresolved bridge,
         projection, identity, schema, extractor, selector, reduced-coverage, or
         truncation gaps for `NoRouteFlowEvidence`.
-  - [ ] Ensure `UnknownAnalysisGap` wins over clean absence when coverage,
+  - [x] Ensure `UnknownAnalysisGap` wins over clean absence when coverage,
         schema, extractor, identity, commit, generated-code, unsupported-shape,
         or truncation evidence blocks a credible conclusion.
-  - [ ] Cap syntax-only, textual, name-only, dynamic, ambiguous,
+  - [x] Cap syntax-only, textual, name-only, dynamic, ambiguous,
         high-fan-out, candidate, generated-code uncertain, unjoined, and
         reduced-coverage rows at review-tier or unknown.
-  - [ ] Assert Tier3-only stitched downstream rows cannot satisfy
+  - [x] Assert Tier3-only stitched downstream rows cannot satisfy
         `StrongStaticRouteFlow`.
-  - [ ] Ensure every emitted gap includes rule ID, evidence tier,
+  - [x] Ensure every emitted gap includes rule ID, evidence tier,
         classification, coverage, safe scope, supporting IDs where available,
         file span where available, and limitations.
 
