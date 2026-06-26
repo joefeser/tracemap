@@ -1,17 +1,17 @@
 # TraceMap Kiro Review Packet
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 Review the `site-tracemap-tools-route-flow-evidence-story` spec for
-implementation readiness.
+implemented-state consistency.
 
-This is a spec-only public site phase. It should define a future
-`tracemap.tools` page or section that tells the route-flow evidence story in
-public-safe terms: how TraceMap can present route-centered static evidence from
-endpoint/root selection to selected service, data, query, dependency,
-value-origin, gap, limitation, and owner-handoff context.
+This implemented public site packet defines the `tracemap.tools` page that
+tells the route-flow evidence story in public-safe terms: how TraceMap can
+present route-centered static evidence from endpoint/root selection to
+selected service, data, query, dependency, value-origin, gap, limitation, and
+owner-handoff context.
 
 Please inspect:
 
@@ -23,17 +23,18 @@ Please inspect:
 
 Review focus:
 
-- Does the spec stay implementation-free and leave future implementation tasks
-  unchecked?
-- Are `Status: not-started`, `Readiness: ready-for-implementation`, and
-  `Public claim level: concept` present in the delivered packet, with the
-  transition from initial `spec-review` readiness recorded after Kiro review
-  findings were patched or dispositioned?
-- Does the spec require visible `Public claim level: concept` and
-  `No public conclusion without evidence` for the future page or section?
-- Does the spec define a conservative route or section placement decision and
-  require route-placement rationale in `implementation-state.md`?
-- Does it distinguish the future story from `/proof-paths/`,
+- Does the packet consistently use `Status: implemented`, `Readiness:
+  implemented`, and `Public claim level: concept` across sibling docs?
+- Does the packet keep implementation scope limited to static-site source,
+  metadata, and validation while avoiding scanner behavior, route-flow
+  behavior, reducer behavior, generated scan artifacts, runtime probes, or
+  release gates?
+- Does the implemented page require visible `Public claim level: concept` and
+  `No public conclusion without evidence`?
+- Does the spec record the selected standalone `/proof-paths/route-flow/`
+  placement decision and route-placement rationale in
+  `implementation-state.md`?
+- Does it distinguish the implemented story from `/proof-paths/`,
   `/proof-paths/tour/`, `/evidence/`, `/limitations/`,
   `/static-vs-runtime/`, `/review-claim-checklist/`, and `/glossary/`?
 - Does it preserve the proof path from selector/root to route/root evidence,

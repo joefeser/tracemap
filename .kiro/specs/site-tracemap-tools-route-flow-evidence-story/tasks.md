@@ -1,12 +1,13 @@
 # Site TraceMap Tools Route-Flow Evidence Story Tasks
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
-These tasks track a spec-only public-site packet. Future implementation tasks
-remain unchecked until a later site implementation phase edits site source and
-validation.
+These tasks began as a spec-only public-site packet and now track the
+completed site implementation. Do not implement scanner code, reducer code,
+runtime route proof, production traffic analysis, or AI/LLM impact analysis in
+this site packet.
 
 ## Spec Review Tasks
 
@@ -17,7 +18,8 @@ validation.
 - [x] Record Sonnet review findings and dispositions in
       `implementation-state.md` before marking the readiness gate task
       complete.
-- [ ] If both requested models are unavailable, record the exact errors, run
+- [x] N/A: both requested models were not unavailable. If both requested
+      models are unavailable in a future review cycle, record the exact errors, run
       the best available Kiro spec review, and record the substitution and
       rationale in `implementation-state.md`.
 - [x] Patch Medium or higher actionable spec findings and run one bounded
@@ -36,7 +38,7 @@ validation.
 
 ## Future Implementation Tasks
 
-- [ ] Confirm or update this spec-local `implementation-state.md` with branch,
+- [x] Confirm or update this spec-local `implementation-state.md` with branch,
       route choice, scope decisions, review results, validation plan, and
       initial implementation status before changing site code.
 - [x] Audit current `origin/dev` route-flow specs, implementation-state notes,
@@ -64,8 +66,9 @@ validation.
 - [x] If standalone, add title, description, canonical URL, Open Graph
       metadata, sitemap metadata, and discovery metadata with concept-level
       wording.
-- [ ] If a host-route section, record host metadata reconciliation and add
-      stable namespaced anchors.
+- [x] N/A: standalone `/proof-paths/route-flow/` route was selected, so
+      host-route metadata reconciliation and stable section anchors were not
+      applicable.
 - [x] Present the route-flow proof path from selector/root to route/root
       evidence, bridge state, selected rows, context rows, gaps, limitations,
       and owner handoff.

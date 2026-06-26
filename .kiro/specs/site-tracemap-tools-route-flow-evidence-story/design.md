@@ -1,17 +1,19 @@
 # Site TraceMap Tools Route-Flow Evidence Story Design
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Design Purpose
 
-This design describes a future public-safe page or section that explains the
+This design describes the implemented public-safe page that explains the
 route-flow evidence story in TraceMap terms. It gives readers a bounded way to
 read route-centered static evidence from endpoint/root selection through
 service, data, dependency, value-origin, gap, and limitation context.
 
-This design does not implement site code.
+The selected implementation is the standalone `/proof-paths/route-flow/`
+route. This design does not implement scanner behavior, route-flow behavior,
+reducer behavior, generated scan artifacts, runtime probes, or release gates.
 
 ## Starting Boundary
 
@@ -232,7 +234,8 @@ desktop/mobile browser sanity checks when layout or interaction changes.
 
 ## Non-Goals
 
-- No site implementation in this spec-only phase.
+- No additional site implementation beyond the checked-in static route,
+  metadata, and validation.
 - No route-flow product implementation.
 - No scanner, reducer, adapter, or generated artifact changes.
 - No runtime probes, production telemetry, endpoint performance claims,

@@ -1,23 +1,23 @@
 # Site TraceMap Tools Proof Paths For Managers Requirements
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Summary
 
-Define a future `tracemap.tools` manager-facing page or section that explains
-proof paths in decision terms. The surface should help managers, reviewers,
-engineering leads, and non-implementing stakeholders ask the right question,
-find the evidence packet, understand what the packet proves from deterministic
-static evidence, understand what it does not prove, preserve the coverage
-label, and route the next runtime, product, release, or owner judgment to the
-right human owner.
+This packet defines the implemented `tracemap.tools` manager-facing proof-path
+surface. The page explains proof paths in decision terms and helps managers,
+reviewers, engineering leads, and non-implementing stakeholders ask the right
+question, find the evidence packet, understand what the packet supports from
+deterministic static evidence, understand what it does not prove, preserve the
+coverage label, and route the next runtime, product, release, or owner
+judgment to the right human owner.
 
-This is a spec-only site packet. It does not implement site code, scanner
-behavior, reducer behavior, generated artifacts, validation scripts, runtime
-monitoring, release automation, approval workflow, or management-decision
-automation.
+The implementation is limited to public static-site source, metadata, and
+validation. It does not implement scanner behavior, reducer behavior,
+generated artifacts, runtime monitoring, release automation, approval
+workflow, or management-decision automation.
 
 ## Shared Site Principle
 
@@ -25,12 +25,12 @@ No public conclusion without evidence.
 
 ## Claim Level Rationale
 
-Use `Public claim level: concept` because the future surface explains how
+Use `Public claim level: concept` because the implemented surface explains how
 managers should read and route proof-path evidence. It does not add a new
 scanner capability, reducer result, demo artifact, runtime observation,
 release decision, product decision, or automated management decision.
 
-The future implementation must visibly include:
+The implemented surface must visibly include:
 
 - `Public claim level: concept`
 - `No public conclusion without evidence`
@@ -42,13 +42,13 @@ future spec amendment records exact public-safe evidence for a stronger claim.
 
 ## Claim Boundaries
 
-The future surface may explain TraceMap's deterministic static evidence model:
+The implemented surface may explain TraceMap's deterministic static evidence model:
 rule IDs or rule families, evidence tiers, coverage labels, limitations,
 analysis gaps, public-safe file paths and line spans, commit or public-safe
 source context, extractor versions, proof paths, generated artifact families,
 review packets, and next-owner handoffs.
 
-The future surface must not claim runtime proof, production traffic,
+The implemented surface must not claim runtime proof, production traffic,
 endpoint performance, outage cause, release safety, operational safety,
 complete product coverage, AI impact analysis, LLM analysis, embeddings,
 vector databases, prompt-based classification, automated approval, automated
@@ -56,7 +56,7 @@ management decisions, or replacement of human review, source review, tests,
 telemetry, logs, traces, product judgment, service-owner judgment, release
 process, or manager judgment.
 
-The future surface must not publish raw source snippets, raw SQL, config
+The implemented surface must not publish raw source snippets, raw SQL, config
 values, secrets, local absolute paths, raw repository remotes, generated scan
 directories, raw `facts.ndjson`, raw `index.sqlite`, combined SQLite files,
 analyzer logs, hidden validation details, raw command output, private sample
