@@ -38,8 +38,10 @@ Please inspect:
 
 - Does the spec satisfy spec-only scope without requiring site code changes in
   this phase?
-- Are `Status: not-started`, `Readiness: spec-review`, and
-  `Public claim level: concept` present and consistent before review?
+- Does the packet preserve the readiness lifecycle: initial spec review starts
+  at `Readiness: spec-review`, committed post-review state may advance to
+  `Readiness: ready-for-implementation`, and `Status: not-started` plus
+  `Public claim level: concept` remain consistent?
 - Does the spec justify advancing readiness to `ready-for-implementation` only
   after review findings are patched?
 - Does it reconcile the future page with the existing
