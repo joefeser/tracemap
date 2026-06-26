@@ -3295,7 +3295,7 @@ public sealed class CombinedRouteFlowTests
             Path.Combine(temp.Path, "route-flow-unsafe-inputs"),
             FromSymbol: "public string Token => secret;",
             ToSurface: "sql-query",
-            SurfaceName: "SELECT\nEmail FROM TenantSecrets WHERE ApiToken = API_KEY; Data Source=private.example.test; PWD=secret; /root/token-cache"));
+            SurfaceName: "safe-prefix WHERE id IN (SELECT Email FROM TenantSecrets WHERE ApiToken = API_KEY); Data Source=private.example.test; PWD=secret; /root/token-cache"));
 
         var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "route-flow-report.md"));
         var json = await File.ReadAllTextAsync(Path.Combine(outDir, "route-flow-report.json"));
@@ -3318,6 +3318,7 @@ public sealed class CombinedRouteFlowTests
             "Server=private.example.test",
             "Password=secret",
             "select CardNumber",
+            "safe-prefix WHERE id IN",
             "TenantSecrets",
             "CardNumber",
             "ApiToken",
