@@ -254,6 +254,7 @@ Planned spec-only validation:
 
 ```bash
 git diff --check
+git diff --cached --check
 ./scripts/check-private-paths.sh
 ```
 
@@ -303,12 +304,11 @@ Results:
   generated output.
 - Site build passed.
 - `git diff --check` passed.
+- `git diff --cached --check` passed after staging the implementation files.
 - `./scripts/check-private-paths.sh` passed with `Private path guard passed.`
 - Browser sanity check passed for desktop 1440x1200 and mobile 390x844 using
   the built static route. Screenshots were captured as generated Playwright
   artifacts and are not committed.
-
-Final validation still needs `git diff --cached --check` after staging.
 
 ## Follow-Up Items
 
@@ -334,3 +334,16 @@ Patched:
   `dev-only` rows.
 - Updated `review-packet.md` review-cycle wording from initial pending review
   state to completed Opus, Sonnet, and bounded re-review state.
+
+Implementation ACK on PR 345 returned `actionable_findings` for five
+unresolved review threads.
+
+Patched:
+
+- Clarified that `git diff --cached --check` passed after staging the
+  implementation files.
+- Updated the legacy .NET evidence-lane validator to decode numeric and
+  hexadecimal HTML entities before leak checks.
+- Updated the legacy .NET evidence-lane validator to scan decoded metadata and
+  raw HTML text for unsupported support claims, not only tag-stripped rendered
+  text.
