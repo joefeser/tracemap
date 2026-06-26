@@ -111,7 +111,23 @@ Actionable review findings were patched:
 All Medium+ actionable findings from the saved reviews have been patched.
 Readiness is advanced to `ready-for-implementation` for this spec-only packet.
 
-Implementation PR loop status: pending PR creation and ACK run.
+Implementation PR loop status:
+
+- PR #365 initial ACK on head
+  `6c71b855683b2e891d31599372379b5e804a45cd` returned
+  `decision=actionable_findings`, `stopReason=UNRESOLVED_REVIEW_THREADS`,
+  `nextAction=patch_actionable_findings`, with 8 unresolved review threads.
+- Patch scope: hardened `site/scripts/legacy-data-surface.mjs` for
+  attribute-order and whitespace-tolerant metadata checks, href and row
+  attribute parsing, metadata/private attribute scanning, and missing matrix
+  header handling; added regression tests in
+  `site/scripts/legacy-data-surface.test.mjs`.
+- Post-patch validation: `cd site && npm test`, `cd site && npm run validate`,
+  `cd site && npm run build`, `git diff --check`, and
+  `./scripts/check-private-paths.sh` passed. A parallel validate/build attempt
+  was discarded after both commands raced on `site/dist`; sequential reruns
+  passed.
+- Final ACK after patch push: pending.
 
 ## Review Artifacts
 

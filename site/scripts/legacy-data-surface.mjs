@@ -145,16 +145,16 @@ export function validateLegacyDataSurfaceHtml(html, { label = legacyDataSurfaceT
     errors.push(`${label} is missing the expected page title.`);
   }
 
-  if (!/<link\s+rel=["']canonical["']\s+href=["']https:\/\/tracemap\.tools\/legacy-data-surface\/["']/i.test(html)) {
+  if (!hasTagWithAttributes(html, "link", { rel: "canonical", href: "https://tracemap.tools/legacy-data-surface/" })) {
     errors.push(`${label} is missing the expected canonical URL.`);
   }
 
-  if (!/<meta\s+property=["']og:type["']\s+content=["']website["']/i.test(html)) {
+  if (!hasTagWithAttributes(html, "meta", { property: "og:type", content: "website" })) {
     errors.push(`${label} is missing og:type website metadata.`);
   }
 
   for (const meta of ["og:title", "og:description", "og:url"]) {
-    if (!new RegExp(`<meta\\s+property=["']${escapeRegExp(meta)}["']\\s+content=["'][^"']+["']`, "i").test(html)) {
+    if (!hasTagWithAttributes(html, "meta", { property: meta }, ["content"])) {
       errors.push(`${label} is missing ${meta} metadata.`);
     }
   }
@@ -166,7 +166,7 @@ export function validateLegacyDataSurfaceHtml(html, { label = legacyDataSurfaceT
   }
 
   for (const href of requiredLinks) {
-    if (!new RegExp(`href=["']${escapeRegExp(href)}["']`, "i").test(html)) {
+    if (!new RegExp(`href\\s*=\\s*["']${escapeRegExp(href)}["']`, "i").test(html)) {
       errors.push(`${label} is missing required public-safe link: ${href}`);
     }
   }
@@ -175,6 +175,7 @@ export function validateLegacyDataSurfaceHtml(html, { label = legacyDataSurfaceT
   validateWordCount(mainText, { errors, label });
   validatePrivateDisclosures(raw, { errors, label });
   validateAffirmativeOverclaims(text, { errors, label });
+  validateAffirmativeOverclaims(extractAttributeValues(html).join(". "), { errors, label, source: "metadata attributes" });
 
   return errors;
 }
@@ -253,8 +254,12 @@ function validateMatrix(html, { errors, label }) {
   }
 
   const body = extractElement(matrix, "tbody") || matrix;
-  const rows = [...body.matchAll(/<tr\b[^>]*data-surface-row=["']([^"']+)["'][^>]*>[\s\S]*?<\/tr>/gi)];
+  const rows = [...body.matchAll(/<tr\b[^>]*data-surface-row\s*=\s*["']([^"']+)["'][^>]*>[\s\S]*?<\/tr>/gi)];
   const seenStatuses = new Set();
+
+  if (requiredHeaders.some((header) => !headerIndex.has(header.toLowerCase()))) {
+    return;
+  }
 
   for (const [rowId, expectedStatus] of expectedRows) {
     const row = rows.find((match) => match[1] === rowId);
@@ -330,12 +335,14 @@ function validateWordCount(mainText, { errors, label }) {
 function validatePrivateDisclosures(rawHtml, { errors, label }) {
   const scanHtml = removeAllowedPrivateRegions(rawHtml);
   const scanText = normalizeRenderedContent(decodeHtmlEntities(stripTags(scanHtml)));
+  const scanRaw = normalizeRenderedContent(decodeHtmlEntities(scanHtml));
 
   for (const check of privateDisclosureChecks) {
-    for (const match of scanText.matchAll(check.pattern)) {
+    const scanTarget = check.id === "raw-artifact-category" ? scanText : `${scanText} ${scanRaw}`;
+    for (const match of scanTarget.matchAll(check.pattern)) {
       const evidence = match[0];
       const start = match.index ?? 0;
-      const window = scanText.slice(Math.max(0, start - 90), Math.min(scanText.length, start + evidence.length + 90));
+      const window = scanTarget.slice(Math.max(0, start - 90), Math.min(scanTarget.length, start + evidence.length + 90));
       if (check.id === "raw-artifact-category" && isAllowedCategoryBoundary(window)) {
         continue;
       }
@@ -346,7 +353,7 @@ function validatePrivateDisclosures(rawHtml, { errors, label }) {
   }
 }
 
-function validateAffirmativeOverclaims(text, { errors, label }) {
+function validateAffirmativeOverclaims(text, { errors, label, source = "rendered text" }) {
   const sentences = splitSentences(text);
   for (const sentence of sentences) {
     if (/\b(?:Forbidden example|does not|do not|No |not |without|cannot|must not)\b/i.test(sentence)) {
@@ -359,7 +366,7 @@ function validateAffirmativeOverclaims(text, { errors, label }) {
 
     for (const phrase of overclaimPhrases) {
       if (new RegExp(`\\b${escapeRegExp(phrase)}\\b`, "i").test(sentence)) {
-        errors.push(`${label} contains affirmative overclaim with TraceMap/page/tool subject: ${phrase}`);
+        errors.push(`${label} contains affirmative overclaim in ${source} with TraceMap/page/tool subject: ${phrase}`);
       }
     }
   }
@@ -391,8 +398,41 @@ function extractCells(html, tagName) {
 }
 
 function getAttribute(tag, name) {
-  const match = tag.match(new RegExp(`\\b${name}=["']([^"']*)["']`, "i"));
+  const match = tag.match(new RegExp(`\\b${name}\\s*=\\s*["']([^"']*)["']`, "i"));
   return match ? decodeHtmlEntities(match[1]) : null;
+}
+
+function hasTagWithAttributes(html, tagName, expectedAttributes, requiredAttributes = []) {
+  for (const match of html.matchAll(new RegExp(`<${tagName}\\b[^>]*>`, "gi"))) {
+    const tag = match[0];
+    let matches = true;
+
+    for (const [name, expected] of Object.entries(expectedAttributes)) {
+      if (getAttribute(tag, name) !== expected) {
+        matches = false;
+        break;
+      }
+    }
+
+    if (!matches) {
+      continue;
+    }
+
+    if (requiredAttributes.every((name) => {
+      const value = getAttribute(tag, name);
+      return typeof value === "string" && value.trim() !== "";
+    })) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function extractAttributeValues(html) {
+  return [...html.matchAll(/\b(?:content|title|aria-label|alt)\s*=\s*(["'])(.*?)\1/gis)]
+    .map((match) => decodeHtmlEntities(match[2]))
+    .filter((value) => value.trim() !== "");
 }
 
 function extractStatus(value) {
