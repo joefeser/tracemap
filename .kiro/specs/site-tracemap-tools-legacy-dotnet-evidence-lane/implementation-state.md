@@ -245,3 +245,5 @@ Patched:
   output must also be checked in and public-safe.
 - Expanded branch-status validation wording from `dev` rows to both `dev` and
   `dev-only` rows.
+- Updated `review-packet.md` review-cycle wording from initial pending review
+  state to completed Opus, Sonnet, and bounded re-review state.
