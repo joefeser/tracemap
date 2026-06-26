@@ -16,8 +16,10 @@ Base: `origin/dev`
 
 PR target: `dev`
 
-Review cycle: initial spec review pending. Review findings, patched items, and
-dispositions should be recorded in `implementation-state.md`.
+Review cycle: Opus and Sonnet spec reviews completed; one bounded Sonnet
+re-review completed; Medium or higher findings patched before readiness.
+Findings, patched items, and dispositions are recorded in
+`implementation-state.md`.
 
 Local review artifacts should remain under `.tmp/kiro-reviews/` and must not
 be committed.
