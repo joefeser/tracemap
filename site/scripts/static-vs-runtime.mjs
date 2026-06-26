@@ -98,6 +98,14 @@ const forbiddenOperationalClaims = [
   /\b(?:surface|endpoint|route|contract|package|service)\b[^.]{0,80}\bimpacted\b/i
 ];
 
+const forbiddenWordingExampleBlockPattern =
+  /<([a-z][\w:-]*)\b[^>]*\bdata-forbidden-wording-example(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?[^>]*>([\s\S]*?)<\/\1>/gi;
+const forbiddenWordingExampleAttributePattern = /\bdata-forbidden-wording-example\b/gi;
+const allowedForbiddenExampleTags = new Set(["aside", "blockquote"]);
+const maxForbiddenExampleWords = 60;
+const maxForbiddenExampleChars = 900;
+const maxForbiddenExampleRemovedWordRatio = 0.15;
+
 export async function validateStaticVsRuntimeDist({ baseUrl = "https://tracemap.tools", dist, errors }) {
   const localErrors = [];
   const cleanBaseUrl = normalizeBaseUrl(baseUrl, localErrors);
@@ -198,6 +206,7 @@ async function validateStaticVsRuntimePage({ pagePath, errors }) {
   const html = await readFile(pagePath, "utf8");
   const decodedHtml = decodeHtmlEntities(html);
   const pageText = normalizeRenderedText(html);
+  validateForbiddenWordingExampleScopes({ html, pageText, errors });
   const policyHtml = stripForbiddenWordingExamples(html);
   const policyDecodedHtml = decodeHtmlEntities(policyHtml);
   const policyPageText = normalizeRenderedText(policyHtml);
@@ -275,11 +284,49 @@ function containsForbiddenText(text, ...values) {
   return values.some((value) => value.toLowerCase().includes(normalizedText));
 }
 
+function validateForbiddenWordingExampleScopes({ html, pageText, errors }) {
+  const examples = collectForbiddenWordingExamples(html);
+  const markerCount = (html.match(forbiddenWordingExampleAttributePattern) ?? []).length;
+  if (markerCount !== examples.length) {
+    errors.push(withEvidence("Static vs runtime page has a malformed forbidden-wording example marker.", "static-vs-runtime/index.html"));
+  }
+
+  let removedWords = 0;
+  for (const example of examples) {
+    const text = normalizeRenderedText(example.html);
+    const wordCount = countWords(text);
+    removedWords += wordCount;
+
+    if (!allowedForbiddenExampleTags.has(example.tag)) {
+      errors.push(withEvidence(`Static vs runtime forbidden-wording examples must use aside or blockquote, got ${example.tag}.`, "static-vs-runtime/index.html"));
+    }
+
+    if (wordCount > maxForbiddenExampleWords || example.html.length > maxForbiddenExampleChars) {
+      errors.push(withEvidence("Static vs runtime forbidden-wording example is too large for a bounded teaching example.", "static-vs-runtime/index.html"));
+    }
+  }
+
+  const totalWords = countWords(pageText);
+  if (totalWords > 0 && removedWords / totalWords > maxForbiddenExampleRemovedWordRatio) {
+    errors.push(withEvidence("Static vs runtime forbidden-wording examples remove too much page text from claim validation.", "static-vs-runtime/index.html"));
+  }
+}
+
 function stripForbiddenWordingExamples(html) {
-  return html.replace(
-    /<([a-z][\w:-]*)\b[^>]*\bdata-forbidden-wording-example\b[^>]*>[\s\S]*?<\/\1>/gi,
-    ""
+  return html.replace(forbiddenWordingExampleBlockPattern, (match, tag) =>
+    allowedForbiddenExampleTags.has(tag.toLowerCase()) &&
+    countWords(normalizeRenderedText(match)) <= maxForbiddenExampleWords &&
+    match.length <= maxForbiddenExampleChars
+      ? ""
+      : match
   );
+}
+
+function collectForbiddenWordingExamples(html) {
+  return [...html.matchAll(forbiddenWordingExampleBlockPattern)].map((match) => ({
+    html: match[0],
+    tag: match[1].toLowerCase()
+  }));
 }
 
 function hasHref(html, href) {

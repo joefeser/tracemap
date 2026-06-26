@@ -138,11 +138,20 @@ Pending final local validation before commit:
 
 ## Review Loop Notes
 
-The PR-loop ACK is a post-PR step and cannot be completed until the
-implementation is pushed and the PR exists. The final handoff should report the
-terminal ACK decision for the exact pushed head. This checked-in state avoids
-recording a local worktree path or post-review command output that would make
-the reviewed head stale.
+- Initial ACK stopped on PR body formatting because the body contained escaped
+  newline sequences. The PR body was edited in GitHub metadata only; no code
+  patch was required.
+- Follow-up ACK authorized one Qodo finding on the
+  `data-forbidden-wording-example` validator wrapper. The patch constrains the
+  wrapper to bounded `aside` or `blockquote` teaching examples, rejects
+  structural or oversized wrappers, and keeps invalid wrappers visible to the
+  forbidden-claim scans.
+- After the Qodo patch, site tests, build, validation, diff check, and private
+  path guard passed locally.
+
+The final handoff should report the terminal ACK decision for the exact pushed
+head. This checked-in state avoids recording a local worktree path or raw
+command output.
 
 ## Oddities
 
