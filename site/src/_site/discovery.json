@@ -425,6 +425,23 @@
     ]
   },
   {
+    "path": "/proof-path-stories/",
+    "title": "Proof-Path Story Gallery",
+    "summary": "Concept-level public-safe story cards for reading static proof paths with rule families, evidence tiers, coverage labels, limitations, stop conditions, and owner routing.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The gallery is a concept-level reading aid over synthetic public-safe cards, not the canonical proof ledger, source catalog, claim checklist, roadmap, or limitations page.",
+      "Story cards remain concept-level until checked-in public-safe demo evidence supports a stricter card label."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, complete coverage, product behavior proof, or automated approval.",
+      "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, private labels, command output, hidden validation details, or credential-like values."
+    ]
+  },
+  {
     "path": "/proof-paths/tour/",
     "title": "Guided Proof-Path Tour",
     "summary": "Concept-level guided reading flow for inspecting one public claim through proof path, rule family, evidence tier, coverage label, source context, limitation, non-claim, and next owner.",

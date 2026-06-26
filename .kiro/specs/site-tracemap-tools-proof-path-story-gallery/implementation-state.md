@@ -1,23 +1,80 @@
 # Site TraceMap Tools Proof Path Story Gallery Implementation State
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-implementation
 Public claim level: concept
 
 Last verified: 2026-06-25
-Branch: codex/spec-site-proof-path-story-gallery-20260625190306
+Branch: codex/impl-site-proof-path-story-gallery-20260625220151
 Source of truth: origin/dev
 
 ## Summary
 
-This packet specifies a future `tracemap.tools` proof-path story gallery. The
-gallery would use short public-safe cards and walkthroughs to show how a static
-question follows deterministic evidence from a source/root surface to endpoint,
-service, data, package, config, generated artifact, or stop-condition surfaces.
+This implementation adds a concept-level `tracemap.tools` proof-path story
+gallery at `/proof-path-stories/`. The page uses synthetic public-safe cards
+and walkthroughs to show how a static question follows deterministic evidence
+from a source/root surface to endpoint, service, data, package, config,
+generated artifact, or stop-condition surfaces.
 
-This is spec-only. No site source, scanner source, reducer source, generated
-artifact, demo artifact, validation script, runtime workflow, or existing spec
-has been changed.
+Site source, route metadata, focused site validation, aggregate site validation
+fixtures, and this spec packet were updated. Scanner source, reducer source,
+generated scan artifacts, runtime workflows, and core analyzer behavior remain
+out of scope.
+
+## Implementation Update - 2026-06-25
+
+- Current branch: `codex/impl-site-proof-path-story-gallery-20260625220151`.
+- Target branch: `dev`.
+- Work isolation: dedicated temporary worktree outside the primary checkout;
+  machine-local absolute worktree path is intentionally not tracked in this
+  public-safe spec packet.
+- Selected placement: standalone public route `/proof-path-stories/`.
+- Rejected placement: `/demo/proof-path-stories/` because the initial stories
+  are synthetic concept cards and are not backed by checked-in public-safe demo
+  evidence.
+- Rejected placement: section on `/demo/proof-upgrades/` because the gallery is
+  a story-oriented reading aid, not a compact proof-ledger companion.
+- Rejected placement: section on a future proof-source/catalog route because
+  the gallery is not the catalog source of truth and the standalone route lets
+  the source catalog keep its route-to-source role.
+- Rejected placement: folded section on an existing route because this spec
+  requires several stable anchors, story cards, walkthroughs, stop conditions,
+  and validation markers that are clearer as a standalone concept page.
+- Primary navigation remains unchanged. Discovery is via sitemap metadata,
+  route-index metadata, and an adjacent link from `/proof-paths/`.
+- The page states `Public claim level: concept` and `No public conclusion
+  without evidence`.
+- All story cards remain `concept`; no card is labeled `demo`.
+- All stories are synthetic, public-safe, and concept-level. No checked-in
+  public-safe demo evidence was used to upgrade a card.
+- The gallery is a story-oriented reading aid. The canonical proof-path overview
+  remains `/proof-paths/`; source-family cataloging remains
+  `/proof-source-catalog/`; claim gating remains `/review-claim-checklist/`;
+  roadmap status remains `/roadmap/`; broad boundaries remain `/limitations/`.
+- Required anchors implemented:
+  `#story-contract`, `#proof-path-anatomy`,
+  `#evidence-packet-references`, `#coverage-and-limitations`,
+  `#stop-conditions-and-routing`, `#non-claims-and-forbidden-wording`, and
+  `#gallery-validation`.
+- Story categories implemented: endpoint/service, data/config,
+  package/dependency, generated artifact, and reduced-coverage orientation.
+- Walkthrough endings implemented: `evidence-backed static path`,
+  `reduced coverage`, `needs owner follow-up`, `internal only`, `hidden`, and
+  `stop: no public-safe evidence`.
+- Stop conditions implemented: `no public-safe evidence`, `reduced coverage`,
+  `semantic gap`, `syntax-only fallback`, `private-only evidence`,
+  `hidden detail`, `missing rule ID`, and `requires reducer evidence`.
+- Boundary wording is wrapped in a stable public-safety section using
+  `data-boundary="rejected-example"` on
+  `#non-claims-and-forbidden-wording`.
+- Focused validation was added in `site/scripts/proof-path-stories.mjs` with
+  regression tests in `site/scripts/proof-path-stories.test.mjs`.
+- Aggregate validation now calls the focused validator from
+  `site/scripts/validate.mjs`.
+- Route metadata was added to `site/src/_site/pages.json` and
+  `site/src/_site/discovery.json`.
+- An adjacent link was added from `/proof-paths/` without adding the gallery to
+  primary navigation.
 
 ## Scope Decisions
 
@@ -127,8 +184,29 @@ Spec packet validation:
 - Passed: `./scripts/check-private-paths.sh`.
 - Passed: diff scope check. Changed files are limited to
   `.kiro/specs/site-tracemap-tools-proof-path-story-gallery/`.
-- Deferred: site `npm test`, `npm run validate`, `npm run build`, and browser
-  sanity checks because this phase is spec-only and does not change `site/`.
+- Spec-review phase deferred site `npm test`, `npm run validate`,
+  `npm run build`, and browser sanity checks because that phase was spec-only.
+
+Implementation validation:
+
+- Passed: `node --test scripts/proof-path-stories.test.mjs
+  scripts/validate.test.mjs`.
+- Passed: `npm test` from `site/` (532 tests before PR review fixes; 533
+  tests after adding the supporting-ID regression).
+- Passed: `npm run validate` from `site/` (built static site and validated 71
+  HTML files, 2444 internal references, and 70 sitemap URLs).
+- Passed: `npm run build` from `site/`.
+- Passed: desktop browser sanity check for `/proof-path-stories/` at
+  1440x1100. DOM check showed no horizontal overflow, 5 story cards, 6
+  walkthroughs, and required public markers present.
+- Passed: mobile browser sanity check for `/proof-path-stories/` at 390x844.
+  DOM check showed no horizontal overflow, 5 story cards, 6 walkthroughs, and
+  required public markers present.
+- Passed: `git diff --check`.
+- Passed: `./scripts/check-private-paths.sh`.
+- Pending before commit: `git diff --name-only origin/dev...HEAD` is expected
+  to be meaningful after the implementation commit exists; pre-commit uncommitted
+  diff was inspected for site/spec-only scope.
 
 ## PR Review Feedback
 
@@ -136,6 +214,39 @@ Spec packet validation:
   machine-local worktree path despite the packet's local-path boundary.
   Disposition: patched to describe the dedicated temporary worktree without
   tracking the absolute path.
+
+Implementation PR: `https://github.com/joefeser/tracemap/pull/347`.
+
+Initial ACK result for implementation head `0700e82e`: `actionable_findings`,
+stop reason `UNRESOLVED_REVIEW_THREADS`, next action
+`patch_actionable_findings`. Qodo and Codex both returned on the same head, and
+patching was authorized by the required-review batch.
+
+Patched implementation review findings:
+
+- Qodo/Codex: rejected-example copy used `impacted` in the public gallery.
+  Disposition: replaced the rejected example with wording that avoids
+  `impacted` while keeping the boundary example concept-level.
+- Qodo/Codex: supporting-ID validation only inspected values that already
+  matched the safe ID pattern. Disposition: changed
+  `validateEvidenceReferences()` to parse the value after `supporting ID` and
+  reject missing or non-public-safe values; added a regression test for an
+  unsafe supporting ID.
+- Codex: `tasks.md` header still said `Status: not-started` after
+  implementation tasks were checked. Disposition: updated the header to
+  `Status: implemented`.
+
+Post-patch validation:
+
+- Passed: `node --test scripts/proof-path-stories.test.mjs
+  scripts/validate.test.mjs`.
+- Passed: `npm test` from `site/` (533 tests).
+- Passed: `npm run validate` from `site/`.
+- Passed: `npm run build` from `site/`.
+- Passed: `git diff --check`.
+- Passed: `./scripts/check-private-paths.sh`.
+
+Final ACK result: pending after pushing the review-fix commit.
 
 Future site implementation validation:
 
@@ -155,9 +266,17 @@ Future site implementation validation:
 - Kiro reviews completed with reduced coverage because the review wrapper
   reported denied tool access (`kiro.review.wrapper.v1`), even though it read
   the packet and produced findings.
+- During implementation validation, running `npm test -- proof-path-stories.test.mjs`
+  invoked the package glob plus the extra argument, so it behaved as a full
+  suite attempt and exposed fixture drift. The focused rerun used
+  `node --test scripts/proof-path-stories.test.mjs scripts/validate.test.mjs`
+  and passed after fixtures were updated.
+- The implementation-state update for this branch was completed in the same
+  implementation turn after the first site edit rather than before the first
+  site edit. The route decision, placement rationale, scope, validation, and
+  follow-ups are now recorded here.
 
 ## Follow-Up Items
 
-- Future implementation must record placement choice, card claim-level
-  decisions, category omissions, metadata decisions, and route/link
-  substitutions.
+- After PR creation, record the PR URL, final ACK decision, and any authorized
+  review-loop patches or dispositions.
