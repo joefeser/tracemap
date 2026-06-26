@@ -236,6 +236,14 @@ Oddities:
 - Remoting display identity follows the existing legacy path graph convention
   by preferring safe hash labels such as `objectUri-*` and `url-*`; raw
   endpoint/config values are not surfaced.
+- ACK review found that production remoting config facts attach through the
+  `RemotingConfiguration.Configure` config-file relationship rather than a
+  direct `sourceSymbol`. The patch now reuses the deterministic configure
+  caller-to-config join for shared route-flow surfaces.
+- ACK/Qodo review found that remoting hash identity must be scoped to remoting
+  surfaces and must not rewrite unrelated surface shape hashes. The patch now
+  gates remoting hash metadata by remoting surface kind, keeps short safe labels
+  for display, and uses longer safe hash tokens for remoting shape identity.
 
 Validation status:
 
@@ -247,16 +255,26 @@ Validation status:
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~LegacyFlowCompositionTests`:
   passed locally with 24 tests and the existing NU1903 warning.
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedDependencyReportTests`:
-  passed locally with 17 tests and the existing NU1903 warning.
+  passed locally with 18 tests and the existing NU1903 warning after the
+  ACK-authorized remoting hash scoping regression test was added.
 - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
   existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
 - `dotnet test src/dotnet/TraceMap.sln`: passed locally with 663 tests and the
   existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- Post-ACK `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and
+  the existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- Post-ACK `dotnet test src/dotnet/TraceMap.sln`: passed locally with 664
+  tests and the existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
 - `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke-46229`:
+  passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`.
+- Post-ACK `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/dotnet-remoting-sample --out /tmp/tracemap-remoting-smoke-27142`:
   passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
   `report.md`, and `logs/analyzer.log`.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+- Post-ACK `./scripts/check-private-paths.sh`: passed.
+- Post-ACK `git diff --check`: passed.
 
 ## Summary
 
