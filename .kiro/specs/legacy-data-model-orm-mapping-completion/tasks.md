@@ -1,7 +1,7 @@
 # Legacy Data Model ORM Mapping Completion Tasks
 
-Current state: ready-for-implementation after reviewed spec loop. Product
-implementation has not started in this branch.
+Current state: implementation slice 1 merged in PR #373. Broad follow-up
+implementation tasks remain open.
 
 ## Spec Authoring Tasks
 
