@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
 using TraceMap.Core;
 
@@ -177,7 +176,6 @@ public sealed record RouteFlowDependencySurface(
     string Coverage,
     IReadOnlyDictionary<string, string> SafeMetadata,
     RouteFlowEvidenceRef Evidence,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? SurfaceSubtype = null);
 
 public sealed record RouteFlowTouchedFile(
