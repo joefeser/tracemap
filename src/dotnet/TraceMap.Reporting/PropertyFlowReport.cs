@@ -241,6 +241,8 @@ internal sealed record PropertyFactRow(
     int EndLine,
     IReadOnlyDictionary<string, string> Properties);
 
+internal sealed record RouteFlowSchemaSignal(string Status, IReadOnlyList<string> Columns);
+
 public static class PropertyFlowClassifications
 {
     public const string StrongStaticLineage = nameof(StrongStaticLineage);
@@ -359,7 +361,8 @@ public static class PropertyFlowReporter
         var graph = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(options.IndexPath, cancellationToken: cancellationToken);
         var facts = await ReadFactsAsync(connection, cancellationToken);
         var missingOptional = await MissingOptionalObjectsAsync(connection, cancellationToken);
-        var routeFlowSignal = await RouteFlowSignalAsync(connection, missingOptional, cancellationToken);
+        var routeFlowSchemaSignal = await RouteFlowSignalAsync(connection, missingOptional, cancellationToken);
+        var routeFlowSignal = routeFlowSchemaSignal.Status;
         var sources = read.Sources.Select(ToSource).OrderBy(source => source.SourceLabel, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray();
         var sourceIds = sources.Select(source => source.SourceIndexId).OrderBy(value => value, StringComparer.Ordinal).ToArray();
         var sourceCommitShas = sources.Select(source => source.CommitSha).Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
@@ -402,28 +405,54 @@ public static class PropertyFlowReporter
 
         if (routeFlowSignal != "available")
         {
-            var unsupportedRouteFlowSchema = routeFlowSignal == "unsupported";
+            var selectedSupport = selectedFacts
+                .Select(fact => fact.CombinedFactId)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            var selectedAnchor = selectedFacts
+                .OrderBy(fact => fact.SourceLabel, StringComparer.Ordinal)
+                .ThenBy(fact => fact.FilePath, StringComparer.Ordinal)
+                .ThenBy(fact => fact.StartLine)
+                .ThenBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            var observedColumns = routeFlowSchemaSignal.Columns.Count == 0
+                ? "none"
+                : string.Join(", ", routeFlowSchemaSignal.Columns);
+            var (gapId, gapKind, message) = routeFlowSignal switch
+            {
+                "empty" => (
+                    "gap:schema:route-flow-unavailable",
+                    "RouteFlowUnavailable",
+                    "Route-flow schema signal was available but contained no rows; route-flow-specific downstream traversal is not promoted by property-flow."),
+                "unsupported" => (
+                    "gap:schema:route-flow-unsupported",
+                    "UnsupportedRouteFlowSchema",
+                    $"Route-flow schema signal exists but does not expose a compatible route key column; observed combined_route_flow_edges columns: {observedColumns}."),
+                _ => (
+                    "gap:schema:route-flow-unavailable",
+                    "RouteFlowUnavailable",
+                    "No route-flow schema signal was available; route-flow-specific downstream traversal is not promoted by property-flow.")
+            };
             gaps.Add(new PropertyFlowGap(
-                unsupportedRouteFlowSchema ? "gap:schema:route-flow-unsupported" : "gap:schema:route-flow-unavailable",
-                unsupportedRouteFlowSchema ? "UnsupportedRouteFlowSchema" : "RouteFlowUnavailable",
+                gapId,
+                gapKind,
                 PropertyFlowClassifications.UnknownAnalysisGap,
-                routeFlowSignal switch
-                {
-                    "empty" => "Route-flow schema signal was available but contained no rows; route-flow-specific downstream traversal is not promoted by property-flow.",
-                    "unsupported" => "Route-flow schema signal exists but does not expose a compatible route key column; route-flow-specific downstream traversal is not promoted by property-flow.",
-                    _ => "No route-flow schema signal was available; route-flow-specific downstream traversal is not promoted by property-flow."
-                },
+                message,
                 SchemaRuleId,
                 EvidenceTiers.Tier4Unknown,
-                null,
-                null,
-                null,
-                null,
-                null,
-                [],
+                selectedAnchor?.SourceLabel,
+                selectedAnchor?.CombinedFactId,
+                selectedAnchor is null ? null : CombinedReportHelpers.SafePath(selectedAnchor.FilePath),
+                selectedAnchor?.StartLine,
+                selectedAnchor?.EndLine,
+                selectedSupport,
                 ["Route-flow absence limits downstream route-specific conclusions. Existing combined path evidence may still be shown."])
             {
                 SupportingSourceIds = sourceIds,
+                SourceIndexId = selectedAnchor?.SourceIndexId,
+                ScanId = selectedAnchor?.ScanId,
+                CommitSha = sourceCommitShas.Length == 1 ? sourceCommitShas[0] : selectedAnchor?.CommitSha,
                 CommitShas = sourceCommitShas
             });
         }
@@ -901,23 +930,24 @@ public static class PropertyFlowReporter
         return missing;
     }
 
-    private static async Task<string> RouteFlowSignalAsync(SqliteConnection connection, IReadOnlyList<string> missingOptional, CancellationToken cancellationToken)
+    private static async Task<RouteFlowSchemaSignal> RouteFlowSignalAsync(SqliteConnection connection, IReadOnlyList<string> missingOptional, CancellationToken cancellationToken)
     {
         if (missingOptional.Contains("combined_route_flow_edges", StringComparer.Ordinal))
         {
-            return "unavailable";
+            return new RouteFlowSchemaSignal("unavailable", []);
         }
 
         var columns = await RouteFlowColumnNamesAsync(connection, cancellationToken);
         var pathColumn = FirstColumn(columns, "normalizedPathKey", "normalized_path_key", "routeKey", "route_key", "pathKey", "path_key");
         if (pathColumn is null)
         {
-            return "unsupported";
+            return new RouteFlowSchemaSignal("unsupported", columns.OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray());
         }
 
         await using var command = connection.CreateCommand();
         command.CommandText = "select count(*) from combined_route_flow_edges;";
-        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) == 0 ? "empty" : "available";
+        var status = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) == 0 ? "empty" : "available";
+        return new RouteFlowSchemaSignal(status, columns.OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray());
     }
 
     private static async Task<IReadOnlyList<PropertyFactRow>> ReadFactsAsync(SqliteConnection connection, CancellationToken cancellationToken)

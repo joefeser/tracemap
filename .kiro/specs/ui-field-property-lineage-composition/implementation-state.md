@@ -252,14 +252,25 @@ Implemented in this slice:
 Validation:
 
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter PropertyFlowTests`:
-  passed, 22 tests.
+  passed, 22 tests. Re-run after PR-loop patch also passed, 22 tests.
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
-  passed, 70 tests.
-- `dotnet test src/dotnet/TraceMap.sln`: passed, 684 tests.
-- `git diff --check`: passed.
-- `./scripts/check-private-paths.sh`: passed.
+  passed, 70 tests. Re-run after PR-loop patch also passed, 70 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 684 tests. Re-run after
+  PR-loop patch also passed, 684 tests.
+- `git diff --check`: passed before and after PR-loop patch.
+- `./scripts/check-private-paths.sh`: passed before and after PR-loop patch.
 - NuGet emitted the existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory
   warning during .NET restore/test.
+
+PR-loop patch notes:
+
+- ACK for PR #376 returned `actionable_findings` with two unresolved threads.
+- Patched Gemini readability feedback by grouping route-flow schema gap ID,
+  kind, and message in one switch expression.
+- Patched Qodo required metadata feedback by carrying observed
+  `combined_route_flow_edges` column names, selected root supporting fact IDs,
+  source/commit metadata, and an anchor span when available on
+  `UnsupportedRouteFlowSchema` gaps.
 
 Deferred:
 

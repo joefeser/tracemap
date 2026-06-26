@@ -785,6 +785,13 @@ public sealed class PropertyFlowTests
         var gap = Assert.Single(report.Gaps, gap => gap.GapKind == "UnsupportedRouteFlowSchema");
         Assert.Equal("property-flow.schema.v1", gap.RuleId);
         Assert.Equal(PropertyFlowClassifications.UnknownAnalysisGap, gap.Classification);
+        Assert.Contains("edge_id", gap.Message);
+        Assert.Contains("unrelated_endpoint", gap.Message);
+        Assert.NotNull(gap.CommitSha);
+        Assert.NotEmpty(gap.CommitShas);
+        Assert.NotEmpty(gap.SupportingFactIds);
+        Assert.NotNull(gap.FilePath);
+        Assert.NotNull(gap.LineSpan);
         Assert.DoesNotContain(report.Gaps, gap => gap.GapKind == "RouteFlowUnavailable");
     }
 
