@@ -240,11 +240,8 @@ public sealed record RouteFlowGap(
     string? FilePath = null,
     int? StartLine = null,
     int? EndLine = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? CommitSha = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? ExtractorName = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? ExtractorVersion = null)
 {
     public string Classification => RouteFlowGapClassifier.ClassificationFor(GapKind);
@@ -261,25 +258,23 @@ public static class RouteFlowClassifications
 
 internal static class RouteFlowGapClassifier
 {
-    public static string ClassificationFor(string gapKind)
+    public static string ClassificationFor(string gapKind) => gapKind switch
     {
-        return gapKind is "NoRouteFlowEvidence"
-            ? RouteFlowClassifications.NoRouteFlowEvidence
-            : gapKind is "SelectorNoMatch"
-                or "SchemaMissing"
-                or "ExtractorUnavailable"
-                or "UnknownCommitSha"
-                or "UnknownAnalysisGap"
-                or "ReducedCoverage"
-                or "MissingRouteRoot"
-                or "MissingMethodSymbolBridge"
-                or "MissingCallEdge"
-                or "IdentityGap"
-                or "TraversalBounds"
-                or "TruncatedByLimit"
-                    ? RouteFlowClassifications.UnknownAnalysisGap
-                    : RouteFlowClassifications.NeedsReviewStaticRouteFlow;
-    }
+        "NoRouteFlowEvidence" => RouteFlowClassifications.NoRouteFlowEvidence,
+        "SelectorNoMatch"
+            or "SchemaMissing"
+            or "ExtractorUnavailable"
+            or "UnknownCommitSha"
+            or "UnknownAnalysisGap"
+            or "ReducedCoverage"
+            or "MissingRouteRoot"
+            or "MissingMethodSymbolBridge"
+            or "MissingCallEdge"
+            or "IdentityGap"
+            or "TraversalBounds"
+            or "TruncatedByLimit" => RouteFlowClassifications.UnknownAnalysisGap,
+        _ => RouteFlowClassifications.NeedsReviewStaticRouteFlow
+    };
 }
 
 public static class CombinedRouteFlowReporter
@@ -4503,7 +4498,7 @@ public static class CombinedRouteFlowReporter
 
     private static string GapClassification(RouteFlowGap gap)
     {
-        return RouteFlowGapClassifier.ClassificationFor(gap.GapKind);
+        return gap.Classification;
     }
 
     private static string GapClassification(CombinedPathGap gap)

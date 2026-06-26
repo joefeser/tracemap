@@ -2300,6 +2300,18 @@ Validation status:
   `logs/analyzer.log` were present.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+- ACK-authorized patch after PR review replaced the nested ternary route-flow
+  gap classifier with a switch expression, reused `gap.Classification` from
+  the route-flow gap filter helper, and stopped omitting nullable
+  commit/extractor metadata fields from serialized gap rows so uncertainty is
+  explicit in JSON. Post-patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed with 67 tests, `dotnet build src/dotnet/TraceMap.sln` passed with 0
+  errors, `dotnet test src/dotnet/TraceMap.sln` passed with 677 tests,
+  `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task8-coverage-modern-sample-rerun`
+  passed with 27 facts at `Level1SemanticAnalysis`,
+  `./scripts/check-private-paths.sh` passed, and `git diff --check` passed.
+  NuGet emitted the same existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 warning.
 
 Follow-ups:
 
