@@ -356,6 +356,8 @@ public sealed class CombinedRouteFlowTests
             CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
             PackageConfigFact(server, repository, FactTypes.PackageReferenced, RuleIds.ProjectFile, "Dapper", null, "Infrastructure/OrderRepository.cs", 31),
             PackageConfigFact(server, repository, FactTypes.ConfigKeyDeclared, RuleIds.ConfigKey, null, "Features:Orders:Enabled", "Infrastructure/OrderRepository.cs", 32),
+            PackageConfigFact(server, repository, FactTypes.ConnectionStringDeclared, RuleIds.ConfigKey, null, "OrdersDb", "Infrastructure/OrderRepository.cs", 33),
+            PackageConfigFact(server, repository, FactTypes.ConfigBinding, RuleIds.CSharpSemanticContractMapping, null, "Customers", "Infrastructure/OrderRepository.cs", 34),
             PackageConfigFact(server, unrelatedRepository, FactTypes.PackageReferenced, RuleIds.ProjectFile, "Newtonsoft.Json", null, "Infrastructure/AuditRepository.cs", 41)
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
@@ -371,7 +373,7 @@ public sealed class CombinedRouteFlowTests
             Route: "GET /api/orders/{id}",
             ToSurface: "package-config"));
 
-        Assert.Equal(2, result.Report.DependencySurfaces.Count);
+        Assert.Equal(4, result.Report.DependencySurfaces.Count);
         Assert.All(result.Report.DependencySurfaces, surface =>
         {
             Assert.Equal("package-config", surface.SurfaceKind);
@@ -388,6 +390,16 @@ public sealed class CombinedRouteFlowTests
             && surface.SafeMetadata.TryGetValue("configKeyHash", out var configKeyHash)
             && configKeyHash == CombinedReportHelpers.Hash("Features:Orders:Enabled", 16)
             && surface.Evidence.SupportingRuleIds.Contains(RuleIds.ConfigKey, StringComparer.Ordinal));
+        Assert.Contains(result.Report.DependencySurfaces, surface =>
+            surface.DisplayName == "OrdersDb"
+            && surface.SafeMetadata.TryGetValue("configKeyHash", out var configKeyHash)
+            && configKeyHash == CombinedReportHelpers.Hash("OrdersDb", 16)
+            && surface.Evidence.SupportingRuleIds.Contains(RuleIds.ConfigKey, StringComparer.Ordinal));
+        Assert.Contains(result.Report.DependencySurfaces, surface =>
+            surface.DisplayName == "Customers"
+            && surface.SafeMetadata.TryGetValue("configKeyHash", out var configKeyHash)
+            && configKeyHash == CombinedReportHelpers.Hash("Customers", 16)
+            && surface.Evidence.SupportingRuleIds.Contains(RuleIds.CSharpSemanticContractMapping, StringComparer.Ordinal));
         Assert.Equal(
             result.Report.DependencySurfaces.Select(surface => surface.StableKey).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             repeated.Report.DependencySurfaces.Select(surface => surface.StableKey).OrderBy(value => value, StringComparer.Ordinal).ToArray());
@@ -401,6 +413,16 @@ public sealed class CombinedRouteFlowTests
             && row.AttachmentKind == "fact-symbol-projection"
             && row.SafeMetadata.TryGetValue("configKeyHash", out var configKeyHash)
             && configKeyHash == CombinedReportHelpers.Hash("Features:Orders:Enabled", 16));
+        Assert.Contains(result.Report.LogicRows, row =>
+            row.LogicKind == "dependency-surface"
+            && row.AttachmentKind == "fact-symbol-projection"
+            && row.SafeMetadata.TryGetValue("configKeyHash", out var configKeyHash)
+            && configKeyHash == CombinedReportHelpers.Hash("OrdersDb", 16));
+        Assert.Contains(result.Report.LogicRows, row =>
+            row.LogicKind == "dependency-surface"
+            && row.AttachmentKind == "fact-symbol-projection"
+            && row.SafeMetadata.TryGetValue("configKeyHash", out var configKeyHash)
+            && configKeyHash == CombinedReportHelpers.Hash("Customers", 16));
 
         Assert.DoesNotContain(result.Report.DependencySurfaces, surface => surface.DisplayName == "Newtonsoft.Json");
         Assert.DoesNotContain(result.Report.FlowRows, row => row.SourceSymbol.Contains("AuditRepository", StringComparison.Ordinal)
@@ -426,7 +448,9 @@ public sealed class CombinedRouteFlowTests
             RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
             CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
             PackageConfigFact(server, unrelatedRepository, FactTypes.PackageReferenced, RuleIds.ProjectFile, "Newtonsoft.Json", null, "Infrastructure/AuditRepository.cs", 41),
-            PackageConfigFact(server, unrelatedRepository, FactTypes.ConfigKeyDeclared, RuleIds.ConfigKey, null, "Audit:Sink:Enabled", "Infrastructure/AuditRepository.cs", 42)
+            PackageConfigFact(server, unrelatedRepository, FactTypes.ConfigKeyDeclared, RuleIds.ConfigKey, null, "Audit:Sink:Enabled", "Infrastructure/AuditRepository.cs", 42),
+            PackageConfigFact(server, unrelatedRepository, FactTypes.ConnectionStringDeclared, RuleIds.ConfigKey, null, "AuditDb", "Infrastructure/AuditRepository.cs", 43),
+            PackageConfigFact(server, unrelatedRepository, FactTypes.ConfigBinding, RuleIds.CSharpSemanticContractMapping, null, "AuditOptions", "Infrastructure/AuditRepository.cs", 44)
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
 
@@ -2864,7 +2888,20 @@ public sealed class CombinedRouteFlowTests
 
         if (!string.IsNullOrWhiteSpace(configKey))
         {
-            properties["configKey"] = configKey!;
+            if (factType == FactTypes.ConnectionStringDeclared)
+            {
+                properties["connectionName"] = configKey!;
+            }
+            else if (factType == FactTypes.ConfigBinding)
+            {
+                properties["boundType"] = "Server.Options";
+                properties["mappingKind"] = "ConfigBinding";
+                properties["sectionName"] = configKey!;
+            }
+            else
+            {
+                properties["configKey"] = configKey!;
+            }
         }
 
         return FactFactory.Create(

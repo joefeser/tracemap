@@ -313,6 +313,11 @@ Oddities:
   route-flow fact-symbol projection now treats selected config fact families as
   dependency-surface context alongside package facts and records config-key
   context by hash.
+- ACK/Qodo review found that real `ConnectionStringDeclared` and
+  `ConfigBinding` rows use `connectionName` and `sectionName` properties, while
+  the first pass hashed only `configKey`/`keyPath`-style aliases. The patch now
+  recognizes those emitted aliases, plus `configurationKey`, in both shared
+  package/config surface display selection and route-flow fact-symbol metadata.
 - Existing generic fact-symbol projection can still emit
   `FactSymbolUnsupportedTypeSkipped` for unrelated selected `CallEdge` rows;
   this PR does not broaden call-edge projection semantics.
@@ -334,6 +339,21 @@ Validation status:
   `report.md`, and `logs/analyzer.log`.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+- Post-ACK `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_package_config_surfaces_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_package_config_surface_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning.
+- Post-ACK `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 56 tests and the existing NU1903 warning.
+- Post-ACK `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedDependencyReportTests`:
+  passed locally with 18 tests and the existing NU1903 warning.
+- Post-ACK `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and
+  the existing NU1903 warning.
+- Post-ACK `dotnet test src/dotnet/TraceMap.sln`: passed locally with 666
+  tests and the existing NU1903 warning.
+- Post-ACK `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke-package-config-postack-20260626`:
+  passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`.
+- Post-ACK `./scripts/check-private-paths.sh`: passed.
+- Post-ACK `git diff --check`: passed.
 
 ## Summary
 

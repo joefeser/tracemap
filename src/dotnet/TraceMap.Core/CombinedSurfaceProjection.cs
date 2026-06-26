@@ -165,7 +165,7 @@ public static class CombinedSurfaceProjection
             ?? (unsafeVersion ? Hash(rawVersion!, 32) : null);
         var redactionReason = FirstValue(fact.Properties, "redactionReason")
             ?? (unsafeVersion ? "unsafe-package-version" : null);
-        var configKey = FirstValue(fact.Properties, "keyPath", "configKey", "connectionStringName", "environmentVariableName");
+        var configKey = FirstValue(fact.Properties, "keyPath", "configKey", "connectionStringName", "connectionName", "sectionName", "configurationKey", "environmentVariableName");
         var asmxName = FirstValue(fact.Properties, "serviceClassName", "operationName", "clientName", "metadataFileName", "configKey");
         var ecosystem = FirstValue(fact.Properties, "ecosystem", "packageEcosystem", "packageManager");
         var manifestKind = FirstValue(fact.Properties, "manifestKind", "metadataSource", "sourceFormat", "type");
