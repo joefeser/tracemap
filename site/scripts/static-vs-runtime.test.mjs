@@ -132,7 +132,7 @@ test("validateStaticVsRuntimeDist rejects proof or replacement wording in metada
 
   await validateStaticVsRuntimeDist({ dist: join(root, "dist"), errors });
 
-  assert.match(errors.join("\n"), /unsupported proof or replacement wording/);
+  assert.match(errors.join("\n"), /unsupported field-guide claim wording/);
 });
 
 test("validateStaticVsRuntimeDist rejects unsupported impacted wording", async (t) => {
@@ -143,7 +143,54 @@ test("validateStaticVsRuntimeDist rejects unsupported impacted wording", async (
 
   await validateStaticVsRuntimeDist({ dist: join(root, "dist"), errors });
 
-  assert.match(errors.join("\n"), /unsupported impacted wording/);
+  assert.match(errors.join("\n"), /unsupported field-guide claim wording/);
+});
+
+test("validateStaticVsRuntimeDist allows marked forbidden-wording teaching examples", async (t) => {
+  const root = await createManagedStaticVsRuntimeDistFixture(t, {
+    pageHtml: staticVsRuntimePage('<aside data-forbidden-wording-example><p>Do not say TraceMap proved runtime behavior or ready to release.</p></aside>')
+  });
+  const errors = [];
+
+  await validateStaticVsRuntimeDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
+test("validateStaticVsRuntimeDist rejects structural forbidden-wording wrappers", async (t) => {
+  const root = await createManagedStaticVsRuntimeDistFixture(t, {
+    pageHtml: staticVsRuntimePage("<main data-forbidden-wording-example><p>TraceMap proved runtime behavior.</p></main>")
+  });
+  const errors = [];
+
+  await validateStaticVsRuntimeDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden-wording examples must use aside or blockquote, got main/);
+  assert.match(errors.join("\n"), /unsupported field-guide claim wording: TraceMap proved/);
+});
+
+test("validateStaticVsRuntimeDist rejects oversized forbidden-wording wrappers", async (t) => {
+  const largeExample = Array.from({ length: 70 }, (_, index) => `claim-example-${index}`).join(" ");
+  const root = await createManagedStaticVsRuntimeDistFixture(t, {
+    pageHtml: staticVsRuntimePage(`<aside data-forbidden-wording-example><p>TraceMap proved runtime behavior. ${largeExample}</p></aside>`)
+  });
+  const errors = [];
+
+  await validateStaticVsRuntimeDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden-wording example is too large/);
+  assert.match(errors.join("\n"), /unsupported field-guide claim wording: TraceMap proved/);
+});
+
+test("validateStaticVsRuntimeDist rejects forbidden field-guide wording outside marked examples", async (t) => {
+  const root = await createManagedStaticVsRuntimeDistFixture(t, {
+    pageHtml: staticVsRuntimePage("<p>TraceMap proved runtime behavior and runtime confirmed the result.</p>")
+  });
+  const errors = [];
+
+  await validateStaticVsRuntimeDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /unsupported field-guide claim wording: TraceMap proved/);
 });
 
 test("validateStaticVsRuntimeDist rejects encoded private text", async (t) => {
@@ -240,18 +287,23 @@ function staticVsRuntimePage(extra = "", { fillerWordCount = 700 } = {}) {
   return page(`
     <p>Public claim level: concept</p>
     <p>No public conclusion without evidence</p>
+    <p>TraceMap shows static dependency evidence and limitations; runtime tools show observed behavior. Neither replaces the other.</p>
     <p>deterministic static repository evidence</p>
     <p>runtime observability remains the source</p>
-    <table><thead><tr><th scope="col">Static evidence question</th><th scope="col">TraceMap evidence shape</th><th scope="col">Runtime question</th><th scope="col">Runtime system owner</th></tr></thead></table>
-    <section id="static-questions"></section>
-    <section id="runtime-questions"></section>
-    <section id="handoff-workflow"></section>
-    <section id="proof-paths"></section>
-    <section id="limitations"></section>
+    <table><thead><tr><th scope="col">Static question</th><th scope="col">TraceMap evidence shape</th><th scope="col">Runtime question</th><th scope="col">Runtime owner or system</th><th scope="col">Limitation</th><th scope="col">Handoff</th></tr></thead></table>
+    <section id="different-questions"></section>
+    <section id="how-to-use-both"></section>
+    <section id="reading-static-evidence"></section>
+    <section id="runtime-authority"></section>
     <section id="non-claims"></section>
+    <section id="proof-paths-and-limitations"></section>
+    <section id="related-links"></section>
     <p>Before runtime review</p>
     <p>During handoff</p>
     <p>After runtime review</p>
+    <p>Reading a static evidence packet</p>
+    <p>Where runtime tools remain authoritative</p>
+    <p>Proof paths and limitations</p>
     <p>TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, incident root cause, service ownership, production dependency understanding, test sufficiency, or complete product coverage.</p>
     <p>TraceMap does not replace logs, traces, APM, telemetry, incident dashboards, production metrics, tests, service-owner review, incident response, release approval, governance, or human judgment.</p>
     <p>TraceMap does not perform AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis.</p>

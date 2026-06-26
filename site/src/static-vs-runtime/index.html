@@ -56,6 +56,8 @@
         </p>
         <p class="hero-note">
           Public claim level: concept. No public conclusion without evidence.
+          TraceMap shows static dependency evidence and limitations; runtime tools
+          show observed behavior. Neither replaces the other.
           This page explains boundaries; it does not describe a TraceMap
           runtime agent, telemetry ingestion path, live dashboard, incident
           automation, or observability replacement.
@@ -67,37 +69,25 @@
         </nav>
       </section>
 
-      <section id="static-questions" class="section split-section">
+      <section id="different-questions" class="section">
         <div>
-          <p class="section-kicker">Static questions</p>
-          <h2>TraceMap starts from a repository snapshot.</h2>
-        </div>
-        <div class="detail-list">
-          <div><strong>Evidence shape</strong><span>Rule ID, evidence tier, file path, line span, commit SHA, extractor version, coverage label, limitation, and snippet hash where public-safe.</span></div>
-          <div><strong>Code surfaces</strong><span>Endpoint or route references, contract surfaces, package references, project/configuration surfaces, SQL-facing references, and nearby static references.</span></div>
-          <div><strong>Unknowns</strong><span>Reduced coverage, syntax-only fallback, unavailable semantic proof, and analysis gaps stay labeled instead of being treated as complete coverage.</span></div>
-        </div>
-      </section>
-
-      <section id="runtime-questions" class="section">
-        <div class="section-header">
           <p class="section-kicker">Different questions</p>
-          <h2>Use static evidence for code context; use runtime systems for production behavior.</h2>
+          <h2>Use static evidence for code context; use runtime systems for observed behavior.</h2>
         </div>
         <div class="claim-ledger-wrap">
           <table class="claim-ledger-table">
             <caption>
-              Static evidence can prepare a review packet, but runtime
-              observability and owners remain responsible for live-system
-              conclusions.
+              Static evidence can prepare a review packet, but runtime observability
+              systems and owners remain responsible for observed behavior.
             </caption>
             <thead>
               <tr>
-                <th scope="col">Static evidence question</th>
+                <th scope="col">Static question</th>
                 <th scope="col">TraceMap evidence shape</th>
                 <th scope="col">Runtime question</th>
-                <th scope="col">Runtime system owner</th>
+                <th scope="col">Runtime owner or system</th>
                 <th scope="col">Limitation</th>
+                <th scope="col">Handoff</th>
               </tr>
             </thead>
             <tbody>
@@ -107,6 +97,7 @@
                 <td>Which requests actually ran in production?</td>
                 <td>Runtime telemetry, logs, traces, metrics, dashboards, alerts, and service-owner interpretation.</td>
                 <td>Static references are review input, not traffic proof.</td>
+                <td>Hand static context to the runtime owner with the scan identity and limitation attached.</td>
               </tr>
               <tr>
                 <td><strong>Which contract, package, config, project, or SQL-facing references are nearby?</strong></td>
@@ -114,6 +105,7 @@
                 <td>How did the endpoint perform under load, and did requests error?</td>
                 <td>APM, production metrics, trace sampling, error monitoring, tests, and the owning team.</td>
                 <td>TraceMap does not prove endpoint performance, runtime errors, or operational safety.</td>
+                <td>Pair the static path with the runtime system of record and ask for owner review.</td>
               </tr>
               <tr>
                 <td><strong>What should reviewers inspect next?</strong></td>
@@ -121,15 +113,16 @@
                 <td>What happened during the incident timeline?</td>
                 <td>Incident dashboards, alert history, logs, traces, incident command, release records, and human review.</td>
                 <td>TraceMap does not determine outage cause, incident root cause, priority, service ownership, or release approval.</td>
+                <td>Assign the unresolved runtime, test, service-owner, or release-process question without upgrading the static evidence.</td>
               </tr>
             </tbody>
           </table>
         </div>
       </section>
 
-      <section id="handoff-workflow" class="section">
+      <section id="how-to-use-both" class="section">
         <div class="section-header">
-          <p class="section-kicker">Handoff workflow</p>
+          <p class="section-kicker">How to use both</p>
           <h2>Keep the static packet useful without turning it into runtime proof.</h2>
         </div>
         <div class="workflow-grid">
@@ -148,9 +141,9 @@
         </div>
       </section>
 
-      <section class="section split-section">
+      <section id="reading-static-evidence" class="section split-section">
         <div>
-          <p class="section-kicker">Manager and reviewer readout</p>
+          <p class="section-kicker">Reading a static evidence packet</p>
           <h2>Read the packet as bounded static evidence.</h2>
         </div>
         <div class="output-list">
@@ -160,6 +153,18 @@
           <div><code>scan identity</code><span>Which commit SHA and extractor version produced the row?</span></div>
           <div><code>coverage label</code><span>Is the scan complete for the stated scope, reduced, partial, syntax-only, or unavailable?</span></div>
           <div><code>follow-up owner</code><span>Who owns the next runtime, test, service-owner, incident-response, or release-process question?</span></div>
+        </div>
+      </section>
+
+      <section id="runtime-authority" class="section split-section">
+        <div>
+          <p class="section-kicker">Where runtime tools remain authoritative</p>
+          <h2>Observed behavior belongs to runtime systems and their owners.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Operational signals</strong><span>Logs, traces, metrics, APM, dashboards, alerts, request behavior, runtime errors, and incident timelines answer what happened while software ran.</span></div>
+          <div><strong>Owner conclusions</strong><span>Service owners, incident-response roles, test owners, and release approvers interpret runtime evidence in their own systems of record.</span></div>
+          <div><strong>TraceMap boundary</strong><span>TraceMap can supply static code context, dependency evidence, nearby references, and visible gaps; it does not establish production behavior, traffic, performance, outage cause, operational safety, or release decisions.</span></div>
         </div>
       </section>
 
@@ -176,9 +181,9 @@
         </ul>
       </section>
 
-      <section id="limitations" class="section split-section">
+      <section id="proof-paths-and-limitations" class="section split-section">
         <div>
-          <p class="section-kicker">Publishing boundary</p>
+          <p class="section-kicker">Proof paths and limitations</p>
           <h2>Public examples stay summarized and public-safe.</h2>
         </div>
         <div class="detail-list">
@@ -188,9 +193,9 @@
         </div>
       </section>
 
-      <section id="proof-paths" class="section link-section">
+      <section id="related-links" class="section link-section">
         <div>
-          <p class="section-kicker">Proof paths</p>
+          <p class="section-kicker">Related links</p>
           <h2>Follow public-safe routes for evidence shape and limitations.</h2>
         </div>
         <div class="link-grid">
