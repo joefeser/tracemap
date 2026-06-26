@@ -1961,7 +1961,9 @@ public static class CombinedRouteFlowReporter
     {
         var method = node.HttpMethod ?? string.Empty;
         var pathKey = node.NormalizedPathKey ?? string.Empty;
-        var safePathKey = SafeSelector(pathKey) ?? $"route-key-hash:{CombinedReportHelpers.Hash(pathKey, 16)}";
+        var safePathKey = string.IsNullOrWhiteSpace(node.NormalizedPathKey)
+            ? string.Empty
+            : SafeSelector(pathKey) ?? $"route-key-hash:{CombinedReportHelpers.Hash(pathKey, 16)}";
         return new RouteFlowEntryEvidence(
             $"entry:{entryKind}:{CombinedReportHelpers.Hash(node.NodeId, 16)}",
             entryKind,
@@ -4594,10 +4596,25 @@ public static class CombinedRouteFlowReporter
     private static bool MetadataRedactionApplied(IReadOnlyDictionary<string, string> metadata)
     {
         return metadata.Any(pair =>
-            pair.Key.EndsWith("Hash", StringComparison.Ordinal)
+            RedactionMetadataHashKeys.Contains(pair.Key)
             || pair.Value.StartsWith("redacted-hash:", StringComparison.Ordinal)
             || string.Equals(pair.Value, "redacted", StringComparison.Ordinal));
     }
+
+    private static readonly HashSet<string> RedactionMetadataHashKeys = new(StringComparer.Ordinal)
+    {
+        "attributeNameHash",
+        "checkedSymbolHash",
+        "columnNamesHash",
+        "configKeyHash",
+        "containingTypeHash",
+        "contractNameHash",
+        "memberNameHash",
+        "memberTypeHash",
+        "sourceSymbolHash",
+        "tableNameHash",
+        "targetSymbolHash"
+    };
 
     private static string SafeSurfaceDisplayName(CombinedPathNode node)
     {
@@ -4676,21 +4693,41 @@ public static class CombinedRouteFlowReporter
             || value.StartsWith("git@", StringComparison.OrdinalIgnoreCase)
             || value.Contains("?")
             || value.Contains("&")
-            || value.Contains("SELECT ", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("INSERT ", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("UPDATE ", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("DELETE ", StringComparison.OrdinalIgnoreCase)
+            || ContainsSqlVerb(value)
             || value.Contains("PASSWORD", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("PASSWD", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("PWD", StringComparison.OrdinalIgnoreCase)
             || value.Contains("SECRET", StringComparison.OrdinalIgnoreCase)
             || value.Contains("TOKEN", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("APIKEY", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("API_KEY", StringComparison.OrdinalIgnoreCase)
             || HasPrivateMarker(value)
             || value.Contains("CONNECTIONSTRING", StringComparison.OrdinalIgnoreCase)
             || value.Contains("SERVER=", StringComparison.OrdinalIgnoreCase)
             || value.Contains("USER ID=", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("USERID", StringComparison.OrdinalIgnoreCase)
             || value.Contains("UID=", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("DATA SOURCE", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("INITIAL CATALOG", StringComparison.OrdinalIgnoreCase)
             || LooksLikeKnownUnsafeHostname(value)
             || LooksLikeSourceSnippet(value)
             || (value.StartsWith("/", StringComparison.Ordinal) && !IsSafeNormalizedPathKey(value));
+    }
+
+    private static bool ContainsSqlVerb(string value)
+    {
+        var trimmed = value.TrimStart();
+        return StartsWithWord(trimmed, "SELECT")
+            || StartsWithWord(trimmed, "INSERT")
+            || StartsWithWord(trimmed, "UPDATE")
+            || StartsWithWord(trimmed, "DELETE");
+    }
+
+    private static bool StartsWithWord(string value, string word)
+    {
+        return value.Length > word.Length
+            && value.StartsWith(word, StringComparison.OrdinalIgnoreCase)
+            && char.IsWhiteSpace(value[word.Length]);
     }
 
     private static bool HasPrivateMarker(string value)
@@ -4712,9 +4749,14 @@ public static class CombinedRouteFlowReporter
         }
 
         var labels = value.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return labels.Length >= 2
-            && labels.All(label => label.Length > 0 && label.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '-'))
-            && (labels[^1] is "test" or "invalid" or "local" or "internal"
+        if (labels.Length < 2)
+        {
+            return false;
+        }
+
+        var tld = labels[^1].ToLowerInvariant();
+        return labels.All(label => label.Length > 0 && label.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '-'))
+            && (tld is "test" or "invalid" or "local" or "internal"
                 || labels.Contains("example", StringComparer.OrdinalIgnoreCase));
     }
 
@@ -4764,6 +4806,7 @@ public static class CombinedRouteFlowReporter
             || value.StartsWith("/tmp/", StringComparison.OrdinalIgnoreCase)
             || value.StartsWith("/var/", StringComparison.OrdinalIgnoreCase)
             || value.StartsWith("/home/", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("/root/", StringComparison.OrdinalIgnoreCase)
             || value.StartsWith("/private/", StringComparison.OrdinalIgnoreCase))
         {
             return false;

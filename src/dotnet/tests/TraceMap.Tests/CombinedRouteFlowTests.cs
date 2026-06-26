@@ -889,6 +889,18 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(result.Report.FlowRows, row => row.SourceSymbol.Contains(secondController, StringComparison.Ordinal));
         Assert.DoesNotContain(result.Report.FlowRows, row => row.SourceSymbol.Contains(firstController, StringComparison.Ordinal)
             || row.TargetSymbol?.Contains(firstRepository, StringComparison.Ordinal) == true);
+
+        var sourceOnly = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-source-only"),
+            FromSource: "server-b",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(sourceOnly.Report.EntryEvidence, row => row.EntryKind == "source-root"
+            && row.NormalizedPathKey == string.Empty
+            && row.NormalizedPathTemplate == string.Empty);
+        Assert.DoesNotContain(sourceOnly.Report.EntryEvidence, row => row.EntryKind == "source-root"
+            && row.NormalizedPathKey.StartsWith("route-key-hash:", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -3234,10 +3246,25 @@ public sealed class CombinedRouteFlowTests
             combinedPath,
             outDir,
             Route: "GET /private/customer-token/{id}"));
+        var unsafeInputResult = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-unsafe-inputs"),
+            FromSymbol: "public string Token => secret;",
+            ToSurface: "sql-query",
+            SurfaceName: "SELECT\nEmail FROM TenantSecrets WHERE ApiToken = API_KEY; Data Source=private.example.test; PWD=secret; /root/token-cache"));
 
         var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "route-flow-report.md"));
         var json = await File.ReadAllTextAsync(Path.Combine(outDir, "route-flow-report.json"));
-        var artifacts = string.Join('\n', markdown, json, JsonSerializer.Serialize(result.Report, CombinedDependencyReporter.JsonOptions));
+        var unsafeInputMarkdown = await File.ReadAllTextAsync(Path.Combine(temp.Path, "route-flow-unsafe-inputs", "route-flow-report.md"));
+        var unsafeInputJson = await File.ReadAllTextAsync(Path.Combine(temp.Path, "route-flow-unsafe-inputs", "route-flow-report.json"));
+        var artifacts = string.Join(
+            '\n',
+            markdown,
+            json,
+            unsafeInputMarkdown,
+            unsafeInputJson,
+            JsonSerializer.Serialize(result.Report, CombinedDependencyReporter.JsonOptions),
+            JsonSerializer.Serialize(unsafeInputResult.Report, CombinedDependencyReporter.JsonOptions));
         string[] unsafeValues =
         [
             "/private/customer-token/{id}",
@@ -3250,6 +3277,10 @@ public sealed class CombinedRouteFlowTests
             "TenantSecrets",
             "CardNumber",
             "ApiToken",
+            "API_KEY",
+            "Data Source",
+            "PWD=secret",
+            "/root/token-cache",
             "URL_SECRET",
             "/opt/acme-private",
             "public string Token"
@@ -3262,6 +3293,8 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains("columnNamesHash", artifacts, StringComparison.Ordinal);
         Assert.Contains("absolute-path-hash:", artifacts, StringComparison.Ordinal);
         Assert.StartsWith("redacted-hash:", result.Report.Query.Route, StringComparison.Ordinal);
+        Assert.StartsWith("redacted-hash:", unsafeInputResult.Report.Query.FromSymbol, StringComparison.Ordinal);
+        Assert.StartsWith("redacted-hash:", unsafeInputResult.Report.Query.SurfaceName, StringComparison.Ordinal);
         Assert.NotNull(result.Report.Query.SelectorTrace);
         Assert.StartsWith("redacted-hash:", result.Report.Query.SelectorTrace!.SafeSelector, StringComparison.Ordinal);
         Assert.Equal("redacted", result.Report.Query.SelectorTrace.RedactionState);
@@ -3329,11 +3362,11 @@ public sealed class CombinedRouteFlowTests
                 attachSymbol: true,
                 tableName: "TenantSecrets",
                 columnNames: "CardNumber;ApiToken",
-                queryShapeHash: "select CardNumber from TenantSecrets where ApiToken = URL_SECRET"),
+                queryShapeHash: "query-shape-hash"),
             ConnectionStringFact(server, repository, "/opt/acme-private/customer-repo/Infrastructure/AuthRepository.cs", 32),
             PackageConfigFact(server, repository, FactTypes.ConnectionStringDeclared, RuleIds.ConfigKey, null, "ConnectionStrings:PrivateOrders", "/opt/acme-private/customer-repo/Infrastructure/AuthRepository.cs", 33),
             HttpClientFact(server, "POST", "https://private.example.test/api/customer-token?id=URL_SECRET", "/private/customer-token", "/opt/acme-private/customer-repo/Services/SecretGateway.cs", 41, gateway),
-            ObjectShapeFact(server, repository, "public string Token => secret;", "/opt/acme-private/customer-repo/Infrastructure/AuthRepository.cs", 51, "private-shape", ["Token", "ApiToken"])
+            ObjectShapeFact(server, repository, "snippet-shape-hash", "/opt/acme-private/customer-repo/Infrastructure/AuthRepository.cs", 51, "shape-hash", ["Token", "ApiToken"])
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["private.example.test"]));
         return combinedPath;
