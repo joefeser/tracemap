@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Final Tasks
 
-Status: task-8-coverage-classification-gap-downgrade-ready-for-review
+Status: task-10-public-safe-validation-complete
 
 ## Spec Delivery Tasks
 
@@ -448,25 +448,42 @@ current `dev` code or merged PR records prove the behavior.
   - [x] Add rule-catalog resolution tests for every emitted route-flow rule ID.
         Covered by `Route_flow_emitted_rule_ids_resolve_to_rule_catalog`.
 
-- [ ] 10. Enforce safety and public-safe validation. Requirements: 7, 8.
+- [x] 10. Enforce safety and public-safe validation. Requirements: 7, 8.
       Suggested boundary: PR 3 for attached rows; otherwise PR 4.
-  - [ ] Reuse safe rendering/hash helpers for route selectors, source labels,
+      Status: complete. Branch `codex/route-flow-public-safe-task10`
+      audited `origin/dev` at `9398cd3a` and closed the final
+      redaction/public-safe validation slice by hashing unsafe selector,
+      source, scan-id, entry path-key, config display, SQL/query metadata,
+      URL/remote/hostname, local absolute path, source-snippet, and secret-like
+      values in route-flow report surfaces; redaction-backed dependency and
+      logic rows now cite `combined.route-flow.redaction.v1` through supporting
+      rule IDs where the row model supports it.
+  - [x] Reuse safe rendering/hash helpers for route selectors, source labels,
         file paths, SQL/query metadata, config/package metadata, URLs, remotes,
         snippets, and secret-like values.
-  - [ ] Cite `combined.route-flow.redaction.v1` when unsafe values are hashed
+  - [x] Cite `combined.route-flow.redaction.v1` when unsafe values are hashed
         or omitted.
-  - [ ] Assert redacted or hashed rows cite `combined.route-flow.redaction.v1`
+  - [x] Assert redacted or hashed rows cite `combined.route-flow.redaction.v1`
         where the report model supports row-level or supporting rule IDs.
-  - [ ] Add Markdown, JSON, log, and fixture-metadata negative tests for raw
+  - [x] Add Markdown, JSON, log, and fixture-metadata negative tests for raw
         SQL, raw config, URLs/query strings, connection strings, secrets,
         snippets, local absolute paths, raw remotes, hostnames, private labels,
         and private route values.
-  - [ ] Run focused route-flow tests, full .NET build/test, private-path guard,
+        Covered by
+        `Route_flow_public_safe_artifacts_omit_raw_sensitive_values_and_cite_redaction`.
+        Route-flow does not emit a separate analyzer log for report generation;
+        the test covers generated Markdown/JSON plus fixture-derived report
+        metadata, and the public combined-path smoke covers scan logs as
+        generated local-only artifacts.
+  - [x] Run focused route-flow tests, full .NET build/test, private-path guard,
         `git diff --check`, and relevant `docs/VALIDATION.md` pinned smokes or
         record explicit deferrals.
-  - [ ] Record any private legacy smoke as local-only generic evidence, with no
+  - [x] Record any private legacy smoke as local-only generic evidence, with no
         private paths, names, routes, SQL/config values, snippets, secrets,
         remotes, or generated private outputs.
+        No private legacy smoke was run for this slice; validation used
+        checked-in synthetic fixtures and generated temporary public sample
+        smoke outputs only.
 
 ## Suggested PR Boundaries
 
