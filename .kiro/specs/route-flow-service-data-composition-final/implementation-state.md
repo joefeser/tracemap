@@ -1,7 +1,7 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: task-7-package-config-attachment-precision-ready-for-review
-Readiness: task-7-package-config-ready-for-pr-review-loop
+Status: task-7-http-client-attachment-precision-ready-for-review
+Readiness: task-7-http-client-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
 Target base: `dev`
@@ -355,9 +355,84 @@ Validation status:
 - Post-ACK `./scripts/check-private-paths.sh`: passed.
 - Post-ACK `git diff --check`: passed.
 
+## Task 7 HTTP Client Attachment Slice
+
+Branch: `codex/task7-http-client-precision-20260626`
+Audited base: `origin/dev` at
+`268b6d082d18004af0980940f458c42e8fa80407`.
+Selected family: HTTP client dependency surfaces.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision evidence for
+  `HttpCallDetected` rows already projected as deterministic `http-client`
+  dependency surfaces.
+- Prove selected HTTP client terminal surfaces attach only when the
+  `HttpCallDetected` row is reached by the selected static route-flow path
+  through source-local symbol evidence.
+- Prove adjacent unjoined HTTP client evidence remains excluded from
+  dependency surfaces and terminal flow rows, while preserving
+  `DataSurfaceAttachmentMissing`.
+- Record the HTTP client sub-slice without closing broader Task 7 families.
+
+Scope decisions:
+
+- This slice does not change scanner extraction, route/client alignment,
+  reducer behavior, UI property lineage, site work, or runtime HTTP reachability
+  claims.
+- The route-flow implementation already attached generic dependency surfaces
+  through selected static paths; this branch adds the missing focused
+  regression evidence rather than adding HTTP-client-specific product logic.
+- Legacy-data/storage, validation/serializer, async/callback, flow-boundary,
+  and broader service/repository/object/projection breadth remain follow-up
+  Task 7 slices unless separately verified in a later PR.
+
+Oddities:
+
+- HTTP client facts are dual-use in combined pathing: they can be selector/root
+  evidence for client-call flows and terminal dependency surfaces when a server
+  route reaches an outbound client call. The tests isolate the terminal-surface
+  behavior so the slice does not broaden endpoint alignment semantics.
+- The attached test uses the selected route path
+  `controller -> payment gateway -> http-client surface` and keeps an unrelated
+  HTTP client fact in the same combined index to prove adjacent evidence is not
+  inferred.
+- The unjoined test keeps a matching route and downstream service call but only
+  an unrelated HTTP client surface, proving route-flow emits the scoped
+  attachment gap rather than a clean no-evidence conclusion.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_http_client_surface_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_http_client_surface_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 58 tests and the existing NU1903 warning.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 668 tests and the
+  existing NU1903 warning.
+- `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke-http-client-20260626`:
+  passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`.
+- Post-Qodo doc-drift patch
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_http_client_surface_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_http_client_surface_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning.
+- Post-Qodo doc-drift patch `./scripts/check-private-paths.sh`: passed.
+- Post-Qodo doc-drift patch `git diff --check`: passed.
+- Post-Qodo stale-phrase patch
+  `rg -n 'spec-only|limited to this spec folder|limited to \\.kiro' .kiro/specs/route-flow-service-data-composition-final`:
+  passed with no matches.
+- Post-Qodo stale-phrase patch
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_http_client_surface_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_http_client_surface_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning.
+- Post-Qodo stale-phrase patch `./scripts/check-private-paths.sh`: passed.
+- Post-Qodo stale-phrase patch `git diff --check`: passed.
+
 ## Summary
 
-This is a spec-only completion packet for the remaining route-centered static
+This packet now tracks both the original spec delivery and subsequent
+focused implementation/test slices for the remaining route-centered static
 service/data composition work. The target product behavior is a conservative
 `tracemap route-flow` trace that can start at endpoint/root method evidence,
 stitch into service methods, continue through review-tier implementation
@@ -420,7 +495,7 @@ classification.
 
 ## Review Plan
 
-Required review loop for this spec-only branch:
+Required review loop for the original spec delivery branch:
 
 ```bash
 node scripts/kiro-review.mjs --phase route-flow-service-data-composition-final --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text
@@ -536,7 +611,8 @@ Also discover whether a dedicated spec/docs validation command exists. If none
 exists, record the discovery command and result here.
 
 Product implementation validation is documented in `tasks.md` and `design.md`,
-but it is intentionally deferred because this branch is spec-only.
+but it is intentionally deferred because the original branch delivered only
+spec files.
 
 ## Validation Log
 

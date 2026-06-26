@@ -341,6 +341,100 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_attaches_http_client_surface_only_from_selected_static_path()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Post(System.Int32)";
+        var gateway = "Server.PaymentGateway.Charge(System.Int32)";
+        var unrelatedGateway = "Server.AuditGateway.Send(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "POST", "/api/orders/{id}/charge", "/api/orders/{}/charge", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, gateway, "Controllers/OrdersController.cs", 15),
+            HttpClientFact(server, "POST", "/billing/{id}", "/billing/{}", "Services/PaymentGateway.cs", 24, gateway),
+            HttpClientFact(server, "POST", "/audit/{id}", "/audit/{}", "Services/AuditGateway.cs", 31, unrelatedGateway)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "POST /api/orders/{id}/charge",
+            ToSurface: "http-client"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "POST /api/orders/{id}/charge",
+            ToSurface: "http-client"));
+
+        var surface = Assert.Single(result.Report.DependencySurfaces);
+        Assert.Equal("http-client", surface.SurfaceKind);
+        Assert.Equal("/billing/{}", surface.DisplayName);
+        Assert.Equal("combined.route-flow.dependency-surface.v1", surface.Evidence.RuleId);
+        Assert.Contains(RuleIds.HttpClientInvocation, surface.Evidence.SupportingRuleIds);
+        Assert.Equal(surface.SurfaceId, Assert.Single(repeated.Report.DependencySurfaces).SurfaceId);
+        Assert.Equal(surface.StableKey, Assert.Single(repeated.Report.DependencySurfaces).StableKey);
+        Assert.StartsWith("surface-key-hash:", surface.StableKey, StringComparison.Ordinal);
+
+        var terminal = Assert.Single(result.Report.FlowRows, row => row.EdgeKind == "terminal-surface");
+        Assert.Equal("terminal-surface", terminal.RowKind);
+        Assert.Contains(gateway, terminal.SourceSymbol, StringComparison.Ordinal);
+        Assert.Contains("/billing/{}", terminal.TargetSymbol!, StringComparison.Ordinal);
+        Assert.Equal(terminal.RowId, Assert.Single(repeated.Report.FlowRows, row => row.EdgeKind == "terminal-surface").RowId);
+
+        Assert.DoesNotContain(result.Report.FlowRows, row => row.SourceSymbol.Contains("AuditGateway", StringComparison.Ordinal)
+            || row.TargetSymbol?.Contains("/audit/{}", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(result.Report.DependencySurfaces, item => item.Evidence.FilePath == "Services/AuditGateway.cs");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "DataSurfaceAttachmentMissing" or "NoRouteFlowEvidence");
+        Assert.Contains(result.Report.ContextGroups!, group => group.GroupKind == "dependency"
+            && group.MatchKind == "dependency-surface"
+            && group.SupportingRowIds.Contains(surface.SurfaceId));
+    }
+
+    [Fact]
+    public async Task Route_flow_does_not_infer_adjacent_http_client_surface_without_selected_join()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Post(System.Int32)";
+        var service = "Server.OrderService.Charge(System.Int32)";
+        var unrelatedGateway = "Server.AuditGateway.Send(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "POST", "/api/orders/{id}/charge", "/api/orders/{}/charge", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 15),
+            HttpClientFact(server, "POST", "/audit/{id}", "/audit/{}", "Services/AuditGateway.cs", 31, unrelatedGateway)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "POST /api/orders/{id}/charge",
+            ToSurface: "http-client"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "POST /api/orders/{id}/charge",
+            ToSurface: "http-client"));
+
+        Assert.Empty(result.Report.DependencySurfaces);
+        var gap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "DataSurfaceAttachmentMissing");
+        Assert.Equal("combined.route-flow.gap.v1", gap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal(gap.GapId, Assert.Single(repeated.Report.Gaps, item => item.GapKind == "DataSurfaceAttachmentMissing").GapId);
+        Assert.DoesNotContain(result.Report.FlowRows, row => row.EdgeKind == "terminal-surface"
+            && row.TargetSymbol?.Contains("/audit/{}", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+    }
+
+    [Fact]
     public async Task Route_flow_attaches_package_config_surfaces_only_from_selected_static_path()
     {
         using var temp = new TempDirectory();
