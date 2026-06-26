@@ -699,6 +699,23 @@
     ]
   },
   {
+    "path": "/legacy-data-surface/",
+    "title": "Legacy Data Surface Evidence Story",
+    "summary": "Concept-level legacy data surface story inside the legacy .NET evidence lane for deterministic static metadata, mapping clues, query-facing references, persistence context, proof paths, limitations, and owner follow-up.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/legacy-evidence/",
+    "limitations": [
+      "The page is a concept-level public explainer and cannot upgrade static repository evidence into runtime, migration, release, or storage conclusions.",
+      "Data-surface rows require public-safe rule families, evidence tiers, coverage labels, limitations, and proof routes before stronger wording."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, complete coverage, migration success, schema compatibility, database connectivity, database execution, or data contents proof.",
+      "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, raw artifact publication, source excerpts, database text, configuration values, credentials, workstation paths, repository locations, scan folders, command output, hidden validation detail, private sample names, or credential-like values."
+    ]
+  },
+  {
     "path": "/use-cases/incident-review/",
     "title": "Incident Review Orientation",
     "summary": "Describes how static evidence can orient incident-adjacent code questions while operational proof stays outside TraceMap.",

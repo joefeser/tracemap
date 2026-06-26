@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap legacy data surface concept: deterministic static evidence families, proof paths, limitations, and owner follow-up without database execution or raw data access."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Legacy Data Surface Evidence Story | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/legacy-data-surface/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Legacy Data Surface Evidence Story Concept">
+    <meta
+      property="og:description"
+      content="A concept-level public story for static legacy data evidence, proof-path requirements, evidence statuses, limitations, and non-claims."
+    >
+    <meta property="og:url" content="https://tracemap.tools/legacy-data-surface/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section id="overview" class="page-hero">
+        <p class="eyebrow">Legacy data surface evidence story</p>
+        <h1>Data-surface review starts as static evidence, not database inspection.</h1>
+        <p class="hero-subhead">
+          This concept page shows how a future public story could frame legacy
+          data metadata, mapping clues, query-facing references, persistence
+          context, proof paths, and gaps from repository snapshots and
+          checked-in artifacts.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This is a narrower data-surface story inside the
+          <a href="/legacy-dotnet/evidence/">legacy .NET evidence lane</a>, not
+          a shipped support page or a migration validator.
+        </p>
+        <nav class="hero-actions" aria-label="Legacy data surface links">
+          <a class="button primary" href="#evidence-status-matrix">Open matrix</a>
+          <a class="button secondary" href="/legacy-evidence/">Hidden legacy evidence ledger</a>
+          <a class="button secondary" href="/legacy-modernization/evidence-map/">Modernization evidence map</a>
+          <a class="button secondary" href="/proof-paths/">Proof paths</a>
+        </nav>
+      </section>
+
+      <section id="placement" class="section split-section">
+        <div>
+          <p class="section-kicker">Placement</p>
+          <h2>A bounded data lane, not a broader modernization claim.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>legacy .NET lane</code><span>The broader lane names legacy framework families and proof posture; this page narrows the lens to static data-surface questions.</span></div>
+          <div><code>hidden ledger</code><span>The <a href="/legacy-evidence/">legacy evidence ledger</a> remains the promotion boundary for hidden proof and validation detail.</span></div>
+          <div><code>modernization map</code><span>The <a href="/legacy-modernization/evidence-map/">modernization evidence map</a> stays a planning map; this page keeps data evidence attached to limitations.</span></div>
+        </div>
+      </section>
+
+      <section id="evidence-families" class="section">
+        <div class="section-header">
+          <p class="section-kicker">Evidence families</p>
+          <h2>Static clues can narrow owner questions, not answer runtime ones.</h2>
+        </div>
+        <div class="workflow-grid audience-grid">
+          <article>
+            <h3>Design-time metadata</h3>
+            <p>Checked-in model designers, descriptor files, generated-designer relationships, and metadata format clues can frame a review question.</p>
+          </article>
+          <article>
+            <h3>Data model metadata</h3>
+            <p>Entity-like descriptors, storage-object descriptors, property or column descriptors, relationship clues, safe hashes, and normalized identities need proof before stronger wording.</p>
+          </article>
+          <article>
+            <h3>ORM/mapping clues</h3>
+            <p>Mapping documents, mapping attributes, generated-code links, and unsupported ORM metadata gaps remain deterministic static evidence questions.</p>
+          </article>
+          <article>
+            <h3>SQL/query-facing references</h3>
+            <p>Query builder calls, stored-procedure references, table or view references, checked-in query references, and call sites must be summarized without raw SQL or private values.</p>
+          </article>
+          <article>
+            <h3>Storage/persistence context</h3>
+            <p>Provider family, connection-name metadata, configuration surface presence, repository or service context, package clues, and owner handoff questions stay public-safe and static.</p>
+          </article>
+          <article>
+            <h3>Limitations and analysis gaps</h3>
+            <p>Unsupported metadata, malformed descriptors, missing generated code, failed project load, build failure, syntax fallback, and unknown evidence keep coverage labels visible.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="evidence-status-matrix" class="section" aria-labelledby="evidence-status-matrix-heading">
+        <div class="section-header">
+          <p class="section-kicker">Evidence-status matrix</p>
+          <h2 id="evidence-status-matrix-heading">Every family carries status, proof path, limitation, and owner follow-up.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table legacy-data-surface-matrix" data-legacy-data-surface-matrix>
+            <caption>
+              Evidence status is not release approval, migration readiness,
+              runtime confirmation, production usage proof, or database
+              compatibility proof. Allowed statuses are concept, future, demo,
+              hidden, reduced, partial, gap, and unknown.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Evidence family</th>
+                <th scope="col">Possible static evidence</th>
+                <th scope="col">Evidence status</th>
+                <th scope="col">Proof path requirement</th>
+                <th scope="col">Limitation</th>
+                <th scope="col">Owner follow-up</th>
+                <th scope="col">Allowed wording</th>
+                <th scope="col">Forbidden wording</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-surface-row="design-time-metadata" data-evidence-status="concept">
+                <td><strong>Design-time metadata</strong></td>
+                <td>Checked-in model designer or descriptor files, generated-designer relationships, and metadata format clues.</td>
+                <td><code>concept</code></td>
+                <td>Public-safe descriptor summary with rule family, evidence tier, coverage label, and limitation.</td>
+                <td>Does not prove tool designer execution, database connectivity, database state, or data contents.</td>
+                <td>Application owner verifies intended model source; database owner verifies live storage questions.</td>
+                <td>Concept: design-time metadata may frame a review question.</td>
+                <td>Forbidden example: TraceMap proves design-time models execute against a database.</td>
+              </tr>
+              <tr data-surface-row="data-model-metadata" data-evidence-status="concept">
+                <td><strong>Data model metadata</strong></td>
+                <td>Entity-like descriptors, storage-object descriptors, property or column descriptors, relationship clues, safe hashes, and normalized identities.</td>
+                <td><code>concept</code></td>
+                <td>Sanitized descriptor summary with rule family, evidence tier, coverage label, safe hashes, or normalized identities before stronger wording.</td>
+                <td>Does not prove live schema, rows, permissions, data values, or schema compatibility.</td>
+                <td>Database owner verifies schema and data-state questions; application owner verifies code intent.</td>
+                <td>Concept: data model metadata may identify static descriptors.</td>
+                <td>Forbidden example: TraceMap proves live schema compatibility or production data contents.</td>
+              </tr>
+              <tr data-surface-row="orm-mapping-clues" data-evidence-status="future">
+                <td><strong>ORM/mapping clues</strong></td>
+                <td>Mapping documents, mapping attributes, generated-code links, framework-specific mapping families, or unsupported ORM metadata gaps.</td>
+                <td><code>future</code></td>
+                <td>Future public-safe rule IDs and evidence tiers; unsupported formats are labeled gap in implementation-specific rows.</td>
+                <td>Does not prove ORM runtime behavior, lazy loading, query generation, package compatibility, or persistence success.</td>
+                <td>Application owner reviews mapping intent; database owner reviews storage implications.</td>
+                <td>Future: ORM or mapping clues may be extractable as static evidence.</td>
+                <td>Forbidden example: TraceMap proves ORM mappings work at runtime.</td>
+              </tr>
+              <tr data-surface-row="sql-query-facing-references" data-evidence-status="future">
+                <td><strong>SQL/query-facing references</strong></td>
+                <td>Query-facing call sites, query builder calls, stored-procedure references, table or view references, or checked-in query references summarized without raw SQL.</td>
+                <td><code>future</code></td>
+                <td>Future public-safe rule IDs confirming extraction without raw SQL exposure; unresolved references are labeled gap.</td>
+                <td>Does not prove query execution, runtime SQL text, database results, performance, permissions, or production usage.</td>
+                <td>Application owner reviews call-site intent; database owner reviews live query, schema, and permission questions.</td>
+                <td>Future: SQL/query-facing references may be identified without raw SQL.</td>
+                <td>Forbidden example: TraceMap executes SQL or proves runtime SQL behavior.</td>
+              </tr>
+              <tr data-surface-row="storage-persistence-context" data-evidence-status="concept">
+                <td><strong>Storage/persistence context</strong></td>
+                <td>Provider family, connection-name metadata, configuration surface presence, repository or service context, package or assembly clues.</td>
+                <td><code>concept</code></td>
+                <td>Public-safe configuration or package summary with no raw values before stronger wording; unavailable proof becomes a gap.</td>
+                <td>Does not prove connectivity, credential validity, live database existence, or storage state.</td>
+                <td>Database owner verifies connectivity and storage; service owner verifies runtime configuration.</td>
+                <td>Concept: persistence context may provide handoff clues.</td>
+                <td>Forbidden example: TraceMap connects to your database or proves storage state.</td>
+              </tr>
+              <tr data-surface-row="analysis-gaps" data-evidence-status="gap">
+                <td><strong>Analysis gaps</strong></td>
+                <td>Failed project load, parser bounds, unsupported metadata, malformed descriptors, missing generated code, build failure, syntax fallback, or unknown evidence.</td>
+                <td><code>gap</code></td>
+                <td>Gap fact, reduced-coverage label, parser limitation, or validation result for the exact scenario.</td>
+                <td>Does not prove absence of data surfaces and does not convert failed build or load into clean coverage.</td>
+                <td>Engineering owner resolves build, load, or parser gaps, or accepts reduced evidence in review.</td>
+                <td>Gap: failed load, parser bounds, unsupported metadata, and syntax fallback remain labeled.</td>
+                <td>Forbidden example: failed load still proves complete data coverage.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="proof-paths" class="section split-section">
+        <div>
+          <p class="section-kicker">Proof paths</p>
+          <h2>Stronger copy needs reviewed proof, not inference.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Required before conclusions</strong><span>Rule ID or rule family, evidence tier, coverage label, limitation, public-safe proof path, and reviewed provenance such as commit SHA, extractor version, file path, line span, supporting ID, or snippet hash when safe.</span></div>
+          <div><strong>Artifact families</strong><span>Public copy may name scan-manifest.json, facts.ndjson, index.sqlite, report.md, and logs/analyzer.log as artifact types, but it must not publish raw private contents from them.</span></div>
+          <div><strong>Reducer boundary</strong><span>The page does not say a surface is impacted unless a reducer-backed finding and public-safe supporting evidence are present.</span></div>
+        </div>
+      </section>
+
+      <section id="boundaries" class="section boundary-section">
+        <div>
+          <p class="section-kicker">Boundaries</p>
+          <h2>Non-claims stay visible.</h2>
+        </div>
+        <ul data-non-claim-region>
+          <li>No raw source snippets, raw SQL, raw config values, secrets, tokens, connection strings, table dumps, raw fact streams, raw SQLite content, analyzer logs, raw remotes, local absolute paths, generated scan directories, private sample names, hidden validation details, raw command output, private URLs, or credential-like values.</li>
+          <li>No database execution, database connectivity, runtime SQL behavior, production traffic, endpoint performance, outage cause, migration success, schema compatibility, release approval, release safety, operational safety, AI impact analysis, LLM analysis, embeddings, vector databases, or prompt classification.</li>
+        </ul>
+      </section>
+
+      <section id="related-routes" class="section link-section">
+        <div>
+          <p class="section-kicker">Related evidence routes</p>
+          <h2>Use these routes before repeating a data-surface claim.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/legacy-dotnet/evidence/">Legacy .NET evidence lane</a>
+          <a href="/legacy-evidence/">Hidden legacy evidence ledger</a>
+          <a href="/legacy-modernization/evidence-map/">Modernization evidence map</a>
+          <a href="/legacy-validation/">Legacy validation concept</a>
+          <a href="/proof-paths/">Proof paths</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/outputs/">Output artifacts</a>
+          <a href="/docs/">Docs</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>&copy; 2026 TraceMap. Deterministic static analysis for evidence-backed change review.</p>
+    </footer>
+  </body>
+</html>

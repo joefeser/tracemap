@@ -25,54 +25,54 @@ phase.
 
 ## Future Implementation Tasks
 
-- [ ] Confirm or update this spec-local `implementation-state.md` with branch,
+- [x] Confirm or update this spec-local `implementation-state.md` with branch,
   placement decision, route choice, proof-path choices, validation plan,
   oddities, and follow-up items before changing site code.
-- [ ] Implement the future route or section, preferably
+- [x] Implement the future route or section, preferably
   `/legacy-data-surface/`, using existing static site layout patterns.
-- [ ] Include visible `Public claim level: concept` and
+- [x] Include visible `Public claim level: concept` and
   `No public conclusion without evidence`.
-- [ ] Present the surface as a concept-level legacy data evidence story, not a
+- [x] Present the surface as a concept-level legacy data evidence story, not a
   shipped support page, runtime data lineage tool, migration validator, SQL
   executor, or database inspection workflow.
-- [ ] Relate the page to `/legacy-dotnet/evidence/`, `/legacy-evidence/`, and
+- [x] Relate the page to `/legacy-dotnet/evidence/`, `/legacy-evidence/`, and
   `/legacy-modernization/evidence-map/` without promoting hidden rows or
   private validation detail.
-- [ ] Cover design-time metadata, data model metadata, ORM/mapping clues,
+- [x] Cover design-time metadata, data model metadata, ORM/mapping clues,
   SQL/query-facing references, storage/persistence context, and limitations.
-- [ ] Add an evidence-status matrix with evidence family, possible static
+- [x] Add an evidence-status matrix with evidence family, possible static
   evidence, evidence status, proof path requirement, limitation, owner
   follow-up, allowed wording, and forbidden wording.
-- [ ] Keep every public conclusion connected to deterministic rule IDs or rule
+- [x] Keep every public conclusion connected to deterministic rule IDs or rule
   families, evidence tiers, coverage labels, limitations, and public-safe proof
   paths when evidence exists.
-- [ ] Use hidden, future, dev, concept, partial, reduced, gap, and unknown
+- [x] Use hidden, future, dev, concept, partial, reduced, gap, and unknown
   wording according to the proof posture documented in the requirements.
-- [ ] Avoid claims of raw data access, database execution, runtime SQL
+- [x] Avoid claims of raw data access, database execution, runtime SQL
   behavior, data contents, database existence, schema compatibility, migration
   success, endpoint performance, production traffic, outage cause, release
   safety, operational safety, AI impact analysis, LLM analysis, embeddings,
   vector databases, prompt-based classification, or complete coverage.
-- [ ] Avoid publishing raw source snippets, raw SQL, raw config values,
+- [x] Avoid publishing raw source snippets, raw SQL, raw config values,
   secrets, credentials, tokens, connection strings, database contents, table
   dumps, raw facts, raw SQLite content, analyzer logs, raw remotes, local
   absolute paths, generated scan directories, private sample names, hidden
   validation details, raw command output, private URLs, or credential-like
   values.
-- [ ] Add title, description, canonical URL, Open Graph metadata, and
+- [x] Add title, description, canonical URL, Open Graph metadata, and
   concept-level claim metadata.
-- [ ] Add discovery metadata with public claim level `concept`, preferred proof
+- [x] Add discovery metadata with public claim level `concept`, preferred proof
   path, limitations, non-claims, neighboring route hints, and relation to the
   legacy .NET evidence lane.
-- [ ] Add sitemap metadata if a standalone route is implemented.
-- [ ] Add focused validation for required visible copy, required evidence
+- [x] Add sitemap metadata if a standalone route is implemented.
+- [x] Add focused validation for required visible copy, required evidence
   families, evidence-status matrix columns, required links, route/discovery
   metadata, forbidden claims, private/raw material, and bounded rendered word
   count.
-- [ ] Run `npm run build` from `site/`.
-- [ ] Run the relevant site validation command from `site/`.
-- [ ] Run `./scripts/check-private-paths.sh`.
-- [ ] Run desktop and mobile browser sanity checks for the new public surface,
+- [x] Run `npm run build` from `site/`.
+- [x] Run the relevant site validation command from `site/`.
+- [x] Run `./scripts/check-private-paths.sh`.
+- [x] Run desktop and mobile browser sanity checks for the new public surface,
   or document an explicit deferral.
-- [ ] Update this spec's `implementation-state.md` with final implementation
+- [x] Update this spec's `implementation-state.md` with final implementation
   scope, validation results, oddities, and follow-up items.
