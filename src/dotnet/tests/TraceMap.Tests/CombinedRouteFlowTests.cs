@@ -591,17 +591,17 @@ public sealed class CombinedRouteFlowTests
             && packageName == "Dapper"
             && surface.Evidence.SupportingRuleIds.Contains(RuleIds.ProjectFile, StringComparer.Ordinal));
         Assert.Contains(result.Report.DependencySurfaces, surface =>
-            surface.DisplayName == "Features:Orders:Enabled"
+            surface.DisplayName == $"config-key-hash:{CombinedReportHelpers.Hash("Features:Orders:Enabled", 16)}"
             && surface.SafeMetadata.TryGetValue("configKeyHash", out var configKeyHash)
             && configKeyHash == CombinedReportHelpers.Hash("Features:Orders:Enabled", 16)
             && surface.Evidence.SupportingRuleIds.Contains(RuleIds.ConfigKey, StringComparer.Ordinal));
         Assert.Contains(result.Report.DependencySurfaces, surface =>
-            surface.DisplayName == "OrdersDb"
+            surface.DisplayName == $"config-key-hash:{CombinedReportHelpers.Hash("OrdersDb", 16)}"
             && surface.SafeMetadata.TryGetValue("configKeyHash", out var configKeyHash)
             && configKeyHash == CombinedReportHelpers.Hash("OrdersDb", 16)
             && surface.Evidence.SupportingRuleIds.Contains(RuleIds.ConfigKey, StringComparer.Ordinal));
         Assert.Contains(result.Report.DependencySurfaces, surface =>
-            surface.DisplayName == "Customers"
+            surface.DisplayName == $"config-key-hash:{CombinedReportHelpers.Hash("Customers", 16)}"
             && surface.SafeMetadata.TryGetValue("configKeyHash", out var configKeyHash)
             && configKeyHash == CombinedReportHelpers.Hash("Customers", 16)
             && surface.Evidence.SupportingRuleIds.Contains(RuleIds.CSharpSemanticContractMapping, StringComparer.Ordinal));
@@ -2987,7 +2987,7 @@ public sealed class CombinedRouteFlowTests
         var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
             combinedPath,
             Path.Combine(temp.Path, "route-flow"),
-            Route: "GET /api/token/{id}"));
+            Route: "GET /private/customer-token/{id}"));
 
         Assert.NotNull(result.Report.Query.SelectorTrace);
         Assert.Equal("route", result.Report.Query.SelectorTrace!.SelectorKind);
@@ -3223,6 +3223,60 @@ public sealed class CombinedRouteFlowTests
         Assert.Empty(missing);
     }
 
+    [Fact]
+    public async Task Route_flow_public_safe_artifacts_omit_raw_sensitive_values_and_cite_redaction()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateSensitiveRouteCombinedIndexAsync(temp);
+        var outDir = Path.Combine(temp.Path, "route-flow");
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            outDir,
+            Route: "GET /private/customer-token/{id}"));
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "route-flow-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "route-flow-report.json"));
+        var artifacts = string.Join('\n', markdown, json, JsonSerializer.Serialize(result.Report, CombinedDependencyReporter.JsonOptions));
+        string[] unsafeValues =
+        [
+            "/private/customer-token/{id}",
+            "customer-token",
+            "private.example.test",
+            "git@github.com:private/customer.git",
+            "Server=private.example.test",
+            "Password=secret",
+            "select CardNumber",
+            "TenantSecrets",
+            "CardNumber",
+            "ApiToken",
+            "URL_SECRET",
+            "/opt/acme-private",
+            "public string Token"
+        ];
+
+        Assert.All(unsafeValues, value => Assert.DoesNotContain(value, artifacts, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("redacted-hash:", artifacts, StringComparison.Ordinal);
+        Assert.Contains("config-key-hash:", artifacts, StringComparison.Ordinal);
+        Assert.Contains("tableNameHash", artifacts, StringComparison.Ordinal);
+        Assert.Contains("columnNamesHash", artifacts, StringComparison.Ordinal);
+        Assert.Contains("absolute-path-hash:", artifacts, StringComparison.Ordinal);
+        Assert.StartsWith("redacted-hash:", result.Report.Query.Route, StringComparison.Ordinal);
+        Assert.NotNull(result.Report.Query.SelectorTrace);
+        Assert.StartsWith("redacted-hash:", result.Report.Query.SelectorTrace!.SafeSelector, StringComparison.Ordinal);
+        Assert.Equal("redacted", result.Report.Query.SelectorTrace.RedactionState);
+        Assert.All(result.Report.Snapshot.Sources, source => Assert.StartsWith("redacted-hash:", source.SourceLabel, StringComparison.Ordinal));
+        Assert.All(result.Report.DependencySurfaces, surface =>
+        {
+            Assert.StartsWith("surface-key-hash:", surface.StableKey, StringComparison.Ordinal);
+            Assert.Contains("combined.route-flow.redaction.v1", surface.Evidence.SupportingRuleIds);
+            Assert.DoesNotContain("tableName", surface.SafeMetadata.Keys);
+            Assert.DoesNotContain("columnNames", surface.SafeMetadata.Keys);
+        });
+        Assert.Contains(result.Report.LogicRows, row => row.Evidence.SupportingRuleIds.Contains("combined.route-flow.redaction.v1"));
+        Assert.Contains(result.Report.ContextGroups!, group => group.RuleIds.Contains("combined.route-flow.redaction.v1"));
+    }
+
     private static async Task<(string CombinedPath, string Controller, string Repository)> CreateRouteFlowCombinedIndexAsync(TempDirectory temp, string serverBuildStatus = "Succeeded")
     {
         var clientIndex = Path.Combine(temp.Path, "client.sqlite");
@@ -3254,13 +3308,34 @@ public sealed class CombinedRouteFlowTests
     {
         var serverIndex = Path.Combine(temp.Path, "server.sqlite");
         var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
-        var server = Manifest("server", "tracemap-milestone15");
+        var server = Manifest(
+            "private.example.test/customer-repo",
+            "tracemap-milestone15",
+            remoteUrl: "git@github.com:private/customer.git",
+            scanRoot: "/opt/acme-private/customer-repo");
         const string controller = "Server.AuthController.Get(System.Int32)";
+        const string repository = "Server.AuthRepository.Query(System.Int32)";
+        const string gateway = "Server.SecretGateway.Send(System.Int32)";
 
         SqliteIndexWriter.Write(serverIndex, server, [
-            RouteFact(server, "GET", "/api/token/{id}", "/api/token/{}", controller, "Controllers/AuthController.cs", 10)
+            RouteFact(server, "GET", "/private/customer-token/{id}", "/private/customer-token/{}", controller, "/opt/acme-private/customer-repo/Controllers/AuthController.cs", 10),
+            CallFact(server, controller, repository, "/opt/acme-private/customer-repo/Controllers/AuthController.cs", 14),
+            CallFact(server, controller, gateway, "/opt/acme-private/customer-repo/Controllers/AuthController.cs", 15),
+            QueryPatternFact(
+                server,
+                repository,
+                "/opt/acme-private/customer-repo/Infrastructure/AuthRepository.cs",
+                31,
+                attachSymbol: true,
+                tableName: "TenantSecrets",
+                columnNames: "CardNumber;ApiToken",
+                queryShapeHash: "select CardNumber from TenantSecrets where ApiToken = URL_SECRET"),
+            ConnectionStringFact(server, repository, "/opt/acme-private/customer-repo/Infrastructure/AuthRepository.cs", 32),
+            PackageConfigFact(server, repository, FactTypes.ConnectionStringDeclared, RuleIds.ConfigKey, null, "ConnectionStrings:PrivateOrders", "/opt/acme-private/customer-repo/Infrastructure/AuthRepository.cs", 33),
+            HttpClientFact(server, "POST", "https://private.example.test/api/customer-token?id=URL_SECRET", "/private/customer-token", "/opt/acme-private/customer-repo/Services/SecretGateway.cs", 41, gateway),
+            ObjectShapeFact(server, repository, "public string Token => secret;", "/opt/acme-private/customer-repo/Infrastructure/AuthRepository.cs", 51, "private-shape", ["Token", "ApiToken"])
         ]);
-        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["private.example.test"]));
         return combinedPath;
     }
 
@@ -3286,13 +3361,19 @@ public sealed class CombinedRouteFlowTests
         return combinedPath;
     }
 
-    private static ScanManifest Manifest(string repo, string scannerVersion, string buildStatus = "Succeeded")
+    private static ScanManifest Manifest(
+        string repo,
+        string scannerVersion,
+        string buildStatus = "Succeeded",
+        string? remoteUrl = null,
+        string branch = "main",
+        string scanRoot = ".")
     {
         return new ScanManifest(
             $"scan-{repo}",
             repo,
-            null,
-            "main",
+            remoteUrl,
+            branch,
             "abc123",
             scannerVersion,
             DateTimeOffset.Parse("2026-01-01T00:00:00Z"),
@@ -3302,7 +3383,7 @@ public sealed class CombinedRouteFlowTests
             [],
             [],
             [],
-            ".",
+            scanRoot,
             FactFactory.Hash(repo, 32),
             FactFactory.Hash("git-root", 32));
     }

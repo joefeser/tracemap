@@ -1,9 +1,9 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: task-9-json-markdown-compatibility-ready-for-review
-Readiness: task-9-json-markdown-compatibility-ready-for-pr-review-loop
+Status: task-10-public-safe-validation-complete
+Readiness: route-flow-service-data-composition-final-spec-complete-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
-Implementation branch: `codex/route-flow-json-markdown-compat-20260626`
+Implementation branch: `codex/route-flow-public-safe-task10`
 Target base: `dev`
 Primary issues: `#159`, `#179`, `#201`
 Public claim level: static evidence only
@@ -2318,7 +2318,7 @@ Follow-ups:
 - Task 9 remains unchecked for broader byte-stable JSON/Markdown compatibility,
   exit-code matrix, and route-flow rule-catalog resolution coverage not
   otherwise touched by this additive field.
-- Task 10 remains unchecked for broader redaction/public-safe negative tests.
+- Task 10 was completed later by the safety/public-safe validation slice below.
 
 ## Task 9 Deterministic JSON/Markdown Compatibility Slice
 
@@ -2385,4 +2385,77 @@ Validation status:
 
 Follow-ups:
 
-- Task 10 remains unchecked for broader redaction/public-safe validation.
+- Task 10 was completed by the safety/public-safe validation slice below.
+
+## Task 10 Safety And Public-Safe Validation Slice
+
+Branch: `codex/route-flow-public-safe-task10`
+Audited base: `origin/dev` at `9398cd3a`.
+Selected slice: final route-flow safety/public-safe validation for
+Requirements 7 and 8.
+
+Scope:
+
+- Keep this PR limited to route-flow reporting, focused route-flow tests, and
+  this spec's task/state tracking.
+- Reuse the route-flow safe selector/path/hash helpers for report-visible
+  selector, source label, scan ID, entry path-key, surface display, metadata,
+  URL/remote/hostname, local absolute path, source-snippet, SQL/query, config,
+  and secret-like values.
+- Hash config-derived dependency-surface display names and continue rendering
+  safe package names where already reviewed as public-safe.
+- Add `combined.route-flow.redaction.v1` to dependency-surface and logic-row
+  supporting rule IDs when route-flow hashes or omits unsafe row metadata.
+- Add focused negative coverage proving route-flow Markdown, JSON, and
+  fixture-derived report metadata do not render raw SQL/config values,
+  connection strings, URL query strings, secrets, source snippets, synthetic
+  local absolute paths, raw remotes, hostnames, private labels, or private route
+  values.
+
+Scope decisions:
+
+- This slice does not start site work, UI property lineage, reducer behavior,
+  scanner extraction, new route-flow commands, new report type/version, new rule
+  namespace, runtime execution claims, or private smoke publication.
+- Route-flow report generation does not create an analyzer log; the focused
+  negative test covers generated Markdown/JSON plus report metadata, and the
+  public combined-path smoke covers scan logs as generated local-only outputs.
+- The public smoke initially failed because `tsc` was unavailable. Homebrew and
+  nvm discovery found Node/npm but no TypeScript binary, so `npm ci` was run in
+  `src/typescript` from the checked-in lockfile; the smoke then passed. The
+  installed `node_modules` tree is ignored and not part of this PR.
+
+Oddities:
+
+- The first sanitizer pass was too broad: dotted C# symbol display names looked
+  like hostnames and method/path selectors containing `{}` looked like source
+  snippets. The final helper now preserves public-safe normalized route
+  selectors and C# symbols while still hashing raw remotes, known unsafe
+  hostnames, URL/query strings, private markers, SQL/config/secret markers,
+  local absolute paths, and source-looking snippets.
+- `scanId` can inherit manifest/repository-shaped text in synthetic combined
+  indexes, so route-flow now sanitizes it before JSON/Markdown rendering.
+- Entry `normalizedPathTemplate` and `normalizedPathKey` now render through the
+  same safe selector path. Public synthetic routes such as `/api/orders/{}` stay
+  readable; private or secret-like route keys are hashed.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests.Route_flow_public_safe_artifacts_omit_raw_sensitive_values_and_cite_redaction`:
+  passed locally after replacing machine-looking test literals with synthetic
+  public-safe absolute paths.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 69 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 679 tests and the
+  existing NU1903 warning.
+- `./scripts/smoke-combined-paths.sh`: passed after `npm ci` in
+  `src/typescript`; output stayed under a temporary directory.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Follow-ups:
+
+- The route-flow service/data composition final spec tasks are complete.
