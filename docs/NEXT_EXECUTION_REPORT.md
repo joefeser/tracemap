@@ -1,17 +1,17 @@
 # TraceMap Next Execution Report
 
-Date: 2026-06-21
+Date: 2026-06-26
 
 ## Current State
 
-- `main` was promoted through PR #247.
-- `dev` was recreated from `origin/main` after GitHub deleted the old remote
-  `dev` branch.
-- Spec-state cleanup landed through PR #248.
-- Current working branch: `dev`.
-- Main worktree is clean.
-- No extra core worktrees are currently registered. Keep the site manager
-  worktree separate when site work resumes.
+- `dev` is the active integration branch for implementation loops.
+- Main promotions remain human-mediated and should happen only at slice
+  boundaries.
+- Route-flow service/data composition is complete through Task 9 on `dev`.
+- PR #369 carries the final route-flow Task 10 public-safe validation slice.
+  Until that PR is merged or explicitly deferred, do not claim legacy .NET v0
+  complete.
+- Keep the site manager lane separate from core implementation work.
 
 ## Product Shape On Main
 
@@ -129,12 +129,21 @@ practical value:
 
 ## Recommended Next Move
 
-1. Run the Feature Delivery Loop on the highest-value ready core
-   follow-up:
-   - first choice: `route-centered-endpoint-trace-completeness`
-   - second choice: `route-flow-service-data-composition`
-   - third choice: `ui-field-property-lineage`
-2. In parallel, keep no more than 2 to 4 reviewed specs ahead of
+1. Finish PR #369 or explicitly record why route-flow Task 10 is deferred.
+2. After Task 10 lands, run a legacy .NET v0 completion pass:
+   - reconcile `.kiro/specs/route-flow-service-data-composition-final/`;
+   - run representative public-safe legacy sample scans;
+   - record unsupported and approximate behavior without private paths or raw
+     snippets;
+   - update `docs/ADAPTER_RUNWAY.md` if the v0 boundary changes.
+3. Then choose the next implementation lane:
+   - first choice: `ui-field-property-lineage-next-slice`, if UI field to
+     backend property evidence is required before Swift;
+   - second choice: `interface-override-di-approximation`, if inherited
+     dispatch and DI candidate clarity remains the largest route-flow gap;
+   - third choice: start the Swift v0 spec/adapter lane after the legacy .NET
+     v0 completion evidence is recorded.
+4. In parallel, keep no more than 2 to 4 reviewed specs ahead of
    implementation. Avoid creating a large spec pile that outruns the product.
 
 ## Notes For Future Agents

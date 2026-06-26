@@ -10,8 +10,9 @@ limitations.
 Legacy .NET v0 is complete when the already-specified cleanup work is closed or
 explicitly deferred in the relevant spec state files:
 
-- finish the remaining route-flow, UI field lineage, legacy data model, and
-  static dispatch candidate slices that are already specified;
+- finish the route-flow service/data composition safety gate, then explicitly
+  close or defer the remaining UI field lineage, legacy data model, and static
+  dispatch candidate slices that are already specified;
 - maintain a known unsupported and approximation register for old framework
   patterns that TraceMap recognizes but cannot safely resolve;
 - ensure reports and exports explain confidence, evidence tier, rule ID, source
@@ -27,6 +28,29 @@ patterns, old data mappings, and static dispatch candidates, but it must not
 claim runtime behavior, branch feasibility, dynamic binding, serializer runtime
 contracts, dependency-injection resolution, reflection targets, or complete UI
 navigation unless the evidence proves that specific claim.
+
+### Current Legacy .NET Gate
+
+As of the route-flow Task 9 merge recorded in
+`.kiro/specs/route-flow-service-data-composition-final/implementation-state.md`,
+`dev` has completed the route-flow service/data composition implementation
+through deterministic JSON/Markdown compatibility. The remaining route-flow
+gate is the public-safe validation slice in
+`.kiro/specs/route-flow-service-data-composition-final/` Task 10. Do not mark
+legacy .NET v0 complete until that Task 10 slice is merged or explicitly
+deferred with evidence in that spec's `tasks.md` and `implementation-state.md`.
+
+After Task 10, the next legacy .NET completion order is:
+
+1. Reconcile route-flow spec state and representative validation evidence.
+2. Run public-safe legacy sample scans and record what each sample proves, what
+   is partial, and what remains unsupported.
+3. Decide whether UI field/property lineage and static dispatch approximation
+   are required for legacy .NET v0 or should be deferred behind Swift v0. Record
+   the decision in each affected spec's `tasks.md` and
+   `implementation-state.md`.
+4. Update the unsupported/approximation register before any `dev` to `main`
+   promotion that claims legacy .NET v0.
 
 ## Swift V0 Candidate Scope
 
