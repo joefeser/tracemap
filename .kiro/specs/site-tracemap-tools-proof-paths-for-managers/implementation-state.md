@@ -1,7 +1,7 @@
 # Implementation State
 
 Status: implemented-pending-pr-loop
-Readiness: ready-for-implementation
+Readiness: implemented-pending-pr-loop
 Last verified: 2026-06-26
 Branch: codex/impl-site-proof-paths-for-managers-20260626014141
 Worktree: isolated temporary worktree; local absolute path omitted from
@@ -162,8 +162,8 @@ mode. The review artifacts therefore include tool-denied analysis gaps.
 - `git diff --check`: passed on 2026-06-26 after `git add -N` made the
   spec-only files visible to the diff checker.
 - `./scripts/check-private-paths.sh`: passed on 2026-06-26.
-- Diff-scope confirmation: passed on 2026-06-26. `git diff --name-only`
-  listed only files under
+- Spec-only phase diff-scope confirmation: passed on 2026-06-26. At that
+  earlier phase, `git diff --name-only` listed only files under
   `.kiro/specs/site-tracemap-tools-proof-paths-for-managers/`.
 - Future implementation tasks are now checked only where the corresponding
   implementation or validation work is complete.
