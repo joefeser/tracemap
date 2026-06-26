@@ -1,6 +1,6 @@
 # Site TraceMap Tools Legacy .NET Evidence Lane Implementation State
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-implementation
 Public claim level: concept
 
@@ -8,26 +8,34 @@ Public claim level: concept
 
 Spec branch: `codex/spec-site-legacy-dotnet-evidence-lane-20260625190237`
 
+Implementation branch:
+`codex/impl-site-legacy-dotnet-evidence-lane-20260625194131`
+
 Base: `origin/dev`
 
 Target PR base: `dev`
 
-Scope: spec-only packet for a future public-site legacy .NET evidence lane.
-Site source, generated output, scanner code, reducer code, validators, and
-unrelated specs are out of scope for this phase.
+Scope: site implementation for a public concept-level legacy .NET evidence
+lane. Scanner code, reducer code, generated site output, and unrelated specs
+remain out of scope for this phase.
 
-Worktree: dedicated isolated spec worktree; local absolute path intentionally
+Worktree: dedicated isolated implementation worktree; local absolute path intentionally
 omitted from checked-in spec notes.
 
 ## Current State
 
-The packet completed Kiro spec review and is ready for future implementation.
-All future site implementation tasks remain unchecked because this phase does
-not implement site code.
+The packet completed Kiro spec review and this phase implements the public-site
+lane. The lane is implemented as a standalone concept route with focused site
+validation.
 
 Current readiness is `ready-for-implementation`. Opus, Sonnet, and one bounded
 post-patch re-review completed with full coverage. Medium or higher findings
 were patched, and the final packet still satisfies the spec-only scope.
+
+Implementation status: page source, route metadata, discovery metadata, focused
+validation, sitemap metadata, and spec task notes were updated for the
+concept-level site route. Generated `site/dist` and `site/output` artifacts are
+not committed.
 
 ## Claim-Level Decision
 
@@ -40,20 +48,29 @@ approval, or operational safety.
 
 ## Placement Decision
 
-No final site placement has been selected in this spec-only phase.
+Selected placement: standalone route `/legacy-dotnet/evidence/`.
 
-Candidate placements for future implementation:
+Rationale: the route is specific to the legacy .NET evidence lane, keeps the
+broader `/legacy-modernization/evidence-map/` page as the modernization map,
+and does not imply shipped legacy .NET scanner coverage because the page title,
+hero note, metadata, discovery entry, and matrix rows all keep `Public claim
+level: concept`, `No public conclusion without evidence`, row-level statuses,
+proof requirements, and limitations visible.
 
-- `/legacy-dotnet/evidence/`
-- `/legacy-modernization/dotnet-evidence/`
-- A section on an existing legacy modernization page.
-- A section on an existing limitations or validation page.
-- A recorded equivalent if site information architecture changes before
-  implementation.
+Rejected alternatives:
 
-Future implementation must record the selected placement, rejected
-alternatives, and why the placement does not imply shipped legacy .NET coverage
-before changing site source.
+- `/legacy-modernization/dotnet-evidence/`: close, but less direct than the
+  chosen route and easier to confuse with the broader modernization map.
+- A section on `/legacy-modernization/evidence-map/`: rejected because the
+  existing page already serves as the broader modernization evidence map.
+- A section on `/legacy-evidence/`: rejected because that route is the
+  canonical legacy evidence story and hidden claim ledger, not the .NET lane.
+- A section on `/limitations/` or `/validation/`: rejected because those routes
+  are cross-cutting boundaries, not the focused lane.
+
+Primary navigation remains unchanged. The lane is discoverable through sitemap
+and discovery metadata, and it links to adjacent proof-boundary routes without
+joining the top nav.
 
 ## Evidence-Status Boundary
 
@@ -84,6 +101,50 @@ until a public-safe ledger update and proof path exist.
 
 This snapshot is not a promotion decision. Future implementation must recheck
 the ledger and branch state before assigning row statuses.
+
+Implementation reconciliation: the target branch was rechecked before assigning
+row statuses. The public legacy evidence story and legacy modernization
+evidence map still present WCF/service-reference mapping, WCF metadata
+normalization, .NET Remoting, WebForms, legacy data metadata, build diagnostics,
+and flow composition as hidden pending validation. ASMX/SOAP and WinForms are
+treated as hidden pending ledger entry. No legacy .NET surface row was promoted
+to `shipped`, `demo`, `dev`, or `dev-only`.
+
+Row decisions:
+
+- General evidence-model rows for status vocabulary, evidence tiers, and
+  reduced coverage use `future` because they explain proof posture without
+  asserting legacy .NET support.
+- WCF is `hidden pending validation`; its row covers hosts, references,
+  contracts, operations, binding or endpoint metadata, generated clients, and
+  metadata normalization at family level only.
+- ASMX/SOAP is `hidden pending ledger entry`; its row covers service
+  declarations, SOAP operation metadata, generated proxy clues, and checked-in
+  metadata at family level only.
+- .NET Remoting is `hidden pending validation`; its row covers API references,
+  channel registration clues, marshal-by-reference type clues, and remoting
+  configuration at family level only.
+- WebForms is `hidden pending validation and ledger entry`; its row covers
+  markup event bindings, code-behind handlers, designer fields, route or
+  navigation clues, and postback questions at family level only.
+- WinForms is `hidden pending ledger entry`; its row covers form and control
+  metadata, designer-file clues, event-handler references, launch clues,
+  navigation clues, and UI-to-backend questions at family level only.
+- Legacy data metadata is `hidden pending validation`; its row covers DBML,
+  EDMX, typed DataSet, TableAdapter, provider metadata, connection-name
+  metadata, and ORM-like mapping clues at family level only.
+- Project and toolchain diagnostics are `hidden pending validation`; the row
+  covers target framework, project style, SDK or non-SDK shape, toolset,
+  restore clues, package metadata, generated-file uncertainty, project-load
+  failure, build failure, syntax fallback, and analysis gaps.
+- Modernization review use is `future` reviewer framing because it translates
+  status rows into owner follow-up, proof gaps, review sequencing, and planning
+  questions without claiming migration approval.
+
+No hidden sub-surface inventory, hidden validation cadence, private sample
+name, hidden count, or unreleased sequencing was published. Required
+sub-surfaces were collapsed into family-level rows where publishing finer
+granularity could imply hidden capability scope.
 
 ## Review Commands
 
@@ -223,16 +284,42 @@ Results:
 - Site build, site tests, site validation, and browser checks were not run
   because this phase is spec-only and does not touch site source or layout.
 
+Completed site implementation validation:
+
+```bash
+node --test scripts/legacy-dotnet-evidence-lane.test.mjs
+npm test
+npm run validate
+npm run build
+git diff --check
+./scripts/check-private-paths.sh
+```
+
+Results:
+
+- Focused legacy .NET evidence-lane tests passed.
+- Full site tests passed.
+- Site validation passed and reported 11 legacy .NET evidence-lane rows in
+  generated output.
+- Site build passed.
+- `git diff --check` passed.
+- `./scripts/check-private-paths.sh` passed with `Private path guard passed.`
+- Browser sanity check passed for desktop 1440x1200 and mobile 390x844 using
+  the built static route. Screenshots were captured as generated Playwright
+  artifacts and are not committed.
+
+Final validation still needs `git diff --cached --check` after staging.
+
 ## Follow-Up Items
 
-- Future implementation must choose the route or section placement.
-- Future implementation must recheck the legacy evidence story claim ledger and
-  target branch status before assigning matrix statuses.
-- Future implementation must add focused validation for matrix rows, proof
-  paths, limitations, forbidden claims, metadata, links, and private/raw
-  material.
-- Future implementation must run site tests, site validation, build, and
-  browser sanity checks if layout or interaction changes are made.
+- Promote row statuses only after public-safe proof exists for the exact
+  wording and branch.
+- Add or update the canonical legacy evidence ledger before any hidden lane row
+  moves to `demo`, `dev`, `dev-only`, or `shipped`.
+- Keep the route out of primary navigation unless a later information
+  architecture review records a concept-level nav decision.
+- Preserve family-level hidden rows until publishing sub-surface detail is
+  public-safe.
 
 ## PR Review-Loop Findings
 
