@@ -55,9 +55,9 @@ prLoopPacket:
     codex:
       requirement: required
       waitUntilReturnedBeforeProcessing: true
-      waitTimeoutSeconds: 300
+      waitTimeoutSeconds: 900
       requestAllowed: policy
-      requestRetryCeiling: 2
+      requestRetryCeiling: 1
       retryCooldownSeconds: 120
     gemini:
       requirement: optional
