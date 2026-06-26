@@ -9,6 +9,10 @@ import {
   adoptionPlaybookRoute
 } from "./adoption-playbook.mjs";
 import {
+  buildReviewWorkflowRequiredLinks,
+  buildReviewWorkflowStoryRoute
+} from "./build-review-workflow-story.mjs";
+import {
   blogProofPathRequiredLinks,
   blogProofPathSeriesRoute
 } from "./blog-proof-path-series.mjs";
@@ -180,10 +184,11 @@ async function createDistFixture({
   indexHtml = page('<a href="/docs/">Docs</a><link rel="canonical" href="https://tracemap.tools/">'),
   robots = "User-agent: *\nAllow: /\n\n# LLM discovery: https://tracemap.tools/llms.txt\nSitemap: https://tracemap.tools/sitemap.xml\n",
   sitemapUrls = [
-    ...new Set([
-      ...deployAuditRequiredRoutes,
-      adoptionPlaybookRoute,
-      blogProofPathSeriesRoute,
+      ...new Set([
+        ...deployAuditRequiredRoutes,
+        adoptionPlaybookRoute,
+        buildReviewWorkflowStoryRoute,
+        blogProofPathSeriesRoute,
       demoEvidenceTrailRoute,
       demoRunbookRoute,
       demoTroubleshootingRoute,
@@ -236,6 +241,8 @@ async function createDistFixture({
     ...deployAuditRequiredRoutes,
     adoptionPlaybookRoute,
     "/blog/",
+    "/blog/building-tracemap-with-codex-kiro-qodo/",
+    buildReviewWorkflowStoryRoute,
     blogProofPathSeriesRoute,
     "/capabilities/",
     "/demo/start-here/",
@@ -407,7 +414,15 @@ async function fixturePageHtml(route, path) {
   }
 
   if (route === "/blog/") {
-    return page(`<a href="${blogProofPathSeriesRoute}">What a Proof Path Is</a>`);
+    return page(`<a href="${buildReviewWorkflowStoryRoute}"><span>Workflow governance</span>Building TraceMap Under Review Pressure</a><a href="${blogProofPathSeriesRoute}">What a Proof Path Is</a>`);
+  }
+
+  if (route === buildReviewWorkflowStoryRoute) {
+    return buildReviewWorkflowStoryPage();
+  }
+
+  if (route === "/blog/building-tracemap-with-codex-kiro-qodo/") {
+    return page(`<article><a href="${buildReviewWorkflowStoryRoute}">Building TraceMap Under Review Pressure</a></article>`);
   }
 
   if (route === blogProofPathSeriesRoute) {
@@ -620,6 +635,64 @@ function blogProofPathSeriesPage() {
         <h2>Close the loop with a handoff, not a bigger claim.</h2>
         <p>Repeat the sentence with the same limits or take the static evidence to the owner, telemetry, logs, traces, tests, or release review.</p>
       </section>
+    </article>`
+  );
+}
+
+function buildReviewWorkflowStoryPage() {
+  const links = buildReviewWorkflowRequiredLinks.map((link) => `<a href="${link}">${link}</a>`).join(" ");
+  const filler = Array.from(
+    { length: 42 },
+    () =>
+      "The workflow keeps claim level, review context, validation evidence, limitation, and human ownership visible before public wording grows stronger."
+  ).join(" ");
+
+  return page(
+    `<article>
+      <meta property="og:type" content="article">
+      <link rel="canonical" href="https://tracemap.tools${buildReviewWorkflowStoryRoute}">
+      <header>
+        <h1>Building TraceMap Under Review Pressure</h1>
+      </header>
+      <div class="article-body">
+        <p>Public claim level: concept</p>
+        <p>No public conclusion without evidence</p>
+        <section data-build-review-block="claim-level-note">
+          <h2>Claim-level note</h2>
+          <p>${filler}</p>
+          <p>${links}</p>
+        </section>
+        <section data-build-review-block="pressure-shaped-workflow">
+          <h2>The pressure that shaped the workflow</h2>
+          <p>Review pressure asks for evidence, limitations, and partial-state labels.</p>
+        </section>
+        <section data-build-review-block="specs-before-implementation">
+          <h2>Specs before implementation</h2>
+          <p>Kiro reviews spec packets as pressure, not certification or endorsement.</p>
+        </section>
+        <section data-build-review-block="reviewable-diffs">
+          <h2>Implementation with reviewable diffs</h2>
+          <p>Codex assists implementation in the build workflow, not the scanner or reducer.</p>
+        </section>
+        <section data-build-review-block="review-loop-coordination">
+          <h2>Kiro, Qodo, and review-loop coordination</h2>
+          <p>Qodo may surface PR findings. A review-loop coordination layer organizes stop reasons and validation evidence.</p>
+          <p>Human ownership remains necessary for merge, publication, product claims, and unresolved judgment calls.</p>
+        </section>
+        <section data-build-review-block="workflow-does-not-prove" data-non-claim-region="workflow-does-not-prove">
+          <h2>What the workflow does not prove</h2>
+          <p>This workflow does not prove production traffic, endpoint performance, outage cause, release safe status, safe to release status, approved by Codex, approved by Kiro, approved by Qodo, certified by anyone, endorsed by anyone, autonomous merge authority, complete coverage, AI impact analysis, LLM impact analysis, embeddings, vector database, prompt classification, or that tools consume TraceMap output.</p>
+          <p>It does not publish raw review logs, raw bot transcripts, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, configuration values, generated scan directories, secrets, credential-like values, local paths, raw remotes, private sample names, hidden run IDs, private session IDs, or hidden validation details.</p>
+        </section>
+        <section data-build-review-block="lessons-evidence-led-specs">
+          <h2>Lessons for evidence-led specs</h2>
+          <p>State the level early, keep acceptance criteria observable, and attach limitations.</p>
+        </section>
+        <section data-build-review-block="validation-publication-checklist">
+          <h2>Validation and publication checklist</h2>
+          <p>Check metadata, sitemap, route output, internal links, word count, and private-material filters before publication.</p>
+        </section>
+      </div>
     </article>`
   );
 }

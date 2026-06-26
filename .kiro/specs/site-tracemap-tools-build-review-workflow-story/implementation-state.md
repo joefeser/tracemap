@@ -1,11 +1,11 @@
 # Implementation State
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-implementation
 Public claim level: concept
 
-Last verified: 2026-06-26 after spec-phase validation
-Branch: codex/spec-site-build-review-workflow-story-20260625190317
+Last verified: 2026-06-26 after site implementation validation
+Branch: codex/impl-site-build-review-workflow-story-20260625232947
 Worktree: dedicated temporary worktree; local absolute path omitted from
 tracked spec
 Base: origin/dev
@@ -13,31 +13,71 @@ PR target: dev
 
 ## Summary
 
-This spec defines a future `tracemap.tools` article or page about building
-TraceMap with review pressure and coordination: Codex implementation help,
-Kiro spec review, Qodo PR review, ACK/agent-control review loops, and
-evidence-led specs. The future public surface is concept-level process
-writing. It is not a TraceMap runtime feature, scanner or reducer capability,
-site implementation, validation script, product proof, release approval,
-vendor endorsement, or AI/LLM impact-analysis claim.
+This spec implements a `tracemap.tools` blog article about building TraceMap
+with review pressure and coordination: Codex implementation help, Kiro spec
+review, Qodo PR review, generic review-loop coordination, and evidence-led
+specs. The public surface is concept-level process writing. It is not a
+TraceMap runtime feature, scanner or reducer capability, product proof,
+release approval, vendor endorsement, or AI/LLM impact-analysis claim.
 
 ## Scope Decisions
 
-- Scope is spec-only in this phase.
+- Scope is site implementation for this phase.
 - Target branch is `dev`.
-- The future article remains `Public claim level: concept`.
-- The future article must keep the shared principle `No public conclusion
-  without evidence` visible.
-- Preferred future placement is
+- The article remains `Public claim level: concept`.
+- The article keeps the shared principle `No public conclusion without
+  evidence` visible.
+- Selected placement is
   `/blog/building-tracemap-under-review-pressure/`.
-- The future implementation may choose a different route or section only if it
-  records the decision and rejected alternatives here.
+- Rejected placement `/building-tracemap-under-review-pressure/` because the
+  existing blog generator already owns narrative process articles and emits the
+  canonical URL, Open Graph metadata, blog index card, and sitemap entry.
+- Rejected placement as a section on an existing route because the topic is a
+  distinct process story and would crowd claim-guardrail or validation pages.
 - The packet intentionally mentions workflow participants by public tool or
   class name, but forbids endorsement, certification, partnership, and product
   capability claims.
 - The packet intentionally forbids saying or implying that workflow tools
   consume TraceMap output as a TraceMap product feature.
 - Tracked spec notes omit local absolute paths and private run identifiers.
+
+## Implementation Decisions
+
+- Existing article reconciliation: the new article complements
+  `/blog/building-tracemap-with-codex-kiro-qodo/`. The existing article
+  remains public as the baseline workflow overview. The new article uses the
+  distinct title `Building TraceMap Under Review Pressure`, slug
+  `/blog/building-tracemap-under-review-pressure/`, and category `Workflow
+  governance`; it focuses on review-loop coordination, claim-level discipline,
+  non-claims, validation handoff, and human ownership instead of re-explaining
+  the shared Codex/Kiro/Qodo basics.
+- Cross-link plan: the new article links to the existing workflow article for
+  background, and the existing workflow article now links back to the new
+  companion note. The new article also links to `/proof-paths/`,
+  `/site-claim-guardrails/`, `/review-claim-checklist/`, `/validation/`, and
+  `/limitations/`.
+- ACK/agent-control naming decision: public-name status was not confirmed for
+  this surface. Public copy uses the generic phrase `review-loop coordination
+  layer` and does not name ACK or agent-control directly.
+- Metadata consequences: blog placement uses the existing blog metadata schema
+  in `site/src/_blog/articles.json`, generated canonical/Open Graph article
+  metadata, generated blog index card, and generated sitemap entry. No
+  `publicClaimLevel` field was added to blog metadata; the visible body label
+  remains the source of truth. Discovery route metadata was not extended
+  because existing blog articles are not discovery-tracked routes in
+  `site/src/_site/discovery.json`.
+- Adjacent route inventory before body copy: confirmed available and linked:
+  `/blog/building-tracemap-with-codex-kiro-qodo/`, `/proof-paths/`,
+  `/site-claim-guardrails/`, `/review-claim-checklist/`, `/validation/`, and
+  `/limitations/`. Confirmed available but deferred to avoid crowding the
+  article: `/proof-source-catalog/`, `/packets/`, `/review-room/`, `/roadmap/`,
+  and `/team-evidence-handoff/`.
+- Primary navigation remains unchanged. Discovery is through the generated blog
+  index, sitemap, canonical/Open Graph metadata, and article cross-links.
+- Rendered body word count: 1027 words, within the 700 to 1600 word target.
+- Non-claim marker: the `What the workflow does not prove` section uses
+  `data-non-claim-region="workflow-does-not-prove"` so validator exceptions
+  stay scoped to explicit non-claims.
 
 ## Review Commands
 
@@ -167,6 +207,19 @@ vendor endorsement, or AI/LLM impact-analysis claim.
   in the worktree.
 - After the Qodo wording patch, `git diff --check` and
   `./scripts/check-private-paths.sh` passed again on 2026-06-26.
+- Implementation validation on 2026-06-26:
+  - `npm test` from `site/`: passed, 544 tests.
+  - `npm run validate` from `site/`: passed; generated-site validator reported
+    72 HTML files, 2469 internal references, and 71 sitemap URLs.
+  - `npm run build` from `site/`: passed.
+  - `git diff --check`: passed.
+  - `./scripts/check-private-paths.sh`: passed.
+  - Desktop browser sanity at `1280x720`: passed; article title/H1 matched,
+    required visible labels were present, and `scrollWidth` equaled viewport
+    width.
+  - Mobile browser sanity at `390x844`: passed; article title/H1 matched,
+    required visible labels were present, and `scrollWidth` equaled viewport
+    width.
 
 ## PR Review Loop
 
@@ -178,6 +231,10 @@ vendor endorsement, or AI/LLM impact-analysis claim.
   `spec-review`, committed post-review state may advance to
   `ready-for-implementation`, while `Status: not-started` and
   `Public claim level: concept` stay consistent.
+- Implementation PR review loop: pending until the implementation PR is opened.
+  The local implementation pass intentionally records validation and branch
+  evidence here before PR creation; final ACK decision is reported from the
+  PR-loop readback.
 
 ## Oddities
 
@@ -185,11 +242,14 @@ vendor endorsement, or AI/LLM impact-analysis claim.
   coordination, so the spec is intentionally stricter than ordinary blog copy
   about endorsement wording, raw review material, local paths, and internal
   identifiers.
+- The generated blog system does not expose a `publicClaimLevel` metadata
+  field for articles. The implementation followed the existing visible-label
+  pattern instead of extending the schema for one article.
+- The public page intentionally avoids the ACK/agent-control names because
+  public-name status was not confirmed during implementation.
 
 ## Follow-ups
 
-- ACK/agent-control public-naming question is unresolved at spec stage. Before
-  implementation begins, confirm whether ACK/agent-control is publicly
-  nameable. If it is not, use `review-loop coordination layer` wording in all
-  public copy and record the decision here. Do not begin article drafting until
-  this is resolved.
+- No site follow-ups remain from local implementation validation.
+- Final PR-loop outcome will be reported from the PR workflow rather than
+  guessed from local state.
