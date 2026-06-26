@@ -1,11 +1,12 @@
 # Site TraceMap Tools Legacy Data Surface Story Tasks
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
-Ordering note: this packet is spec-only. Do not implement site code in this
-phase.
+Ordering note: this packet began as spec-only and now tracks the completed
+site implementation. Do not implement scanner code, reducer code, runtime data
+lineage, SQL execution, or database inspection workflows in this site packet.
 
 ## Spec Review Tasks
 

@@ -1,7 +1,7 @@
 # Implementation State
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Last verified: 2026-06-26
 Branch: codex/spec-site-route-flow-evidence-story-20260626002412
 Worktree: dedicated temporary worktree; absolute path omitted from spec packet
@@ -21,6 +21,31 @@ evidence from endpoint/root selection to selected static flow rows, service
 or data context, dependency/value-origin rows, gaps, limitations, and owner
 handoff. It stays concept-level unless a later implementation cites
 current-branch public-safe evidence for narrower row-level statements.
+
+## Bookkeeping Normalization
+
+Current `origin/dev` evidence on 2026-06-26 proves the route-flow evidence
+story site implementation is already present, so the stale task header and two
+remaining non-applicable checklist items have been normalized to implemented
+state.
+
+Evidence checked in on `origin/dev`:
+
+- Source route: `site/src/proof-paths/route-flow/index.html`.
+- Focused validator: `site/scripts/route-flow-evidence-story.mjs`.
+- Focused tests: `site/scripts/route-flow-evidence-story.test.mjs`.
+- Aggregate validation wiring: `site/scripts/validate.mjs` imports and runs
+  `validateRouteFlowEvidenceStoryDist`.
+- Route metadata: `site/src/_site/pages.json` contains
+  `/proof-paths/route-flow/`.
+- Discovery metadata: `site/src/_site/discovery.json` contains
+  `/proof-paths/route-flow/`.
+- Inbound route evidence: `site/src/proof-paths/index.html` links to
+  `/proof-paths/route-flow/`.
+- Prior implementation validation and PR-loop findings are recorded below.
+  The implementation commits are present in current `origin/dev`, including
+  the PR #355 site-spec base and later route-flow story implementation
+  history.
 
 ## Scope Decisions
 

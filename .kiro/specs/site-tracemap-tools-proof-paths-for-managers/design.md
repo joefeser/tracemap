@@ -1,18 +1,20 @@
 # Site TraceMap Tools Proof Paths For Managers Design
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Design Purpose
 
-This design describes a future manager-facing proof-path page or section for
-`tracemap.tools`. The future surface should help a manager or reviewer move
-from a decision question to a bounded static evidence packet, then stop at the
-right boundary and route the remaining runtime, product, release, ownership,
-or security judgment to the correct owner category.
+This design describes the implemented manager-facing proof-path page for
+`tracemap.tools`. The surface helps a manager or reviewer move from a
+decision question to a bounded static evidence packet, then stop at the right
+boundary and route the remaining runtime, product, release, ownership, or
+security judgment to the correct owner category.
 
-The design does not implement site code.
+The selected implementation is the standalone `/proof-paths/for-managers/`
+route. This design does not implement scanner code, reducer code, runtime
+behavior, release workflow, or management-decision automation.
 
 ## Placement Options
 

@@ -1,7 +1,7 @@
 # Implementation State
 
-Status: implemented-pending-pr-loop
-Readiness: implemented-pending-pr-loop
+Status: implemented
+Readiness: implemented
 Last verified: 2026-06-26
 Branch: codex/impl-site-proof-paths-for-managers-20260626014141
 Worktree: isolated temporary worktree; local absolute path omitted from
@@ -23,6 +23,28 @@ Site source, site metadata, inbound links, focused validation, and focused
 tests are implemented in this branch. No scanner code, reducer code, core
 generated output, runtime behavior, release workflow, or management-decision
 automation is implemented.
+
+## Bookkeeping Normalization
+
+Current `origin/dev` evidence on 2026-06-26 proves the manager proof-path site
+implementation is already present, so the stale `implemented-pending-pr-loop`
+task status and two remaining checklist items have been normalized to
+implemented state.
+
+Evidence checked in on `origin/dev`:
+
+- Source route: `site/src/proof-paths/for-managers/index.html`.
+- Focused validator: `site/scripts/proof-paths-for-managers.mjs`.
+- Focused tests: `site/scripts/proof-paths-for-managers.test.mjs`.
+- Aggregate validation wiring: `site/scripts/validate.mjs` imports and runs
+  `validateProofPathsForManagersDist`.
+- Route metadata: `site/src/_site/pages.json` contains
+  `/proof-paths/for-managers/`.
+- Discovery metadata: `site/src/_site/discovery.json` contains
+  `/proof-paths/for-managers/`.
+- The implementation-state note below already records standalone placement,
+  adjacent route decisions, validation results, browser sanity, and the
+  authorized PR-loop patch history.
 
 ## Scope Decisions
 

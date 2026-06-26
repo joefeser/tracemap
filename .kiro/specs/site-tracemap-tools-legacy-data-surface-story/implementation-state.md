@@ -1,7 +1,7 @@
 # Site TraceMap Tools Legacy Data Surface Story Implementation State
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Public claim level: concept
 
 Last verified: 2026-06-26
@@ -20,6 +20,27 @@ and persistence context, proof paths, evidence status, owner follow-up, and
 limitations. It is not a claim that TraceMap reads databases, executes SQL,
 observes runtime SQL behavior, inspects production data, validates migrations,
 or ships complete legacy data coverage.
+
+## Bookkeeping Normalization
+
+Current `origin/dev` evidence on 2026-06-26 proves the site implementation is
+already present, so the stale task header has been normalized from
+`not-started` / `ready-for-implementation` to `implemented` / `implemented`.
+
+Evidence checked in on `origin/dev`:
+
+- Source route: `site/src/legacy-data-surface/index.html`.
+- Focused validator: `site/scripts/legacy-data-surface.mjs`.
+- Focused tests: `site/scripts/legacy-data-surface.test.mjs`.
+- Aggregate validation wiring: `site/scripts/validate.mjs` imports and runs
+  `validateLegacyDataSurface`.
+- Route metadata: `site/src/_site/pages.json` contains
+  `/legacy-data-surface/`.
+- Discovery metadata: `site/src/_site/discovery.json` contains
+  `/legacy-data-surface/`.
+- Prior implementation validation and PR-loop state are recorded below. The
+  implementation commits are present in current `origin/dev`, including the
+  PR #365 merge history.
 
 ## Scope Decisions
 
@@ -109,7 +130,7 @@ Actionable review findings were patched:
   rules.
 
 All Medium+ actionable findings from the saved reviews have been patched.
-Readiness is advanced to `ready-for-implementation` for this spec-only packet.
+Readiness is now `implemented` for this completed site packet.
 
 Implementation PR loop status:
 

@@ -1,21 +1,22 @@
 # Site TraceMap Tools Proof Paths For Managers Review Packet
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Review Objective
 
-Review this spec-only packet for a future `tracemap.tools` manager-facing
-proof-path page or section. The future surface should explain proof paths in
-decision terms: what question a manager or reviewer can ask, what evidence
-packet exists, what deterministic static evidence supports, what it does not
-prove, what the coverage label means, and who owns the next runtime, product,
-release, ownership, security, or review judgment.
+Review this implemented packet for the `tracemap.tools` manager-facing
+proof-path page. The surface explains proof paths in decision terms: what
+question a manager or reviewer can ask, what evidence packet exists, what
+deterministic static evidence supports, what it does not prove, what the
+coverage label means, and who owns the next runtime, product, release,
+ownership, security, or review judgment.
 
-This packet intentionally changes no site source, site scripts, scanner code,
-reducer code, generated outputs, validation scripts, runtime behavior,
-public copy, release workflow, or management-decision automation.
+This packet's implementation scope is static-site source, metadata, and
+validation only. It intentionally changes no scanner code, reducer code,
+generated scan outputs, runtime behavior, release workflow, or
+management-decision automation.
 
 Shared principle: No public conclusion without evidence.
 
@@ -29,17 +30,16 @@ Shared principle: No public conclusion without evidence.
 
 ## Reviewer Questions
 
-1. Does the packet make clear that the future surface is concept-level and
+1. Does the packet make clear that the implemented surface is concept-level and
    must visibly say `Public claim level: concept`?
 2. Does it require visible `No public conclusion without evidence`?
-3. Does it keep scope spec-only and avoid implementing site source, scanner
-   code, reducer code, generated output, validation scripts, runtime behavior,
-   public copy, release workflow, or automated management decisions?
-4. Does it require a final placement decision for
-   `/proof-paths/for-managers/`, `/manager-proof-paths/`, a section on
-   `/manager-packet/`, a section on `/manager-faq/`, a section on
-   `/proof-paths/`, or a recorded equivalent?
-5. Does it distinguish the future surface from `/manager-brief/`,
+3. Does it keep implementation scope limited to static-site source, metadata,
+   and validation while avoiding scanner code, reducer code, generated scan
+   output, runtime behavior, release workflow, or automated management
+   decisions?
+4. Does it record the final placement decision for
+   `/proof-paths/for-managers/` and the rejected alternatives?
+5. Does it distinguish the implemented surface from `/manager-brief/`,
    `/manager-faq/`, `/manager-packet/`, `/packets/`,
    `/packets/assembly/`, `/proof-paths/`, `/proof-paths/faq/`, and
    `/proof-paths/tour/`?
