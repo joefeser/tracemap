@@ -22,8 +22,9 @@ has been changed.
 ## Scope Decisions
 
 - Target branch is `dev`.
-- Work is isolated in a dedicated worktree:
-  `/private/tmp/tracemap-spec-site-proof-path-story-gallery-20260625190306`.
+- Work is isolated in a dedicated temporary worktree outside the primary
+  checkout; the machine-local absolute path is intentionally not tracked in
+  this public-safe spec packet.
 - The future public surface defaults to `Public claim level: concept` because
   this packet does not prove checked-in public-safe generated summaries for
   concrete story cards.
@@ -128,6 +129,13 @@ Spec packet validation:
   `.kiro/specs/site-tracemap-tools-proof-path-story-gallery/`.
 - Deferred: site `npm test`, `npm run validate`, `npm run build`, and browser
   sanity checks because this phase is spec-only and does not change `site/`.
+
+## PR Review Feedback
+
+- ACK/Qodo P3 review thread: tracked `implementation-state.md` recorded a
+  machine-local worktree path despite the packet's local-path boundary.
+  Disposition: patched to describe the dedicated temporary worktree without
+  tracking the absolute path.
 
 Future site implementation validation:
 
