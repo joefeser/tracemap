@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { buildSite, topNavigationLinks } from "./build.mjs";
 import { validateAdoptionPlaybookDist } from "./adoption-playbook.mjs";
+import { validateBuildReviewWorkflowStoryDist } from "./build-review-workflow-story.mjs";
 import { validateBlogProofPathSeriesDist } from "./blog-proof-path-series.mjs";
 import { validateChangeRiskLanguageGuideDist } from "./change-risk-language-guide.mjs";
 import {
@@ -116,6 +117,12 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateClaimReviewDrillDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateGlossaryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateAdoptionPlaybookDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateBuildReviewWorkflowStoryDist({
+      baseUrl: normalizedBaseUrl,
+      dist,
+      errors,
+      root: resolve(root, "src")
+    });
     await validateBlogProofPathSeriesDist({ baseUrl: normalizedBaseUrl, dist, errors, root: resolve(root, "src") });
     await validateIncidentCallDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateIncidentEvidenceHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
