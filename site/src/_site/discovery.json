@@ -271,6 +271,23 @@
     ]
   },
   {
+    "path": "/demo/",
+    "title": "Public Demo",
+    "summary": "Demo-level public entry point for checked-in TraceMap samples, scrubbed result summaries, runbook guidance, troubleshooting, and proof asset routes.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "demo",
+    "preferredProofPath": "/demo/result/",
+    "limitations": [
+      "The demo hub is navigation over public-safe demo surfaces; individual proof routes carry the evidence fields, limitations, and validation details.",
+      "Demo copy must stay attached to checked-in samples or generated public-safe summaries instead of upgrading into product-completeness claims."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage-cause proof, release approval, release safety, operational safety, or complete coverage proof.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, AI impact analysis, LLM analysis, prompt classification, embeddings, or vector databases."
+    ]
+  },
+  {
     "path": "/demo/result/",
     "title": "Public Demo Result",
     "summary": "Current demo result guide with generated summary rows, rule IDs, evidence tiers, coverage labels, counts, and reasons.",
@@ -936,6 +953,23 @@
     "nonClaims": [
       "No meeting automation, release approval, release safety, operational safety, runtime proof, production traffic proof, endpoint performance proof, absence-of-impact proof, complete coverage, AI analysis, LLM analysis, embeddings, vector databases, prompt classification, automated impact analysis, or replacement of human judgment or governance.",
       "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, credential-like values, connection strings, tokens, or keys are public agenda material."
+    ]
+  },
+  {
+    "path": "/review-room/demo-path/",
+    "title": "Review Room Demo Path",
+    "summary": "Concept-level guided path for moving one public-safe static question through review-room, agenda, proof-path, packet, checklist, limitation, validation, owner-routing, and stop-condition surfaces.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route is an authored public reading path over existing public-safe static evidence surfaces, not a live review room, generated packet builder, proof engine, approval flow, or new proof source.",
+      "Every guided-path step keeps limitation, stop condition, owner or route, evidence tier, coverage label, validation evidence, and public-safe packet context visible instead of upgrading missing evidence."
+    ],
+    "nonClaims": [
+      "No runtime proof, production traffic proof, endpoint performance proof, outage-cause proof, release approval, release safety, operational safety, production proof, live workflow completeness, complete coverage, AI impact analysis, LLM analysis, prompt classification, embeddings, vector databases, autonomous review, autonomous approval, or automated management decision.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, private labels, credential-like values, connection strings, tokens, or keys are public demo-path material."
     ]
   },
   {

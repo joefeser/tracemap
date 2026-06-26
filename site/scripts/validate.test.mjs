@@ -57,6 +57,7 @@ import { reviewPacketAssemblyRoute } from "./review-packet-assembly.mjs";
 import { reviewClaimChecklistInboundRoutes, reviewClaimChecklistRoute } from "./review-claim-checklist.mjs";
 import { releaseReviewBoundaryRoute } from "./release-review-boundary.mjs";
 import { reviewMeetingAgendaRoute } from "./review-meeting-agenda.mjs";
+import { reviewRoomDemoPathRoute } from "./review-room-demo-path.mjs";
 import { reviewRoomRoute } from "./review-room.mjs";
 import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { siteClaimGuardrailsRoute } from "./site-claim-guardrails.mjs";
@@ -194,6 +195,8 @@ async function createDistFixture({
       demoEvidenceTrailRoute,
       demoRunbookRoute,
       demoTroubleshootingRoute,
+      "/demo/start-here/",
+      "/demo/proof-assets/",
       evidenceDecisionRecordRoute,
       evidenceGapRegisterRoute,
       evidenceHandoffTemplateRoute,
@@ -228,6 +231,7 @@ async function createDistFixture({
       reviewClaimChecklistRoute,
       releaseReviewBoundaryRoute,
       reviewMeetingAgendaRoute,
+      reviewRoomDemoPathRoute,
       reviewRoomRoute,
       roadmapClaimLedgerRoute,
       siteClaimGuardrailsRoute,
@@ -292,6 +296,7 @@ async function createDistFixture({
     reviewClaimChecklistRoute,
     releaseReviewBoundaryRoute,
     reviewMeetingAgendaRoute,
+    reviewRoomDemoPathRoute,
     reviewRoomRoute,
     roadmapClaimLedgerRoute,
     siteClaimGuardrailsRoute,
@@ -327,6 +332,7 @@ async function createDistFixture({
   await writeEvidenceGapRegisterImplementationState(root);
   await writeRouteFlowEvidenceStoryImplementationState(root);
   await writeReviewMeetingAgendaImplementationState(root);
+  await writeReviewRoomDemoPathImplementationState(root);
 
   return root;
 }
@@ -439,6 +445,32 @@ Rejected alternative: section on \`/reviewer-quickstart/\`
 Primary navigation remains unchanged.
 Word-count bounds: 700 to 1500 rendered main-content words
 Manual public-safety reviewer signoff: completed by implementation owner
+`,
+    "utf8"
+  );
+}
+
+async function writeReviewRoomDemoPathImplementationState(root) {
+  const statePath = join(
+    root,
+    ".kiro",
+    "specs",
+    "site-tracemap-tools-review-room-demo-path",
+    "implementation-state.md"
+  );
+  await mkdir(join(statePath, ".."), { recursive: true });
+  await writeFile(
+    statePath,
+    `Implementation branch: \`codex/impl-site-review-room-demo-path-20260626095826\`
+
+Selected placement: \`/review-room/demo-path/\`
+Rejected alternative: section on \`/review-room/\`
+Rejected alternative: section on \`/review-room/agenda/\`
+Rejected alternative: section on \`/demo/start-here/\`
+Primary navigation remains unchanged.
+All preferred adjacent routes exist at implementation time.
+Evidence-packet routes present: \`/packets/\`, \`/packets/assembly/\`, \`/packets/examples/\`
+Browser sanity: fixture-only state record for aggregate validation.
 `,
     "utf8"
   );
@@ -603,6 +635,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === reviewMeetingAgendaRoute) {
     return readFile(new URL("../src/review-room/agenda/index.html", import.meta.url), "utf8");
+  }
+
+  if (route === reviewRoomDemoPathRoute) {
+    return readFile(new URL("../src/review-room/demo-path/index.html", import.meta.url), "utf8");
   }
 
   if (route === roadmapClaimLedgerRoute) {
@@ -801,6 +837,28 @@ async function writeDiscoveryFiles(dist) {
         hintCategory: "demo",
         preferredProofPath: "/demo/runbook/",
         limitations: ["Fixture demo troubleshooting limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: "/demo/start-here/",
+        title: "Demo Start Here",
+        summary: "Fixture demo start route for validation.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "demo",
+        preferredProofPath: "/demo/evidence-trail/",
+        limitations: ["Fixture demo start limitations remain bounded."],
+        nonClaims: ["No runtime behavior or production usage proof."]
+      },
+      {
+        path: "/demo/proof-assets/",
+        title: "Demo Proof Assets",
+        summary: "Fixture demo proof-assets route for validation.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "demo",
+        preferredProofPath: "/demo/evidence-trail/",
+        limitations: ["Fixture demo proof-assets limitations remain bounded."],
         nonClaims: ["No runtime behavior or production usage proof."]
       },
       {
@@ -1292,6 +1350,23 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: [
           "No meeting automation, release approval, release safety, operational safety, runtime proof, production traffic proof, endpoint performance proof, absence-of-impact proof, complete coverage, AI analysis, LLM analysis, embeddings, vector databases, prompt classification, automated impact analysis, or replacement of human judgment or governance.",
           "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, credential-like values, connection strings, tokens, or keys are public agenda material."
+        ]
+      },
+      {
+        path: reviewRoomDemoPathRoute,
+        title: "Review Room Demo Path",
+        summary: "Concept-level guided path for moving one public-safe static question through review-room, agenda, proof-path, packet, checklist, limitation, validation, owner-routing, and stop-condition surfaces.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The route is an authored public reading path over existing public-safe static evidence surfaces, not a live review room, generated packet builder, proof engine, approval flow, or new proof source.",
+          "Every guided-path step keeps limitation, stop condition, owner or route, evidence tier, coverage label, validation evidence, and public-safe packet context visible instead of upgrading missing evidence."
+        ],
+        nonClaims: [
+          "No runtime proof, production traffic proof, endpoint performance proof, outage-cause proof, release approval, release safety, operational safety, production proof, live workflow completeness, complete coverage, AI impact analysis, LLM analysis, prompt classification, embeddings, vector databases, autonomous review, autonomous approval, or automated management decision.",
+          "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, private labels, credential-like values, connection strings, tokens, or keys are public demo-path material."
         ]
       },
       {
