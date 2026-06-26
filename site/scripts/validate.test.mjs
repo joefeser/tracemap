@@ -42,6 +42,7 @@ import {
   ownerFollowupMapRoute
 } from "./owner-followup-map.mjs";
 import { proofPathFaqRoute } from "./proof-path-faq.mjs";
+import { proofPathStoriesRoute } from "./proof-path-stories.mjs";
 import { proofPathTourRoute } from "./proof-path-tour.mjs";
 import { proofSourceCatalogRoute } from "./proof-source-catalog.mjs";
 import { reducedCoveragePlaybookRoute } from "./reduced-coverage-playbook.mjs";
@@ -207,6 +208,7 @@ async function createDistFixture({
       ownerFollowupMapRoute,
       ...ownerFollowupMapRequiredLinks,
       proofPathFaqRoute,
+      proofPathStoriesRoute,
       proofPathTourRoute,
       proofSourceCatalogRoute,
       reducedCoveragePlaybookRoute,
@@ -264,6 +266,7 @@ async function createDistFixture({
     ownerFollowupMapRoute,
     ...ownerFollowupMapRequiredLinks,
     proofPathFaqRoute,
+    proofPathStoriesRoute,
     proofPathTourRoute,
     proofSourceCatalogRoute,
     reducedCoveragePlaybookRoute,
@@ -491,6 +494,10 @@ async function fixturePageHtml(route, path) {
     return readFile(new URL("../src/proof-paths/tour/index.html", import.meta.url), "utf8");
   }
 
+  if (route === proofPathStoriesRoute) {
+    return readFile(new URL("../src/proof-path-stories/index.html", import.meta.url), "utf8");
+  }
+
   if (route === proofPathFaqRoute) {
     return readFile(new URL("../src/proof-paths/faq/index.html", import.meta.url), "utf8");
   }
@@ -560,7 +567,7 @@ async function fixturePageHtml(route, path) {
   }
 
   return page(
-    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/limitations/" ? `<a href="${reducedCoveragePlaybookRoute}">Reduced coverage playbook</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a><a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === reviewPacketAssemblyRoute ? `<a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === "/proof-paths/" ? `<a href="${proofPathTourRoute}">Guided proof-path tour</a><a href="${proofPathFaqRoute}">Proof path FAQ</a>` : ""}`
+    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/limitations/" ? `<a href="${reducedCoveragePlaybookRoute}">Reduced coverage playbook</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a><a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === reviewPacketAssemblyRoute ? `<a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === "/proof-paths/" ? `<a href="${proofPathTourRoute}">Guided proof-path tour</a><a href="${proofPathStoriesRoute}">Proof-path story gallery</a><a href="${proofPathFaqRoute}">Proof path FAQ</a>` : ""}`
   );
 }
 
@@ -907,6 +914,24 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: [
           "No real org ownership claim, production ownership proof, runtime behavior, production traffic, endpoint performance, release approval, release safety, operational safety, complete coverage, or replacement of human judgment.",
           "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, automated ownership detection, automated release approval, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, or credential-like values are public owner follow-up material."
+        ]
+      },
+      {
+        path: proofPathStoriesRoute,
+        title: "Proof-Path Story Gallery",
+        summary:
+          "Concept-level public-safe story cards for reading static proof paths with rule families, evidence tiers, coverage labels, limitations, stop conditions, and owner routing.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The gallery is a concept-level reading aid over synthetic public-safe cards, not the canonical proof ledger, source catalog, claim checklist, roadmap, or limitations page.",
+          "Story cards remain concept-level until checked-in public-safe demo evidence supports a stricter card label."
+        ],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, complete coverage, product behavior proof, or automated approval.",
+          "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, private labels, command output, hidden validation details, or credential-like values."
         ]
       },
       {

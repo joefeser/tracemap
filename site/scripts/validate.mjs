@@ -33,6 +33,7 @@ import { validateManagerDemoScriptDist } from "./manager-demo-script.mjs";
 import { validateManagerFaqDist } from "./manager-faq.mjs";
 import { validateOwnerFollowupMapDist } from "./owner-followup-map.mjs";
 import { validateProofPathFaqDist } from "./proof-path-faq.mjs";
+import { validateProofPathStoriesDist } from "./proof-path-stories.mjs";
 import { validateProofPathTourDist } from "./proof-path-tour.mjs";
 import { validateProofSourceCatalogDist } from "./proof-source-catalog.mjs";
 import { validateReducedCoveragePlaybookDist } from "./reduced-coverage-playbook.mjs";
@@ -123,6 +124,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateManagerFaqDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateOwnerFollowupMapDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofPathFaqDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateProofPathStoriesDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofPathTourDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofSourceCatalogDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReducedCoveragePlaybookDist({ baseUrl: normalizedBaseUrl, dist, errors });
