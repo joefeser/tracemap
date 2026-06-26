@@ -1,7 +1,7 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: task-7-http-client-attachment-precision-ready-for-review
-Readiness: task-7-http-client-ready-for-pr-review-loop
+Status: task-7-legacy-data-storage-attachment-precision-ready-for-review
+Readiness: task-7-legacy-data-storage-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
 Target base: `dev`
@@ -428,6 +428,65 @@ Validation status:
   passed locally with 2 tests and the existing NU1903 warning.
 - Post-Qodo stale-phrase patch `./scripts/check-private-paths.sh`: passed.
 - Post-Qodo stale-phrase patch `git diff --check`: passed.
+
+## Task 7 Legacy-Data/Storage Attachment Slice
+
+Branch: `codex/task7-storage-precision-20260626`
+Audited base: `origin/dev` at
+`45fc97b50115d6f7c99389d2b8e114352c387cd9`.
+Selected family: legacy-data/storage dependency surfaces.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision evidence for
+  `legacy-data` terminal surfaces already projected from deterministic legacy
+  data model facts.
+- Prove selected legacy entity and storage-object descriptors attach only when
+  reached by the selected static route-flow path through source-local symbol
+  evidence.
+- Prove adjacent unjoined legacy storage descriptors remain excluded from
+  dependency surfaces and terminal flow rows while preserving
+  `DataSurfaceAttachmentMissing`.
+- Record the legacy-data/storage sub-slice without closing broader Task 7
+  families.
+
+Scope decisions:
+
+- This slice does not change scanner extraction, legacy data model projection,
+  reducer behavior, UI property lineage, site work, or runtime database/schema
+  existence claims.
+- The route-flow implementation already accepted `legacy-data` as a terminal
+  surface; this branch adds the missing focused attachment and unjoined-gap
+  regression evidence rather than adding legacy-data-specific product logic.
+- Validation/guard, serializer/contract, async/callback, flow-boundary, and
+  broader service/repository/object/projection breadth remain follow-up Task 7
+  slices unless separately verified in a later PR.
+
+Oddities:
+
+- Existing route-flow legacy-data coverage only preserved the
+  `surfaceSubtype = data-model` row shape; it did not prove selected versus
+  adjacent-unjoined storage precision.
+- Route-flow dependency surface evidence cites the original legacy DBML rule
+  (`legacy.data.dbml.v1`) in supporting rule IDs; it does not currently expose
+  the descriptor projection rule on the route-flow row.
+- The focused tests assert public-safe redaction by excluding raw legacy
+  descriptor names from Markdown and JSON while retaining hashed stable surface
+  keys.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_legacy_data_storage_surfaces_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_legacy_data_storage_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 59 tests and the existing NU1903 warning.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 669 tests and
+  the existing NU1903 warning.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
 
 ## Summary
 
