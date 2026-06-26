@@ -32,14 +32,14 @@ implementation has not started in this branch.
         `legacy.data.generated-link.v1` remains sufficient.
   - [ ] Add or amend rule catalog entries before emitting any new relationship,
         unsupported descriptor, selector, projection, or exporter gap.
-  - [ ] Confirm or add `DuplicateLegacyDataModelSurface`,
+  - [x] Confirm or add `DuplicateLegacyDataModelSurface`,
         `AmbiguousLegacyDataModelSelector`, and
         `UnknownLegacyDataModelDescriptorRole` catalog coverage before emitting
         them from projection/report compatibility code.
   - [ ] Document limitations for every changed rule: static evidence only,
         reduced coverage, parser safety, redaction, unsupported shapes, and no
         runtime ORM/database proof.
-  - [ ] Add exact classification tests for any new or reused gap strings.
+  - [x] Add exact classification tests for any new or reused gap strings.
 
 - [ ] 2. Harden safe normalized descriptor identity. Requirements: 2, 9.
   - [ ] Centralize identity fields for metadata format, source artifact type,
@@ -55,7 +55,7 @@ implementation has not started in this branch.
         duplicate identities.
   - [ ] Add determinism, duplicate identity, safe-name, hash-only, and SQLite
         privacy tests.
-  - [ ] Add a cross-format identity collision test proving identical display
+  - [x] Add a cross-format identity collision test proving identical display
         names in different metadata formats or source artifact types keep
         separate stable keys and downgrade ambiguous selectors.
 
@@ -74,7 +74,7 @@ implementation has not started in this branch.
   - [ ] Add tests proving ambiguous or unsupported relationship shapes produce
         `AnalysisGap` rows and downstream needs-review/reduced-coverage labels,
         not arbitrary relationships.
-  - [ ] Add a no-double-count regression proving source relationship facts and
+  - [x] Add a no-double-count regression proving source relationship facts and
         normalized relationship projection do not create duplicate terminal
         `legacy-data` surfaces.
         The regression must assert the SQLite/report surface-count path, not
@@ -164,7 +164,7 @@ implementation has not started in this branch.
         schema or availability gap.
   - [ ] Keep `AnalysisGap` facts under `legacy.data.*` out of terminal
         `legacy-data` surfaces.
-  - [ ] Add compatibility tests only for workflows touched by this slice.
+  - [x] Add compatibility tests only for workflows touched by this slice.
   - [ ] Record broad diff, impact, release-review, portfolio, evidence graph,
         vault, RAG/docs-export, and static HTML expansion as follow-up unless
         touched directly.
@@ -174,7 +174,7 @@ implementation has not started in this branch.
   - [ ] Add small synthetic fixtures for DBML, EDMX, typed DataSet/TableAdapter,
         NHibernate, unsupported ORM gaps, generated-code links, ambiguity, parser
         safety, and unsafe value suppression.
-  - [ ] Add focused tests for extractor behavior, relationship evidence,
+  - [x] Add focused tests for extractor behavior, relationship evidence,
         unsupported gaps, generated-link boundaries, descriptor tier ceilings,
         deterministic ordering, and privacy suppression.
   - [ ] Add SQLite privacy assertions for metadata-derived properties.
