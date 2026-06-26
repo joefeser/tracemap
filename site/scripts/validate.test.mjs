@@ -35,6 +35,10 @@ import {
   incidentEvidenceHandoffRequiredLinks,
   incidentEvidenceHandoffRoute
 } from "./incident-evidence-handoff.mjs";
+import {
+  legacyModernizationReviewHandoffRequiredLinks,
+  legacyModernizationReviewHandoffRoute
+} from "./legacy-modernization-review-handoff.mjs";
 import { managerBriefRoute } from "./manager-brief.mjs";
 import {
   managerDemoScriptInboundLinkRoutes,
@@ -211,6 +215,8 @@ async function createDistFixture({
       ...incidentEvidenceHandoffRequiredLinks,
       teamEvidenceHandoffRoute,
       ...teamEvidenceHandoffRequiredLinks,
+      legacyModernizationReviewHandoffRoute,
+      ...legacyModernizationReviewHandoffRequiredLinks,
       testPlanningHandoffRoute,
       managerBriefRoute,
       managerDemoScriptRoute,
@@ -272,6 +278,8 @@ async function createDistFixture({
     incidentCallRoute,
     incidentEvidenceHandoffRoute,
     teamEvidenceHandoffRoute,
+    legacyModernizationReviewHandoffRoute,
+    ...legacyModernizationReviewHandoffRequiredLinks,
     testPlanningHandoffRoute,
     "/legacy-modernization/evidence-map/",
     "/legacy-validation/",
@@ -559,6 +567,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === teamEvidenceHandoffRoute) {
     return readFile(new URL("../src/team-evidence-handoff/index.html", import.meta.url), "utf8");
+  }
+
+  if (route === legacyModernizationReviewHandoffRoute) {
+    return readFile(new URL("../src/legacy-modernization/review-handoff/index.html", import.meta.url), "utf8");
   }
 
   if (route === testPlanningHandoffRoute) {
@@ -1041,6 +1053,22 @@ async function writeDiscoveryFiles(dist) {
         limitations: ["Fixture team evidence handoff limitations remain bounded."],
         nonClaims: [
           "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof."
+        ]
+      },
+      {
+        path: legacyModernizationReviewHandoffRoute,
+        title: "Legacy Modernization Review Handoff",
+        summary: "Fixture legacy modernization review handoff route for validation.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/legacy-modernization/evidence-map/",
+        limitations: [
+          "The route is a handoff checklist, not a modernization decision or new proof source.",
+          "Every row must keep evidence, proof fields, limitations, owners, and stop conditions attached."
+        ],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint performance, release safety, operational safety, migration success, database execution, AI impact analysis, LLM analysis, or complete coverage proof."
         ]
       },
       {

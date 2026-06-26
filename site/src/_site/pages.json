@@ -135,6 +135,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/legacy-modernization/review-handoff/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/legacy-dotnet/evidence/",
     "changefreq": "monthly",
     "priority": "0.7"
