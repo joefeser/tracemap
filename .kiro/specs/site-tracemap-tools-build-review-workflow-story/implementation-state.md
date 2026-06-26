@@ -1,7 +1,7 @@
 # Implementation State
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Public claim level: concept
 
 Last verified: 2026-06-26 after site implementation validation
@@ -10,6 +10,12 @@ Worktree: dedicated temporary worktree; local absolute path omitted from
 tracked spec
 Base: origin/dev
 PR target: dev
+
+## Status Normalization - 2026-06-26
+
+This PR normalized stale status/readiness headers after verifying the
+implemented `/blog/building-tracemap-under-review-pressure/` page exists on
+`origin/dev`.
 
 ## Summary
 

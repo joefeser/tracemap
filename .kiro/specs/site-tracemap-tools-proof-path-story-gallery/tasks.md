@@ -1,13 +1,13 @@
 # Site TraceMap Tools Proof Path Story Gallery Tasks
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Public claim level: concept
 
-These tasks track a future public-site implementation phase for a proof-path
-story gallery. This packet is spec-only until review readiness is complete.
-Scanner code, reducer code, generated artifacts, runtime telemetry, public demo
-artifacts, and unrelated specs remain out of scope.
+These tasks record the completed public-site implementation phase for a
+proof-path story gallery. Scanner code, reducer code, generated artifacts,
+runtime telemetry, public demo artifacts, and unrelated specs remain out of
+scope.
 
 ## Spec Review Tasks
 
@@ -26,11 +26,11 @@ artifacts, and unrelated specs remain out of scope.
 - [x] Run `./scripts/check-private-paths.sh`.
 - [x] Confirm the diff is limited to
   `.kiro/specs/site-tracemap-tools-proof-path-story-gallery/`.
-- [x] Move `Readiness` to `ready-for-implementation` only after Medium or
-  higher findings are patched or explicitly dispositioned in
+- [x] Move post-review readiness only after Medium or higher findings are
+  patched or explicitly dispositioned in
   `implementation-state.md`.
 
-## Future Implementation Tasks
+## Completed Implementation Tasks
 
 - [x] Confirm or update this spec-local `implementation-state.md` with branch,
   placement choice, scope decisions, review results, validation plan, and

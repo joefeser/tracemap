@@ -1,12 +1,12 @@
 # Site TraceMap Tools Legacy .NET Evidence Lane Tasks
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
-These tasks track future implementation of the legacy .NET evidence lane. This
-packet is spec-only; implementation tasks remain unchecked until a later site
-implementation phase.
+These tasks record the completed legacy .NET evidence lane implementation.
+Historical spec-review tasks remain checked as completed; this normalization
+does not advance deferred follow-up work.
 
 ## Spec Review
 
@@ -24,15 +24,15 @@ implementation phase.
   committing it, and record the re-review status, model, findings, patched
   items, dispositioned-without-patch items, and clean artifact path in
   `implementation-state.md`.
-- [x] Update all packet files from `Readiness: spec-review` to
-  `Readiness: ready-for-implementation` only after review findings, including
-  the re-review pass, are patched or explicitly dispositioned.
+- [x] During the spec-review phase, update packet readiness only after review
+  findings, including the re-review pass, are patched or explicitly
+  dispositioned.
 - [x] Run `git diff --check`.
 - [x] Run `./scripts/check-private-paths.sh`.
 - [x] Confirm the spec-only diff is limited to
   `.kiro/specs/site-tracemap-tools-legacy-dotnet-evidence-lane/`.
 
-## Future Implementation
+## Completed Implementation
 
 - [x] Confirm or update this spec-local `implementation-state.md` with branch,
   target, scope, placement decision, public claim level, validation results,

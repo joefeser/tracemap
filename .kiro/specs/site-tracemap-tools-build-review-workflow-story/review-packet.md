@@ -1,12 +1,11 @@
 # TraceMap Build Review Workflow Story Review Packet
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
-Review the `site-tracemap-tools-build-review-workflow-story` spec for
-spec-review findings first. This is a spec-only public site phase; it should
-not implement site code.
+This review packet records the spec-review orientation for the implemented
+`site-tracemap-tools-build-review-workflow-story` site phase.
 
 ## Review Orientation
 
@@ -14,7 +13,7 @@ Branch: codex/spec-site-build-review-workflow-story-20260625190317
 Base: origin/dev
 PR target: dev
 Public claim level: concept
-Readiness after Kiro review and patches: ready-for-implementation
+Readiness after implementation: implemented
 
 ## Scope
 
@@ -36,14 +35,12 @@ Please inspect:
 
 ## Review Focus
 
-- Does the spec satisfy spec-only scope without requiring site code changes in
-  this phase?
-- Does the packet preserve the readiness lifecycle: initial spec review starts
-  at `Readiness: spec-review`, committed post-review state may advance to
-  `Readiness: ready-for-implementation`, and `Status: not-started` plus
-  `Public claim level: concept` remain consistent?
-- Does the spec justify advancing readiness to `ready-for-implementation` only
-  after review findings are patched?
+- Does the packet lifecycle state stay consistent after implementation?
+- Are lifecycle fields coherent: committed state should use
+  `Status: implemented`, `Readiness: implemented`, and
+  `Public claim level: concept`?
+- Does the packet preserve the historical review evidence without implying
+  unfinished site implementation?
 - Does it reconcile the future page with the existing
   `/blog/building-tracemap-with-codex-kiro-qodo/` article so implementation
   avoids duplicate body copy, slug collision, and competing metadata?
@@ -84,7 +81,8 @@ Please inspect:
 - Does validation require `npm test`, `npm run validate`, `npm run build`,
   `git diff --check`, `./scripts/check-private-paths.sh`, and browser sanity
   checks when applicable?
-- Are future implementation tasks unchecked and scoped tightly?
+- Are completed implementation tasks checked only where existing implementation
+  evidence supports them?
 
 Return findings first, severity ordered. Include suggested spec edits for any
 Medium or higher findings.
