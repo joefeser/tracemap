@@ -329,10 +329,11 @@ Acceptance criteria:
   omissions, or deferrals.
 - Validation checks forbidden runtime, production, endpoint-performance,
   outage-cause, release-safety, operational-safety, complete-coverage,
-  business-impact, AI/LLM, approval, and replacement-of-review claims across
-  rendered text, decoded HTML, raw HTML attributes, metadata, sitemap,
-  discovery output, fixtures, tests, captions, alt text, and bot-oriented
-  discovery surfaces.
+  business-impact, runtime dependency-injection target selection, branch
+  feasibility, SQL execution, database state, data contents, AI/LLM, approval,
+  and replacement-of-review claims across rendered text, decoded HTML, raw
+  HTML attributes, metadata, sitemap, discovery output, fixtures, tests,
+  captions, alt text, and bot-oriented discovery surfaces.
 - Validation checks unsupported conclusion verbs across the same surfaces and
   allows them only inside explicitly bounded rejection, non-claim, or
   limitation sections.
