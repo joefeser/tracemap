@@ -89,12 +89,12 @@ const forbiddenClaimPatterns = [
 ];
 
 const privateMaterialPatterns = [
-  { id: "local-absolute-path", pattern: /(?:^|[\s>"'(=])(?:\/Users\/|\/home\/|\/tmp\/|\/var\/folders\/|\/private\/var\/|[A-Za-z]:[\\/])[^\s<>"')]+/gi },
-  { id: "generated-scan-directory", pattern: /(?:^|[\s>"'(=])(?:scan-results|generated-scan|site\/dist|site\/output|dist|output)\/[^\s<>"')]+/gi },
-  { id: "private-url", pattern: /\b(?:https?:\/\/(?:localhost|127(?:\.\d{1,3}){3}|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2}|[^/\s<>"']+\.local)(?::\d+)?(?:\/[^\s<>"']*)?|file:\/\/[^\s<>"']*)/gi },
-  { id: "raw-remote", pattern: /\b(?:git@[^:\s<>"']+:[^\s<>"']+|ssh:\/\/git@[^/\s<>"']+\/[^\s<>"']+|https:\/\/[^/\s<>"']+\/[^\s<>"']+\/[^\s<>"']+\.git)\b/gi },
-  { id: "credential-like-value", pattern: /\b(?:api[_-]?key|access[_-]?token|secret|password|passwd|pwd|client[_-]?secret|connection[_-]?string)\s*(?:=|:)\s*["']?[^"'\s<>{}]+/gi },
-  { id: "connection-string", pattern: /\b(?:Server|Data Source|Initial Catalog|Database|User ID|User Id|Uid|Password|Pwd)\s*=\s*[^;\s<>"']+(?:\s*;\s*(?:Server|Data Source|Initial Catalog|Database|User ID|User Id|Uid|Password|Pwd)\s*=\s*[^;\s<>"']+)+/gi }
+  { id: "local-absolute-path", pattern: /(?:^|[\s>"'(=])(?:\/Users\/|\/home\/|\/tmp\/|\/var\/folders\/|\/private\/var\/|[A-Za-z]:[\\/])[^\s<>"')]+/i },
+  { id: "generated-scan-directory", pattern: /(?:^|[\s>"'(=])(?:scan-results|generated-scan|site\/dist|site\/output|dist|output)\/[^\s<>"')]+/i },
+  { id: "private-url", pattern: /\b(?:https?:\/\/(?:localhost|127(?:\.\d{1,3}){3}|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2}|[^/\s<>"']+\.local)(?::\d+)?(?:\/[^\s<>"']*)?|file:\/\/[^\s<>"']*)/i },
+  { id: "raw-remote", pattern: /\b(?:git@[^:\s<>"']+:[^\s<>"']+|ssh:\/\/git@[^/\s<>"']+\/[^\s<>"']+|https:\/\/[^/\s<>"']+\/[^\s<>"']+\/[^\s<>"']+\.git)\b/i },
+  { id: "credential-like-value", pattern: /\b(?:api[_-]?key|access[_-]?token|secret|password|passwd|pwd|client[_-]?secret|connection[_-]?string)\s*(?:=|:)\s*["']?[^"'\s<>{}]+/i },
+  { id: "connection-string", pattern: /\b(?:Server|Data Source|Initial Catalog|Database|User ID|User Id|Uid|Password|Pwd)\s*=\s*[^;\s<>"']+(?:\s*;\s*(?:Server|Data Source|Initial Catalog|Database|User ID|User Id|Uid|Password|Pwd)\s*=\s*[^;\s<>"']+)+/i }
 ];
 
 export async function validateLegacyModernizationReviewHandoffDist({
@@ -191,9 +191,9 @@ function validateRouteEntry(routeEntry, errors) {
   if (!Array.isArray(routeEntry.nonClaims) || routeEntry.nonClaims.length === 0) {
     errors.push("Legacy modernization review handoff routes-index.json must include nonClaims metadata.");
   } else {
-    const nonClaims = routeEntry.nonClaims.join(" ");
+    const nonClaims = routeEntry.nonClaims.join(" ").toLowerCase();
     for (const term of metadataNonClaimTerms) {
-      if (!nonClaims.includes(term)) {
+      if (!nonClaims.includes(term.toLowerCase())) {
         errors.push(`Legacy modernization review handoff routes-index.json nonClaims are missing required term: ${term}`);
       }
     }
@@ -230,23 +230,23 @@ async function validatePage({ pagePath, errors }) {
   }
 
   for (const [row, label] of requiredRows) {
-    const rowMatch = html.match(new RegExp(`<tr\\b[^>]*data-handoff-row=["']${escapeRegExp(row)}["'][^>]*>`, "i"));
-    if (!rowMatch) {
+    const rowHtml = findHandoffRowHtml(html, row);
+    if (!rowHtml) {
       errors.push(`Legacy modernization review handoff matrix is missing required row: ${row}`);
       continue;
     }
-    const rowText = normalizeRenderedText(sliceRowHtml(html, rowMatch.index ?? 0));
+    const rowText = normalizeRenderedText(rowHtml);
     if (!rowText.includes(label)) {
       errors.push(`Legacy modernization review handoff row ${row} is missing visible label: ${label}`);
     }
-    const cellCount = (sliceRowHtml(html, rowMatch.index ?? 0).match(/<td\b/gi) ?? []).length;
+    const cellCount = (rowHtml.match(/<td\b/gi) ?? []).length;
     if (cellCount !== requiredHeaders.length) {
       errors.push(`Legacy modernization review handoff row ${row} expected ${requiredHeaders.length} cells, got ${cellCount}.`);
     }
   }
 
   for (const href of legacyModernizationReviewHandoffRequiredLinks) {
-    if (!new RegExp(`href=["']${escapeRegExp(href)}["']`, "i").test(html)) {
+    if (!hasAnchorHref(html, href)) {
       errors.push(`Legacy modernization review handoff is missing required adjacent link: ${href}`);
     }
   }
@@ -278,6 +278,20 @@ function validateForbiddenText(value, label, errors) {
 
 function extractMainHtml(html) {
   return html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1] ?? html;
+}
+
+function findHandoffRowHtml(html, row) {
+  const pattern = new RegExp(`<tr\\b[^>]*\\bdata-handoff-row\\s*=\\s*["']${escapeRegExp(row)}["'][^>]*>`, "i");
+  const rowMatch = html.match(pattern);
+  if (!rowMatch) {
+    return null;
+  }
+
+  return sliceRowHtml(html, rowMatch.index ?? 0);
+}
+
+function hasAnchorHref(html, href) {
+  return new RegExp(`<a\\b[^>]*\\bhref\\s*=\\s*["']${escapeRegExp(href)}["']`, "i").test(html);
 }
 
 function sliceRowHtml(html, rowStart) {

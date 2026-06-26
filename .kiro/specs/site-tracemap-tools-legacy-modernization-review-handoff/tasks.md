@@ -8,5 +8,5 @@
 - [x] Wire validator into site validation.
 - [x] Run required validation commands.
 - [x] Do desktop and mobile browser sanity checks.
-- [ ] Commit, push, open ready PR to `dev`.
+- [x] Commit, push, open ready PR to `dev`.
 - [ ] Run ACK and follow its final decision.
