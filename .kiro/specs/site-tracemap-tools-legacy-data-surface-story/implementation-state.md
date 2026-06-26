@@ -130,7 +130,7 @@ Actionable review findings were patched:
   rules.
 
 All Medium+ actionable findings from the saved reviews have been patched.
-Readiness is advanced to `ready-for-implementation` for this spec-only packet.
+Readiness is now `implemented` for this completed site packet.
 
 Implementation PR loop status:
 
