@@ -88,7 +88,5 @@ __pycache__/
 TestResult.xml
 nunit-*.xml
 scripts/smoke-typescript-endpoints.sh
-.DS_Store
 .tmp
 .agent-control/tmp
-.DS_Store
