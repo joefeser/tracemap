@@ -2455,6 +2455,19 @@ Validation status:
   `src/typescript`; output stayed under a temporary directory.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+- ACK-authorized patch after PR review removed the raw source-snippet-like
+  object-shape fixture value, added user-input coverage for snippet-like and
+  multiline SQL/credential values without persisting raw snippets, preserved
+  empty entry path keys instead of hashing missing values, limited redaction
+  rule citation to explicit redaction/hash-by-policy metadata keys, expanded
+  secret/connection-string and root-home path detection, and made unsafe
+  hostname TLD matching case-insensitive. Post-patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 69 tests, `dotnet build src/dotnet/TraceMap.sln` passed
+  with 0 errors, `dotnet test src/dotnet/TraceMap.sln` passed locally with 679
+  tests, `./scripts/smoke-combined-paths.sh` passed,
+  `./scripts/check-private-paths.sh` passed, and `git diff --check` passed.
+  NuGet emitted the same existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 warning.
 
 Follow-ups:
 
