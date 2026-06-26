@@ -2299,7 +2299,7 @@ rules:
   - id: combined.route-flow.fact-symbol-projection.v1
     name: Route-flow fact-symbol evidence projection
     description: Projects combined_fact_symbols attachments into route-flow logic rows by joining to combined_facts and selected source-local route-flow symbols.
-    evidenceTier: Inherits attached fact evidence and caps strongest projection at ProbableStaticRouteFlow, with async/callback boundary context capped at NeedsReviewStaticRouteFlow unless weaker evidence requires UnknownAnalysisGap
+    evidenceTier: Inherits attached fact evidence tier
     emits:
       - route-flow fact-symbol projection logic row
       - FactSymbolProjectionUnavailable gap
@@ -2308,7 +2308,8 @@ rules:
       - Fact-symbol projection rows preserve source-local static attachments only; they do not prove runtime request execution, dependency injection binding, dynamic dispatch target selection, SQL execution, database existence, schema compatibility, package loading, or production use.
       - Projection requires source-local symbol identity already present in the selected route-flow path; global short-name stitching and cross-source symbol guesses are not evidence in this rule.
       - Query, data, config, package, object-shape, and async/callback boundary metadata must use safe descriptors and hashes; raw SQL, config values, connection strings, URLs, remotes, source snippets, local paths, private labels, and secrets must not be rendered.
-      - Async and callback boundary rows are review-tier path context only; they do not prove callback invocation, event firing, runtime scheduling, ordering, task completion, closure lifetime, or mutation safety.
+      - Query, data, config, package, and object-shape projections cap strongest route-flow classification at ProbableStaticRouteFlow unless weaker evidence requires NeedsReviewStaticRouteFlow or UnknownAnalysisGap.
+      - Async and callback boundary rows cap route-flow classification at NeedsReviewStaticRouteFlow and are review-tier path context only; they do not prove callback invocation, event firing, runtime scheduling, ordering, task completion, closure lifetime, or mutation safety.
       - Unsupported attached fact-symbol types are reported as review-tier skipped context, not silently rendered or inferred as data-flow evidence.
 
   - id: combined.route-flow.classification.v1
