@@ -358,6 +358,7 @@ Acceptance criteria:
   metadata outside this spec folder.
 - The packet records Kiro review artifacts, findings patched or dispositioned,
   validation commands, and follow-up notes in `implementation-state.md`.
-- Readiness remains `spec-review` until requested Kiro reviews run and Medium
-  or higher actionable findings are patched or dispositioned. Readiness may
-  advance only after that review work is recorded.
+- Readiness starts as `spec-review` and remains there until requested Kiro
+  reviews run and Medium or higher actionable findings are patched or
+  dispositioned. Readiness may advance to `ready-for-implementation` only
+  after that review work is recorded.
