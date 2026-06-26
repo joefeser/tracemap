@@ -3,7 +3,9 @@
 ## Kiro Spec Review Prompt
 
 Review the `route-flow-service-data-composition-final` Kiro spec for
-merge-readiness. This is a spec-only branch; it must not implement product code.
+merge-readiness. The original spec-delivery branch was spec-only; later
+implementation slices may update focused tests and spec state, but must not
+add product logic outside the selected task scope.
 
 Inspect:
 

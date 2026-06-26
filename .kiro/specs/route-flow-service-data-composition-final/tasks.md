@@ -10,7 +10,7 @@ Status: task-7-http-client-attachment-precision-ready-for-review
   - [x] Add `tasks.md`.
   - [x] Add `implementation-state.md`.
   - [x] Add `review-prompts.md`.
-  - [x] Keep this PR limited to this spec folder.
+  - [x] Keep the original spec-delivery PR limited to this spec folder.
   - [x] Keep examples synthetic/public-safe and avoid private paths, private
         labels, raw SQL/config values, source snippets, secrets, raw remotes,
         and private route strings.
@@ -25,12 +25,12 @@ Status: task-7-http-client-attachment-precision-ready-for-review
   - [x] Record review commands, artifacts, coverage, findings, dispositions,
         and final readiness in `implementation-state.md`.
 
-- [x] 3. Validate the spec-only change.
+- [x] 3. Validate the original spec-only change.
   - [x] Run `git diff --check`.
   - [x] Run `./scripts/check-private-paths.sh`.
   - [x] Run any obvious spec/docs validation command if present, or record that
         none exists.
-  - [x] Confirm the diff is limited to
+  - [x] Confirm the original spec-delivery diff is limited to
         `.kiro/specs/route-flow-service-data-composition-final/`.
   - [x] Record validation results in `implementation-state.md`.
 
