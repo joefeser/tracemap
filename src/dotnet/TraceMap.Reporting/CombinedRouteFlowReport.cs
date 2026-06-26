@@ -3621,7 +3621,9 @@ public static class CombinedRouteFlowReporter
         var contractName = FirstProperty(row.Properties, "contractName");
         if (kind == "serializer-contract" && !string.IsNullOrWhiteSpace(contractName))
         {
-            return $"{kind}:contract-name-hash:{CombinedReportHelpers.Hash(contractName!, 16)}";
+            var containingTypeHash = HashValue(FirstProperty(row.Properties, "containingType")) ?? "unknown-type";
+            var memberNameHash = HashValue(FirstProperty(row.Properties, "memberName", "memberSymbol")) ?? CombinedReportHelpers.Hash(row.CombinedFactId, 16);
+            return $"{kind}:contract-name-hash:{CombinedReportHelpers.Hash(contractName!, 16)}:type-hash:{containingTypeHash}:member-hash:{memberNameHash}";
         }
 
         return $"{kind}:fact-hash:{CombinedReportHelpers.Hash(row.CombinedFactId, 16)}";
@@ -3651,7 +3653,7 @@ public static class CombinedRouteFlowReporter
             ("conditionExpressionKind", FirstProperty(row.Properties, "conditionExpressionKind")),
             ("conditionExpressionHash", FirstProperty(row.Properties, "conditionExpressionHash")),
             ("checkedSymbolHash", HashValue(FirstProperty(row.Properties, "checkedSymbol"))),
-            ("attributeName", SafeSelector(FirstProperty(row.Properties, "attributeName") ?? string.Empty)),
+            ("attributeNameHash", HashValue(FirstProperty(row.Properties, "attributeName"))),
             ("contractNameHash", HashValue(FirstProperty(row.Properties, "contractName"))),
             ("memberNameHash", HashValue(FirstProperty(row.Properties, "memberName"))),
             ("memberTypeHash", HashValue(FirstProperty(row.Properties, "memberType"))),
