@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level TraceMap modernization review handoff for carrying deterministic static legacy evidence into owner questions with proof paths, limitations, and stop conditions."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Legacy Modernization Review Handoff | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/legacy-modernization/review-handoff/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Legacy Modernization Review Handoff">
+    <meta
+      property="og:description"
+      content="A public-safe handoff from static legacy evidence to modernization review questions without runtime, migration, release, or database proof claims."
+    >
+    <meta property="og:url" content="https://tracemap.tools/legacy-modernization/review-handoff/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Legacy modernization review handoff</p>
+        <h1>Move from static legacy evidence to owner questions without upgrading the claim.</h1>
+        <p class="hero-subhead">
+          This concept page gives managers, reviewers, architects, and engineers
+          a public-safe handoff boundary. It carries deterministic static
+          repository evidence into modernization review questions while keeping
+          rule families, evidence tiers, coverage labels, limitations, proof
+          paths, owners, allowed wording, and stop conditions attached.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          The page is a review handoff, not a modernization decision, runtime
+          telemetry report, migration tool, service ownership record, or release
+          approval surface.
+        </p>
+        <nav class="hero-actions" aria-label="Legacy modernization review handoff links">
+          <a class="button primary" href="#handoff-matrix">Open handoff matrix</a>
+          <a class="button secondary" href="/legacy-modernization/evidence-map/">Evidence map</a>
+          <a class="button secondary" href="/owners/follow-up/">Owner follow-up</a>
+          <a class="button secondary" href="/limitations/">Limitations</a>
+        </nav>
+      </section>
+
+      <section id="handoff-boundary" class="section callout-section">
+        <h2>Static evidence can start the review; it cannot finish the modernization decision.</h2>
+        <p>
+          TraceMap public copy may say that a checked-in repository snapshot
+          contains static evidence that raises a review question. The handoff
+          stops there until a human owner brings the missing proof: runtime
+          context, migration planning, service accountability, test strategy,
+          or release governance. If a proof field is missing, the public wording
+          must stay at question level with the limitation still visible.
+        </p>
+      </section>
+
+      <section id="handoff-matrix" class="section" aria-labelledby="handoff-matrix-heading">
+        <div class="section-header">
+          <p class="section-kicker">Handoff matrix</p>
+          <h2 id="handoff-matrix-heading">Each modernization question keeps its proof fields and stop condition.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-legacy-modernization-review-handoff>
+            <caption>
+              Use the allowed wording only while the static evidence, required
+              proof field, limitation, owner, and stop condition travel together.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Review question</th>
+                <th scope="col">Static evidence to bring</th>
+                <th scope="col">Required proof field</th>
+                <th scope="col">Limitation to keep attached</th>
+                <th scope="col">Owner to involve</th>
+                <th scope="col">Allowed wording</th>
+                <th scope="col">Stop condition</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-handoff-row="framework-runtime-age">
+                <td><strong>Framework/runtime age question</strong></td>
+                <td>Project metadata, target framework clues, package files, generated-file hints, or toolchain diagnostics with rule ID/rule family and evidence tier.</td>
+                <td>Coverage label, proof path, commit SHA, and extractor version that show where the static clue came from.</td>
+                <td>Static age clues do not prove compatibility, support status, deployment state, or migration feasibility.</td>
+                <td>Architect, platform owner, and engineering lead.</td>
+                <td>Static repository evidence raises a framework/runtime review question.</td>
+                <td>Stop if the clue lacks rule context, tier, coverage label, or a limitation for reduced analysis.</td>
+              </tr>
+              <tr data-handoff-row="route-api">
+                <td><strong>Route/API question</strong></td>
+                <td>Controller, route attribute, handler, service-reference, or syntax fallback evidence with path spans and rule family.</td>
+                <td>Evidence tier, proof path, coverage label, and owner question for source review.</td>
+                <td>Static route evidence does not prove live endpoint existence, reachability, production traffic, latency, or user behavior.</td>
+                <td>Service owner, API reviewer, and test owner.</td>
+                <td>Static evidence identifies a route/API review surface.</td>
+                <td>Stop if wording drifts into runtime behavior, endpoint performance, or operational safety.</td>
+              </tr>
+              <tr data-handoff-row="data-surface">
+                <td><strong>Data surface question</strong></td>
+                <td>ORM mapping, query-facing reference, data metadata, configuration shape, or Tier3SyntaxOrTextual clue without raw SQL or values.</td>
+                <td>Rule family, evidence tier, coverage label, proof path, and data-owner follow-up.</td>
+                <td>Static data clues do not prove database connectivity, execution, schema compatibility, permissions, or contents.</td>
+                <td>Data owner, application owner, and reviewer.</td>
+                <td>Static evidence raises a data surface owner question.</td>
+                <td>Stop if the handoff needs raw SQL, config values, connection strings, database contents, or hidden validation detail.</td>
+              </tr>
+              <tr data-handoff-row="package-dependency">
+                <td><strong>Package/dependency question</strong></td>
+                <td>Manifest, project reference, package reference, lockfile, or dependency surface evidence with deterministic extractor context.</td>
+                <td>Rule ID/rule family, evidence tier, package proof path, and coverage label.</td>
+                <td>Static dependency evidence does not prove exploitability, compatibility, installability, runtime loading, or upgrade success.</td>
+                <td>Dependency owner, architect, and build owner.</td>
+                <td>Static evidence shows a dependency review item.</td>
+                <td>Stop if the claim implies package compatibility, vulnerability outcome, or migration success.</td>
+              </tr>
+              <tr data-handoff-row="config-deployment-clue">
+                <td><strong>Config/deployment clue question</strong></td>
+                <td>Checked-in project, config, environment-shape, publish-profile, or deployment clue summarized without raw values.</td>
+                <td>Static proof path, rule family, coverage label, and redaction confirmation.</td>
+                <td>Checked-in clues do not prove deployed state, active environment, secret validity, service binding, or release posture.</td>
+                <td>Deployment owner, security reviewer, and application owner.</td>
+                <td>Static evidence raises a config/deployment review question.</td>
+                <td>Stop if raw config values, private URLs, secrets, tokens, remotes, or local paths would be exposed.</td>
+              </tr>
+              <tr data-handoff-row="validation-reduced-coverage">
+                <td><strong>Validation/reduced coverage question</strong></td>
+                <td>AnalysisGap facts, failed project load labels, syntax fallback notes, unsupported file notes, or validation route context.</td>
+                <td>Coverage label, Tier4Unknown or weaker-tier explanation, proof path, and limitation text.</td>
+                <td>Reduced coverage is useful context, not a clean repository result and not absence-of-evidence proof.</td>
+                <td>Reviewer, build owner, and validation owner.</td>
+                <td>Analysis is partial and needs owner follow-up before stronger wording.</td>
+                <td>Stop if a failed build or partial scan is described as complete coverage or clean analysis.</td>
+              </tr>
+              <tr data-handoff-row="migration-test-planning">
+                <td><strong>Migration/test planning question</strong></td>
+                <td>Static route, dependency, data, and validation clues bundled as planning inputs with limitations.</td>
+                <td>Proof paths, rule families, evidence tiers, coverage labels, non-claims, and owner questions.</td>
+                <td>TraceMap evidence does not choose migration tooling, guarantee migration success, replace tests, or approve release.</td>
+                <td>Manager, architect, test owner, release owner, and engineering lead.</td>
+                <td>Static evidence can seed a modernization review checklist.</td>
+                <td>Stop if the handoff becomes approval language, success language, or a substitute for tests and owner decisions.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="boundary-map" class="section split-section">
+        <div>
+          <p class="section-kicker">Boundary map</p>
+          <h2>Keep TraceMap static evidence separate from decisions and operations.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Modernization decisions</strong><span>TraceMap can supply static evidence questions; owners decide scope, priority, architecture, and tradeoffs.</span></div>
+          <div><strong>Runtime telemetry</strong><span>Production traffic, live behavior, endpoint performance, incidents, traces, logs, and usage need operational systems.</span></div>
+          <div><strong>Migration tooling</strong><span>Tool choices, generated migrations, compatibility checks, and migration success require separate planning and validation.</span></div>
+          <div><strong>Service ownership</strong><span>TraceMap can route an owner question; it does not prove real teams, on-call state, accountability, or approval chains.</span></div>
+          <div><strong>Release approval</strong><span>Release safety, operational safety, and approval remain outside this public static evidence page.</span></div>
+        </div>
+      </section>
+
+      <section id="non-claims" class="section boundary-section" data-boundary-region>
+        <div>
+          <p class="section-kicker">Non-claims and stop conditions</p>
+          <h2>The handoff stops before the evidence becomes a stronger claim.</h2>
+        </div>
+        <ul>
+          <li>No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, migration success, schema compatibility, database connectivity, database execution, raw data access, or complete coverage proof.</li>
+          <li>No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, autonomous review, autonomous approval, or replacement of human judgment.</li>
+          <li>Do not publish raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, raw config values, secrets, tokens, connection strings, database contents, raw remotes, local paths, generated scan directories, private sample names, raw command output, private URLs, hidden validation details, or credential-like values.</li>
+          <li>Stop when the proof path is missing, the evidence tier is unclear, the coverage label is reduced but unlabeled, the owner is unknown, the limitation is detached, or the wording would imply approval, execution, compatibility, or live behavior.</li>
+        </ul>
+      </section>
+
+      <section id="related-proof" class="section link-section">
+        <div>
+          <p class="section-kicker">Adjacent proof surfaces</p>
+          <h2>Use nearby routes to keep the handoff anchored to public-safe context.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/legacy-dotnet/evidence/">Legacy .NET evidence lane</a>
+          <a href="/legacy-evidence/">Legacy evidence story</a>
+          <a href="/legacy-modernization/evidence-map/">Legacy modernization evidence map</a>
+          <a href="/legacy-data-surface/">Legacy data surface</a>
+          <a href="/legacy-validation/">Legacy validation</a>
+          <a href="/proof-paths/">Proof paths</a>
+          <a href="/review-room/">Review room</a>
+          <a href="/review-claim-checklist/">Review claim checklist</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/validation/">Validation</a>
+          <a href="/outputs/">Outputs</a>
+          <a href="/docs/">Docs</a>
+          <a href="/owners/follow-up/">Owner follow-up</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Legacy modernization review handoff links
+        <a href="/legacy-modernization/evidence-map/">evidence map</a>,
+        <a href="/owners/follow-up/">owner follow-up</a>,
+        <a href="/proof-paths/">proof paths</a>,
+        and
+        <a href="/limitations/">limitations</a>.
+      </p>
+      <p class="copyright">&copy; 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
