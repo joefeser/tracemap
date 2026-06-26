@@ -88,6 +88,21 @@ test("validateProofPathsForManagersDist rejects unsupported positive runtime cla
   assert.match(errors.join("\n"), /forbidden public claim/);
 });
 
+test("validateProofPathsForManagersDist rejects absence-of-impact and release-approval claims", async (t) => {
+  const root = await createManagedFixture(t, {
+    pageHtml: (await page()).replace(
+      "</main>",
+      "<p>This evidence proves no impact.</p><p>The release is approved.</p></main>"
+    )
+  });
+  const errors = [];
+
+  await validateProofPathsForManagersDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden public claim.*proves no impact/);
+  assert.match(errors.join("\n"), /forbidden public claim.*release is approved/);
+});
+
 test("validateProofPathsForManagersDist rejects hard private material", async (t) => {
   const root = await createManagedFixture(t, {
     pageHtml: (await page()).replace("</main>", '<img alt="file&#58;//private/report"></main>')

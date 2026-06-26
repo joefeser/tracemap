@@ -176,6 +176,10 @@ mode. The review artifacts therefore include tool-denied analysis gaps.
 - `git diff --check`: passed on 2026-06-26 for the implementation patch.
 - `./scripts/check-private-paths.sh`: passed on 2026-06-26 for the
   implementation patch.
+- After the initial ACK patch, `node --test
+  scripts/proof-paths-for-managers.test.mjs`, `npm test`, `npm run validate`,
+  `npm run build`, `git diff --check`, and
+  `./scripts/check-private-paths.sh` passed on 2026-06-26.
 - Desktop browser sanity: passed on 2026-06-26. The route loaded with the
   expected page title, visible hero, placement section, and matrix.
 - Mobile browser sanity: passed on 2026-06-26. The route loaded at a narrow
@@ -183,8 +187,17 @@ mode. The review artifacts therefore include tool-denied analysis gaps.
 
 ## Review Loop
 
-- PR loop is pending until the branch is committed, pushed, and a PR exists.
-- The final PR-loop outcome should be appended here after ACK completes.
+- Initial ACK for PR 361 returned `actionable_findings` with stop reason
+  `UNRESOLVED_REVIEW_THREADS`.
+- Required-review finding:
+  `site/scripts/proof-paths-for-managers.mjs` did not reject
+  absence-of-impact wording such as `proves no impact` or release approval
+  wording such as `the release is approved`.
+- Patch disposition: added forbidden-claim patterns for absence-of-impact,
+  absence-of-dependency/no-risk, `release is approved`, `release approved`,
+  and `safe to release`; added focused tests for absence-of-impact and
+  release-approval claims.
+- Rerun ACK is pending after the follow-up commit is pushed.
 
 ## Oddities
 
@@ -203,17 +216,12 @@ mode. The review artifacts therefore include tool-denied analysis gaps.
 - Kiro review coverage was reduced because Kiro's internal shell/write tools
   were denied in non-interactive mode. The wrapper still ran, saved review
   text, and the returned Medium or higher findings were patched.
-- Residual PR-loop state is pending until the implementation PR exists and
-  ACK returns a terminal decision.
-- ACK initially stopped on Qodo findings for stale follow-up wording,
-  unsupported impact terminology in a design matrix row, and missing residual
-  risk notes. This follow-up commit patched those state and wording gaps.
-- Implementation PR-loop evidence is not recorded yet because the PR has not
-  been created.
+- Residual PR-loop state is pending until ACK is rerun on the follow-up
+  commit and returns a terminal decision.
 
 ## Follow-ups
 
 - Keep the reduced Kiro review coverage visible when using this spec as an
   implementation starting point.
-- After the implementation PR is opened, run ACK, patch only authorized
-  actionable findings, and update this state note with the final ACK decision.
+- Rerun ACK on the follow-up commit, patch only authorized actionable
+  findings, and update this state note with the final ACK decision.

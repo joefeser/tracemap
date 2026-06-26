@@ -154,7 +154,11 @@ const hardPrivatePatterns = [
 
 const forbiddenClaimPatterns = [
   /\b(?:TraceMap\s+)?(?:proves?|proven|proof of)\s+(?:runtime behavior|production traffic|endpoint performance|outage cause|release approval|release safety|operational safety|complete coverage|product behavior|customer impact)\b/i,
+  /\b(?:TraceMap|proof path|static evidence|this evidence|the packet)\s+(?:proves?|proven|guarantees?|certifies?|verifies?|confirms?)\s+(?:no impact|no dependency|no risk|absence of impact|absence of dependency)\b/i,
   /\b(?:certifies?|guarantees?|verifies?|confirms?)\s+(?:runtime behavior|production traffic|endpoint performance|release safety|operational safety|complete coverage|product behavior|customer impact)\b/i,
+  /\b(?:the\s+)?release\s+is\s+approved\b/i,
+  /\brelease\s+approved\b/i,
+  /\bsafe\s+to\s+release\b/i,
   /\b(?:monitors?|knows?)\s+production traffic\b/i,
   /\bmeasures?\s+endpoint performance\b/i,
   /\bidentifies?\s+outage cause\b/i,
