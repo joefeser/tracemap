@@ -473,6 +473,11 @@ Oddities:
 - The focused tests assert public-safe redaction by excluding raw legacy
   descriptor names from Markdown and JSON while retaining hashed stable surface
   keys.
+- ACK review found that the first storage fixture attached descriptors by
+  setting `sourceSymbol` directly to the repository method. The patch now seeds
+  scanner-shaped legacy metadata descriptors with null `sourceSymbol` and
+  generated/model `targetSymbol` attachment, then reaches those descriptors
+  through selected static route-flow calls.
 
 Validation status:
 
@@ -487,6 +492,21 @@ Validation status:
   the existing NU1903 warning.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+- Post-ACK patch
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_legacy_data_storage_surfaces_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_legacy_data_storage_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning.
+- Post-ACK patch
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 59 tests and the existing NU1903 warning.
+- Post-ACK patch `dotnet build src/dotnet/TraceMap.sln`: passed with 0
+  errors and the existing NU1903 warning.
+- Post-ACK patch first `dotnet test src/dotnet/TraceMap.sln` rerun failed one
+  unrelated `BuildEnvironmentDiagnosticTests.Cli_restore_failure_artifacts_are_sanitized`
+  assertion; an immediate focused rerun of that test passed.
+- Post-ACK patch second `dotnet test src/dotnet/TraceMap.sln`: passed locally
+  with 669 tests and the existing NU1903 warning.
+- Post-ACK patch `./scripts/check-private-paths.sh`: passed.
+- Post-ACK patch `git diff --check`: passed.
 
 ## Summary
 

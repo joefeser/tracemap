@@ -218,14 +218,16 @@ public sealed class CombinedRouteFlowTests
         var server = Manifest("server", "tracemap-milestone15");
         var controller = "Server.OrdersController.Get(System.Int32)";
         var repository = "Server.OrderRepository.Read(System.Int32)";
-        var unrelatedRepository = "Server.AuditRepository.Read(System.Int32)";
+        var generatedModel = "Server.LegacyModels.GeneratedOrderRow";
+        var unrelatedGeneratedModel = "Server.LegacyModels.GeneratedAuditRow";
 
         SqliteIndexWriter.Write(serverIndex, server, [
             RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
             CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
-            LegacyDataEntityFact(server, repository, "CustomerLedger", "Models/Store.dbml", 21),
-            LegacyDataStorageObjectFact(server, repository, "CustomerLedgerTable", "Models/Store.dbml", 26),
-            LegacyDataStorageObjectFact(server, unrelatedRepository, "AuditTrailTable", "Models/Audit.dbml", 31, "audit-trail-hash", "ldm:route-flow-audit-storage-key")
+            CallFact(server, repository, generatedModel, "Infrastructure/OrderRepository.cs", 18, targetSymbolKind: "NamedType"),
+            LegacyDataEntityFact(server, null, "CustomerLedger", "Models/Store.dbml", 21, targetSymbol: generatedModel),
+            LegacyDataStorageObjectFact(server, null, "CustomerLedgerTable", "Models/Store.dbml", 26, targetSymbol: generatedModel),
+            LegacyDataStorageObjectFact(server, null, "AuditTrailTable", "Models/Audit.dbml", 31, "audit-trail-hash", "ldm:route-flow-audit-storage-key", targetSymbol: unrelatedGeneratedModel)
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
 
@@ -256,8 +258,8 @@ public sealed class CombinedRouteFlowTests
 
         var terminalRows = result.Report.FlowRows.Where(row => row.RowKind == "terminal-surface").ToArray();
         Assert.Equal(2, terminalRows.Length);
-        Assert.All(terminalRows, row => Assert.Contains(repository, row.SourceSymbol, StringComparison.Ordinal));
-        Assert.DoesNotContain(result.Report.FlowRows, row => row.SourceSymbol.Contains("AuditRepository", StringComparison.Ordinal));
+        Assert.All(terminalRows, row => Assert.Contains(generatedModel, row.SourceSymbol, StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Report.FlowRows, row => row.SourceSymbol.Contains("AuditTrail", StringComparison.Ordinal));
         Assert.DoesNotContain(result.Report.DependencySurfaces, surface => surface.Evidence.FilePath == "Models/Audit.dbml");
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "DataSurfaceAttachmentMissing" or "NoRouteFlowEvidence");
         Assert.Contains(result.Report.ContextGroups!, group => group.GroupKind == "legacy-data"
@@ -285,12 +287,12 @@ public sealed class CombinedRouteFlowTests
         var server = Manifest("server", "tracemap-milestone15");
         var controller = "Server.OrdersController.Get(System.Int32)";
         var repository = "Server.OrderRepository.Read(System.Int32)";
-        var unrelatedRepository = "Server.AuditRepository.Read(System.Int32)";
+        var unrelatedGeneratedModel = "Server.LegacyModels.GeneratedAuditRow";
 
         SqliteIndexWriter.Write(serverIndex, server, [
             RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
             CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
-            LegacyDataStorageObjectFact(server, unrelatedRepository, "AuditTrailTable", "Models/Audit.dbml", 31, "audit-trail-hash", "ldm:route-flow-audit-storage-key")
+            LegacyDataStorageObjectFact(server, null, "AuditTrailTable", "Models/Audit.dbml", 31, "audit-trail-hash", "ldm:route-flow-audit-storage-key", targetSymbol: unrelatedGeneratedModel)
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
 
@@ -307,7 +309,7 @@ public sealed class CombinedRouteFlowTests
 
         Assert.Empty(result.Report.DependencySurfaces);
         Assert.DoesNotContain(result.Report.FlowRows, row => row.RowKind == "terminal-surface");
-        Assert.DoesNotContain(result.Report.FlowRows, row => row.SourceSymbol.Contains("AuditRepository", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Report.FlowRows, row => row.SourceSymbol.Contains("AuditTrail", StringComparison.Ordinal));
         var gap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "DataSurfaceAttachmentMissing");
         Assert.Equal("combined.route-flow.gap.v1", gap.RuleId);
         Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
@@ -2869,7 +2871,7 @@ public sealed class CombinedRouteFlowTests
             });
     }
 
-    private static CodeFact LegacyDataEntityFact(ScanManifest manifest, string? sourceSymbol, string displayName, string file, int line)
+    private static CodeFact LegacyDataEntityFact(ScanManifest manifest, string? sourceSymbol, string displayName, string file, int line, string? targetSymbol = null)
     {
         return LegacyDataFact(
             manifest,
@@ -2881,7 +2883,8 @@ public sealed class CombinedRouteFlowTests
             "entity",
             "conceptual",
             "customer-ledger-hash",
-            "ldm:route-flow-model-key");
+            "ldm:route-flow-model-key",
+            targetSymbol);
     }
 
     private static CodeFact LegacyDataStorageObjectFact(
@@ -2891,7 +2894,8 @@ public sealed class CombinedRouteFlowTests
         string file,
         int line,
         string displayNameHash = "customer-ledger-table-hash",
-        string stableModelKey = "ldm:route-flow-storage-key")
+        string stableModelKey = "ldm:route-flow-storage-key",
+        string? targetSymbol = null)
     {
         return LegacyDataFact(
             manifest,
@@ -2903,7 +2907,8 @@ public sealed class CombinedRouteFlowTests
             "storage-object",
             "storage",
             displayNameHash,
-            stableModelKey);
+            stableModelKey,
+            targetSymbol);
     }
 
     private static CodeFact LegacyDataFact(
@@ -2916,7 +2921,8 @@ public sealed class CombinedRouteFlowTests
         string modelKind,
         string descriptorRole,
         string displayNameHash,
-        string stableModelKey)
+        string stableModelKey,
+        string? targetSymbol = null)
     {
         return FactFactory.Create(
             manifest,
@@ -2925,7 +2931,7 @@ public sealed class CombinedRouteFlowTests
             EvidenceTiers.Tier2Structural,
             new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
             sourceSymbol: sourceSymbol,
-            targetSymbol: displayName,
+            targetSymbol: targetSymbol ?? displayName,
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
                 ["coverageLabel"] = "reduced",
@@ -2936,7 +2942,8 @@ public sealed class CombinedRouteFlowTests
                 ["metadataHash"] = "metadata-hash",
                 ["metadataKind"] = "Dbml",
                 ["modelKind"] = modelKind,
-                ["stableModelKey"] = stableModelKey
+                ["stableModelKey"] = stableModelKey,
+                ["targetSymbolId"] = targetSymbol ?? displayName
             });
     }
 
