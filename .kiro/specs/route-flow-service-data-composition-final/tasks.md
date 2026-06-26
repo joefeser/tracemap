@@ -195,7 +195,8 @@ current `dev` code or merged PR records prove the behavior.
           and
           `Route_flow_does_not_infer_adjacent_asmx_client_surface_without_selected_join`.
     - [x] WCF operation dependency-surface sub-slice covered by
-          `Route_flow_attaches_wcf_operation_surface_only_from_selected_static_path`
+          `Route_flow_attaches_wcf_operation_surface_only_from_selected_static_path`,
+          `Route_flow_keeps_same_operation_wcf_surfaces_distinct_by_mapping_identity`,
           and
           `Route_flow_does_not_infer_adjacent_wcf_operation_surface_without_selected_join`.
   - [x] Render argument-flow and parameter-forward value-origin rows only when
@@ -229,7 +230,8 @@ current `dev` code or merged PR records prove the behavior.
     - [x] WCF operation surface attachment, adjacent-unjoinable gap behavior,
           terminal-surface labeling, dependency context grouping, and
           deterministic stable IDs covered by
-          `Route_flow_attaches_wcf_operation_surface_only_from_selected_static_path`
+          `Route_flow_attaches_wcf_operation_surface_only_from_selected_static_path`,
+          `Route_flow_keeps_same_operation_wcf_surfaces_distinct_by_mapping_identity`,
           and
           `Route_flow_does_not_infer_adjacent_wcf_operation_surface_without_selected_join`.
 

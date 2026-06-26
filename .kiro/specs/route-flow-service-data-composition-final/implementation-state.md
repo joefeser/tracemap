@@ -178,11 +178,14 @@ Oddities:
 - The projection patch uses `normalizedOperationName` as the safe operation
   display source and leaves endpoint/channel/runtime details out of the
   route-flow surface row.
+- ACK review found that same-operation WCF mappings from different generated
+  clients could otherwise collapse under the route-flow stable surface key; the
+  patch now carries `mappingHash`/`metadataHash` as WCF shape identity.
 
 Validation status:
 
-- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_wcf_operation_surface_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_wcf_operation_surface_without_selected_join"`:
-  passed locally with 2 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_wcf_operation_surface_only_from_selected_static_path|FullyQualifiedName~Route_flow_keeps_same_operation_wcf_surfaces_distinct_by_mapping_identity|FullyQualifiedName~Route_flow_does_not_infer_adjacent_wcf_operation_surface_without_selected_join"`:
+  passed locally with 3 tests.
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
   passed locally with 51 tests.
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Legacy_paths_treat_wcf_operation_as_terminal"`:

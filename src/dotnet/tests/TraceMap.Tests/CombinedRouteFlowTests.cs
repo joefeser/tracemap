@@ -1729,6 +1729,56 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_keeps_same_operation_wcf_surfaces_distinct_by_mapping_identity()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Post(System.Int32)";
+        var ratingClient = "Server.ServiceReference.RatingClient.Rate(System.Int32)";
+        var auditClient = "Server.ServiceReference.AuditClient.Rate(System.Int32)";
+        var ratingMappingHash = FactFactory.Hash($"{ratingClient}:Rate", 32);
+        var auditMappingHash = FactFactory.Hash($"{auditClient}:Rate", 32);
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "POST", "/api/orders/{id}/rate", "/api/orders/{}/rate", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, ratingClient, "Controllers/OrdersController.cs", 15),
+            CallFact(server, controller, auditClient, "Controllers/OrdersController.cs", 16),
+            WcfSurfaceFact(server, ratingClient, "Rate", "Service References/Rating/Reference.cs", 24),
+            WcfSurfaceFact(server, auditClient, "Rate", "Service References/Audit/Reference.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "POST /api/orders/{id}/rate",
+            ToSurface: "wcf-operation"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "POST /api/orders/{id}/rate",
+            ToSurface: "wcf-operation"));
+
+        Assert.Equal(2, result.Report.DependencySurfaces.Count);
+        Assert.All(result.Report.DependencySurfaces, surface =>
+        {
+            Assert.Equal("wcf-operation", surface.SurfaceKind);
+            Assert.Equal("Rate", surface.DisplayName);
+            Assert.Equal("combined.route-flow.dependency-surface.v1", surface.Evidence.RuleId);
+            Assert.StartsWith("surface-key-hash:", surface.StableKey, StringComparison.Ordinal);
+        });
+        Assert.Equal(2, result.Report.DependencySurfaces.Select(surface => surface.StableKey).Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(result.Report.DependencySurfaces, surface => surface.SafeMetadata.TryGetValue("shapeHash", out var value) && value == ratingMappingHash);
+        Assert.Contains(result.Report.DependencySurfaces, surface => surface.SafeMetadata.TryGetValue("shapeHash", out var value) && value == auditMappingHash);
+        Assert.Equal(
+            result.Report.DependencySurfaces.Select(surface => surface.StableKey).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            repeated.Report.DependencySurfaces.Select(surface => surface.StableKey).OrderBy(value => value, StringComparer.Ordinal).ToArray());
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "DataSurfaceAttachmentMissing" or "NoRouteFlowEvidence");
+    }
+
+    [Fact]
     public async Task Route_flow_does_not_infer_adjacent_wcf_operation_surface_without_selected_join()
     {
         using var temp = new TempDirectory();
