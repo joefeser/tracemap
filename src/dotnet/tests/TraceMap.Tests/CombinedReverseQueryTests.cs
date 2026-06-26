@@ -530,6 +530,8 @@ public sealed class CombinedReverseQueryTests
         Assert.Equal(RuleIds.LegacyDataModelSurface, gap.RuleId);
         Assert.Equal(CombinedReverseClassifications.NeedsReviewSurfaceEvidence, gap.Classification);
         Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal(server.CommitSha, gap.Metadata["commitSha"]);
+        Assert.Equal("2", gap.Metadata["selectedLegacyDataSurfaceCount"]);
 
         var inferredSurface = await CombinedReverseReporter.WriteAsync(
             new CombinedReverseOptions(
