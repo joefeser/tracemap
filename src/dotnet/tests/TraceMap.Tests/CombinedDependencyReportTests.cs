@@ -386,6 +386,42 @@ public sealed class CombinedDependencyReportTests
     }
 
     [Fact]
+    public async Task Report_counts_one_terminal_legacy_data_surface_for_relationship_mapping_source_fact()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "api.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "report");
+        var manifest = Manifest("api", "tracemap-milestone15");
+
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            LegacyDataRelationshipFact(manifest, "Models/Customer.hbm.xml", 15)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([indexPath], combinedPath, ["api"]));
+
+        var result = await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(combinedPath, outDir));
+
+        var surface = Assert.Single(result.Report.DependencySurfaces, row => row.SurfaceKind == "legacy-data");
+        Assert.Equal("data-model", surface.SurfaceSubtype);
+        Assert.Equal(FactTypes.LegacyDataMappingDeclared, surface.FactType);
+        Assert.Equal(RuleIds.LegacyDataOrmNHibernate, surface.RuleId);
+        Assert.Equal(RuleIds.LegacyDataModelSurface, surface.LegacyDataProjectionRuleId);
+        Assert.Equal("nhibernate-hbm", surface.LegacyDataMetadataFormat);
+        Assert.Equal("relationship", surface.LegacyDataModelKind);
+        Assert.Equal("relationship", surface.LegacyDataDescriptorRole);
+        Assert.Equal("many-to-one", surface.LegacyDataMappingKind);
+        Assert.Equal("relationship", surface.LegacyDataModelRelationshipKind);
+        Assert.Equal("metadata-fact-1", surface.LegacyDataSourceMetadataFactId);
+        Assert.Contains("metadata-fact-1", surface.LegacyDataSupportingFactIds ?? []);
+        Assert.Contains(surface.CombinedFactId, surface.LegacyDataSupportingFactIds ?? []);
+
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "dependency-report.json"));
+        Assert.Contains("\"legacyDataMappingKind\": \"many-to-one\"", json);
+        Assert.Contains("\"legacyDataSupportingFactIds\"", json);
+        Assert.Equal(1, result.Report.DependencySurfaces.Count(row => row.SurfaceKind == "legacy-data"));
+    }
+
+    [Fact]
     public void Legacy_data_projection_flags_duplicate_descriptor_identity()
     {
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
@@ -952,6 +988,36 @@ public sealed class CombinedDependencyReportTests
             {
                 ["classification"] = "AmbiguousLegacyDataModelIdentity",
                 ["metadataFormat"] = "dbml"
+            });
+    }
+
+    private static CodeFact LegacyDataRelationshipFact(ScanManifest manifest, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.LegacyDataMappingDeclared,
+            RuleIds.LegacyDataOrmNHibernate,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            targetSymbol: "Customer.Account",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["associationName"] = "Account",
+                ["coverageLabel"] = "full",
+                ["descriptorRole"] = "relationship",
+                ["displayNameHash"] = "association-display-hash",
+                ["mappingKind"] = "many-to-one",
+                ["metadataFormat"] = "nhibernate-hbm",
+                ["metadataHash"] = "metadata-hash",
+                ["metadataKind"] = "NHibernateHbm",
+                ["modelKind"] = "relationship",
+                ["modelRelationshipKind"] = "relationship",
+                ["relationshipEndpointCoverage"] = "full",
+                ["sourceEndpointName"] = "Customer",
+                ["sourceMetadataFactId"] = "metadata-fact-1",
+                ["stableModelKey"] = "ldm:nhibernate-hbm:customer-account",
+                ["supportingFactIds"] = "metadata-fact-1",
+                ["targetEndpointName"] = "Account"
             });
     }
 
