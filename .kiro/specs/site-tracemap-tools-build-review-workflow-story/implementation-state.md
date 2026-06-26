@@ -165,6 +165,19 @@ vendor endorsement, or AI/LLM impact-analysis claim.
 - Diff scope confirmation: passed on 2026-06-26. `git status --porcelain=v1`
   showed only `.kiro/specs/site-tracemap-tools-build-review-workflow-story/`
   in the worktree.
+- After the Qodo wording patch, `git diff --check` and
+  `./scripts/check-private-paths.sh` passed again on 2026-06-26.
+
+## PR Review Loop
+
+- Qodo PR review found one readiness-lifecycle wording mismatch in
+  `review-packet.md`: the review focus still asked reviewers to verify
+  `Readiness: spec-review` after the packet had advanced to
+  `ready-for-implementation`.
+- Patched by describing the lifecycle explicitly: initial spec review starts at
+  `spec-review`, committed post-review state may advance to
+  `ready-for-implementation`, while `Status: not-started` and
+  `Public claim level: concept` stay consistent.
 
 ## Oddities
 
