@@ -1881,27 +1881,34 @@ function staticVsRuntimePage() {
   return page(`
     <p>Public claim level: concept</p>
     <p>No public conclusion without evidence</p>
+    <p>TraceMap shows static dependency evidence and limitations; runtime tools show observed behavior. Neither replaces the other.</p>
     <p>deterministic static repository evidence</p>
     <p>runtime observability remains the source</p>
     <table>
       <thead>
         <tr>
-          <th scope="col">Static evidence question</th>
+          <th scope="col">Static question</th>
           <th scope="col">TraceMap evidence shape</th>
           <th scope="col">Runtime question</th>
-          <th scope="col">Runtime system owner</th>
+          <th scope="col">Runtime owner or system</th>
+          <th scope="col">Limitation</th>
+          <th scope="col">Handoff</th>
         </tr>
       </thead>
     </table>
-    <section id="static-questions"></section>
-    <section id="runtime-questions"></section>
-    <section id="handoff-workflow"></section>
-    <section id="proof-paths"></section>
-    <section id="limitations"></section>
+    <section id="different-questions"></section>
+    <section id="how-to-use-both"></section>
+    <section id="reading-static-evidence"></section>
+    <section id="runtime-authority"></section>
     <section id="non-claims"></section>
+    <section id="proof-paths-and-limitations"></section>
+    <section id="related-links"></section>
     <p>Before runtime review</p>
     <p>During handoff</p>
     <p>After runtime review</p>
+    <p>Reading a static evidence packet</p>
+    <p>Where runtime tools remain authoritative</p>
+    <p>Proof paths and limitations</p>
     <p>TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, incident root cause, service ownership, production dependency understanding, test sufficiency, or complete product coverage.</p>
     <p>TraceMap does not replace logs, traces, APM, telemetry, incident dashboards, production metrics, tests, service-owner review, incident response, release approval, governance, or human judgment.</p>
     <p>TraceMap does not perform AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis.</p>
