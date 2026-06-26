@@ -570,9 +570,12 @@ Scope:
 
 Scope decisions:
 
-- This slice does not start UI property lineage, site work, scanner extraction
-  changes, reducer behavior, runtime object materialization claims, or Tasks
-  8/9/10 follow-up work.
+- This slice does not start UI property lineage, site work, reducer behavior,
+  runtime object materialization claims, or Tasks 8/9/10 follow-up work.
+- The ACK-authorized patch adds source-symbol identity metadata to syntax
+  object-shape facts so real scan-written `fact_symbols` and
+  `combined_fact_symbols` rows can support selected route-flow object-shape
+  projection.
 - Object-shape evidence remains deterministic static syntax evidence and is
   capped by its evidence tier; it does not prove runtime object creation,
   serializer behavior, branch feasibility, or production execution.
@@ -593,17 +596,32 @@ Validation status:
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_object_shape_projection_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_object_shape_without_selected_join"`:
   passed locally with 2 tests and the existing NU1903 warning for
   `SQLitePCLRaw.lib.e_sqlite3`.
+- Post-ACK patch `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_object_shape_projection_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_object_shape_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning.
+- Post-ACK patch `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CSharpSyntaxExtractorTests`:
+  passed locally with 7 tests and the existing NU1903 warning.
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
   passed locally with 67 tests and the existing NU1903 warning.
 - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
   existing NU1903 warning.
 - `dotnet test src/dotnet/TraceMap.sln`: passed locally with 677 tests and
   the existing NU1903 warning.
+- Post-ACK patch `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 67 tests and the existing NU1903 warning.
+- Post-ACK patch `dotnet build src/dotnet/TraceMap.sln`: passed with 0
+  errors and the existing NU1903 warning.
+- Post-ACK patch `dotnet test src/dotnet/TraceMap.sln`: passed locally with
+  677 tests and the existing NU1903 warning.
 - `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-object-projection-modern-sample`:
+  passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`.
+- Post-ACK patch `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-object-projection-modern-sample-postack`:
   passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
   `report.md`, and `logs/analyzer.log`.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+- Post-ACK patch `./scripts/check-private-paths.sh`: passed.
+- Post-ACK patch `git diff --check`: passed.
 
 ## Summary
 
