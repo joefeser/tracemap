@@ -1,20 +1,18 @@
 # Site TraceMap Tools Legacy Data Surface Story Implementation State
 
-Status: not-started
+Status: implemented
 Readiness: ready-for-implementation
 Public claim level: concept
 
 Last verified: 2026-06-26
-Branch: codex/spec-site-legacy-data-surface-story-20260626002417
+Branch: codex/site-legacy-data-surface-story
 Base: origin/dev
-Scope: spec-only site packet
+Scope: public site concept route implementation
 
 ## Summary
 
-This spec defines a future public-safe `tracemap.tools` page or section about
-legacy data surface evidence. The preferred future route is
-`/legacy-data-surface/`, but implementation may choose a subsection of the
-legacy .NET evidence lane if route review shows that is clearer.
+This implementation adds a public-safe `tracemap.tools` concept page about
+legacy data surface evidence at `/legacy-data-surface/`.
 
 The story is bounded to deterministic static evidence: design-time metadata,
 data model metadata, ORM or mapping clues, SQL/query-facing references, storage
@@ -25,14 +23,20 @@ or ships complete legacy data coverage.
 
 ## Scope Decisions
 
-- Create only spec files under
-  `.kiro/specs/site-tracemap-tools-legacy-data-surface-story/`.
-- Do not edit `site/src/`, scanner code, reducer code, generated site output,
-  or documentation outside this spec folder.
-- Keep `Status: not-started` and `Public claim level: concept`; readiness is
-  `ready-for-implementation` because Medium+ Kiro findings have been patched
-  and reduced-coverage review artifacts are recorded.
-- Keep future implementation language route-ready but concept-bound.
+- Route decision: standalone `/legacy-data-surface/` using
+  `site/src/legacy-data-surface/index.html`. Route review found all requested
+  neighboring routes already exist, and a standalone page avoids overloading
+  `/legacy-dotnet/evidence/`.
+- Navigation decision: no primary nav addition. The route is discoverable
+  through sitemap metadata, discovery metadata, and public-safe cross-links
+  from the new page.
+- Preferred proof path: `/legacy-evidence/`, with related proof context linked
+  through `/proof-paths/`, `/validation/`, `/limitations/`, `/outputs/`,
+  `/docs/`, and `/legacy-validation/`.
+- Scope is public static-site work only. Scanner, reducer, core behavior,
+  generated `site/dist`, and generated `site/output` were not hand-edited.
+- Public claim level remains `concept`; rows use only the allowed evidence
+  statuses `concept`, `future`, and `gap` in the initial public matrix.
 
 ## Public Safety Boundaries
 
@@ -52,29 +56,36 @@ or ships complete legacy data coverage.
   query, sample, customer, repository, or local file-system names unless a
   future public-safe demo explicitly approves those values.
 
-## Validation Plan
+## Validation
 
-Spec-only validation for this branch:
+Implementation validation run on 2026-06-26:
 
-- Run Kiro Opus spec review:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-legacy-data-surface-story --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-- Run Kiro Sonnet spec review:
-  `node scripts/kiro-review.mjs --phase site-tracemap-tools-legacy-data-surface-story --kind spec --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
-- Patch Medium+ actionable findings and rerun one bounded re-review if
-  findings are patched.
-- Run `git diff --check`.
-- Run `./scripts/check-private-paths.sh`.
-- Confirm `git diff --name-only origin/dev...HEAD` is limited to this spec
-  folder before commit.
+- `cd site && npm test` passed.
+- `cd site && npm run validate` passed; it built `dist/` and reported 76 HTML
+  files, 2671 internal references, 75 sitemap URLs, 1 legacy story safety
+  target, 11 legacy .NET evidence-lane rows, 13 legacy modernization
+  evidence-map rows, and 6 legacy data surface rows.
+- `cd site && npm run build` passed.
+- `git diff --check` passed.
+- `./scripts/check-private-paths.sh` passed.
+- Desktop browser sanity at 1440x1100 on
+  `http://localhost:4179/legacy-data-surface/` passed: title rendered,
+  required concept phrases rendered, matrix present, and document scroll width
+  equaled viewport width.
+- Mobile browser sanity at 390x844 passed: no document-level horizontal
+  overflow, required copy rendered, and the wide matrix scrolled inside its
+  table wrapper.
 
-Future implementation validation:
+Focused validation module:
 
-- Run `npm run build` from `site/`.
-- Run relevant site validation from `site/`.
-- Run focused validation for required copy, evidence families, matrix columns,
-  links, metadata, discovery, sitemap when standalone, forbidden claims,
-  private/raw material, and rendered word count.
-- Run desktop and mobile browser sanity checks for layout and overflow.
+- Added `site/scripts/legacy-data-surface.mjs`.
+- Added `site/scripts/legacy-data-surface.test.mjs`.
+- Wired `validateLegacyDataSurface` into `site/scripts/validate.mjs`.
+- Assertion strategy: affirmative overclaim matching is sentence-level and
+  subject-scoped to TraceMap, the page, or the tool. Private/raw disclosure
+  matching remains category/value-based, with narrow exclusions for marked
+  non-claim regions, limitation/negation context, and explicitly labeled
+  `Forbidden example:` cells.
 
 ## Review Status
 
@@ -100,6 +111,8 @@ Actionable review findings were patched:
 All Medium+ actionable findings from the saved reviews have been patched.
 Readiness is advanced to `ready-for-implementation` for this spec-only packet.
 
+Implementation PR loop status: pending PR creation and ACK run.
+
 ## Review Artifacts
 
 - Opus initial review:
@@ -124,12 +137,17 @@ Readiness is advanced to `ready-for-implementation` for this spec-only packet.
 - The existing public site already uses hidden/future/concept language for
   legacy evidence. Future implementation should reuse that vocabulary rather
   than inventing new status labels.
+- Discovery metadata rejects some raw artifact terms outside direct
+  `nonClaims`, so the discovery entry uses broader public-safe wording while
+  the page body names allowed artifact families in proof-path context.
+- Browser sanity used generated static output served locally from `site/dist`;
+  generated Playwright screenshots were removed from the worktree before
+  commit.
 
 ## Follow-Up Items
 
-- During implementation, verify whether `/legacy-data-surface/` should be a
-  standalone route or a section linked from `/legacy-dotnet/evidence/`.
-- During implementation, verify the current discovery schema before choosing
-  `hintCategory` and `preferredProofPath`.
-- During implementation, verify any public-safe rule IDs or rule families before
-  rendering them as page evidence.
+- If future public-safe rule IDs or rule families are promoted, replace
+  concept/future wording only after evidence tiers, coverage labels,
+  limitations, and proof paths are documented.
+- Keep the route out of primary navigation unless a future navigation spec
+  requests promotion.
