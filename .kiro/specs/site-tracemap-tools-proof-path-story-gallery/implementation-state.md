@@ -1,12 +1,17 @@
 # Site TraceMap Tools Proof Path Story Gallery Implementation State
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Public claim level: concept
 
 Last verified: 2026-06-25
 Branch: codex/impl-site-proof-path-story-gallery-20260625220151
 Source of truth: origin/dev
+
+## Status Normalization - 2026-06-26
+
+This PR normalized stale status/readiness headers after verifying the
+implemented `/proof-path-stories/` page exists on `origin/dev`.
 
 ## Summary
 

@@ -1,7 +1,7 @@
 # Site TraceMap Tools Legacy .NET Evidence Lane Tasks
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 These tasks track future implementation of the legacy .NET evidence lane. This

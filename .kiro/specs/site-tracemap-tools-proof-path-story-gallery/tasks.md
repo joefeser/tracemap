@@ -1,7 +1,7 @@
 # Site TraceMap Tools Proof Path Story Gallery Tasks
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Public claim level: concept
 
 These tasks track a future public-site implementation phase for a proof-path
