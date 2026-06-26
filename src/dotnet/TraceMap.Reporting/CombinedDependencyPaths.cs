@@ -638,6 +638,16 @@ public static class CombinedDependencyPathReporter
                 edge.EdgeKind));
         }
 
+        var remotingFacts = read.Facts
+            .Where(IsRemotingFact)
+            .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+        var callFacts = read.Facts
+            .Where(fact => fact.FactType == FactTypes.CallEdge)
+            .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+        var configureCallersByConfig = RemotingConfigureCallersByConfig(remotingFacts, callFacts);
+
         foreach (var surface in surfaces)
         {
             if (!factsById.TryGetValue(surface.CombinedFactId, out var fact))
@@ -650,10 +660,15 @@ public static class CombinedDependencyPathReporter
                 continue;
             }
 
+            if (includeLegacyRoots && IsRemotingSurface(surface.SurfaceKind))
+            {
+                continue;
+            }
+
             var surfaceNode = ToSurfaceNode(surface);
             graph.AddNode(surfaceNode);
             var attached = false;
-            foreach (var symbol in SurfaceAttachmentSymbols(fact))
+            foreach (var symbol in SurfaceAttachmentSymbols(fact, callFacts, configureCallersByConfig))
             {
                 if (IsLegacyDataFact(fact)
                     && !string.Equals(symbol, fact.SourceSymbol?.Trim(), StringComparison.Ordinal)
@@ -2790,11 +2805,19 @@ public static class CombinedDependencyPathReporter
         return sourceIds;
     }
 
-    private static IReadOnlyList<string> SurfaceAttachmentSymbols(CombinedFactRow fact)
+    private static IReadOnlyList<string> SurfaceAttachmentSymbols(
+        CombinedFactRow fact,
+        IReadOnlyList<CombinedFactRow> callFacts,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> configureCallersByConfig)
     {
         if (IsLegacyDataFact(fact))
         {
             return LegacyDataAttachmentSymbols(fact).ToArray();
+        }
+
+        if (IsRemotingFact(fact))
+        {
+            return RemotingAttachmentSymbols(fact, callFacts, configureCallersByConfig).ToArray();
         }
 
         return new[]
