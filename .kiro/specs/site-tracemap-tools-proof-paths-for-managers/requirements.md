@@ -277,8 +277,8 @@ Acceptance criteria:
 - Forbidden unsupported claim wording includes unqualified `proves`,
   `guarantees`, `certifies`, `approves`, `blocks`, `resolves`, `safe`,
   `unsafe`, `root cause`, `production proven`, `complete coverage`, `no
-  impact`, `not impacted`, `release approval`, `release approved`, `release
-  safe`, `operationally safe`, `AI impact analysis`, `LLM analysis`,
+  impact`, absence-of-impact wording, `release approval`, `release approved`,
+  `release safe`, `operationally safe`, `AI impact analysis`, `LLM analysis`,
   `AI-powered`, `embeddings`, `vector database`,
   `prompt-based classification`, `autonomous approval`, `automated
   management decision`, and `replaces telemetry`. Conclusion verbs
