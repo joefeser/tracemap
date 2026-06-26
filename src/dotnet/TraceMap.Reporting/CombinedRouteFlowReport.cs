@@ -4037,7 +4037,6 @@ public static class CombinedRouteFlowReporter
     private static RouteFlowGap FromPathGap(CombinedPathGap gap, string pathReportCoverage)
     {
         var gapKind = NormalizeGapKind(gap.GapKind);
-        var preserveGapSpan = gapKind == "DispatchCandidateFanOut";
         return new RouteFlowGap(
             $"gap:path:{CombinedReportHelpers.Hash(gap.GapId, 24)}",
             gapKind,
@@ -4049,12 +4048,12 @@ public static class CombinedRouteFlowReporter
             gap.NodeId,
             gap.CombinedFactId is null ? [] : [gap.CombinedFactId],
             PathGapLimitations(gapKind, pathReportCoverage),
-            preserveGapSpan ? CombinedReportHelpers.SafePath(gap.FilePath) : null,
-            preserveGapSpan ? gap.StartLine : null,
-            preserveGapSpan ? gap.EndLine : null,
-            preserveGapSpan ? SafeCommitSha(gap.CommitSha) : null,
-            preserveGapSpan ? ExtractorName(gap.RuleId) : null,
-            preserveGapSpan ? SafeSelector(gap.ExtractorVersion) ?? "unknown" : null);
+            CombinedReportHelpers.SafePath(gap.FilePath) ?? "unknown",
+            gap.StartLine,
+            gap.EndLine,
+            SafeCommitSha(gap.CommitSha),
+            ExtractorName(gap.RuleId),
+            SafeSelector(gap.ExtractorVersion) ?? "unknown");
     }
 
     private static IReadOnlyList<string> PathGapLimitations(string gapKind, string pathReportCoverage)

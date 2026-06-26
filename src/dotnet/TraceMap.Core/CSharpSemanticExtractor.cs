@@ -2162,6 +2162,18 @@ public static class CSharpSemanticExtractor
                         _ => null
                     };
                     var containingType = symbol.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty;
+                    var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["evidenceKind"] = "SerializerContractMember",
+                        ["attributeName"] = attributeName,
+                        ["contractName"] = contractName,
+                        ["memberName"] = symbol.Name,
+                        ["memberSymbol"] = symbol.ToDisplayString(SymbolFormat),
+                        ["memberType"] = memberType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                        ["containingType"] = containingType
+                    };
+                    AddSymbolProperties(properties, "source", symbol.ContainingType);
+                    AddSymbolProperties(properties, "target", symbol);
                     facts.Add(CreateSemanticFact(
                         FactTypes.SerializerContractMember,
                         RuleIds.CSharpSemanticRuntimeEvidence,
@@ -2172,24 +2184,7 @@ public static class CSharpSemanticExtractor
                         targetSymbol: symbol.ToDisplayString(SymbolFormat),
                         contractElement: contractName,
                         properties: AddAssemblyProperties(
-                            new SortedDictionary<string, string>(StringComparer.Ordinal)
-                            {
-                                ["evidenceKind"] = "SerializerContractMember",
-                                ["attributeName"] = attributeName,
-                                ["contractName"] = contractName,
-                                ["memberName"] = symbol.Name,
-                                ["memberSymbol"] = symbol.ToDisplayString(SymbolFormat),
-                                ["memberType"] = memberType?.ToDisplayString(SymbolFormat) ?? string.Empty,
-                                ["containingType"] = containingType,
-                                ["sourceSymbolId"] = containingType,
-                                ["sourceSymbolDisplayName"] = containingType,
-                                ["sourceSymbolKind"] = "Type",
-                                ["sourceSymbolLanguage"] = "csharp",
-                                ["targetSymbolId"] = symbol.ToDisplayString(SymbolFormat),
-                                ["targetSymbolDisplayName"] = symbol.ToDisplayString(SymbolFormat),
-                                ["targetSymbolKind"] = symbol is IPropertySymbol ? "Property" : "Field",
-                                ["targetSymbolLanguage"] = "csharp"
-                            },
+                            properties,
                             model.GetEnclosingSymbol(attribute.SpanStart)?.ContainingAssembly,
                             symbol.ContainingAssembly)));
                 }
