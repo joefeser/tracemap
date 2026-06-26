@@ -10,7 +10,8 @@ Status: task-7-http-client-attachment-precision-ready-for-review
   - [x] Add `tasks.md`.
   - [x] Add `implementation-state.md`.
   - [x] Add `review-prompts.md`.
-  - [x] Keep the original spec-delivery PR limited to this spec folder.
+  - [x] Keep the original spec-delivery PR changed files within this spec
+        folder.
   - [x] Keep examples synthetic/public-safe and avoid private paths, private
         labels, raw SQL/config values, source snippets, secrets, raw remotes,
         and private route strings.
@@ -25,7 +26,7 @@ Status: task-7-http-client-attachment-precision-ready-for-review
   - [x] Record review commands, artifacts, coverage, findings, dispositions,
         and final readiness in `implementation-state.md`.
 
-- [x] 3. Validate the original spec-only change.
+- [x] 3. Validate the original spec change.
   - [x] Run `git diff --check`.
   - [x] Run `./scripts/check-private-paths.sh`.
   - [x] Run any obvious spec/docs validation command if present, or record that
@@ -36,7 +37,7 @@ Status: task-7-http-client-attachment-precision-ready-for-review
 
 ## Next Implementation PR Tasks
 
-Current state: the spec-only PR merged as PR #311 (`43426b7c`), duplicate
+Current state: the initial spec PR merged as PR #311 (`43426b7c`), duplicate
 endpoint/root selector ambiguity merged as PR #318 (`1e9c5660`), and
 source-local service-call cycle gaps merged as PR #320 (`565d7b64`).
 Branch `codex/route-flow-task5-matrix` audited `origin/dev` at
