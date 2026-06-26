@@ -2766,6 +2766,7 @@ public static class CombinedRouteFlowReporter
         var selectedPairKeys = pairCandidates
             .Select(candidate => SymbolPairKey(candidate.SourceIndexId, candidate.CallerSymbol, candidate.CalleeSymbol))
             .ToHashSet(StringComparer.Ordinal);
+        var sourceFilter = AddSourceFilterParameters(command, sourceIndexIds);
         command.CommandText = """
             select flows.combined_fact_id,
                    flows.source_index_id,
@@ -2780,6 +2781,9 @@ public static class CombinedRouteFlowReporter
                    sources.scanner_version
             from combined_argument_flows flows
             join index_sources sources on sources.source_index_id = flows.source_index_id
+            where flows.source_index_id in (
+            """ + sourceFilter + """
+            )
             order by flows.source_index_id, flows.caller_symbol, flows.callee_symbol, flows.parameter_ordinal, flows.combined_fact_id
             """;
         var values = new List<ProjectionGapEvidence>();
@@ -4715,18 +4719,40 @@ public static class CombinedRouteFlowReporter
 
     private static bool ContainsSqlVerb(string value)
     {
-        var trimmed = value.TrimStart();
-        return StartsWithWord(trimmed, "SELECT")
-            || StartsWithWord(trimmed, "INSERT")
-            || StartsWithWord(trimmed, "UPDATE")
-            || StartsWithWord(trimmed, "DELETE");
+        return ContainsWord(value, "SELECT")
+            || ContainsWord(value, "INSERT")
+            || ContainsWord(value, "UPDATE")
+            || ContainsWord(value, "DELETE");
     }
 
-    private static bool StartsWithWord(string value, string word)
+    private static bool ContainsWord(string value, string word)
     {
-        return value.Length > word.Length
-            && value.StartsWith(word, StringComparison.OrdinalIgnoreCase)
-            && char.IsWhiteSpace(value[word.Length]);
+        var index = 0;
+        while (index < value.Length)
+        {
+            var found = value.IndexOf(word, index, StringComparison.OrdinalIgnoreCase);
+            if (found < 0)
+            {
+                return false;
+            }
+
+            var before = found == 0 ? '\0' : value[found - 1];
+            var afterIndex = found + word.Length;
+            var after = afterIndex >= value.Length ? '\0' : value[afterIndex];
+            if (!IsIdentifierCharacter(before) && !IsIdentifierCharacter(after))
+            {
+                return true;
+            }
+
+            index = found + word.Length;
+        }
+
+        return false;
+    }
+
+    private static bool IsIdentifierCharacter(char value)
+    {
+        return char.IsLetterOrDigit(value) || value == '_';
     }
 
     private static bool HasPrivateMarker(string value)
