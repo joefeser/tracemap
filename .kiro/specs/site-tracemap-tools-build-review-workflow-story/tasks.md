@@ -1,7 +1,7 @@
 # Site TraceMap Tools Build Review Workflow Story Tasks
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Public claim level: concept
 
 These tasks are checked only after the corresponding spec review,
