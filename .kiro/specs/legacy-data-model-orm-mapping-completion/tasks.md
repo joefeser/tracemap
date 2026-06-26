@@ -32,10 +32,13 @@ implementation has not started in this branch.
         `legacy.data.generated-link.v1` remains sufficient.
   - [ ] Add or amend rule catalog entries before emitting any new relationship,
         unsupported descriptor, selector, projection, or exporter gap.
-  - [x] Confirm or add `DuplicateLegacyDataModelSurface`,
+  - [ ] Confirm or add `DuplicateLegacyDataModelSurface`,
         `AmbiguousLegacyDataModelSelector`, and
         `UnknownLegacyDataModelDescriptorRole` catalog coverage before emitting
         them from projection/report compatibility code.
+        Slice 1 added regression assertions for existing rule-catalog
+        vocabulary ownership text; exact new gap entries remain open until
+        product code emits them.
   - [ ] Document limitations for every changed rule: static evidence only,
         reduced coverage, parser safety, redaction, unsupported shapes, and no
         runtime ORM/database proof.
@@ -55,9 +58,11 @@ implementation has not started in this branch.
         duplicate identities.
   - [ ] Add determinism, duplicate identity, safe-name, hash-only, and SQLite
         privacy tests.
-  - [x] Add a cross-format identity collision test proving identical display
+  - [ ] Add a cross-format identity collision test proving identical display
         names in different metadata formats or source artifact types keep
         separate stable keys and downgrade ambiguous selectors.
+        Slice 1 proves cross-format descriptor identity separation. Ambiguous
+        selector downgrade coverage remains open.
 
 - [ ] 3. Complete relationship extraction and gap behavior. Requirements: 3, 8.
   - [ ] Add or harden deterministic DBML association relationship evidence and
