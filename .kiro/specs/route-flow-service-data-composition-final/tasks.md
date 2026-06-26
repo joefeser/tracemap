@@ -410,20 +410,43 @@ current `dev` code or merged PR records prove the behavior.
         classification, coverage, safe scope, supporting IDs where available,
         file span where available, and limitations.
 
-- [ ] 9. Preserve deterministic JSON/Markdown compatibility. Requirements: 6.
+- [x] 9. Preserve deterministic JSON/Markdown compatibility. Requirements: 6.
       Suggested boundary: PR 1 for changed fields; otherwise PR 4.
-  - [ ] Preserve `reportType = "route-flow"` and JSON `version = "1.0"`.
-  - [ ] Add only backward-compatible fields or collections.
-  - [ ] Use explicit `null`, empty arrays, and closed-set placeholders for
+      Status: complete. Branch
+      `codex/route-flow-json-markdown-compat-20260626` audited `origin/dev`
+      at `21536f57` and closed the compatibility slice by preserving the
+      existing route-flow command/report/version contract, adding focused
+      top-level JSON field and Markdown section-order regression coverage,
+      preserving byte-stable repeated outputs, and making nullable dependency
+      surface subtype uncertainty explicit as JSON `null` instead of omission.
+  - [x] Preserve `reportType = "route-flow"` and JSON `version = "1.0"`.
+  - [x] Add only backward-compatible fields or collections.
+        No new collections or renamed fields were added; `surfaceSubtype`
+        remains an existing additive field and now serializes explicit `null`
+        when unavailable.
+  - [x] Use explicit `null`, empty arrays, and closed-set placeholders for
         unavailable values.
-  - [ ] Sort rows, context groups, metadata maps, and gaps deterministically.
-  - [ ] Add byte-stable JSON and Markdown-ordering tests.
-  - [ ] Add `--exit-code` regression tests for review/unknown/no-evidence
+  - [x] Sort rows, context groups, metadata maps, and gaps deterministically.
+        Existing route-flow deterministic ordering tests remain authoritative;
+        this slice added a compatibility-level repeated JSON/Markdown
+        byte-stability assertion over the full report output.
+  - [x] Add byte-stable JSON and Markdown-ordering tests.
+        Covered by
+        `Route_flow_json_and_markdown_preserve_compatibility_contract`.
+  - [x] Add `--exit-code` regression tests for review/unknown/no-evidence
         classifications and error-precedence behavior if this slice touches
         summary or classification rollup.
-  - [ ] Add tests for any emitted `classificationCap` field and context-group
+        Existing coverage remains
+        `Route_flow_cli_exit_code_follows_summary_mapping` and
+        `Route_flow_cli_validation_error_takes_precedence_over_exit_code_mapping`;
+        this slice did not touch summary or classification rollup.
+  - [x] Add tests for any emitted `classificationCap` field and context-group
         weakest classification/tier/coverage rollup.
-  - [ ] Add rule-catalog resolution tests for every emitted route-flow rule ID.
+        No `classificationCap` field is emitted by current route-flow JSON.
+        Existing context-group rollup assertions remain in the focused
+        route-flow attachment tests.
+  - [x] Add rule-catalog resolution tests for every emitted route-flow rule ID.
+        Covered by `Route_flow_emitted_rule_ids_resolve_to_rule_catalog`.
 
 - [ ] 10. Enforce safety and public-safe validation. Requirements: 7, 8.
       Suggested boundary: PR 3 for attached rows; otherwise PR 4.

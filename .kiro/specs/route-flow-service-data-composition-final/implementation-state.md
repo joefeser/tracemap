@@ -1,9 +1,9 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: task-8-coverage-classification-gap-downgrade-ready-for-review
-Readiness: task-8-coverage-classification-gap-downgrade-ready-for-pr-review-loop
+Status: task-9-json-markdown-compatibility-ready-for-review
+Readiness: task-9-json-markdown-compatibility-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
-Implementation branch: `codex/route-flow-task8-coverage`
+Implementation branch: `codex/route-flow-json-markdown-compat-20260626`
 Target base: `dev`
 Primary issues: `#159`, `#179`, `#201`
 Public claim level: static evidence only
@@ -2319,3 +2319,70 @@ Follow-ups:
   exit-code matrix, and route-flow rule-catalog resolution coverage not
   otherwise touched by this additive field.
 - Task 10 remains unchecked for broader redaction/public-safe negative tests.
+
+## Task 9 Deterministic JSON/Markdown Compatibility Slice
+
+Branch: `codex/route-flow-json-markdown-compat-20260626`
+Audited base: `origin/dev` at `21536f57`.
+Selected slice: deterministic route-flow JSON and Markdown compatibility for
+Requirement 6.
+
+Scope:
+
+- Keep this PR limited to route-flow reporting, focused route-flow tests, and
+  this spec's task/state tracking.
+- Preserve the existing `tracemap route-flow` command, `reportType =
+  "route-flow"`, JSON `version = "1.0"`, output file names, and route-flow
+  classification vocabulary.
+- Add focused compatibility regression coverage proving the required top-level
+  JSON fields are present, collection fields serialize as arrays, dependency
+  surface subtype uncertainty is explicit as `null`, route-flow gap uncertainty
+  fields remain present, Markdown section order is stable, and repeated
+  identical inputs/options produce byte-identical JSON and Markdown.
+- Serialize the existing additive `surfaceSubtype` field as explicit `null`
+  when unavailable instead of omitting it.
+
+Scope decisions:
+
+- No new route-flow collection, command, report type, JSON version, rule
+  namespace, traversal behavior, summary/classification rollup, exit-code
+  behavior, scanner extraction, reducer behavior, site work, or UI property
+  lineage work was added.
+- The current route-flow JSON record order is preserved for compatibility.
+  `contextGroups` remains an additive field serialized in its existing record
+  position after `limitations`; the Task 9 test asserts required field
+  presence and byte-stability rather than inventing a new field-order
+  migration.
+- No `classificationCap` field is emitted by current route-flow JSON, so this
+  slice did not add classification-cap-specific assertions beyond existing
+  route-flow classification and context-group tests.
+
+Oddities:
+
+- Repeated-output byte stability must use identical output paths because the
+  report stores a safe hash of the output path in the query metadata; different
+  output directories correctly produce different redacted hashes.
+- `surfaceSubtype` was the remaining route-flow row field with a
+  `WhenWritingNull` omission override; removing that override aligns dependency
+  surfaces with the explicit-null behavior already used by route-flow gaps and
+  evidence rows.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 68 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 678 tests and the
+  existing NU1903 warning.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task9-compat-modern-sample`:
+  passed with 27 facts at `Level1SemanticAnalysis`; required outputs
+  `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
+  `logs/analyzer.log` were present.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Follow-ups:
+
+- Task 10 remains unchecked for broader redaction/public-safe validation.
