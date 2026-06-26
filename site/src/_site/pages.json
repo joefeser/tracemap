@@ -235,6 +235,11 @@
     "priority": "0.8"
   },
   {
+    "path": "/proof-paths/for-managers/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/proof-path-stories/",
     "changefreq": "monthly",
     "priority": "0.7"

@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level manager guide for reading TraceMap proof paths as deterministic static evidence packets with coverage labels, limitations, and next-owner routing."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Proof Paths for Managers | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/proof-paths/for-managers/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Proof Paths for Managers">
+    <meta
+      property="og:description"
+      content="A concept-level decision-routing guide for preserving proof paths, evidence tiers, coverage labels, limitations, and next-owner handoffs."
+    >
+    <meta property="og:url" content="https://tracemap.tools/proof-paths/for-managers/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Proof paths for managers</p>
+        <h1>Turn a proof path into the right review question.</h1>
+        <p class="hero-subhead">
+          This page translates TraceMap proof paths into manager and reviewer
+          decision terms: what to inspect, what deterministic static evidence
+          can support, where the coverage label limits the sentence, and which
+          owner category should answer the next question.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This surface coordinates review questions; it does not automate
+          management, product, runtime, release, or service-owner decisions.
+        </p>
+        <nav class="hero-actions" aria-label="Proof paths for managers links">
+          <a class="button primary" href="#manager-question-matrix">Open matrix</a>
+          <a class="button secondary" href="/proof-paths/">Proof path overview</a>
+          <a class="button secondary" href="/proof-paths/faq/">Proof-path FAQ</a>
+          <a class="button secondary" href="/manager-faq/">Manager FAQ</a>
+          <a class="button secondary" href="/manager-packet/">Manager packet</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="placement">
+        <div>
+          <p class="section-kicker">Placement</p>
+          <h2>This is the manager lens inside the proof-path family.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong><a href="/manager-brief/">/manager-brief/</a></strong><span>The brief frames the coordination problem; this page turns proof paths into bounded decision questions and owner routing.</span></div>
+          <div><strong><a href="/manager-faq/">/manager-faq/</a></strong><span>The FAQ answers repeated stakeholder questions; this page provides a reusable matrix and anatomy checklist.</span></div>
+          <div><strong><a href="/manager-packet/">/manager-packet/</a></strong><span>The packet summarizes the TraceMap conversation; this page explains how to read and route a proof path before repeating a claim.</span></div>
+          <div><strong><a href="/packets/">/packets/</a> and <a href="/packets/assembly/">/packets/assembly/</a></strong><span>Packet pages describe ingredients and handoff assembly; this page is manager-facing proof interpretation.</span></div>
+          <div><strong><a href="/proof-paths/">/proof-paths/</a></strong><span>The overview remains the canonical proof-path index; this page adds the manager and reviewer decision lens.</span></div>
+          <div><strong><a href="/proof-paths/faq/">/proof-paths/faq/</a> and <a href="/proof-paths/tour/">/proof-paths/tour/</a></strong><span>The FAQ handles general proof-path questions and the tour gives a guided reading flow; this page is a reference matrix.</span></div>
+          <div><strong><a href="/proof-source-catalog/">/proof-source-catalog/</a></strong><span>The catalog inventories public-safe source material; this page routes publication and owner questions around that material.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="manager-question-matrix">
+        <div class="section-header">
+          <p class="section-kicker">Manager question matrix</p>
+          <h2>Each row keeps evidence, limitation, coverage, stop condition, and next owner attached.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-proof-manager-matrix>
+            <caption>All rows are concept-level guidance unless a linked public-safe proof surface carries its own separate claim level.</caption>
+            <thead>
+              <tr>
+                <th>Manager or reviewer question</th>
+                <th>Evidence packet to inspect</th>
+                <th>What static evidence can support</th>
+                <th>What it does not prove</th>
+                <th>Coverage-label consequence</th>
+                <th>Stop condition</th>
+                <th>Next owner</th>
+                <th>Supporting public route</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="question-code-path-change" data-proof-manager-question="What changed in the code path we are reviewing?">
+                <td>What changed in the code path we are reviewing?</td>
+                <td>Review packet or proof path with rule ID or rule family, evidence tier, coverage label, commit context, file span, limitation, and validation evidence.</td>
+                <td>A static reference, dependency, route, contract, or artifact relationship when the cited rule and tier support it.</td>
+                <td>Runtime behavior, production traffic, user impact, release safety, or product correctness.</td>
+                <td>Preserve exact coverage label; downgrade if syntax-only, reduced, unknown, or private-only.</td>
+                <td>Stop when the answer would say what actually ran, served traffic, or affected users.</td>
+                <td>Reviewer, service owner, code owner, or architect.</td>
+                <td><a href="/proof-paths/">/proof-paths/</a> or <a href="/packets/assembly/">/packets/assembly/</a></td>
+              </tr>
+              <tr id="question-repeat-claim" data-proof-manager-question="What evidence supports repeating this claim?">
+                <td>What evidence supports repeating this claim?</td>
+                <td>Claim review packet with public claim level, proof path, rule ID or rule family, evidence tier, coverage label, limitation, non-claim, and source context.</td>
+                <td>Whether the public sentence has visible static evidence and the fields needed for review.</td>
+                <td>Approval, safety, absence of risk, absence of impact, or complete coverage.</td>
+                <td>If coverage is reduced or unknown, repeat only a downgraded or gap-labeled claim.</td>
+                <td>Stop when required proof fields are missing, private-only, or inconsistent with the wording.</td>
+                <td>Reviewer or TraceMap owner.</td>
+                <td><a href="/review-claim-checklist/">/review-claim-checklist/</a></td>
+              </tr>
+              <tr id="question-coverage-meaning" data-proof-manager-question="What does reduced or partial coverage mean for this decision?">
+                <td>What does reduced or partial coverage mean for this decision?</td>
+                <td>Evidence packet with coverage label, analysis gaps, build or scan status, evidence tier, and limitation.</td>
+                <td>The analysis boundary and what was or was not available to the static scanner.</td>
+                <td>That the repository is clean, fully analyzed, affected, unaffected, or ready for a reducer-backed impact conclusion.</td>
+                <td>Keep the reduced or partial label visible and route unknowns instead of smoothing them into a clean conclusion.</td>
+                <td>Stop when someone tries to upgrade partial evidence into full certainty.</td>
+                <td>TraceMap owner, reviewer, service owner, or build/tooling owner.</td>
+                <td><a href="/limitations/">/limitations/</a></td>
+              </tr>
+              <tr id="question-next-runtime-product-owner" data-proof-manager-question="Who should answer runtime or product behavior next?">
+                <td>Who should answer runtime or product behavior next?</td>
+                <td>Proof path plus limitation and owner routing row.</td>
+                <td>The static evidence boundary and the owner category needed for the next question.</td>
+                <td>Runtime truth, product tradeoff, customer impact, priority, or ownership assignment.</td>
+                <td>Coverage labels decide whether the static answer can be repeated or must become an owner follow-up.</td>
+                <td>Stop when the question asks what users saw, what happened in production, or what product decision to make.</td>
+                <td>Runtime observability owner, product owner, manager, or service owner.</td>
+                <td><a href="/static-vs-runtime/">/static-vs-runtime/</a> and <a href="/questions/">/questions/</a></td>
+              </tr>
+              <tr id="question-release-decision" data-proof-manager-question="Can this evidence approve, block, or certify a release?">
+                <td>Can this evidence approve, block, or certify a release?</td>
+                <td>Release-review input packet with claim level, proof path, validation status, tests, limitations, and review notes.</td>
+                <td>Static review inputs and questions to ask before a release decision.</td>
+                <td>Release approval, release blocking, release certification, release safety, or operational safety.</td>
+                <td>Reduced, unknown, or private-only evidence cannot be promoted to approval language.</td>
+                <td>Stop before wording would approve, block, certify, or declare a release safe.</td>
+                <td>Release owner, test owner, reviewer, and service owner.</td>
+                <td><a href="/review-claim-checklist/">/review-claim-checklist/</a></td>
+              </tr>
+              <tr id="question-runtime-incident-performance" data-proof-manager-question="Can this evidence explain production traffic, endpoint performance, or outage cause?">
+                <td>Can this evidence explain production traffic, endpoint performance, or outage cause?</td>
+                <td>Static proof path plus static-vs-runtime boundary.</td>
+                <td>Static code, config, route, dependency, or contract evidence when a rule supports it.</td>
+                <td>Live requests, latency, throughput, errors, traces, logs, incident timeline, or outage cause.</td>
+                <td>Coverage labels remain static-analysis labels, not observability labels.</td>
+                <td>Stop when the answer needs telemetry, dashboards, logs, traces, incident command, or postmortem evidence.</td>
+                <td>Runtime observability owner, service owner, or incident owner.</td>
+                <td><a href="/static-vs-runtime/">/static-vs-runtime/</a></td>
+              </tr>
+              <tr id="question-public-sharing" data-proof-manager-question="Can this evidence be shared publicly?">
+                <td>Can this evidence be shared publicly?</td>
+                <td>Public-safe packet summary, proof-source catalog entry, or sanitized demo surface.</td>
+                <td>Whether a public-safe route or summary can carry the claim without raw material.</td>
+                <td>That raw local artifacts, private paths, snippets, SQL, config, secrets, remotes, logs, or private names are safe to publish.</td>
+                <td>Private-only evidence becomes a limitation, not public proof.</td>
+                <td>Stop when supporting material is raw, private, local-only, hidden, or credential-like.</td>
+                <td>Security owner, repository owner, or TraceMap site owner.</td>
+                <td><a href="/proof-source-catalog/">/proof-source-catalog/</a></td>
+              </tr>
+              <tr id="question-missing-evidence" data-proof-manager-question="What should happen when evidence is missing, private-only, syntax-only, or unknown?">
+                <td>What should happen when evidence is missing, private-only, syntax-only, or unknown?</td>
+                <td>Gap-labeled packet with missing field, evidence tier, coverage label, limitation, and owner follow-up.</td>
+                <td>The existence and location of the analysis gap.</td>
+                <td>Absence of impact, absence of dependency, correctness, safety, or complete coverage.</td>
+                <td>Gap and unknown labels must travel with the claim or block public repetition.</td>
+                <td>Stop, downgrade, keep internal, or hand off rather than filling the gap with confidence.</td>
+                <td>Reviewer, service owner, TraceMap owner, or manager.</td>
+                <td><a href="/limitations/">/limitations/</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section" id="proof-path-anatomy">
+        <div>
+          <p class="section-kicker">Proof path anatomy</p>
+          <h2>Preserve these fields before repeating a claim.</h2>
+          <p>
+            Dropping any required field weakens or blocks the public conclusion.
+            The packet can still be useful, but the missing field becomes a
+            limitation, gap, internal-only note, or owner follow-up.
+          </p>
+        </div>
+        <div class="output-list">
+          <div data-proof-manager-anatomy="claim/question"><code>claim/question</code><span>Claim or question being reviewed, with the sentence kept narrow enough for the cited proof path.</span></div>
+          <div data-proof-manager-anatomy="claim level"><code>claim level</code><span>Public claim level, including this page's <code>concept</code> level and any stricter linked evidence label.</span></div>
+          <div data-proof-manager-anatomy="proof path/packet link"><code>proof path/packet link</code><span>Public-safe route or packet link that another reviewer can inspect.</span></div>
+          <div data-proof-manager-anatomy="rule ID/family"><code>rule ID/family</code><span>Rule ID or rule family, with the documented limitation attached.</span></div>
+          <div data-proof-manager-anatomy="tier"><code>tier</code><span><code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code>.</span></div>
+          <div data-proof-manager-anatomy="coverage label"><code>coverage label</code><span>Coverage label copied from the cited evidence: reduced, partial, unknown, unavailable, syntax-only, private-only, future-only, or gap-labeled when those boundaries apply.</span></div>
+          <div data-proof-manager-anatomy="commit/source context"><code>commit/source context</code><span>Commit or public-safe source context when available, or a visible limitation when not available.</span></div>
+          <div data-proof-manager-anatomy="extractor/schema family"><code>extractor/schema family</code><span>Extractor version or schema family when available, so repeatability can be reviewed.</span></div>
+          <div data-proof-manager-anatomy="public-safe file path/span"><code>public-safe file path/span</code><span>Public-safe file path and line span when shareable, or an explicit limitation when not public-safe.</span></div>
+          <div data-proof-manager-anatomy="snippet hash or summary"><code>snippet hash or summary</code><span>Snippet hash or public-safe summary when available; raw snippets stay out of public copy by default.</span></div>
+          <div data-proof-manager-anatomy="artifact family"><code>artifact family</code><span><code>scan-manifest.json</code>, <code>facts.ndjson</code>, <code>index.sqlite</code>, <code>report.md</code>, and <code>logs/analyzer.log</code> as local output categories unless a sanitized public summary exists.</span></div>
+          <div data-proof-manager-anatomy="limitation"><code>limitation</code><span>The documented limit that travels with the claim.</span></div>
+          <div data-proof-manager-anatomy="non-claim"><code>non-claim</code><span>The explicit statement of what the evidence does not prove.</span></div>
+          <div data-proof-manager-anatomy="validation evidence"><code>validation evidence</code><span>Validation evidence that a reviewer can inspect without raw command output.</span></div>
+          <div data-proof-manager-anatomy="unresolved gaps"><code>unresolved gaps</code><span>Unknown, missing, syntax-only, private-only, or future-only fields that remain attached.</span></div>
+          <div data-proof-manager-anatomy="next owner"><code>next owner</code><span>Public role category for the next question after static evidence reaches its boundary.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="limits-and-non-claims" data-proof-manager-boundary="non-claims">
+        <div>
+          <p class="section-kicker">Limits and non-claims</p>
+          <h2>Static evidence supports review conversations, not runtime or release conclusions.</h2>
+        </div>
+        <ul>
+          <li>A proof path can support a deterministic static evidence conversation, not a runtime conclusion.</li>
+          <li>Coverage labels such as reduced, partial, unknown, unavailable, syntax-only, private-only, future-only, and gap-labeled must remain visible with the claim.</li>
+          <li>Missing evidence is a gap, downgrade, internal-only note, or owner follow-up, not proof of no impact, no dependency, no risk, safety, or correctness.</li>
+          <li>A manager may use the packet to coordinate review questions, but the packet does not make product, release, runtime, security, staffing, priority, or approval decisions.</li>
+          <li>Static evidence does not prove production traffic, runtime behavior, endpoint performance, outage cause, release safety, operational safety, complete coverage, or customer impact.</li>
+          <li>TraceMap core scanner and reducer claims are deterministic and evidence-backed, not AI/LLM impact analysis, embeddings, vector databases, prompt classification, or confidence scoring.</li>
+          <li>TraceMap can point to owner categories, but does not assign accountability, organizational authority, incident command, release authority, staffing, priority, or product ownership.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" id="owner-routing">
+        <div>
+          <p class="section-kicker">Next-owner routing</p>
+          <h2>When the static proof path stops, route the next question by evidence type.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Runtime evidence</strong><span>Runtime behavior, telemetry, live errors, logs, traces, metrics, production traffic, and endpoint performance go to a runtime observability owner or service owner.</span></div>
+          <div><strong>Product judgment</strong><span>Product behavior, user workflow, customer impact, priority, and product tradeoff questions go to a product owner, manager, or service owner.</span></div>
+          <div><strong>Release process</strong><span>Release approval, release blocking, release certification, deployment timing, and release safety questions go to release owners, test owners, reviewers, and the release process.</span></div>
+          <div><strong>Test evidence</strong><span>Regression coverage, reproduction, test evidence, and verification strategy go to test owners and reviewers.</span></div>
+          <div><strong>Source interpretation</strong><span>Source meaning, code ownership, service architecture, and service follow-up go to service owners, code owners, reviewers, or architects.</span></div>
+          <div><strong>Publication policy</strong><span>Raw artifact sharing, secrets, private paths, repository remotes, and public-publication questions go to security owners, repository owners, or TraceMap site owners.</span></div>
+          <div><strong>TraceMap limits</strong><span>Scanner and reducer limitations, rule catalog gaps, coverage labels, extractor versions, and public site claim wording go to TraceMap owners or reviewers.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="illustrative-pattern">
+        <div>
+          <p class="section-kicker">Illustrative pattern</p>
+          <h2>Use synthetic rows to practice the shape without inventing findings.</h2>
+          <p>This example is illustrative only, not a real TraceMap finding.</p>
+        </div>
+        <div class="detail-list">
+          <div><strong>Claim/question</strong><span>Can this static dependency note be repeated in a manager review? Illustrative only.</span></div>
+          <div><strong>Rule and tier</strong><span><code>example.manager.proof-path.v1</code> with <code>Tier2Structural</code>; <code>Tier4Unknown</code> would require a gap label.</span></div>
+          <div><strong>Coverage and context</strong><span><code>partial</code> coverage, illustrative commit label <code>abc1234</code>, and an example schema family <code>proof-path-example-v0</code>.</span></div>
+          <div><strong>Public-safe support</strong><span><a href="/proof-paths/">Proof path overview</a>, <a href="/packets/assembly/">packet assembly</a>, and <a href="/review-claim-checklist/">claim checklist</a>.</span></div>
+          <div><strong>Limitation and next owner</strong><span>Static evidence can orient a reviewer; runtime or product questions go to the runtime observability owner, product owner, or service owner.</span></div>
+        </div>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Adjacent public-safe routes</p>
+          <h2>Use the neighboring route that matches the reader's next question.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/manager-brief/">Manager problem brief</a>
+          <a href="/manager-faq/">Manager FAQ</a>
+          <a href="/manager-packet/">Manager packet</a>
+          <a href="/proof-paths/">Proof path overview</a>
+          <a href="/proof-paths/faq/">Proof-path FAQ</a>
+          <a href="/proof-paths/tour/">Guided proof-path tour</a>
+          <a href="/packets/">Evidence packet guide</a>
+          <a href="/packets/assembly/">Packet assembly checklist</a>
+          <a href="/proof-source-catalog/">Proof source catalog</a>
+          <a href="/questions/">Question index</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/static-vs-runtime/">Static versus runtime</a>
+          <a href="/review-claim-checklist/">Review claim checklist</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Proof paths for managers connects the
+        <a href="/proof-paths/">proof-path overview</a>,
+        <a href="/proof-paths/faq/">proof-path FAQ</a>,
+        <a href="/manager-packet/">manager packet</a>,
+        and
+        <a href="/review-claim-checklist/">review claim checklist</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

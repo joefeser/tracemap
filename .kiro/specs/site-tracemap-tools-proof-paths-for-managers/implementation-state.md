@@ -1,9 +1,9 @@
 # Implementation State
 
-Status: not-started
+Status: implemented-pending-pr-loop
 Readiness: ready-for-implementation
 Last verified: 2026-06-26
-Branch: codex/spec-site-proof-paths-for-managers-20260626002459
+Branch: codex/impl-site-proof-paths-for-managers-20260626014141
 Worktree: isolated temporary worktree; local absolute path omitted from
 tracked spec
 Base: origin/dev
@@ -12,36 +12,81 @@ Public claim level: concept
 
 ## Summary
 
-This spec-only packet defines a future manager-facing `tracemap.tools` page or
-section about proof paths in decision terms. The future surface should help a
-manager or reviewer ask a question, inspect a static evidence packet, preserve
-coverage labels and limitations, understand what the packet does not prove,
-and route the next runtime, product, release, ownership, or security judgment
-to the correct owner category.
+This implementation adds a concept-level manager-facing `tracemap.tools`
+route that explains proof paths in decision terms. The surface helps a
+manager or reviewer ask a question, inspect a static evidence packet,
+preserve coverage labels and limitations, understand what the packet does not
+prove, and route the next runtime, product, release, ownership, or security
+judgment to the correct public owner category.
 
-No site source, scanner code, reducer code, generated output, validation
-script, runtime behavior, public copy, or automation workflow is implemented
-in this branch.
+Site source, site metadata, inbound links, focused validation, and focused
+tests are implemented in this branch. No scanner code, reducer code, core
+generated output, runtime behavior, release workflow, or management-decision
+automation is implemented.
 
 ## Scope Decisions
 
 - Target base: `origin/dev`.
-- Scope is limited to
-  `.kiro/specs/site-tracemap-tools-proof-paths-for-managers/`.
-- Future public claim level remains `concept`.
-- Required visible future copy:
+- Scope is limited to site source, site validation scripts/tests, and this
+  spec packet.
+- Public claim level remains `concept`.
+- Required visible copy:
   - `Public claim level: concept`
   - `No public conclusion without evidence`
-- Recommended placement starts at `/proof-paths/for-managers/`, with
-  alternatives recorded in `requirements.md` and `design.md`.
-- The future surface is distinct from `/manager-brief/`, `/manager-faq/`,
-  `/manager-packet/`, `/packets/`, `/packets/assembly/`, `/proof-paths/`,
-  `/proof-paths/faq/`, and `/proof-paths/tour/`.
-- The packet intentionally keeps future implementation tasks unchecked until
-  a later site implementation phase completes them.
+- Selected placement: `/proof-paths/for-managers/`.
+- Rejected placement alternatives:
+  - `/manager-proof-paths/`: rejected because the page belongs beside the
+    canonical proof-path overview rather than as a separate manager route
+    family.
+  - Section on `/manager-packet/`: rejected because the matrix and anatomy
+    checklist are reusable proof-interpretation reference material, not just
+    manager-packet summary copy.
+  - Section on `/manager-faq/`: rejected because the page is matrix-first,
+    not a compact answer set.
+  - Section on `/proof-paths/`: rejected because the overview is already a
+    broad proof-path index and would become too long with manager routing
+    mechanics.
+- Placement outside the named candidates was not used, so no spec amendment
+  was required.
+- Primary navigation remains unchanged.
+- The implemented route distinguishes itself from `/manager-brief/`,
+  `/manager-faq/`, `/manager-packet/`, `/packets/`, `/packets/assembly/`,
+  `/proof-paths/`, `/proof-paths/faq/`, `/proof-paths/tour/`, and
+  `/proof-source-catalog/`.
+- All adjacent links used by the page existed at implementation time. No
+  missing adjacent routes, substitutions, deferrals, or blockers are recorded.
+- Section-host metadata compatibility is not applicable because this is a
+  standalone route.
 - Tracked notes avoid local absolute paths, raw remotes, private sample names,
   raw artifacts, source snippets, SQL, config values, secrets, and hidden
   validation details.
+
+## Implementation Summary
+
+- Added standalone route `/proof-paths/for-managers/`.
+- Added concept-level title, description, canonical URL, Open Graph metadata,
+  sitemap metadata, and discovery metadata.
+- Added a manager question matrix with the required questions, evidence
+  packet, static support, non-claim, coverage consequence, stop condition,
+  next owner, and supporting route fields.
+- Added proof path anatomy fields for claim/question, public claim level,
+  proof path or packet link, rule ID/family, tier, coverage label,
+  commit/source context, extractor/schema family, public-safe file path/span,
+  snippet hash or summary, artifact family, limitation, non-claim, validation
+  evidence, unresolved gaps, and next owner.
+- Added owner routing for runtime, product, release, test, source,
+  publication, and TraceMap limitation questions.
+- Added bounded non-claims for runtime behavior, production traffic, endpoint
+  performance, outage cause, release safety, operational safety, complete
+  coverage, AI/LLM analysis, embeddings, vector databases, prompt
+  classification, autonomous approval, automated management decisions, and
+  replacement of telemetry, logs, traces, tests, source review, human review,
+  product judgment, service-owner judgment, release process, or manager
+  judgment.
+- Added safe inbound links from proof-path and manager-adjacent pages.
+- Added `site/scripts/proof-paths-for-managers.mjs` and
+  `site/scripts/proof-paths-for-managers.test.mjs`, and wired focused
+  validation into aggregate site validation.
 
 ## Review Commands
 
@@ -120,12 +165,26 @@ mode. The review artifacts therefore include tool-denied analysis gaps.
 - Diff-scope confirmation: passed on 2026-06-26. `git diff --name-only`
   listed only files under
   `.kiro/specs/site-tracemap-tools-proof-paths-for-managers/`.
-- Future implementation tasks remain unchecked; only the spec-only review
-  tasks are marked complete.
+- Future implementation tasks are now checked only where the corresponding
+  implementation or validation work is complete.
 
-Future implementation validation is defined in `requirements.md` and
-`tasks.md`, including site tests, site validation, site build, and desktop and
-mobile browser sanity checks when layout or interaction changes.
+- `npm test` from `site/`: passed on 2026-06-26.
+- `npm run validate` from `site/`: passed on 2026-06-26. Note: an earlier
+  attempt ran concurrently with `npm run build`, and the two commands raced on
+  generated static output; the standalone rerun passed.
+- `npm run build` from `site/`: passed on 2026-06-26.
+- `git diff --check`: passed on 2026-06-26 for the implementation patch.
+- `./scripts/check-private-paths.sh`: passed on 2026-06-26 for the
+  implementation patch.
+- Desktop browser sanity: passed on 2026-06-26. The route loaded with the
+  expected page title, visible hero, placement section, and matrix.
+- Mobile browser sanity: passed on 2026-06-26. The route loaded at a narrow
+  viewport with no page-level horizontal overflow, and the matrix was present.
+
+## Review Loop
+
+- PR loop is pending until the branch is committed, pushed, and a PR exists.
+- The final PR-loop outcome should be appended here after ACK completes.
 
 ## Oddities
 
@@ -136,21 +195,25 @@ mobile browser sanity checks when layout or interaction changes.
   next owner.
 - The future page should not promise that management decisions are automated.
   It can identify owner categories and handoff boundaries only.
+- Wide matrix content uses the site's existing horizontally scrollable table
+  pattern. Mobile browser sanity found no document-level horizontal overflow.
 
 ## Residual Risks
 
 - Kiro review coverage was reduced because Kiro's internal shell/write tools
   were denied in non-interactive mode. The wrapper still ran, saved review
   text, and the returned Medium or higher findings were patched.
-- This is a spec-only packet. Site build, site validation, and browser sanity
-  remain future implementation responsibilities because no site code changed.
+- Residual PR-loop state is pending until the implementation PR exists and
+  ACK returns a terminal decision.
 - ACK initially stopped on Qodo findings for stale follow-up wording,
   unsupported impact terminology in a design matrix row, and missing residual
   risk notes. This follow-up commit patched those state and wording gaps.
+- Implementation PR-loop evidence is not recorded yet because the PR has not
+  been created.
 
 ## Follow-ups
 
 - Keep the reduced Kiro review coverage visible when using this spec as an
   implementation starting point.
-- Keep any future implementation PR site-only and run the site validation plan
-  before marking implementation tasks complete.
+- After the implementation PR is opened, run ACK, patch only authorized
+  actionable findings, and update this state note with the final ACK decision.
