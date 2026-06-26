@@ -439,6 +439,10 @@ h3 {
   border-collapse: collapse;
 }
 
+.guided-path-table {
+  min-width: 1580px;
+}
+
 .claim-ledger-table caption {
   padding: 18px 20px 0;
   color: var(--muted);
