@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Final Tasks
 
-Status: task-7-http-client-attachment-precision-ready-for-review
+Status: task-7-legacy-data-storage-attachment-precision-ready-for-review
 
 ## Spec Delivery Tasks
 
@@ -197,6 +197,14 @@ current `dev` code or merged PR records prove the behavior.
       route-flow terminal-surface attachment already joined `HttpCallDetected`
       rows through selected source-local static paths, and the slice added
       focused evidence that adjacent unjoined HTTP client rows preserve
+      `DataSurfaceAttachmentMissing`. Branch
+      `codex/task7-storage-precision-20260626` audited `origin/dev` at
+      `45fc97b50115d6f7c99389d2b8e114352c387cd9` and selected the
+      legacy-data/storage dependency-surface sub-slice: route-flow already
+      accepted legacy-data terminal surfaces from the deterministic legacy data
+      model projection, and the slice added focused evidence that selected
+      entity/storage descriptors attach only through selected static
+      route-flow paths while adjacent unjoined storage descriptors preserve
       `DataSurfaceAttachmentMissing`.
   - [ ] Attach service, repository, object/projection, query-shape, SQL-shape,
         legacy-data, package/config, HTTP client, WCF, ASMX/SOAP, remoting,
@@ -231,6 +239,10 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_http_client_surface_only_from_selected_static_path`
           and
           `Route_flow_does_not_infer_adjacent_http_client_surface_without_selected_join`.
+    - [x] Legacy-data/storage dependency-surface sub-slice covered by
+          `Route_flow_attaches_legacy_data_storage_surfaces_only_from_selected_static_path`
+          and
+          `Route_flow_does_not_infer_adjacent_legacy_data_storage_without_selected_join`.
   - [x] Render argument-flow and parameter-forward value-origin rows only when
         joined to selected static route-flow rows.
   - [x] Render fact-symbol context only for selected source-local symbols.
@@ -284,6 +296,13 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_http_client_surface_only_from_selected_static_path`
           and
           `Route_flow_does_not_infer_adjacent_http_client_surface_without_selected_join`.
+    - [x] Legacy-data/storage surface attachment, adjacent-unjoinable gap
+          behavior, terminal-surface labeling, legacy-data context grouping,
+          subtype preservation, deterministic stable IDs, and public-safe
+          descriptor redaction covered by
+          `Route_flow_attaches_legacy_data_storage_surfaces_only_from_selected_static_path`
+          and
+          `Route_flow_does_not_infer_adjacent_legacy_data_storage_without_selected_join`.
 
 - [ ] 8. Enforce coverage, classification, and gap downgrade behavior.
       Requirements: 5.
