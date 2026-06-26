@@ -13,6 +13,7 @@ export const proofPathFaqRoute = "/proof-paths/faq/";
 export const proofPathFaqRequiredLinks = [
   "/questions/",
   "/proof-paths/",
+  "/proof-paths/for-managers/",
   "/proof-paths/tour/",
   "/evidence/",
   "/limitations/",
