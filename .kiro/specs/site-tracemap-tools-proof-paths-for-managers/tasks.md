@@ -1,7 +1,7 @@
 # Site TraceMap Tools Proof Paths For Managers Tasks
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented-pending-pr-loop
+Readiness: implemented-pending-pr-loop
 Public claim level: concept
 
 This packet began as a spec-only packet and now tracks the site
