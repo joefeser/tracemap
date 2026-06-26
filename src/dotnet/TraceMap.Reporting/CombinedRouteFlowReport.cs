@@ -2360,7 +2360,7 @@ public static class CombinedRouteFlowReporter
                     FactSymbolDisplayName(row, kind),
                     "fact-symbol-projection",
                     attached.RowId,
-                    WeakestClassification(ClassificationForTier(row.EvidenceTier), RouteFlowClassifications.ProbableStaticRouteFlow),
+                    FactSymbolProjectionClassification(row),
                     CoverageFor(row.EvidenceTier),
                     FactSymbolMetadata(row, kind),
                     EvidenceFromProjection(
@@ -2821,7 +2821,9 @@ public static class CombinedRouteFlowReporter
                 'PackageReferenced',
                 'ConfigBinding',
                 'ConfigKeyDeclared',
-                'ConnectionStringDeclared'
+                'ConnectionStringDeclared',
+                'CallbackBoundary',
+                'AsyncBoundary'
             )
             order by links.combined_fact_id
             limit 20;
@@ -3572,7 +3574,9 @@ public static class CombinedRouteFlowReporter
             or FactTypes.PackageReferenced
             or FactTypes.ConfigBinding
             or FactTypes.ConfigKeyDeclared
-            or FactTypes.ConnectionStringDeclared;
+            or FactTypes.ConnectionStringDeclared
+            or FactTypes.CallbackBoundary
+            or FactTypes.AsyncBoundary;
     }
 
     private static string FactSymbolLogicKind(FactSymbolProjectionRow row)
@@ -3583,6 +3587,7 @@ public static class CombinedRouteFlowReporter
             FactTypes.QueryPatternDetected or FactTypes.SqlTextUsed or FactTypes.SqlCommandDetected or FactTypes.DapperCallDetected => "query-shape",
             FactTypes.DatabaseColumnMapping => "data-surface",
             FactTypes.PackageReferenced or FactTypes.ConfigBinding or FactTypes.ConfigKeyDeclared or FactTypes.ConnectionStringDeclared => "dependency-surface",
+            FactTypes.CallbackBoundary or FactTypes.AsyncBoundary => "flow-boundary",
             _ => "fact-symbol-attachment"
         };
     }
@@ -3593,6 +3598,12 @@ public static class CombinedRouteFlowReporter
         if (!string.IsNullOrWhiteSpace(shapeHash))
         {
             return $"{kind}:{SafeSelector(shapeHash) ?? CombinedReportHelpers.Hash(shapeHash!, 16)}";
+        }
+
+        var boundaryKind = FirstProperty(row.Properties, "boundaryKind", "callbackBoundaryKind");
+        if (kind == "flow-boundary" && !string.IsNullOrWhiteSpace(boundaryKind))
+        {
+            return $"{kind}:{SafeSelector(boundaryKind!) ?? CombinedReportHelpers.Hash(boundaryKind!, 16)}";
         }
 
         return $"{kind}:fact-hash:{CombinedReportHelpers.Hash(row.CombinedFactId, 16)}";
@@ -3611,8 +3622,21 @@ public static class CombinedRouteFlowReporter
             ("packageName", FirstProperty(row.Properties, "packageName", "package", "dependencyName")),
             ("configKeyHash", HashValue(FirstProperty(row.Properties, "configKey", "keyPath", "connectionStringName", "connectionName", "sectionName", "configurationKey", "environmentVariableName"))),
             ("tableNameHash", HashProperty(row.Properties, "tableName")),
+            ("boundaryKind", FirstProperty(row.Properties, "boundaryKind")),
+            ("callbackBoundaryKind", FirstProperty(row.Properties, "callbackBoundaryKind")),
+            ("callbackExpressionKind", FirstProperty(row.Properties, "callbackExpressionKind")),
+            ("callbackExpressionHash", FirstProperty(row.Properties, "callbackExpressionHash")),
+            ("asyncOperationKind", FirstProperty(row.Properties, "asyncOperationKind")),
             ("targetSymbolHash", string.IsNullOrWhiteSpace(row.TargetSymbol) ? null : CombinedReportHelpers.Hash(row.TargetSymbol!, 16)),
             ("sourceSymbolHash", string.IsNullOrWhiteSpace(row.SourceSymbol) ? null : CombinedReportHelpers.Hash(row.SourceSymbol!, 16)));
+    }
+
+    private static string FactSymbolProjectionClassification(FactSymbolProjectionRow row)
+    {
+        var cap = row.FactType is FactTypes.CallbackBoundary or FactTypes.AsyncBoundary
+            ? RouteFlowClassifications.NeedsReviewStaticRouteFlow
+            : RouteFlowClassifications.ProbableStaticRouteFlow;
+        return WeakestClassification(ClassificationForTier(row.EvidenceTier), cap);
     }
 
     private static string SafeParameterName(string value, out bool redacted)
