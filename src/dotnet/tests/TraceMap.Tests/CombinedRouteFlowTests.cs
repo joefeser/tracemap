@@ -148,6 +148,13 @@ public sealed class CombinedRouteFlowTests
         Assert.NotEmpty(gapNodes!);
         Assert.All(gapNodes!, node =>
         {
+            var gapObject = Assert.IsType<JsonObject>(node);
+            Assert.True(gapObject.ContainsKey("filePath"));
+            Assert.True(gapObject.ContainsKey("startLine"));
+            Assert.True(gapObject.ContainsKey("endLine"));
+            Assert.True(gapObject.ContainsKey("commitSha"));
+            Assert.True(gapObject.ContainsKey("extractorName"));
+            Assert.True(gapObject.ContainsKey("extractorVersion"));
             Assert.False(string.IsNullOrWhiteSpace(node?["ruleId"]?.GetValue<string>()));
             Assert.False(string.IsNullOrWhiteSpace(node?["evidenceTier"]?.GetValue<string>()));
             Assert.False(string.IsNullOrWhiteSpace(node?["classification"]?.GetValue<string>()));
