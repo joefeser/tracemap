@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Final Tasks
 
-Status: task-7-package-config-attachment-precision-ready-for-review
+Status: task-7-http-client-attachment-precision-ready-for-review
 
 ## Spec Delivery Tasks
 
@@ -10,7 +10,8 @@ Status: task-7-package-config-attachment-precision-ready-for-review
   - [x] Add `tasks.md`.
   - [x] Add `implementation-state.md`.
   - [x] Add `review-prompts.md`.
-  - [x] Keep this PR limited to this spec folder.
+  - [x] Keep the original spec-delivery PR changed files within this spec
+        folder.
   - [x] Keep examples synthetic/public-safe and avoid private paths, private
         labels, raw SQL/config values, source snippets, secrets, raw remotes,
         and private route strings.
@@ -25,18 +26,18 @@ Status: task-7-package-config-attachment-precision-ready-for-review
   - [x] Record review commands, artifacts, coverage, findings, dispositions,
         and final readiness in `implementation-state.md`.
 
-- [x] 3. Validate the spec-only change.
+- [x] 3. Validate the original spec change.
   - [x] Run `git diff --check`.
   - [x] Run `./scripts/check-private-paths.sh`.
   - [x] Run any obvious spec/docs validation command if present, or record that
         none exists.
-  - [x] Confirm the diff is limited to
+  - [x] Confirm the original spec-delivery diff is limited to
         `.kiro/specs/route-flow-service-data-composition-final/`.
   - [x] Record validation results in `implementation-state.md`.
 
 ## Next Implementation PR Tasks
 
-Current state: the spec-only PR merged as PR #311 (`43426b7c`), duplicate
+Current state: the initial spec PR merged as PR #311 (`43426b7c`), duplicate
 endpoint/root selector ambiguity merged as PR #318 (`1e9c5660`), and
 source-local service-call cycle gaps merged as PR #320 (`565d7b64`).
 Branch `codex/route-flow-task5-matrix` audited `origin/dev` at
@@ -190,6 +191,13 @@ current `dev` code or merged PR records prove the behavior.
       joined to selected static route-flow rows, package/config terminal
       surfaces attach only through selected route-flow paths, and adjacent
       unjoined package/config evidence preserves `DataSurfaceAttachmentMissing`.
+      Branch `codex/task7-http-client-precision-20260626` audited
+      `origin/dev` at `268b6d082d18004af0980940f458c42e8fa80407` and
+      selected the HTTP client dependency-surface sub-slice: existing
+      route-flow terminal-surface attachment already joined `HttpCallDetected`
+      rows through selected source-local static paths, and the slice added
+      focused evidence that adjacent unjoined HTTP client rows preserve
+      `DataSurfaceAttachmentMissing`.
   - [ ] Attach service, repository, object/projection, query-shape, SQL-shape,
         legacy-data, package/config, HTTP client, WCF, ASMX/SOAP, remoting,
         event/message, storage, validation/guard, serializer/contract,
@@ -219,6 +227,10 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_package_config_surfaces_only_from_selected_static_path`
           and
           `Route_flow_does_not_infer_adjacent_package_config_surface_without_selected_join`.
+    - [x] HTTP client dependency-surface sub-slice covered by
+          `Route_flow_attaches_http_client_surface_only_from_selected_static_path`
+          and
+          `Route_flow_does_not_infer_adjacent_http_client_surface_without_selected_join`.
   - [x] Render argument-flow and parameter-forward value-origin rows only when
         joined to selected static route-flow rows.
   - [x] Render fact-symbol context only for selected source-local symbols.
@@ -266,6 +278,12 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_package_config_surfaces_only_from_selected_static_path`
           and
           `Route_flow_does_not_infer_adjacent_package_config_surface_without_selected_join`.
+    - [x] HTTP client surface attachment, adjacent-unjoinable gap behavior,
+          terminal-surface labeling, dependency context grouping, and
+          deterministic stable IDs covered by
+          `Route_flow_attaches_http_client_surface_only_from_selected_static_path`
+          and
+          `Route_flow_does_not_infer_adjacent_http_client_surface_without_selected_join`.
 
 - [ ] 8. Enforce coverage, classification, and gap downgrade behavior.
       Requirements: 5.
