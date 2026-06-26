@@ -1438,6 +1438,8 @@ rules:
       - Surface rows are static report/export context and do not prove runtime database use, query execution, schema existence, reachability, dependency impact, deployment, provider compatibility, or production usage.
       - AnalysisGap facts under legacy.data.* rules are excluded from terminal surface projection and remain gaps, caveats, or limitations.
       - Already-derived projection rows are not re-consumed by prefix-based legacy data fact readers.
+      - AmbiguousLegacyDataModelSelector gaps are emitted when a downstream selector matches multiple legacy-data model surfaces and cannot identify one model without additional source or stable-evidence scope.
+      - DuplicateLegacyDataModelSurface gaps are emitted when downstream projection cannot distinguish duplicate stable model identities without additional evidence.
       - Unknown vocabulary values for descriptor role, metadata format, or source artifact type produce an unknown-vocabulary schema gap under this rule rather than being rendered as free-form display strings; implementations should register a narrower rule ID when a specific unknown vocabulary has a distinct gap cause.
       - Safe properties include surfaceKind, surfaceSubtype, modelKind, metadataFormat, stableSurfaceKey, safeDisplayName or hash label, sourceRuleIds, supportingFactIds, supportingEdgeIds, coverageLabel, and limitations.
       - Surface classification is capped for syntax-only, ambiguous, high fan-out, missing generated-code, unsupported, or reduced-coverage evidence.

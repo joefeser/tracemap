@@ -496,6 +496,50 @@ public sealed class CombinedReverseQueryTests
     }
 
     [Fact]
+    public async Task Reverse_downgrades_ambiguous_legacy_data_model_selector()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "reverse");
+        var server = Manifest("server", "tracemap-milestone15");
+        var repository = "Server.OrderRepository.Read(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            LegacyDataEntityFact(server, repository, "Customer", "Models/Store.dbml", 21, "ldm:dbml:customer", "customerselectorhash123"),
+            LegacyDataEntityFact(server, repository, "Customer", "Mappings/Customer.hbm.xml", 8, "ldm:nhibernate-hbm:customer", "customerselectorhash123")
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedReverseReporter.WriteAsync(
+            new CombinedReverseOptions(
+                combinedPath,
+                outDir,
+                Surface: "legacy-data",
+                SurfaceName: "entity:hash:customerselector",
+                To: "all"));
+
+        Assert.Equal(2, result.Report.SelectedSurfaces.Count);
+        Assert.All(result.Report.SelectedSurfaces, surface =>
+        {
+            Assert.Equal("legacy-data", surface.SurfaceKind);
+            Assert.Equal(CombinedReverseClassifications.NeedsReviewSurfaceEvidence, surface.Classification);
+            Assert.Contains(surface.CoverageCaveats, caveat => caveat.Contains("AmbiguousLegacyDataModelSelector", StringComparison.Ordinal));
+        });
+        var gap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "AmbiguousLegacyDataModelSelector");
+        Assert.Equal(RuleIds.LegacyDataModelSurface, gap.RuleId);
+        Assert.Equal(CombinedReverseClassifications.NeedsReviewSurfaceEvidence, gap.Classification);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "reverse-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "reverse-report.json"));
+        Assert.Contains("AmbiguousLegacyDataModelSelector", markdown);
+        Assert.Contains("\"gapKind\": \"AmbiguousLegacyDataModelSelector\"", json);
+        Assert.DoesNotContain("ldm:dbml:customer", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("ldm:nhibernate-hbm:customer", markdown, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Reverse_rejects_single_language_index()
     {
         using var temp = new TempDirectory();
@@ -656,8 +700,31 @@ public sealed class CombinedReverseQueryTests
             });
     }
 
-    private static CodeFact LegacyDataEntityFact(ScanManifest manifest, string sourceSymbol, string displayName, string file, int line)
+    private static CodeFact LegacyDataEntityFact(
+        ScanManifest manifest,
+        string sourceSymbol,
+        string displayName,
+        string file,
+        int line,
+        string stableModelKey = "ldm:reverse-model-key",
+        string? displayNameHash = null)
     {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["coverageLabel"] = "full",
+            ["descriptorRole"] = "conceptual",
+            ["displayName"] = displayName,
+            ["metadataFormat"] = "dbml",
+            ["metadataHash"] = "metadata-hash",
+            ["metadataKind"] = "Dbml",
+            ["modelKind"] = "entity",
+            ["stableModelKey"] = stableModelKey
+        };
+        if (!string.IsNullOrWhiteSpace(displayNameHash))
+        {
+            properties["displayNameHash"] = displayNameHash;
+        }
+
         return FactFactory.Create(
             manifest,
             FactTypes.LegacyDataEntityDeclared,
@@ -666,17 +733,7 @@ public sealed class CombinedReverseQueryTests
             new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
             sourceSymbol: sourceSymbol,
             targetSymbol: displayName,
-            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["coverageLabel"] = "full",
-                ["descriptorRole"] = "conceptual",
-                ["displayName"] = displayName,
-                ["metadataFormat"] = "dbml",
-                ["metadataHash"] = "metadata-hash",
-                ["metadataKind"] = "Dbml",
-                ["modelKind"] = "entity",
-                ["stableModelKey"] = "ldm:reverse-model-key"
-            });
+            properties: properties);
     }
 
     private static CodeFact ConfigFact(ScanManifest manifest, string sourceSymbol, string file, int line)
