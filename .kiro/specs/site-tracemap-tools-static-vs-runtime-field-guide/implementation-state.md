@@ -146,8 +146,12 @@ Pending final local validation before commit:
   wrapper to bounded `aside` or `blockquote` teaching examples, rejects
   structural or oversized wrappers, and keeps invalid wrappers visible to the
   forbidden-claim scans.
-- After the Qodo patch, site tests, build, validation, diff check, and private
-  path guard passed locally.
+- The same Qodo summary also recommended making route-conditional tasks less
+  ambiguous. The checklist now marks non-selected route paths as `N/A` and
+  scopes checked metadata tasks to the existing `/static-vs-runtime/` route.
+- After the Qodo code patch, site tests, build, validation, diff check, and
+  private path guard passed locally. After the checklist patch, diff check and
+  private path guard were rerun.
 
 The final handoff should report the terminal ACK decision for the exact pushed
 head. This checked-in state avoids recording a local worktree path or raw
