@@ -1052,7 +1052,9 @@ public sealed class CombinedRouteFlowTests
         var bridgeGap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "MissingMethodSymbolBridge" && gap.RuleId == "combined.route-flow.gap.v1");
         Assert.Equal("Controllers/OrdersController.cs", bridgeGap.FilePath);
         Assert.Equal(10, bridgeGap.StartLine);
-        var touchedControllerFile = Assert.Single(result.Report.TouchedFiles, file => file.FilePath == "Controllers/OrdersController.cs");
+        var touchedControllerFile = Assert.Single(result.Report.TouchedFiles, file =>
+            file.FilePath == "Controllers/OrdersController.cs"
+            && file.SupportingRowIds.Contains(bridgeGap.GapId));
         Assert.NotEqual("unknown", touchedControllerFile.CommitSha);
         Assert.Contains(bridgeGap.GapId, touchedControllerFile.SupportingRowIds);
         Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, touchedControllerFile.Classification);
@@ -1524,6 +1526,48 @@ public sealed class CombinedRouteFlowTests
         Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
         Assert.Equal("ReducedCoverage", gap.Coverage);
         Assert.Contains("other:relationship-fact", gap.SupportingFactIds);
+    }
+
+    [Fact]
+    public void Route_flow_path_gap_preserves_available_provenance_metadata()
+    {
+        var pathGap = new CombinedPathGap(
+            GapId: "gap:path:missing-call",
+            GapKind: "MissingCallEdge",
+            Classification: "NeedsReviewPath",
+            Message: "No call edge was found.",
+            SourceIndexId: "server",
+            SourceLabel: "server",
+            NodeId: "node:server:controller",
+            CombinedFactId: "server:fact-controller",
+            RuleId: RuleIds.CSharpSemanticCallGraph,
+            EvidenceTier: EvidenceTiers.Tier4Unknown,
+            FilePath: "Controllers/OrdersController.cs",
+            StartLine: 33,
+            Reason: "NoOutgoingEdge",
+            CommitSha: "abc123",
+            ExtractorVersion: "tracemap-milestone15",
+            EvidenceScope: "Path",
+            EndLine: 33);
+
+        var method = typeof(CombinedRouteFlowReporter).GetMethod(
+            "FromPathGap",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(method);
+
+        var gap = Assert.IsType<RouteFlowGap>(method!.Invoke(null, [
+            pathGap,
+            "FullEvidenceAvailable"
+        ]));
+
+        Assert.Equal("MissingCallEdge", gap.GapKind);
+        Assert.Equal("Controllers/OrdersController.cs", gap.FilePath);
+        Assert.Equal(33, gap.StartLine);
+        Assert.Equal(33, gap.EndLine);
+        Assert.Equal("abc123", gap.CommitSha);
+        Assert.Equal("csharp", gap.ExtractorName);
+        Assert.Equal("tracemap-milestone15", gap.ExtractorVersion);
+        Assert.Contains("server:fact-controller", gap.SupportingFactIds);
     }
 
     [Fact]
