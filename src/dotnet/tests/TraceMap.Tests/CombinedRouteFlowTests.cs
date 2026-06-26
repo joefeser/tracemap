@@ -2128,13 +2128,17 @@ public sealed class CombinedRouteFlowTests
         var server = Manifest("server", "tracemap-milestone15");
         var controller = "Server.OrdersController.Get(System.Int32)";
         var dtoType = "Server.Contracts.OrderResponse";
+        var alternateDtoType = "Server.Contracts.OrderSummaryResponse";
         var unrelatedDtoType = "Server.Contracts.AuditResponse";
 
         SqliteIndexWriter.Write(serverIndex, server, [
             RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
             ObjectCreationFact(server, controller, dtoType, "Controllers/OrdersController.cs", 14),
+            ObjectCreationFact(server, controller, alternateDtoType, "Controllers/OrdersController.cs", 15),
             QueryPatternFact(server, dtoType, "Contracts/OrderResponse.cs", 31, attachSymbol: true),
+            QueryPatternFact(server, alternateDtoType, "Contracts/OrderSummaryResponse.cs", 32, attachSymbol: true),
             SerializerContractFact(server, dtoType, "Status", "System.String", "customer_status", "Contracts/OrderResponse.cs", 7),
+            SerializerContractFact(server, alternateDtoType, "SummaryStatus", "System.String", "customer_status", "Contracts/OrderSummaryResponse.cs", 8),
             SerializerContractFact(server, unrelatedDtoType, "InternalStatus", "System.String", "audit_status", "Contracts/AuditResponse.cs", 11)
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
@@ -2150,33 +2154,53 @@ public sealed class CombinedRouteFlowTests
             Route: "GET /api/orders/{id}",
             ToSurface: "sql-query"));
 
-        var serializer = Assert.Single(result.Report.LogicRows, row => row.LogicKind == "serializer-contract"
-            && row.AttachmentKind == "fact-symbol-projection");
-        Assert.NotNull(serializer.AttachedFlowRowId);
-        Assert.StartsWith("serializer-contract:contract-name-hash:", serializer.DisplayName, StringComparison.Ordinal);
-        Assert.Equal(RouteFlowClassifications.NeedsReviewStaticRouteFlow, serializer.Classification);
-        Assert.Equal("combined.route-flow.fact-symbol-projection.v1", serializer.Evidence.RuleId);
-        Assert.Contains(RuleIds.CSharpSemanticRuntimeEvidence, serializer.Evidence.SupportingRuleIds);
-        Assert.Equal("serializer-contract", serializer.SafeMetadata["evidenceKind"]);
-        Assert.Equal("System.Text.Json.Serialization.JsonPropertyNameAttribute", serializer.SafeMetadata["attributeName"]);
-        Assert.Contains("contractNameHash", serializer.SafeMetadata.Keys);
-        Assert.Contains("memberNameHash", serializer.SafeMetadata.Keys);
-        Assert.Contains("memberTypeHash", serializer.SafeMetadata.Keys);
-        Assert.Contains("containingTypeHash", serializer.SafeMetadata.Keys);
-        Assert.DoesNotContain("contractName", serializer.SafeMetadata.Keys);
-        Assert.DoesNotContain("memberName", serializer.SafeMetadata.Keys);
-        Assert.DoesNotContain("customer_status", JsonSerializer.Serialize(serializer.SafeMetadata), StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Status", JsonSerializer.Serialize(serializer.SafeMetadata), StringComparison.Ordinal);
+        var serializerRows = result.Report.LogicRows
+            .Where(row => row.LogicKind == "serializer-contract"
+                && row.AttachmentKind == "fact-symbol-projection")
+            .OrderBy(row => row.Evidence.FilePath, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(2, serializerRows.Length);
+        Assert.Equal(2, serializerRows.Select(row => row.DisplayName).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(serializerRows, serializer =>
+        {
+            Assert.NotNull(serializer.AttachedFlowRowId);
+            Assert.StartsWith("serializer-contract:contract-name-hash:", serializer.DisplayName, StringComparison.Ordinal);
+            Assert.Contains(":type-hash:", serializer.DisplayName, StringComparison.Ordinal);
+            Assert.Contains(":member-hash:", serializer.DisplayName, StringComparison.Ordinal);
+            Assert.Equal(RouteFlowClassifications.NeedsReviewStaticRouteFlow, serializer.Classification);
+            Assert.Equal("combined.route-flow.fact-symbol-projection.v1", serializer.Evidence.RuleId);
+            Assert.Contains(RuleIds.CSharpSemanticRuntimeEvidence, serializer.Evidence.SupportingRuleIds);
+            Assert.Equal("serializer-contract", serializer.SafeMetadata["evidenceKind"]);
+            Assert.Contains("attributeNameHash", serializer.SafeMetadata.Keys);
+            Assert.Contains("contractNameHash", serializer.SafeMetadata.Keys);
+            Assert.Contains("memberNameHash", serializer.SafeMetadata.Keys);
+            Assert.Contains("memberTypeHash", serializer.SafeMetadata.Keys);
+            Assert.Contains("containingTypeHash", serializer.SafeMetadata.Keys);
+            Assert.DoesNotContain("attributeName", serializer.SafeMetadata.Keys);
+            Assert.DoesNotContain("contractName", serializer.SafeMetadata.Keys);
+            Assert.DoesNotContain("memberName", serializer.SafeMetadata.Keys);
+            Assert.DoesNotContain("customer_status", JsonSerializer.Serialize(serializer.SafeMetadata), StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Status", JsonSerializer.Serialize(serializer.SafeMetadata), StringComparison.Ordinal);
+            Assert.DoesNotContain("JsonPropertyName", JsonSerializer.Serialize(serializer.SafeMetadata), StringComparison.Ordinal);
+        });
         Assert.DoesNotContain(result.Report.LogicRows, row => row.Evidence.FilePath == "Contracts/AuditResponse.cs");
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "FactSymbolProjectionUnavailable" or "NoRouteFlowEvidence");
         Assert.Contains(result.Report.ContextGroups!, group => group.GroupKind == "data-surface"
             && group.MatchKind == "fact-symbol"
             && group.RuleIds.Contains("combined.route-flow.fact-symbol-projection.v1")
-            && group.SupportingRowIds.Contains(serializer.LogicRowId));
+            && group.SupportingRowIds.Contains(serializerRows[0].LogicRowId));
+        Assert.Contains(result.Report.ContextGroups!, group => group.GroupKind == "data-surface"
+            && group.MatchKind == "fact-symbol"
+            && group.RuleIds.Contains("combined.route-flow.fact-symbol-projection.v1")
+            && group.SupportingRowIds.Contains(serializerRows[1].LogicRowId));
         Assert.Equal(
-            serializer.LogicRowId,
-            Assert.Single(repeated.Report.LogicRows, row => row.LogicKind == "serializer-contract"
-                && row.AttachmentKind == "fact-symbol-projection").LogicRowId);
+            serializerRows.Select(row => row.LogicRowId).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            repeated.Report.LogicRows
+                .Where(row => row.LogicKind == "serializer-contract"
+                    && row.AttachmentKind == "fact-symbol-projection")
+                .Select(row => row.LogicRowId)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray());
         Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
     }
 
