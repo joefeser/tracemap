@@ -490,6 +490,10 @@ h3 {
   min-width: 1380px;
 }
 
+.dotnet-evidence-matrix {
+  min-width: 1680px;
+}
+
 [data-non-claim-region] {
   border-left: 4px solid #6e5d1c;
 }
