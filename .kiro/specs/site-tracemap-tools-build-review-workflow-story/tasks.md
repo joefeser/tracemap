@@ -1,7 +1,7 @@
 # Site TraceMap Tools Build Review Workflow Story Tasks
 
 Status: implemented
-Readiness: ready-for-implementation
+Readiness: implemented
 Public claim level: concept
 
 These tasks are checked only after the corresponding spec review,
@@ -19,20 +19,20 @@ implementation decision, site change, or validation has actually completed.
 - [x] Run one bounded Kiro re-review because review findings were patched.
 - [x] Patch all Medium or higher actionable findings from the bounded Kiro
   re-review.
-- [x] Keep this phase spec-only; do not edit `site/src/`, generated site
-  output, scanner code, reducer code, validation scripts, or runtime behavior.
+- [x] During the spec-review phase, keep the packet spec-only; do not edit
+  `site/src/`, generated site output, scanner code, reducer code, validation
+  scripts, or runtime behavior.
 - [x] Run `git diff --check`.
 - [x] Run `./scripts/check-private-paths.sh`.
-- [x] Confirm final diff is limited to
-  `.kiro/specs/site-tracemap-tools-build-review-workflow-story/` during this
-  spec-only phase.
+- [x] Confirm the spec-review diff is limited to
+  `.kiro/specs/site-tracemap-tools-build-review-workflow-story/`.
 - [x] Update `implementation-state.md` with review artifacts, validation
   results, claim-boundary decisions, oddities, and follow-up items.
-- [x] Update readiness to `ready-for-implementation` only if the reviewed spec
-  has no remaining Medium or higher actionable findings and no unresolved
-  blocker that prevents implementation.
+- [x] Update post-review readiness only if the reviewed spec has no remaining
+  Medium or higher actionable findings and no unresolved blocker that prevents
+  implementation.
 
-## Future implementation tasks
+## Completed implementation tasks
 
 - [x] Choose the final future placement:
   `/blog/building-tracemap-under-review-pressure/`,
