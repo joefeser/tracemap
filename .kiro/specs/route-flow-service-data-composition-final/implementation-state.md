@@ -1,7 +1,7 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: task-7-wcf-operation-attachment-precision-ready-for-review
-Readiness: task-7-wcf-operation-ready-for-pr-review-loop
+Status: task-7-remoting-attachment-precision-ready-for-review
+Readiness: task-7-remoting-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
 Target base: `dev`
@@ -195,6 +195,66 @@ Validation status:
   existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
 - `dotnet test src/dotnet/TraceMap.sln`: passed locally with 660 tests and the
   existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+## Task 7 Remoting Attachment Slice
+
+Branch: `codex/task7-next-attachment-precision`
+Audited base: `origin/dev` at
+`edf9c7de8f7bc5eba06bbf6cd9b0a3636aa0c117`.
+Selected family: remoting endpoint dependency surfaces.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision for remoting static
+  evidence already emitted by the deterministic legacy remoting extractor.
+- Project remoting fact families as shared dependency surfaces without enabling
+  legacy-flow mode in route-flow.
+- Attach `remoting-endpoint` dependency surfaces only when the surface node is
+  reached by the selected static route-flow path.
+- Preserve `DataSurfaceAttachmentMissing` when remoting evidence is present in
+  the same combined index but not connected to the selected route-flow path.
+
+Scope decisions:
+
+- This slice does not start UI property lineage, site work, reducer behavior,
+  or scanner extraction changes.
+- This slice does not add runtime remoting endpoint, channel, activation,
+  hosting, deployment, or reachability claims. Rows remain deterministic static
+  evidence backed by existing remoting rule IDs and evidence tiers.
+- Package/config, HTTP client, legacy-data/storage, validation/serializer,
+  async/callback, and flow-boundary families remain follow-up Task 7 slices
+  unless separately verified in a later PR.
+
+Oddities:
+
+- Remoting terminal nodes already existed in the legacy-flow graph hook, but
+  route-flow uses the normal dependency path graph. The patch therefore
+  projects remoting facts as shared dependency surfaces instead of turning on
+  legacy-flow mode for route-flow.
+- Remoting display identity follows the existing legacy path graph convention
+  by preferring safe hash labels such as `objectUri-*` and `url-*`; raw
+  endpoint/config values are not surfaced.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_remoting_endpoint_surface_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_remoting_endpoint_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 54 tests and the existing NU1903 warning.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~LegacyFlowCompositionTests`:
+  passed locally with 24 tests and the existing NU1903 warning.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedDependencyReportTests`:
+  passed locally with 17 tests and the existing NU1903 warning.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 663 tests and the
+  existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke-46229`:
+  passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
 
