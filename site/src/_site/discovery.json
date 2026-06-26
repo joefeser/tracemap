@@ -939,6 +939,23 @@
     ]
   },
   {
+    "path": "/review-room/demo-path/",
+    "title": "Review Room Demo Path",
+    "summary": "Concept-level guided path for moving one public-safe static question through review-room, agenda, proof-path, packet, checklist, limitation, validation, owner-routing, and stop-condition surfaces.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route is an authored public reading path over existing public-safe static evidence surfaces, not a live review room, generated packet builder, proof engine, approval flow, or new proof source.",
+      "Every guided-path step keeps limitation, stop condition, owner or route, evidence tier, coverage label, validation evidence, and public-safe packet context visible instead of upgrading missing evidence."
+    ],
+    "nonClaims": [
+      "No runtime proof, production traffic proof, endpoint performance proof, outage-cause proof, release approval, release safety, operational safety, production proof, live workflow completeness, complete coverage, AI impact analysis, LLM analysis, prompt classification, embeddings, vector databases, autonomous review, autonomous approval, or automated management decision.",
+      "No raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, raw command output, hidden validation details, private labels, credential-like values, connection strings, tokens, or keys are public demo-path material."
+    ]
+  },
+  {
     "path": "/release-review-boundary/",
     "title": "Release Review Boundary",
     "summary": "Concept-level handoff for what deterministic static evidence can contribute during release review while release-control decisions remain owner-owned.",
