@@ -2016,6 +2016,110 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_attaches_validation_guard_branches_only_from_selected_static_path()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.OrderService.Query(System.Int32)";
+        var unrelatedService = "Server.AuditService.Check(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, service, "Services/OrderService.cs", 31),
+            GuardFact(server, service, "If", "NullCheckNotEquals", "customerKey", "Services/OrderService.cs", 22),
+            GuardFact(server, unrelatedService, "If", "NullCheckEquals", "auditId", "Services/AuditService.cs", 41)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        var guard = Assert.Single(result.Report.LogicRows, row => row.LogicKind == "validation-guard"
+            && row.AttachmentKind == "fact-symbol-projection");
+        Assert.NotNull(guard.AttachedFlowRowId);
+        Assert.Equal("validation-guard:NullCheckNotEquals", guard.DisplayName);
+        Assert.Equal(RouteFlowClassifications.NeedsReviewStaticRouteFlow, guard.Classification);
+        Assert.Equal("combined.route-flow.fact-symbol-projection.v1", guard.Evidence.RuleId);
+        Assert.Contains(RuleIds.CSharpSemanticRuntimeEvidence, guard.Evidence.SupportingRuleIds);
+        Assert.Equal("validation-guard", guard.SafeMetadata["evidenceKind"]);
+        Assert.Equal("If", guard.SafeMetadata["branchKind"]);
+        Assert.Equal("NullCheckNotEquals", guard.SafeMetadata["feasibilityKind"]);
+        Assert.Equal("!=", guard.SafeMetadata["comparisonOperator"]);
+        Assert.Equal("IdentifierName", guard.SafeMetadata["conditionExpressionKind"]);
+        Assert.Contains("checkedSymbolHash", guard.SafeMetadata.Keys);
+        Assert.DoesNotContain("checkedSymbol", guard.SafeMetadata.Keys);
+        Assert.DoesNotContain("customerKey", JsonSerializer.Serialize(guard.SafeMetadata), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(result.Report.LogicRows, row => row.Evidence.FilePath == "Services/AuditService.cs");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "FactSymbolProjectionUnavailable" or "NoRouteFlowEvidence");
+        Assert.Contains(result.Report.ContextGroups!, group => group.GroupKind == "method"
+            && group.MatchKind == "fact-symbol"
+            && group.RuleIds.Contains("combined.route-flow.fact-symbol-projection.v1")
+            && group.SupportingRowIds.Contains(guard.LogicRowId));
+        Assert.Equal(
+            guard.LogicRowId,
+            Assert.Single(repeated.Report.LogicRows, row => row.LogicKind == "validation-guard"
+                && row.AttachmentKind == "fact-symbol-projection").LogicRowId);
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+    }
+
+    [Fact]
+    public async Task Route_flow_does_not_infer_adjacent_validation_guard_without_selected_join()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.OrderService.Query(System.Int32)";
+        var unrelatedService = "Server.AuditService.Check(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, service, "Services/OrderService.cs", 31),
+            GuardFact(server, unrelatedService, "If", "NullCheckEquals", "auditId", "Services/AuditService.cs", 41)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.DoesNotContain(result.Report.LogicRows, row => row.LogicKind == "validation-guard"
+            && row.AttachmentKind == "fact-symbol-projection");
+        var gap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "FactSymbolProjectionUnavailable");
+        Assert.Equal("combined.route-flow.gap.v1", gap.RuleId);
+        Assert.Contains(gap.Limitations, limitation => limitation.Contains("combined.route-flow.fact-symbol-projection.v1", StringComparison.Ordinal));
+        Assert.Equal("Services/AuditService.cs", gap.FilePath);
+        Assert.Equal("server", gap.SourceLabel);
+        Assert.Equal("abc123", gap.CommitSha);
+        Assert.Equal("tracemap-milestone15", gap.ExtractorVersion);
+        Assert.Contains("none could be connected to the selected route-flow path", gap.Message, StringComparison.Ordinal);
+        Assert.Equal(gap.GapId, Assert.Single(repeated.Report.Gaps, item => item.GapKind == "FactSymbolProjectionUnavailable").GapId);
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
+    }
+
+    [Fact]
     public async Task Route_flow_attaches_message_surfaces_only_from_selected_static_path()
     {
         using var temp = new TempDirectory();
@@ -3295,6 +3399,40 @@ public sealed class CombinedRouteFlowTests
             targetSymbol: boundaryKind,
             contractElement: boundaryKind,
             properties: properties);
+    }
+
+    private static CodeFact GuardFact(
+        ScanManifest manifest,
+        string sourceSymbol,
+        string branchKind,
+        string feasibilityKind,
+        string checkedSymbol,
+        string file,
+        int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.BranchFeasibility,
+            RuleIds.CSharpSemanticRuntimeEvidence,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: checkedSymbol,
+            contractElement: branchKind,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["branchKind"] = branchKind,
+                ["checkedSymbol"] = checkedSymbol,
+                ["comparisonOperator"] = feasibilityKind == "NullCheckEquals" ? "==" : "!=",
+                ["conditionExpressionHash"] = FactFactory.Hash($"{sourceSymbol}:{checkedSymbol}:{feasibilityKind}", 32),
+                ["conditionExpressionKind"] = "IdentifierName",
+                ["evidenceKind"] = "BranchFeasibility",
+                ["feasibilityKind"] = feasibilityKind,
+                ["sourceSymbolDisplayName"] = sourceSymbol,
+                ["sourceSymbolId"] = sourceSymbol,
+                ["sourceSymbolKind"] = "Method",
+                ["sourceSymbolLanguage"] = "csharp"
+            });
     }
 
     private static CodeFact MessageSurfaceFact(
