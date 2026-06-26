@@ -122,6 +122,17 @@ test("validateReviewRoomDemoPathDist reports unresolved rendered links", async (
   assert.match(errors.join("\n"), /required link does not resolve in generated output: \/owners\/follow-up\//);
 });
 
+test("validateReviewRoomDemoPathDist reports required links missing from routes index", async (t) => {
+  const root = await createManagedReviewRoomDemoPathFixture(t, {
+    discoveryRoutes: [reviewRoomDemoPathRoute, ...reviewRoomDemoPathRequiredLinks.filter((route) => route !== "/owners/follow-up/")]
+  });
+  const errors = [];
+
+  await validateReviewRoomDemoPathDist({ dist: join(root, "site", "dist"), errors });
+
+  assert.match(errors.join("\n"), /required link does not resolve in generated output: \/owners\/follow-up\//);
+});
+
 test("validateReviewRoomDemoPathDist rejects forbidden positive claims", async (t) => {
   const root = await createManagedReviewRoomDemoPathFixture(t, {
     pageHtml: (await canonicalPage()).replace(
