@@ -2122,6 +2122,20 @@ Validation status:
   `logs/analyzer.log` were present.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+- ACK-authorized patch after PR review added source and target symbol identity
+  metadata to real `SerializerContractMember` facts so scan-written
+  `fact_symbols`/`combined_fact_symbols` rows exist for route-flow serializer
+  projection. Post-patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~SqliteIndexWriterTests.Scan_writes_semantic_symbol_tables_to_sqlite|FullyQualifiedName~Scan_extracts_tier1_runtime_evidence_facts|FullyQualifiedName~Route_flow_attaches_serializer_contract_members_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_serializer_contract_without_selected_join"`
+  passed locally with 3 tests,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 65 tests, `dotnet build src/dotnet/TraceMap.sln`
+  passed with 0 errors, `dotnet test src/dotnet/TraceMap.sln` passed locally
+  with 675 tests,
+  `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-serializer-contract-modern-sample`
+  passed with required outputs present, `./scripts/check-private-paths.sh`
+  passed, and `git diff --check` passed. NuGet emitted the same existing
+  `SQLitePCLRaw.lib.e_sqlite3` warning.
 
 Follow-ups:
 

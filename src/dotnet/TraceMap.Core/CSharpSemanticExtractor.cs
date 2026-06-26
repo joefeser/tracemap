@@ -2180,7 +2180,15 @@ public static class CSharpSemanticExtractor
                                 ["memberName"] = symbol.Name,
                                 ["memberSymbol"] = symbol.ToDisplayString(SymbolFormat),
                                 ["memberType"] = memberType?.ToDisplayString(SymbolFormat) ?? string.Empty,
-                                ["containingType"] = containingType
+                                ["containingType"] = containingType,
+                                ["sourceSymbolId"] = containingType,
+                                ["sourceSymbolDisplayName"] = containingType,
+                                ["sourceSymbolKind"] = "Type",
+                                ["sourceSymbolLanguage"] = "csharp",
+                                ["targetSymbolId"] = symbol.ToDisplayString(SymbolFormat),
+                                ["targetSymbolDisplayName"] = symbol.ToDisplayString(SymbolFormat),
+                                ["targetSymbolKind"] = symbol is IPropertySymbol ? "Property" : "Field",
+                                ["targetSymbolLanguage"] = "csharp"
                             },
                             model.GetEnclosingSymbol(attribute.SpanStart)?.ContainingAssembly,
                             symbol.ContainingAssembly)));

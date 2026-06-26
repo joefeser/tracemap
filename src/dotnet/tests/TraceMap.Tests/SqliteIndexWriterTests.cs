@@ -92,10 +92,13 @@ public sealed class SqliteIndexWriterTests
             </Project>
             """);
         File.WriteAllText(Path.Combine(projectPath, "SymbolDemo.cs"), """
+            using System.Text.Json.Serialization;
+
             namespace SymbolSample;
 
             public sealed class Dto
             {
+                [JsonPropertyName("customer_name")]
                 public string Name { get; set; } = "";
             }
 
@@ -175,6 +178,26 @@ public sealed class SqliteIndexWriterTests
             where f.fact_type = 'BranchFeasibility' and fs.role = 'source';
             """);
         Assert.True(branchFeasibilitySourceSymbolCount > 0);
+
+        var serializerContractSourceSymbolCount = await ExecuteScalarAsync<long>(
+            connection,
+            """
+            select count(*)
+            from fact_symbols fs
+            join facts f on f.fact_id = fs.fact_id
+            where f.fact_type = 'SerializerContractMember' and fs.role = 'source';
+            """);
+        Assert.True(serializerContractSourceSymbolCount > 0);
+
+        var serializerContractTargetSymbolCount = await ExecuteScalarAsync<long>(
+            connection,
+            """
+            select count(*)
+            from fact_symbols fs
+            join facts f on f.fact_id = fs.fact_id
+            where f.fact_type = 'SerializerContractMember' and fs.role = 'target';
+            """);
+        Assert.True(serializerContractTargetSymbolCount > 0);
 
         Assert.Equal(1L, await ExecuteScalarAsync<long>(connection, "select count(*) from symbol_relationships where relationship_kind = 'InheritsFrom';"));
         Assert.Equal(1L, await ExecuteScalarAsync<long>(connection, "select count(*) from symbol_relationships where relationship_kind = 'ImplementsInterface';"));
