@@ -1,14 +1,66 @@
 # Legacy Data Model Metadata Extraction Implementation State
 
-Status: continuation-ready
+Status: implementation-slice-ready-for-pr
 Spec authoring branch: codex/spec-legacy-data-model-metadata-extraction
 Current implementation branch: codex/implement-legacy-data-model-portfolio-safety
+Latest implementation branch: codex/legacy-data-model-selector-slice
 Public claim level: hidden
 
 Post-promotion note: several legacy-data model identity/reporting slices have
 landed, including PR #199, PR #236, the later NHibernate `.hbm.xml` MVP
 slice, and PR #303 graph/vault export redaction. This spec still has follow-up
 work after the current continuation slice.
+
+## Current Branch Scope: Reverse Selector Downgrade
+
+Branch: `codex/legacy-data-model-selector-slice`
+Base: `origin/dev` after PR #373
+
+Selected scope: partial Task 3/7 reverse-query selector downgrade behavior for
+projected `legacy-data` model surfaces. This slice does not add new scanner
+extractors, runtime ORM behavior, path/route-flow selector handling, portfolio
+privacy, persisted derived rows, or broader graph/export behavior.
+
+Implemented in this slice:
+
+- Reverse query now detects when `--surface legacy-data --surface-name <name>`
+  selects multiple legacy-data model surfaces.
+- Ambiguous legacy-data selector matches emit an
+  `AmbiguousLegacyDataModelSelector` gap under
+  `legacy.data.model.surface.v1` with `Tier4Unknown` evidence.
+- Selected model surfaces from that ambiguous selector are classified as
+  `NeedsReviewSurfaceEvidence` and carry an
+  `AmbiguousLegacyDataModelSelector` caveat.
+- Rule catalog text now documents `AmbiguousLegacyDataModelSelector` and
+  `DuplicateLegacyDataModelSurface` gap vocabulary for legacy data model
+  surface projection.
+
+Validation so far:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "CombinedReverseQueryTests|LegacyDataModelRuleCatalogTests"`:
+  passed, 16 tests, with the existing `SQLitePCLRaw.lib.e_sqlite3` NU1903
+  advisory warning.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with the same existing
+  NU1903 advisory warning.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+
+PR review-loop fix notes:
+
+- Patched review findings by detecting ambiguous legacy-data model selectors
+  before `MaxSurfaces` truncation, by treating omitted `--surface` as still
+  eligible for legacy-data ambiguity when multiple legacy-data model surfaces
+  match the selector, and by simplifying the helper to return the matched nodes
+  directly.
+- Added regression coverage for both omitted `--surface` and capped
+  `MaxSurfaces = 1` selector ambiguity.
+
+Deferred:
+
+- Selector downgrade behavior outside reverse query.
+- Persisted derived-row no-double-projection tests.
+- Portfolio privacy and broader end-to-end unsafe-value redaction outside
+  graph/vault.
 
 ## Current Branch Scope
 
