@@ -1,9 +1,9 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: task-7-serializer-contract-attachment-precision-ready-for-review
-Readiness: task-7-serializer-contract-ready-for-pr-review-loop
+Status: task-7-service-repository-object-projection-breadth-ready-for-review
+Readiness: task-7-service-repository-object-projection-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
-Implementation branch: `codex/task7-serializer-contract-precision`
+Implementation branch: `codex/task7-service-projection-breadth-20260626`
 Target base: `dev`
 Primary issues: `#159`, `#179`, `#201`
 Public claim level: static evidence only
@@ -545,6 +545,83 @@ Validation status:
   with 669 tests and the existing NU1903 warning.
 - Post-second-ACK patch `./scripts/check-private-paths.sh`: passed.
 - Post-second-ACK patch `git diff --check`: passed.
+
+## Task 7 Service/Repository/Object Projection Breadth Slice
+
+Branch: `codex/task7-service-projection-breadth-20260626`
+Audited base: `origin/dev` at
+`36eedb1039eb98d75ed49c3d3c7161cc44e67424`.
+Selected family: service/repository/object/projection breadth closeout.
+
+Scope:
+
+- Keep this PR limited to the final Task 7 route-flow breadth closeout for
+  selected service/repository context and object-shape fact-symbol projection.
+- Preserve existing source-local service and repository context grouping from
+  selected route-flow path rows.
+- Classify selected `ObjectShapeInferred` fact-symbol projection rows as
+  data-surface context and render them only when joined to selected
+  source-local route-flow symbols.
+- Preserve `FactSymbolProjectionUnavailable` when object-shape evidence is
+  present in the same combined index but cannot join the selected static
+  route-flow path.
+- Mark Task 7 complete because the remaining attachment families now have
+  explicit selected-versus-adjacent coverage; leave Tasks 8/9/10 unchecked.
+
+Scope decisions:
+
+- This slice does not start UI property lineage, site work, reducer behavior,
+  runtime object materialization claims, or Tasks 8/9/10 follow-up work.
+- The ACK-authorized patch adds source-symbol identity metadata to syntax
+  object-shape facts so real scan-written `fact_symbols` and
+  `combined_fact_symbols` rows can support selected route-flow object-shape
+  projection.
+- Object-shape evidence remains deterministic static syntax evidence and is
+  capped by its evidence tier; it does not prove runtime object creation,
+  serializer behavior, branch feasibility, or production execution.
+- Field names from object-shape facts stay omitted from route-flow logic row
+  metadata; report rows carry hashes/safe labels only.
+
+Oddities:
+
+- `ObjectShapeInferred` projection support already existed, but the previous
+  route-flow context-group mapping treated emitted `object-shape` logic rows as
+  generic method context rather than data-surface context.
+- Existing broad route-flow tests already covered service and repository
+  context grouping; this slice adds the missing focused selected/unjoined
+  object-shape projection regression tests.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_object_shape_projection_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_object_shape_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- Post-ACK patch `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_object_shape_projection_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_object_shape_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning.
+- Post-ACK patch `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CSharpSyntaxExtractorTests`:
+  passed locally with 7 tests and the existing NU1903 warning.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 67 tests and the existing NU1903 warning.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 677 tests and
+  the existing NU1903 warning.
+- Post-ACK patch `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 67 tests and the existing NU1903 warning.
+- Post-ACK patch `dotnet build src/dotnet/TraceMap.sln`: passed with 0
+  errors and the existing NU1903 warning.
+- Post-ACK patch `dotnet test src/dotnet/TraceMap.sln`: passed locally with
+  677 tests and the existing NU1903 warning.
+- `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-object-projection-modern-sample`:
+  passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`.
+- Post-ACK patch `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-object-projection-modern-sample-postack`:
+  passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Post-ACK patch `./scripts/check-private-paths.sh`: passed.
+- Post-ACK patch `git diff --check`: passed.
 
 ## Summary
 
