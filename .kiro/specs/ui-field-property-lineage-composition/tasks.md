@@ -35,28 +35,30 @@ route-flow contract is re-audited against that commit.
 
 ### PR 1: Composition Contract Audit And Gap Hardening
 
-- [ ] 1. Inventory current property-flow and route-flow contracts.
+- [x] 1. Inventory current property-flow and route-flow contracts.
   Requirements: 1, 3, 5, 6.
-  - [ ] Confirm current property-flow report version, row shapes, selectors,
+  - [x] Confirm current property-flow report version, row shapes, selectors,
     classifications, and rule IDs.
-  - [ ] Confirm current route-flow schema/report signals available to
+  - [x] Confirm current route-flow schema/report signals available to
     property-flow, including context groups, touched files, touched symbols,
     logic rows, dependency surfaces, argument projection, and fact-symbol
     projection.
-  - [ ] Record which property-specific bridge kinds already exist and which
+  - [x] Record which property-specific bridge kinds already exist and which
     remain gaps.
-  - [ ] Decide whether new output is report version `1.0` compatible or needs a
+  - [x] Decide whether new output is report version `1.0` compatible or needs a
     documented version bump, using the existing continuation spec's version
     `1.0` compatibility decision as the starting point.
-  - [ ] Commit the audit result in this spec's `implementation-state.md` or a
+  - [x] Commit the audit result in this spec's `implementation-state.md` or a
     spec-local contract audit note before marking this task complete.
 
 - [ ] 2. Harden gaps and rule-catalog coverage.
   Requirements: 3, 4, 5.
-  - [ ] Reuse existing `property-flow.*.v1` and source rule IDs where possible.
-  - [ ] Add catalog entries and limitations before emitting any new rule IDs.
-  - [ ] Emit route-flow unavailable/no-property-context gaps with coverage
+  - [x] Reuse existing `property-flow.*.v1` and source rule IDs where possible.
+  - [x] Add catalog entries and limitations before emitting any new rule IDs.
+  - [x] Emit route-flow unavailable/no-property-context gaps with coverage
     labels and supporting IDs where available.
+  - [x] Emit unsupported route-flow schema gaps when a route-flow signal exists
+    but does not expose a compatible normalized route key column.
   - [ ] Emit explicit property identity, endpoint alignment, mapper evidence,
     terminal context, schema, coverage, unsafe input, and truncation gaps.
   - [ ] Add tests proving broad endpoint reachability does not become property

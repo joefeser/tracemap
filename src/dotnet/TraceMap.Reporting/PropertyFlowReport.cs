@@ -402,13 +402,17 @@ public static class PropertyFlowReporter
 
         if (routeFlowSignal != "available")
         {
+            var unsupportedRouteFlowSchema = routeFlowSignal == "unsupported";
             gaps.Add(new PropertyFlowGap(
-                "gap:schema:route-flow-unavailable",
-                "RouteFlowUnavailable",
+                unsupportedRouteFlowSchema ? "gap:schema:route-flow-unsupported" : "gap:schema:route-flow-unavailable",
+                unsupportedRouteFlowSchema ? "UnsupportedRouteFlowSchema" : "RouteFlowUnavailable",
                 PropertyFlowClassifications.UnknownAnalysisGap,
-                routeFlowSignal == "empty"
-                    ? "Route-flow schema signal was available but contained no rows; route-flow-specific downstream traversal is not promoted by property-flow."
-                    : "No route-flow schema signal was available; route-flow-specific downstream traversal is not promoted by property-flow.",
+                routeFlowSignal switch
+                {
+                    "empty" => "Route-flow schema signal was available but contained no rows; route-flow-specific downstream traversal is not promoted by property-flow.",
+                    "unsupported" => "Route-flow schema signal exists but does not expose a compatible route key column; route-flow-specific downstream traversal is not promoted by property-flow.",
+                    _ => "No route-flow schema signal was available; route-flow-specific downstream traversal is not promoted by property-flow."
+                },
                 SchemaRuleId,
                 EvidenceTiers.Tier4Unknown,
                 null,
@@ -902,6 +906,13 @@ public static class PropertyFlowReporter
         if (missingOptional.Contains("combined_route_flow_edges", StringComparer.Ordinal))
         {
             return "unavailable";
+        }
+
+        var columns = await RouteFlowColumnNamesAsync(connection, cancellationToken);
+        var pathColumn = FirstColumn(columns, "normalizedPathKey", "normalized_path_key", "routeKey", "route_key", "pathKey", "path_key");
+        if (pathColumn is null)
+        {
+            return "unsupported";
         }
 
         await using var command = connection.CreateCommand();
