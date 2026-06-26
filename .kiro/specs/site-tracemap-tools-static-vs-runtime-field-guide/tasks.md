@@ -47,7 +47,7 @@ and validation complete.
   `/use-cases/incident-review/`.
 - [x] Record the selected placement and rejected alternatives in
   `implementation-state.md`.
-- [ ] N/A: separate `/static-vs-runtime-field-guide/` route was not selected;
+- [x] N/A: separate `/static-vs-runtime-field-guide/` route was not selected;
   `implementation-state.md` records why extending `/static-vs-runtime/` avoids
   a second concept-level static-versus-runtime surface and duplicate discovery
   entry.
@@ -119,7 +119,7 @@ and validation complete.
   metadata includes `publicClaimLevel: concept`, `sourceType`, an existing
   valid `hintCategory`, `preferredProofPath`, `limitations`, and `nonClaims`
   using the current site discovery schema.
-- [ ] N/A: folded section placement was not chosen; host metadata and anchor
+- [x] N/A: folded section placement was not chosen; host metadata and anchor
   reconciliation were not needed.
 - [x] Add validation for required visible wording, required sections, stable
   anchors (`#different-questions`, `#how-to-use-both`,

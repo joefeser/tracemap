@@ -23,6 +23,29 @@ It does not change scanner code, reducer behavior, runtime telemetry
 ingestion, observability vendor integrations, client-side tracking, generated
 site output, or generated scan artifacts.
 
+## Bookkeeping Normalization
+
+Current `origin/dev` evidence on 2026-06-26 proves the static-versus-runtime
+field guide implementation is already present. The two remaining unchecked
+tasks were explicitly marked as not applicable because the implementation
+extends the existing standalone `/static-vs-runtime/` route and did not select
+either a duplicate `/static-vs-runtime-field-guide/` route or a folded
+host-page section.
+
+Evidence checked in on `origin/dev`:
+
+- Source route: `site/src/static-vs-runtime/index.html`.
+- Focused validator: `site/scripts/static-vs-runtime.mjs`.
+- Focused tests: `site/scripts/static-vs-runtime.test.mjs`.
+- Aggregate validation wiring: `site/scripts/validate.mjs` imports and runs
+  `validateStaticVsRuntimeDist`.
+- Route metadata: `site/src/_site/pages.json` contains
+  `/static-vs-runtime/`.
+- Discovery metadata: `site/src/_site/discovery.json` contains
+  `/static-vs-runtime/`.
+- The implementation-state note below already records route decisions,
+  validation results, browser sanity, and PR-loop patch history.
+
 ## Placement Decision
 
 Selected placement: extend the existing standalone `/static-vs-runtime/` route.
