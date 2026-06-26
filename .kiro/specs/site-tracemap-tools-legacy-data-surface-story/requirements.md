@@ -257,6 +257,11 @@ Acceptance criteria:
 - Focused validation rejects forbidden runtime, database-execution, data-access,
   migration-success, complete-coverage, AI/LLM, private/raw-artifact, and hidden
   implementation wording.
+- Focused validation treats private/raw disclosure checks separately from
+  overclaim assertion matching. Private/raw checks must reject route-scoped
+  private values, raw artifact content, credential-like text, local path
+  material, and raw identifier disclosures wherever they appear outside approved
+  boundary, limitation, or forbidden-material example copy.
 - Focused validation distinguishes forbidden wording the page asserts as its
   own claim from forbidden wording the page is required to render as a negated
   boundary statement, limitation, allowed/forbidden wording example, or
@@ -277,6 +282,10 @@ Acceptance criteria:
   the grammatical subject of its containing clause is the page, the tool, or
   TraceMap and the clause is affirmative. Substring matching alone does not
   satisfy this requirement.
+- Private/raw disclosure matching must not use the affirmative-assertion
+  subject rule. It remains value/category based, with only narrow exclusions for
+  authored boundary lists, limitation copy, forbidden-material examples, and
+  future approved public demo fixtures.
 - Denylist phrases are permitted in the evidence-status matrix `forbidden
   wording` column only when the column heading or cell text clearly marks the
   phrase as an example of what the page must not say. A bare affirmative
