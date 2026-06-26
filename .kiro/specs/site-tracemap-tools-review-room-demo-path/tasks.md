@@ -46,10 +46,10 @@ code in this phase.
 
 ## Publish Tasks
 
-- [ ] Commit the spec-only packet.
-- [ ] Push the branch.
-- [ ] Create a ready pull request into `dev`.
-- [ ] Run ACK with
+- [x] Commit the spec-only packet.
+- [x] Push the branch.
+- [x] Create a ready pull request into `dev`.
+- [x] Run ACK with
   `agent-control pr-loop --repo joefeser/tracemap --pr <PR> --base dev --require-codex-review --quiet --json`.
-- [ ] Follow ACK instructions without merging.
-- [ ] Record ACK decision, stop reason, and whether Joe can merge.
+- [x] Follow ACK instructions without merging.
+- [x] Record ACK decision, stop reason, and whether Joe can merge.

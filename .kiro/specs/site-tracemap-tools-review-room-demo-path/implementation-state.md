@@ -133,7 +133,14 @@ change `site/`.
 
 ## ACK Status
 
-Pending PR creation and ACK run.
+- PR: `#354`
+- First ACK command:
+  `agent-control pr-loop --repo joefeser/tracemap --pr 354 --base dev --require-codex-review --quiet --json`
+- First ACK decision: `actionable_findings`.
+- Stop reason: `UNRESOLVED_REVIEW_THREADS`.
+- Merge status: not merge-ready.
+- Action taken: patched the readiness lifecycle wording and updated completed
+  publish/ACK task checkboxes without merging.
 
 ## Follow-Ups
 
