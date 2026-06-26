@@ -91,7 +91,7 @@ Actionable review findings were patched:
   example copy.
 - Sonnet initial review: expanded matrix/link validation specificity and
   tightened `dev` wording.
-- Sonnet re-reviews: added concept-level matrix placeholders, non-empty
+- Sonnet follow-up spec review runs: added concept-level matrix placeholders, non-empty
   limitation-cell validation, token denylist parity, stricter route/link
   fallback wording, explicit forbidden-wording cell rules, subject-verb
   assertion matching, allowed status vocabulary, and future/dev label lifecycle
@@ -110,7 +110,7 @@ Readiness is advanced to `ready-for-implementation` for this spec-only packet.
   `.tmp/kiro-reviews/site-tracemap-tools-legacy-data-surface-story/2026-06-26T053149-285Z-spec-claude-sonnet-4.6.clean.md`
 - Sonnet initial meta:
   `.tmp/kiro-reviews/site-tracemap-tools-legacy-data-surface-story/2026-06-26T053149-285Z-spec-claude-sonnet-4.6.meta.json`
-- Sonnet re-review artifacts:
+- Sonnet follow-up spec review artifacts:
   `.tmp/kiro-reviews/site-tracemap-tools-legacy-data-surface-story/2026-06-26T053411-238Z-spec-claude-sonnet-4.6.clean.md`
   `.tmp/kiro-reviews/site-tracemap-tools-legacy-data-surface-story/2026-06-26T053701-535Z-spec-claude-sonnet-4.6.clean.md`
   `.tmp/kiro-reviews/site-tracemap-tools-legacy-data-surface-story/2026-06-26T053857-610Z-spec-claude-sonnet-4.6.clean.md`
