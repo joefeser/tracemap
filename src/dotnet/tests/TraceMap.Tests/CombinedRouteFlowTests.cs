@@ -1827,13 +1827,14 @@ public sealed class CombinedRouteFlowTests
         var server = Manifest("server", "tracemap-milestone15");
         var controller = "Server.OrdersController.Post(System.Int32)";
         var configure = "Server.Legacy.RemotingHost.Configure()";
-        var unrelatedConfigure = "Server.Legacy.OtherRemotingHost.Configure()";
 
         SqliteIndexWriter.Write(serverIndex, server, [
             RouteFact(server, "POST", "/api/orders/{id}/remoting", "/api/orders/{}/remoting", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
             CallFact(server, controller, configure, "Controllers/OrdersController.cs", 15),
-            RemotingEndpointFact(server, configure, "App.config", 24, "Server.Legacy.RemoteService", "abcdef1234567890"),
-            RemotingEndpointFact(server, unrelatedConfigure, "Other.config", 31, "Server.Legacy.OtherRemoteService", "fedcba0987654321")
+            CallFact(server, configure, "System.Runtime.Remoting.RemotingConfiguration.Configure", "Services/RemotingHost.cs", 20),
+            RemotingConfigureApiFact(server, "Services/RemotingHost.cs", 20, "App.config"),
+            RemotingEndpointFact(server, null, "App.config", 24, "Server.Legacy.RemoteService", "abcdef1234567890"),
+            RemotingEndpointFact(server, null, "Other.config", 31, "Server.Legacy.OtherRemoteService", "fedcba0987654321")
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
 
@@ -1856,12 +1857,17 @@ public sealed class CombinedRouteFlowTests
         Assert.Equal(surface.SurfaceId, Assert.Single(repeated.Report.DependencySurfaces).SurfaceId);
         Assert.Equal(surface.StableKey, Assert.Single(repeated.Report.DependencySurfaces).StableKey);
         Assert.StartsWith("surface-key-hash:", surface.StableKey, StringComparison.Ordinal);
+        Assert.Equal("objectUri-abcdef1234567890", surface.SafeMetadata["shapeHash"]);
 
-        var terminal = Assert.Single(result.Report.FlowRows, row => row.EdgeKind == "terminal-surface");
+        var terminal = Assert.Single(result.Report.FlowRows, row => row.EdgeKind == "terminal-surface"
+            && string.Equals(row.SourceSymbol, configure, StringComparison.Ordinal)
+            && row.TargetSymbol?.Contains("objectUri-abcdef12", StringComparison.Ordinal) == true);
         Assert.Equal("terminal-surface", terminal.RowKind);
         Assert.Contains(configure, terminal.SourceSymbol, StringComparison.Ordinal);
         Assert.Contains("objectUri-abcdef12", terminal.TargetSymbol!, StringComparison.Ordinal);
-        Assert.Equal(terminal.RowId, Assert.Single(repeated.Report.FlowRows, row => row.EdgeKind == "terminal-surface").RowId);
+        Assert.Equal(terminal.RowId, Assert.Single(repeated.Report.FlowRows, row => row.EdgeKind == "terminal-surface"
+            && string.Equals(row.SourceSymbol, configure, StringComparison.Ordinal)
+            && row.TargetSymbol?.Contains("objectUri-abcdef12", StringComparison.Ordinal) == true).RowId);
 
         Assert.DoesNotContain(result.Report.FlowRows, row => row.SourceSymbol.Contains("OtherRemotingHost", StringComparison.Ordinal)
             || row.TargetSymbol?.Contains("OtherRemoteService", StringComparison.Ordinal) == true);
@@ -1881,12 +1887,11 @@ public sealed class CombinedRouteFlowTests
         var server = Manifest("server", "tracemap-milestone15");
         var controller = "Server.OrdersController.Post(System.Int32)";
         var service = "Server.OrderRatingService.Rate(System.Int32)";
-        var unrelatedConfigure = "Server.Legacy.OtherRemotingHost.Configure()";
 
         SqliteIndexWriter.Write(serverIndex, server, [
             RouteFact(server, "POST", "/api/orders/{id}/remoting", "/api/orders/{}/remoting", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
             CallFact(server, controller, service, "Controllers/OrdersController.cs", 15),
-            RemotingEndpointFact(server, unrelatedConfigure, "Other.config", 31, "Server.Legacy.OtherRemoteService", "fedcba0987654321")
+            RemotingEndpointFact(server, null, "Other.config", 31, "Server.Legacy.OtherRemoteService", "fedcba0987654321")
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
 
@@ -2811,7 +2816,7 @@ public sealed class CombinedRouteFlowTests
 
     private static CodeFact RemotingEndpointFact(
         ScanManifest manifest,
-        string sourceSymbol,
+        string? sourceSymbol,
         string file,
         int line,
         string typeName,
@@ -2834,6 +2839,30 @@ public sealed class CombinedRouteFlowTests
                 ["registrationKind"] = "well-known-service",
                 ["sourceKind"] = "config",
                 ["typeName"] = typeName
+            });
+    }
+
+    private static CodeFact RemotingConfigureApiFact(
+        ScanManifest manifest,
+        string file,
+        int line,
+        string configFileName)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.RemotingApiUsageDeclared,
+            RuleIds.LegacyRemotingRegistration,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", ScannerVersions.LegacyRemotingExtractor),
+            targetSymbol: "System.Runtime.Remoting.RemotingConfiguration.Configure",
+            contractElement: "Configure",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["configFileName"] = configFileName,
+                ["coverage"] = "syntax-fallback",
+                ["limitation"] = "Static registration call evidence only; dynamic arguments, runtime configuration, deployment, reachability, and production usage are not proven.",
+                ["registrationKind"] = "configure",
+                ["sourceKind"] = "syntax"
             });
     }
 

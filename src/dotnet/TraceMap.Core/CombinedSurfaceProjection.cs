@@ -150,8 +150,10 @@ public static class CombinedSurfaceProjection
         var wcfMappingHash = fact.FactType == FactTypes.WcfServiceReferenceMapping
             ? FirstValue(fact.Properties, "mappingHash", "metadataHash")
             : null;
-        var remotingDisplayHash = RemotingDisplayHash(fact);
-        var shapeHash = FirstValue(fact.Properties, "queryShapeHash", "patternHash") ?? wcfMappingHash ?? remotingDisplayHash;
+        var isRemotingSurface = surfaceKind.StartsWith("remoting-", StringComparison.Ordinal);
+        var remotingDisplayHash = isRemotingSurface ? RemotingDisplayHash(fact) : null;
+        var remotingIdentityHash = isRemotingSurface ? RemotingIdentityHash(fact) : null;
+        var shapeHash = FirstValue(fact.Properties, "queryShapeHash", "patternHash") ?? wcfMappingHash ?? remotingIdentityHash;
         var textHash = FirstValue(fact.Properties, "textHash");
         var textLength = FirstValue(fact.Properties, "textLength");
         var sqlResourceName = FirstValue(fact.Properties, "sqlResourceName", "resourceName", "fileName");
@@ -394,6 +396,16 @@ public static class CombinedSurfaceProjection
 
     private static string? RemotingDisplayHash(CombinedSurfaceFactInput fact)
     {
+        return RemotingHashToken(fact, 8);
+    }
+
+    private static string? RemotingIdentityHash(CombinedSurfaceFactInput fact)
+    {
+        return RemotingHashToken(fact, 16);
+    }
+
+    private static string? RemotingHashToken(CombinedSurfaceFactInput fact, int length)
+    {
         foreach (var (property, prefix) in new[]
         {
             ("urlHash", "url"),
@@ -409,7 +421,7 @@ public static class CombinedSurfaceProjection
                 continue;
             }
 
-            var hash = new string(value.Trim().Where(UriHashCharacter).Take(8).ToArray()).ToLowerInvariant();
+            var hash = new string(value.Trim().Where(UriHashCharacter).Take(length).ToArray()).ToLowerInvariant();
             if (hash.Length > 0)
             {
                 return $"{prefix}-{hash}";

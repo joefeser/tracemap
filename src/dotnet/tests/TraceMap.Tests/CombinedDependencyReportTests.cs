@@ -462,6 +462,58 @@ public sealed class CombinedDependencyReportTests
     }
 
     [Fact]
+    public void Surface_projection_scopes_remoting_hash_identity_to_remoting_facts()
+    {
+        var surfaces = CombinedSurfaceProjection.BuildSurfaces([
+            new CombinedSurfaceFactInput(
+                "cf-config",
+                "src-1",
+                "api",
+                "of-config",
+                "scan-api",
+                "abc123",
+                FactTypes.ConnectionStringDeclared,
+                RuleIds.ConfigKey,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                "App.config",
+                8,
+                8,
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["configKey"] = "ConnectionStrings:Orders",
+                    ["valueHash"] = "abcdef1234567890"
+                }),
+            new CombinedSurfaceFactInput(
+                "cf-remoting",
+                "src-1",
+                "api",
+                "of-remoting",
+                "scan-api",
+                "abc123",
+                FactTypes.RemotingConfigServiceDeclared,
+                RuleIds.LegacyRemotingConfig,
+                EvidenceTiers.Tier2Structural,
+                "App.config",
+                12,
+                12,
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["objectUriHash"] = "abcdef1234567890",
+                    ["registrationKind"] = "well-known-service"
+                })
+        ]);
+
+        var config = Assert.Single(surfaces, surface => surface.CombinedFactId == "cf-config");
+        Assert.Equal("package-config", config.SurfaceKind);
+        Assert.Null(config.ShapeHash);
+
+        var remoting = Assert.Single(surfaces, surface => surface.CombinedFactId == "cf-remoting");
+        Assert.Equal("remoting-endpoint", remoting.SurfaceKind);
+        Assert.Equal("objectUri-abcdef12", remoting.DisplayName);
+        Assert.Equal("objectUri-abcdef1234567890", remoting.ShapeHash);
+    }
+
+    [Fact]
     public void Legacy_data_projection_classifies_edmx_msl_from_source_section()
     {
         var surfaces = CombinedSurfaceProjection.BuildSurfaces([
