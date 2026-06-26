@@ -1903,6 +1903,119 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_attaches_async_callback_boundaries_only_from_selected_static_path()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.OrderService.QueryAsync(System.Int32)";
+        var unrelatedService = "Server.AuditService.ScheduleAsync(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, service, "Services/OrderService.cs", 31),
+            BoundaryFact(server, service, FactTypes.AsyncBoundary, "AwaitBoundary", "Services/OrderService.cs", 24, asyncOperationKind: "await"),
+            BoundaryFact(server, service, FactTypes.CallbackBoundary, "CallbackBoundary", "Services/OrderService.cs", 25, callbackBoundaryKind: "LambdaExpression"),
+            BoundaryFact(server, unrelatedService, FactTypes.AsyncBoundary, "TaskSchedulingBoundary", "Services/AuditService.cs", 41, asyncOperationKind: "task-scheduling")
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        var boundaryRows = result.Report.LogicRows
+            .Where(row => row.LogicKind == "flow-boundary"
+                && row.AttachmentKind == "fact-symbol-projection")
+            .OrderBy(row => row.DisplayName, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(2, boundaryRows.Length);
+        Assert.All(boundaryRows, row =>
+        {
+            Assert.NotNull(row.AttachedFlowRowId);
+            Assert.Equal(RouteFlowClassifications.NeedsReviewStaticRouteFlow, row.Classification);
+            Assert.Equal("combined.route-flow.fact-symbol-projection.v1", row.Evidence.RuleId);
+            Assert.Contains(RuleIds.CSharpSemanticFlowBoundary, row.Evidence.SupportingRuleIds);
+            Assert.Equal("flow-boundary", row.SafeMetadata["evidenceKind"]);
+        });
+        Assert.Contains(boundaryRows, row => row.SafeMetadata.TryGetValue("boundaryKind", out var boundaryKind)
+            && boundaryKind == "AwaitBoundary"
+            && row.SafeMetadata.TryGetValue("asyncOperationKind", out var asyncOperationKind)
+            && asyncOperationKind == "await");
+        Assert.Contains(boundaryRows, row => row.SafeMetadata.TryGetValue("callbackBoundaryKind", out var callbackBoundaryKind)
+            && callbackBoundaryKind == "LambdaExpression"
+            && row.SafeMetadata.ContainsKey("callbackExpressionHash"));
+        Assert.DoesNotContain(result.Report.LogicRows, row => row.Evidence.FilePath == "Services/AuditService.cs");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "FactSymbolProjectionUnavailable" or "NoRouteFlowEvidence");
+        Assert.Contains(result.Report.ContextGroups!, group => group.GroupKind == "value-origin"
+            && group.MatchKind == "fact-symbol"
+            && group.RuleIds.Contains("combined.route-flow.fact-symbol-projection.v1"));
+        Assert.Equal(
+            boundaryRows.Select(row => row.LogicRowId).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            repeated.Report.LogicRows
+                .Where(row => row.LogicKind == "flow-boundary" && row.AttachmentKind == "fact-symbol-projection")
+                .Select(row => row.LogicRowId)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray());
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+    }
+
+    [Fact]
+    public async Task Route_flow_does_not_infer_adjacent_async_callback_boundary_without_selected_join()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.OrderService.QueryAsync(System.Int32)";
+        var unrelatedService = "Server.AuditService.ScheduleAsync(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, service, "Services/OrderService.cs", 31),
+            BoundaryFact(server, unrelatedService, FactTypes.AsyncBoundary, "TaskSchedulingBoundary", "Services/AuditService.cs", 41, asyncOperationKind: "task-scheduling")
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.DoesNotContain(result.Report.LogicRows, row => row.LogicKind == "flow-boundary"
+            && row.AttachmentKind == "fact-symbol-projection");
+        var gap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "FactSymbolProjectionUnavailable");
+        Assert.Equal("combined.route-flow.gap.v1", gap.RuleId);
+        Assert.Contains(gap.Limitations, limitation => limitation.Contains("combined.route-flow.fact-symbol-projection.v1", StringComparison.Ordinal));
+        Assert.Equal("Services/AuditService.cs", gap.FilePath);
+        Assert.Equal("server", gap.SourceLabel);
+        Assert.Equal("abc123", gap.CommitSha);
+        Assert.Equal("tracemap-milestone15", gap.ExtractorVersion);
+        Assert.Contains("none could be connected to the selected route-flow path", gap.Message, StringComparison.Ordinal);
+        Assert.Equal(gap.GapId, Assert.Single(repeated.Report.Gaps, item => item.GapKind == "FactSymbolProjectionUnavailable").GapId);
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
+    }
+
+    [Fact]
     public async Task Route_flow_attaches_message_surfaces_only_from_selected_static_path()
     {
         using var temp = new TempDirectory();
@@ -3139,6 +3252,48 @@ public sealed class CombinedRouteFlowTests
             sourceSymbol: sourceSymbol,
             targetSymbol: packageName ?? configKey,
             contractElement: packageName ?? configKey,
+            properties: properties);
+    }
+
+    private static CodeFact BoundaryFact(
+        ScanManifest manifest,
+        string sourceSymbol,
+        string factType,
+        string boundaryKind,
+        string file,
+        int line,
+        string? callbackBoundaryKind = null,
+        string? asyncOperationKind = null)
+    {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["boundaryKind"] = boundaryKind,
+            ["sourceSymbolDisplayName"] = sourceSymbol,
+            ["sourceSymbolId"] = sourceSymbol,
+            ["sourceSymbolKind"] = "Method",
+            ["sourceSymbolLanguage"] = "csharp"
+        };
+        if (!string.IsNullOrWhiteSpace(callbackBoundaryKind))
+        {
+            properties["callbackBoundaryKind"] = callbackBoundaryKind!;
+            properties["callbackExpressionHash"] = FactFactory.Hash($"{sourceSymbol}:{boundaryKind}:callback", 32);
+            properties["callbackExpressionKind"] = "LambdaExpression";
+        }
+
+        if (!string.IsNullOrWhiteSpace(asyncOperationKind))
+        {
+            properties["asyncOperationKind"] = asyncOperationKind!;
+        }
+
+        return FactFactory.Create(
+            manifest,
+            factType,
+            RuleIds.CSharpSemanticFlowBoundary,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: boundaryKind,
+            contractElement: boundaryKind,
             properties: properties);
     }
 

@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Final Tasks
 
-Status: task-7-legacy-data-storage-attachment-precision-ready-for-review
+Status: task-7-async-callback-flow-boundary-attachment-precision-ready-for-review
 
 ## Spec Delivery Tasks
 
@@ -205,7 +205,15 @@ current `dev` code or merged PR records prove the behavior.
       model projection, and the slice added focused evidence that selected
       entity/storage descriptors attach only through selected static
       route-flow paths while adjacent unjoined storage descriptors preserve
-      `DataSurfaceAttachmentMissing`.
+      `DataSurfaceAttachmentMissing`. Branch
+      `codex/task7-validation-guard-attachments` audited `origin/dev` at
+      `825834304185f6934f27eeeb1b07cae06b7d22bd`, rebased onto `origin/dev`
+      at `419cfeb1a46f6ffcfac954e8d2b2a7868d39f113`, and selected the
+      async/callback flow-boundary sub-slice: selected `CallbackBoundary` and
+      `AsyncBoundary` fact-symbol rows now project as review-tier
+      `flow-boundary` logic context only when joined to selected static
+      route-flow symbols, while adjacent unjoined boundary evidence preserves
+      `FactSymbolProjectionUnavailable`.
   - [ ] Attach service, repository, object/projection, query-shape, SQL-shape,
         legacy-data, package/config, HTTP client, WCF, ASMX/SOAP, remoting,
         event/message, storage, validation/guard, serializer/contract,
@@ -243,6 +251,11 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_legacy_data_storage_surfaces_only_from_selected_static_path`
           and
           `Route_flow_does_not_infer_adjacent_legacy_data_storage_without_selected_join`.
+    - [x] Async/callback flow-boundary fact-symbol projection sub-slice
+          covered by
+          `Route_flow_attaches_async_callback_boundaries_only_from_selected_static_path`
+          and
+          `Route_flow_does_not_infer_adjacent_async_callback_boundary_without_selected_join`.
   - [x] Render argument-flow and parameter-forward value-origin rows only when
         joined to selected static route-flow rows.
   - [x] Render fact-symbol context only for selected source-local symbols.
@@ -303,6 +316,13 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_legacy_data_storage_surfaces_only_from_selected_static_path`
           and
           `Route_flow_does_not_infer_adjacent_legacy_data_storage_without_selected_join`.
+    - [x] Async/callback flow-boundary attachment, adjacent-unjoinable
+          fact-symbol gap behavior, value-origin context grouping,
+          deterministic stable IDs, and review-tier classification cap covered
+          by
+          `Route_flow_attaches_async_callback_boundaries_only_from_selected_static_path`
+          and
+          `Route_flow_does_not_infer_adjacent_async_callback_boundary_without_selected_join`.
 
 - [ ] 8. Enforce coverage, classification, and gap downgrade behavior.
       Requirements: 5.
