@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Final Tasks
 
-Status: task-7-remoting-attachment-precision-ready-for-review
+Status: task-7-package-config-attachment-precision-ready-for-review
 
 ## Spec Delivery Tasks
 
@@ -182,7 +182,14 @@ current `dev` code or merged PR records prove the behavior.
       `edf9c7de8f7bc5eba06bbf6cd9b0a3636aa0c117` and selected the remoting
       endpoint dependency-surface sub-slice: remoting static evidence now
       projects as dependency surfaces and attaches only through selected
-      static route-flow paths.
+      static route-flow paths. Branch
+      `codex/task7-package-config-precision-20260626` audited `origin/dev` at
+      `3e987d7d46d2bdae7b9c10441bc16ce2c9332010` and selected the
+      package/config dependency-surface sub-slice: selected package and config
+      fact-symbol rows now project as dependency-surface context only when
+      joined to selected static route-flow rows, package/config terminal
+      surfaces attach only through selected route-flow paths, and adjacent
+      unjoined package/config evidence preserves `DataSurfaceAttachmentMissing`.
   - [ ] Attach service, repository, object/projection, query-shape, SQL-shape,
         legacy-data, package/config, HTTP client, WCF, ASMX/SOAP, remoting,
         event/message, storage, validation/guard, serializer/contract,
@@ -208,6 +215,10 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_remoting_endpoint_surface_only_from_selected_static_path`
           and
           `Route_flow_does_not_infer_adjacent_remoting_endpoint_without_selected_join`.
+    - [x] Package/config dependency-surface sub-slice covered by
+          `Route_flow_attaches_package_config_surfaces_only_from_selected_static_path`
+          and
+          `Route_flow_does_not_infer_adjacent_package_config_surface_without_selected_join`.
   - [x] Render argument-flow and parameter-forward value-origin rows only when
         joined to selected static route-flow rows.
   - [x] Render fact-symbol context only for selected source-local symbols.
@@ -249,6 +260,12 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_remoting_endpoint_surface_only_from_selected_static_path`
           and
           `Route_flow_does_not_infer_adjacent_remoting_endpoint_without_selected_join`.
+    - [x] Package/config surface attachment, adjacent-unjoinable gap behavior,
+          selected fact-symbol dependency projection, dependency context
+          grouping, and deterministic stable IDs covered by
+          `Route_flow_attaches_package_config_surfaces_only_from_selected_static_path`
+          and
+          `Route_flow_does_not_infer_adjacent_package_config_surface_without_selected_join`.
 
 - [ ] 8. Enforce coverage, classification, and gap downgrade behavior.
       Requirements: 5.
