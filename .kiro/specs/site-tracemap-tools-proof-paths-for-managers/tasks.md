@@ -4,7 +4,7 @@ Status: implemented
 Readiness: implemented
 Public claim level: concept
 
-This packet began as a spec-only packet and now tracks the site
+This packet began as a review-only packet and now tracks the site
 implementation phase. Do not implement scanner code, reducer code, core
 generated outputs, runtime behavior, release workflow, or management-decision
 automation in this site branch. Implementation tasks are checked only after

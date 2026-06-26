@@ -1,16 +1,14 @@
 # Site TraceMap Tools Legacy Data Surface Story Design
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Overview
 
-This design defines a future concept-level public surface for legacy data
-surface evidence on `tracemap.tools`. The preferred implementation is a
-standalone route at `/legacy-data-surface/`; a future implementation may choose
-a subsection of `/legacy-dotnet/evidence/` only if route review shows the
-standalone page would duplicate the legacy .NET evidence lane.
+This design defines the implemented concept-level public surface for legacy
+data surface evidence on `tracemap.tools`. The selected implementation is a
+standalone route at `/legacy-data-surface/`.
 
 The surface should make old data evidence easier to discuss in manager,
 reviewer, architect, and engineer conversations while staying bounded to
@@ -21,8 +19,8 @@ data coverage.
 
 ## Route and Placement
 
-- Preferred route: `/legacy-data-surface/`
-- Preferred source file: `site/src/legacy-data-surface/index.html`
+- Selected route: `/legacy-data-surface/`
+- Source file: `site/src/legacy-data-surface/index.html`
 - Page type: concept-level public site page or section
 - Public claim level: `concept`
 - Discovery category: legacy evidence, modernization planning, or use-case

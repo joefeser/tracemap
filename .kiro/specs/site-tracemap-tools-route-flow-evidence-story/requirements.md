@@ -1,25 +1,25 @@
 # Site TraceMap Tools Route-Flow Evidence Story Requirements
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Summary
 
-Define a future public-safe `tracemap.tools` page or section that tells the
-route-flow evidence story: how TraceMap can present route-centered static
-evidence from an endpoint or root selector to selected service, data, query,
-dependency, value-origin, and gap context when the checked-in evidence supports
-that story.
+This packet defines the implemented public-safe `tracemap.tools` page that
+tells the route-flow evidence story: how TraceMap can present route-centered
+static evidence from an endpoint or root selector to selected service, data,
+query, dependency, value-origin, and gap context when the checked-in evidence
+supports that story.
 
-This is a spec-only public-site phase. It does not implement site code,
-scanner behavior, route-flow behavior, reducer behavior, generated artifacts,
-validation scripts, runtime probes, release gates, or public copy changes.
+The implementation is limited to public static-site source, metadata, and
+validation. It does not implement scanner behavior, route-flow behavior,
+reducer behavior, generated scan artifacts, runtime probes, or release gates.
 
-The future surface is concept-level. It may explain how a route-flow evidence
-story should be read, what fields must travel with each row, and when the
-reader must stop. It must not claim route-flow capabilities are shipped unless
-the implementation cites current-branch public-safe evidence, such as a
+The implemented surface is concept-level. It explains how a route-flow
+evidence story should be read, what fields must travel with each row, and when
+the reader must stop. It must not claim route-flow capabilities are shipped
+unless the implementation cites current-branch public-safe evidence, such as a
 checked-in spec state, test, rule catalog entry, report schema, or public demo
 artifact that proves the narrower statement.
 
@@ -29,12 +29,12 @@ No public conclusion without evidence.
 
 ## Claim Level Rationale
 
-Use `Public claim level: concept` because this packet defines a future public
+Use `Public claim level: concept` because this packet defines a public
 explanation surface. Current route-flow core work contains shipped and
-in-progress static evidence slices, but this site surface itself is not
-implemented and does not add a new route-flow artifact or demo result.
+in-progress static evidence slices, but this site surface does not add a new
+route-flow artifact or demo result.
 
-Do not upgrade the future page above `concept` merely because it links to
+Do not upgrade the page above `concept` merely because it links to
 route-flow specs, tests, or reports. Any stronger row-level statement must
 cite public-safe evidence for that row and preserve the row's rule ID,
 evidence tier, coverage label, supporting IDs, limitations, and stop

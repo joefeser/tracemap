@@ -1,23 +1,23 @@
 # Site TraceMap Tools Legacy Data Surface Story Requirements
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Summary
 
-Define a future public-safe `tracemap.tools` page or section about legacy data
-surface evidence. The page should help managers, reviewers, architects, and
-engineers understand what deterministic static evidence can say about legacy
-data surfaces without implying raw data access, database execution, production
-behavior, migration success, or complete coverage.
+This packet defines the implemented public-safe `tracemap.tools` page about
+legacy data surface evidence. The page helps managers, reviewers, architects,
+and engineers understand what deterministic static evidence can say about
+legacy data surfaces without implying raw data access, database execution,
+production behavior, migration success, or complete coverage.
 
-The future page is concept-level only. It describes the story shape for
+The implemented page is concept-level only. It describes the story shape for
 design-time metadata, data model metadata, ORM or mapping clues,
 SQL/query-facing references, storage and persistence context, proof paths, and
-limitations. It does not implement scanner behavior, reducer behavior, site
-code, data access, database execution, runtime SQL observation, migration
-automation, AI impact analysis, or release approval.
+limitations. It does not implement scanner behavior, reducer behavior, data
+access, database execution, runtime SQL observation, migration automation, AI
+impact analysis, or release approval.
 
 ## Shared Site Principle
 
