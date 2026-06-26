@@ -1,7 +1,7 @@
 # Site TraceMap Tools Legacy .NET Evidence Lane Requirements
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Summary
