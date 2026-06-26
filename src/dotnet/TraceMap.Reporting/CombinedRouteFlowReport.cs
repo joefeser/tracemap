@@ -670,7 +670,7 @@ public static class CombinedRouteFlowReporter
                 return new RouteFlowSource(
                     SafeLabel(source.Label),
                     source.SourceIndexId,
-                    source.ScanId,
+                    SafeSelector(source.ScanId) ?? $"scan-id-hash:{CombinedReportHelpers.Hash(source.ScanId ?? "unknown", 16)}",
                     SafeCommitSha(source.CommitSha),
                     source.Language ?? "unknown",
                     source.AnalysisLevel,
@@ -1961,12 +1961,13 @@ public static class CombinedRouteFlowReporter
     {
         var method = node.HttpMethod ?? string.Empty;
         var pathKey = node.NormalizedPathKey ?? string.Empty;
+        var safePathKey = SafeSelector(pathKey) ?? $"route-key-hash:{CombinedReportHelpers.Hash(pathKey, 16)}";
         return new RouteFlowEntryEvidence(
             $"entry:{entryKind}:{CombinedReportHelpers.Hash(node.NodeId, 16)}",
             entryKind,
             method,
-            pathKey,
-            pathKey,
+            safePathKey,
+            safePathKey,
             SafeSelector(node.SymbolId ?? node.DisplayName),
             ClassificationForTier(node.EvidenceTier),
             CoverageFor(node.EvidenceTier),
@@ -2123,24 +2124,28 @@ public static class CombinedRouteFlowReporter
             {
                 var node = pair.Node;
                 var stable = StableSurfaceKey(node);
+                var displayName = SafeSurfaceDisplayName(node);
+                var metadata = Metadata(
+                    ("operationName", node.OperationName),
+                    ("tableNameHash", string.IsNullOrWhiteSpace(node.TableName) ? null : CombinedReportHelpers.Hash(node.TableName!, 16)),
+                    ("columnNamesHash", string.IsNullOrWhiteSpace(node.ColumnNames) ? null : CombinedReportHelpers.Hash(node.ColumnNames!, 16)),
+                    ("sourceKind", node.SourceKind),
+                    ("shapeHash", node.ShapeHash),
+                    ("textHash", node.TextHash),
+                    ("packageName", node.PackageName),
+                    ("configKeyHash", string.IsNullOrWhiteSpace(node.ConfigKey) ? null : CombinedReportHelpers.Hash(node.ConfigKey!, 16)),
+                    ("surfaceSubtype", node.SurfaceSubtype));
+                var redactionApplied = MetadataRedactionApplied(metadata)
+                    || !string.Equals(displayName, node.SurfaceName ?? node.DisplayName, StringComparison.Ordinal);
                 return new RouteFlowDependencySurface(
                     $"surface:{CombinedReportHelpers.Hash(stable, 16)}",
                     node.SurfaceKind!,
-                    node.SurfaceName ?? node.DisplayName,
+                    displayName,
                     stable,
                     WeakestClassification(ClassifyRouteRow(null, node, sources), ClassificationFromPath(pair.Path.Classification)),
                     CoverageFor(node.EvidenceTier),
-                    Metadata(
-                        ("operationName", node.OperationName),
-                        ("tableNameHash", string.IsNullOrWhiteSpace(node.TableName) ? null : CombinedReportHelpers.Hash(node.TableName!, 16)),
-                        ("columnNamesHash", string.IsNullOrWhiteSpace(node.ColumnNames) ? null : CombinedReportHelpers.Hash(node.ColumnNames!, 16)),
-                        ("sourceKind", node.SourceKind),
-                        ("shapeHash", node.ShapeHash),
-                        ("textHash", node.TextHash),
-                        ("packageName", node.PackageName),
-                        ("configKeyHash", string.IsNullOrWhiteSpace(node.ConfigKey) ? null : CombinedReportHelpers.Hash(node.ConfigKey!, 16)),
-                        ("surfaceSubtype", node.SurfaceSubtype)),
-                    EvidenceFromNode(DependencySurfaceRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? DependencySurfaceRuleId], sources),
+                    metadata,
+                    EvidenceFromNode(DependencySurfaceRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? DependencySurfaceRuleId], sources, redactionApplied),
                     node.SurfaceSubtype);
             })
             .GroupBy(surface => surface.StableKey, StringComparer.Ordinal)
@@ -2163,22 +2168,26 @@ public static class CombinedRouteFlowReporter
                 continue;
             }
 
+            var metadata = Metadata(
+                ("nodeKind", node.NodeKind),
+                ("surfaceKind", node.SurfaceKind),
+                ("surfaceSubtype", node.SurfaceSubtype),
+                ("operationName", node.OperationName),
+                ("sourceKind", node.SourceKind),
+                ("shapeHash", node.ShapeHash));
+            var displayName = SafeSurfaceDisplayName(node);
+            var redactionApplied = MetadataRedactionApplied(metadata)
+                || !string.Equals(displayName, node.SurfaceName ?? node.DisplayName, StringComparison.Ordinal);
             rows.Add(new RouteFlowLogicRow(
                 $"logic:{CombinedReportHelpers.Hash($"{node.NodeId}:{kind}", 16)}",
                 kind,
-                node.SurfaceName ?? node.DisplayName,
+                displayName,
                 "path-context",
                 attachedByNode.GetValueOrDefault(node.NodeId),
                 ClassifyRouteRow(null, node, sources),
                 CoverageFor(node.EvidenceTier),
-                Metadata(
-                    ("nodeKind", node.NodeKind),
-                    ("surfaceKind", node.SurfaceKind),
-                    ("surfaceSubtype", node.SurfaceSubtype),
-                    ("operationName", node.OperationName),
-                    ("sourceKind", node.SourceKind),
-                    ("shapeHash", node.ShapeHash)),
-                EvidenceFromNode(LogicSurfaceRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? LogicSurfaceRuleId], sources)));
+                metadata,
+                EvidenceFromNode(LogicSurfaceRuleId, node, node.CombinedFactId is null ? [] : [node.CombinedFactId], [], [node.RuleId ?? LogicSurfaceRuleId], sources, redactionApplied)));
         }
 
         foreach (var edge in paths.SelectMany(path => path.Edges).OrderBy(edge => edge.EdgeId, StringComparer.Ordinal))
@@ -2203,6 +2212,9 @@ public static class CombinedRouteFlowReporter
         return rows
             .GroupBy(row => row.LogicRowId, StringComparer.Ordinal)
             .Select(group => group.First())
+            .OrderBy(row => row.LogicKind, StringComparer.Ordinal)
+            .ThenBy(row => row.DisplayName, StringComparer.Ordinal)
+            .ThenBy(row => row.LogicRowId, StringComparer.Ordinal)
             .ToArray();
     }
 
@@ -4093,8 +4105,23 @@ public static class CombinedRouteFlowReporter
                 ["Unknown or unverified source identity caps route-flow conclusions."]));
     }
 
-    private static RouteFlowEvidenceRef EvidenceFromNode(string routeRuleId, CombinedPathNode node, IReadOnlyList<string> facts, IReadOnlyList<string> edges, IReadOnlyList<string?> supportingRules, IReadOnlyList<RouteFlowSource> sources)
+    private static RouteFlowEvidenceRef EvidenceFromNode(
+        string routeRuleId,
+        CombinedPathNode node,
+        IReadOnlyList<string> facts,
+        IReadOnlyList<string> edges,
+        IReadOnlyList<string?> supportingRules,
+        IReadOnlyList<RouteFlowSource> sources,
+        bool redactionApplied = false)
     {
+        var supportingRuleIds = supportingRules
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .Append(routeRuleId)
+            .Concat(redactionApplied ? [RedactionRuleId] : [])
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
         return new RouteFlowEvidenceRef(
             routeRuleId,
             node.EvidenceTier ?? EvidenceTiers.Tier4Unknown,
@@ -4107,7 +4134,7 @@ public static class CombinedRouteFlowReporter
             ExtractorVersionFor(node.SourceLabel, sources),
             facts.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             edges.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            supportingRules.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value!).Append(routeRuleId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            supportingRuleIds,
             LimitationsFor(routeRuleId));
     }
 
@@ -4564,6 +4591,28 @@ public static class CombinedRouteFlowReporter
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
     }
 
+    private static bool MetadataRedactionApplied(IReadOnlyDictionary<string, string> metadata)
+    {
+        return metadata.Any(pair =>
+            pair.Key.EndsWith("Hash", StringComparison.Ordinal)
+            || pair.Value.StartsWith("redacted-hash:", StringComparison.Ordinal)
+            || string.Equals(pair.Value, "redacted", StringComparison.Ordinal));
+    }
+
+    private static string SafeSurfaceDisplayName(CombinedPathNode node)
+    {
+        if (!string.IsNullOrWhiteSpace(node.ConfigKey))
+        {
+            return $"config-key-hash:{CombinedReportHelpers.Hash(node.ConfigKey!, 16)}";
+        }
+
+        var value = node.SurfaceName ?? node.DisplayName;
+        var safe = SafeSelector(value);
+        return safe is null
+            ? $"surface-name-hash:{CombinedReportHelpers.Hash(value ?? node.NodeId, 16)}"
+            : safe;
+    }
+
     private static bool IdentityVerified(CombinedReportSource source)
     {
         return CombinedReportHelpers.SourceIdentityVerified(source)
@@ -4612,18 +4661,91 @@ public static class CombinedRouteFlowReporter
         }
 
         var trimmed = value.Trim();
-        if (trimmed.Contains("://", StringComparison.Ordinal)
-            || trimmed.Contains(":\\", StringComparison.Ordinal)
-            || (trimmed.StartsWith("/", StringComparison.Ordinal) && !IsSafeNormalizedPathKey(trimmed))
-            || trimmed.Contains("SELECT ", StringComparison.OrdinalIgnoreCase)
-            || trimmed.Contains("PASSWORD", StringComparison.OrdinalIgnoreCase)
-            || trimmed.Contains("SECRET", StringComparison.OrdinalIgnoreCase)
-            || trimmed.Contains("TOKEN", StringComparison.OrdinalIgnoreCase))
+        if (IsUnsafeRouteFlowValue(trimmed))
         {
             return $"redacted-hash:{CombinedReportHelpers.Hash(trimmed, 16)}";
         }
 
         return trimmed.ReplaceLineEndings(" ");
+    }
+
+    private static bool IsUnsafeRouteFlowValue(string value)
+    {
+        return value.Contains("://", StringComparison.Ordinal)
+            || value.Contains(":\\", StringComparison.Ordinal)
+            || value.StartsWith("git@", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("?")
+            || value.Contains("&")
+            || value.Contains("SELECT ", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("INSERT ", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("UPDATE ", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("DELETE ", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("PASSWORD", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("SECRET", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("TOKEN", StringComparison.OrdinalIgnoreCase)
+            || HasPrivateMarker(value)
+            || value.Contains("CONNECTIONSTRING", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("SERVER=", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("USER ID=", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("UID=", StringComparison.OrdinalIgnoreCase)
+            || LooksLikeKnownUnsafeHostname(value)
+            || LooksLikeSourceSnippet(value)
+            || (value.StartsWith("/", StringComparison.Ordinal) && !IsSafeNormalizedPathKey(value));
+    }
+
+    private static bool HasPrivateMarker(string value)
+    {
+        return value.Contains("/private", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("private/", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("private.", StringComparison.OrdinalIgnoreCase)
+            || value.Contains(".private", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("private-", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("private_", StringComparison.OrdinalIgnoreCase)
+            || value.Contains(" private", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeKnownUnsafeHostname(string value)
+    {
+        if (value.Contains(' ') || value.Contains('/') || value.Contains('\\') || !value.Contains('.'))
+        {
+            return false;
+        }
+
+        var labels = value.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return labels.Length >= 2
+            && labels.All(label => label.Length > 0 && label.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '-'))
+            && (labels[^1] is "test" or "invalid" or "local" or "internal"
+                || labels.Contains("example", StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static bool LooksLikeSourceSnippet(string value)
+    {
+        if (IsSafeNormalizedPathKey(value) || IsSafeMethodPathSelector(value))
+        {
+            return false;
+        }
+
+        return value.Contains("public ", StringComparison.Ordinal)
+            || value.Contains("private ", StringComparison.Ordinal)
+            || value.Contains("class ", StringComparison.Ordinal)
+            || value.Contains("return ", StringComparison.Ordinal)
+            || value.Contains("=>", StringComparison.Ordinal)
+            || value.Contains('{')
+            || value.Contains('}');
+    }
+
+    private static bool IsSafeMethodPathSelector(string value)
+    {
+        var split = value.IndexOf(' ');
+        if (split <= 0)
+        {
+            return false;
+        }
+
+        var method = value[..split].Trim();
+        var path = value[(split + 1)..].Trim();
+        return method is "GET" or "POST" or "PUT" or "PATCH" or "DELETE" or "HEAD" or "OPTIONS" or "ANY"
+            && IsSafeNormalizedPathKey(path);
     }
 
     private static bool IsSafeNormalizedPathKey(string value)
@@ -4634,6 +4756,15 @@ public static class CombinedRouteFlowReporter
             || value.Contains('\\', StringComparison.Ordinal)
             || value.Contains('?', StringComparison.Ordinal)
             || value.Contains('#', StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (value.StartsWith("/Users/", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("/tmp/", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("/var/", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("/home/", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("/private/", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
