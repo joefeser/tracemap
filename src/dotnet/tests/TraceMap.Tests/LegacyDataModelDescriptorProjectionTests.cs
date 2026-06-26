@@ -87,6 +87,42 @@ public sealed class LegacyDataModelDescriptorProjectionTests
         Assert.Equal("association", descriptor.MappingKind);
     }
 
+    [Fact]
+    public void Legacy_data_descriptors_with_same_display_name_remain_separate_across_formats()
+    {
+        var dbml = SurfaceInput(
+            FactTypes.LegacyDataEntityDeclared,
+            RuleIds.LegacyDataDbml,
+            EvidenceTiers.Tier2Structural,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["descriptorRole"] = "conceptual",
+                ["displayName"] = "Customer",
+                ["metadataFormat"] = "dbml",
+                ["modelKind"] = "entity",
+                ["stableModelKey"] = "ldm:dbml:customer"
+            });
+        var nhibernate = SurfaceInput(
+            FactTypes.LegacyDataEntityDeclared,
+            RuleIds.LegacyDataOrmNHibernate,
+            EvidenceTiers.Tier2Structural,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["descriptorRole"] = "conceptual",
+                ["displayName"] = "Customer",
+                ["metadataFormat"] = "nhibernate-hbm",
+                ["modelKind"] = "entity",
+                ["stableModelKey"] = "ldm:nhibernate-hbm:customer"
+            }) with { CombinedFactId = "combined-2", OriginalFactId = "fact-2" };
+
+        var descriptors = LegacyDataModelDescriptorProjection.BuildDescriptors([dbml, nhibernate]);
+
+        Assert.Equal(2, descriptors.Count);
+        Assert.Equal(["dbml", "nhibernate-hbm"], descriptors.Select(row => row.MetadataFormat).Order(StringComparer.Ordinal));
+        Assert.Equal(2, descriptors.Select(row => row.DescriptorId).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(descriptors, descriptor => Assert.DoesNotContain("duplicate-stable-identity", descriptor.Limitations));
+    }
+
     private static CombinedSurfaceFactInput SurfaceInput(
         string factType,
         string ruleId,

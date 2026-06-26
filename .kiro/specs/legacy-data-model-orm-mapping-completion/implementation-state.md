@@ -1,7 +1,8 @@
 # Legacy Data Model ORM Mapping Completion Implementation State
 
-Status: ready-for-implementation
+Status: implementation-slice-ready-for-pr
 Spec authoring branch: codex/spec-legacy-data-model-orm-mapping-completion
+Implementation branch: codex/legacy-orm-mapping-slice
 Target base: dev
 Public claim level: hidden
 
@@ -9,6 +10,21 @@ Public claim level: hidden
 
 This is a spec-only branch for the remaining legacy data model extraction depth.
 No product code is implemented here.
+
+2026-06-26 implementation slice:
+
+- Confirmed existing NHibernate, unsupported ORM, generated-link, descriptor
+  projection, report/export, and rule catalog behavior already covers a large
+  portion of this broad spec on `dev`.
+- Added rule-catalog regression coverage for legacy data model gap/vocabulary
+  ownership text before introducing any new emitted classification strings.
+- Added cross-format descriptor identity coverage proving identical display
+  names in DBML and NHibernate metadata remain separate descriptor identities.
+- Added an index-combine-report regression proving one relationship mapping
+  source fact creates exactly one terminal `legacy-data` report surface and
+  retains the source metadata fact as supporting evidence.
+- No extractor behavior changed in this slice; the new tests close evidence
+  gaps around already-shipped implementation behavior.
 
 The spec consolidates open follow-ups from prior legacy data metadata,
 model-metadata, reporting-integration, and legacy validation specs into a single
@@ -100,6 +116,15 @@ dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo <public-safe-fixture
 ./scripts/check-private-paths.sh
 git diff --check
 ```
+
+Implementation validation run on `codex/legacy-orm-mapping-slice`:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "LegacyDataModelRuleCatalogTests|CombinedDependencyReportTests"`:
+  passed, 22 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "LegacyDataModelDescriptorProjectionTests|LegacyDataModelRuleCatalogTests|CombinedDependencyReportTests"`:
+  passed, 26 tests.
+- Both runs reported existing NU1903 warnings for
+  `SQLitePCLRaw.lib.e_sqlite3` 2.1.11.
 
 Pinned smoke checks from `docs/VALIDATION.md` must run or be explicitly
 deferred when implementation touches language adapters, shared graph/report
