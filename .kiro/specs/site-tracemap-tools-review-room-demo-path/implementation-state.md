@@ -76,11 +76,13 @@ Future implementation must re-check generated output before adding links.
 
 - Kiro Opus spec review command:
   `node scripts/kiro-review.mjs --phase site-tracemap-tools-review-room-demo-path --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text`
-  exited 1 after saving full-coverage review artifacts. Clean review:
+  exited 1 after saving full-coverage review artifacts and review text.
+  Saved cleaned review text:
   `.tmp/kiro-reviews/site-tracemap-tools-review-room-demo-path/2026-06-26T052818-327Z-spec-claude-opus-4.8.clean.md`.
 - Kiro Sonnet spec review command:
   `node scripts/kiro-review.mjs --phase site-tracemap-tools-review-room-demo-path --kind spec --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
-  exited 1 after saving full-coverage review artifacts. Clean review:
+  exited 1 after saving full-coverage review artifacts and review text.
+  Saved cleaned review text:
   `.tmp/kiro-reviews/site-tracemap-tools-review-room-demo-path/2026-06-26T053011-641Z-spec-claude-sonnet-4.6.clean.md`.
 - Medium or higher actionable findings patched:
   - Promoted owner-routing role vocabulary and the non-proof disclaimer into
@@ -97,7 +99,8 @@ Future implementation must re-check generated output before adding links.
   - Named the fallback Open Graph type as `article`.
 - Bounded re-review command:
   `node scripts/kiro-review.mjs --phase site-tracemap-tools-review-room-demo-path --kind spec --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text`
-  exited 1 after saving full-coverage review artifacts. Clean review:
+  exited 1 after saving full-coverage review artifacts and review text.
+  Saved cleaned review text:
   `.tmp/kiro-reviews/site-tracemap-tools-review-room-demo-path/2026-06-26T053221-416Z-spec-claude-sonnet-4.6.clean.md`.
 - Medium findings from bounded re-review patched:
   - Required non-empty limitation, stop condition, and next owner or route
