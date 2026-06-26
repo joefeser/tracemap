@@ -420,10 +420,18 @@ Validation status:
   passed locally with 2 tests and the existing NU1903 warning.
 - Post-Qodo doc-drift patch `./scripts/check-private-paths.sh`: passed.
 - Post-Qodo doc-drift patch `git diff --check`: passed.
+- Post-Qodo stale-phrase patch
+  `rg -n 'spec-only|limited to this spec folder|limited to \\.kiro' .kiro/specs/route-flow-service-data-composition-final`:
+  passed with no matches.
+- Post-Qodo stale-phrase patch
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_http_client_surface_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_http_client_surface_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning.
+- Post-Qodo stale-phrase patch `./scripts/check-private-paths.sh`: passed.
+- Post-Qodo stale-phrase patch `git diff --check`: passed.
 
 ## Summary
 
-This packet now tracks both the original spec-only delivery and subsequent
+This packet now tracks both the original spec delivery and subsequent
 focused implementation/test slices for the remaining route-centered static
 service/data composition work. The target product behavior is a conservative
 `tracemap route-flow` trace that can start at endpoint/root method evidence,
@@ -487,7 +495,7 @@ classification.
 
 ## Review Plan
 
-Required review loop for this spec-only branch:
+Required review loop for the original spec delivery branch:
 
 ```bash
 node scripts/kiro-review.mjs --phase route-flow-service-data-composition-final --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text
@@ -603,7 +611,8 @@ Also discover whether a dedicated spec/docs validation command exists. If none
 exists, record the discovery command and result here.
 
 Product implementation validation is documented in `tasks.md` and `design.md`,
-but it is intentionally deferred because this branch is spec-only.
+but it is intentionally deferred because the original branch delivered only
+spec files.
 
 ## Validation Log
 
