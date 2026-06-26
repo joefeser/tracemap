@@ -138,6 +138,22 @@ Validation status:
 - `dotnet test src/dotnet/TraceMap.sln`: passed locally with 658 tests.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+- ACK-authorized Codex patch after PR review added source symbol identity
+  metadata to real `BranchFeasibility` facts so scan-written
+  `fact_symbols`/`combined_fact_symbols` rows exist for route-flow guard
+  projection. Post-patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~SqliteIndexWriterTests.Scan_writes_semantic_symbol_tables_to_sqlite"`
+  passed locally with 1 test,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_validation_guard_branches_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_validation_guard_without_selected_join"`
+  passed locally with 2 tests,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 63 tests, `dotnet build src/dotnet/TraceMap.sln`
+  passed with 0 errors, `dotnet test src/dotnet/TraceMap.sln` passed locally
+  with 673 tests,
+  `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-validation-guard-modern-sample`
+  passed with required outputs present, `./scripts/check-private-paths.sh`
+  passed, and `git diff --check` passed. NuGet emitted the same existing
+  `SQLitePCLRaw.lib.e_sqlite3` warning.
 
 Follow-ups:
 
