@@ -157,6 +157,31 @@ test("validateStaticVsRuntimeDist allows marked forbidden-wording teaching examp
   assert.deepEqual(errors, []);
 });
 
+test("validateStaticVsRuntimeDist rejects structural forbidden-wording wrappers", async (t) => {
+  const root = await createManagedStaticVsRuntimeDistFixture(t, {
+    pageHtml: staticVsRuntimePage("<main data-forbidden-wording-example><p>TraceMap proved runtime behavior.</p></main>")
+  });
+  const errors = [];
+
+  await validateStaticVsRuntimeDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden-wording examples must use aside or blockquote, got main/);
+  assert.match(errors.join("\n"), /unsupported field-guide claim wording: TraceMap proved/);
+});
+
+test("validateStaticVsRuntimeDist rejects oversized forbidden-wording wrappers", async (t) => {
+  const largeExample = Array.from({ length: 70 }, (_, index) => `claim-example-${index}`).join(" ");
+  const root = await createManagedStaticVsRuntimeDistFixture(t, {
+    pageHtml: staticVsRuntimePage(`<aside data-forbidden-wording-example><p>TraceMap proved runtime behavior. ${largeExample}</p></aside>`)
+  });
+  const errors = [];
+
+  await validateStaticVsRuntimeDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden-wording example is too large/);
+  assert.match(errors.join("\n"), /unsupported field-guide claim wording: TraceMap proved/);
+});
+
 test("validateStaticVsRuntimeDist rejects forbidden field-guide wording outside marked examples", async (t) => {
   const root = await createManagedStaticVsRuntimeDistFixture(t, {
     pageHtml: staticVsRuntimePage("<p>TraceMap proved runtime behavior and runtime confirmed the result.</p>")
