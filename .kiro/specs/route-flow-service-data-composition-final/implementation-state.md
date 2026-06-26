@@ -478,6 +478,10 @@ Oddities:
   scanner-shaped legacy metadata descriptors with null `sourceSymbol` and
   generated/model `targetSymbol` attachment, then reaches those descriptors
   through selected static route-flow calls.
+- A follow-up ACK review found that readable `displayNameHash` fixture values
+  could still render normalized descriptor hints in route-flow labels. The
+  patch now uses opaque hash-like fixture values and asserts the lowercase
+  descriptor tokens are absent from Markdown and JSON.
 
 Validation status:
 
@@ -507,6 +511,18 @@ Validation status:
   with 669 tests and the existing NU1903 warning.
 - Post-ACK patch `./scripts/check-private-paths.sh`: passed.
 - Post-ACK patch `git diff --check`: passed.
+- Post-second-ACK patch
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_legacy_data_storage_surfaces_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_legacy_data_storage_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning.
+- Post-second-ACK patch
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 59 tests and the existing NU1903 warning.
+- Post-second-ACK patch `dotnet build src/dotnet/TraceMap.sln`: passed with
+  0 errors and the existing NU1903 warning.
+- Post-second-ACK patch `dotnet test src/dotnet/TraceMap.sln`: passed locally
+  with 669 tests and the existing NU1903 warning.
+- Post-second-ACK patch `./scripts/check-private-paths.sh`: passed.
+- Post-second-ACK patch `git diff --check`: passed.
 
 ## Summary
 

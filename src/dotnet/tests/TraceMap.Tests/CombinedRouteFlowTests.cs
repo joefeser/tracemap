@@ -227,7 +227,7 @@ public sealed class CombinedRouteFlowTests
             CallFact(server, repository, generatedModel, "Infrastructure/OrderRepository.cs", 18, targetSymbolKind: "NamedType"),
             LegacyDataEntityFact(server, null, "CustomerLedger", "Models/Store.dbml", 21, targetSymbol: generatedModel),
             LegacyDataStorageObjectFact(server, null, "CustomerLedgerTable", "Models/Store.dbml", 26, targetSymbol: generatedModel),
-            LegacyDataStorageObjectFact(server, null, "AuditTrailTable", "Models/Audit.dbml", 31, "audit-trail-hash", "ldm:route-flow-audit-storage-key", targetSymbol: unrelatedGeneratedModel)
+            LegacyDataStorageObjectFact(server, null, "AuditTrailTable", "Models/Audit.dbml", 31, "9f83c6a1d047e2b4", "ldm:route-flow-audit-storage-key", targetSymbol: unrelatedGeneratedModel)
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
 
@@ -276,6 +276,10 @@ public sealed class CombinedRouteFlowTests
         Assert.DoesNotContain("CustomerLedgerTable", json, StringComparison.Ordinal);
         Assert.DoesNotContain("AuditTrailTable", markdown, StringComparison.Ordinal);
         Assert.DoesNotContain("AuditTrailTable", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("customer-ledger", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("customer-ledger", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("audit-trail", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("audit-trail", json, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -292,7 +296,7 @@ public sealed class CombinedRouteFlowTests
         SqliteIndexWriter.Write(serverIndex, server, [
             RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
             CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
-            LegacyDataStorageObjectFact(server, null, "AuditTrailTable", "Models/Audit.dbml", 31, "audit-trail-hash", "ldm:route-flow-audit-storage-key", targetSymbol: unrelatedGeneratedModel)
+            LegacyDataStorageObjectFact(server, null, "AuditTrailTable", "Models/Audit.dbml", 31, "9f83c6a1d047e2b4", "ldm:route-flow-audit-storage-key", targetSymbol: unrelatedGeneratedModel)
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
 
@@ -2882,7 +2886,7 @@ public sealed class CombinedRouteFlowTests
             line,
             "entity",
             "conceptual",
-            "customer-ledger-hash",
+            "4d20bb6c8ed47712",
             "ldm:route-flow-model-key",
             targetSymbol);
     }
@@ -2893,7 +2897,7 @@ public sealed class CombinedRouteFlowTests
         string displayName,
         string file,
         int line,
-        string displayNameHash = "customer-ledger-table-hash",
+        string displayNameHash = "5c31ea90a85f4d62",
         string stableModelKey = "ldm:route-flow-storage-key",
         string? targetSymbol = null)
     {
