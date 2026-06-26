@@ -51,46 +51,46 @@ Readiness: ready-for-implementation after recorded Kiro reviews and validation.
 Implementation tasks are intentionally unchecked. They are future product work,
 not part of this spec-only branch.
 
-- [ ] 5. Audit and preserve existing paths behavior.
-  - [ ] Inspect the current `tracemap paths` candidate implementation and tests
+- [x] 5. Audit and preserve existing paths behavior.
+  - [x] Inspect the current `tracemap paths` candidate implementation and tests
         from the interface/override/DI paths slice.
-  - [ ] Add or preserve focused tests for interface member and override
+  - [x] Add or preserve focused tests for interface member and override
         candidate derivation before refactoring shared code.
-  - [ ] Confirm `combined.dispatch-candidate.v1` and
+  - [x] Confirm `combined.dispatch-candidate.v1` and
         `combined.dispatch-gap.v1` catalog entries cover the shared builder
         limitations, or update the catalog before behavior changes.
-  - [ ] Preserve existing path Markdown/JSON output unless an additive field is
+  - [x] Preserve existing path Markdown/JSON output unless an additive field is
         explicitly covered by tests.
-  - [ ] Add a byte-identical characterization test proving shared-builder
+  - [x] Add a byte-identical characterization test proving shared-builder
         extraction preserves existing paths output before additive candidate
         behavior lands.
-  - [ ] Audit `combined.dispatch-gap.v1` in `rules/rule-catalog.yml`; if it
+  - [x] Audit `combined.dispatch-gap.v1` in `rules/rule-catalog.yml`; if it
         only lists `DispatchCandidateFanOut`, expand it or add a successor rule
         for the complete closed gap vocabulary before implementation emits new
         candidate gaps.
-  - [ ] Add rule-catalog resolution tests for all candidate gap kinds emitted
+  - [x] Add rule-catalog resolution tests for all candidate gap kinds emitted
         by the shared builder.
 
 - [ ] 6. Extract a shared candidate builder.
-  - [ ] Define an internal candidate edge/gap model with stable IDs,
+  - [x] Define an internal candidate edge/gap model with stable IDs,
         supporting fact IDs, supporting edge IDs, relationship IDs,
         registration fact IDs, file spans, rule IDs, evidence tiers, coverage
         state, and limitations.
-  - [ ] Read original `relationship_kind` metadata from
+  - [x] Read original `relationship_kind` metadata from
         `combined_symbol_relationships` or equivalent relationship rows; do
         not rely only on normalized graph edge kinds such as `implements` or
         `inherits`.
-  - [ ] Derive member-level interface candidates only from
+  - [x] Derive member-level interface candidates only from
         `ImplementsInterfaceMember` evidence.
-  - [ ] Derive explicit interface implementation candidates by symbol ID, not
+  - [x] Derive explicit interface implementation candidates by symbol ID, not
         display-name equality.
-  - [ ] Derive override candidates only from `Overrides` evidence and bounded
+  - [x] Derive override candidates only from `Overrides` evidence and bounded
         override-chain traversal.
   - [ ] Keep type-level fallback candidates as `WeakerCandidate` with
         type-level-bridge-only limitations.
   - [ ] Emit gaps for missing candidates, ambiguous identities, high fan-out,
         reduced coverage, missing schema, generic caveats, and truncation.
-  - [ ] Add deterministic ordering, caps, cycle protection, and byte-stability
+  - [x] Add deterministic ordering, caps, cycle protection, and byte-stability
         tests.
 
 - [ ] 7. Add DI registration-context annotations.

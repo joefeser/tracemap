@@ -263,6 +263,36 @@ public sealed class LegacyFlowCompositionTests
     }
 
     [Fact]
+    public async Task Legacy_paths_preserve_asmx_projection_terminal_surface_kind()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var manifest = Manifest("legacy-app");
+        var handler = "Legacy.Pages.Orders.Submit_Click(System.Object,System.EventArgs)";
+        var binding = WebFormsBinding(manifest, "Pages/Orders.aspx", "Submit", "OnClick", "Submit_Click", 12);
+        var handlerFact = WebFormsHandler(manifest, "Pages/Orders.aspx.cs", handler, "Submit_Click", 24, EvidenceTiers.Tier2Structural, binding.FactId);
+        SqliteIndexWriter.Write(index, manifest, [
+            binding,
+            handlerFact,
+            ProjectionFact(manifest, handler, "Submit_Click", "asmx-operation", FactFactory.Hash("Rate", 32), [binding.FactId, handlerFact.FactId])
+        ]);
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            IndexPath: index,
+            OutputPath: Path.Combine(temp.Path, "flows"),
+            IncludeLegacyRoots: true,
+            View: LegacyFlowReportConstants.View,
+            FromWebFormsEvent: "Submit/OnClick",
+            ToSurface: "asmx-operation"));
+
+        var path = Assert.Single(result.Report.Paths);
+        Assert.Equal("asmx-operation", path.Nodes.Last().SurfaceKind);
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "webforms-event-flow-projection"
+            && edge.RuleId == RuleIds.LegacyFlowStaticTraversal);
+        Assert.DoesNotContain(path.Nodes, node => node.SurfaceKind == "dependency-surface");
+    }
+
+    [Fact]
     public async Task Legacy_paths_apply_classification_filter_after_legacy_downgrade()
     {
         using var temp = new TempDirectory();

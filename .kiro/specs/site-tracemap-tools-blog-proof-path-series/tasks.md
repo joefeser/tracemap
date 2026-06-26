@@ -1,7 +1,7 @@
 # Site TraceMap Tools Blog Proof Path Series Tasks
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Spec Packet Tasks

@@ -2162,6 +2162,18 @@ public static class CSharpSemanticExtractor
                         _ => null
                     };
                     var containingType = symbol.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty;
+                    var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["evidenceKind"] = "SerializerContractMember",
+                        ["attributeName"] = attributeName,
+                        ["contractName"] = contractName,
+                        ["memberName"] = symbol.Name,
+                        ["memberSymbol"] = symbol.ToDisplayString(SymbolFormat),
+                        ["memberType"] = memberType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                        ["containingType"] = containingType
+                    };
+                    AddSymbolProperties(properties, "source", symbol.ContainingType);
+                    AddSymbolProperties(properties, "target", symbol);
                     facts.Add(CreateSemanticFact(
                         FactTypes.SerializerContractMember,
                         RuleIds.CSharpSemanticRuntimeEvidence,
@@ -2172,16 +2184,7 @@ public static class CSharpSemanticExtractor
                         targetSymbol: symbol.ToDisplayString(SymbolFormat),
                         contractElement: contractName,
                         properties: AddAssemblyProperties(
-                            new SortedDictionary<string, string>(StringComparer.Ordinal)
-                            {
-                                ["evidenceKind"] = "SerializerContractMember",
-                                ["attributeName"] = attributeName,
-                                ["contractName"] = contractName,
-                                ["memberName"] = symbol.Name,
-                                ["memberSymbol"] = symbol.ToDisplayString(SymbolFormat),
-                                ["memberType"] = memberType?.ToDisplayString(SymbolFormat) ?? string.Empty,
-                                ["containingType"] = containingType
-                            },
+                            properties,
                             model.GetEnclosingSymbol(attribute.SpanStart)?.ContainingAssembly,
                             symbol.ContainingAssembly)));
                 }
@@ -2786,26 +2789,30 @@ public static class CSharpSemanticExtractor
             return;
         }
 
+        var enclosingSymbol = model.GetEnclosingSymbol(evidenceNode.SpanStart);
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["evidenceKind"] = "BranchFeasibility",
+            ["branchKind"] = branchKind,
+            ["feasibilityKind"] = feasibilityKind,
+            ["checkedSymbol"] = checkedSymbol ?? string.Empty,
+            ["comparisonOperator"] = comparisonOperator ?? string.Empty,
+            ["constantValue"] = constantValue ?? string.Empty,
+            ["conditionExpressionKind"] = GetExpressionKind(condition),
+            ["conditionExpressionHash"] = FactFactory.Hash(condition.ToString(), 32)
+        };
+        AddSymbolProperties(properties, "source", enclosingSymbol);
+
         facts.Add(CreateSemanticFact(
             FactTypes.BranchFeasibility,
             RuleIds.CSharpSemanticRuntimeEvidence,
             projectPath,
             filePath,
             evidenceNode,
-            sourceSymbol: GetEnclosingSymbol(model, evidenceNode),
+            sourceSymbol: enclosingSymbol?.ToDisplayString(SymbolFormat),
             targetSymbol: checkedSymbol ?? branchKind,
             contractElement: branchKind,
-            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["evidenceKind"] = "BranchFeasibility",
-                ["branchKind"] = branchKind,
-                ["feasibilityKind"] = feasibilityKind,
-                ["checkedSymbol"] = checkedSymbol ?? string.Empty,
-                ["comparisonOperator"] = comparisonOperator ?? string.Empty,
-                ["constantValue"] = constantValue ?? string.Empty,
-                ["conditionExpressionKind"] = GetExpressionKind(condition),
-                ["conditionExpressionHash"] = FactFactory.Hash(condition.ToString(), 32)
-            }));
+            properties: properties));
     }
 
     private static bool TryClassifyBranchFeasibility(

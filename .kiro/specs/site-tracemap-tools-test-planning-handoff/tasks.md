@@ -1,7 +1,7 @@
 # Site TraceMap Tools Test Planning Handoff Tasks
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 Ordering note: this is a spec-only phase. Do not implement public-site code,

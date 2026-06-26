@@ -238,6 +238,12 @@ public sealed class CSharpSyntaxExtractorTests
         Assert.Contains("Status", objectShape.Properties["fieldNames"]);
         Assert.Contains("Total", objectShape.Properties["fieldNames"]);
         Assert.True(objectShape.Properties["shapeHash"].Length > 0);
+        Assert.StartsWith("syntax:csharp:", objectShape.Properties["sourceSymbolId"], StringComparison.Ordinal);
+        Assert.NotEqual(objectShape.SourceSymbol, objectShape.Properties["sourceSymbolId"]);
+        Assert.Equal(objectShape.SourceSymbol, objectShape.Properties["sourceSymbolDisplayName"]);
+        Assert.Equal("Run", objectShape.SourceSymbol);
+        Assert.Equal("Method", objectShape.Properties["sourceSymbolKind"]);
+        Assert.Equal("csharp", objectShape.Properties["sourceSymbolLanguage"]);
     }
 
     [Fact]

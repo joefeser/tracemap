@@ -1,40 +1,48 @@
 # Site TraceMap Tools Site Claim Guardrails Implementation State
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Branch
 
 Spec branch: `codex/spec-site-claim-guardrails`
 
-Implementation branch: not started
+Implementation branch: `codex/impl-site-claim-guardrails`
 
 Base: `origin/dev`
 
 Target PR base: `dev`
 
-Worktree: isolated spec worktree; local absolute path intentionally omitted
-from checked-in spec notes.
+Worktree: dedicated implementation worktree; local absolute path intentionally
+omitted from checked-in spec notes.
 
-Scope: spec-only public-site or contributor-facing guardrails packet. Changes
-are limited to this spec directory. Site source, generated output, scanner
-code, reducer code, validation scripts, existing specs, runtime telemetry,
-review automation behavior, and AI/LLM behavior remain out of scope.
+Scope: implemented one public static-site concept route plus focused
+validation and metadata. Changes are limited to site source, site validation
+tests, sitemap/discovery metadata, and this spec packet. Generated
+`site/dist/` and `site/output/` remain generated-only and were not edited by
+hand. Scanner code, reducer code, runtime telemetry, review automation
+behavior, and AI/LLM behavior remain out of scope.
 
 ## Current State
 
-This packet is in spec review. Required spec files:
+Implemented as a standalone public route:
+`/site-claim-guardrails/`.
 
-- `requirements.md`
-- `design.md`
-- `tasks.md`
-- `implementation-state.md`
-- `review-packet.md`
+Implemented files:
+
+- `site/src/site-claim-guardrails/index.html`
+- `site/scripts/site-claim-guardrails.mjs`
+- `site/scripts/site-claim-guardrails.test.mjs`
+- `site/scripts/validate.mjs`
+- `site/scripts/validate.test.mjs`
+- `site/src/_site/pages.json`
+- `site/src/_site/discovery.json`
+- `.kiro/specs/site-tracemap-tools-site-claim-guardrails/*`
 
 ## Claim-Level Decision
 
-Provisional public claim level: `concept`.
+Public claim level: `concept`.
 
 Rationale: the preferred future surface is public-facing governance guidance
 for site copy. It explains how to keep public claims attached to deterministic
@@ -43,45 +51,44 @@ does not publish a new TraceMap finding, scanner capability, reducer result,
 demo result, runtime observation, release decision, operational safety claim,
 or shipped workflow.
 
-Contributor-only alternative: a future implementation may choose
-`Public claim level: hidden` only for a strictly contributor-only page that is
-excluded from public discovery, sitemap metadata, external-facing route output,
-public `/docs/` links, and public navigation. Because `/docs/` is public in
-this repository, any page linked from public `/docs/` is public-facing concept
-guidance. A hidden contributor-only decision must be recorded before
-implementation.
+Hidden contributor-only placement was not selected. Because `/docs/` is public
+in this repository, a page linked from public `/docs/` would still be
+public-facing concept guidance. No hidden contributor-only output was added.
 
 ## Placement Decision
 
-Provisional recommended placement for future implementation:
-`/site-claim-guardrails/`.
+Selected placement: `/site-claim-guardrails/`.
 
 Reason: the guardrails are broad copy-governance rules. A standalone public
 route gives enough space for claim levels, evidence references, forbidden raw
 material, downgrade rules, and validation expectations without crowding the
 canonical claim checklist.
 
-Candidate placements to reevaluate at implementation time:
+Rejected alternatives:
 
-- `/site-claim-guardrails/`: recommended public standalone route.
 - `/docs/site-claim-guardrails/`: allowed if the site docs family is the
-  better home for contributor-facing guidance.
+  better home for contributor-facing guidance, but `/docs/` is public and the
+  route needs enough space to stay distinct from the docs hub.
 - Section on `/review-claim-checklist/`: allowed only if the required content
-  fits without turning the checklist into a general policy page.
+  fits without turning the checklist into a general policy page; rejected so
+  the checklist remains the canonical real-claim decision ritual.
 - Contributor-facing docs page linked from `/docs/`: allowed as public-facing
-  concept guidance because `/docs/` is public in this repository. A hidden
-  contributor-only page must not be linked from public `/docs/` and must be
-  excluded from public sitemap, discovery output, and navigation.
+  concept guidance because `/docs/` is public in this repository; rejected in
+  favor of the standalone route.
+- Strictly hidden contributor-only page: rejected because this implementation
+  is intended as public governance guidance and is registered in sitemap and
+  discovery metadata.
 
 ## Scope Decisions
 
-- Create a guardrails spec, not site implementation.
-- Require visible `Public claim level: concept` for public-facing output.
-- Require visible `No public conclusion without evidence`.
-- Require sections for public claim levels, proof-path requirements, allowed
+- Created a public concept-level guardrails route, not a scanner/reducer
+  product feature.
+- Included visible `Public claim level: concept`.
+- Included visible `No public conclusion without evidence`.
+- Included sections for public claim levels, proof-path requirements, allowed
   evidence references, forbidden raw material, non-claim patterns, downgrade
   and hidden rules, validation expectations, and review handoff.
-- Require guardrail rows for shipped, demo, concept, hidden, raw artifact
+- Included guardrail rows for shipped, demo, concept, hidden, raw artifact
   reference, dev-only feature, reduced coverage, runtime/release wording,
   AI/LLM wording, and private-only support.
 - Keep public claim levels to `shipped`, `demo`, `concept`, and `hidden`.
@@ -93,6 +100,21 @@ Candidate placements to reevaluate at implementation time:
   sample names, command output, hidden validation details, and
   credential-like values.
 - Avoid blame language.
+- Kept `/site-claim-guardrails/` out of primary navigation. The existing
+  public top navigation remains unchanged.
+
+## Adjacent Route Decisions
+
+All adjacent routes named by the spec exist and are linked directly:
+
+- `/review-claim-checklist/`
+- `/proof-source-catalog/`
+- `/roadmap/`
+- `/limitations/`
+- `/questions/objections/`
+- `/language/change-risk/`
+
+No adjacent route substitutions, omissions, or deferrals were needed.
 
 ## Review Commands
 
@@ -254,22 +276,34 @@ Validation after PR-loop patch:
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
 
-## Future Implementation Validation
+## Implementation Validation
 
-Expected future implementation validation:
+Completed implementation validation:
 
-- `npm test` from `site/`.
-- `npm run validate` from `site/`.
-- `npm run build` from `site/`.
-- `git diff --check`.
-- `./scripts/check-private-paths.sh`.
-- Desktop browser sanity if route, layout, or interaction changes are made.
-- Mobile browser sanity if route, layout, or interaction changes are made.
+- `npm test` from `site/`: passed.
+- `npm run validate` from `site/`: passed.
+- `npm run build` from `site/`: passed.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- Desktop browser sanity: passed at 1440x1000. The route rendered with the
+  expected title, visible concept label, shared principle, 10 guardrail rows,
+  programmatic table marker, and no body overflow.
+- Mobile browser sanity: passed at 390x844. The route rendered with the
+  expected title, visible concept label, shared principle, 10 guardrail rows,
+  programmatic table marker, no body overflow, and table overflow contained in
+  the scroll wrapper.
+- PR review-loop hardening on 2026-06-25: patched whitespace-tolerant
+  attribute parsing, narrowed overclaim-scan exemptions to explicit
+  non-claim/rejected zones, added tag-split private-material scanning, added
+  route-metadata overclaim scanning, and removed a broad table-wrapper
+  exemption. Validation after the patch: `npm test -- site-claim-guardrails`,
+  `npm run validate`, `npm run build`, `git diff --check`, and
+  `./scripts/check-private-paths.sh` passed.
 
-Focused validation should cover required guardrail rows, required adjacent
-links, metadata, discovery or sitemap metadata if public standalone,
-forbidden claims, private/raw material, word count bounds, and desktop/mobile
-browser sanity.
+Focused validation covers required guardrail rows, required adjacent links,
+metadata, discovery and sitemap metadata, forbidden claims, private/raw
+material in page and route metadata, word count bounds, and primary-navigation
+absence.
 
 ## Oddities
 
@@ -283,7 +317,4 @@ browser sanity.
 
 ## Follow-Up Items
 
-- Future implementation should confirm the final route or contributor-only
-  placement before changing site code.
-- Future implementation should rerun the site validation and browser sanity
-  checks listed above after adding any public or contributor-facing surface.
+- No follow-up items are required for this implementation phase.

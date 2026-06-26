@@ -37,15 +37,21 @@ const forbiddenAffirmativeAiPositioning =
 const requiredText = [
   "Public claim level: concept",
   "No public conclusion without evidence",
+  "TraceMap shows static dependency evidence and limitations; runtime tools show observed behavior. Neither replaces the other.",
   "deterministic static repository evidence",
   "runtime observability remains the source",
-  "Static evidence question",
+  "Static question",
   "TraceMap evidence shape",
   "Runtime question",
-  "Runtime system owner",
+  "Runtime owner or system",
+  "Limitation",
+  "Handoff",
   "Before runtime review",
   "During handoff",
   "After runtime review",
+  "Reading a static evidence packet",
+  "Where runtime tools remain authoritative",
+  "Proof paths and limitations",
   "TraceMap does not prove runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, incident root cause, service ownership, production dependency understanding, test sufficiency, or complete product coverage",
   "TraceMap does not replace logs, traces, APM, telemetry, incident dashboards, production metrics, tests, service-owner review, incident response, release approval, governance, or human judgment",
   "TraceMap does not perform AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis",
@@ -53,12 +59,13 @@ const requiredText = [
 ];
 
 const requiredAnchors = [
-  "static-questions",
-  "runtime-questions",
-  "handoff-workflow",
-  "proof-paths",
-  "limitations",
-  "non-claims"
+  "different-questions",
+  "how-to-use-both",
+  "reading-static-evidence",
+  "runtime-authority",
+  "non-claims",
+  "proof-paths-and-limitations",
+  "related-links"
 ];
 
 const forbiddenText = [
@@ -72,12 +79,32 @@ const forbiddenText = [
   "index.sqlite",
   "logs/analyzer.log",
   "analyzer.log",
+  "dashboard screenshot",
   "ConnectionString",
   "connection string",
   "Server=",
   "User Id=",
   "Password="
 ];
+
+const forbiddenOperationalClaims = [
+  /\bTraceMap proved\b/i,
+  /\bruntime confirmed\b/i,
+  /\bproduction is unaffected\b/i,
+  /\bno impact\b/i,
+  /\bready to release\b/i,
+  /\bapproved to merge\b/i,
+  /\b(?:TraceMap|static evidence)\b[^.]{0,80}\b(?:confirms|certifies|guarantees|proves|replaces)\b/i,
+  /\b(?:surface|endpoint|route|contract|package|service)\b[^.]{0,80}\bimpacted\b/i
+];
+
+const forbiddenWordingExampleBlockPattern =
+  /<([a-z][\w:-]*)\b[^>]*\bdata-forbidden-wording-example(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?[^>]*>([\s\S]*?)<\/\1>/gi;
+const forbiddenWordingExampleAttributePattern = /\bdata-forbidden-wording-example\b/gi;
+const allowedForbiddenExampleTags = new Set(["aside", "blockquote"]);
+const maxForbiddenExampleWords = 60;
+const maxForbiddenExampleChars = 900;
+const maxForbiddenExampleRemovedWordRatio = 0.15;
 
 export async function validateStaticVsRuntimeDist({ baseUrl = "https://tracemap.tools", dist, errors }) {
   const localErrors = [];
@@ -179,7 +206,12 @@ async function validateStaticVsRuntimePage({ pagePath, errors }) {
   const html = await readFile(pagePath, "utf8");
   const decodedHtml = decodeHtmlEntities(html);
   const pageText = normalizeRenderedText(html);
-  const positioningText = `${decodedHtml} ${pageText}`;
+  validateForbiddenWordingExampleScopes({ html, pageText, errors });
+  const policyHtml = stripForbiddenWordingExamples(html);
+  const policyDecodedHtml = decodeHtmlEntities(policyHtml);
+  const policyPageText = normalizeRenderedText(policyHtml);
+  const positioningText = `${policyDecodedHtml} ${policyPageText}`;
+  const privateMaterialText = `${decodedHtml} ${pageText}`;
   const wordCount = countWords(pageText);
 
   for (const phrase of requiredText) {
@@ -200,8 +232,12 @@ async function validateStaticVsRuntimePage({ pagePath, errors }) {
     }
   }
 
-  if (!/<table\b[\s\S]*?<th\b[^>]*scope=["']col["'][\s\S]*?Static evidence question[\s\S]*?<\/table>/i.test(html)) {
-    errors.push(withEvidence("Static vs runtime page is missing an accessible comparison table with column headers.", "static-vs-runtime/index.html"));
+  if (
+    !/<table\b[\s\S]*?<th\b[^>]*scope=["']col["'][\s\S]*?Static question[\s\S]*?TraceMap evidence shape[\s\S]*?Runtime question[\s\S]*?Runtime owner or system[\s\S]*?Limitation[\s\S]*?Handoff[\s\S]*?<\/table>/i.test(
+      html
+    )
+  ) {
+    errors.push(withEvidence("Static vs runtime page is missing an accessible field-guide comparison table with required column headers.", "static-vs-runtime/index.html"));
   }
 
   if (wordCount < 650 || wordCount > 1900) {
@@ -220,16 +256,15 @@ async function validateStaticVsRuntimePage({ pagePath, errors }) {
     errors.push(withEvidence("Static vs runtime page contains forbidden runtime or AI/LLM positioning.", "static-vs-runtime/index.html"));
   }
 
-  if (/\b(?:TraceMap|static evidence)\b[^.]{0,80}\b(?:confirms|certifies|guarantees|proves|replaces)\b/i.test(positioningText)) {
-    errors.push(withEvidence("Static vs runtime page contains unsupported proof or replacement wording.", "static-vs-runtime/index.html"));
-  }
-
-  if (/\b(?:surface|endpoint|route|contract|package|service)\b[^.]{0,80}\bimpacted\b/i.test(pageText)) {
-    errors.push(withEvidence("Static vs runtime page contains unsupported impacted wording.", "static-vs-runtime/index.html"));
+  for (const pattern of forbiddenOperationalClaims) {
+    const match = positioningText.match(pattern);
+    if (match) {
+      errors.push(withEvidence(`Static vs runtime page contains unsupported field-guide claim wording: ${match[0]}`, "static-vs-runtime/index.html"));
+    }
   }
 
   for (const text of forbiddenText) {
-    if (containsForbiddenText(text, html, decodedHtml, pageText)) {
+    if (containsForbiddenText(text, html, privateMaterialText)) {
       errors.push(withEvidence(`Static vs runtime page contains forbidden public text: ${text}`, "static-vs-runtime/index.html"));
     }
   }
@@ -247,6 +282,51 @@ function routeTextFields(routeEntry) {
 function containsForbiddenText(text, ...values) {
   const normalizedText = text.toLowerCase();
   return values.some((value) => value.toLowerCase().includes(normalizedText));
+}
+
+function validateForbiddenWordingExampleScopes({ html, pageText, errors }) {
+  const examples = collectForbiddenWordingExamples(html);
+  const markerCount = (html.match(forbiddenWordingExampleAttributePattern) ?? []).length;
+  if (markerCount !== examples.length) {
+    errors.push(withEvidence("Static vs runtime page has a malformed forbidden-wording example marker.", "static-vs-runtime/index.html"));
+  }
+
+  let removedWords = 0;
+  for (const example of examples) {
+    const text = normalizeRenderedText(example.html);
+    const wordCount = countWords(text);
+    removedWords += wordCount;
+
+    if (!allowedForbiddenExampleTags.has(example.tag)) {
+      errors.push(withEvidence(`Static vs runtime forbidden-wording examples must use aside or blockquote, got ${example.tag}.`, "static-vs-runtime/index.html"));
+    }
+
+    if (wordCount > maxForbiddenExampleWords || example.html.length > maxForbiddenExampleChars) {
+      errors.push(withEvidence("Static vs runtime forbidden-wording example is too large for a bounded teaching example.", "static-vs-runtime/index.html"));
+    }
+  }
+
+  const totalWords = countWords(pageText);
+  if (totalWords > 0 && removedWords / totalWords > maxForbiddenExampleRemovedWordRatio) {
+    errors.push(withEvidence("Static vs runtime forbidden-wording examples remove too much page text from claim validation.", "static-vs-runtime/index.html"));
+  }
+}
+
+function stripForbiddenWordingExamples(html) {
+  return html.replace(forbiddenWordingExampleBlockPattern, (match, tag) =>
+    allowedForbiddenExampleTags.has(tag.toLowerCase()) &&
+    countWords(normalizeRenderedText(match)) <= maxForbiddenExampleWords &&
+    match.length <= maxForbiddenExampleChars
+      ? ""
+      : match
+  );
+}
+
+function collectForbiddenWordingExamples(html) {
+  return [...html.matchAll(forbiddenWordingExampleBlockPattern)].map((match) => ({
+    html: match[0],
+    tag: match[1].toLowerCase()
+  }));
 }
 
 function hasHref(html, href) {

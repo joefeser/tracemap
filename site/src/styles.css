@@ -439,6 +439,10 @@ h3 {
   border-collapse: collapse;
 }
 
+.guided-path-table {
+  min-width: 1580px;
+}
+
 .claim-ledger-table caption {
   padding: 18px 20px 0;
   color: var(--muted);
@@ -484,6 +488,26 @@ h3 {
 .claim-ledger-table code {
   display: inline-block;
   margin: 1px 0;
+}
+
+.troubleshooting-matrix {
+  min-width: 1380px;
+}
+
+.dotnet-evidence-matrix {
+  min-width: 1680px;
+}
+
+.legacy-data-surface-matrix {
+  min-width: 1760px;
+}
+
+[data-non-claim-region] {
+  border-left: 4px solid #6e5d1c;
+}
+
+[data-rejected-pattern-region] {
+  border-left: 4px solid #9d3f32;
 }
 
 .claim-ledger-note {

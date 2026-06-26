@@ -135,7 +135,7 @@ public static class CombinedSurfaceProjection
 
         var httpMethod = FirstValue(fact.Properties, "httpMethod", "httpMethods", "methodName");
         var normalizedPathKey = FirstValue(fact.Properties, "normalizedPathKey");
-        var operationName = FirstValue(fact.Properties, "operationName");
+        var operationName = FirstValue(fact.Properties, "operationName", "normalizedOperationName");
         var mappingKind = FirstValue(fact.Properties, "mappingKind");
         var mappedName = FirstValue(fact.Properties, "mappedName");
         var tableName = SafeSqlIdentifierList(
@@ -147,7 +147,13 @@ public static class CombinedSurfaceProjection
             80,
             allowSpaces: false);
         var sourceKind = FirstValue(fact.Properties, "sqlSourceKind", "sourceKind");
-        var shapeHash = FirstValue(fact.Properties, "queryShapeHash", "patternHash");
+        var wcfMappingHash = fact.FactType == FactTypes.WcfServiceReferenceMapping
+            ? FirstValue(fact.Properties, "mappingHash", "metadataHash")
+            : null;
+        var isRemotingSurface = surfaceKind.StartsWith("remoting-", StringComparison.Ordinal);
+        var remotingDisplayHash = isRemotingSurface ? RemotingDisplayHash(fact) : null;
+        var remotingIdentityHash = isRemotingSurface ? RemotingIdentityHash(fact) : null;
+        var shapeHash = FirstValue(fact.Properties, "queryShapeHash", "patternHash") ?? wcfMappingHash ?? remotingIdentityHash;
         var textHash = FirstValue(fact.Properties, "textHash");
         var textLength = FirstValue(fact.Properties, "textLength");
         var sqlResourceName = FirstValue(fact.Properties, "sqlResourceName", "resourceName", "fileName");
@@ -159,7 +165,7 @@ public static class CombinedSurfaceProjection
             ?? (unsafeVersion ? Hash(rawVersion!, 32) : null);
         var redactionReason = FirstValue(fact.Properties, "redactionReason")
             ?? (unsafeVersion ? "unsafe-package-version" : null);
-        var configKey = FirstValue(fact.Properties, "keyPath", "configKey", "connectionStringName", "environmentVariableName");
+        var configKey = FirstValue(fact.Properties, "keyPath", "configKey", "connectionStringName", "connectionName", "sectionName", "configurationKey", "environmentVariableName");
         var asmxName = FirstValue(fact.Properties, "serviceClassName", "operationName", "clientName", "metadataFileName", "configKey");
         var ecosystem = FirstValue(fact.Properties, "ecosystem", "packageEcosystem", "packageManager");
         var manifestKind = FirstValue(fact.Properties, "manifestKind", "metadataSource", "sourceFormat", "type");
@@ -184,7 +190,10 @@ public static class CombinedSurfaceProjection
             "sql-query" => SqlSurfaceDisplayName(fact, operationName, tableName, columns, sourceKind, shapeHash, textHash, sqlResourceName),
             "sql-persistence" => SqlPersistenceDisplayName(fact, tableName, columns, mappedName),
             "package-config" => packageName ?? configKey ?? $"unknown-package-config:{fact.CombinedFactId}",
+            "wcf-operation" => operationName ?? $"unknown-wcf-operation:{fact.CombinedFactId}",
             "asmx-service" or "asmx-operation" or "asmx-client" or "asmx-config" or "asmx-metadata" => asmxName ?? $"unknown-{surfaceKind}:{fact.CombinedFactId}",
+            "remoting-endpoint" or "remoting-registration" or "remoting-channel" or "remoting-object" or "remoting-api" =>
+                RemotingDisplayName(surfaceKind, fact, remotingDisplayHash),
             "message-queue" or "message-topic" or "message-subscription" or "message-exchange" or "message-stream" or "message-event" or "message-channel" or "message-unknown" =>
                 MessageSurfaceDisplayName(surfaceKind, operationDirection, normalizedDestinationKey, destinationHash, eventTypeIdentity, fact.CombinedFactId),
             _ => $"unknown-surface:{fact.CombinedFactId}"
@@ -315,6 +324,17 @@ public static class CombinedSurfaceProjection
                 : "message-unknown";
         }
 
+        if (fact.FactType == FactTypes.WcfServiceReferenceMapping)
+        {
+            return "wcf-operation";
+        }
+
+        var remotingSurfaceKind = RemotingSurfaceKind(fact.FactType);
+        if (remotingSurfaceKind is not null)
+        {
+            return remotingSurfaceKind;
+        }
+
         if (fact.Properties.TryGetValue("surfaceKind", out var declaredSurfaceKind)
             && !string.IsNullOrWhiteSpace(declaredSurfaceKind))
         {
@@ -337,6 +357,83 @@ public static class CombinedSurfaceProjection
         }
 
         return null;
+    }
+
+    private static string? RemotingSurfaceKind(string factType)
+    {
+        return factType switch
+        {
+            FactTypes.RemotingServiceTypeRegistered or FactTypes.RemotingClientTypeRegistered => "remoting-registration",
+            FactTypes.RemotingClientActivationDeclared or FactTypes.RemotingConfigServiceDeclared or FactTypes.RemotingConfigClientDeclared => "remoting-endpoint",
+            FactTypes.RemotingChannelDeclared or FactTypes.RemotingChannelRegistered or FactTypes.RemotingConfigChannelDeclared or FactTypes.RemotingConfigProviderDeclared => "remoting-channel",
+            FactTypes.RemotingMarshalByRefObjectDeclared => "remoting-object",
+            FactTypes.RemotingApiUsageDeclared or FactTypes.RemotingConfigSectionDeclared => "remoting-api",
+            _ => null
+        };
+    }
+
+    private static string RemotingDisplayName(string surfaceKind, CombinedSurfaceFactInput fact, string? displayHash)
+    {
+        if (!string.IsNullOrWhiteSpace(displayHash))
+        {
+            return displayHash!;
+        }
+
+        var safeName = SafeSqlIdentifierList(
+            FirstValue(
+                fact.Properties,
+                "registrationKind",
+                "apiKind",
+                "apiName",
+                "channelKind",
+                "providerKind"),
+            80,
+            allowSpaces: false);
+        return safeName is null
+            ? $"unknown-{surfaceKind}:{Hash(fact.CombinedFactId, 16)}"
+            : $"{surfaceKind}:{safeName}";
+    }
+
+    private static string? RemotingDisplayHash(CombinedSurfaceFactInput fact)
+    {
+        return RemotingHashToken(fact, 8);
+    }
+
+    private static string? RemotingIdentityHash(CombinedSurfaceFactInput fact)
+    {
+        return RemotingHashToken(fact, 16);
+    }
+
+    private static string? RemotingHashToken(CombinedSurfaceFactInput fact, int length)
+    {
+        foreach (var (property, prefix) in new[]
+        {
+            ("urlHash", "url"),
+            ("objectUriHash", "objectUri"),
+            ("valueHash", "value"),
+            ("applicationNameHash", "application"),
+            ("configValueHash", "value")
+        })
+        {
+            var value = FirstValue(fact.Properties, property);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            var hash = new string(value.Trim().Where(UriHashCharacter).Take(length).ToArray()).ToLowerInvariant();
+            if (hash.Length > 0)
+            {
+                return $"{prefix}-{hash}";
+            }
+        }
+
+        return null;
+    }
+
+    private static bool UriHashCharacter(char value)
+    {
+        return value is >= '0' and <= '9' or >= 'a' and <= 'f' or >= 'A' and <= 'F';
     }
 
     private static string MessageSurfaceDisplayName(

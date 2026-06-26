@@ -1,26 +1,642 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: implementation-pr2-cycle-gap-second-ack-patch-ready-to-push
-Readiness: focused-cycle-slice-implemented-reviewed-ack-patched-and-validated
+Status: task-10-public-safe-validation-complete
+Readiness: route-flow-service-data-composition-final-spec-complete-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
-Implementation branch: `codex/implement-route-flow-service-data-composition-final`
+Implementation branch: `codex/route-flow-public-safe-task10`
 Target base: `dev`
 Primary issues: `#159`, `#179`, `#201`
 Public claim level: static evidence only
 
+## Reconciliation State
+
+Reconciled against `origin/dev` on 2026-06-25 at `086ad376`.
+
+Task 5 closure branch: `codex/route-flow-task5-matrix`.
+Task 5 audited base: `origin/dev` at
+`625e6fef9c9a88539545334c3fcd3e979e7d3244`.
+
+Task 5 scope selected on 2026-06-25:
+
+- Audit the remaining endpoint/root method to service-call stitching matrix
+  after PR #325/reconciliation without moving to Task 6.
+- Keep existing source-local symbol/fact/edge identity stitching intact.
+- Add the smallest missing product/test slice:
+  `SelectorNoMatch` now blocks clean `NoRouteFlowEvidence` suppression, and
+  inherited path no-evidence gaps preserve `FullEvidenceAvailable` coverage
+  when the path report is full coverage.
+- Add focused route-flow tests for deterministic direct service-call ordering
+  and full-coverage no-direct-call selector-blocker suppression.
+- Leave implementation-candidate continuation, attached dependency precision,
+  and broader Task 8/9/10 work for later tasks.
+
+Task 5 validation status:
+
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+  errors.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 39 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 642 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- ACK-authorized Qodo patch normalized the rule-catalog `evidenceTier` field
+  back to inherited evidence-tier wording and moved route-flow classification
+  caps into limitations. Post-patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 61 tests, `./scripts/check-private-paths.sh` passed, and
+  `git diff --check` passed. NuGet emitted the same existing NU1903 warning.
+
+Merged evidence on `dev`:
+
+- PR #311 merged this final spec packet (`43426b7c`).
+- PR #318 merged duplicate normalized endpoint/root selector ambiguity handling
+  (`1e9c5660`).
+- PR #320 merged source-local service-call cycle `TraversalBounds` gap
+  handling (`565d7b64`).
+- Current code contains `RouteFlowReport.contextGroups`, entry
+  `bridgeState`, bounded duplicate-root supporting evidence, cycle-gap
+  metadata, `MissingCallEdge`/`DataSurfaceAttachmentMissing`/projection schema
+  gaps, route-flow CLI exit-code tests, and focused `CombinedRouteFlowTests`
+  coverage for the merged slices.
+
+Remaining slices after reconciliation:
+
+- Task 6: implementation-candidate continuation and downgrade hardening is
+  closed by PR #330 plus branch `codex/route-flow-task6-gap-matrix`, which
+  audited `origin/dev` at `086ad376e387ea8d87e430175ef2673cbc74c0f1`.
+- Task 7: attached versus unjoinable service/data/query/dependency/value-origin
+  precision, including the large projection SQL parameter cap noted below.
+- Task 8/9/10: only the downgrade, compatibility, exit-code, rule-catalog, and
+  safety checks directly affected by the selected product slice.
+
+Recommended next order after any in-flight route-flow branch is merged or
+explicitly closed:
+
+1. Fetch `origin/dev`, record the audited commit SHA, and re-audit this spec's
+   Task 5 remainder against that head.
+2. Either close Task 5 with evidence or pick the smallest still-missing
+   route-flow direct-call/gap slice.
+3. Then move to Task 6 candidate continuation if Task 5 is closed.
+4. Then move to Task 7 service/data/query/dependency attachment precision.
+5. Only after the route-flow contract is stable, start
+   `.kiro/specs/ui-field-property-lineage-composition/` PR 1.
+
+Do not reopen `route-flow-service-data-composition-next` or
+`route-flow-endpoint-stitching` as fresh implementation queues unless a future
+audit proves this final spec does not cover the needed slice.
+
+## Task 7 ASMX/SOAP Attachment Slice
+
+Branch: `codex/task7-http-wcf-attachments-20260625-182659`
+Audited base: `origin/dev` at `cb70ba7def4313cce34034421618062b60cb0c01`.
+Selected family: ASMX/SOAP dependency surfaces.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision for ASMX/SOAP surface
+  kinds already produced by the deterministic legacy ASMX extractor and shared
+  surface projection.
+- Add `asmx-service`, `asmx-operation`, `asmx-client`, `asmx-config`, and
+  `asmx-metadata` to the route-flow terminal surface selector vocabulary.
+- Attach ASMX/SOAP dependency surfaces only when the surface node is reached by
+  the selected static route-flow path via existing source-local graph evidence.
+- Preserve `DataSurfaceAttachmentMissing` when ASMX/SOAP evidence is adjacent
+  in the same combined index but not connected to the selected route-flow path.
+
+Scope decisions:
+
+- This slice does not start UI property lineage, site work, reducer behavior, or
+  scanner extraction changes.
+- This slice does not add runtime SOAP endpoint claims; all ASMX/SOAP rows stay
+  static evidence with existing rule IDs and evidence tiers.
+- WCF, remoting, package/config, legacy-data, storage, validation,
+  serializer/contract, async/callback, and flow-boundary families remain
+  follow-up Task 7 slices unless separately verified in a later PR.
+
+Oddities:
+
+- The shared surface projection already recognized ASMX/SOAP facts through the
+  `surfaceKind` property, but route-flow rejected those surface kinds in
+  `--to-surface` validation before this slice.
+- The focused tests use synthetic public-safe ASMX facts rather than invoking
+  full legacy extractors so they isolate selected-route attachment behavior.
+- ACK review found that real `LegacyAsmxExtractor` client-operation rows attach
+  the generated client type as `sourceSymbol` and the callable operation as
+  `targetSymbol`; the patch now links selected ASMX operation surfaces through
+  that callable target symbol.
+- Qodo review found that legacy projected flow terminals and CLI help also
+  needed the ASMX/SOAP surface vocabulary; the patch now preserves ASMX surface
+  kinds in legacy projection terminal nodes and lists them in `paths` and
+  `route-flow` help.
+
+Validation status:
+
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+  errors.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~CombinedRouteFlowTests|FullyQualifiedName~LegacyFlowCompositionTests"`:
+  passed locally with 73 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 658 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- ACK-authorized Codex patch after PR review added source symbol identity
+  metadata to real `BranchFeasibility` facts so scan-written
+  `fact_symbols`/`combined_fact_symbols` rows exist for route-flow guard
+  projection. Post-patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~SqliteIndexWriterTests.Scan_writes_semantic_symbol_tables_to_sqlite"`
+  passed locally with 1 test,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_validation_guard_branches_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_validation_guard_without_selected_join"`
+  passed locally with 2 tests,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 63 tests, `dotnet build src/dotnet/TraceMap.sln`
+  passed with 0 errors, `dotnet test src/dotnet/TraceMap.sln` passed locally
+  with 673 tests,
+  `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-validation-guard-modern-sample`
+  passed with required outputs present, `./scripts/check-private-paths.sh`
+  passed, and `git diff --check` passed. NuGet emitted the same existing
+  `SQLitePCLRaw.lib.e_sqlite3` warning.
+
+Follow-ups:
+
+- Continue Task 7 with one separate family at a time, such as remoting,
+  legacy-data/storage, package/config, validation/serializer, or
+  async/callback/flow-boundary.
+
+## Task 7 WCF Operation Attachment Slice
+
+Branch: `codex/route-flow-task7-next-attachment-precision-20260625`
+Audited base: `origin/dev` at
+`122ca28d61a28c5b0e9cadf96ab9191aef39811f`.
+Selected family: WCF operation dependency surfaces.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision for WCF
+  service-reference mapping facts already emitted by the deterministic legacy
+  WCF extractor.
+- Project `WcfServiceReferenceMapping` facts as `wcf-operation` dependency
+  surfaces through the shared combined surface projection.
+- Attach WCF operation dependency surfaces only when the generated client
+  operation is reached by the selected static route-flow path.
+- Preserve `DataSurfaceAttachmentMissing` when WCF mapping evidence is present
+  in the same combined index but not connected to the selected route-flow path.
+
+Scope decisions:
+
+- This slice does not start UI property lineage, site work, reducer behavior,
+  or scanner extraction changes.
+- This slice does not add runtime WCF endpoint, deployment, channel, or service
+  activation claims. Rows remain deterministic static evidence backed by
+  existing WCF rule IDs and evidence tiers.
+- Remoting, package/config, legacy-data/storage, validation/serializer,
+  async/callback, and flow-boundary families remain follow-up Task 7 slices
+  unless separately verified in a later PR.
+
+Oddities:
+
+- `route-flow --to-surface wcf-operation` was already in the terminal-surface
+  vocabulary, but shared surface projection did not create `wcf-operation`
+  rows from `WcfServiceReferenceMapping` facts unless a future extractor
+  happened to add explicit `surfaceKind` metadata.
+- The projection patch uses `normalizedOperationName` as the safe operation
+  display source and leaves endpoint/channel/runtime details out of the
+  route-flow surface row.
+- ACK review found that same-operation WCF mappings from different generated
+  clients could otherwise collapse under the route-flow stable surface key; the
+  patch now carries `mappingHash`/`metadataHash` as WCF shape identity.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_wcf_operation_surface_only_from_selected_static_path|FullyQualifiedName~Route_flow_keeps_same_operation_wcf_surfaces_distinct_by_mapping_identity|FullyQualifiedName~Route_flow_does_not_infer_adjacent_wcf_operation_surface_without_selected_join"`:
+  passed locally with 3 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 51 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Legacy_paths_treat_wcf_operation_as_terminal"`:
+  passed locally with 1 test after the legacy-root duplicate terminal-path
+  guard.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 660 tests and the
+  existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+## Task 7 Remoting Attachment Slice
+
+Branch: `codex/task7-next-attachment-precision`
+Audited base: `origin/dev` at
+`edf9c7de8f7bc5eba06bbf6cd9b0a3636aa0c117`.
+Selected family: remoting endpoint dependency surfaces.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision for remoting static
+  evidence already emitted by the deterministic legacy remoting extractor.
+- Project remoting fact families as shared dependency surfaces without enabling
+  legacy-flow mode in route-flow.
+- Attach `remoting-endpoint` dependency surfaces only when the surface node is
+  reached by the selected static route-flow path.
+- Preserve `DataSurfaceAttachmentMissing` when remoting evidence is present in
+  the same combined index but not connected to the selected route-flow path.
+
+Scope decisions:
+
+- This slice does not start UI property lineage, site work, reducer behavior,
+  or scanner extraction changes.
+- This slice does not add runtime remoting endpoint, channel, activation,
+  hosting, deployment, or reachability claims. Rows remain deterministic static
+  evidence backed by existing remoting rule IDs and evidence tiers.
+- Package/config, HTTP client, legacy-data/storage, validation/serializer,
+  async/callback, and flow-boundary families remain follow-up Task 7 slices
+  unless separately verified in a later PR.
+
+Oddities:
+
+- Remoting terminal nodes already existed in the legacy-flow graph hook, but
+  route-flow uses the normal dependency path graph. The patch therefore
+  projects remoting facts as shared dependency surfaces instead of turning on
+  legacy-flow mode for route-flow.
+- Remoting display identity follows the existing legacy path graph convention
+  by preferring safe hash labels such as `objectUri-*` and `url-*`; raw
+  endpoint/config values are not surfaced.
+- ACK review found that production remoting config facts attach through the
+  `RemotingConfiguration.Configure` config-file relationship rather than a
+  direct `sourceSymbol`. The patch now reuses the deterministic configure
+  caller-to-config join for shared route-flow surfaces.
+- ACK/Qodo review found that remoting hash identity must be scoped to remoting
+  surfaces and must not rewrite unrelated surface shape hashes. The patch now
+  gates remoting hash metadata by remoting surface kind, keeps short safe labels
+  for display, and uses longer safe hash tokens for remoting shape identity.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_remoting_endpoint_surface_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_remoting_endpoint_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 54 tests and the existing NU1903 warning.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~LegacyFlowCompositionTests`:
+  passed locally with 24 tests and the existing NU1903 warning.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedDependencyReportTests`:
+  passed locally with 18 tests and the existing NU1903 warning after the
+  ACK-authorized remoting hash scoping regression test was added.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 663 tests and the
+  existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- Post-ACK `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and
+  the existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- Post-ACK `dotnet test src/dotnet/TraceMap.sln`: passed locally with 664
+  tests and the existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke-46229`:
+  passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`.
+- Post-ACK `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/dotnet-remoting-sample --out /tmp/tracemap-remoting-smoke-27142`:
+  passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Post-ACK `./scripts/check-private-paths.sh`: passed.
+- Post-ACK `git diff --check`: passed.
+
+## Task 7 Package/Config Attachment Slice
+
+Branch: `codex/task7-package-config-precision-20260626`
+Audited base: `origin/dev` at
+`3e987d7d46d2bdae7b9c10441bc16ce2c9332010`.
+Selected family: package/config dependency surfaces.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision for package/config
+  facts already projected as deterministic dependency surfaces.
+- Project selected package/config fact-symbol rows as route-flow
+  `dependency-surface` logic context only when they attach through selected
+  source-local route-flow rows.
+- Attach `package-config` dependency surfaces only when the surface node is
+  reached by the selected static route-flow path.
+- Preserve `DataSurfaceAttachmentMissing` when package/config evidence is
+  present in the same combined index but not connected to the selected
+  route-flow path.
+
+Scope decisions:
+
+- This slice does not start UI property lineage, site work, reducer behavior,
+  scanner extraction changes, or package-upgrade impact behavior.
+- This slice does not claim package restore, resolved transitive dependencies,
+  runtime loading, config value use, deployment, or production behavior.
+- HTTP client, legacy-data/storage, validation/serializer, async/callback,
+  flow-boundary, and broader service/repository/object/projection breadth
+  remain follow-up Task 7 slices unless separately verified in a later PR.
+
+Oddities:
+
+- `package-config` was already accepted by `route-flow --to-surface` and the
+  shared surface projection, so the product change is intentionally narrow:
+  route-flow fact-symbol projection now treats selected config fact families as
+  dependency-surface context alongside package facts and records config-key
+  context by hash.
+- ACK/Qodo review found that real `ConnectionStringDeclared` and
+  `ConfigBinding` rows use `connectionName` and `sectionName` properties, while
+  the first pass hashed only `configKey`/`keyPath`-style aliases. The patch now
+  recognizes those emitted aliases, plus `configurationKey`, in both shared
+  package/config surface display selection and route-flow fact-symbol metadata.
+- Existing generic fact-symbol projection can still emit
+  `FactSymbolUnsupportedTypeSkipped` for unrelated selected `CallEdge` rows;
+  this PR does not broaden call-edge projection semantics.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_package_config_surfaces_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_package_config_surface_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 56 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 666 tests and the
+  existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke-package-config-20260626`:
+  passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Post-ACK `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_package_config_surfaces_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_package_config_surface_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning.
+- Post-ACK `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 56 tests and the existing NU1903 warning.
+- Post-ACK `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedDependencyReportTests`:
+  passed locally with 18 tests and the existing NU1903 warning.
+- Post-ACK `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and
+  the existing NU1903 warning.
+- Post-ACK `dotnet test src/dotnet/TraceMap.sln`: passed locally with 666
+  tests and the existing NU1903 warning.
+- Post-ACK `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke-package-config-postack-20260626`:
+  passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`.
+- Post-ACK `./scripts/check-private-paths.sh`: passed.
+- Post-ACK `git diff --check`: passed.
+
+## Task 7 HTTP Client Attachment Slice
+
+Branch: `codex/task7-http-client-precision-20260626`
+Audited base: `origin/dev` at
+`268b6d082d18004af0980940f458c42e8fa80407`.
+Selected family: HTTP client dependency surfaces.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision evidence for
+  `HttpCallDetected` rows already projected as deterministic `http-client`
+  dependency surfaces.
+- Prove selected HTTP client terminal surfaces attach only when the
+  `HttpCallDetected` row is reached by the selected static route-flow path
+  through source-local symbol evidence.
+- Prove adjacent unjoined HTTP client evidence remains excluded from
+  dependency surfaces and terminal flow rows, while preserving
+  `DataSurfaceAttachmentMissing`.
+- Record the HTTP client sub-slice without closing broader Task 7 families.
+
+Scope decisions:
+
+- This slice does not change scanner extraction, route/client alignment,
+  reducer behavior, UI property lineage, site work, or runtime HTTP reachability
+  claims.
+- The route-flow implementation already attached generic dependency surfaces
+  through selected static paths; this branch adds the missing focused
+  regression evidence rather than adding HTTP-client-specific product logic.
+- Legacy-data/storage, validation/serializer, async/callback, flow-boundary,
+  and broader service/repository/object/projection breadth remain follow-up
+  Task 7 slices unless separately verified in a later PR.
+
+Oddities:
+
+- HTTP client facts are dual-use in combined pathing: they can be selector/root
+  evidence for client-call flows and terminal dependency surfaces when a server
+  route reaches an outbound client call. The tests isolate the terminal-surface
+  behavior so the slice does not broaden endpoint alignment semantics.
+- The attached test uses the selected route path
+  `controller -> payment gateway -> http-client surface` and keeps an unrelated
+  HTTP client fact in the same combined index to prove adjacent evidence is not
+  inferred.
+- The unjoined test keeps a matching route and downstream service call but only
+  an unrelated HTTP client surface, proving route-flow emits the scoped
+  attachment gap rather than a clean no-evidence conclusion.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_http_client_surface_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_http_client_surface_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 58 tests and the existing NU1903 warning.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 668 tests and the
+  existing NU1903 warning.
+- `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke-http-client-20260626`:
+  passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`.
+- Post-Qodo doc-drift patch
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_http_client_surface_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_http_client_surface_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning.
+- Post-Qodo doc-drift patch `./scripts/check-private-paths.sh`: passed.
+- Post-Qodo doc-drift patch `git diff --check`: passed.
+- Post-Qodo stale-phrase patch
+  `rg -n 'spec-only|limited to this spec folder|limited to \\.kiro' .kiro/specs/route-flow-service-data-composition-final`:
+  passed with no matches.
+- Post-Qodo stale-phrase patch
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_http_client_surface_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_http_client_surface_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning.
+- Post-Qodo stale-phrase patch `./scripts/check-private-paths.sh`: passed.
+- Post-Qodo stale-phrase patch `git diff --check`: passed.
+
+## Task 7 Legacy-Data/Storage Attachment Slice
+
+Branch: `codex/task7-storage-precision-20260626`
+Audited base: `origin/dev` at
+`45fc97b50115d6f7c99389d2b8e114352c387cd9`.
+Selected family: legacy-data/storage dependency surfaces.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision evidence for
+  `legacy-data` terminal surfaces already projected from deterministic legacy
+  data model facts.
+- Prove selected legacy entity and storage-object descriptors attach only when
+  reached by the selected static route-flow path through source-local symbol
+  evidence.
+- Prove adjacent unjoined legacy storage descriptors remain excluded from
+  dependency surfaces and terminal flow rows while preserving
+  `DataSurfaceAttachmentMissing`.
+- Record the legacy-data/storage sub-slice without closing broader Task 7
+  families.
+
+Scope decisions:
+
+- This slice does not change scanner extraction, legacy data model projection,
+  reducer behavior, UI property lineage, site work, or runtime database/schema
+  existence claims.
+- The route-flow implementation already accepted `legacy-data` as a terminal
+  surface; this branch adds the missing focused attachment and unjoined-gap
+  regression evidence rather than adding legacy-data-specific product logic.
+- Validation/guard, serializer/contract, async/callback, flow-boundary, and
+  broader service/repository/object/projection breadth remain follow-up Task 7
+  slices unless separately verified in a later PR.
+
+Oddities:
+
+- Existing route-flow legacy-data coverage only preserved the
+  `surfaceSubtype = data-model` row shape; it did not prove selected versus
+  adjacent-unjoined storage precision.
+- Route-flow dependency surface evidence cites the original legacy DBML rule
+  (`legacy.data.dbml.v1`) in supporting rule IDs; it does not currently expose
+  the descriptor projection rule on the route-flow row.
+- The focused tests assert public-safe redaction by excluding raw legacy
+  descriptor names from Markdown and JSON while retaining hashed stable surface
+  keys.
+- ACK review found that the first storage fixture attached descriptors by
+  setting `sourceSymbol` directly to the repository method. The patch now seeds
+  scanner-shaped legacy metadata descriptors with null `sourceSymbol` and
+  generated/model `targetSymbol` attachment, then reaches those descriptors
+  through selected static route-flow calls.
+- A follow-up ACK review found that readable `displayNameHash` fixture values
+  could still render normalized descriptor hints in route-flow labels. The
+  patch now uses opaque hash-like fixture values and asserts the lowercase
+  descriptor tokens are absent from Markdown and JSON.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_legacy_data_storage_surfaces_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_legacy_data_storage_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 59 tests and the existing NU1903 warning.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 669 tests and
+  the existing NU1903 warning.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Post-ACK patch
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_legacy_data_storage_surfaces_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_legacy_data_storage_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning.
+- Post-ACK patch
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 59 tests and the existing NU1903 warning.
+- Post-ACK patch `dotnet build src/dotnet/TraceMap.sln`: passed with 0
+  errors and the existing NU1903 warning.
+- Post-ACK patch first `dotnet test src/dotnet/TraceMap.sln` rerun failed one
+  unrelated `BuildEnvironmentDiagnosticTests.Cli_restore_failure_artifacts_are_sanitized`
+  assertion; an immediate focused rerun of that test passed.
+- Post-ACK patch second `dotnet test src/dotnet/TraceMap.sln`: passed locally
+  with 669 tests and the existing NU1903 warning.
+- Post-ACK patch `./scripts/check-private-paths.sh`: passed.
+- Post-ACK patch `git diff --check`: passed.
+- Post-second-ACK patch
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_legacy_data_storage_surfaces_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_legacy_data_storage_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning.
+- Post-second-ACK patch
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 59 tests and the existing NU1903 warning.
+- Post-second-ACK patch `dotnet build src/dotnet/TraceMap.sln`: passed with
+  0 errors and the existing NU1903 warning.
+- Post-second-ACK patch `dotnet test src/dotnet/TraceMap.sln`: passed locally
+  with 669 tests and the existing NU1903 warning.
+- Post-second-ACK patch `./scripts/check-private-paths.sh`: passed.
+- Post-second-ACK patch `git diff --check`: passed.
+
+## Task 7 Service/Repository/Object Projection Breadth Slice
+
+Branch: `codex/task7-service-projection-breadth-20260626`
+Audited base: `origin/dev` at
+`36eedb1039eb98d75ed49c3d3c7161cc44e67424`.
+Selected family: service/repository/object/projection breadth closeout.
+
+Scope:
+
+- Keep this PR limited to the final Task 7 route-flow breadth closeout for
+  selected service/repository context and object-shape fact-symbol projection.
+- Preserve existing source-local service and repository context grouping from
+  selected route-flow path rows.
+- Classify selected `ObjectShapeInferred` fact-symbol projection rows as
+  data-surface context and render them only when joined to selected
+  source-local route-flow symbols.
+- Preserve `FactSymbolProjectionUnavailable` when object-shape evidence is
+  present in the same combined index but cannot join the selected static
+  route-flow path.
+- Mark Task 7 complete because the remaining attachment families now have
+  explicit selected-versus-adjacent coverage; leave Tasks 8/9/10 unchecked.
+
+Scope decisions:
+
+- This slice does not start UI property lineage, site work, reducer behavior,
+  runtime object materialization claims, or Tasks 8/9/10 follow-up work.
+- The ACK-authorized patch adds source-symbol identity metadata to syntax
+  object-shape facts so real scan-written `fact_symbols` and
+  `combined_fact_symbols` rows can support selected route-flow object-shape
+  projection.
+- Object-shape evidence remains deterministic static syntax evidence and is
+  capped by its evidence tier; it does not prove runtime object creation,
+  serializer behavior, branch feasibility, or production execution.
+- Field names from object-shape facts stay omitted from route-flow logic row
+  metadata; report rows carry hashes/safe labels only.
+
+Oddities:
+
+- `ObjectShapeInferred` projection support already existed, but the previous
+  route-flow context-group mapping treated emitted `object-shape` logic rows as
+  generic method context rather than data-surface context.
+- Existing broad route-flow tests already covered service and repository
+  context grouping; this slice adds the missing focused selected/unjoined
+  object-shape projection regression tests.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_object_shape_projection_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_object_shape_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- Post-ACK patch `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_object_shape_projection_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_object_shape_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning.
+- Post-ACK patch `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CSharpSyntaxExtractorTests`:
+  passed locally with 7 tests and the existing NU1903 warning.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 67 tests and the existing NU1903 warning.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 677 tests and
+  the existing NU1903 warning.
+- Post-ACK patch `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 67 tests and the existing NU1903 warning.
+- Post-ACK patch `dotnet build src/dotnet/TraceMap.sln`: passed with 0
+  errors and the existing NU1903 warning.
+- Post-ACK patch `dotnet test src/dotnet/TraceMap.sln`: passed locally with
+  677 tests and the existing NU1903 warning.
+- `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-object-projection-modern-sample`:
+  passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`.
+- Post-ACK patch `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-object-projection-modern-sample-postack`:
+  passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Post-ACK patch `./scripts/check-private-paths.sh`: passed.
+- Post-ACK patch `git diff --check`: passed.
+
 ## Summary
 
-This is a spec-only completion packet for the remaining route-centered static
+This packet now tracks both the original spec delivery and subsequent
+focused implementation/test slices for the remaining route-centered static
 service/data composition work. The target product behavior is a conservative
 `tracemap route-flow` trace that can start at endpoint/root method evidence,
 stitch into service methods, continue through review-tier implementation
 candidates where rule-backed static evidence allows, and render data/query/
 dependency/value-origin rows or narrower gaps with evidence provenance.
 
-The product implementation PR for this spec currently changes route-flow
+The merged product implementation PRs for this spec changed route-flow
 reporting code, focused route-flow tests, and this spec state/task tracking.
-No site files, generated outputs, rule catalog entries, scanner extraction
-logic, LLM/vector/prompt logic, or sample artifacts are changed by this branch.
+No site files, generated outputs, scanner extraction logic, LLM/vector/prompt
+logic, or sample artifacts were part of those route-flow slices.
 
 ## Source Material Reviewed
 
@@ -73,7 +689,7 @@ classification.
 
 ## Review Plan
 
-Required review loop for this spec-only branch:
+Required review loop for the original spec delivery branch:
 
 ```bash
 node scripts/kiro-review.mjs --phase route-flow-service-data-composition-final --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text
@@ -189,7 +805,8 @@ Also discover whether a dedicated spec/docs validation command exists. If none
 exists, record the discovery command and result here.
 
 Product implementation validation is documented in `tasks.md` and `design.md`,
-but it is intentionally deferred because this branch is spec-only.
+but it is intentionally deferred because the original branch delivered only
+spec files.
 
 ## Validation Log
 
@@ -631,7 +1248,9 @@ Takeover notes:
   artifacts found no raw local workspace path, raw SQL wildcard, private
   connection-string sample, password token, raw URL, raw GitHub remote, private
   feed, secret-token, query-token, or connection-string key matches.
-- Push and ACK rerun are pending in this takeover pass.
+- The second ACK patch was pushed, ACK was rerun by the implementation worker,
+  and PR #320 merged to `dev` as `565d7b64`. This reconciliation pass found no
+  remaining PR #320-specific local action to push.
 
 ### Kiro Implementation Review For PR 2
 
@@ -710,3 +1329,1146 @@ node scripts/kiro-review.mjs --phase route-flow-service-data-composition-final -
 - If implementation requires a new gap code or row kind, update
   `rules/rule-catalog.yml` before emitting it and document limitations in the
   implementation state.
+
+## Product Implementation PR 3
+
+Branch: `codex/route-flow-service-data-stitching`
+Base: `origin/dev` at `87fe78a31ce9204230b00dab8dfeaabf79d1b206`
+
+Selected slice: the next remaining Task 5 no-direct-call/reduced-coverage
+subcase, plus the directly touched Task 8 guard that clean
+`NoRouteFlowEvidence` gaps require full relevant route-flow coverage.
+
+### Live Audit Notes
+
+- The prior duplicate-root and cycle Task 5 sub-slices are already present on
+  `origin/dev`.
+- Direct source-local service/repository call stitching and MissingCallEdge
+  behavior already exist in `CombinedRouteFlowReport`.
+- The remaining gap selected for this PR was narrower: when a route root has no
+  downstream flow rows and source coverage is reduced, route-flow should keep
+  the reduced/unknown gap and must not also emit a clean absence
+  `NoRouteFlowEvidence` gap.
+
+### Implementation Notes
+
+- Added a route-flow report guard that removes inherited clean
+  `NoRouteFlowEvidence` gaps and avoids adding a new one whenever reduced
+  coverage, schema/extractor/unknown, projection, attachment, or endpoint
+  composition gaps block a clean absence conclusion.
+- Preserved the existing full-coverage clean no-evidence fixture and avoided
+  broad path-reporter behavior changes.
+- Added a synthetic regression with a failed-build source, selected route root,
+  no downstream call rows, and a required terminal surface. The report now
+  emits the reduced-coverage gap, downgrades to `UnknownAnalysisGap`, and does
+  not emit `NoRouteFlowEvidence` or `MissingCallEdge`.
+
+### Validation Log For PR 3
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
+  passed, 37 tests.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+  errors.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 640 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- PR #325 opened against `dev` from
+  `codex/route-flow-service-data-stitching`.
+- Initial ACK PR loop returned `actionable_findings` with two unresolved
+  review threads and `patchAuthorized=true`.
+- ACK-authorized findings patched:
+  - removed a redundant `DataSurfaceAttachmentMissing` branch from the clean
+    no-evidence blocker predicate because it is already covered by endpoint
+    composition blocker handling;
+  - treated `TruncatedByLimit` gaps as blockers for clean
+    `NoRouteFlowEvidence` and updated the truncation-adjacent fixture to assert
+    the safer unknown conclusion.
+- Focused validation after the ACK patch:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`
+  passed, 37 tests.
+- Post-ACK `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and
+  0 errors.
+- First post-ACK `dotnet test src/dotnet/TraceMap.sln` had one known
+  intermittent diagnostic artifact assertion miss for `NuGetRestoreFailed`.
+  The single diagnostic test passed in isolation, and the full solution rerun
+  passed, 640 tests.
+- Post-ACK `./scripts/check-private-paths.sh`: passed.
+- Post-ACK `git diff --check`: passed.
+- After the ACK patch, the live PR diff showed an unrelated site
+  troubleshooting commit on this branch. A normal revert commit removed that
+  unrelated site slice from the net PR diff; the PR diff is back to this spec
+  folder plus route-flow reporting/tests only.
+- Final post-cleanup validation:
+  - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+    errors.
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
+    passed, 37 tests.
+  - `dotnet test src/dotnet/TraceMap.sln`: passed, 640 tests.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
+- ACK rerun after cleanup showed the two review threads resolved but one Qodo
+  top-level actionable finding remained: inherited clean no-evidence gaps were
+  cleaned before projection gaps were appended.
+- Patched the Qodo finding by rerunning clean no-evidence gap cleanup after
+  projection gaps are appended, and added projection-gap coverage asserting
+  `NoRouteFlowEvidence` is absent when projection blockers exist.
+- Post-Qodo validation:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
+    passed, 37 tests.
+  - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+    errors.
+  - `dotnet test src/dotnet/TraceMap.sln`: passed, 640 tests.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
+- Follow-up push completed at
+  `bb881c95f5146b86af411e69e309c1f2ca6bd5a9`.
+- ACK rerun returned `merge_ready`, stop reason `NONE`, next action
+  `merge_ready`; Qodo's remaining finding was patched and dispositioned, Codex
+  stale review remained residual medium risk under the configured trusted
+  review quorum policy.
+- After PR #326 merged the spec reconciliation branch, PR #325 became dirty.
+  The branch merged `origin/dev`, preserved the completed no-direct-call
+  reduced/projection-blocker checklist items, and kept the broader
+  direct/no-call/reduced-coverage/deterministic-ordering remainder unchecked for
+  a future route-flow slice.
+
+### Oddities / Design Decisions For PR 3
+
+- A legacy full-coverage no-downstream fixture inherits a path-reporter
+  `TruncatedByLimit` gap with coverage-relative evidence. This PR leaves that
+  behavior unchanged and only suppresses clean absence when reduced/unknown or
+  endpoint-composition blockers are present.
+
+### Follow-Ups For PR 3
+
+- Remaining Task 5 backlog after this slice: MissingCallEdge-specific
+  full-coverage dead-end coverage and deterministic ordering coverage.
+- Broader Task 6/7 candidate and attachment precision work remains deferred.
+
+## Product Implementation PR 4
+
+Branch: `codex/task6-route-flow-candidates`
+Base: `origin/dev` at `80afdc3bd4b9`
+
+Selected slice: Task 6 implementation-candidate continuation audit plus the
+smallest downgrade-hardening patch after PR #328 closed Task 5. This slice
+does not start UI property lineage, site work, attachment precision, scanner
+extraction, or broader Task 7/8/9/10 work.
+
+### Live Audit Notes
+
+- `CombinedRouteFlowReport` already consumes source-local
+  `combined_symbol_relationships` through the combined dependency graph and
+  emits `interface-implementation-candidate` rows from implementation
+  relationships.
+- Existing focused route-flow coverage already proves single compiler-backed
+  implementation candidates continue to downstream surfaces only as
+  `NeedsReviewStaticRouteFlow`; candidate paths and summaries do not upgrade to
+  `StrongStaticRouteFlow` or `ProbableStaticRouteFlow`.
+- Existing tests cover no-candidate `ImplementationCandidateUnavailable`,
+  multiple-candidate ambiguity, high fan-out capped candidate traversal,
+  syntax/name-only candidate caps, Tier3 downstream caps, and reduced-coverage
+  clean-absence suppression.
+- The remaining broad Task 6 matrix item stays open because cross-source and
+  cross-language candidate fixtures need a dedicated follow-up. The live graph
+  builder source-scopes symbol relationships, so this PR avoids corrupting
+  combined-index source identity merely to manufacture that fixture.
+
+### Implementation Notes
+
+- Route-flow now separates all implementation-candidate relationship edges from
+  source-compatible candidates. If the graph contains incompatible
+  cross-source/cross-language implementation candidate evidence for the
+  selected interface node, it emits a deterministic `RuntimeBindingNotProven`
+  gap and does not traverse that candidate.
+- Ambiguous implementation-candidate gap IDs now use incremental SHA-256 over
+  deterministic candidate/supporting-evidence sequences instead of joining the
+  full candidate set into one allocation.
+- Added a focused regression proving runtime-adjacent facts such as dependency
+  registration, service-locator-style resolution evidence, reflection target
+  evidence, and dynamic dispatch candidate evidence do not become route-flow
+  implementation candidates, terminal dependency surfaces, stronger summary
+  classifications, or runtime-proof wording.
+
+### Validation Log For PR 4
+
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+  errors.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
+  passed, 40 tests before the ACK patch and 41 tests after the ACK patch.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 643 tests before the ACK
+  patch and 644 tests after the ACK patch.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Initial ACK PR loop for PR #330 returned `actionable_findings` with two
+  unresolved review threads and `patchAuthorized=true`.
+- ACK-authorized findings patched:
+  - partitioned implementation candidate edges in a single pass to avoid
+    redundant LINQ allocations and repeated node lookups;
+  - populated `RuntimeBindingNotProven` gaps with commit SHA, extractor name,
+    and extractor version metadata;
+  - suppressed contradictory `MissingImplementationBridge` and
+    `ImplementationCandidateUnavailable` gaps when incompatible candidate
+    evidence exists and `RuntimeBindingNotProven` explains the blocked bridge;
+  - added focused regression coverage for runtime-binding gap metadata.
+- Post-ACK patch validation:
+  - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+    errors.
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
+    passed, 41 tests.
+  - `dotnet test src/dotnet/TraceMap.sln`: passed, 644 tests.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
+
+### Oddities / Design Decisions For PR 4
+
+- The `RuntimeBindingNotProven` gap path is intentionally conservative: it
+  labels incompatible candidate evidence as reduced coverage and static review
+  context only. It does not infer runtime dependency-injection targets,
+  service-locator targets, factory outputs, reflection targets, or dynamic
+  dispatch targets.
+- No new rule ID or gap code was added; the existing
+  `combined.route-flow.gap.v1` and `combined.route-flow.interface-bridge.v1`
+  limitations already document this boundary.
+
+### Follow-Ups For PR 4
+
+- Add dedicated, non-corrupt cross-source/cross-language route-flow candidate
+  fixtures if the combined graph gains an explicit persisted bridge contract
+  that can represent those relationships without violating source-local symbol
+  identity.
+- Task 6 deterministic gap matrix is closed by the follow-up slice below.
+
+## Product Implementation PR 5
+
+Branch: `codex/route-flow-task6-gap-matrix`
+Base: `origin/dev` at `086ad376e387ea8d87e430175ef2673cbc74c0f1`
+
+Selected slice: finish the remaining Task 6 implementation-candidate
+continuation/downgrade matrix after PR #330 and static dispatch builder PR
+#331. This slice does not start Task 7, site work, scanner extraction, runtime
+binding proof, or attached dependency/data precision.
+
+### Live Audit Notes
+
+- PR #330 already closed source-local candidate traversal, single-candidate
+  review-tier continuation, multiple/no-candidate gaps, runtime-binding
+  non-proof gaps, syntax/name-only caps, reduced-coverage clean-absence
+  suppression, and runtime-adjacent non-proof coverage.
+- PR #331 added `StaticDispatchCandidateBuilder` for deterministic static
+  dispatch candidate derivation and fan-out gaps.
+- Remaining Task 6 work on this audited base was to let route-flow reuse the
+  shared builder where safe and to preserve a route-flow-native deterministic
+  `DispatchCandidateFanOut` gap for high fan-out candidate sets.
+
+### Implementation Notes
+
+- Route-flow now derives implementation candidates through
+  `StaticDispatchCandidateBuilder` and maps builder output back to existing
+  route-flow row/gap vocabulary.
+- Candidate flow rows remain `interface-implementation-candidate` rows with
+  `combined.route-flow.interface-bridge.v1` evidence and
+  `NeedsReviewStaticRouteFlow` classification.
+- Builder fan-out gaps are translated into `DispatchCandidateFanOut` route-flow
+  gaps under `combined.route-flow.gap.v1`, `Tier4Unknown`, and
+  `ReducedCoverage`; the gap documents deterministic capping and runtime
+  non-proof limitations.
+- Runtime-binding gaps now consume the builder candidate edge shape. This keeps
+  candidate bridges as static review context only and does not claim runtime DI
+  target selection, service locator behavior, factory output, reflection target
+  execution, or dynamic dispatch.
+- `rules/rule-catalog.yml` now documents `DispatchCandidateFanOut` under
+  `combined.route-flow.interface-bridge.v1` limitations.
+
+### Validation Log For PR 5
+
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+  errors.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed, 41 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedDependencyPathTests`:
+  passed, 27 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 646 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- ACK rerun on PR #332 returned `actionable_findings` with four unresolved
+  review threads and `patchAuthorized=true`.
+- ACK-authorized findings patched:
+  - added a null/whitespace guard around static-dispatch extractor-version
+    lookup;
+  - changed route-flow static-dispatch gap extractor metadata from evidence
+    scope to extractor name;
+  - normalized inherited path `DispatchCandidateFanOut` gaps as route-flow
+    fan-out gaps and removed duplicate endpoint-composition fan-out gaps when
+    the inherited path gap already exists for the same candidate node;
+  - preserved fan-out span/commit/extractor metadata only for the reviewed
+    dispatch fan-out path to avoid unrelated touched-file duplication.
+- Post-ACK patch validation:
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+    passed, 41 tests.
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedDependencyPathTests`:
+    passed, 27 tests.
+  - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+    errors.
+  - `dotnet test src/dotnet/TraceMap.sln`: passed, 646 tests.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
+
+### Oddities / Design Decisions For PR 5
+
+- The shared builder emits `combined.dispatch-candidate.v1` and
+  `combined.dispatch-gap.v1` for paths. Route-flow intentionally keeps its
+  public row/gap contract under `combined.route-flow.*` and uses builder output
+  as an internal deterministic derivation source.
+- High fan-out is review-tier, not a hard clean-absence blocker. It caps
+  candidate-dependent rows and summaries without implying a runtime target was
+  selected or omitted.
+
+### Follow-Ups For PR 5
+
+- Task 7 remains the next implementation task: attached versus unjoinable
+  service/data/query/dependency/value-origin precision. Do not start it from
+  this Task 6 branch.
+
+## Product Implementation PR 6
+
+Branch: `codex/route-flow-task7-attachment-precision-20260625163442`
+Base: `origin/dev` at `9bb459587475864cab9c484b29ab2360369c0aa3`
+
+Selected slice: first Task 7 attachment-precision slice for fact-symbol
+projection. This PR keeps the public `route-flow` report type and JSON
+version `1.0`; it does not start broad scanner extraction, site work, runtime
+DI proof, runtime endpoint reachability, AI/LLM analysis, or Task 8/9/10
+hardening beyond tests directly touched by the projection behavior.
+
+### Live Audit Notes For PR 6
+
+- `CombinedRouteFlowReport` already emits selected route-flow rows,
+  dependency surfaces, path-context logic rows, argument projection rows,
+  fact-symbol projection rows, `DataSurfaceAttachmentMissing`,
+  `ArgumentProjectionUnavailable`, `FactSymbolProjectionUnavailable`,
+  context groups, touched files/symbols, and rule-catalog resolution tests.
+- The remaining Task 7 gap selected for this small PR was fact-symbol
+  attachment precision: target-role or same-source symbol adjacency could be
+  read as projection context unless route-flow required the fact-symbol row to
+  attach through a selected source-local symbol identity.
+- Argument-flow projection and parameter-forward rows were audited as already
+  requiring selected route-flow pair/path evidence on this base, but the larger
+  parameter batching/cap follow-up remains open.
+
+### Implementation Notes For PR 6
+
+- Fact-symbol projection now attaches only through `combined_fact_symbols`
+  rows with `role = source` that match selected source-local route-flow symbol
+  identities. Target-role adjacency is not rendered as route-flow context.
+- Fact-symbol projection candidate reads now filter to source-role links, and
+  fallback `FactSymbolProjectionUnavailable` probes look for projectable
+  source-role fact types in the selected source so unsupported selected
+  symbols cannot hide adjacent unjoinable projectable facts.
+- Added a synthetic regression with an unrelated query fact that names the
+  selected repository as a target-role symbol. Route-flow now emits
+  `FactSymbolProjectionUnavailable` and does not render fact-symbol logic rows
+  or context groups for that misleading target adjacency.
+
+### Validation Log For PR 6
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_optional_projection_tables_emit_scoped_gaps_when_rows_cannot_join_selected_path|FullyQualifiedName~Route_flow_fact_symbol_projection_requires_selected_source_symbol_identity"`:
+  passed, 2 tests, with the existing `SQLitePCLRaw.lib.e_sqlite3` NuGet
+  vulnerability warnings.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed, 42 tests, with the same existing NuGet warnings.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 650 tests, with the same
+  existing NuGet warnings.
+- `git diff --check`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `./scripts/demo-public.sh /tmp/tracemap-route-flow-task7-demo-20260625`:
+  passed. The sample-only public demo produced route-flow/reporting artifacts
+  under the temporary output root and retained reduced coverage where the
+  checked-in samples intentionally have partial evidence.
+- Diff-scope review before commit showed only route-flow reporting code,
+  focused route-flow tests, and this spec's task/state files.
+- Initial ACK PR loop for PR #335 returned `actionable_findings` with two
+  unresolved review threads and `patchAuthorized=true`.
+- ACK-authorized findings patched:
+  - restored combined-symbol-ID matching for source-role fact-symbol
+    projection by adding deterministic combined symbol keys to the selected
+    path model and checking `row.CombinedSymbolId` after the `role = source`
+    guard;
+  - enriched `FactSymbolProjectionUnavailable` fallback gaps with source
+    label, file span, commit SHA, extractor name, and extractor version
+    metadata from the unprojected fact evidence.
+- Post-ACK focused projection validation passed:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_optional_projection_tables_emit_scoped_gaps_when_rows_cannot_join_selected_path|FullyQualifiedName~Route_flow_fact_symbol_projection_requires_selected_source_symbol_identity"`.
+- Post-ACK focused route-flow validation passed:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  with 42 tests.
+- Post-ACK `dotnet test src/dotnet/TraceMap.sln` passed with 650 tests.
+- Post-ACK `git diff --check` passed.
+- Post-ACK `./scripts/check-private-paths.sh` passed.
+- Post-ACK `./scripts/demo-public.sh /tmp/tracemap-route-flow-task7-demo-postack-20260625`
+  passed, with generated outputs kept under the temporary output root.
+
+### Follow-Ups For PR 6
+
+- Complete the rest of Task 7's broad attachment matrix for repository,
+  object/projection, SQL/query, legacy data, package/config, HTTP client, WCF,
+  ASMX/SOAP, remoting, event/message, storage, validation/guard,
+  serializer/contract, async/callback, and flow-boundary facts.
+- Add the larger attached versus path-context labeling and deterministic stable
+  ID matrix across all service/data/dependency surface families.
+- Cap or batch large argument-pair and fact-symbol projection SQL filters so
+  very large selected route-flow graphs cannot exceed SQLite parameter limits.
+
+## Product Implementation PR 7
+
+Branch: `codex/route-flow-task7-attachments`
+Base: `origin/dev` at `9bb459587475`
+
+Selected slice: Task 7 event/message terminal-surface attachment precision
+after Task 5, Task 6, and the fact-symbol attachment slice. This slice does not
+start UI property lineage, site work, scanner extraction, runtime execution
+claims, or the full remaining service/data/query/dependency taxonomy.
+
+### Live Audit Notes For PR 7
+
+- Current `dev` already contains selected-path-only route-flow traversal,
+  dependency surface rendering from selected `routePaths`, argument-flow and
+  fact-symbol projection joins through selected route-flow rows, schema gaps,
+  `ArgumentProjectionUnavailable`, `FactSymbolProjectionUnavailable`,
+  `FactSymbolUnsupportedTypeSkipped`, and `DataSurfaceAttachmentMissing`.
+- `CombinedDependencyPathReporter` already supports message terminal surface
+  kinds (`message-queue`, `message-topic`, `message-subscription`,
+  `message-exchange`, `message-stream`, `message-event`, `message-channel`,
+  and `message-unknown`) as selected static path terminals.
+- `CombinedRouteFlowReport` still rejected those message surface selectors,
+  which meant route-flow could not request already-supported event/message
+  terminals through `--to-surface`.
+
+### Implementation Notes For PR 7
+
+- Added the existing message terminal surface kinds to route-flow's
+  `--to-surface` allow-list and validation message.
+- No new traversal rule, report type, JSON version, rule ID, scanner
+  extractor, or graph edge kind was added.
+- Added focused synthetic route-flow coverage proving:
+  - selected message terminal surfaces render as dependency surfaces only when
+    joined through the selected route-flow static path;
+  - adjacent same-source message surface evidence for an unrelated publisher is
+    not inferred as a selected terminal;
+  - unjoined adjacent message surface evidence preserves
+    `DataSurfaceAttachmentMissing` instead of a clean no-evidence conclusion;
+  - dependency surface and gap IDs are deterministic across repeated renders.
+
+### Validation Log For PR 7
+
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+  errors.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 43 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 651 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Initial ACK PR loop on PR #334 returned `actionable_findings` with one
+  unresolved review thread and `patchAuthorized=true`.
+- ACK-authorized finding patched:
+  - added a reporting-internal terminal surface kind contract shared by
+    `CombinedDependencyPathReporter` and `CombinedRouteFlowReporter`;
+  - derived both `paths --to-surface` and `route-flow --to-surface`
+    validation messages from the shared surface-kind allow-list, so future
+    surface additions do not drift between the path engine, route-flow
+    selector validation, and error text.
+- Post-ACK patch validation:
+  - `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+    errors.
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+    passed locally with 43 tests.
+  - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedDependencyPathTests`:
+    passed locally with 30 tests.
+  - `dotnet test src/dotnet/TraceMap.sln`: passed locally with 651 tests.
+  - `./scripts/check-private-paths.sh`: passed.
+  - `git diff --check`: passed.
+
+### Oddities / Design Decisions For PR 7
+
+- Message terminal surfaces are rendered in `dependencySurfaces` and selected
+  terminal `flowRows`; route-flow does not create extra generic logic rows for
+  message terminals because `LogicKind` currently only projects SQL/object-ish
+  shapes as path-context logic rows.
+- The synthetic fixtures use public-safe route strings, source labels,
+  destination keys, and stable hashes only.
+
+### Follow-Ups For PR 7
+
+- Continue Task 7 for the remaining taxonomy items, especially ASMX/SOAP
+  route-flow selection if the path reporter gains those terminal surface kinds,
+  plus storage, validation/guard, serializer/contract, async/callback, and any
+  broader attached-versus-path-context labeling coverage not already proven by
+  existing projection tests.
+- Keep Task 8/9/10 unchecked except for validation/safety behavior directly
+  touched by this event/message sub-slice.
+
+## Product Implementation PR 8
+
+Branch: `codex/task7-attachment-precision`
+Base: `origin/dev` at `7ac6e1ac`
+
+Selected slice: continue Task 7 after PR #334 and PR #335 with a small
+SQL/query dependency-surface attachment precision hardening slice. This slice
+does not start UI property lineage, site work, scanner extraction, runtime
+execution claims, or the full remaining service/data/query/dependency taxonomy.
+
+### Live Audit Notes For PR 8
+
+- Current `dev` already contains selected route-flow traversal, dependency
+  surface rendering from selected `routePaths`, parameter-forward seed edges,
+  argument-flow projection joins through selected route-flow caller/callee
+  pairs, source-role fact-symbol projection joins through selected source-local
+  symbols, and the projection/attachment gap kinds
+  `ArgumentProjectionUnavailable`, `FactSymbolProjectionUnavailable`,
+  `FactSymbolUnsupportedTypeSkipped`, and `DataSurfaceAttachmentMissing`.
+- PR #334's event/message terminal-surface precision and PR #335's source-role
+  fact-symbol precision are present on the audited base.
+- SQL/query terminal surfaces are already selected through route-flow path
+  evidence. The missing small-slice evidence was focused coverage for selected
+  SQL attachment versus adjacent same-source SQL evidence, path-context
+  labeling, and deterministic dependency surface/gap IDs.
+
+### Implementation Notes For PR 8
+
+- Added focused `CombinedRouteFlowTests` coverage proving selected SQL/query
+  surfaces render as dependency surfaces only when joined through the selected
+  static route-flow path.
+- Added adjacent same-source SQL/query evidence coverage proving route-flow
+  does not infer an unjoined SQL surface and preserves
+  `DataSurfaceAttachmentMissing` instead of a clean no-evidence conclusion.
+- Added deterministic repeated-render assertions for selected SQL surface IDs,
+  stable keys, and unjoinable gap IDs.
+- Added path-context labeling assertions for the selected SQL logic row and its
+  attachment to the selected terminal `flowRows` row.
+- Extended the synthetic `QueryPatternFact` test helper with optional table,
+  column, and shape values so fixtures can distinguish selected and adjacent
+  public-safe SQL surfaces without raw SQL/config values.
+
+### Validation Log For PR 8
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_selected_sql_surface_with_path_context_and_stable_ids|FullyQualifiedName~Route_flow_does_not_infer_adjacent_sql_surface_without_selected_join"`:
+  passed locally with 2 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 46 tests.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 warnings and 0
+  errors.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 654 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+### Oddities / Design Decisions For PR 8
+
+- The unjoinable SQL fixture's `DataSurfaceAttachmentMissing` gap currently
+  carries rule, source label, deterministic gap ID, and route-root file span,
+  but no commit SHA or supporting fact IDs on this traversal path. The test
+  asserts the stable rule-backed evidence available on `dev` and leaves broader
+  gap metadata enrichment out of this conservative slice.
+- The adjacent SQL fixture uses public-safe synthetic table/shape labels only;
+  no raw SQL, config values, secrets, private paths, remotes, or source snippets
+  are rendered.
+
+### Follow-Ups For PR 8
+
+- Continue Task 7 for the remaining taxonomy items: service/repository rows
+  beyond existing selected path rows, object/projection variants, legacy data,
+  package/config, HTTP client, WCF, ASMX/SOAP, remoting, storage,
+  validation/guard, serializer/contract, async/callback, flow-boundary breadth,
+  and any broader attached-versus-path-context matrix not already covered.
+- Consider enriching `DataSurfaceAttachmentMissing` gaps with commit SHA and
+  supporting fact IDs where traversal paths have that evidence available, but
+  keep the gap conservative when the join is unavailable.
+- Keep the large argument-pair and fact-symbol projection SQL batching follow-up
+  open so large selected route-flow graphs cannot exceed SQLite parameter
+  limits.
+
+## Product Implementation PR 9
+
+Branch: `codex/route-flow-task7-value-origin-precision-20260625173937`
+Base: `origin/dev` at `7ac6e1ac883998a7c09c87afc416f0c76be225f6`
+Merge refresh: merged `origin/dev` at
+`7dc99a8564ac3a46effce7492a5e21a1b243837a` to preserve the SQL/query
+attachment precision slice from Product Implementation PR 8.
+
+Selected slice: Task 7 argument-flow / parameter-forward value-origin
+attachment precision after PR #335 and current `origin/dev`. This slice
+preserves `route-flow`, JSON version `1.0`, and the existing
+`combined.route-flow.*` rule namespace. It does not add runtime proof,
+endpoint reachability, DI binding, production traffic, release-safety wording,
+AI/LLM analysis, vector search, or scanner extraction changes.
+
+### Live Audit Notes For PR 9
+
+- Current `origin/dev` already includes Task 5, Task 6, fact-symbol
+  source-role precision from PR #335, event/message terminal-surface
+  attachment precision from PR #334, and the SQL/query attachment precision
+  slice from Product Implementation PR 8.
+- `CombinedRouteFlowReport` already renders selected parameter-forward
+  value-origin rows through selected route-flow paths and already joins
+  argument-flow projection rows through selected caller/callee route-flow row
+  pairs.
+- The remaining value-origin gap was narrower: when one selected argument-flow
+  projection attached successfully, adjacent same-source argument-flow evidence
+  that could not join a selected static route-flow pair was silently omitted
+  instead of preserving `ArgumentProjectionUnavailable`.
+
+### Implementation Notes For PR 9
+
+- Argument projection gap evidence now reads unjoined same-source
+  `combined_argument_flows` rows by excluding the selected route-flow
+  caller/callee pair set.
+- `ArgumentProjectionUnavailable` is emitted for adjacent unjoined
+  argument-flow evidence even when other argument-flow projection rows attach
+  successfully.
+- The argument projection gap now carries source label, file span, commit SHA,
+  extractor name, and extractor version metadata from the unjoined evidence,
+  matching the fact-symbol projection gap evidence shape.
+- Added focused synthetic coverage proving selected argument-flow projection
+  rows attach to selected static route-flow rows, selected parameter-forward
+  value-origin rows remain route-flow path context, adjacent unjoined
+  argument-flow evidence does not render as flow/logic rows, and repeated
+  row/gap IDs are deterministic.
+
+### Validation Log For PR 9
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_value_origin_rows_only_from_selected_static_path"`:
+  passed locally with 1 test before the merge refresh. NuGet emitted the
+  existing `SQLitePCLRaw.lib.e_sqlite3` high-severity vulnerability warning.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 45 tests before the merge refresh, with the same existing
+  NuGet warning.
+- `git diff --check`: passed before the merge refresh.
+- `./scripts/check-private-paths.sh`: passed before the merge refresh.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 653 tests before
+  the merge refresh, with the same existing NuGet warning.
+- Post-merge refresh validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 47 tests, `git diff --check` passed,
+  `./scripts/check-private-paths.sh` passed, and
+  `dotnet test src/dotnet/TraceMap.sln` passed locally with 655 tests. NuGet
+  emitted the same existing `SQLitePCLRaw.lib.e_sqlite3` warning.
+- ACK-authorized patch after the merge refresh replaced the SQL
+  `not (caller/callee pair clauses)` gap-exclusion filter with deterministic
+  in-memory selected-pair exclusion. This avoids large exclusion predicates and
+  preserves null-caller/null-callee unjoined argument-flow rows as
+  `ArgumentProjectionUnavailable` evidence.
+- Post-ACK patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_value_origin_rows_only_from_selected_static_path"`
+  passed locally with 1 test,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 47 tests, `git diff --check` passed,
+  `./scripts/check-private-paths.sh` passed, and
+  `dotnet test src/dotnet/TraceMap.sln` passed locally with 655 tests. NuGet
+  emitted the same existing `SQLitePCLRaw.lib.e_sqlite3` warning.
+- Second ACK-authorized patch made the unjoined argument-flow gap evidence
+  query fully static SQL and moved selected source filtering into the same
+  deterministic in-memory pass as selected-pair exclusion.
+- Post-second-ACK patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_value_origin_rows_only_from_selected_static_path"`
+  passed locally with 1 test,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 47 tests, `git diff --check` passed,
+  `./scripts/check-private-paths.sh` passed, and
+  `dotnet test src/dotnet/TraceMap.sln` passed locally with 655 tests. NuGet
+  emitted the same existing `SQLitePCLRaw.lib.e_sqlite3` warning.
+- Third ACK-authorized patch groups unjoined argument-flow projection gap
+  evidence by source label, file span, commit SHA, rule ID, and extractor
+  version before emitting `ArgumentProjectionUnavailable`, so each gap's
+  metadata matches its supporting evidence location.
+- Post-third-ACK patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_value_origin_rows_only_from_selected_static_path"`
+  passed locally with 1 test,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 47 tests, `git diff --check` passed,
+  `./scripts/check-private-paths.sh` passed, and
+  `dotnet test src/dotnet/TraceMap.sln` passed locally with 655 tests. NuGet
+  emitted the same existing `SQLitePCLRaw.lib.e_sqlite3` warning.
+
+### Follow-Ups For PR 9
+
+- Complete the broader Task 7 taxonomy for storage, validation/guard,
+  serializer/contract, async/callback, flow-boundary, ASMX/SOAP if supported by
+  path terminals, and remaining attached-versus-path-context labeling coverage.
+- Keep the large argument-pair and fact-symbol projection SQL batching/cap
+  follow-up open for a dedicated performance/scale slice.
+- Keep Task 8/9/10 unchecked except for the validation and safety behavior
+  directly touched by this value-origin sub-slice.
+
+## Task 7 Async/Callback Flow-Boundary Attachment Slice
+
+Branch: `codex/task7-validation-guard-attachments`
+Audited base: `origin/dev` at
+`825834304185f6934f27eeeb1b07cae06b7d22bd`.
+Final PR base after unrelated site/spec cleanup rebase: `origin/dev` at
+`419cfeb1a46f6ffcfac954e8d2b2a7868d39f113`.
+Selected family: async/callback flow-boundary fact-symbol projection.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision for
+  `CallbackBoundary` and `AsyncBoundary` facts already emitted by the
+  deterministic C# semantic extractor.
+- Project selected async/callback boundary fact-symbol rows as
+  `flow-boundary` logic context only when joined to selected source-local
+  route-flow symbols.
+- Cap async/callback boundary logic rows at `NeedsReviewStaticRouteFlow`,
+  because they are static boundary context and do not prove scheduling,
+  callback invocation, ordering, completion, closure lifetime, or mutation
+  safety.
+- Preserve `FactSymbolProjectionUnavailable` when same-source async/callback
+  boundary fact-symbol evidence exists but cannot join the selected static
+  route-flow path.
+
+Scope decisions:
+
+- This slice does not add terminal dependency surface kinds for
+  async/callback, validation/guard, or serializer/contract facts.
+- This slice does not start UI property lineage, site work, reducer behavior,
+  scanner extraction, runtime execution claims, or broader Task 8/9/10
+  compatibility work.
+- Validation/guard, serializer/contract, and broader
+  service/repository/object/projection breadth remain follow-up Task 7 slices.
+
+Oddities:
+
+- The synthetic route-flow fixtures may still surface the pre-existing
+  `FactSymbolUnsupportedTypeSkipped` gap for route/root fact-symbol rows. This
+  slice leaves that behavior unchanged and asserts only the async/callback
+  projection contract.
+- The unjoined async/callback coverage uses the existing fact-symbol projection
+  gap path, so no new route-flow rule ID or JSON schema field is required.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_async_callback_boundaries_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_async_callback_boundary_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 61 tests and the existing NU1903 warning.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 671 tests and the
+  existing NU1903 warning.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-async-callback-modern-sample`:
+  passed with 27 facts at `Level1SemanticAnalysis`; required outputs
+  `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
+  `logs/analyzer.log` were present.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Follow-ups:
+
+- Continue Task 7 with serializer/contract and broader
+  service/repository/object/projection breadth in separate small slices.
+- Keep the large argument-pair and fact-symbol projection SQL batching/cap
+  follow-up open for a dedicated performance/scale slice.
+- Keep Task 8/9/10 unchecked except for validation and safety behavior directly
+  touched by this async/callback flow-boundary sub-slice.
+
+## Task 7 Validation/Guard Attachment Slice
+
+Branch: `codex/task7-guard-serializer-attachments`
+Audited base: `origin/dev` at
+`49f90ec90e722afa9fe4afa18898f1d70291c7e1`.
+Selected family: validation/guard branch-feasibility fact-symbol projection.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision for
+  `BranchFeasibility` facts already emitted by the deterministic C# semantic
+  runtime-evidence extractor.
+- Project selected branch-feasibility guard fact-symbol rows as
+  `validation-guard` logic context only when joined to selected source-local
+  route-flow symbols.
+- Cap validation/guard logic rows at `NeedsReviewStaticRouteFlow`, because
+  they are static guard context and do not prove symbolic execution, branch
+  feasibility, validation outcome, authorization result, or runtime values.
+- Preserve `FactSymbolProjectionUnavailable` when same-source
+  branch-feasibility fact-symbol evidence exists but cannot join the selected
+  static route-flow path.
+
+Scope decisions:
+
+- This slice does not add terminal dependency surface kinds for
+  validation/guard or serializer/contract facts.
+- This slice does not start UI property lineage, site work, reducer behavior,
+  scanner extraction, runtime execution claims, symbolic execution, or broader
+  Task 8/9/10 compatibility work.
+- Serializer/contract and broader service/repository/object/projection breadth
+  remain follow-up Task 7 slices.
+
+Oddities:
+
+- `BranchFeasibility` facts are stored under
+  `csharp.semantic.runtimeevidence.v1`, not a separate validation-specific rule
+  ID. The route-flow slice reuses `combined.route-flow.fact-symbol-projection.v1`
+  and documents the validation/guard review-tier cap in the existing catalog
+  entry.
+- Checked symbols are rendered only through `checkedSymbolHash`; raw checked
+  symbol names are not exposed in route-flow safe metadata.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_validation_guard_branches_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_validation_guard_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 63 tests and the existing NU1903 warning.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 673 tests and the
+  existing NU1903 warning.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-validation-guard-modern-sample`:
+  passed with 27 facts at `Level1SemanticAnalysis`; required outputs
+  `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
+  `logs/analyzer.log` were present.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Follow-ups:
+
+- Continue Task 7 with serializer/contract and broader
+  service/repository/object/projection breadth in separate small slices.
+- Keep the large argument-pair and fact-symbol projection SQL batching/cap
+  follow-up open for a dedicated performance/scale slice.
+- Keep Task 8/9/10 unchecked except for validation and safety behavior directly
+  touched by this validation/guard sub-slice.
+
+## Task 7 Serializer/Contract Attachment Slice
+
+Branch: `codex/task7-serializer-contract-precision`
+Audited base: `origin/dev` at
+`b302c0ab5f9284b983cb3210ee6c0bc5f2d0ad27`.
+Selected family: serializer/contract fact-symbol projection.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision for
+  `SerializerContractMember` facts already emitted by the deterministic C#
+  semantic runtime-evidence extractor.
+- Project selected serializer contract member fact-symbol rows as
+  `serializer-contract` logic context only when joined to selected source-local
+  route-flow symbols, including selected DTO/type symbols reached by static
+  object-creation path evidence.
+- Cap serializer contract logic rows at `NeedsReviewStaticRouteFlow`, because
+  they are static contract context and do not prove serialization execution,
+  formatter selection, runtime payload shape, binary compatibility, client
+  compatibility, or production use.
+- Preserve `FactSymbolProjectionUnavailable` when same-source serializer
+  contract fact-symbol evidence exists but cannot join the selected static
+  route-flow path.
+
+Scope decisions:
+
+- This slice does not add terminal dependency surface kinds for serializer or
+  contract facts.
+- This slice does not start UI property lineage, site work, reducer behavior,
+  scanner extraction, runtime execution claims, serializer alias expansion, or
+  broader Task 8/9/10 compatibility work.
+- Broader service/repository/object/projection breadth remains follow-up Task 7
+  work; Task 7 stays unchecked.
+
+Oddities:
+
+- Real `SerializerContractMember` facts attach `sourceSymbol` to the containing
+  DTO/type and `targetSymbol` to the member. The focused selected-path test
+  therefore uses a selected object-creation edge to place the DTO/type symbol on
+  the route-flow path before projecting serializer contract context.
+- Contract name, member name, member type, containing type, source symbol, and
+  target symbol values are rendered only as hashes; raw serializer contract and
+  member names are not exposed in route-flow safe metadata.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_serializer_contract_members_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_serializer_contract_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 65 tests and the existing NU1903 warning.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 675 tests and the
+  existing NU1903 warning.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-serializer-contract-modern-sample`:
+  passed with 27 facts at `Level1SemanticAnalysis`; required outputs
+  `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
+  `logs/analyzer.log` were present.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- ACK-authorized patch after PR review added source and target symbol identity
+  metadata to real `SerializerContractMember` facts so scan-written
+  `fact_symbols`/`combined_fact_symbols` rows exist for route-flow serializer
+  projection. Post-patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~SqliteIndexWriterTests.Scan_writes_semantic_symbol_tables_to_sqlite|FullyQualifiedName~Scan_extracts_tier1_runtime_evidence_facts|FullyQualifiedName~Route_flow_attaches_serializer_contract_members_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_serializer_contract_without_selected_join"`
+  passed locally with 3 tests,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 65 tests, `dotnet build src/dotnet/TraceMap.sln`
+  passed with 0 errors, `dotnet test src/dotnet/TraceMap.sln` passed locally
+  with 675 tests,
+  `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-serializer-contract-modern-sample`
+  passed with required outputs present, `./scripts/check-private-paths.sh`
+  passed, and `git diff --check` passed. NuGet emitted the same existing
+  `SQLitePCLRaw.lib.e_sqlite3` warning.
+- ACK-authorized Qodo patch made serializer-contract display/context identity
+  include hashed containing-type and member disambiguators for same-contract-name
+  rows, replaced raw `attributeName` metadata with `attributeNameHash`, and
+  documented serializer attribute name redaction in the rule catalog.
+  Post-patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~SqliteIndexWriterTests.Scan_writes_semantic_symbol_tables_to_sqlite|FullyQualifiedName~Route_flow_attaches_serializer_contract_members_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_serializer_contract_without_selected_join"`
+  passed locally with 3 tests,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 65 tests, `dotnet build src/dotnet/TraceMap.sln`
+  passed with 0 errors, `dotnet test src/dotnet/TraceMap.sln` passed locally
+  with 675 tests,
+  `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-serializer-contract-modern-sample`
+  passed with required outputs present, `./scripts/check-private-paths.sh`
+  passed, and `git diff --check` passed. NuGet emitted the same existing
+  `SQLitePCLRaw.lib.e_sqlite3` warning.
+
+Follow-ups:
+
+- Continue Task 7 with broader service/repository/object/projection breadth in
+  separate small slices.
+- Keep the large argument-pair and fact-symbol projection SQL batching/cap
+  follow-up open for a dedicated performance/scale slice.
+- Keep Task 8/9/10 unchecked except for validation and safety behavior directly
+  touched by this serializer/contract sub-slice.
+
+## Task 8 Coverage, Classification, And Gap Downgrade Slice
+
+Branch: `codex/route-flow-task8-coverage`
+Audited base: `origin/dev` at `10bf8a93`.
+Selected slice: final route-flow coverage/classification/gap-downgrade
+contract for Requirement 5.
+
+Scope:
+
+- Keep this PR limited to route-flow core/reporting tests and spec state.
+- Emit an explicit computed `classification` field on every route-flow gap so
+  gap rows carry rule ID, evidence tier, classification, coverage, safe
+  message/scope metadata, supporting IDs where available, and limitations.
+- Share route-flow gap classification through one helper so JSON, classification
+  filtering, and summary/gap assertions do not drift.
+- Treat `TruncatedByLimit` route-flow gaps as `UnknownAnalysisGap`, preserving
+  the spec rule that truncation blocks a credible clean-absence conclusion.
+- Preserve existing downgrade behavior already covered on `dev`: full coverage
+  is required for `StrongStaticRouteFlow`; clean `NoRouteFlowEvidence` is
+  suppressed by selector, identity, schema/extractor, projection, attachment,
+  reduced-coverage, and traversal blockers; syntax/name-only/Tier3,
+  high-fan-out, candidate, dynamic/runtime-adjacent, unjoined, and
+  reduced-coverage evidence remains review-tier or unknown.
+
+Scope decisions:
+
+- This slice does not start Task 9 deterministic JSON/Markdown compatibility
+  beyond the directly touched additive gap field and existing deterministic
+  report tests.
+- This slice does not start Task 10 redaction/public-safety work beyond
+  preserving existing safe rendering assertions.
+- No scanner extraction, reducer behavior, site work, UI property lineage,
+  runtime execution claims, new command, new report type, new rule namespace, or
+  new gap code was added.
+
+Oddities:
+
+- `RouteFlowGap` classification is derived from closed-set `gapKind` rather
+  than stored separately in constructors. This keeps existing gap construction
+  stable while making the classification explicit in JSON.
+- Projection and data-surface attachment gaps remain
+  `NeedsReviewStaticRouteFlow` because they are unjoined static context gaps;
+  they still suppress clean absence through the existing clean no-evidence
+  blocker path.
+- Truncation already reduced report coverage through `IsBlockingGap`; this
+  slice aligns the per-gap classification with the same unknown conclusion.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 67 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 677 tests and the
+  existing NU1903 warning.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task8-coverage-modern-sample`:
+  passed with 27 facts at `Level1SemanticAnalysis`; required outputs
+  `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
+  `logs/analyzer.log` were present.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- ACK-authorized patch after PR review replaced the nested ternary route-flow
+  gap classifier with a switch expression, reused `gap.Classification` from
+  the route-flow gap filter helper, and stopped omitting nullable
+  commit/extractor metadata fields from serialized gap rows so uncertainty is
+  explicit in JSON. Post-patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed with 67 tests, `dotnet build src/dotnet/TraceMap.sln` passed with 0
+  errors, `dotnet test src/dotnet/TraceMap.sln` passed with 677 tests,
+  `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task8-coverage-modern-sample-rerun`
+  passed with 27 facts at `Level1SemanticAnalysis`,
+  `./scripts/check-private-paths.sh` passed, and `git diff --check` passed.
+  NuGet emitted the same existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 warning.
+
+Follow-ups:
+
+- Task 9 remains unchecked for broader byte-stable JSON/Markdown compatibility,
+  exit-code matrix, and route-flow rule-catalog resolution coverage not
+  otherwise touched by this additive field.
+- Task 10 was completed later by the safety/public-safe validation slice below.
+
+## Task 9 Deterministic JSON/Markdown Compatibility Slice
+
+Branch: `codex/route-flow-json-markdown-compat-20260626`
+Audited base: `origin/dev` at `21536f57`.
+Selected slice: deterministic route-flow JSON and Markdown compatibility for
+Requirement 6.
+
+Scope:
+
+- Keep this PR limited to route-flow reporting, focused route-flow tests, and
+  this spec's task/state tracking.
+- Preserve the existing `tracemap route-flow` command, `reportType =
+  "route-flow"`, JSON `version = "1.0"`, output file names, and route-flow
+  classification vocabulary.
+- Add focused compatibility regression coverage proving the required top-level
+  JSON fields are present, collection fields serialize as arrays, dependency
+  surface subtype uncertainty is explicit as `null`, route-flow gap uncertainty
+  fields remain present, Markdown section order is stable, and repeated
+  identical inputs/options produce byte-identical JSON and Markdown.
+- Serialize the existing additive `surfaceSubtype` field as explicit `null`
+  when unavailable instead of omitting it.
+
+Scope decisions:
+
+- No new route-flow collection, command, report type, JSON version, rule
+  namespace, traversal behavior, summary/classification rollup, exit-code
+  behavior, scanner extraction, reducer behavior, site work, or UI property
+  lineage work was added.
+- The current route-flow JSON record order is preserved for compatibility.
+  `contextGroups` remains an additive field serialized in its existing record
+  position after `limitations`; the Task 9 test asserts required field
+  presence and byte-stability rather than inventing a new field-order
+  migration.
+- No `classificationCap` field is emitted by current route-flow JSON, so this
+  slice did not add classification-cap-specific assertions beyond existing
+  route-flow classification and context-group tests.
+
+Oddities:
+
+- Repeated-output byte stability must use identical output paths because the
+  report stores a safe hash of the output path in the query metadata; different
+  output directories correctly produce different redacted hashes.
+- `surfaceSubtype` was the remaining route-flow row field with a
+  `WhenWritingNull` omission override; removing that override aligns dependency
+  surfaces with the explicit-null behavior already used by route-flow gaps and
+  evidence rows.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 68 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 678 tests and the
+  existing NU1903 warning.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task9-compat-modern-sample`:
+  passed with 27 facts at `Level1SemanticAnalysis`; required outputs
+  `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
+  `logs/analyzer.log` were present.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Follow-ups:
+
+- Task 10 was completed by the safety/public-safe validation slice below.
+
+## Task 10 Safety And Public-Safe Validation Slice
+
+Branch: `codex/route-flow-public-safe-task10`
+Audited base: `origin/dev` at `9398cd3a`.
+Selected slice: final route-flow safety/public-safe validation for
+Requirements 7 and 8.
+
+Scope:
+
+- Keep this PR limited to route-flow reporting, focused route-flow tests, and
+  this spec's task/state tracking.
+- Reuse the route-flow safe selector/path/hash helpers for report-visible
+  selector, source label, scan ID, entry path-key, surface display, metadata,
+  URL/remote/hostname, local absolute path, source-snippet, SQL/query, config,
+  and secret-like values.
+- Hash config-derived dependency-surface display names and continue rendering
+  safe package names where already reviewed as public-safe.
+- Add `combined.route-flow.redaction.v1` to dependency-surface and logic-row
+  supporting rule IDs when route-flow hashes or omits unsafe row metadata.
+- Add focused negative coverage proving route-flow Markdown, JSON, and
+  fixture-derived report metadata do not render raw SQL/config values,
+  connection strings, URL query strings, secrets, source snippets, synthetic
+  local absolute paths, raw remotes, hostnames, private labels, or private route
+  values.
+
+Scope decisions:
+
+- This slice does not start site work, UI property lineage, reducer behavior,
+  scanner extraction, new route-flow commands, new report type/version, new rule
+  namespace, runtime execution claims, or private smoke publication.
+- Route-flow report generation does not create an analyzer log; the focused
+  negative test covers generated Markdown/JSON plus report metadata, and the
+  public combined-path smoke covers scan logs as generated local-only outputs.
+- The public smoke initially failed because `tsc` was unavailable. Homebrew and
+  nvm discovery found Node/npm but no TypeScript binary, so `npm ci` was run in
+  `src/typescript` from the checked-in lockfile; the smoke then passed. The
+  installed `node_modules` tree is ignored and not part of this PR.
+
+Oddities:
+
+- The first sanitizer pass was too broad: dotted C# symbol display names looked
+  like hostnames and method/path selectors containing `{}` looked like source
+  snippets. The final helper now preserves public-safe normalized route
+  selectors and C# symbols while still hashing raw remotes, known unsafe
+  hostnames, URL/query strings, private markers, SQL/config/secret markers,
+  local absolute paths, and source-looking snippets.
+- `scanId` can inherit manifest/repository-shaped text in synthetic combined
+  indexes, so route-flow now sanitizes it before JSON/Markdown rendering.
+- Entry `normalizedPathTemplate` and `normalizedPathKey` now render through the
+  same safe selector path. Public synthetic routes such as `/api/orders/{}` stay
+  readable; private or secret-like route keys are hashed.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests.Route_flow_public_safe_artifacts_omit_raw_sensitive_values_and_cite_redaction`:
+  passed locally after replacing machine-looking test literals with synthetic
+  public-safe absolute paths.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 69 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 679 tests and the
+  existing NU1903 warning.
+- `./scripts/smoke-combined-paths.sh`: passed after `npm ci` in
+  `src/typescript`; output stayed under a temporary directory.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- ACK-authorized patch after PR review removed the raw source-snippet-like
+  object-shape fixture value, added user-input coverage for snippet-like and
+  multiline SQL/credential values without persisting raw snippets, preserved
+  empty entry path keys instead of hashing missing values, limited redaction
+  rule citation to explicit redaction/hash-by-policy metadata keys, expanded
+  secret/connection-string and root-home path detection, and made unsafe
+  hostname TLD matching case-insensitive. Post-patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 69 tests, `dotnet build src/dotnet/TraceMap.sln` passed
+  with 0 errors, `dotnet test src/dotnet/TraceMap.sln` passed locally with 679
+  tests, `./scripts/smoke-combined-paths.sh` passed,
+  `./scripts/check-private-paths.sh` passed, and `git diff --check` passed.
+  NuGet emitted the same existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 warning.
+
+Follow-ups:
+
+- The route-flow service/data composition final spec tasks are complete.

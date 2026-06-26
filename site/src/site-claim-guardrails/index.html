@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level TraceMap site claim guardrails for public wording, evidence references, downgrade rules, hidden states, and review handoff."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Site Claim Guardrails | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/site-claim-guardrails/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Site Claim Guardrails">
+    <meta
+      property="og:description"
+      content="Public concept guidance for keeping TraceMap site copy tied to deterministic static evidence, proof paths, limitations, and bounded handoff states."
+    >
+    <meta property="og:url" content="https://tracemap.tools/site-claim-guardrails/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main data-site-claim-guardrails>
+      <section class="page-hero">
+        <p class="eyebrow">Site claim guardrails</p>
+        <h1>Keep public TraceMap copy inside its proof boundary.</h1>
+        <p class="hero-subhead">
+          These guardrails help contributors, implementation agents, reviewers,
+          and maintainers decide when site copy may repeat a claim, when it
+          needs weaker wording, and when it must stay hidden.
+        </p>
+        <p class="hero-note" data-claim-guardrails-zone="boundary">
+          Public claim level: concept. No public conclusion without evidence.
+          This page is copy governance for deterministic static evidence, not
+          a new scanner or reducer result.
+        </p>
+        <nav class="hero-actions" aria-label="Site claim guardrail links">
+          <a class="button primary" href="#downgrade-and-hidden-rules">Open guardrail table</a>
+          <a class="button secondary" href="/review-claim-checklist/">Claim checklist</a>
+          <a class="button secondary" href="/proof-source-catalog/">Proof source catalog</a>
+          <a class="button secondary" href="/language/change-risk/">Language guide</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="public-claim-levels">
+        <div>
+          <p class="section-kicker">Public claim levels</p>
+          <h2>Claim levels govern wording strength, not product readiness.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>shipped</strong><span>Main-true source behavior or source-document guidance has a public-safe proof path, rule ID or family, coverage label, limitation, and source context.</span></div>
+          <div><strong>demo</strong><span>Checked-in public demo proof, sanctioned demo artifacts, or public-safe demo summaries support the exact wording and keep limitations visible.</span></div>
+          <div><strong>concept</strong><span>Future-facing, explanatory, dev-only, process-level, or not-yet-backed wording stays framed as guidance and cannot be presented as shipped or demo-backed.</span></div>
+          <div><strong>hidden</strong><span>Private, unreleased, unsafe, or local-only detail is omitted or abstracted until an owner provides a public-safe summary.</span></div>
+          <div data-claim-guardrails-zone="boundary"><strong>Page-level boundary</strong><span>The concept label on this page does not upgrade any row into shipped behavior, demo-backed behavior, impact proof, runtime proof, release-safety proof, or complete coverage.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="proof-path-requirements">
+        <div>
+          <p class="section-kicker">Proof-path requirements</p>
+          <h2>A public claim needs all supporting fields before it grows stronger.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>proof path</code><span>Point to a public-safe route or artifact summary, with source context such as main, public demo, future-only, dev-only, hidden, or local-only.</span></div>
+          <div><code>rule basis</code><span>Use a public-safe rule ID when available; otherwise use a rule family and a limitation explaining why the exact rule is unavailable.</span></div>
+          <div><code>evidence tier</code><span>Use only <code>Tier1Semantic</code>, <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, or <code>Tier4Unknown</code> when a tier applies.</span></div>
+          <div><code>coverage label</code><span>Transcribe reduced, partial, unknown, unavailable, future-only, local-only, or hidden labels without normalizing them into stronger wording.</span></div>
+          <div><code>limitation</code><span>No claim is upgraded by confidence, seniority, repetition, urgency, roadmap intent, pressure, or appealing phrasing.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="allowed-evidence-references">
+        <div>
+          <p class="section-kicker">Allowed evidence references</p>
+          <h2>Reference public-safe summaries and route families, not private proof.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Use public surfaces</strong><span>Allowed references include public pages, documentation, rule catalog pages, public-safe generated summaries, sanctioned demo artifacts, review packets, route metadata, coverage labels, limitations, and safe extractor-version labels.</span></div>
+          <div data-claim-guardrails-zone="boundary"><strong>Name artifact families only as categories</strong><span>Fact streams, SQLite indexes, analyzer logs, reports, and rule catalog entries may be named as boundary categories, not linked as raw public proof.</span></div>
+          <div><strong>Preserve the evidence boundary</strong><span>Keep rule ID or family, evidence tier when applicable, coverage label, limitation, and source context beside the public statement.</span></div>
+          <div><strong>Private-only support</strong><span>Private-only evidence can support internal follow-up, but public copy needs a public-safe summary before it cites that support.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="forbidden-raw-material" data-claim-guardrails-zone="boundary">
+        <div>
+          <p class="section-kicker">Forbidden raw material</p>
+          <h2>Raw or private material stays out of public copy.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Do not publish raw proof</strong><span>Forbidden categories include raw facts, raw SQLite databases, analyzer logs, source snippets, raw SQL, config values, secrets, local paths, remotes, generated scan directories, private sample names, command output, hidden validation details, and credential-like values.</span></div>
+          <div><strong>Apply this everywhere</strong><span>The boundary applies to rendered text, decoded HTML attributes, metadata, sitemap or discovery output, examples, fixtures, validation messages, and review-packet references.</span></div>
+          <div><strong>Use abstract labels</strong><span>Hidden work is one abstract row or omitted; it does not reveal private names, internal route names, counts, cadence, sequencing, or private proof details.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="non-claim-patterns" data-claim-guardrails-zone="non-claim">
+        <div>
+          <p class="section-kicker">Non-claim patterns</p>
+          <h2>Say what static evidence does not establish.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Static boundary</strong><span>TraceMap static evidence can show a bounded relation, gap, coverage label, or owner handoff without proving impact, absence of impact, safety, approval, business correctness, or production behavior.</span></div>
+          <div><strong>Do not say</strong><span data-claim-guardrails-zone="rejected">TraceMap proves runtime behavior, production traffic, endpoint performance, outage cause, release approval, release safety, operational safety, complete coverage, AI/LLM impact analysis, or replacement of human review.</span></div>
+          <div><strong>Prefer neutral wording</strong><span>Use phrases such as evidence shows, coverage is reduced, not established by this scan, needs review, owner follow-up needed, internal only, downgrade, hidden, and stop condition.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="downgrade-and-hidden-rules" aria-labelledby="downgrade-and-hidden-rules-heading">
+        <div class="section-header">
+          <p class="section-kicker">Downgrade and hidden rules</p>
+          <h2 id="downgrade-and-hidden-rules-heading">Choose the row before repeating the sentence.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-claim-guardrails-table>
+            <caption>Public wording guardrail rows. Each row includes the required condition, allowed action, proof path, downgrade trigger, forbidden implication, and review handoff.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Row</th>
+                <th scope="col">Condition</th>
+                <th scope="col">Allowed public wording/action</th>
+                <th scope="col">Required proof path</th>
+                <th scope="col">Downgrade/hidden trigger</th>
+                <th scope="col">Forbidden implication</th>
+                <th scope="col">Review handoff</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="guardrail-shipped" data-claim-guardrail-row="shipped"><th scope="row">shipped</th><td data-field="condition">Main-true behavior or source-document guidance exists.</td><td data-field="allowed public wording/action">Repeat only with proof and limitations.</td><td data-field="required proof path">Public-safe source, rule or rule family, coverage label, and limitation.</td><td data-field="downgrade/hidden trigger">Missing proof field or reduced evidence.</td><td data-field="forbidden implication">Runtime, release, safety, complete coverage, or replacement of review.</td><td data-field="review handoff">owner follow-up needed</td></tr>
+              <tr id="guardrail-demo" data-claim-guardrail-row="demo"><th scope="row">demo</th><td data-field="condition">Checked-in public demo proof or public-safe demo summary exists.</td><td data-field="allowed public wording/action">Repeat as demo with proof.</td><td data-field="required proof path">Public demo proof, evidence boundary, coverage label, and limitation.</td><td data-field="downgrade/hidden trigger">Demo proof is absent, private, raw, or stale.</td><td data-field="forbidden implication">Shipped, production, runtime, or release wording.</td><td data-field="review handoff">downgrade before repeating</td></tr>
+              <tr id="guardrail-concept" data-claim-guardrail-row="concept"><th scope="row">concept</th><td data-field="condition">Future-facing, guidance, dev-only, or not-yet-backed wording.</td><td data-field="allowed public wording/action">Keep concept wording.</td><td data-field="required proof path">Public-safe concept source and limitation.</td><td data-field="downgrade/hidden trigger">Wording implies shipped or demo-backed behavior.</td><td data-field="forbidden implication">Public availability, operational readiness, or release timing.</td><td data-field="review handoff">downgrade before repeating</td></tr>
+              <tr id="guardrail-hidden" data-claim-guardrail-row="hidden"><th scope="row">hidden</th><td data-field="condition">Details are private, unreleased, or unsafe to disclose.</td><td data-field="allowed public wording/action">Omit or abstract.</td><td data-field="required proof path">None public; use hidden rationale internally.</td><td data-field="downgrade/hidden trigger">Any public detail would expose private material.</td><td data-field="forbidden implication">Hidden names, counts, cadence, sequencing, or in-flight status.</td><td data-field="review handoff">hidden</td></tr>
+              <tr id="guardrail-raw-artifact-reference" data-claim-guardrail-row="raw artifact reference"><th scope="row">raw artifact reference</th><td data-field="condition">A claim cites raw or private material.</td><td data-field="allowed public wording/action">Replace with a public-safe summary.</td><td data-field="required proof path">Public-safe summary or owner-approved public artifact.</td><td data-field="downgrade/hidden trigger">Only raw/private proof exists.</td><td data-field="forbidden implication">Direct raw facts, SQLite, logs, snippets, SQL, config, paths, remotes, command output, or hidden validation details.</td><td data-field="review handoff">owner follow-up needed</td></tr>
+              <tr id="guardrail-dev-only-feature" data-claim-guardrail-row="dev-only feature"><th scope="row">dev-only feature</th><td data-field="condition">Evidence exists only off public/main surfaces.</td><td data-field="allowed public wording/action">Treat as concept or hidden.</td><td data-field="required proof path">Public-safe dev/context note if publishable.</td><td data-field="downgrade/hidden trigger">Wording implies availability.</td><td data-field="forbidden implication">Shipped, demo, timing, or production use.</td><td data-field="review handoff">internal only</td></tr>
+              <tr id="guardrail-reduced-coverage" data-claim-guardrail-row="reduced coverage"><th scope="row">reduced coverage</th><td data-field="condition">Evidence is partial, reduced, unknown, unavailable, or gap-labeled.</td><td data-field="allowed public wording/action">Keep reduced coverage visible.</td><td data-field="required proof path">Public-safe artifact with coverage label and limitation.</td><td data-field="downgrade/hidden trigger">Claim depends on missing coverage.</td><td data-field="forbidden implication">Clean, complete, safe, or no-impact wording.</td><td data-field="review handoff">owner follow-up needed</td></tr>
+              <tr id="guardrail-runtime-release-wording" data-claim-guardrail-row="runtime/release wording"><th scope="row">runtime/release wording</th><td data-field="condition">Copy implies runtime behavior or release approval.</td><td data-field="allowed public wording/action">Remove or rewrite.</td><td data-field="required proof path">Not supported by TraceMap static evidence.</td><td data-field="downgrade/hidden trigger">Any runtime or release assertion appears.</td><td data-field="forbidden implication">Production traffic, endpoint performance, outage cause, release safety, or operational safety.</td><td data-field="review handoff">do not repeat</td></tr>
+              <tr id="guardrail-ai-llm-wording" data-claim-guardrail-row="AI/LLM wording"><th scope="row">AI/LLM wording</th><td data-field="condition">Copy says core scanner/reducer uses AI/LLM analysis.</td><td data-field="allowed public wording/action">Remove or rewrite.</td><td data-field="required proof path">Deterministic static evidence only.</td><td data-field="downgrade/hidden trigger">AI/LLM impact-analysis wording appears.</td><td data-field="forbidden implication">Embeddings, vector search, prompt classification, or AI impact analysis.</td><td data-field="review handoff">do not repeat</td></tr>
+              <tr id="guardrail-private-only-support" data-claim-guardrail-row="private-only support"><th scope="row">private-only support</th><td data-field="condition">Support exists only in private or local evidence.</td><td data-field="allowed public wording/action">Internal only, hidden, or owner follow-up.</td><td data-field="required proof path">Public-safe summary required before publication.</td><td data-field="downgrade/hidden trigger">No public-safe summary exists.</td><td data-field="forbidden implication">Public proof, capability, availability, or customer-specific implication.</td><td data-field="review handoff">internal only</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section" id="validation-expectations">
+        <div>
+          <p class="section-kicker">Validation expectations</p>
+          <h2>Validation checks the route, not hidden proof.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Route and metadata</strong><span>The standalone route needs concept-level title, description, canonical URL, Open Graph metadata, sitemap metadata, and discovery metadata.</span></div>
+          <div><strong>Structure</strong><span>Checks cover visible concept level, the shared principle, required anchors, adjacent links, row markers, row fields, and body word-count bounds.</span></div>
+          <div data-claim-guardrails-zone="boundary"><strong>Public-safety sweep</strong><span>Validation scans rendered text, decoded attributes, raw HTML, metadata, sitemap, discovery output, tests, examples, and messages for forbidden claims or private/raw material.</span></div>
+          <div><strong>Browser sanity</strong><span>Desktop and mobile sanity checks confirm the public page is readable and the table remains reachable without adding the route to primary navigation.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="review-handoff">
+        <div>
+          <p class="section-kicker">Review handoff</p>
+          <h2>Use bounded next states when proof is missing.</h2>
+        </div>
+        <div class="output-list" data-claim-guardrails-handoff>
+          <div><code>repeat with proof</code><span>The public-safe proof path, rule basis, tier if applicable, coverage label, limitation, and source context are present.</span></div>
+          <div><code>downgrade before repeating</code><span>The wording is stronger than the proof and must move to concept, demo, reduced, or narrower language.</span></div>
+          <div><code>owner follow-up needed</code><span>An owner must provide a missing proof path, public-safe summary, limitation, source context, or decision.</span></div>
+          <div><code>do not repeat</code><span>The sentence makes a forbidden implication or lacks the minimum proof fields.</span></div>
+          <div><code>internal only</code><span>Private-only or raw-only evidence can guide internal follow-up but is not public proof.</span></div>
+          <div><code>hidden</code><span>Publishing details would expose private material, hidden work, or unsafe context.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" id="adjacent-surfaces">
+        <div>
+          <p class="section-kicker">Adjacent surfaces</p>
+          <h2>This page sets copy guardrails; nearby routes keep their own jobs.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong><a href="/review-claim-checklist/">Review claim checklist</a></strong><span>Canonical ritual for deciding whether a specific sentence can be repeated, downgraded, sent to an owner, withheld, or kept internal.</span></div>
+          <div><strong><a href="/proof-source-catalog/">Proof source catalog</a></strong><span>Route-to-source mapping for public-safe proof sources; this page only says what categories may be referenced.</span></div>
+          <div><strong><a href="/roadmap/">Roadmap</a></strong><span>Claim gates and maturity context without adding timing promises here.</span></div>
+          <div><strong><a href="/limitations/">Limitations</a></strong><span>Broader product and analysis boundaries; this page shows when those boundaries force downgrade, hiding, or owner follow-up.</span></div>
+          <div><strong><a href="/questions/objections/">Questions and objections</a></strong><span>Stakeholder Q&amp;A; this page teaches authoring boundaries.</span></div>
+          <div><strong><a href="/language/change-risk/">Change-risk language guide</a></strong><span>Wording patterns for static change-risk language; this page defines claim-level and publication rules.</span></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Continue with the
+        <a href="/review-claim-checklist/">review claim checklist</a>
+        or the
+        <a href="/proof-source-catalog/">proof source catalog</a>.
+      </p>
+      <p class="copyright">&copy; 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

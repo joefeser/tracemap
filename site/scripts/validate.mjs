@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { buildSite, topNavigationLinks } from "./build.mjs";
 import { validateAdoptionPlaybookDist } from "./adoption-playbook.mjs";
+import { validateBuildReviewWorkflowStoryDist } from "./build-review-workflow-story.mjs";
 import { validateBlogProofPathSeriesDist } from "./blog-proof-path-series.mjs";
 import { validateChangeRiskLanguageGuideDist } from "./change-risk-language-guide.mjs";
 import {
@@ -14,6 +15,7 @@ import {
 import { validateDeployAuditDist } from "./deploy-audit.mjs";
 import { validateDemoEvidenceTrailDist } from "./demo-evidence-trail.mjs";
 import { validateDemoRunbookDist } from "./demo-runbook.mjs";
+import { validateDemoTroubleshootingDist } from "./demo-troubleshooting.mjs";
 import { validateEvidenceHandoffTemplateDist } from "./evidence-handoff-template.mjs";
 import { validateEvidenceDecisionRecordDist } from "./evidence-decision-record.mjs";
 import { validateEvidenceGapRegisterDist } from "./evidence-gap-register.mjs";
@@ -24,23 +26,31 @@ import { validateClaimReviewDrillDist } from "./claim-review-drill.mjs";
 import { validateGlossaryDist } from "./glossary.mjs";
 import { validateIncidentCallDist } from "./incident-call.mjs";
 import { validateIncidentEvidenceHandoffDist } from "./incident-evidence-handoff.mjs";
+import { validateLegacyDataSurface } from "./legacy-data-surface.mjs";
+import { validateLegacyDotnetEvidenceLane } from "./legacy-dotnet-evidence-lane.mjs";
 import { validateLegacyModernizationEvidenceMap } from "./legacy-modernization-evidence-map.mjs";
+import { validateLegacyModernizationReviewHandoffDist } from "./legacy-modernization-review-handoff.mjs";
 import { validateLegacyStorySafety } from "./legacy-story-safety.mjs";
 import { validateManagerBriefDist } from "./manager-brief.mjs";
 import { validateManagerDemoScriptDist } from "./manager-demo-script.mjs";
 import { validateManagerFaqDist } from "./manager-faq.mjs";
 import { validateOwnerFollowupMapDist } from "./owner-followup-map.mjs";
 import { validateProofPathFaqDist } from "./proof-path-faq.mjs";
+import { validateProofPathsForManagersDist } from "./proof-paths-for-managers.mjs";
+import { validateRouteFlowEvidenceStoryDist } from "./route-flow-evidence-story.mjs";
+import { validateProofPathStoriesDist } from "./proof-path-stories.mjs";
 import { validateProofPathTourDist } from "./proof-path-tour.mjs";
 import { validateProofSourceCatalogDist } from "./proof-source-catalog.mjs";
 import { validateReducedCoveragePlaybookDist } from "./reduced-coverage-playbook.mjs";
 import { validateReviewMeetingAgendaDist } from "./review-meeting-agenda.mjs";
+import { validateReviewRoomDemoPathDist } from "./review-room-demo-path.mjs";
 import { validateReviewerQuickstartDist } from "./reviewer-quickstart.mjs";
 import { validateReviewPacketAssemblyDist } from "./review-packet-assembly.mjs";
 import { validateReviewClaimChecklistDist } from "./review-claim-checklist.mjs";
 import { validateReleaseReviewBoundaryDist } from "./release-review-boundary.mjs";
 import { validateReviewRoomDist } from "./review-room.mjs";
 import { validateRoadmapClaimLedgerDist } from "./roadmap-claim-ledger.mjs";
+import { validateSiteClaimGuardrailsDist } from "./site-claim-guardrails.mjs";
 import { validateStaticTriageDist } from "./static-triage.mjs";
 import { validateStaticVsRuntimeDist } from "./static-vs-runtime.mjs";
 import { validateStakeholderObjectionGuideDist } from "./stakeholder-objection-guide.mjs";
@@ -57,11 +67,13 @@ export async function validateSite(options = {}) {
   await buildSite({ log, root });
   await validateDemoSummary({ root });
   const legacyStoryResult = await validateLegacyStorySafety({ root });
+  const legacyDotnetEvidenceLaneResult = await validateLegacyDotnetEvidenceLane({ root });
   const legacyModernizationResult = await validateLegacyModernizationEvidenceMap({ root });
+  const legacyDataSurfaceResult = await validateLegacyDataSurface({ root });
   const result = await validateDist({ root });
 
   log(
-    `Validated ${result.htmlFileCount} HTML files, ${result.internalReferenceCount} internal references, ${result.sitemapUrlCount} sitemap URLs, ${legacyStoryResult.scannedFileCount} legacy story safety targets, and ${legacyModernizationResult.rowCount} legacy modernization evidence-map rows.`
+    `Validated ${result.htmlFileCount} HTML files, ${result.internalReferenceCount} internal references, ${result.sitemapUrlCount} sitemap URLs, ${legacyStoryResult.scannedFileCount} legacy story safety targets, ${legacyDotnetEvidenceLaneResult.rowCount} legacy .NET evidence-lane rows, ${legacyModernizationResult.rowCount} legacy modernization evidence-map rows, and ${legacyDataSurfaceResult.rowCount} legacy data surface rows.`
   );
 
   return result;
@@ -100,6 +112,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateDeployAuditDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateDemoEvidenceTrailDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateDemoRunbookDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateDemoTroubleshootingDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateChangeRiskLanguageGuideDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateEvidenceHandoffTemplateDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateEvidenceDecisionRecordDist({ baseUrl: normalizedBaseUrl, dist, errors });
@@ -110,24 +123,36 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateClaimReviewDrillDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateGlossaryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateAdoptionPlaybookDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateBuildReviewWorkflowStoryDist({
+      baseUrl: normalizedBaseUrl,
+      dist,
+      errors,
+      root: resolve(root, "src")
+    });
     await validateBlogProofPathSeriesDist({ baseUrl: normalizedBaseUrl, dist, errors, root: resolve(root, "src") });
     await validateIncidentCallDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateIncidentEvidenceHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateLegacyModernizationReviewHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerBriefDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerDemoScriptDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateManagerFaqDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateOwnerFollowupMapDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofPathFaqDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateProofPathsForManagersDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateRouteFlowEvidenceStoryDist({ baseUrl: normalizedBaseUrl, dist, errors, root });
+    await validateProofPathStoriesDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofPathTourDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofSourceCatalogDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReducedCoveragePlaybookDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewMeetingAgendaDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateReviewRoomDemoPathDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewerQuickstartDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewPacketAssemblyDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewClaimChecklistDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReleaseReviewBoundaryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewRoomDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateRoadmapClaimLedgerDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateSiteClaimGuardrailsDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticTriageDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticVsRuntimeDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStakeholderObjectionGuideDist({ baseUrl: normalizedBaseUrl, dist, errors });
