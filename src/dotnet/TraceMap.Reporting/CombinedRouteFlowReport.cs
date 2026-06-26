@@ -2824,7 +2824,8 @@ public static class CombinedRouteFlowReporter
                 'ConnectionStringDeclared',
                 'CallbackBoundary',
                 'AsyncBoundary',
-                'BranchFeasibility'
+                'BranchFeasibility',
+                'SerializerContractMember'
             )
             order by links.combined_fact_id
             limit 20;
@@ -3097,7 +3098,7 @@ public static class CombinedRouteFlowReporter
         {
             "argument-flow" or "flow-boundary" => "value-origin",
             "query-filter-sort-selection" or "query-shape" => "query",
-            "projection-or-object-shape" => "data-surface",
+            "projection-or-object-shape" or "serializer-contract" => "data-surface",
             _ => "method"
         };
     }
@@ -3578,7 +3579,8 @@ public static class CombinedRouteFlowReporter
             or FactTypes.ConnectionStringDeclared
             or FactTypes.CallbackBoundary
             or FactTypes.AsyncBoundary
-            or FactTypes.BranchFeasibility;
+            or FactTypes.BranchFeasibility
+            or FactTypes.SerializerContractMember;
     }
 
     private static string FactSymbolLogicKind(FactSymbolProjectionRow row)
@@ -3591,6 +3593,7 @@ public static class CombinedRouteFlowReporter
             FactTypes.PackageReferenced or FactTypes.ConfigBinding or FactTypes.ConfigKeyDeclared or FactTypes.ConnectionStringDeclared => "dependency-surface",
             FactTypes.CallbackBoundary or FactTypes.AsyncBoundary => "flow-boundary",
             FactTypes.BranchFeasibility => "validation-guard",
+            FactTypes.SerializerContractMember => "serializer-contract",
             _ => "fact-symbol-attachment"
         };
     }
@@ -3613,6 +3616,12 @@ public static class CombinedRouteFlowReporter
         if (kind == "validation-guard" && !string.IsNullOrWhiteSpace(feasibilityKind))
         {
             return $"{kind}:{SafeSelector(feasibilityKind!) ?? CombinedReportHelpers.Hash(feasibilityKind!, 16)}";
+        }
+
+        var contractName = FirstProperty(row.Properties, "contractName");
+        if (kind == "serializer-contract" && !string.IsNullOrWhiteSpace(contractName))
+        {
+            return $"{kind}:contract-name-hash:{CombinedReportHelpers.Hash(contractName!, 16)}";
         }
 
         return $"{kind}:fact-hash:{CombinedReportHelpers.Hash(row.CombinedFactId, 16)}";
@@ -3642,13 +3651,18 @@ public static class CombinedRouteFlowReporter
             ("conditionExpressionKind", FirstProperty(row.Properties, "conditionExpressionKind")),
             ("conditionExpressionHash", FirstProperty(row.Properties, "conditionExpressionHash")),
             ("checkedSymbolHash", HashValue(FirstProperty(row.Properties, "checkedSymbol"))),
+            ("attributeName", SafeSelector(FirstProperty(row.Properties, "attributeName") ?? string.Empty)),
+            ("contractNameHash", HashValue(FirstProperty(row.Properties, "contractName"))),
+            ("memberNameHash", HashValue(FirstProperty(row.Properties, "memberName"))),
+            ("memberTypeHash", HashValue(FirstProperty(row.Properties, "memberType"))),
+            ("containingTypeHash", HashValue(FirstProperty(row.Properties, "containingType"))),
             ("targetSymbolHash", string.IsNullOrWhiteSpace(row.TargetSymbol) ? null : CombinedReportHelpers.Hash(row.TargetSymbol!, 16)),
             ("sourceSymbolHash", string.IsNullOrWhiteSpace(row.SourceSymbol) ? null : CombinedReportHelpers.Hash(row.SourceSymbol!, 16)));
     }
 
     private static string FactSymbolProjectionClassification(FactSymbolProjectionRow row)
     {
-        var cap = row.FactType is FactTypes.CallbackBoundary or FactTypes.AsyncBoundary or FactTypes.BranchFeasibility
+        var cap = row.FactType is FactTypes.CallbackBoundary or FactTypes.AsyncBoundary or FactTypes.BranchFeasibility or FactTypes.SerializerContractMember
             ? RouteFlowClassifications.NeedsReviewStaticRouteFlow
             : RouteFlowClassifications.ProbableStaticRouteFlow;
         return WeakestClassification(ClassificationForTier(row.EvidenceTier), cap);
@@ -3678,7 +3692,11 @@ public static class CombinedRouteFlowReporter
     {
         return !string.IsNullOrWhiteSpace(row.SourceSymbol)
             || !string.IsNullOrWhiteSpace(row.TargetSymbol)
-            || !string.IsNullOrWhiteSpace(FirstProperty(row.Properties, "tableName"));
+            || !string.IsNullOrWhiteSpace(FirstProperty(row.Properties, "tableName"))
+            || !string.IsNullOrWhiteSpace(FirstProperty(row.Properties, "contractName"))
+            || !string.IsNullOrWhiteSpace(FirstProperty(row.Properties, "memberName"))
+            || !string.IsNullOrWhiteSpace(FirstProperty(row.Properties, "memberType"))
+            || !string.IsNullOrWhiteSpace(FirstProperty(row.Properties, "containingType"));
     }
 
     private static string? FirstProperty(IReadOnlyDictionary<string, string> properties, params string[] keys)
@@ -4634,7 +4652,7 @@ public static class CombinedRouteFlowReporter
             DependencySurfaceRuleId => ["Dependency/data surface rows are static evidence only and do not prove runtime persistence, traffic, or production use."],
             LogicSurfaceRuleId => ["Business/data logic rows are static path context and do not prove branch feasibility or business impact."],
             ArgumentProjectionRuleId => ["Argument projection rows are direct static argument evidence only and do not prove full taint, mutation, alias, branch feasibility, or runtime values."],
-            FactSymbolProjectionRuleId => ["Fact-symbol projection rows attach source-local facts to route-flow symbols only and do not prove runtime execution, database schema state, or dependency binding."],
+            FactSymbolProjectionRuleId => ["Fact-symbol projection rows attach source-local facts to route-flow symbols only and do not prove runtime execution, database schema state, serializer behavior, or dependency binding."],
             RedactionRuleId => ["Redaction records mean unsafe values are hashed or omitted and do not make the output public-approved."],
             _ => ["Route-flow rows are static evidence and do not prove runtime execution."]
         };
@@ -4649,7 +4667,7 @@ public static class CombinedRouteFlowReporter
             "Call edges may miss reflection, dynamic dispatch, delegates, generated code, dependency injection, and branch feasibility.",
             "Candidate implementation rows identify compiler-known candidates only and do not prove runtime dependency-injection targets.",
             "Argument-flow projection rows describe direct static argument evidence and do not prove full taint, mutation tracking, alias behavior, branch feasibility, or runtime values.",
-            "Fact-symbol projection rows preserve source-local static attachments and do not prove runtime execution, database schema state, or dependency binding.",
+            "Fact-symbol projection rows preserve source-local static attachments and do not prove runtime execution, database schema state, serializer behavior, or dependency binding.",
             "Query and dependency/data rows do not prove SQL execution, database existence, schema compatibility, persistence, or production use.",
             "Business/data logic rows are static review context, not proof of business intent or business impact.",
             "Reduced coverage, missing extractors, missing schema, unknown commit SHA, truncation, dynamic URLs, and ambiguous candidates cap classifications.",

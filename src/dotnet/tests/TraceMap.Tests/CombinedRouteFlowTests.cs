@@ -2120,6 +2120,112 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_attaches_serializer_contract_members_only_from_selected_static_path()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var dtoType = "Server.Contracts.OrderResponse";
+        var unrelatedDtoType = "Server.Contracts.AuditResponse";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            ObjectCreationFact(server, controller, dtoType, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, dtoType, "Contracts/OrderResponse.cs", 31, attachSymbol: true),
+            SerializerContractFact(server, dtoType, "Status", "System.String", "customer_status", "Contracts/OrderResponse.cs", 7),
+            SerializerContractFact(server, unrelatedDtoType, "InternalStatus", "System.String", "audit_status", "Contracts/AuditResponse.cs", 11)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        var serializer = Assert.Single(result.Report.LogicRows, row => row.LogicKind == "serializer-contract"
+            && row.AttachmentKind == "fact-symbol-projection");
+        Assert.NotNull(serializer.AttachedFlowRowId);
+        Assert.StartsWith("serializer-contract:contract-name-hash:", serializer.DisplayName, StringComparison.Ordinal);
+        Assert.Equal(RouteFlowClassifications.NeedsReviewStaticRouteFlow, serializer.Classification);
+        Assert.Equal("combined.route-flow.fact-symbol-projection.v1", serializer.Evidence.RuleId);
+        Assert.Contains(RuleIds.CSharpSemanticRuntimeEvidence, serializer.Evidence.SupportingRuleIds);
+        Assert.Equal("serializer-contract", serializer.SafeMetadata["evidenceKind"]);
+        Assert.Equal("System.Text.Json.Serialization.JsonPropertyNameAttribute", serializer.SafeMetadata["attributeName"]);
+        Assert.Contains("contractNameHash", serializer.SafeMetadata.Keys);
+        Assert.Contains("memberNameHash", serializer.SafeMetadata.Keys);
+        Assert.Contains("memberTypeHash", serializer.SafeMetadata.Keys);
+        Assert.Contains("containingTypeHash", serializer.SafeMetadata.Keys);
+        Assert.DoesNotContain("contractName", serializer.SafeMetadata.Keys);
+        Assert.DoesNotContain("memberName", serializer.SafeMetadata.Keys);
+        Assert.DoesNotContain("customer_status", JsonSerializer.Serialize(serializer.SafeMetadata), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Status", JsonSerializer.Serialize(serializer.SafeMetadata), StringComparison.Ordinal);
+        Assert.DoesNotContain(result.Report.LogicRows, row => row.Evidence.FilePath == "Contracts/AuditResponse.cs");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "FactSymbolProjectionUnavailable" or "NoRouteFlowEvidence");
+        Assert.Contains(result.Report.ContextGroups!, group => group.GroupKind == "data-surface"
+            && group.MatchKind == "fact-symbol"
+            && group.RuleIds.Contains("combined.route-flow.fact-symbol-projection.v1")
+            && group.SupportingRowIds.Contains(serializer.LogicRowId));
+        Assert.Equal(
+            serializer.LogicRowId,
+            Assert.Single(repeated.Report.LogicRows, row => row.LogicKind == "serializer-contract"
+                && row.AttachmentKind == "fact-symbol-projection").LogicRowId);
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+    }
+
+    [Fact]
+    public async Task Route_flow_does_not_infer_adjacent_serializer_contract_without_selected_join()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+        var unrelatedDtoType = "Server.Contracts.AuditResponse";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31),
+            SerializerContractFact(server, unrelatedDtoType, "InternalStatus", "System.String", "audit_status", "Contracts/AuditResponse.cs", 11)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.DoesNotContain(result.Report.LogicRows, row => row.LogicKind == "serializer-contract"
+            && row.AttachmentKind == "fact-symbol-projection");
+        var gap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "FactSymbolProjectionUnavailable");
+        Assert.Equal("combined.route-flow.gap.v1", gap.RuleId);
+        Assert.Contains(gap.Limitations, limitation => limitation.Contains("combined.route-flow.fact-symbol-projection.v1", StringComparison.Ordinal));
+        Assert.Equal("Contracts/AuditResponse.cs", gap.FilePath);
+        Assert.Equal("server", gap.SourceLabel);
+        Assert.Equal("abc123", gap.CommitSha);
+        Assert.Equal("tracemap-milestone15", gap.ExtractorVersion);
+        Assert.Contains("none could be connected to the selected route-flow path", gap.Message, StringComparison.Ordinal);
+        Assert.Equal(gap.GapId, Assert.Single(repeated.Report.Gaps, item => item.GapKind == "FactSymbolProjectionUnavailable").GapId);
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
+    }
+
+    [Fact]
     public async Task Route_flow_attaches_message_surfaces_only_from_selected_static_path()
     {
         using var temp = new TempDirectory();
@@ -3432,6 +3538,45 @@ public sealed class CombinedRouteFlowTests
                 ["sourceSymbolId"] = sourceSymbol,
                 ["sourceSymbolKind"] = "Method",
                 ["sourceSymbolLanguage"] = "csharp"
+            });
+    }
+
+    private static CodeFact SerializerContractFact(
+        ScanManifest manifest,
+        string containingType,
+        string memberName,
+        string memberType,
+        string contractName,
+        string file,
+        int line)
+    {
+        var memberSymbol = $"{containingType}.{memberName}";
+        return FactFactory.Create(
+            manifest,
+            FactTypes.SerializerContractMember,
+            RuleIds.CSharpSemanticRuntimeEvidence,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: containingType,
+            targetSymbol: memberSymbol,
+            contractElement: contractName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["attributeName"] = "System.Text.Json.Serialization.JsonPropertyNameAttribute",
+                ["containingType"] = containingType,
+                ["contractName"] = contractName,
+                ["evidenceKind"] = "SerializerContractMember",
+                ["memberName"] = memberName,
+                ["memberSymbol"] = memberSymbol,
+                ["memberType"] = memberType,
+                ["sourceSymbolDisplayName"] = containingType,
+                ["sourceSymbolId"] = containingType,
+                ["sourceSymbolKind"] = "Type",
+                ["sourceSymbolLanguage"] = "csharp",
+                ["targetSymbolDisplayName"] = memberSymbol,
+                ["targetSymbolId"] = memberSymbol,
+                ["targetSymbolKind"] = "Property",
+                ["targetSymbolLanguage"] = "csharp"
             });
     }
 
