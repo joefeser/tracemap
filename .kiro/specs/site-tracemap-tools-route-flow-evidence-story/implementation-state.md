@@ -11,10 +11,10 @@ Public claim level: concept
 
 ## Summary
 
-This spec-only packet defines a future public-safe `tracemap.tools` route-flow
-evidence story page or section. It does not implement site source, route-flow
-product behavior, scanner behavior, reducer behavior, generated artifacts, or
-validation scripts.
+This packet now includes a site implementation for a public-safe
+`tracemap.tools` route-flow evidence story page. It does not implement
+route-flow product behavior, scanner behavior, reducer behavior, generated
+artifacts, or core route-flow changes.
 
 The future page explains how a reader should inspect route-centered static
 evidence from endpoint/root selection to selected static flow rows, service
@@ -24,22 +24,59 @@ current-branch public-safe evidence for narrower row-level statements.
 
 ## Scope Decisions
 
-- Scope is spec-only.
+- Scope is site-only implementation.
 - Target base is `dev`.
 - Public claim level remains `concept`.
-- Future route placement recommendation is `/proof-paths/route-flow/`, with
-  alternatives recorded in requirements and design.
-- The future page must visibly include `Public claim level: concept`.
-- The future page must visibly include `No public conclusion without evidence`.
-- The future implementation must audit current route-flow specs, tests, rule
-  catalog entries, implementation-state notes, and public site routes before
-  making any stronger route-flow statement.
+- Implementation branch is
+  `codex/impl-site-route-flow-evidence-story-20260626010602`.
+- Worktree is a dedicated temporary worktree; absolute path omitted from this
+  spec packet.
+- Selected placement: `/proof-paths/route-flow/`.
+- The route visibly includes `Public claim level: concept`.
+- The route visibly includes `No public conclusion without evidence`.
+- The route is not added to primary navigation.
+- Standalone route metadata, sitemap metadata, Open Graph metadata, discovery
+  metadata, and route validation use concept-level wording.
+- Current route-flow specs, tests, rule catalog entries, implementation-state
+  notes, and public site routes were audited before writing stronger
+  route-flow statements. Public copy makes only concept-level reading-model
+  claims unless checked-in public-safe code/rule/test evidence supports the
+  narrower vocabulary statement.
 - In-progress route-flow attachment precision must be labeled partial,
   in-progress, future-only, illustrative, or limited to cited sub-slices unless
   current-branch evidence proves the broader statement.
 - Review artifact paths recorded in this file, including `.tmp/kiro-reviews/`
   references, are internal spec-packet material and must not be quoted or
   linked in public site copy, metadata, or discovery surfaces.
+
+Rejected placement alternatives:
+
+- `/route-flow/`: rejected because route-flow should not be treated as a
+  first-class public concept page or public demo result before a later
+  information-architecture review.
+- Section on `/proof-paths/`: rejected because the required route-flow row,
+  stop-condition, safe-wording, and adjacent-surface vocabulary is too large
+  for a compact overview section.
+- Section on `/evidence/`: rejected because the page is a route-centered proof
+  path story, not only a field vocabulary reference.
+- Section on `/capabilities/`: rejected because concept-level route-flow copy
+  near capability rows could imply shipped public capability breadth.
+
+Adjacent route decisions:
+
+- `/proof-paths/`: present; linked as the broader proof-path overview and now
+  links back to `/proof-paths/route-flow/`.
+- `/proof-paths/tour/`: present; linked as the guided reading flow.
+- `/evidence/`: present; linked as the broader evidence vocabulary surface.
+- `/limitations/`: present; linked as the canonical boundary and non-claim
+  surface.
+- `/static-vs-runtime/`: present; linked as the static-versus-runtime boundary.
+- `/review-claim-checklist/`: present; linked as the repeat, downgrade, hold,
+  keep-internal, or do-not-repeat ritual.
+- `/glossary/`: present; linked as the canonical term index.
+- Additional public-safe adjacent links used: `/proof-path-stories/`,
+  `/review-room/`, `/capabilities/`, and `/demo/evidence-trail/`.
+- Missing/deferred links: none for the required adjacent routes.
 
 ## Current Route-Flow Alignment Notes
 
@@ -62,10 +99,22 @@ Reviewed the route-flow core spec state on the spec base:
   site story must not cite private branch names, private worktree paths, raw
   generated outputs, or private sample material.
 
-Implication for future site copy: explain the route-flow evidence story as a
-concept-level reading model. Only make narrower availability statements when
-the implementation can point to checked-in public-safe proof on the target
-branch.
+Current-branch evidence statements:
+
+- Backed by current checked-in public-safe evidence: route-flow report names,
+  route-flow JSON/Markdown report shape, route-flow rule families, static
+  route-flow classification names, selected row/context/gap vocabulary, and
+  route-flow redaction/report-envelope concepts are present in
+  `CombinedRouteFlowReport`, `rules/rule-catalog.yml`, `CombinedRouteFlowTests`,
+  and route-flow implementation-state notes.
+- Backed only as in-progress or sub-slice evidence: attachment precision for
+  service/data/query/dependency/value-origin families. Public copy labels this
+  evidence-conditioned and does not state broad completion.
+- Concept-level or illustrative only: safe wording examples, route-flow row
+  examples, and review outcomes on the public page.
+- Deferred/private-only: real route values, local generated outputs, raw scan
+  internals, private repository labels, private sample names, raw source, raw
+  SQL/config, raw remotes, command output, and hidden validation detail.
 
 ## Review Results
 
@@ -232,16 +281,31 @@ Spec validation run on 2026-06-26:
 - Diff scope: passed; `git status --short` showed only
   `.kiro/specs/site-tracemap-tools-route-flow-evidence-story/` changed.
 
+Site implementation validation status:
+
+- `npm test` from `site/`: passed.
+- `npm run validate` from `site/`: passed; generated site validation included
+  the new route, discovery metadata, sitemap entry, internal links, focused
+  route-flow evidence-story guard, and existing aggregate site guards.
+- `npm run build` from `site/`: passed.
+- `git diff --check`: passed after implementation edits.
+- `./scripts/check-private-paths.sh`: passed after implementation edits.
+- Browser sanity checks: passed against the generated site output served from a
+  temporary local static server. Desktop viewport `1280x900` loaded
+  `/proof-paths/route-flow/`, confirmed title, route path, required anchors,
+  23 internal main links, and no horizontal overflow. Mobile viewport
+  `390x844` loaded the same route, confirmed concept label, required anchors,
+  card width within viewport, and no horizontal overflow.
+
 ## Future Implementation Notes
 
-- The future implementation should decide whether the page is standalone or a
-  section, then record route and metadata reconciliation here.
-- If implemented as a standalone route, metadata and discovery must use
-  concept-level wording.
-- If implemented as a host-route section, host metadata must not be upgraded
-  by this section.
-- The implementation should add focused validation before checking future
-  implementation tasks complete.
+- The implemented page is standalone at `/proof-paths/route-flow/`.
+- Metadata and discovery use concept-level wording.
+- Host-route metadata reconciliation is not applicable because the selected
+  placement is standalone.
+- Focused validation has been added through
+  `site/scripts/route-flow-evidence-story.mjs` and
+  `site/scripts/route-flow-evidence-story.test.mjs`.
 
 ## Oddities
 
@@ -250,6 +314,9 @@ Spec validation run on 2026-06-26:
 - The route-flow core implementation state contains active in-progress work;
   future site copy must not flatten those partial states into complete
   coverage.
+- The spec-local implementation-state note was updated after the first site
+  source patch rather than before site code changed, so the corresponding
+  task remains unchecked.
 
 ## Follow-Ups
 

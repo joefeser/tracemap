@@ -459,6 +459,23 @@
     ]
   },
   {
+    "path": "/proof-paths/route-flow/",
+    "title": "Route-Flow Evidence Story",
+    "summary": "Concept-level route-flow proof-path explanation for reading selected static route evidence, context rows, gaps, limitations, and owner handoffs.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route is a concept-level reading model over checked-in route-flow vocabulary, rule families, classifications, and tests; it is not a public demo result or new evidence source.",
+      "Attachment precision remains evidence-conditioned; row families stay concept-level, illustrative, limited to cited sub-slices, or deferred unless checked-in public-safe proof supports the narrower statement."
+    ],
+    "nonClaims": [
+      "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, complete coverage, business impact, runtime dependency-injection target selection, branch feasibility, SQL execution, database state, data contents, autonomous approval, or replacement for tests, code review, source review, runtime observability, service-owner judgment, or human review.",
+      "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, private route values, hidden validation details, raw command output, or credential-like values are public route-flow story material."
+    ]
+  },
+  {
     "path": "/proof-paths/faq/",
     "title": "Proof Path FAQ",
     "summary": "Concept-level FAQ for reading proof paths, evidence tiers, coverage labels, limitations, review-packet context, missing-evidence gaps, and static-evidence boundaries.",
