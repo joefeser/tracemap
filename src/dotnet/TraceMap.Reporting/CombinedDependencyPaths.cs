@@ -645,6 +645,11 @@ public static class CombinedDependencyPathReporter
                 continue;
             }
 
+            if (includeLegacyRoots && fact.FactType == FactTypes.WcfServiceReferenceMapping)
+            {
+                continue;
+            }
+
             var surfaceNode = ToSurfaceNode(surface);
             graph.AddNode(surfaceNode);
             var attached = false;

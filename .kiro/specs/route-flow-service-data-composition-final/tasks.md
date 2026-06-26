@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Final Tasks
 
-Status: task-7-value-origin-precision-ready-for-review
+Status: task-7-wcf-operation-attachment-precision-ready-for-review
 
 ## Spec Delivery Tasks
 
@@ -172,7 +172,12 @@ current `dev` code or merged PR records prove the behavior.
       selected ASMX/SOAP surface kinds already emitted by the shared surface
       projection, attaches them only through selected static route-flow paths,
       and preserves `DataSurfaceAttachmentMissing` for adjacent unjoined ASMX
-      evidence.
+      evidence. Branch
+      `codex/route-flow-task7-next-attachment-precision-20260625` audited
+      `origin/dev` at `122ca28d61a28c5b0e9cadf96ab9191aef39811f` and selected
+      the WCF operation dependency-surface sub-slice: WCF service-reference
+      mappings now project as `wcf-operation` dependency surfaces and attach
+      only through selected static route-flow paths.
   - [ ] Attach service, repository, object/projection, query-shape, SQL-shape,
         legacy-data, package/config, HTTP client, WCF, ASMX/SOAP, remoting,
         event/message, storage, validation/guard, serializer/contract,
@@ -189,6 +194,11 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_asmx_client_surface_only_from_selected_static_path`
           and
           `Route_flow_does_not_infer_adjacent_asmx_client_surface_without_selected_join`.
+    - [x] WCF operation dependency-surface sub-slice covered by
+          `Route_flow_attaches_wcf_operation_surface_only_from_selected_static_path`,
+          `Route_flow_keeps_same_operation_wcf_surfaces_distinct_by_mapping_identity`,
+          and
+          `Route_flow_does_not_infer_adjacent_wcf_operation_surface_without_selected_join`.
   - [x] Render argument-flow and parameter-forward value-origin rows only when
         joined to selected static route-flow rows.
   - [x] Render fact-symbol context only for selected source-local symbols.
@@ -217,6 +227,13 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_asmx_client_surface_only_from_selected_static_path`
           and
           `Route_flow_does_not_infer_adjacent_asmx_client_surface_without_selected_join`.
+    - [x] WCF operation surface attachment, adjacent-unjoinable gap behavior,
+          terminal-surface labeling, dependency context grouping, and
+          deterministic stable IDs covered by
+          `Route_flow_attaches_wcf_operation_surface_only_from_selected_static_path`,
+          `Route_flow_keeps_same_operation_wcf_surfaces_distinct_by_mapping_identity`,
+          and
+          `Route_flow_does_not_infer_adjacent_wcf_operation_surface_without_selected_join`.
 
 - [ ] 8. Enforce coverage, classification, and gap downgrade behavior.
       Requirements: 5.

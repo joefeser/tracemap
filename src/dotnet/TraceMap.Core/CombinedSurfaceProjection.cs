@@ -135,7 +135,7 @@ public static class CombinedSurfaceProjection
 
         var httpMethod = FirstValue(fact.Properties, "httpMethod", "httpMethods", "methodName");
         var normalizedPathKey = FirstValue(fact.Properties, "normalizedPathKey");
-        var operationName = FirstValue(fact.Properties, "operationName");
+        var operationName = FirstValue(fact.Properties, "operationName", "normalizedOperationName");
         var mappingKind = FirstValue(fact.Properties, "mappingKind");
         var mappedName = FirstValue(fact.Properties, "mappedName");
         var tableName = SafeSqlIdentifierList(
@@ -147,7 +147,10 @@ public static class CombinedSurfaceProjection
             80,
             allowSpaces: false);
         var sourceKind = FirstValue(fact.Properties, "sqlSourceKind", "sourceKind");
-        var shapeHash = FirstValue(fact.Properties, "queryShapeHash", "patternHash");
+        var wcfMappingHash = fact.FactType == FactTypes.WcfServiceReferenceMapping
+            ? FirstValue(fact.Properties, "mappingHash", "metadataHash")
+            : null;
+        var shapeHash = FirstValue(fact.Properties, "queryShapeHash", "patternHash") ?? wcfMappingHash;
         var textHash = FirstValue(fact.Properties, "textHash");
         var textLength = FirstValue(fact.Properties, "textLength");
         var sqlResourceName = FirstValue(fact.Properties, "sqlResourceName", "resourceName", "fileName");
@@ -184,6 +187,7 @@ public static class CombinedSurfaceProjection
             "sql-query" => SqlSurfaceDisplayName(fact, operationName, tableName, columns, sourceKind, shapeHash, textHash, sqlResourceName),
             "sql-persistence" => SqlPersistenceDisplayName(fact, tableName, columns, mappedName),
             "package-config" => packageName ?? configKey ?? $"unknown-package-config:{fact.CombinedFactId}",
+            "wcf-operation" => operationName ?? $"unknown-wcf-operation:{fact.CombinedFactId}",
             "asmx-service" or "asmx-operation" or "asmx-client" or "asmx-config" or "asmx-metadata" => asmxName ?? $"unknown-{surfaceKind}:{fact.CombinedFactId}",
             "message-queue" or "message-topic" or "message-subscription" or "message-exchange" or "message-stream" or "message-event" or "message-channel" or "message-unknown" =>
                 MessageSurfaceDisplayName(surfaceKind, operationDirection, normalizedDestinationKey, destinationHash, eventTypeIdentity, fact.CombinedFactId),
@@ -313,6 +317,11 @@ public static class CombinedSurfaceProjection
             return MessageSurfaceIdentity.SurfaceKinds.Contains(surfaceKind, StringComparer.Ordinal)
                 ? surfaceKind
                 : "message-unknown";
+        }
+
+        if (fact.FactType == FactTypes.WcfServiceReferenceMapping)
+        {
+            return "wcf-operation";
         }
 
         if (fact.Properties.TryGetValue("surfaceKind", out var declaredSurfaceKind)

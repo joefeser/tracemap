@@ -1,7 +1,7 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: task-7-asmx-soap-attachment-precision-ready-for-review
-Readiness: task-7-asmx-soap-ready-for-pr-review-loop
+Status: task-7-wcf-operation-attachment-precision-ready-for-review
+Readiness: task-7-wcf-operation-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
 Target base: `dev`
@@ -135,9 +135,68 @@ Validation status:
 
 Follow-ups:
 
-- Continue Task 7 with one separate family at a time, such as WCF/remoting,
+- Continue Task 7 with one separate family at a time, such as remoting,
   legacy-data/storage, package/config, validation/serializer, or
   async/callback/flow-boundary.
+
+## Task 7 WCF Operation Attachment Slice
+
+Branch: `codex/route-flow-task7-next-attachment-precision-20260625`
+Audited base: `origin/dev` at
+`122ca28d61a28c5b0e9cadf96ab9191aef39811f`.
+Selected family: WCF operation dependency surfaces.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision for WCF
+  service-reference mapping facts already emitted by the deterministic legacy
+  WCF extractor.
+- Project `WcfServiceReferenceMapping` facts as `wcf-operation` dependency
+  surfaces through the shared combined surface projection.
+- Attach WCF operation dependency surfaces only when the generated client
+  operation is reached by the selected static route-flow path.
+- Preserve `DataSurfaceAttachmentMissing` when WCF mapping evidence is present
+  in the same combined index but not connected to the selected route-flow path.
+
+Scope decisions:
+
+- This slice does not start UI property lineage, site work, reducer behavior,
+  or scanner extraction changes.
+- This slice does not add runtime WCF endpoint, deployment, channel, or service
+  activation claims. Rows remain deterministic static evidence backed by
+  existing WCF rule IDs and evidence tiers.
+- Remoting, package/config, legacy-data/storage, validation/serializer,
+  async/callback, and flow-boundary families remain follow-up Task 7 slices
+  unless separately verified in a later PR.
+
+Oddities:
+
+- `route-flow --to-surface wcf-operation` was already in the terminal-surface
+  vocabulary, but shared surface projection did not create `wcf-operation`
+  rows from `WcfServiceReferenceMapping` facts unless a future extractor
+  happened to add explicit `surfaceKind` metadata.
+- The projection patch uses `normalizedOperationName` as the safe operation
+  display source and leaves endpoint/channel/runtime details out of the
+  route-flow surface row.
+- ACK review found that same-operation WCF mappings from different generated
+  clients could otherwise collapse under the route-flow stable surface key; the
+  patch now carries `mappingHash`/`metadataHash` as WCF shape identity.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_wcf_operation_surface_only_from_selected_static_path|FullyQualifiedName~Route_flow_keeps_same_operation_wcf_surfaces_distinct_by_mapping_identity|FullyQualifiedName~Route_flow_does_not_infer_adjacent_wcf_operation_surface_without_selected_join"`:
+  passed locally with 3 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 51 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Legacy_paths_treat_wcf_operation_as_terminal"`:
+  passed locally with 1 test after the legacy-root duplicate terminal-path
+  guard.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 660 tests and the
+  existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
 
 ## Summary
 
