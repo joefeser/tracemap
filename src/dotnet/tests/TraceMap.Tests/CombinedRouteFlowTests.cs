@@ -3455,7 +3455,7 @@ public sealed class CombinedRouteFlowTests
             {
                 ["expressionHash"] = FactFactory.Hash($"{sourceSymbol}:{shapeHash}", 32),
                 ["fieldCount"] = fieldNames.Count.ToString(),
-                ["fieldNames"] = string.Join(";", fieldNames),
+                ["fieldNamesHash"] = FactFactory.Hash(string.Join("|", fieldNames), 32),
                 ["objectKind"] = objectKind,
                 ["shapeHash"] = shapeHash,
                 ["sourceSymbolDisplayName"] = sourceSymbol,
