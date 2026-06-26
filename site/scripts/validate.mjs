@@ -25,6 +25,7 @@ import { validateClaimReviewDrillDist } from "./claim-review-drill.mjs";
 import { validateGlossaryDist } from "./glossary.mjs";
 import { validateIncidentCallDist } from "./incident-call.mjs";
 import { validateIncidentEvidenceHandoffDist } from "./incident-evidence-handoff.mjs";
+import { validateLegacyDotnetEvidenceLane } from "./legacy-dotnet-evidence-lane.mjs";
 import { validateLegacyModernizationEvidenceMap } from "./legacy-modernization-evidence-map.mjs";
 import { validateLegacyStorySafety } from "./legacy-story-safety.mjs";
 import { validateManagerBriefDist } from "./manager-brief.mjs";
@@ -59,11 +60,12 @@ export async function validateSite(options = {}) {
   await buildSite({ log, root });
   await validateDemoSummary({ root });
   const legacyStoryResult = await validateLegacyStorySafety({ root });
+  const legacyDotnetEvidenceLaneResult = await validateLegacyDotnetEvidenceLane({ root });
   const legacyModernizationResult = await validateLegacyModernizationEvidenceMap({ root });
   const result = await validateDist({ root });
 
   log(
-    `Validated ${result.htmlFileCount} HTML files, ${result.internalReferenceCount} internal references, ${result.sitemapUrlCount} sitemap URLs, ${legacyStoryResult.scannedFileCount} legacy story safety targets, and ${legacyModernizationResult.rowCount} legacy modernization evidence-map rows.`
+    `Validated ${result.htmlFileCount} HTML files, ${result.internalReferenceCount} internal references, ${result.sitemapUrlCount} sitemap URLs, ${legacyStoryResult.scannedFileCount} legacy story safety targets, ${legacyDotnetEvidenceLaneResult.rowCount} legacy .NET evidence-lane rows, and ${legacyModernizationResult.rowCount} legacy modernization evidence-map rows.`
   );
 
   return result;
