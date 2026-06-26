@@ -24,6 +24,36 @@ test("validateReviewRoomDemoPathDist accepts the canonical route", async (t) => 
   assert.deepEqual(errors, []);
 });
 
+test("validateReviewRoomDemoPathDist accepts spaced attributes and reordered metadata", async (t) => {
+  const page = (await canonicalPage())
+    .replace(
+      '<link rel="canonical" href="https://tracemap.tools/review-room/demo-path/">',
+      '<link href="https://tracemap.tools/review-room/demo-path/" rel = "canonical">'
+    )
+    .replace('<meta property="og:type" content="article">', '<meta content = "article" property = "og:type">')
+    .replace(
+      '<meta property="og:title" content="TraceMap Review Room Demo Path">',
+      '<meta content = "TraceMap Review Room Demo Path" property = "og:title">'
+    )
+    .replace(
+      '<meta property="og:url" content="https://tracemap.tools/review-room/demo-path/">',
+      '<meta content = "https://tracemap.tools/review-room/demo-path/" property = "og:url">'
+    )
+    .replaceAll('scope="col"', 'scope = "col"')
+    .replaceAll('data-review-demo-step="', 'data-review-demo-step = "')
+    .replaceAll('data-field="', 'data-field = "')
+    .replaceAll('id="proof-packet-fields"', 'id = "proof-packet-fields"')
+    .replaceAll('id="stop-conditions"', 'id = "stop-conditions"')
+    .replaceAll('id="non-claims"', 'id = "non-claims"')
+    .replaceAll('data-review-demo-path-boundary="', 'data-review-demo-path-boundary = "');
+  const root = await createManagedReviewRoomDemoPathFixture(t, { pageHtml: page });
+  const errors = [];
+
+  await validateReviewRoomDemoPathDist({ dist: join(root, "site", "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateReviewRoomDemoPathDist reports missing required visible markers", async (t) => {
   const root = await createManagedReviewRoomDemoPathFixture(t, {
     pageHtml: (await canonicalPage()).replace("Public claim level: concept", "Claim level pending")

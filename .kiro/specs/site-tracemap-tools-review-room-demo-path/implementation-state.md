@@ -168,6 +168,14 @@ Patched authorized findings:
   only when it appears in both `routes-index.json` and `sitemap.xml`.
 - Added a focused negative test where `/owners/follow-up/` exists on disk and
   in the sitemap but is absent from discovery/routes-index output.
+- Hardened metadata, table, boundary, tagged-element, section, and attribute
+  parsing for whitespace around `=` and metadata attribute ordering. Added a
+  focused regression test covering reordered route metadata and spaced table,
+  step, field, section, and boundary attributes.
+- Added a bounded discovery entry for `/demo/` because the review-room demo
+  path links the existing public demo hub and the stricter adjacent-link
+  validator now requires required links to appear in both sitemap and
+  discovery/routes-index output.
 
 Inbound-link disposition: no additional public-site inbound link is added for
 this concept route before publishing. Evidence: the route is registered in
