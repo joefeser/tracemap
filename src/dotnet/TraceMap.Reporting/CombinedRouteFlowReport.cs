@@ -3098,7 +3098,7 @@ public static class CombinedRouteFlowReporter
         {
             "argument-flow" or "flow-boundary" => "value-origin",
             "query-filter-sort-selection" or "query-shape" => "query",
-            "projection-or-object-shape" or "serializer-contract" => "data-surface",
+            "projection-or-object-shape" or "object-shape" or "serializer-contract" => "data-surface",
             _ => "method"
         };
     }

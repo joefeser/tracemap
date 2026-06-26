@@ -1733,6 +1733,109 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_attaches_object_shape_projection_only_from_selected_static_path()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.OrderService.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+        var unrelated = "Server.AuditService.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14),
+            CallFact(server, service, repository, "Services/OrderService.cs", 21),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true),
+            ObjectShapeFact(server, repository, "anonymous-object", "Infrastructure/OrderRepository.cs", 32, "order-shape-hash", ["ShapeFieldAlpha", "Status"]),
+            ObjectShapeFact(server, unrelated, "anonymous-object", "Infrastructure/AuditRepository.cs", 41, "audit-shape-hash", ["ShapeFieldBeta", "Status"])
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        var objectShape = Assert.Single(result.Report.LogicRows, row => row.LogicKind == "object-shape"
+            && row.AttachmentKind == "fact-symbol-projection");
+        var repeatedObjectShape = Assert.Single(repeated.Report.LogicRows, row => row.LogicKind == "object-shape"
+            && row.AttachmentKind == "fact-symbol-projection");
+        Assert.Equal(objectShape.LogicRowId, repeatedObjectShape.LogicRowId);
+        Assert.Equal(objectShape.DisplayName, repeatedObjectShape.DisplayName);
+        Assert.StartsWith("object-shape:order-shape-hash", objectShape.DisplayName, StringComparison.Ordinal);
+        Assert.Equal(RouteFlowClassifications.NeedsReviewStaticRouteFlow, objectShape.Classification);
+        Assert.Equal("combined.route-flow.fact-symbol-projection.v1", objectShape.Evidence.RuleId);
+        Assert.Contains(RuleIds.CSharpSyntaxObjectShape, objectShape.Evidence.SupportingRuleIds);
+        Assert.Contains("combined.route-flow.redaction.v1", objectShape.Evidence.SupportingRuleIds);
+        Assert.Equal("object-shape", objectShape.SafeMetadata["evidenceKind"]);
+        Assert.Equal("order-shape-hash", objectShape.SafeMetadata["shapeHash"]);
+        Assert.DoesNotContain("fieldNames", objectShape.SafeMetadata.Keys);
+        Assert.DoesNotContain("ShapeFieldAlpha", JsonSerializer.Serialize(result.Report), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ShapeFieldBeta", JsonSerializer.Serialize(result.Report), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(result.Report.LogicRows, row => row.Evidence.FilePath == "Infrastructure/AuditRepository.cs");
+        Assert.Contains(result.Report.ContextGroups ?? [], group => group.GroupKind == "data-surface"
+            && group.MatchKind == "fact-symbol"
+            && group.RuleIds.Contains("combined.route-flow.fact-symbol-projection.v1")
+            && group.SupportingRowIds.Contains(objectShape.LogicRowId));
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "FactSymbolProjectionUnavailable" or "NoRouteFlowEvidence");
+    }
+
+    [Fact]
+    public async Task Route_flow_does_not_infer_adjacent_object_shape_without_selected_join()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.OrderService.Get(System.Int32)";
+        var unrelated = "Server.AuditService.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, service, "Services/OrderService.cs", 31),
+            ObjectShapeFact(server, unrelated, "anonymous-object", "Infrastructure/AuditRepository.cs", 41, "audit-shape-hash", ["ShapeFieldBeta", "Status"])
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.DoesNotContain(result.Report.LogicRows, row => row.LogicKind == "object-shape"
+            && row.AttachmentKind == "fact-symbol-projection");
+        var gap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "FactSymbolProjectionUnavailable");
+        Assert.Equal("combined.route-flow.gap.v1", gap.RuleId);
+        Assert.Contains(gap.Limitations, limitation => limitation.Contains("combined.route-flow.fact-symbol-projection.v1", StringComparison.Ordinal));
+        Assert.Equal("Infrastructure/AuditRepository.cs", gap.FilePath);
+        Assert.Equal("server", gap.SourceLabel);
+        Assert.Equal("abc123", gap.CommitSha);
+        Assert.Equal("tracemap-milestone15", gap.ExtractorVersion);
+        Assert.Contains("none could be connected to the selected route-flow path", gap.Message, StringComparison.Ordinal);
+        Assert.Equal(gap.GapId, Assert.Single(repeated.Report.Gaps, item => item.GapKind == "FactSymbolProjectionUnavailable").GapId);
+        Assert.DoesNotContain("ShapeFieldBeta", JsonSerializer.Serialize(result.Report), StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
+    }
+
+    [Fact]
     public async Task Route_flow_traverses_parameter_forward_bridge_to_data_surface()
     {
         using var temp = new TempDirectory();
@@ -3326,6 +3429,42 @@ public sealed class CombinedRouteFlowTests
                 ["targetSymbolId"] = createdType,
                 ["targetSymbolDisplayName"] = createdType,
                 ["targetSymbolKind"] = "Type",
+                ["targetSymbolLanguage"] = "csharp"
+            });
+    }
+
+    private static CodeFact ObjectShapeFact(
+        ScanManifest manifest,
+        string sourceSymbol,
+        string objectKind,
+        string file,
+        int line,
+        string shapeHash,
+        IReadOnlyList<string> fieldNames)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.ObjectShapeInferred,
+            RuleIds.CSharpSyntaxObjectShape,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: objectKind,
+            contractElement: objectKind,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["expressionHash"] = FactFactory.Hash($"{sourceSymbol}:{shapeHash}", 32),
+                ["fieldCount"] = fieldNames.Count.ToString(),
+                ["fieldNames"] = string.Join(";", fieldNames),
+                ["objectKind"] = objectKind,
+                ["shapeHash"] = shapeHash,
+                ["sourceSymbolDisplayName"] = sourceSymbol,
+                ["sourceSymbolId"] = sourceSymbol,
+                ["sourceSymbolKind"] = "Method",
+                ["sourceSymbolLanguage"] = "csharp",
+                ["targetSymbolDisplayName"] = objectKind,
+                ["targetSymbolId"] = objectKind,
+                ["targetSymbolKind"] = "ObjectShape",
                 ["targetSymbolLanguage"] = "csharp"
             });
     }
