@@ -1,6 +1,6 @@
 # Route Flow Service/Data Composition Final Tasks
 
-Status: task-7-async-callback-flow-boundary-attachment-precision-ready-for-review
+Status: task-7-validation-guard-attachment-precision-ready-for-review
 
 ## Spec Delivery Tasks
 
@@ -214,6 +214,13 @@ current `dev` code or merged PR records prove the behavior.
       `flow-boundary` logic context only when joined to selected static
       route-flow symbols, while adjacent unjoined boundary evidence preserves
       `FactSymbolProjectionUnavailable`.
+      Branch `codex/task7-guard-serializer-attachments` audited `origin/dev`
+      at `49f90ec90e722afa9fe4afa18898f1d70291c7e1` and selected the
+      validation/guard fact-symbol projection sub-slice: selected
+      `BranchFeasibility` guard rows now project as review-tier
+      `validation-guard` logic context only when joined to selected
+      source-local route-flow symbols, while adjacent unjoined guard evidence
+      preserves `FactSymbolProjectionUnavailable`.
   - [ ] Attach service, repository, object/projection, query-shape, SQL-shape,
         legacy-data, package/config, HTTP client, WCF, ASMX/SOAP, remoting,
         event/message, storage, validation/guard, serializer/contract,
@@ -256,6 +263,11 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_async_callback_boundaries_only_from_selected_static_path`
           and
           `Route_flow_does_not_infer_adjacent_async_callback_boundary_without_selected_join`.
+    - [x] Validation/guard branch-feasibility fact-symbol projection
+          sub-slice covered by
+          `Route_flow_attaches_validation_guard_branches_only_from_selected_static_path`
+          and
+          `Route_flow_does_not_infer_adjacent_validation_guard_without_selected_join`.
   - [x] Render argument-flow and parameter-forward value-origin rows only when
         joined to selected static route-flow rows.
   - [x] Render fact-symbol context only for selected source-local symbols.
@@ -323,6 +335,13 @@ current `dev` code or merged PR records prove the behavior.
           `Route_flow_attaches_async_callback_boundaries_only_from_selected_static_path`
           and
           `Route_flow_does_not_infer_adjacent_async_callback_boundary_without_selected_join`.
+    - [x] Validation/guard branch-feasibility attachment,
+          adjacent-unjoinable fact-symbol gap behavior, method context
+          grouping, safe checked-symbol hashing, deterministic stable IDs, and
+          review-tier classification cap covered by
+          `Route_flow_attaches_validation_guard_branches_only_from_selected_static_path`
+          and
+          `Route_flow_does_not_infer_adjacent_validation_guard_without_selected_join`.
 
 - [ ] 8. Enforce coverage, classification, and gap downgrade behavior.
       Requirements: 5.
