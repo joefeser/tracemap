@@ -47,10 +47,10 @@ and validation complete.
   `/use-cases/incident-review/`.
 - [x] Record the selected placement and rejected alternatives in
   `implementation-state.md`.
-- [x] If a separate `/static-vs-runtime-field-guide/` route is selected,
-  record why a second concept-level static-versus-runtime surface is warranted,
-  how the two pages cross-link, and how duplicate discovery entries are
-  avoided.
+- [ ] N/A: separate `/static-vs-runtime-field-guide/` route was not selected;
+  `implementation-state.md` records why extending `/static-vs-runtime/` avoids
+  a second concept-level static-versus-runtime surface and duplicate discovery
+  entry.
 - [x] Keep the page or section out of primary navigation unless a recorded
   information-architecture decision explicitly selects primary navigation.
 - [x] Add the future public page or section using existing static-site layout,
@@ -112,15 +112,15 @@ and validation complete.
   timelines, customer data, service names, production identifiers, dashboard
   screenshots, command output, hidden validation details, or credential-like
   values.
-- [x] If a standalone route is chosen, add title, description, canonical URL,
-  Open Graph metadata, sitemap metadata, and discovery metadata.
-- [x] If a standalone route is chosen, ensure discovery metadata includes
-  `publicClaimLevel: concept`, `sourceType`, an existing valid
-  `hintCategory`, `preferredProofPath`, `limitations`, and `nonClaims` using
-  the current site discovery schema.
-- [x] If a folded section is chosen, record host title, description, social
-  metadata, sitemap, discovery, and anchor reconciliation in
-  `implementation-state.md`.
+- [x] For the existing standalone `/static-vs-runtime/` route, verify title,
+  description, canonical URL, Open Graph metadata, sitemap metadata, and
+  discovery metadata stay concept-level.
+- [x] For the existing standalone `/static-vs-runtime/` route, ensure discovery
+  metadata includes `publicClaimLevel: concept`, `sourceType`, an existing
+  valid `hintCategory`, `preferredProofPath`, `limitations`, and `nonClaims`
+  using the current site discovery schema.
+- [ ] N/A: folded section placement was not chosen; host metadata and anchor
+  reconciliation were not needed.
 - [x] Add validation for required visible wording, required sections, stable
   anchors (`#different-questions`, `#how-to-use-both`,
   `#reading-static-evidence`, `#runtime-authority`, `#non-claims`,
