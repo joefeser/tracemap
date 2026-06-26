@@ -3609,7 +3609,7 @@ public static class CombinedRouteFlowReporter
             ("shapeHash", FirstProperty(row.Properties, "queryShapeHash", "shapeHash", "objectShapeHash")),
             ("textHash", FirstProperty(row.Properties, "textHash")),
             ("packageName", FirstProperty(row.Properties, "packageName", "package", "dependencyName")),
-            ("configKeyHash", HashValue(FirstProperty(row.Properties, "configKey", "keyPath", "connectionStringName", "environmentVariableName"))),
+            ("configKeyHash", HashValue(FirstProperty(row.Properties, "configKey", "keyPath", "connectionStringName", "connectionName", "sectionName", "configurationKey", "environmentVariableName"))),
             ("tableNameHash", HashProperty(row.Properties, "tableName")),
             ("targetSymbolHash", string.IsNullOrWhiteSpace(row.TargetSymbol) ? null : CombinedReportHelpers.Hash(row.TargetSymbol!, 16)),
             ("sourceSymbolHash", string.IsNullOrWhiteSpace(row.SourceSymbol) ? null : CombinedReportHelpers.Hash(row.SourceSymbol!, 16)));
