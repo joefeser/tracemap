@@ -147,7 +147,10 @@ public static class CombinedSurfaceProjection
             80,
             allowSpaces: false);
         var sourceKind = FirstValue(fact.Properties, "sqlSourceKind", "sourceKind");
-        var shapeHash = FirstValue(fact.Properties, "queryShapeHash", "patternHash");
+        var wcfMappingHash = fact.FactType == FactTypes.WcfServiceReferenceMapping
+            ? FirstValue(fact.Properties, "mappingHash", "metadataHash")
+            : null;
+        var shapeHash = FirstValue(fact.Properties, "queryShapeHash", "patternHash") ?? wcfMappingHash;
         var textHash = FirstValue(fact.Properties, "textHash");
         var textLength = FirstValue(fact.Properties, "textLength");
         var sqlResourceName = FirstValue(fact.Properties, "sqlResourceName", "resourceName", "fileName");
