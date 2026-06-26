@@ -716,6 +716,101 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_json_and_markdown_preserve_compatibility_contract()
+    {
+        using var temp = new TempDirectory();
+        var (combinedPath, _, _) = await CreateRouteFlowCombinedIndexAsync(temp);
+        var outDir = Path.Combine(temp.Path, "route-flow");
+
+        await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            outDir,
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "route-flow-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(outDir, "route-flow-report.json"));
+        var root = JsonNode.Parse(json)!.AsObject();
+
+        string[] requiredTopLevelFields =
+        [
+            "reportType",
+            "version",
+            "reportCoverage",
+            "coverageWarnings",
+            "query",
+            "snapshot",
+            "summary",
+            "entryEvidence",
+            "flowRows",
+            "logicRows",
+            "dependencySurfaces",
+            "touchedFiles",
+            "touchedSymbols",
+            "contextGroups",
+            "gaps",
+            "limitations"
+        ];
+        Assert.All(requiredTopLevelFields, field => Assert.True(root.ContainsKey(field), $"Missing route-flow JSON field `{field}`."));
+        Assert.Equal("route-flow", root["reportType"]!.GetValue<string>());
+        Assert.Equal("1.0", root["version"]!.GetValue<string>());
+        Assert.All(requiredTopLevelFields.Where(field => field is "coverageWarnings" or "entryEvidence" or "flowRows" or "logicRows" or "dependencySurfaces" or "touchedFiles" or "touchedSymbols" or "contextGroups" or "gaps" or "limitations"),
+            field => Assert.NotNull(root[field]?.AsArray()));
+
+        Assert.All(root["dependencySurfaces"]!.AsArray(), surfaceNode =>
+        {
+            var surface = Assert.IsType<JsonObject>(surfaceNode);
+            Assert.True(surface.ContainsKey("surfaceSubtype"));
+            Assert.NotNull(surface["safeMetadata"]?.AsObject());
+            Assert.NotNull(surface["evidence"]?.AsObject());
+        });
+        Assert.All(root["gaps"]!.AsArray(), gapNode =>
+        {
+            var gap = Assert.IsType<JsonObject>(gapNode);
+            Assert.True(gap.ContainsKey("affectedRowId"));
+            Assert.True(gap.ContainsKey("filePath"));
+            Assert.True(gap.ContainsKey("startLine"));
+            Assert.True(gap.ContainsKey("endLine"));
+            Assert.True(gap.ContainsKey("commitSha"));
+            Assert.True(gap.ContainsKey("extractorName"));
+            Assert.True(gap.ContainsKey("extractorVersion"));
+            Assert.NotNull(gap["supportingFactIds"]?.AsArray());
+            Assert.NotNull(gap["limitations"]?.AsArray());
+        });
+
+        string[] markdownSections =
+        [
+            "## Summary",
+            "## Query",
+            "## Snapshot Sources",
+            "## Entry Evidence",
+            "## Static Flow",
+            "## Business/Data Logic",
+            "## Dependency Surfaces",
+            "## Context Groups",
+            "## Touched Files",
+            "## Touched Symbols",
+            "## Gaps",
+            "## Limitations"
+        ];
+        var previousIndex = -1;
+        foreach (var section in markdownSections)
+        {
+            var index = markdown.IndexOf(section, StringComparison.Ordinal);
+            Assert.True(index > previousIndex, $"{section} should appear after the previous route-flow section.");
+            previousIndex = index;
+        }
+
+        await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            outDir,
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+        Assert.Equal(markdown, await File.ReadAllTextAsync(Path.Combine(outDir, "route-flow-report.md")));
+        Assert.Equal(json, await File.ReadAllTextAsync(Path.Combine(outDir, "route-flow-report.json")));
+    }
+
+    [Fact]
     public async Task Client_call_selector_preserves_generic_client_server_paths()
     {
         using var temp = new TempDirectory();
