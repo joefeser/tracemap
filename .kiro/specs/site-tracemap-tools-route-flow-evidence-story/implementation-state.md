@@ -205,6 +205,12 @@ Readiness decision:
   deferred with rationale above.
 - Readiness advanced to `ready-for-implementation` after local validation
   passed on 2026-06-26.
+- PR-loop review findings on PR #355: patched. Qodo found a stale readiness
+  sentence that still said readiness remained `spec-review`; Codex found that
+  Requirement 8 validation omitted several forbidden overclaim categories from
+  the claim-boundary list. The patch updated the readiness sentence and added
+  runtime dependency-injection target selection, branch feasibility, SQL
+  execution, database state, and data contents to validation coverage.
 
 Required review commands:
 
@@ -213,8 +219,9 @@ node scripts/kiro-review.mjs --phase site-tracemap-tools-route-flow-evidence-sto
 node scripts/kiro-review.mjs --phase site-tracemap-tools-route-flow-evidence-story --kind spec --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text
 ```
 
-Readiness remains `spec-review` until one bounded re-review completes, then
-Medium or higher findings are either patched or explicitly dispositioned.
+Readiness has advanced to `ready-for-implementation` because the required
+reviews and bounded re-review are recorded above, Medium or higher findings
+are patched or explicitly dispositioned, and spec validation passed.
 
 ## Validation
 
