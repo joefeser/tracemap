@@ -137,9 +137,20 @@ mobile browser sanity checks when layout or interaction changes.
 - The future page should not promise that management decisions are automated.
   It can identify owner categories and handoff boundaries only.
 
+## Residual Risks
+
+- Kiro review coverage was reduced because Kiro's internal shell/write tools
+  were denied in non-interactive mode. The wrapper still ran, saved review
+  text, and the returned Medium or higher findings were patched.
+- This is a spec-only packet. Site build, site validation, and browser sanity
+  remain future implementation responsibilities because no site code changed.
+- ACK initially stopped on Qodo findings for stale follow-up wording,
+  unsupported impact terminology in a design matrix row, and missing residual
+  risk notes. This follow-up commit patched those state and wording gaps.
+
 ## Follow-ups
 
-- Patch or disposition Medium or higher Kiro spec-review findings before
-  moving readiness to `ready-for-implementation`.
+- Keep the reduced Kiro review coverage visible when using this spec as an
+  implementation starting point.
 - Keep any future implementation PR site-only and run the site validation plan
   before marking implementation tasks complete.
