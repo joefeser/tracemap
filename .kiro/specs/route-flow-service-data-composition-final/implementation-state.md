@@ -1,9 +1,9 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: task-7-async-callback-flow-boundary-attachment-precision-ready-for-review
-Readiness: task-7-async-callback-flow-boundary-ready-for-pr-review-loop
+Status: task-7-validation-guard-attachment-precision-ready-for-review
+Readiness: task-7-validation-guard-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
-Implementation branch: `codex/implement-route-flow-service-data-composition-final`
+Implementation branch: `codex/task7-guard-serializer-attachments`
 Target base: `dev`
 Primary issues: `#159`, `#179`, `#201`
 Public claim level: static evidence only
@@ -138,6 +138,22 @@ Validation status:
 - `dotnet test src/dotnet/TraceMap.sln`: passed locally with 658 tests.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+- ACK-authorized Codex patch after PR review added source symbol identity
+  metadata to real `BranchFeasibility` facts so scan-written
+  `fact_symbols`/`combined_fact_symbols` rows exist for route-flow guard
+  projection. Post-patch validation:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~SqliteIndexWriterTests.Scan_writes_semantic_symbol_tables_to_sqlite"`
+  passed locally with 1 test,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_validation_guard_branches_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_validation_guard_without_selected_join"`
+  passed locally with 2 tests,
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`
+  passed locally with 63 tests, `dotnet build src/dotnet/TraceMap.sln`
+  passed with 0 errors, `dotnet test src/dotnet/TraceMap.sln` passed locally
+  with 673 tests,
+  `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-validation-guard-modern-sample`
+  passed with required outputs present, `./scripts/check-private-paths.sh`
+  passed, and `git diff --check` passed. NuGet emitted the same existing
+  `SQLitePCLRaw.lib.e_sqlite3` warning.
 
 Follow-ups:
 
@@ -1969,9 +1985,78 @@ Validation status:
 
 Follow-ups:
 
-- Continue Task 7 with validation/guard, serializer/contract, and broader
+- Continue Task 7 with serializer/contract and broader
   service/repository/object/projection breadth in separate small slices.
 - Keep the large argument-pair and fact-symbol projection SQL batching/cap
   follow-up open for a dedicated performance/scale slice.
 - Keep Task 8/9/10 unchecked except for validation and safety behavior directly
   touched by this async/callback flow-boundary sub-slice.
+
+## Task 7 Validation/Guard Attachment Slice
+
+Branch: `codex/task7-guard-serializer-attachments`
+Audited base: `origin/dev` at
+`49f90ec90e722afa9fe4afa18898f1d70291c7e1`.
+Selected family: validation/guard branch-feasibility fact-symbol projection.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision for
+  `BranchFeasibility` facts already emitted by the deterministic C# semantic
+  runtime-evidence extractor.
+- Project selected branch-feasibility guard fact-symbol rows as
+  `validation-guard` logic context only when joined to selected source-local
+  route-flow symbols.
+- Cap validation/guard logic rows at `NeedsReviewStaticRouteFlow`, because
+  they are static guard context and do not prove symbolic execution, branch
+  feasibility, validation outcome, authorization result, or runtime values.
+- Preserve `FactSymbolProjectionUnavailable` when same-source
+  branch-feasibility fact-symbol evidence exists but cannot join the selected
+  static route-flow path.
+
+Scope decisions:
+
+- This slice does not add terminal dependency surface kinds for
+  validation/guard or serializer/contract facts.
+- This slice does not start UI property lineage, site work, reducer behavior,
+  scanner extraction, runtime execution claims, symbolic execution, or broader
+  Task 8/9/10 compatibility work.
+- Serializer/contract and broader service/repository/object/projection breadth
+  remain follow-up Task 7 slices.
+
+Oddities:
+
+- `BranchFeasibility` facts are stored under
+  `csharp.semantic.runtimeevidence.v1`, not a separate validation-specific rule
+  ID. The route-flow slice reuses `combined.route-flow.fact-symbol-projection.v1`
+  and documents the validation/guard review-tier cap in the existing catalog
+  entry.
+- Checked symbols are rendered only through `checkedSymbolHash`; raw checked
+  symbol names are not exposed in route-flow safe metadata.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_validation_guard_branches_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_validation_guard_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 63 tests and the existing NU1903 warning.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 673 tests and the
+  existing NU1903 warning.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/modern-sample --out /tmp/tracemap-task7-validation-guard-modern-sample`:
+  passed with 27 facts at `Level1SemanticAnalysis`; required outputs
+  `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
+  `logs/analyzer.log` were present.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Follow-ups:
+
+- Continue Task 7 with serializer/contract and broader
+  service/repository/object/projection breadth in separate small slices.
+- Keep the large argument-pair and fact-symbol projection SQL batching/cap
+  follow-up open for a dedicated performance/scale slice.
+- Keep Task 8/9/10 unchecked except for validation and safety behavior directly
+  touched by this validation/guard sub-slice.

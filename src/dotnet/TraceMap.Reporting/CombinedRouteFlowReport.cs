@@ -2823,7 +2823,8 @@ public static class CombinedRouteFlowReporter
                 'ConfigKeyDeclared',
                 'ConnectionStringDeclared',
                 'CallbackBoundary',
-                'AsyncBoundary'
+                'AsyncBoundary',
+                'BranchFeasibility'
             )
             order by links.combined_fact_id
             limit 20;
@@ -3576,7 +3577,8 @@ public static class CombinedRouteFlowReporter
             or FactTypes.ConfigKeyDeclared
             or FactTypes.ConnectionStringDeclared
             or FactTypes.CallbackBoundary
-            or FactTypes.AsyncBoundary;
+            or FactTypes.AsyncBoundary
+            or FactTypes.BranchFeasibility;
     }
 
     private static string FactSymbolLogicKind(FactSymbolProjectionRow row)
@@ -3588,6 +3590,7 @@ public static class CombinedRouteFlowReporter
             FactTypes.DatabaseColumnMapping => "data-surface",
             FactTypes.PackageReferenced or FactTypes.ConfigBinding or FactTypes.ConfigKeyDeclared or FactTypes.ConnectionStringDeclared => "dependency-surface",
             FactTypes.CallbackBoundary or FactTypes.AsyncBoundary => "flow-boundary",
+            FactTypes.BranchFeasibility => "validation-guard",
             _ => "fact-symbol-attachment"
         };
     }
@@ -3604,6 +3607,12 @@ public static class CombinedRouteFlowReporter
         if (kind == "flow-boundary" && !string.IsNullOrWhiteSpace(boundaryKind))
         {
             return $"{kind}:{SafeSelector(boundaryKind!) ?? CombinedReportHelpers.Hash(boundaryKind!, 16)}";
+        }
+
+        var feasibilityKind = FirstProperty(row.Properties, "feasibilityKind", "branchKind");
+        if (kind == "validation-guard" && !string.IsNullOrWhiteSpace(feasibilityKind))
+        {
+            return $"{kind}:{SafeSelector(feasibilityKind!) ?? CombinedReportHelpers.Hash(feasibilityKind!, 16)}";
         }
 
         return $"{kind}:fact-hash:{CombinedReportHelpers.Hash(row.CombinedFactId, 16)}";
@@ -3627,13 +3636,19 @@ public static class CombinedRouteFlowReporter
             ("callbackExpressionKind", FirstProperty(row.Properties, "callbackExpressionKind")),
             ("callbackExpressionHash", FirstProperty(row.Properties, "callbackExpressionHash")),
             ("asyncOperationKind", FirstProperty(row.Properties, "asyncOperationKind")),
+            ("branchKind", FirstProperty(row.Properties, "branchKind")),
+            ("feasibilityKind", FirstProperty(row.Properties, "feasibilityKind")),
+            ("comparisonOperator", FirstProperty(row.Properties, "comparisonOperator")),
+            ("conditionExpressionKind", FirstProperty(row.Properties, "conditionExpressionKind")),
+            ("conditionExpressionHash", FirstProperty(row.Properties, "conditionExpressionHash")),
+            ("checkedSymbolHash", HashValue(FirstProperty(row.Properties, "checkedSymbol"))),
             ("targetSymbolHash", string.IsNullOrWhiteSpace(row.TargetSymbol) ? null : CombinedReportHelpers.Hash(row.TargetSymbol!, 16)),
             ("sourceSymbolHash", string.IsNullOrWhiteSpace(row.SourceSymbol) ? null : CombinedReportHelpers.Hash(row.SourceSymbol!, 16)));
     }
 
     private static string FactSymbolProjectionClassification(FactSymbolProjectionRow row)
     {
-        var cap = row.FactType is FactTypes.CallbackBoundary or FactTypes.AsyncBoundary
+        var cap = row.FactType is FactTypes.CallbackBoundary or FactTypes.AsyncBoundary or FactTypes.BranchFeasibility
             ? RouteFlowClassifications.NeedsReviewStaticRouteFlow
             : RouteFlowClassifications.ProbableStaticRouteFlow;
         return WeakestClassification(ClassificationForTier(row.EvidenceTier), cap);
