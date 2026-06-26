@@ -110,6 +110,21 @@ test("validateRouteFlowEvidenceStoryDist rejects raw material outside boundary",
   assert.match(errors.join("\n"), /forbidden raw\/private material/);
 });
 
+test("validateRouteFlowEvidenceStoryDist rejects unsupported boundary sections", async (t) => {
+  const root = await createManagedRouteFlowFixture(t, {
+    pageHtml: routeFlowPage(`
+      <section id="extra-boundary" data-tm-boundary="route-flow-static-boundary">
+        <p>Route-flow proves runtime behavior.</p>
+      </section>
+    `)
+  });
+  const errors = [];
+
+  await validateRouteFlowEvidenceStoryDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /unsupported boundary section/);
+});
+
 test("validateRouteFlowEvidenceStoryDist reports missing illustrative framing", async (t) => {
   const root = await createManagedRouteFlowFixture(t, {
     pageHtml: routeFlowPage().replace("not a real TraceMap finding", "a TraceMap finding")
@@ -130,6 +145,15 @@ test("validateRouteFlowEvidenceStoryDist reports missing inbound link from proof
   await validateRouteFlowEvidenceStoryDist({ dist: join(root, "dist"), errors });
 
   assert.match(errors.join("\n"), /missing inbound links from live adjacent routes: \/proof-paths\//);
+});
+
+test("validateRouteFlowEvidenceStoryDist reports missing implementation state when root is provided", async (t) => {
+  const root = await createManagedRouteFlowFixture(t);
+  const errors = [];
+
+  await validateRouteFlowEvidenceStoryDist({ dist: join(root, "dist"), errors, root: join(root, "site") });
+
+  assert.match(errors.join("\n"), /implementation-state file is missing/);
 });
 
 async function createManagedRouteFlowFixture(t, options = {}) {
