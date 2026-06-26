@@ -9,4 +9,4 @@
 - [x] Run required validation commands.
 - [x] Do desktop and mobile browser sanity checks.
 - [x] Commit, push, open ready PR to `dev`.
-- [ ] Run ACK and follow its final decision.
+- [x] Run ACK and follow its final decision.

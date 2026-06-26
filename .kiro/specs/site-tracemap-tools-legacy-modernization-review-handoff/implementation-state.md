@@ -33,4 +33,8 @@ Completed validation:
 
 ## PR / ACK
 
-Pending commit, push, PR creation, and ACK.
+- Ready PR: https://github.com/joefeser/tracemap/pull/368
+- Review patch commit: `4988769750adad56916fd846f84c670af6bbee43`
+- ACK after review patch: `decision=merge_ready`, `stopReason=NONE`, `nextAction=merge_ready`, `canMerge=true`, unresolved threads `0`, actionable findings `0`.
+- ACK disposition notes were recorded for the fixed Qodo global-regex thread and the outdated Codex anchor-link thread, both fixed by `4988769750adad56916fd846f84c670af6bbee43`.
+- Final bookkeeping update records the ACK result and completes the spec checklist.
