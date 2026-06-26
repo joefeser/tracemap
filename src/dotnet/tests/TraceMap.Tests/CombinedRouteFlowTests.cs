@@ -186,7 +186,8 @@ public sealed class CombinedRouteFlowTests
         Assert.DoesNotContain("argumentSymbol", argumentProjection.SafeMetadata.Keys);
         Assert.Contains(argumentProjection.Evidence.SupportingRuleIds, rule => rule == RuleIds.CSharpSemanticValueFlow);
         Assert.Contains(argumentProjection.Evidence.SupportingRuleIds, rule => rule == "combined.route-flow.redaction.v1");
-        var factSymbolProjection = parsed.LogicRows.Single(row => row.Evidence.RuleId == "combined.route-flow.fact-symbol-projection.v1");
+        var factSymbolProjection = parsed.LogicRows.Single(row => row.Evidence.RuleId == "combined.route-flow.fact-symbol-projection.v1"
+            && row.LogicKind == "query-shape");
         Assert.Equal("fact-symbol-projection", factSymbolProjection.AttachmentKind);
         Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, factSymbolProjection.Classification);
         Assert.Contains(factSymbolProjection.Evidence.SupportingRuleIds, rule => rule == RuleIds.CSharpSyntaxQueryPattern);
@@ -336,6 +337,144 @@ public sealed class CombinedRouteFlowTests
         Assert.Equal("Controllers/OrdersController.cs", gap.FilePath);
         Assert.Contains("no matching terminal dependency/data surface", gap.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "NoRouteFlowEvidence");
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+    }
+
+    [Fact]
+    public async Task Route_flow_attaches_package_config_surfaces_only_from_selected_static_path()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+        var unrelatedRepository = "Server.AuditRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
+            PackageConfigFact(server, repository, FactTypes.PackageReferenced, RuleIds.ProjectFile, "Dapper", null, "Infrastructure/OrderRepository.cs", 31),
+            PackageConfigFact(server, repository, FactTypes.ConfigKeyDeclared, RuleIds.ConfigKey, null, "Features:Orders:Enabled", "Infrastructure/OrderRepository.cs", 32),
+            PackageConfigFact(server, repository, FactTypes.ConnectionStringDeclared, RuleIds.ConfigKey, null, "OrdersDb", "Infrastructure/OrderRepository.cs", 33),
+            PackageConfigFact(server, repository, FactTypes.ConfigBinding, RuleIds.CSharpSemanticContractMapping, null, "Customers", "Infrastructure/OrderRepository.cs", 34),
+            PackageConfigFact(server, unrelatedRepository, FactTypes.PackageReferenced, RuleIds.ProjectFile, "Newtonsoft.Json", null, "Infrastructure/AuditRepository.cs", 41)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "package-config"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "package-config"));
+
+        Assert.Equal(4, result.Report.DependencySurfaces.Count);
+        Assert.All(result.Report.DependencySurfaces, surface =>
+        {
+            Assert.Equal("package-config", surface.SurfaceKind);
+            Assert.Equal("combined.route-flow.dependency-surface.v1", surface.Evidence.RuleId);
+            Assert.StartsWith("surface-key-hash:", surface.StableKey, StringComparison.Ordinal);
+        });
+        Assert.Contains(result.Report.DependencySurfaces, surface =>
+            surface.DisplayName == "Dapper"
+            && surface.SafeMetadata.TryGetValue("packageName", out var packageName)
+            && packageName == "Dapper"
+            && surface.Evidence.SupportingRuleIds.Contains(RuleIds.ProjectFile, StringComparer.Ordinal));
+        Assert.Contains(result.Report.DependencySurfaces, surface =>
+            surface.DisplayName == "Features:Orders:Enabled"
+            && surface.SafeMetadata.TryGetValue("configKeyHash", out var configKeyHash)
+            && configKeyHash == CombinedReportHelpers.Hash("Features:Orders:Enabled", 16)
+            && surface.Evidence.SupportingRuleIds.Contains(RuleIds.ConfigKey, StringComparer.Ordinal));
+        Assert.Contains(result.Report.DependencySurfaces, surface =>
+            surface.DisplayName == "OrdersDb"
+            && surface.SafeMetadata.TryGetValue("configKeyHash", out var configKeyHash)
+            && configKeyHash == CombinedReportHelpers.Hash("OrdersDb", 16)
+            && surface.Evidence.SupportingRuleIds.Contains(RuleIds.ConfigKey, StringComparer.Ordinal));
+        Assert.Contains(result.Report.DependencySurfaces, surface =>
+            surface.DisplayName == "Customers"
+            && surface.SafeMetadata.TryGetValue("configKeyHash", out var configKeyHash)
+            && configKeyHash == CombinedReportHelpers.Hash("Customers", 16)
+            && surface.Evidence.SupportingRuleIds.Contains(RuleIds.CSharpSemanticContractMapping, StringComparer.Ordinal));
+        Assert.Equal(
+            result.Report.DependencySurfaces.Select(surface => surface.StableKey).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            repeated.Report.DependencySurfaces.Select(surface => surface.StableKey).OrderBy(value => value, StringComparer.Ordinal).ToArray());
+        Assert.Contains(result.Report.LogicRows, row =>
+            row.LogicKind == "dependency-surface"
+            && row.AttachmentKind == "fact-symbol-projection"
+            && row.SafeMetadata.TryGetValue("packageName", out var packageName)
+            && packageName == "Dapper");
+        Assert.Contains(result.Report.LogicRows, row =>
+            row.LogicKind == "dependency-surface"
+            && row.AttachmentKind == "fact-symbol-projection"
+            && row.SafeMetadata.TryGetValue("configKeyHash", out var configKeyHash)
+            && configKeyHash == CombinedReportHelpers.Hash("Features:Orders:Enabled", 16));
+        Assert.Contains(result.Report.LogicRows, row =>
+            row.LogicKind == "dependency-surface"
+            && row.AttachmentKind == "fact-symbol-projection"
+            && row.SafeMetadata.TryGetValue("configKeyHash", out var configKeyHash)
+            && configKeyHash == CombinedReportHelpers.Hash("OrdersDb", 16));
+        Assert.Contains(result.Report.LogicRows, row =>
+            row.LogicKind == "dependency-surface"
+            && row.AttachmentKind == "fact-symbol-projection"
+            && row.SafeMetadata.TryGetValue("configKeyHash", out var configKeyHash)
+            && configKeyHash == CombinedReportHelpers.Hash("Customers", 16));
+
+        Assert.DoesNotContain(result.Report.DependencySurfaces, surface => surface.DisplayName == "Newtonsoft.Json");
+        Assert.DoesNotContain(result.Report.FlowRows, row => row.SourceSymbol.Contains("AuditRepository", StringComparison.Ordinal)
+            || row.TargetSymbol?.Contains("Newtonsoft.Json", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "DataSurfaceAttachmentMissing" or "NoRouteFlowEvidence");
+        Assert.Contains(result.Report.ContextGroups!, group => group.GroupKind == "dependency"
+            && group.MatchKind == "dependency-surface"
+            && group.SupportingRowIds.Any(rowId => result.Report.DependencySurfaces.Any(surface => surface.SurfaceId == rowId)));
+    }
+
+    [Fact]
+    public async Task Route_flow_does_not_infer_adjacent_package_config_surface_without_selected_join()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+        var unrelatedRepository = "Server.AuditRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, repository, "Controllers/OrdersController.cs", 14),
+            PackageConfigFact(server, unrelatedRepository, FactTypes.PackageReferenced, RuleIds.ProjectFile, "Newtonsoft.Json", null, "Infrastructure/AuditRepository.cs", 41),
+            PackageConfigFact(server, unrelatedRepository, FactTypes.ConfigKeyDeclared, RuleIds.ConfigKey, null, "Audit:Sink:Enabled", "Infrastructure/AuditRepository.cs", 42),
+            PackageConfigFact(server, unrelatedRepository, FactTypes.ConnectionStringDeclared, RuleIds.ConfigKey, null, "AuditDb", "Infrastructure/AuditRepository.cs", 43),
+            PackageConfigFact(server, unrelatedRepository, FactTypes.ConfigBinding, RuleIds.CSharpSemanticContractMapping, null, "AuditOptions", "Infrastructure/AuditRepository.cs", 44)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "package-config"));
+        var repeated = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow-repeat"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "package-config"));
+
+        Assert.Empty(result.Report.DependencySurfaces);
+        Assert.DoesNotContain(result.Report.FlowRows, row => row.RowKind == "terminal-surface");
+        var gap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "DataSurfaceAttachmentMissing");
+        Assert.Equal("combined.route-flow.gap.v1", gap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal(gap.GapId, Assert.Single(repeated.Report.Gaps, item => item.GapKind == "DataSurfaceAttachmentMissing").GapId);
+        Assert.Equal("server", gap.SourceLabel);
+        Assert.Equal("Controllers/OrdersController.cs", gap.FilePath);
+        Assert.Contains("no matching terminal dependency/data surface", gap.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind is "FactSymbolUnsupportedTypeSkipped" or "NoRouteFlowEvidence");
         Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
     }
 
@@ -2719,6 +2858,62 @@ public sealed class CombinedRouteFlowTests
                 ["sourceSymbolLanguage"] = "csharp",
                 ["value"] = "Server=private;Password=secret;"
             });
+    }
+
+    private static CodeFact PackageConfigFact(
+        ScanManifest manifest,
+        string sourceSymbol,
+        string factType,
+        string ruleId,
+        string? packageName,
+        string? configKey,
+        string file,
+        int line)
+    {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["sourceSymbolId"] = sourceSymbol,
+            ["sourceSymbolDisplayName"] = sourceSymbol,
+            ["sourceSymbolKind"] = "Method",
+            ["sourceSymbolLanguage"] = "csharp",
+            ["surfaceKind"] = "package-config"
+        };
+        if (!string.IsNullOrWhiteSpace(packageName))
+        {
+            properties["packageName"] = packageName!;
+            properties["ecosystem"] = "nuget";
+            properties["manifestKind"] = "PackageReference";
+            properties["version"] = "1.2.3";
+        }
+
+        if (!string.IsNullOrWhiteSpace(configKey))
+        {
+            if (factType == FactTypes.ConnectionStringDeclared)
+            {
+                properties["connectionName"] = configKey!;
+            }
+            else if (factType == FactTypes.ConfigBinding)
+            {
+                properties["boundType"] = "Server.Options";
+                properties["mappingKind"] = "ConfigBinding";
+                properties["sectionName"] = configKey!;
+            }
+            else
+            {
+                properties["configKey"] = configKey!;
+            }
+        }
+
+        return FactFactory.Create(
+            manifest,
+            factType,
+            ruleId,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: packageName ?? configKey,
+            contractElement: packageName ?? configKey,
+            properties: properties);
     }
 
     private static CodeFact MessageSurfaceFact(

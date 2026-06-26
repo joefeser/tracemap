@@ -1,7 +1,7 @@
 # Route Flow Service/Data Composition Final Implementation State
 
-Status: task-7-remoting-attachment-precision-ready-for-review
-Readiness: task-7-remoting-ready-for-pr-review-loop
+Status: task-7-package-config-attachment-precision-ready-for-review
+Readiness: task-7-package-config-ready-for-pr-review-loop
 Spec branch: `codex/spec-route-flow-service-data-composition-final`
 Implementation branch: `codex/implement-route-flow-service-data-composition-final`
 Target base: `dev`
@@ -273,6 +273,85 @@ Validation status:
   `report.md`, and `logs/analyzer.log`.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+- Post-ACK `./scripts/check-private-paths.sh`: passed.
+- Post-ACK `git diff --check`: passed.
+
+## Task 7 Package/Config Attachment Slice
+
+Branch: `codex/task7-package-config-precision-20260626`
+Audited base: `origin/dev` at
+`3e987d7d46d2bdae7b9c10441bc16ce2c9332010`.
+Selected family: package/config dependency surfaces.
+
+Scope:
+
+- Keep this PR limited to route-flow attachment precision for package/config
+  facts already projected as deterministic dependency surfaces.
+- Project selected package/config fact-symbol rows as route-flow
+  `dependency-surface` logic context only when they attach through selected
+  source-local route-flow rows.
+- Attach `package-config` dependency surfaces only when the surface node is
+  reached by the selected static route-flow path.
+- Preserve `DataSurfaceAttachmentMissing` when package/config evidence is
+  present in the same combined index but not connected to the selected
+  route-flow path.
+
+Scope decisions:
+
+- This slice does not start UI property lineage, site work, reducer behavior,
+  scanner extraction changes, or package-upgrade impact behavior.
+- This slice does not claim package restore, resolved transitive dependencies,
+  runtime loading, config value use, deployment, or production behavior.
+- HTTP client, legacy-data/storage, validation/serializer, async/callback,
+  flow-boundary, and broader service/repository/object/projection breadth
+  remain follow-up Task 7 slices unless separately verified in a later PR.
+
+Oddities:
+
+- `package-config` was already accepted by `route-flow --to-surface` and the
+  shared surface projection, so the product change is intentionally narrow:
+  route-flow fact-symbol projection now treats selected config fact families as
+  dependency-surface context alongside package facts and records config-key
+  context by hash.
+- ACK/Qodo review found that real `ConnectionStringDeclared` and
+  `ConfigBinding` rows use `connectionName` and `sectionName` properties, while
+  the first pass hashed only `configKey`/`keyPath`-style aliases. The patch now
+  recognizes those emitted aliases, plus `configurationKey`, in both shared
+  package/config surface display selection and route-flow fact-symbol metadata.
+- Existing generic fact-symbol projection can still emit
+  `FactSymbolUnsupportedTypeSkipped` for unrelated selected `CallEdge` rows;
+  this PR does not broaden call-edge projection semantics.
+
+Validation status:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_package_config_surfaces_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_package_config_surface_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 56 tests and the existing NU1903 warning for
+  `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and the
+  existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet test src/dotnet/TraceMap.sln`: passed locally with 666 tests and the
+  existing NU1903 warning for `SQLitePCLRaw.lib.e_sqlite3`.
+- `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke-package-config-20260626`:
+  passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Post-ACK `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~Route_flow_attaches_package_config_surfaces_only_from_selected_static_path|FullyQualifiedName~Route_flow_does_not_infer_adjacent_package_config_surface_without_selected_join"`:
+  passed locally with 2 tests and the existing NU1903 warning.
+- Post-ACK `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedRouteFlowTests`:
+  passed locally with 56 tests and the existing NU1903 warning.
+- Post-ACK `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter FullyQualifiedName~CombinedDependencyReportTests`:
+  passed locally with 18 tests and the existing NU1903 warning.
+- Post-ACK `dotnet build src/dotnet/TraceMap.sln`: passed with 0 errors and
+  the existing NU1903 warning.
+- Post-ACK `dotnet test src/dotnet/TraceMap.sln`: passed locally with 666
+  tests and the existing NU1903 warning.
+- Post-ACK `dotnet run --project src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -- scan --repo samples/modern-sample --out /tmp/tracemap-modern-smoke-package-config-postack-20260626`:
+  passed and produced `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`.
 - Post-ACK `./scripts/check-private-paths.sh`: passed.
 - Post-ACK `git diff --check`: passed.
 

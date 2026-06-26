@@ -2818,7 +2818,10 @@ public static class CombinedRouteFlowReporter
                 'SqlCommandDetected',
                 'DapperCallDetected',
                 'DatabaseColumnMapping',
-                'PackageReferenced'
+                'PackageReferenced',
+                'ConfigBinding',
+                'ConfigKeyDeclared',
+                'ConnectionStringDeclared'
             )
             order by links.combined_fact_id
             limit 20;
@@ -3566,7 +3569,10 @@ public static class CombinedRouteFlowReporter
             or FactTypes.SqlCommandDetected
             or FactTypes.DapperCallDetected
             or FactTypes.DatabaseColumnMapping
-            or FactTypes.PackageReferenced;
+            or FactTypes.PackageReferenced
+            or FactTypes.ConfigBinding
+            or FactTypes.ConfigKeyDeclared
+            or FactTypes.ConnectionStringDeclared;
     }
 
     private static string FactSymbolLogicKind(FactSymbolProjectionRow row)
@@ -3576,7 +3582,7 @@ public static class CombinedRouteFlowReporter
             FactTypes.ObjectShapeInferred => "object-shape",
             FactTypes.QueryPatternDetected or FactTypes.SqlTextUsed or FactTypes.SqlCommandDetected or FactTypes.DapperCallDetected => "query-shape",
             FactTypes.DatabaseColumnMapping => "data-surface",
-            FactTypes.PackageReferenced => "dependency-surface",
+            FactTypes.PackageReferenced or FactTypes.ConfigBinding or FactTypes.ConfigKeyDeclared or FactTypes.ConnectionStringDeclared => "dependency-surface",
             _ => "fact-symbol-attachment"
         };
     }
@@ -3602,6 +3608,8 @@ public static class CombinedRouteFlowReporter
             ("sourceKind", FirstProperty(row.Properties, "sqlSourceKind", "sourceKind")),
             ("shapeHash", FirstProperty(row.Properties, "queryShapeHash", "shapeHash", "objectShapeHash")),
             ("textHash", FirstProperty(row.Properties, "textHash")),
+            ("packageName", FirstProperty(row.Properties, "packageName", "package", "dependencyName")),
+            ("configKeyHash", HashValue(FirstProperty(row.Properties, "configKey", "keyPath", "connectionStringName", "connectionName", "sectionName", "configurationKey", "environmentVariableName"))),
             ("tableNameHash", HashProperty(row.Properties, "tableName")),
             ("targetSymbolHash", string.IsNullOrWhiteSpace(row.TargetSymbol) ? null : CombinedReportHelpers.Hash(row.TargetSymbol!, 16)),
             ("sourceSymbolHash", string.IsNullOrWhiteSpace(row.SourceSymbol) ? null : CombinedReportHelpers.Hash(row.SourceSymbol!, 16)));
@@ -3650,8 +3658,15 @@ public static class CombinedRouteFlowReporter
     private static string? HashProperty(IReadOnlyDictionary<string, string> properties, string key)
     {
         return properties.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
-            ? CombinedReportHelpers.Hash(value, 16)
+            ? HashValue(value)
             : null;
+    }
+
+    private static string? HashValue(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? null
+            : CombinedReportHelpers.Hash(value, 16);
     }
 
     private static RouteFlowGap ProjectionUnavailableGap(
