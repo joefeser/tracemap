@@ -48,12 +48,14 @@
 - [ ] 3.3 Label or exclude generated, vendor, build, dependency, and cache
   roots including `.build/**`, `DerivedData/**`, `Pods/**`,
   `Carthage/Build/**`, `SourcePackages/**`, `vendor/**`, `Generated/**`, and
-  `*.generated.swift`.
+  `*.generated.swift` using normalized path-segment matching rather than
+  substring containment.
 - [ ] 3.4 Keep in-scope metadata files parseable even when they are near
   excluded dependency roots.
 - [ ] 3.5 Add tests for include/exclude ordering, skipped counts, generated
   source labeling, vendor roots, and reduced coverage from skipped or
-  ambiguous roots.
+  ambiguous roots. Include negative tests proving similarly named path segments
+  are not excluded by substring matching.
 
 ### Phase 4: SwiftPM Metadata Inventory
 

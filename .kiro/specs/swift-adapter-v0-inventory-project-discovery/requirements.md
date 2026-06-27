@@ -77,9 +77,9 @@ specific repository and commit so findings are reproducible.
 
 #### Acceptance Criteria
 
-1. WHEN `tracemap scan` runs the Swift adapter THEN the adapter SHALL require a
-   repo identity and concrete commit SHA before writing successful scan
-   artifacts.
+1. WHEN `tracemap-swift scan` or the equivalent independent Swift scanner entry
+   point runs THEN the adapter SHALL require a repo identity and concrete commit
+   SHA before writing successful scan artifacts.
 2. WHEN the commit SHA cannot be determined THEN the adapter SHALL fail before
    writing a successful artifact set and SHALL explain the missing commit
    provenance in `logs/analyzer.log`.
@@ -115,7 +115,9 @@ roots and excluded areas before deeper Swift analysis starts.
    such as `.build/**`, `DerivedData/**`, `Pods/**`, `Carthage/Build/**`,
    `SourcePackages/**`, `vendor/**`, `Generated/**`, or `*.generated.swift`
    THEN the adapter SHALL exclude or separately label them using deterministic
-   exclusion rules documented in the rule catalog.
+   exclusion rules documented in the rule catalog. Path-root checks SHALL split
+   repo-relative paths into normalized segments and match whole segments or
+   documented suffixes, not substring containment.
 5. WHEN an excluded file is relevant to project metadata, such as
    `Podfile.lock` or `Package.resolved`, THEN the adapter SHALL still inventory
    that metadata file if it is in scope and safe to parse.
@@ -272,7 +274,9 @@ stable, machine-readable, and honest.
    `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
    `logs/analyzer.log`, including when no Swift evidence is detected. A
    no-Swift scan SHALL use the Swift no-evidence coverage label with an empty
-   fact set rather than skipping artifacts.
+   fact set rather than skipping artifacts. `index.sqlite` SHALL use the shared
+   TraceMap SQLite index schema required by combine/report/reducer tooling, not
+   a Swift-only placeholder database.
 2. WHEN facts are written THEN fact IDs, scan IDs, property ordering, report
    ordering, SQLite rows, and NDJSON ordering SHALL be deterministic for the
    same repo, commit, options, and toolchain diagnostics.
