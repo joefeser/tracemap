@@ -9,6 +9,7 @@ struct TraceMapSwiftSmokeTests {
         try scanWritesRequiredArtifactsAndReducedCoverage()
         try factsAreStableWhenOnlyOutputPathChanges()
         try dangerousOutputPathsAreRejected()
+        try detachedHeadBranchIsUnknown()
         try defaultExcludesUsePathSegments()
         try bundleFactsHonorUserFilters()
         try oversizedFilesBecomeGaps()
@@ -104,6 +105,15 @@ struct TraceMapSwiftSmokeTests {
         } catch {
             assert(String(describing: error).contains("ancestor"))
         }
+    }
+
+    static func detachedHeadBranchIsUnknown() throws {
+        let fixture = try SwiftFixture()
+        try run("/usr/bin/git", ["-C", fixture.repo.path, "checkout", "--detach", "HEAD"])
+
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: fixture.temp.url.appendingPathComponent("scan")))
+
+        assert(result.manifest.branch == nil)
     }
 
     static func bundleFactsHonorUserFilters() throws {

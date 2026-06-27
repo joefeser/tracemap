@@ -37,6 +37,9 @@ The implementation slice should:
 - SQLite writer decision: the Swift adapter creates the shared schema via the system `sqlite3` command and populates `scan_manifest` plus `facts`. Shared relationship/flow tables are created empty for downstream compatibility.
 - Portability decision: the scaffold avoids Apple-only `CryptoKit`; it uses a small local SHA-256 implementation and platform-gated executable imports so `swift build --package-path src/swift` is not tied to Apple SDK modules.
 - Output safety decision: the scaffold refuses `--out` values that are the filesystem root, the scan/git root, or an ancestor of the scan/git root before recursive output cleanup.
+- Process safety decision: local subprocess calls drain stdout/stderr concurrently and use bounded timeouts so `git`, `swift --version`, and `sqlite3` cannot hang a scan indefinitely.
+- Git metadata decision: detached HEAD reports branch as unavailable instead of the literal `HEAD`.
+- Evidence schema decision: Swift scaffold evidence spans include their supporting rule ID in addition to the containing fact rule ID.
 - Downstream reader compatibility lives in command smoke validation for this slice; deeper Swift fixtures can add integration scripts when more fact families exist.
 
 ## Source Material Paths
@@ -152,3 +155,5 @@ sqlite3 <tmp>/swift-combined.sqlite "select label || ':' || language from index_
 ```
 
 The post-review downstream smoke reported `swift:swift` in `index_sources`, confirming Swift scaffold indexes retain Swift language identity after combine.
+
+Additional Qodo review cleanup added bounded subprocess timeouts, detached HEAD branch normalization, and nested evidence rule IDs. The Swift smoke executable covers dangerous output paths, bundle filtering, and detached HEAD branch behavior.
