@@ -58,7 +58,8 @@ struct TraceMapSwiftSmokeTests {
         for artifact in ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log"] {
             assert(FileManager.default.fileExists(atPath: out.appendingPathComponent(artifact).path), "missing \(artifact)")
         }
-        assert(result.facts.contains { $0.factType == "FileInventoried" && $0.ruleId == "swift.inventory.source-file.v1" })
+        assert(result.facts.contains { $0.factType == "FileInventoried" && $0.ruleId == "swift.file.inventory.v1" })
+        assert(result.facts.contains { $0.factType == "SwiftSourceFileDeclared" && $0.ruleId == "swift.inventory.source-file.v1" })
         assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.unsupported.dynamic-boundary.v1" })
         let report = try String(contentsOf: out.appendingPathComponent("report.md"), encoding: .utf8)
         assert(report.contains("Level1SemanticAnalysisReduced"))

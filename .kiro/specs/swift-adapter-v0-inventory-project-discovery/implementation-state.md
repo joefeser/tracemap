@@ -9,7 +9,7 @@
 - Issue: `Refs #379`
 - Parent issue: `Refs #377`
 - Adjacent follow-up: `Refs #382`
-- PR: pending
+- PR: #405
 
 ## Current Status
 
@@ -246,6 +246,20 @@ dotnet test src/dotnet/TraceMap.sln
 git diff --check
 ```
 
+Post-review fix validation completed after Codex/Qodo/Gemini review findings:
+
+- `swift build --package-path src/swift`: passed.
+- `swift run --package-path src/swift tracemap-swift-smoke-tests`: passed.
+- `samples/swift-package-basic`: scan passed with 13 facts.
+- `samples/swift-metadata-reduced`: scan passed with 26 facts.
+- `samples/swift-metadata-unsupported`: scan passed with 12 facts.
+- `samples/no-swift`: scan passed with 3 facts,
+  `Level3SyntaxAnalysis`, and `FailedOrPartial`.
+- Downstream export/combine/report passed over
+  `/tmp/tracemap-swift-package-basic/index.sqlite`.
+- Combined source identity smoke returned `swift:swift`.
+- Generated-output redaction sentinel passed.
+
 The Swift smoke executable now covers required artifacts, stable facts, output
 deletion safety, detached HEAD branch normalization, segment-based exclusions,
 bundle filtering, package/project/plist/ecosystem metadata facts, unsafe value
@@ -304,3 +318,18 @@ identity names in generated Swift scan/export/report artifacts.
     path-segment matching rather than substring containment.
   - Made dependency identity persistence hash-first by default for
     SwiftPM/CocoaPods/Carthage metadata.
+- First ACK run for PR #405 returned `actionable_findings` on head
+  `71e956ab67f3dcd9bfbde33ba12c4ba0bc224de6` with nine unresolved review
+  threads and patch authorization.
+- Patched current actionable findings:
+  - Generic `FileInventoried` facts now use generic inventory/package/project
+    rule IDs; richer Swift-specific facts retain the specific Swift rule IDs.
+  - Optional Swift/Xcode/CocoaPods/Carthage tool probes now run only when the
+    corresponding repository evidence is present.
+  - Binary plist detection now uses the file magic prefix instead of UTF-8
+    substring probing.
+  - Dynamic `Package.swift` gap detection now ignores comments and string
+    literals.
+  - CocoaPods lockfile parsing uses multiline matching.
+  - Carthage parsing extracts repository tokens only, not version strings.
+  - Tool discovery now uses `/usr/bin/env` for Swift and Xcode probes.
