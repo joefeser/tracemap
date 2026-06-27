@@ -24,9 +24,9 @@ Readiness: validated-spec-only
 - [x] Run `git diff --check`.
 - [x] Run `./scripts/check-private-paths.sh`.
 - [x] Confirm diff is limited to this spec folder.
-- [ ] Commit the spec branch.
-- [ ] Push the branch and open a PR to `dev`.
-- [ ] Wait 3 minutes, then run ACK PR loop.
+- [x] Commit the spec branch.
+- [x] Push the branch and open a PR to `dev`.
+- [x] Wait 3 minutes, then run ACK PR loop.
 - [ ] Follow ACK-authorized actions only; do not manually tag review bots, do
   not merge, do not force-push, and never squash.
 
@@ -42,6 +42,10 @@ Readiness: validated-spec-only
   - [ ] Record which existing rules are reused and why
     `property-flow.terminal-context.v1` is or is not needed before product
     code changes.
+  - [ ] If the generic-name set changes, update the live
+    `PropertyFlowReporter` generic-name set, docs/spec references, and tests in
+    the same implementation PR so names such as `result` and `response` do not
+    drift from the documented downgrade behavior.
   - [ ] Record the chosen context family and unsupported alternatives in this
     spec's `implementation-state.md` before product edits.
 
