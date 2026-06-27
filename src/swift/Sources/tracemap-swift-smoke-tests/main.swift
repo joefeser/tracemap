@@ -12,6 +12,8 @@ struct TraceMapSwiftSmokeTests {
         try detachedHeadBranchIsUnknown()
         try defaultExcludesUsePathSegments()
         try bundleFactsHonorUserFilters()
+        try projectAndPackageMetadataFactsAreEmittedSafely()
+        try unsupportedMetadataEmitsGaps()
         try oversizedFilesBecomeGaps()
         try sqliteContainsSharedTablesAndFacts()
         try emittedRuleIdsAreCataloged()
@@ -56,7 +58,7 @@ struct TraceMapSwiftSmokeTests {
         for artifact in ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log"] {
             assert(FileManager.default.fileExists(atPath: out.appendingPathComponent(artifact).path), "missing \(artifact)")
         }
-        assert(result.facts.contains { $0.factType == "FileInventoried" && $0.ruleId == "swift.file.inventory.v1" })
+        assert(result.facts.contains { $0.factType == "FileInventoried" && $0.ruleId == "swift.inventory.source-file.v1" })
         assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.unsupported.dynamic-boundary.v1" })
         let report = try String(contentsOf: out.appendingPathComponent("report.md"), encoding: .utf8)
         assert(report.contains("Level1SemanticAnalysisReduced"))
@@ -134,6 +136,89 @@ struct TraceMapSwiftSmokeTests {
         assert(!paths.contains("Sources/App/Model.xcdatamodeld"))
     }
 
+    static func projectAndPackageMetadataFactsAreEmittedSafely() throws {
+        let fixture = try SwiftFixture(
+            extraFiles: [
+                "Package.resolved": """
+                {"version":2,"pins":[{"identity":"swift-argument-parser","location":"https://github.com/apple/swift-argument-parser","state":{"version":"1.0.0"}}]}
+                """,
+                "App.xcworkspace/contents.xcworkspacedata": """
+                <?xml version="1.0" encoding="UTF-8"?><Workspace version="1.0"><FileRef location="group:App.xcodeproj"></FileRef></Workspace>
+                """,
+                "App.xcodeproj/project.pbxproj": """
+                productType = com.apple.product-type.application;
+                name = Debug;
+                name = Release;
+                """,
+                "Sources/App/Info.plist": """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+                <plist version="1.0"><dict>
+                  <key>CFBundleIdentifier</key><string>com.example.publicsafe</string>
+                  <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLSchemes</key><array><string>sample</string></array></dict></array>
+                  <key>NSCameraUsageDescription</key><string>Needed by sample tests.</string>
+                  <key>NSAppTransportSecurity</key><dict/>
+                </dict></plist>
+                """,
+                "Podfile.lock": """
+                PODS:
+                  - Alamofire
+                """,
+                "Cartfile.resolved": """
+                github "ReactiveX/RxSwift" "6.0.0"
+                """
+            ],
+            extraDirectories: [
+                "App.xcodeproj",
+                "App.xcworkspace"
+            ]
+        )
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: fixture.temp.url.appendingPathComponent("scan")))
+        let factTypes = Set(result.facts.map(\.factType))
+        for factType in [
+            "SwiftSourceRootDeclared",
+            "SwiftSourceFileDeclared",
+            "SwiftPackageManifestDeclared",
+            "SwiftPackageResolvedDeclared",
+            "SwiftXcodeProjectDeclared",
+            "SwiftXcodeWorkspaceDeclared",
+            "SwiftInfoPlistDeclared",
+            "SwiftEcosystemMetadataDeclared"
+        ] {
+            assert(factTypes.contains(factType), "missing \(factType)")
+        }
+        let packageResolved = try requireFact(result, "SwiftPackageResolvedDeclared")
+        assert(packageResolved.properties["safeIdentityCount"] == "1")
+        assert(packageResolved.properties["unsafeLocationCount"] == "1")
+        let plist = try requireFact(result, "SwiftInfoPlistDeclared")
+        assert(plist.properties["urlSchemeCount"] == "1")
+        assert(plist.properties["permissionKeyCount"] == "1")
+        let rendered = try String(contentsOf: fixture.temp.url.appendingPathComponent("scan/facts.ndjson"), encoding: .utf8)
+        assert(!rendered.contains("https://github.com/apple/swift-argument-parser"))
+        assert(!rendered.contains("com.example.publicsafe"))
+        assert(!rendered.contains("Needed by sample tests"))
+    }
+
+    static func unsupportedMetadataEmitsGaps() throws {
+        let fixture = try SwiftFixture(extraFiles: [
+            "Package.swift": """
+            // swift-tools-version: 6.0
+            import PackageDescription
+            let dynamicName = ProcessInfo.processInfo.environment["PACKAGE_NAME"] ?? "Dynamic"
+            let package = Package(name: dynamicName)
+            """,
+            "Package.resolved": #"{"version":99,"pins":[]}"#,
+            "Sources/App/Info.plist": "bplist00unsupported",
+            "App.xcworkspace/contents.xcworkspacedata": #"<Workspace><FileRef location="https://example.invalid/App.xcodeproj"></FileRef></Workspace>"#
+        ], extraDirectories: ["App.xcworkspace"])
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: fixture.temp.url.appendingPathComponent("scan")))
+        let gapKinds = Set(result.facts.filter { $0.factType == "AnalysisGap" }.compactMap { $0.properties["gapKind"] })
+        assert(gapKinds.contains("swiftpm-manifest-dynamic"))
+        assert(gapKinds.contains("swiftpm-resolved-unknown-version"))
+        assert(gapKinds.contains("plist-binary-unsupported"))
+        assert(gapKinds.contains("xcode-workspace-external-reference"))
+    }
+
     static func oversizedFilesBecomeGaps() throws {
         let fixture = try SwiftFixture(extraFiles: [
             "Sources/App/Large.swift": String(repeating: "x", count: 128)
@@ -165,6 +250,13 @@ struct TraceMapSwiftSmokeTests {
         for ruleId in Set(result.facts.map(\.ruleId)) {
             assert(catalog.contains("id: \(ruleId)"), "missing rule \(ruleId)")
         }
+    }
+
+    static func requireFact(_ result: SwiftScanResult, _ factType: String) throws -> CodeFact {
+        guard let fact = result.facts.first(where: { $0.factType == factType }) else {
+            throw SmokeFailure("missing fact \(factType)")
+        }
+        return fact
     }
 }
 

@@ -13,11 +13,30 @@
 
 ## Current Status
 
-Status: `ready-for-implementation`
+Status: `implemented`
 
-This is a spec-only packet for Swift adapter v0 repository inventory and
-project/package discovery. No Swift analyzer/runtime code has been implemented
-in this branch. Implementation tasks in `tasks.md` are intentionally unchecked.
+This implementation adds Swift adapter v0 repository inventory and
+project/package discovery on top of the scaffold/output contract. The adapter
+still emits deterministic static evidence only; it does not implement
+SwiftSyntax, SourceKit, compiler semantic analysis, runtime proof, build proof,
+package compatibility, or impact conclusions.
+
+Implementation branch: `codex/implement-swift-inventory-project-discovery`
+
+Implemented behavior:
+
+- Swift source file and root inventory facts.
+- SwiftPM manifest token/line-scan metadata facts.
+- Package.resolved schema/state/safe-identity inventory facts.
+- Xcode project/workspace metadata inventory facts and reduced-coverage gaps.
+- XML Info.plist allowlisted/hashed metadata facts and binary/malformed gaps.
+- CocoaPods/Carthage metadata boundary facts.
+- Bounded non-mutating toolchain diagnostics for Swift, Xcode, CocoaPods, and
+  Carthage.
+- Checked-in sample fixtures under `samples/swift-package-basic`,
+  `samples/swift-metadata-reduced`, `samples/swift-metadata-unsupported`, and
+  `samples/no-swift`.
+- Swift validation documentation in `docs/VALIDATION.md`.
 
 ## Source Material
 
@@ -78,6 +97,24 @@ Forbidden claims:
 - Do not store source snippets, manifest snippets, raw URLs, hostnames, local
   absolute paths, raw remotes, credentials, secrets, or private labels by
   default.
+
+## Implementation Decisions
+
+- `Package.swift` parsing is token/line scanning only and emits
+  Tier3SyntaxOrTextual facts for static labels.
+- `Package.resolved` parsing reads JSON schemas 1 and 2 as data. Unknown
+  schemas emit `AnalysisGap` evidence.
+- `project.pbxproj` remains a checked-in metadata inventory fact with narrow
+  line/key extraction only. Full Xcode graph interpretation remains deferred.
+- Workspace references are counted and hashed when repo-relative/group-based.
+  External or absolute references emit gaps.
+- Info.plist parsing is XML/property-list based. Binary plists emit gaps.
+- Ecosystem metadata stops at inventory counts and hashes. It does not infer
+  dependency surfaces, compatibility, license, vulnerability, freshness, or
+  runtime use.
+- Toolchain probes use bounded non-mutating version checks only; they do not
+  build, restore, install, resolve, test, launch simulators/devices, or execute
+  app code.
 
 ## Files
 
@@ -188,6 +225,38 @@ git diff --check
 - `./scripts/check-private-paths.sh`: passed.
 - Full product tests are not required for this spec-only branch unless review
   findings request them.
+
+Implementation validation completed:
+
+```bash
+swift build --package-path src/swift
+swift run --package-path src/swift tracemap-swift-smoke-tests
+swift run --package-path src/swift tracemap-swift scan --repo samples/swift-package-basic --out /tmp/tracemap-swift-package-basic
+swift run --package-path src/swift tracemap-swift scan --repo samples/swift-metadata-reduced --out /tmp/tracemap-swift-metadata-reduced
+swift run --package-path src/swift tracemap-swift scan --repo samples/swift-metadata-unsupported --out /tmp/tracemap-swift-metadata-unsupported
+swift run --package-path src/swift tracemap-swift scan --repo samples/no-swift --out /tmp/tracemap-no-swift
+dotnet run --project src/dotnet/TraceMap.Cli -- export --index /tmp/tracemap-swift-package-basic/index.sqlite --out /tmp/tracemap-swift-export --format json
+dotnet run --project src/dotnet/TraceMap.Cli -- combine --index /tmp/tracemap-swift-package-basic/index.sqlite --label swift --out /tmp/tracemap-swift-combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- report --index /tmp/tracemap-swift-combined.sqlite --out /tmp/tracemap-swift-report
+sqlite3 /tmp/tracemap-swift-combined.sqlite "select label || ':' || language from index_sources order by label;"
+if rg -n "https://github.com|https://example|com\\.example|Sample value|<local-absolute-path>|/tmp/tracemap|swift-argument-parser" /tmp/tracemap-swift-package-basic /tmp/tracemap-swift-metadata-reduced /tmp/tracemap-swift-metadata-unsupported /tmp/tracemap-no-swift /tmp/tracemap-swift-export /tmp/tracemap-swift-report; then exit 1; else echo "Swift generated-output redaction check passed"; fi
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+The Swift smoke executable now covers required artifacts, stable facts, output
+deletion safety, detached HEAD branch normalization, segment-based exclusions,
+bundle filtering, package/project/plist/ecosystem metadata facts, unsafe value
+redaction, dynamic manifest gaps, unsupported Package.resolved schema gaps,
+binary plist gaps, external workspace reference gaps, SQLite schema creation,
+and rule-catalog coverage.
+
+`dotnet test` passed with 686 tests. The downstream combined smoke reported
+`swift:swift`. The generated-output redaction check passed by finding no raw
+sample URLs, plist values, local absolute paths, temp output paths, or package
+identity names in generated Swift scan/export/report artifacts.
 
 ## Out Of Scope
 

@@ -1,8 +1,8 @@
 # TraceMap Swift Adapter
 
-This is the v0 Swift adapter scaffold. It provides a deterministic scan command
-and output contract before deeper SwiftSyntax, SourceKit, SwiftPM, Xcode, UI,
-HTTP, storage, or relationship extraction is added.
+This is the v0 Swift adapter. It provides a deterministic scan command, output
+contract, and checked-in inventory/project metadata discovery before deeper
+SwiftSyntax, SourceKit, UI, HTTP, storage, or relationship extraction is added.
 
 The scanner emits static evidence only. It does not build the app, resolve
 packages over the network, launch a simulator or device, inspect runtime state,
@@ -41,9 +41,29 @@ The fixed default `--max-file-byte-size` is `1048576` bytes. Raw source snippets
 raw remotes, local absolute paths, connection strings, provisioning details, and
 private labels are not stored by default.
 
+Useful checked-in smoke fixtures:
+
+```bash
+swift run --package-path src/swift tracemap-swift scan --repo samples/swift-package-basic --out /tmp/tracemap-swift-package-basic
+swift run --package-path src/swift tracemap-swift scan --repo samples/swift-metadata-reduced --out /tmp/tracemap-swift-metadata-reduced
+swift run --package-path src/swift tracemap-swift scan --repo samples/swift-metadata-unsupported --out /tmp/tracemap-swift-metadata-unsupported
+swift run --package-path src/swift tracemap-swift scan --repo samples/no-swift --out /tmp/tracemap-no-swift
+```
+
 ## Coverage
 
-This scaffold always reports reduced coverage (`Level1SemanticAnalysisReduced`
-with `FailedOrPartial`) or lower. Full Swift semantic coverage is reserved for a
-future implementation that proves deterministic semantic evidence for the
-selected scope and records toolchain gaps.
+This adapter reports non-semantic inventory coverage:
+
+- `SwiftInventoryFileBasedSucceeded`: file-based inventory succeeded for the
+  selected scope and supported metadata files were handled according to v0
+  policy.
+- `SwiftInventoryReduced`: useful inventory exists, but at least one metadata,
+  project, lockfile, plist, exclusion, or toolchain diagnostic is partial or
+  unavailable.
+- `SwiftInventoryNotDetected`: no Swift files or supported Swift metadata were
+  found in the selected scope.
+
+These labels do not prove Swift compiler semantic coverage, build success,
+package compatibility, Xcode scheme behavior, runtime behavior, or impact.
+Manifest analysis remains `Level1SemanticAnalysisReduced` or lower with
+`FailedOrPartial`.

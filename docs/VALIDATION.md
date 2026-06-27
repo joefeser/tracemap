@@ -89,6 +89,41 @@ For JVM CLI smoke, also run:
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm installDist
 ```
 
+For Swift adapter inventory/project-discovery changes, run the Swift package
+and checked-in sample scans:
+
+```bash
+swift build --package-path src/swift
+swift run --package-path src/swift tracemap-swift-smoke-tests
+swift run --package-path src/swift tracemap-swift scan --repo samples/swift-package-basic --out /tmp/tracemap-swift-package-basic
+swift run --package-path src/swift tracemap-swift scan --repo samples/swift-metadata-reduced --out /tmp/tracemap-swift-metadata-reduced
+swift run --package-path src/swift tracemap-swift scan --repo samples/swift-metadata-unsupported --out /tmp/tracemap-swift-metadata-unsupported
+swift run --package-path src/swift tracemap-swift scan --repo samples/no-swift --out /tmp/tracemap-no-swift
+test -f /tmp/tracemap-swift-package-basic/scan-manifest.json
+test -f /tmp/tracemap-swift-package-basic/facts.ndjson
+test -f /tmp/tracemap-swift-package-basic/index.sqlite
+test -f /tmp/tracemap-swift-package-basic/report.md
+test -f /tmp/tracemap-swift-package-basic/logs/analyzer.log
+test -f /tmp/tracemap-swift-metadata-reduced/scan-manifest.json
+test -f /tmp/tracemap-swift-metadata-unsupported/scan-manifest.json
+test -f /tmp/tracemap-no-swift/scan-manifest.json
+dotnet run --project src/dotnet/TraceMap.Cli -- export --index /tmp/tracemap-swift-package-basic/index.sqlite --out /tmp/tracemap-swift-export --format json
+dotnet run --project src/dotnet/TraceMap.Cli -- combine --index /tmp/tracemap-swift-package-basic/index.sqlite --label swift --out /tmp/tracemap-swift-combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- report --index /tmp/tracemap-swift-combined.sqlite --out /tmp/tracemap-swift-report
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Expected Swift behavior: scans remain deterministic static inventory over
+checked-in files, emit repo and commit SHA provenance, rule IDs, evidence
+tiers, extractor versions, coverage labels, and public-safe repo-relative
+paths. Swift v0 must not claim compiler semantic coverage, build success,
+package compatibility, Xcode scheme behavior, simulator/device behavior,
+runtime behavior, dependency vulnerability/license/freshness, or impact.
+Generated Swift artifacts must not contain raw source snippets, manifest
+snippets, plist values, raw URLs, hostnames, local absolute paths, raw remotes,
+credentials, secrets, or private labels.
+
 For query-pattern report rendering changes, inspect generated scan reports from the affected adapters:
 
 ```bash
