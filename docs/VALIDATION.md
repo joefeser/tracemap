@@ -89,8 +89,10 @@ For JVM CLI smoke, also run:
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm installDist
 ```
 
-For Swift adapter inventory/project-discovery changes, run the Swift package
-and checked-in sample scans:
+For Swift adapter changes, run the Swift package and checked-in sample scans.
+The Swift package currently resolves a pinned SwiftSyntax dependency for
+source declaration/call extraction, so first-run validation may need network
+access for SwiftPM dependency restore:
 
 ```bash
 swift build --package-path src/swift
@@ -114,15 +116,16 @@ dotnet run --project src/dotnet/TraceMap.Cli -- report --index /tmp/tracemap-swi
 git diff --check
 ```
 
-Expected Swift behavior: scans remain deterministic static inventory over
+Expected Swift behavior: scans remain deterministic static evidence over
 checked-in files, emit repo and commit SHA provenance, rule IDs, evidence
-tiers, extractor versions, coverage labels, and public-safe repo-relative
-paths. Swift v0 must not claim compiler semantic coverage, build success,
-package compatibility, Xcode scheme behavior, simulator/device behavior,
-runtime behavior, dependency vulnerability/license/freshness, or impact.
-Generated Swift artifacts must not contain raw source snippets, manifest
-snippets, plist values, raw URLs, hostnames, local absolute paths, raw remotes,
-credentials, secrets, or private labels.
+tiers, extractor versions, coverage labels, public-safe repo-relative paths,
+and syntax-backed declarations/call candidates where supported. Swift v0 must
+not claim compiler semantic coverage, build success, package compatibility,
+Xcode scheme behavior, simulator/device behavior, runtime behavior, dependency
+vulnerability/license/freshness, or impact. Generated Swift artifacts must not
+contain raw source snippets, manifest snippets, plist values, raw URLs,
+hostnames, local absolute paths, raw remotes, credentials, secrets, or private
+labels.
 
 For query-pattern report rendering changes, inspect generated scan reports from the affected adapters:
 
