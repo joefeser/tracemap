@@ -150,16 +150,15 @@ public enum SwiftScanEngine {
         let inventory = try InventoryBuilder.build(scanRoot: repo, gitRoot: git.gitRoot, options: options)
         let scanId = stableScanId(git: git, options: options, inventory: inventory)
         var gaps = CoverageGap.defaults(inventory: inventory)
-        if !Toolchain.swiftAvailable() {
-            gaps.append(CoverageGap(kind: "swift-toolchain-unavailable", ruleId: RuleIds.toolchainUnavailable, message: "Swift toolchain unavailable; emitted scaffold inventory only."))
-        }
+        gaps += Toolchain.diagnostics()
+        gaps += MetadataGapFactory.gaps(scanRoot: repo, inventory: inventory)
         if inventory.contains(where: { $0.kind == "swiftpm-manifest" }) {
-            gaps.append(CoverageGap(kind: "swiftpm-load-deferred", ruleId: RuleIds.projectLoadFailed, message: "SwiftPM semantic package loading is deferred in the scaffold slice."))
+            gaps.append(CoverageGap(kind: "swiftpm-load-deferred", ruleId: RuleIds.analysisGap, message: "SwiftPM semantic package loading is deferred; checked-in Package.swift metadata is inventory-only."))
         }
         if inventory.contains(where: { $0.kind == "xcode-project" || $0.kind == "xcode-workspace" }) {
-            gaps.append(CoverageGap(kind: "xcode-load-deferred", ruleId: RuleIds.projectLoadFailed, message: "Xcode project/workspace semantic loading is deferred in the scaffold slice."))
+            gaps.append(CoverageGap(kind: "xcode-load-deferred", ruleId: RuleIds.analysisGap, message: "Xcode project/workspace semantic loading is deferred; checked-in metadata is inventory-only."))
         }
-        gaps.append(CoverageGap(kind: "swift-semantic-extractor-deferred", ruleId: RuleIds.dynamicBoundary, message: "SwiftSyntax, SourceKit, protocol dispatch, Objective-C bridging, UI, storage, and runtime analysis are out of scope for this scaffold."))
+        gaps.append(CoverageGap(kind: "swift-semantic-extractor-deferred", ruleId: RuleIds.dynamicBoundary, message: "SwiftSyntax, SourceKit, protocol dispatch, Objective-C bridging, UI, storage, and runtime analysis are out of scope for this inventory slice."))
 
         let manifest = ScanManifest(
             scanId: scanId,
@@ -169,7 +168,7 @@ public enum SwiftScanEngine {
             commitSha: git.commitSha,
             scannerVersion: TraceMapSwiftVersion.scanner,
             scannedAt: isoNow(),
-            analysisLevel: inventory.hasOnlyTextualEvidence ? "Level3SyntaxAnalysis" : "Level1SemanticAnalysisReduced",
+            analysisLevel: inventory.isEmpty ? "Level3SyntaxAnalysis" : "Level1SemanticAnalysisReduced",
             buildStatus: "FailedOrPartial",
             solutions: [],
             projects: inventory.projectIdentifiers,
@@ -181,7 +180,7 @@ public enum SwiftScanEngine {
             extractorVersions: [TraceMapSwiftVersion.extractorId: TraceMapSwiftVersion.extractorVersion]
         )
 
-        let facts = FactFactory.facts(manifest: manifest, inventory: inventory, gaps: gaps)
+        let facts = FactFactory.facts(manifest: manifest, inventory: inventory, gaps: gaps, scanRoot: repo)
         try OutputWriter.write(outputPath: options.outputPath, manifest: manifest, facts: facts, inventory: inventory)
         return SwiftScanResult(manifest: manifest, facts: facts, inventory: inventory)
     }
@@ -263,7 +262,7 @@ public struct InventoryItem: Codable, Equatable {
 
 enum InventoryBuilder {
     static let excludedSegmentNames: Set<String> = [
-        ".git", ".build", ".swiftpm", ".tracemap-demo", ".tmp", "DerivedData"
+        ".git", ".build", ".swiftpm", ".tracemap-demo", ".tmp", "DerivedData", "SourcePackages"
     ]
 
     static func build(scanRoot: URL, gitRoot: URL, options: SwiftScanOptions) throws -> [InventoryItem] {
@@ -327,6 +326,7 @@ enum InventoryBuilder {
                 let next = segments[index + 1]
                 if next == ".build" || next == "Build" { return true }
             }
+            if current == "vendor" && index + 1 < segments.count { return true }
         }
         return false
     }
@@ -340,7 +340,7 @@ enum InventoryBuilder {
         if ["Package.swift", "Package.resolved", "Podfile", "Podfile.lock", "Cartfile", "Cartfile.resolved", "Info.plist", "PrivacyInfo.xcprivacy", "project.pbxproj", "contents.xcworkspacedata"].contains(name) {
             return true
         }
-        return [".swift", ".entitlements", ".xcdatamodel", ".storyboard", ".xib"].contains { relativePath.hasSuffix($0) }
+        return [".swift", ".entitlements", ".xcdatamodel", ".storyboard", ".xib", ".plist"].contains { relativePath.hasSuffix($0) }
     }
 
     static func kind(for relativePath: String, isDirectory: Bool) -> String {
@@ -424,13 +424,88 @@ struct CoverageGap: Codable, Equatable {
     }
 }
 
+enum MetadataGapFactory {
+    static func gaps(scanRoot: URL, inventory: [InventoryItem]) -> [CoverageGap] {
+        var gaps: [CoverageGap] = []
+        for item in inventory where item.selected {
+            switch item.kind {
+            case "swiftpm-manifest":
+                gaps += swiftPackageManifestGaps(scanRoot.appendingPathComponent(item.relativePath), item)
+            case "swiftpm-resolved":
+                gaps += packageResolvedGaps(scanRoot.appendingPathComponent(item.relativePath), item)
+            case "xcode-project":
+                gaps.append(CoverageGap(kind: "xcode-project-graph-deferred", ruleId: RuleIds.analysisGap, message: "Xcode project object graph parsing is deferred in v0 inventory.", filePath: item.relativePath, startLine: item.startLine, endLine: item.endLine))
+            case "xcode-workspace-metadata":
+                gaps += workspaceMetadataGaps(scanRoot.appendingPathComponent(item.relativePath), item)
+            case "plist":
+                gaps += plistGaps(scanRoot.appendingPathComponent(item.relativePath), item)
+            default:
+                break
+            }
+        }
+        return gaps
+    }
+
+    private static func swiftPackageManifestGaps(_ url: URL, _ item: InventoryItem) -> [CoverageGap] {
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            return [CoverageGap(kind: "swiftpm-manifest-unreadable", ruleId: RuleIds.analysisGap, message: "Package.swift could not be read as UTF-8.", filePath: item.relativePath, startLine: item.startLine, endLine: item.endLine)]
+        }
+        let dynamicMarkers = ["ProcessInfo.", "FileManager.", "getenv(", "#if ", "if ", "for ", "while ", "func ", "var "]
+        guard dynamicMarkers.contains(where: { text.contains($0) }) else { return [] }
+        return [CoverageGap(kind: "swiftpm-manifest-dynamic", ruleId: RuleIds.analysisGap, message: "Package.swift contains dynamic or unsupported constructs; token-scanned inventory is partial.", filePath: item.relativePath, startLine: item.startLine, endLine: item.endLine)]
+    }
+
+    private static func packageResolvedGaps(_ url: URL, _ item: InventoryItem) -> [CoverageGap] {
+        guard let data = try? Data(contentsOf: url),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return [CoverageGap(kind: "swiftpm-resolved-malformed", ruleId: RuleIds.analysisGap, message: "Package.resolved is malformed or unsupported; lockfile inventory is partial.", filePath: item.relativePath, startLine: item.startLine, endLine: item.endLine)]
+        }
+        let version = object["version"] as? Int
+        return version == 1 || version == 2 ? [] : [CoverageGap(kind: "swiftpm-resolved-unknown-version", ruleId: RuleIds.analysisGap, message: "Package.resolved schema version is unsupported; lockfile inventory is partial.", filePath: item.relativePath, startLine: item.startLine, endLine: item.endLine)]
+    }
+
+    private static func workspaceMetadataGaps(_ url: URL, _ item: InventoryItem) -> [CoverageGap] {
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            return [CoverageGap(kind: "xcode-workspace-unreadable", ruleId: RuleIds.analysisGap, message: "Workspace metadata could not be read as UTF-8.", filePath: item.relativePath, startLine: item.startLine, endLine: item.endLine)]
+        }
+        let locations = regexCaptures(#"location\s*=\s*"([^"]+)""#, in: text)
+        if locations.contains(where: { $0.hasPrefix("http:") || $0.hasPrefix("https:") || $0.hasPrefix("absolute:") || $0.hasPrefix("container:/") }) {
+            return [CoverageGap(kind: "xcode-workspace-external-reference", ruleId: RuleIds.analysisGap, message: "Workspace contains an external or absolute reference; only safe counts and hashes are emitted.", filePath: item.relativePath, startLine: item.startLine, endLine: item.endLine)]
+        }
+        return []
+    }
+
+    private static func plistGaps(_ url: URL, _ item: InventoryItem) -> [CoverageGap] {
+        guard let data = try? Data(contentsOf: url) else {
+            return [CoverageGap(kind: "plist-unreadable", ruleId: RuleIds.analysisGap, message: "Info.plist could not be read.", filePath: item.relativePath, startLine: item.startLine, endLine: item.endLine)]
+        }
+        guard String(data: data.prefix(32), encoding: .utf8)?.contains("bplist") != true else {
+            return [CoverageGap(kind: "plist-binary-unsupported", ruleId: RuleIds.analysisGap, message: "Binary plist parsing is deferred in v0 inventory.", filePath: item.relativePath, startLine: item.startLine, endLine: item.endLine)]
+        }
+        guard (try? PropertyListSerialization.propertyList(from: data, options: [], format: nil)) != nil else {
+            return [CoverageGap(kind: "plist-malformed", ruleId: RuleIds.analysisGap, message: "Info.plist is malformed or unsupported; plist inventory is partial.", filePath: item.relativePath, startLine: item.startLine, endLine: item.endLine)]
+        }
+        return []
+    }
+}
+
 enum RuleIds {
     static let repoManifest = "swift.repo.manifest.v1"
     static let fileInventory = "swift.file.inventory.v1"
+    static let sourceFile = "swift.inventory.source-file.v1"
+    static let exclusion = "swift.inventory.exclusion.v1"
     static let swiftPM = "swift.package.swiftpm.v1"
+    static let swiftPMManifest = "swift.swiftpm.manifest.v1"
+    static let swiftPMResolved = "swift.swiftpm.resolved.v1"
     static let cocoaPods = "swift.package.cocoapods.v1"
     static let carthage = "swift.package.carthage.v1"
     static let xcode = "swift.project.xcode.v1"
+    static let xcodeProject = "swift.xcode.project.v1"
+    static let xcodeWorkspace = "swift.xcode.workspace.v1"
+    static let infoPlist = "swift.plist.info.v1"
+    static let ecosystemMetadata = "swift.ecosystem.metadata.v1"
+    static let toolchainDiagnostic = "swift.toolchain.diagnostic.v1"
+    static let analysisGap = "swift.analysis-gap.v1"
     static let toolchainUnavailable = "swift.toolchain.unavailable.v1"
     static let projectLoadFailed = "swift.project.load-failed.v1"
     static let dynamicBoundary = "swift.unsupported.dynamic-boundary.v1"
@@ -490,7 +565,7 @@ public struct CodeFact: Codable, Equatable {
 }
 
 enum FactFactory {
-    static func facts(manifest: ScanManifest, inventory: [InventoryItem], gaps: [CoverageGap]) -> [CodeFact] {
+    static func facts(manifest: ScanManifest, inventory: [InventoryItem], gaps: [CoverageGap], scanRoot: URL) -> [CodeFact] {
         var facts: [CodeFact] = []
         facts.append(makeFact(
             manifest: manifest,
@@ -503,7 +578,9 @@ enum FactFactory {
             targetSymbol: manifest.repoName,
             properties: [
                 "language": "swift",
-                "adapterKind": "scaffold",
+                "adapterKind": "inventory-project-discovery",
+                "coverageCeiling": "syntax-or-structural",
+                "coverageLabel": coverageLabel(inventory: inventory, gaps: gaps),
                 "repoNameHash": sha256Hex(manifest.repoName),
                 "scanRootRelativePath": manifest.scanRootRelativePath ?? "."
             ]
@@ -527,6 +604,10 @@ enum FactFactory {
                     "staticEvidenceOnly": "true"
                 ]
             ))
+        }
+        facts += sourceRootFacts(manifest: manifest, inventory: inventory)
+        for item in inventory where item.selected {
+            facts += metadataFacts(manifest: manifest, item: item, scanRoot: scanRoot)
         }
         for gap in gaps {
             facts.append(makeFact(
@@ -601,10 +682,14 @@ enum FactFactory {
 
     private static func ruleId(for item: InventoryItem) -> String {
         switch item.kind {
-        case "swiftpm-manifest", "swiftpm-resolved": return RuleIds.swiftPM
+        case "swift-source": return RuleIds.sourceFile
+        case "swiftpm-manifest": return RuleIds.swiftPMManifest
+        case "swiftpm-resolved": return RuleIds.swiftPMResolved
         case "cocoapods-metadata": return RuleIds.cocoaPods
         case "carthage-metadata": return RuleIds.carthage
-        case "xcode-project", "xcode-workspace", "xcode-project-metadata", "xcode-workspace-metadata": return RuleIds.xcode
+        case "xcode-project", "xcode-project-metadata": return RuleIds.xcodeProject
+        case "xcode-workspace", "xcode-workspace-metadata": return RuleIds.xcodeWorkspace
+        case "plist": return RuleIds.infoPlist
         default: return RuleIds.fileInventory
         }
     }
@@ -614,6 +699,321 @@ enum FactFactory {
         case "swift-source": return .tier3SyntaxOrTextual
         default: return .tier2Structural
         }
+    }
+
+    private static func coverageLabel(inventory: [InventoryItem], gaps: [CoverageGap]) -> String {
+        if inventory.isEmpty { return "SwiftInventoryNotDetected" }
+        if gaps.contains(where: { $0.kind != "swift-semantic-extractor-deferred" }) {
+            return "SwiftInventoryReduced"
+        }
+        return "SwiftInventoryFileBasedSucceeded"
+    }
+
+    private static func sourceRootFacts(manifest: ScanManifest, inventory: [InventoryItem]) -> [CodeFact] {
+        let grouped = Dictionary(grouping: inventory.filter { $0.selected && ($0.kind == "swift-source" || $0.kind == "swift-generated-source") }) { sourceRoot(for: $0.relativePath) }
+        return grouped.keys.sorted().map { root in
+            let items = grouped[root] ?? []
+            let rootKind = rootKind(for: root)
+            return makeFact(
+                manifest: manifest,
+                factType: "SwiftSourceRootDeclared",
+                ruleId: RuleIds.sourceFile,
+                evidenceTier: .tier2Structural,
+                filePath: root,
+                startLine: 1,
+                endLine: 1,
+                targetSymbol: root,
+                contractElement: root,
+                properties: [
+                    "classificationEvidence": "repo-relative-path",
+                    "coverageCeiling": "syntax-or-structural",
+                    "fileCount": String(items.count),
+                    "language": "swift",
+                    "rootKind": rootKind,
+                    "rootPathHash": sha256Hex(root)
+                ]
+            )
+        }
+    }
+
+    private static func metadataFacts(manifest: ScanManifest, item: InventoryItem, scanRoot: URL) -> [CodeFact] {
+        let url = scanRoot.appendingPathComponent(item.relativePath)
+        switch item.kind {
+        case "swift-source":
+            return [makeFact(
+                manifest: manifest,
+                factType: "SwiftSourceFileDeclared",
+                ruleId: RuleIds.sourceFile,
+                evidenceTier: .tier2Structural,
+                filePath: item.relativePath,
+                startLine: item.startLine,
+                endLine: item.endLine,
+                targetSymbol: item.relativePath,
+                contractElement: item.relativePath,
+                properties: [
+                    "coverageCeiling": "syntax-or-structural",
+                    "fileKind": item.relativePath.hasSuffix(".generated.swift") ? "generated-source" : "source",
+                    "language": "swift",
+                    "lineCount": String(item.endLine),
+                    "pathHash": sha256Hex(item.relativePath),
+                    "rootKind": rootKind(for: item.relativePath)
+                ]
+            )]
+        case "swiftpm-manifest":
+            return [swiftPMManifestFact(manifest: manifest, item: item, url: url)]
+        case "swiftpm-resolved":
+            return [swiftPMResolvedFact(manifest: manifest, item: item, url: url)]
+        case "xcode-project", "xcode-project-metadata":
+            return [xcodeProjectFact(manifest: manifest, item: item, url: url)]
+        case "xcode-workspace", "xcode-workspace-metadata":
+            return [xcodeWorkspaceFact(manifest: manifest, item: item, url: url)]
+        case "plist":
+            return [infoPlistFact(manifest: manifest, item: item, url: url)]
+        case "cocoapods-metadata", "carthage-metadata":
+            return [ecosystemFact(manifest: manifest, item: item, url: url)]
+        default:
+            return []
+        }
+    }
+
+    private static func swiftPMManifestFact(manifest: ScanManifest, item: InventoryItem, url: URL) -> CodeFact {
+        let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        let packageNames = regexCaptures(#"Package\s*\(\s*name\s*:\s*"([^"]+)""#, in: text)
+        let targetNames = regexCaptures(#"(?:target|executableTarget|testTarget)\s*\(\s*name\s*:\s*"([^"]+)""#, in: text)
+        let productNames = regexCaptures(#"(?:library|executable)\s*\(\s*name\s*:\s*"([^"]+)""#, in: text)
+        let dependencyNames = regexCaptures(#"\.package\s*\("#, in: text)
+        return makeFact(
+            manifest: manifest,
+            factType: "SwiftPackageManifestDeclared",
+            ruleId: RuleIds.swiftPMManifest,
+            evidenceTier: .tier3SyntaxOrTextual,
+            filePath: item.relativePath,
+            startLine: item.startLine,
+            endLine: item.endLine,
+            targetSymbol: safeLabel(packageNames.first ?? "Package.swift"),
+            contractElement: item.relativePath,
+            properties: [
+                "coverageCeiling": "syntax-or-structural",
+                "dependencyDeclarationCount": String(dependencyNames.count),
+                "language": "swift",
+                "manifestHash": fileHash(url),
+                "packageName": safeLabel(packageNames.first),
+                "parserMode": "token-line-scan",
+                "productCount": String(productNames.count),
+                "safeProductLabels": safeLabels(productNames),
+                "safeTargetLabels": safeLabels(targetNames),
+                "targetCount": String(targetNames.count)
+            ]
+        )
+    }
+
+    private static func swiftPMResolvedFact(manifest: ScanManifest, item: InventoryItem, url: URL) -> CodeFact {
+        let metadata = PackageResolvedMetadata.read(url)
+        return makeFact(
+            manifest: manifest,
+            factType: "SwiftPackageResolvedDeclared",
+            ruleId: RuleIds.swiftPMResolved,
+            evidenceTier: .tier2Structural,
+            filePath: item.relativePath,
+            startLine: item.startLine,
+            endLine: item.endLine,
+            targetSymbol: item.relativePath,
+            contractElement: item.relativePath,
+            properties: [
+                "coverageCeiling": "syntax-or-structural",
+                "identityHashSample": metadata.identityHashSample,
+                "language": "swift",
+                "parserStatus": metadata.parserStatus,
+                "safeIdentityCount": String(metadata.safeIdentityCount),
+                "schemaVersion": metadata.schemaVersion,
+                "stateCount": String(metadata.stateCount),
+                "unsafeLocationCount": String(metadata.unsafeLocationCount)
+            ]
+        )
+    }
+
+    private static func xcodeProjectFact(manifest: ScanManifest, item: InventoryItem, url: URL) -> CodeFact {
+        let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        let productTypes = Set(regexCaptures(#"productType\s*=\s*([^;]+);"#, in: text).map(safeLabel)).sorted()
+        let configurations = Set(regexCaptures(#"name\s*=\s*(Debug|Release|[A-Za-z0-9_.-]+);"#, in: text).map(safeLabel)).sorted()
+        return makeFact(
+            manifest: manifest,
+            factType: "SwiftXcodeProjectDeclared",
+            ruleId: RuleIds.xcodeProject,
+            evidenceTier: .tier2Structural,
+            filePath: item.relativePath,
+            startLine: item.startLine,
+            endLine: item.endLine,
+            targetSymbol: item.relativePath,
+            contractElement: item.relativePath,
+            properties: [
+                "buildConfigurationLabels": configurations.prefix(10).joined(separator: ","),
+                "coverageCeiling": "syntax-or-structural",
+                "language": "swift",
+                "parseStatus": item.kind == "xcode-project-metadata" ? "narrow-line-scan" : "bundle-inventory",
+                "productTypeLabels": productTypes.prefix(10).joined(separator: ","),
+                "projectPathHash": sha256Hex(item.relativePath),
+                "runtimeReachabilityProven": "false"
+            ]
+        )
+    }
+
+    private static func xcodeWorkspaceFact(manifest: ScanManifest, item: InventoryItem, url: URL) -> CodeFact {
+        let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        let references = regexCaptures(#"location\s*=\s*"([^"]+)""#, in: text)
+        let safeReferences = references.filter { $0.hasPrefix("group:") }.map { String($0.dropFirst("group:".count)) }
+        let externalCount = references.count - safeReferences.count
+        return makeFact(
+            manifest: manifest,
+            factType: "SwiftXcodeWorkspaceDeclared",
+            ruleId: RuleIds.xcodeWorkspace,
+            evidenceTier: .tier2Structural,
+            filePath: item.relativePath,
+            startLine: item.startLine,
+            endLine: item.endLine,
+            targetSymbol: item.relativePath,
+            contractElement: item.relativePath,
+            properties: [
+                "coverageCeiling": "syntax-or-structural",
+                "externalReferenceCount": String(max(0, externalCount)),
+                "language": "swift",
+                "parseStatus": item.kind == "xcode-workspace-metadata" ? "xml-line-scan" : "bundle-inventory",
+                "referencedProjectCount": String(safeReferences.filter { $0.hasSuffix(".xcodeproj") }.count),
+                "referenceHashSample": safeReferences.map { sha256Hex($0) }.sorted().prefix(3).joined(separator: ",")
+            ]
+        )
+    }
+
+    private static func infoPlistFact(manifest: ScanManifest, item: InventoryItem, url: URL) -> CodeFact {
+        let metadata = PlistMetadata.read(url)
+        return makeFact(
+            manifest: manifest,
+            factType: "SwiftInfoPlistDeclared",
+            ruleId: RuleIds.infoPlist,
+            evidenceTier: .tier2Structural,
+            filePath: item.relativePath,
+            startLine: item.startLine,
+            endLine: item.endLine,
+            targetSymbol: item.relativePath,
+            contractElement: item.relativePath,
+            properties: [
+                "atsKeyPresent": metadata.atsKeyPresent ? "true" : "false",
+                "bundleIdentifierHash": metadata.bundleIdentifierHash,
+                "coverageCeiling": "syntax-or-structural",
+                "language": "swift",
+                "parseStatus": metadata.parseStatus,
+                "permissionKeyCount": String(metadata.permissionKeyCount),
+                "platformLabels": metadata.platformLabels,
+                "urlSchemeCount": String(metadata.urlSchemeCount)
+            ]
+        )
+    }
+
+    private static func ecosystemFact(manifest: ScanManifest, item: InventoryItem, url: URL) -> CodeFact {
+        let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        let ecosystem = item.kind == "cocoapods-metadata" ? "cocoapods" : "carthage"
+        let identities = ecosystem == "cocoapods" ? parsePodIdentities(text) : parseCartfileIdentities(text)
+        let unsafeCount = text.components(separatedBy: .whitespacesAndNewlines).filter { token in
+            token.contains("://") || token.hasPrefix("/") || token.contains("@")
+        }.count
+        return makeFact(
+            manifest: manifest,
+            factType: "SwiftEcosystemMetadataDeclared",
+            ruleId: RuleIds.ecosystemMetadata,
+            evidenceTier: .tier2Structural,
+            filePath: item.relativePath,
+            startLine: item.startLine,
+            endLine: item.endLine,
+            targetSymbol: item.relativePath,
+            contractElement: item.relativePath,
+            properties: [
+                "coverageCeiling": "syntax-or-structural",
+                "dependencyIdentityCount": String(identities.count),
+                "ecosystem": ecosystem,
+                "identityHashSample": identities.map { sha256Hex($0) }.sorted().prefix(3).joined(separator: ","),
+                "language": "swift",
+                "metadataKind": URL(fileURLWithPath: item.relativePath).lastPathComponent,
+                "parserStatus": "inventory-only",
+                "unsafeValueCount": String(unsafeCount)
+            ]
+        )
+    }
+}
+
+struct PackageResolvedMetadata {
+    let schemaVersion: String
+    let stateCount: Int
+    let safeIdentityCount: Int
+    let identityHashSample: String
+    let unsafeLocationCount: Int
+    let parserStatus: String
+
+    static func read(_ url: URL) -> PackageResolvedMetadata {
+        guard let data = try? Data(contentsOf: url),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return PackageResolvedMetadata(schemaVersion: "unknown", stateCount: 0, safeIdentityCount: 0, identityHashSample: "", unsafeLocationCount: 0, parserStatus: "malformed")
+        }
+        let version = (root["version"] as? Int).map(String.init) ?? "unknown"
+        let pins = root["pins"] as? [[String: Any]] ?? ((root["object"] as? [String: Any])?["pins"] as? [[String: Any]] ?? [])
+        var identities: [String] = []
+        var unsafeLocations = 0
+        for pin in pins {
+            let identity = (pin["identity"] as? String) ?? (pin["package"] as? String)
+            if let identity, isSafeLabel(identity) {
+                identities.append(identity)
+            }
+            let location = pin["location"] as? String ?? ((pin["repositoryURL"] as? String) ?? "")
+            if location.contains("://") || location.contains("@") || location.hasPrefix("/") {
+                unsafeLocations += 1
+            }
+        }
+        let supported = version == "1" || version == "2"
+        return PackageResolvedMetadata(
+            schemaVersion: version,
+            stateCount: pins.count,
+            safeIdentityCount: identities.count,
+            identityHashSample: identities.map { sha256Hex($0) }.sorted().prefix(3).joined(separator: ","),
+            unsafeLocationCount: unsafeLocations,
+            parserStatus: supported ? "parsed" : "unsupported-schema"
+        )
+    }
+}
+
+struct PlistMetadata {
+    let bundleIdentifierHash: String
+    let permissionKeyCount: Int
+    let urlSchemeCount: Int
+    let atsKeyPresent: Bool
+    let platformLabels: String
+    let parseStatus: String
+
+    static func read(_ url: URL) -> PlistMetadata {
+        guard let data = try? Data(contentsOf: url),
+              String(data: data.prefix(32), encoding: .utf8)?.contains("bplist") != true,
+              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil),
+              let dictionary = plist as? [String: Any] else {
+            return PlistMetadata(bundleIdentifierHash: "", permissionKeyCount: 0, urlSchemeCount: 0, atsKeyPresent: false, platformLabels: "", parseStatus: "unsupported-or-malformed")
+        }
+        let bundleIdentifier = dictionary["CFBundleIdentifier"] as? String
+        let permissions = dictionary.keys.filter { $0.hasPrefix("NS") && ($0.hasSuffix("UsageDescription") || $0.contains("Usage")) }
+        let urlTypes = dictionary["CFBundleURLTypes"] as? [[String: Any]] ?? []
+        let urlSchemeCount = urlTypes.compactMap { $0["CFBundleURLSchemes"] as? [String] }.reduce(0) { $0 + $1.count }
+        var platformValues: [String] = []
+        if let platformName = dictionary["DTPlatformName"] as? String {
+            platformValues.append(platformName)
+        }
+        if let supportedPlatforms = dictionary["CFBundleSupportedPlatforms"] as? [String] {
+            platformValues += supportedPlatforms
+        }
+        let platformLabels = platformValues.map(safeLabel).sorted().joined(separator: ",")
+        return PlistMetadata(
+            bundleIdentifierHash: bundleIdentifier.map { sha256Hex($0) } ?? "",
+            permissionKeyCount: permissions.count,
+            urlSchemeCount: urlSchemeCount,
+            atsKeyPresent: dictionary.keys.contains("NSAppTransportSecurity"),
+            platformLabels: platformLabels,
+            parseStatus: "parsed-xml"
+        )
     }
 }
 
@@ -817,11 +1217,35 @@ enum SQLiteWriter {
 }
 
 enum Toolchain {
+    static func diagnostics() -> [CoverageGap] {
+        var gaps: [CoverageGap] = []
+        if !toolAvailable(label: "swift", executable: "/usr/bin/swift", arguments: ["--version"]) {
+            gaps.append(CoverageGap(kind: "swift-toolchain-unavailable", ruleId: RuleIds.toolchainDiagnostic, message: "Swift toolchain probe unavailable or timed out; file-based inventory continued."))
+        }
+        if !toolAvailable(label: "xcodebuild", executable: "/usr/bin/xcodebuild", arguments: ["-version"]) {
+            gaps.append(CoverageGap(kind: "xcodebuild-toolchain-unavailable", ruleId: RuleIds.toolchainDiagnostic, message: "Xcode command-line probe unavailable or timed out; Xcode metadata remains checked-in inventory only."))
+        }
+        if !toolAvailable(label: "pod", executable: "/usr/bin/env", arguments: ["pod", "--version"]) {
+            gaps.append(CoverageGap(kind: "cocoapods-toolchain-unavailable", ruleId: RuleIds.toolchainDiagnostic, message: "CocoaPods probe unavailable or timed out; CocoaPods metadata remains checked-in inventory only."))
+        }
+        if !toolAvailable(label: "carthage", executable: "/usr/bin/env", arguments: ["carthage", "version"]) {
+            gaps.append(CoverageGap(kind: "carthage-toolchain-unavailable", ruleId: RuleIds.toolchainDiagnostic, message: "Carthage probe unavailable or timed out; Carthage metadata remains checked-in inventory only."))
+        }
+        return gaps
+    }
+
     static func swiftAvailable() -> Bool {
         if ProcessInfo.processInfo.environment["TRACEMAP_SWIFT_DISABLE_TOOLCHAIN"] == "1" {
             return false
         }
-        return (try? runProcess(executable: "/usr/bin/swift", arguments: ["--version"])) != nil
+        return toolAvailable(label: "swift", executable: "/usr/bin/swift", arguments: ["--version"])
+    }
+
+    private static func toolAvailable(label: String, executable: String, arguments: [String]) -> Bool {
+        if ProcessInfo.processInfo.environment["TRACEMAP_SWIFT_DISABLE_TOOLCHAIN"] == "1" {
+            return false
+        }
+        return (try? runProcess(executable: executable, arguments: arguments, timeoutSeconds: 5)) != nil
     }
 }
 
@@ -938,6 +1362,69 @@ func relativePath(from base: URL, to url: URL) -> String {
 
 func normalizeRelativePath(_ value: String) -> String {
     value.replacingOccurrences(of: "\\", with: "/").trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+}
+
+func sourceRoot(for path: String) -> String {
+    let segments = path.split(separator: "/").map(String.init)
+    guard !segments.isEmpty else { return "." }
+    if segments.count >= 2, segments[0] == "Sources" || segments[0] == "Tests" {
+        return "\(segments[0])/\(segments[1])"
+    }
+    return segments[0]
+}
+
+func rootKind(for path: String) -> String {
+    let segments = path.split(separator: "/").map(String.init)
+    if segments.first == "Sources" { return "source" }
+    if segments.first == "Tests" { return "test" }
+    if segments.contains("Generated") || path.hasSuffix(".generated.swift") { return "generated" }
+    if segments.contains("vendor") || segments.contains("Pods") || segments.contains("Carthage") { return "vendor" }
+    return "custom"
+}
+
+func regexCaptures(_ pattern: String, in text: String) -> [String] {
+    guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+    let range = NSRange(text.startIndex..<text.endIndex, in: text)
+    return regex.matches(in: text, range: range).compactMap { match in
+        let captureIndex = match.numberOfRanges > 1 ? 1 : 0
+        guard let range = Range(match.range(at: captureIndex), in: text) else { return nil }
+        return String(text[range])
+    }
+}
+
+func parsePodIdentities(_ text: String) -> [String] {
+    let podNames = regexCaptures(#"\bpod\s+['"]([^'"]+)['"]"#, in: text)
+    let lockNames = regexCaptures(#"^\s{2}-\s+([A-Za-z0-9_.+-]+)"#, in: text)
+    return Array(Set((podNames + lockNames).filter(isSafeLabel))).sorted()
+}
+
+func parseCartfileIdentities(_ text: String) -> [String] {
+    let quoted = regexCaptures(#"["']([^"']+)["']"#, in: text)
+    return Array(Set(quoted.map { value in
+        value.split(separator: "/").last.map(String.init) ?? value
+    }.filter(isSafeLabel))).sorted()
+}
+
+func isSafeLabel(_ value: String) -> Bool {
+    value.range(of: #"^[A-Za-z0-9_.+-]{1,80}$"#, options: .regularExpression) != nil
+}
+
+func safeLabel(_ value: String) -> String {
+    isSafeLabel(value) ? value : "sha256:\(sha256Hex(value, length: 24))"
+}
+
+func safeLabel(_ value: String?) -> String {
+    guard let value, !value.isEmpty else { return "" }
+    return safeLabel(value)
+}
+
+func safeLabels(_ values: [String]) -> String {
+    values.map(safeLabel).sorted().prefix(20).joined(separator: ",")
+}
+
+func fileHash(_ url: URL) -> String {
+    guard let data = try? Data(contentsOf: url) else { return "" }
+    return PortableSHA256.hash(data).map { String(format: "%02x", $0) }.joined()
 }
 
 func lineCount(_ url: URL) -> Int {
