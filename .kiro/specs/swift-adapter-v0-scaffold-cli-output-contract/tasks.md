@@ -30,7 +30,7 @@ All tasks are implementation tasks for a future PR. They are intentionally unche
 - [ ] 2.1 Implement Git metadata detection for repo name, remote URL when available, branch when available, and concrete commit SHA.
 - [ ] 2.2 Fail before writing success artifacts when commit SHA is unavailable.
 - [ ] 2.3 Implement selected file inventory for Swift and project metadata files.
-- [ ] 2.4 Implement default excludes for `.git`, TraceMap outputs, `.build`, DerivedData, Xcode build products, dependency caches, Pods build outputs, Carthage build/checkouts, and hidden tool caches.
+- [ ] 2.4 Implement default excludes for `.git`, TraceMap outputs, `.build`, DerivedData, Xcode build products, dependency caches, Pods build outputs, Carthage build/checkouts, and hidden tool caches by normalizing repository-relative paths, splitting them into path segments, and checking individual segment names or documented segment sequences.
 - [ ] 2.5 Implement include/exclude/project filters and max file byte-size skip gaps.
 - [ ] 2.6 Implement deterministic `scanId` from fixed `swift-scan/v1` discriminator, repo identity, commit SHA, normalized options, and selected inventory signature.
 - [ ] 2.7 Add tests for stable inventory ordering, stable scan IDs, skipped-file gaps, missing Git SHA failure, `scanId` invariance across different output paths and local absolute checkout paths, and repeatable flag ordering for `--project`, `--include`, and `--exclude`.
