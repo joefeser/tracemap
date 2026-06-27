@@ -275,8 +275,11 @@ Recommended behavior:
   display identity is credible.
 - Preserve extension membership through occurrence metadata and supporting
   properties; do not emit `ExtensionOf` as a traversable v0 relationship.
-- If the extension target is unresolved or ambiguous, create an extension-local
-  container symbol and emit a gap. Do not attach members to a guessed type.
+- If the extension target cannot be classified as exactly one source-local type
+  or one credible known external type, create an extension-local container
+  symbol and emit a gap. Do not attach members to a guessed type. Known external
+  targets are handled by the previous bullet; they are not automatically
+  "unresolved" merely because their implementation source is outside the scan.
 - If the extension adds protocol adoption, emit canonical `ImplementsInterface`
   only when source and target identities are credible; otherwise gap or
   candidate evidence.
@@ -396,9 +399,10 @@ were visible.
 
 Property wrappers such as `@State`, `@Published`, or similar wrapper attributes
 can synthesize backing storage and projected properties that are not visible as
-ordinary declarations in SwiftSyntax. SwiftSyntax-only v0 should emit visible
-wrapper attributes as declaration metadata or gap evidence, but it must not
-invent `_property` or `$property` symbols unless a future compiler-backed rule
+ordinary declarations in SwiftSyntax, including conventional `_property`
+backing storage and `$property` projected values. SwiftSyntax-only v0 should
+emit visible wrapper attributes as declaration metadata or gap evidence, but it
+must not invent those synthesized symbols unless a future compiler-backed rule
 proves them.
 
 ## Determinism Rules
