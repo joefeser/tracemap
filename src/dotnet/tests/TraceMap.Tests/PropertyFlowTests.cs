@@ -1424,8 +1424,8 @@ public sealed class PropertyFlowTests
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)
         {
-            if (Directory.Exists(Path.Combine(directory.FullName, ".git"))
-                || File.Exists(Path.Combine(directory.FullName, "rules", "rule-catalog.yml")))
+            if (File.Exists(Path.Combine(directory.FullName, "rules", "rule-catalog.yml"))
+                && Directory.Exists(Path.Combine(directory.FullName, ".kiro")))
             {
                 return directory.FullName;
             }

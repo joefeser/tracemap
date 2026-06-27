@@ -145,6 +145,10 @@ PR review-loop patch:
 - `HasSelectedPropertyBridge` now excludes the root fact itself from satisfying
   the selected-property bridge. A downstream node must carry the exact selected
   identity before terminal context can render.
+- Qodo requested stricter repo-root detection for rule-catalog assertions.
+  `FindRepositoryRoot()` now requires both `rules/rule-catalog.yml` and
+  `.kiro` before returning a directory, avoiding nested-repo/worktree false
+  positives.
 
 ## Review Log
 
@@ -240,12 +244,16 @@ Implementation validation:
 
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter PropertyFlowTests`:
   passed, 31 tests. Re-run after PR review patch: passed, 31 tests.
+  Re-run after Qodo root-detection patch: passed, 31 tests.
 - `dotnet test src/dotnet/TraceMap.sln`: passed, 693 tests.
-  Re-run after PR review patch: passed, 693 tests.
+  Re-run after PR review patch: passed, 693 tests. Re-run after Qodo
+  root-detection patch: passed, 693 tests.
 - `./scripts/check-private-paths.sh`: passed.
-  Re-run after PR review patch: passed.
+  Re-run after PR review patch: passed. Re-run after Qodo root-detection patch:
+  passed.
 - `git diff --check`: passed.
-  Re-run after PR review patch: passed.
+  Re-run after PR review patch: passed. Re-run after Qodo root-detection patch:
+  passed.
 
 Validation notes:
 
