@@ -76,7 +76,11 @@ context.
    weaker evidence. Generic names such as `id`, `name`, `value`, `state`,
    `status`, `type`, `result`, or `response` SHALL remain insufficient as the
    primary bridge unless narrowed by exact fact/symbol identity, type-qualified
-   model/DTO identity, or Tier2-or-stronger structural property identity.
+   model/DTO identity, or Tier2-or-stronger structural property identity. If
+   the implementation keeps or expands this generic-name set, it SHALL update
+   the live `PropertyFlowReporter` generic-name set and tests in the same
+   implementation PR so the documented downgrade behavior and code do not
+   drift.
 6. WHEN no property-specific bridge exists but potentially relevant terminal
    facts are present nearby THEN property-flow SHALL emit a catalogued
    terminal-context gap or omit context, not a lineage edge.

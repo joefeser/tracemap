@@ -27,7 +27,7 @@ Readiness: validated-spec-only
 - [x] Commit the spec branch.
 - [x] Push the branch and open a PR to `dev`.
 - [x] Wait 3 minutes, then run ACK PR loop.
-- [ ] Follow ACK-authorized actions only; do not manually tag review bots, do
+- [x] Follow ACK-authorized actions only; do not manually tag review bots, do
   not merge, do not force-push, and never squash.
 
 ## PR 1: Terminal Context Gate And One Narrow Context Family

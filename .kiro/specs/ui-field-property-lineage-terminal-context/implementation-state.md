@@ -216,6 +216,31 @@ Patch disposition:
 - Checked completed spec-only PR lifecycle tasks after commit, push, PR open,
   wait, and initial ACK.
 
+Second ACK command after commit `9f827422`:
+
+```bash
+agent-control pr-loop --repo joefeser/tracemap --pr 396 --base dev --require-codex-review --quiet --json
+```
+
+Result: still `actionable_findings` / `UNRESOLVED_REVIEW_THREADS` with
+`nextAction: patch_actionable_findings`. ACK reported two remaining review
+threads:
+
+- implementation-state should include a dedicated placeholder for PR 1 audit
+  decisions;
+- tasks/requirements should explicitly prevent generic-name drift between the
+  spec and live `PropertyFlowReporter.GenericNames`.
+
+Second patch disposition:
+
+- Kept the PR 1 audit decision placeholder in `implementation-state.md`.
+- Added a requirements-level implementation gate requiring live
+  `PropertyFlowReporter` generic-name set and test updates when the documented
+  generic-name set is kept or expanded.
+- Checked the ACK-following task because this follow-up patch is
+  ACK-authorized and no manual bot tags, force-pushes, squashes, or manual
+  merges were used.
+
 Follow ACK-authorized actions only. Do not manually tag Codex, Qodo, Gemini,
 or Sourcery. Do not force-push or squash. Auto-merge is authorized only through
 the Agent Control Kit executor after ACK returns a clean exact-head
