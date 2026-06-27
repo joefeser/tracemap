@@ -1172,12 +1172,18 @@ public static class CombinedDependencyReporter
             .ThenBy(edge => edge.EdgeId, StringComparer.Ordinal)
             .ToArray();
         var sourceById = sources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
+        var surfacesByOriginalFactId = messageSurfaces
+            .GroupBy(surface => surface.OriginalFactId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.OrderBy(surface => surface.CombinedFactId, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
         var rows = new List<MessageFlowContextRow>();
         foreach (var edge in candidateEdges)
         {
-            var related = messageSurfaces
-                .Where(surface => string.Equals(surface.DisplayName, edge.SourceSymbol, StringComparison.Ordinal)
-                    || string.Equals(surface.DisplayName, edge.TargetSymbol, StringComparison.Ordinal))
+            var related = SplitMessageEdgeOriginalFactIds(edge.OriginalFactId)
+                .SelectMany(id => surfacesByOriginalFactId.TryGetValue(id, out var matching) ? matching : [])
+                .DistinctBy(surface => surface.CombinedFactId)
+                .OrderBy(surface => surface.OperationDirection, StringComparer.Ordinal)
+                .ThenBy(surface => surface.SourceLabel, StringComparer.Ordinal)
+                .ThenBy(surface => surface.CombinedFactId, StringComparer.Ordinal)
                 .ToArray();
             rows.Add(new MessageFlowContextRow(
                 $"message-context:candidate:{Hash(edge.EdgeId, 24)}",
@@ -1244,9 +1250,9 @@ public static class CombinedDependencyReporter
                 MessageGapRuleId,
                 EvidenceTiers.Tier4Unknown,
                 warnings.Count == 0 ? "FullEvidenceAvailable" : "ReducedCoverage",
-                [],
-                [],
-                [],
+                SortedStrings(sources.Select(source => source.Label)),
+                SortedStrings(sources.Select(source => source.CommitSha)),
+                SortedStrings(sources.Select(source => source.ScannerVersion)),
                 [],
                 [],
                 [],
@@ -1268,6 +1274,20 @@ public static class CombinedDependencyReporter
                 "Message review context is hidden local static review context only.",
                 "It does not prove runtime broker delivery, topology, live subscriptions, production traffic, ordering, retries, auth, retention, dead-letter behavior, deployment reachability, payload compatibility, schema compatibility, or impact."
             ]);
+    }
+
+    private static IReadOnlyList<string> SplitMessageEdgeOriginalFactIds(string? originalFactId)
+    {
+        if (string.IsNullOrWhiteSpace(originalFactId))
+        {
+            return [];
+        }
+
+        return originalFactId
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static bool IsMessageSurface(CombinedDependencySurfaceRow surface)
