@@ -1,8 +1,8 @@
 # UI Field Property Lineage Terminal Context Coverage Implementation State
 
-Status: ready-for-implementation
-Readiness: validated-spec-only
-Spec branch: `codex/ui-field-property-lineage-terminal-context-coverage`
+Status: implemented-pending-pr-review
+Readiness: implementation-validated
+Spec branch: `codex/impl-terminal-context-coverage-20260627133632`
 Target base: `dev`
 Public claim level: hidden
 
@@ -27,14 +27,22 @@ Before validation and commit, fetched/rebased onto latest `origin/dev`:
 The spec remains intentionally scoped as a follow-up to the PR #400
 property-flow terminal-context gate.
 
+Implementation branch started from:
+
+```text
+558c9977
+```
+
+That commit is the `dev` merge for PR #404, `[codex] Add terminal context
+coverage spec`.
+
 ## Scope
 
-This is a spec-only branch. It creates one new implementation-ready Kiro spec
-for terminal-context coverage and vocabulary hardening after PR #400.
+This implementation branch adds the first coverage-harness slice for
+terminal-context vocabulary and selected-property bridge gating after PR #400.
 
-No product code, site files, generated output, rule catalog entries, scanner
-logic, reducer logic, existing specs, or public copy are changed by this
-branch.
+No site files, generated output, scanner logic, reducer logic, or public copy
+are changed by this branch.
 
 ## Source Material Reviewed
 
@@ -64,6 +72,17 @@ branch.
   selected-property identity is present.
 - Require rule-catalog and report-version decisions before broader
   terminal-context families or new emitted artifacts are added.
+- Expose `PropertyFlowReporter.TerminalContextKind(string?)` as an internal
+  mapper and add `InternalsVisibleTo("TraceMap.Tests")` so tests can fail
+  closed over `CombinedTerminalSurfaceKinds.All` without making this a public
+  product API.
+- Keep terminal context as additive path notes and safe node metadata over
+  existing path/source rules. No new rule ID, gap code, or report version bump
+  is emitted in this slice.
+- Keep `report.Version == "1.0"` because the metadata remains safely ignorable.
+- Treat broader bridge-family fixtures as deferred unless they can be
+  represented without scanner changes or overlapping evidence that would hide
+  the boundary being tested.
 
 ## PR 1 Implementation Slice
 
@@ -81,6 +100,38 @@ Recommended first implementation PR:
    private-path guard, and whitespace check.
 
 PR 1 should not add broader terminal-context families or scanner facts.
+
+## Implementation Log
+
+PR 1 coverage harness:
+
+- Added internal mapper access for tests:
+  `src/dotnet/TraceMap.Reporting/Properties/AssemblyInfo.cs`.
+- Changed `PropertyFlowReporter.TerminalContextKind(string?)` from private to
+  internal.
+- Added `Property_flow_terminal_context_mapper_covers_closed_surface_vocabulary`.
+  The test enumerates every current `CombinedTerminalSurfaceKinds.All` value,
+  asserts bucket/suppression decisions, checks `wcf-service` and `wcf-binding`
+  fall through to dependency-surface context, and fails if a new surface kind is
+  added without a test decision.
+- Extended the selected-property SQL fixture to pin `report.Version == "1.0"`,
+  assert rule-catalog coverage for `property-flow.path.v1` and
+  `combined.paths.surface-evidence.v1`, and preserve the existing raw SQL leak
+  guard.
+- Added
+  `Property_flow_generic_names_do_not_attach_terminal_context_without_exact_identity`
+  for the current property-flow generic names: `id`, `name`, `type`, `value`,
+  `state`, and `status`.
+
+Deferred bridge families:
+
+- Selected combined fact ID isolation.
+- Selected member/target symbol metadata beyond the current target-symbol path.
+- Type-qualified model property and UI/model display fixtures that require more
+  careful fixture data to avoid simultaneous symbol bridges.
+- Broader route-flow/high-fan-out generic examples such as `result` and
+  `response`; those remain compatibility decisions, not imported
+  property-flow vocabulary.
 
 ## Review Log
 
@@ -171,6 +222,23 @@ Results:
 - `./scripts/check-private-paths.sh`: passed (`Private path guard passed.`).
 - `git diff --cached --name-only`: limited to the five files in
   `.kiro/specs/ui-field-property-lineage-terminal-context-coverage/`.
+
+Implementation validation:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter PropertyFlowTests`:
+  passed, 31 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 693 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Validation notes:
+
+- Focused route-flow/path/reverse/export tests were not run separately because
+  this slice touched `PropertyFlowReport.cs`, property-flow tests, and
+  additive test access only; the full solution test run covered the existing
+  route-flow/path/reverse/export suites.
+- The known `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory warning appeared
+  during restore/build and is pre-existing for this validation lane.
 
 ## ACK / PR State
 

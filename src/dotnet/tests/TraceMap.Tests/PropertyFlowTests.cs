@@ -814,6 +814,7 @@ public sealed class PropertyFlowTests
             Path.Combine(temp.Path, "out"),
             "dto:ProfileDto.Email"));
 
+        Assert.Equal("1.0", report.Version);
         var path = Assert.Single(report.LineagePaths, path => path.Nodes.Any(node => node.SafeMetadata.GetValueOrDefault("surfaceKind") == "sql-query"));
         Assert.Equal(PropertyFlowClassifications.NeedsReviewLineage, path.Classification);
         Assert.Contains(path.Notes, note => note.StartsWith("StaticTerminalContext: selected-property path reached data-surface terminal context", StringComparison.Ordinal));
@@ -822,6 +823,84 @@ public sealed class PropertyFlowTests
         Assert.Contains(path.Edges, edge => edge.EdgeKind == "surface-evidence" && edge.RuleId == "combined.paths.surface-evidence.v1");
         Assert.Contains(path.Notes, note => note.Contains("not runtime execution, dependency execution, database execution, or impact proof", StringComparison.Ordinal));
         Assert.DoesNotContain(path.Nodes.SelectMany(node => node.SafeMetadata.Values), value => value.Contains("select ", StringComparison.OrdinalIgnoreCase));
+
+        var catalog = await File.ReadAllTextAsync(Path.Combine(FindRepositoryRoot(), "rules", "rule-catalog.yml"));
+        Assert.Contains("id: property-flow.path.v1", catalog);
+        Assert.Contains("id: combined.paths.surface-evidence.v1", catalog);
+    }
+
+    [Fact]
+    public void Property_flow_terminal_context_mapper_covers_closed_surface_vocabulary()
+    {
+        var expected = new SortedDictionary<string, string?>(StringComparer.Ordinal)
+        {
+            ["asmx-client"] = "legacy-communication terminal context",
+            ["asmx-config"] = "legacy-communication terminal context",
+            ["asmx-metadata"] = "legacy-communication terminal context",
+            ["asmx-operation"] = "legacy-communication terminal context",
+            ["asmx-service"] = "legacy-communication terminal context",
+            ["dependency-surface"] = "dependency-surface terminal context",
+            ["http-client"] = null,
+            ["http-route"] = null,
+            ["legacy-data"] = "legacy-data terminal context",
+            ["message-channel"] = "message-surface terminal context",
+            ["message-event"] = "message-surface terminal context",
+            ["message-exchange"] = "message-surface terminal context",
+            ["message-queue"] = "message-surface terminal context",
+            ["message-stream"] = "message-surface terminal context",
+            ["message-subscription"] = "message-surface terminal context",
+            ["message-topic"] = "message-surface terminal context",
+            ["message-unknown"] = "message-surface terminal context",
+            ["package-config"] = "package/config terminal context",
+            ["remoting-api"] = "legacy-communication terminal context",
+            ["remoting-channel"] = "legacy-communication terminal context",
+            ["remoting-endpoint"] = "legacy-communication terminal context",
+            ["remoting-object"] = "legacy-communication terminal context",
+            ["remoting-registration"] = "legacy-communication terminal context",
+            ["sql-persistence"] = "data-surface terminal context",
+            ["sql-query"] = "data-surface terminal context",
+            ["wcf-operation"] = "legacy-communication terminal context"
+        };
+
+        Assert.Equal(expected.Keys, CombinedTerminalSurfaceKinds.All.OrderBy(value => value, StringComparer.Ordinal));
+        foreach (var (surfaceKind, contextKind) in expected)
+        {
+            Assert.Equal(contextKind, PropertyFlowReporter.TerminalContextKind(surfaceKind));
+        }
+
+        Assert.Equal("dependency-surface terminal context", PropertyFlowReporter.TerminalContextKind("wcf-service"));
+        Assert.Equal("dependency-surface terminal context", PropertyFlowReporter.TerminalContextKind("wcf-binding"));
+        Assert.Equal("dependency-surface terminal context", PropertyFlowReporter.TerminalContextKind("custom-terminal-surface"));
+    }
+
+    [Theory]
+    [InlineData("id")]
+    [InlineData("name")]
+    [InlineData("type")]
+    [InlineData("value")]
+    [InlineData("state")]
+    [InlineData("status")]
+    public async Task Property_flow_generic_names_do_not_attach_terminal_context_without_exact_identity(string propertyName)
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone16");
+        var property = char.ToUpperInvariant(propertyName[0]) + propertyName[1..];
+        SqliteIndexWriter.Write(index, server, [
+            PropertyFact(server, "ProfileDto", property, "dto", "Models/ProfileDto.cs", 4),
+            CallFact(server, $"OtherDto.{property}", "ProfileRepository.SaveGeneric()", "Controllers/ProfileController.cs", 22),
+            QueryPatternFact(server, "ProfileRepository.SaveGeneric()", "Data/ProfileRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        var report = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, $"{propertyName}-out"),
+            $"dto:ProfileDto.{property}"));
+
+        Assert.DoesNotContain(report.LineagePaths, path => path.Notes.Any(note => note.StartsWith("StaticTerminalContext:", StringComparison.Ordinal)));
+        Assert.DoesNotContain(report.LineagePaths.SelectMany(path => path.Nodes), node => node.SafeMetadata.ContainsKey("terminalContextKind"));
     }
 
     [Fact]
@@ -1250,6 +1329,23 @@ public sealed class PropertyFlowTests
         await using var connection = new SqliteConnection($"Data Source={path};Mode=ReadOnly");
         await connection.OpenAsync();
         return await ScalarAsync(connection, "select count(*) || ':' || coalesce(group_concat(name, ','), '') from sqlite_master where name not like 'sqlite_%';");
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (Directory.Exists(Path.Combine(directory.FullName, ".git"))
+                || File.Exists(Path.Combine(directory.FullName, "rules", "rule-catalog.yml")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root.");
     }
 
     private static async Task<string> ScalarAsync(SqliteConnection connection, string sql, params (string Name, string Value)[] parameters)

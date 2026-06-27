@@ -2122,7 +2122,7 @@ public static class PropertyFlowReporter
         return TerminalContextKind(node?.SurfaceKind);
     }
 
-    private static string? TerminalContextKind(string? surfaceKind)
+    internal static string? TerminalContextKind(string? surfaceKind)
     {
         if (string.IsNullOrWhiteSpace(surfaceKind))
         {
