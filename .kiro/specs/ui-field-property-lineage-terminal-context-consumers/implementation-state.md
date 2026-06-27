@@ -176,6 +176,25 @@ Results:
 - Diff scope check: only `.kiro/specs/ui-field-property-lineage-terminal-context-consumers/`
   is changed.
 
+## PR Loop Log
+
+- PR #403 opened against `dev`.
+- Initial ACK command:
+  `agent-control pr-loop --repo joefeser/tracemap --pr 403 --base dev --require-codex-review --quiet --json`
+  returned `not_merge_ready` with stop reason `MERGE_STATE_NOT_CLEAN`.
+  Current actionable review findings at that time:
+  - Gemini comment on `design.md` requested vault-export omitted-context
+    candidate rule naming follow existing `vault-export.gap.*.v1`
+    convention.
+  - Qodo comment on `tasks.md` requested completed spec-only workflow tasks be
+    checked.
+- Patch applied: renamed candidate vault rules to
+  `vault-export.graph.property-flow-terminal-context.v1` and
+  `vault-export.gap.terminal-context-omitted.v1`; checked the completed
+  spec-only commit/push/PR/wait/ACK workflow tasks.
+- Post-patch validation: `git diff --check` passed and
+  `./scripts/check-private-paths.sh` passed.
+
 ## Follow-Up Items
 
 - Implementation PRs must update this spec's task checkboxes as tasks are

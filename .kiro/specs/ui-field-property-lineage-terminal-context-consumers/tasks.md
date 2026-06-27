@@ -27,10 +27,10 @@ Readiness: spec-drafted
 - [x] Run `git diff --check`.
 - [x] Run `./scripts/check-private-paths.sh`.
 - [x] Confirm diff is limited to this spec folder.
-- [ ] Commit the spec branch.
-- [ ] Push the branch and open a PR to `dev`.
-- [ ] Wait 3 minutes, then run ACK PR loop.
-- [ ] Follow ACK-authorized actions only; do not manually tag review bots, do
+- [x] Commit the spec branch.
+- [x] Push the branch and open a PR to `dev`.
+- [x] Wait 3 minutes, then run ACK PR loop.
+- [x] Follow ACK-authorized actions only; do not manually tag review bots, do
   not force-push, and never squash.
 
 ## PR 1: Docs Export Compatibility And Static Metadata

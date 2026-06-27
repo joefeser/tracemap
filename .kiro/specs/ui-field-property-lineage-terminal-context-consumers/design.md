@@ -240,8 +240,8 @@ Reuse first:
 Candidate new consumer rules, only if reuse is insufficient:
 
 - `docs-export.chunk.property-flow-terminal-context.v1`
-- `vault-export.property-flow-terminal-context.v1`
-- `vault-export.terminal-context-omitted.v1`
+- `vault-export.graph.property-flow-terminal-context.v1`
+- `vault-export.gap.terminal-context-omitted.v1`
 
 Candidate gap kinds, only after catalog update:
 
