@@ -111,6 +111,8 @@ Default excludes should include:
 - hidden tool caches
 - files over `--max-file-byte-size`
 
+Default-exclude matching should normalize repository-relative paths, split them into path segments, and compare individual segment names or documented segment sequences. It should not depend on slash-delimited substring checks such as looking for `/.git/`, because relative paths may not include leading or trailing separators.
+
 Project metadata that requires executing code, running package resolution, invoking build scripts, reading environment-dependent settings, or accessing the network is a dynamic boundary.
 
 ## Manifest Contract
