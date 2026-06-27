@@ -314,6 +314,11 @@ Acceptance Criteria:
 4. Local validation artifacts SHALL remain uncommitted unless explicitly
    redacted and approved for the spec or implementation.
 5. Fixtures SHALL use synthetic public-safe labels only.
+6. WHEN validating or checking repo-relative paths for specific directory
+   segments THEN the implementation SHALL split paths into segments and check
+   individual parts instead of using slash-wrapped string containment. This
+   prevents root-level directory segments from being missed by checks that
+   assume a leading slash.
 
 ### Requirement 10: Validation
 

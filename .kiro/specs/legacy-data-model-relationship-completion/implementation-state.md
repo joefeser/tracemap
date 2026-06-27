@@ -1,6 +1,6 @@
 # Legacy Data Model Relationship Completion Implementation State
 
-Status: spec-delivery-ready
+Status: pr-open-ack-patch-pass
 Spec branch: `codex/legacy-data-model-relationship-completion`
 Target base: `dev`
 Public claim level: hidden
@@ -245,6 +245,22 @@ Spec delivery validation after rebasing onto refreshed `origin/dev`:
   `.kiro/specs/legacy-data-model-relationship-completion/`.
 - `git status --short --branch`: branch ahead of `origin/dev` by one commit,
   no unstaged or untracked files.
+
+## PR And ACK State
+
+- PR opened: https://github.com/joefeser/tracemap/pull/398
+- Initial ACK command:
+  `agent-control pr-loop --repo joefeser/tracemap --pr 398 --base dev --require-codex-review --quiet --json`
+- Initial ACK result: `not_merge_ready` with stop reason
+  `MERGE_STATE_NOT_CLEAN`.
+- ACK evidence included head SHA
+  `630d8e00444a19f737ac35994a92c4f5fa264ca8`, two unresolved review threads,
+  and `humanNextAction: patch_actionable_findings`.
+- ACK-authorized patch pass:
+  - Added the relative path segment-check acceptance criterion requested by the
+    Gemini review thread.
+  - Updated `tasks.md` current state and spec authoring checklist so the PR-open
+    and initial ACK state are no longer stale.
 
 ## Oddities And Follow-Ups
 
