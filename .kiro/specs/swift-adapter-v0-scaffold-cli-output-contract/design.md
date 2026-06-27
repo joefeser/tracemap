@@ -109,7 +109,7 @@ Default excludes should include:
 - Carthage build/checkouts
 - Pods build outputs where generated/dependency content would dominate
 - hidden tool caches
-- files over `--max-file-byte-size`
+- files over `--max-file-byte-size`, after directory excludes are evaluated with path-segment matching
 
 Default-exclude matching should normalize repository-relative paths, split them into path segments, and compare individual segment names or documented segment sequences. It should not depend on slash-delimited substring checks such as looking for `/.git/`, because root-level relative paths such as `.git/config` and `.build/checkouts/...` may not include leading separators, and directory paths may or may not include trailing separators.
 
