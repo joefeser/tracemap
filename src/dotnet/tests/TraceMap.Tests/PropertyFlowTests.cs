@@ -795,6 +795,66 @@ public sealed class PropertyFlowTests
         Assert.DoesNotContain(report.Gaps, gap => gap.GapKind == "RouteFlowUnavailable");
     }
 
+    [Fact]
+    public async Task Property_flow_attaches_terminal_context_only_after_selected_property_path_reaches_surface()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone16");
+        SqliteIndexWriter.Write(index, server, [
+            PropertyFact(server, "ProfileDto", "Email", "dto", "Models/ProfileDto.cs", 4),
+            CallFact(server, "ProfileDto.Email", "ProfileRepository.SaveEmail()", "Controllers/ProfileController.cs", 22),
+            QueryPatternFact(server, "ProfileRepository.SaveEmail()", "Data/ProfileRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        var report = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "out"),
+            "dto:ProfileDto.Email"));
+
+        var path = Assert.Single(report.LineagePaths, path => path.Nodes.Any(node => node.SafeMetadata.GetValueOrDefault("surfaceKind") == "sql-query"));
+        Assert.Equal(PropertyFlowClassifications.NeedsReviewLineage, path.Classification);
+        Assert.Contains(path.Notes, note => note.StartsWith("StaticTerminalContext: selected-property path reached data-surface terminal context", StringComparison.Ordinal));
+        var terminalNode = Assert.Single(path.Nodes, node => node.SafeMetadata.GetValueOrDefault("terminalContextKind") == "data-surface terminal context");
+        Assert.Equal("SqlSurface", terminalNode.NodeKind);
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "surface-evidence" && edge.RuleId == "combined.paths.surface-evidence.v1");
+        Assert.Contains(path.Notes, note => note.Contains("not runtime execution, dependency execution, database execution, or impact proof", StringComparison.Ordinal));
+        Assert.DoesNotContain(path.Nodes.SelectMany(node => node.SafeMetadata.Values), value => value.Contains("select ", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Property_flow_does_not_attach_terminal_context_from_endpoint_proximity_alone()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone16");
+        SqliteIndexWriter.Write(index, server, [
+            PropertyFact(server, "ProfileDto", "Email", "dto", "Models/ProfileDto.cs", 4),
+            RouteFact(server, "POST", "/api/profile", "/api/profile", "Server.ProfileController.Save(ProfileDto)", "Controllers/ProfileController.cs", 8),
+            QueryPatternFact(server, "Server.ProfileController.Save(ProfileDto)", "Controllers/ProfileController.cs", 30)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        var report = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "out"),
+            "dto:ProfileDto.Email"));
+
+        Assert.DoesNotContain(report.LineagePaths, path => path.Notes.Any(note => note.StartsWith("StaticTerminalContext:", StringComparison.Ordinal)));
+        Assert.DoesNotContain(report.LineagePaths.SelectMany(path => path.Nodes), node => node.SafeMetadata.ContainsKey("terminalContextKind"));
+
+        var methodRoot = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "method-root-out"),
+            "symbol:Server.ProfileController.Save(ProfileDto)"));
+
+        Assert.DoesNotContain(methodRoot.LineagePaths, path => path.Notes.Any(note => note.StartsWith("StaticTerminalContext:", StringComparison.Ordinal)));
+        Assert.DoesNotContain(methodRoot.LineagePaths.SelectMany(path => path.Nodes), node => node.SafeMetadata.ContainsKey("terminalContextKind"));
+    }
+
     private static async Task<(string CombinedPath, string RootFactId)> CreatePropertyFlowCombinedIndexAsync(TempDirectory temp)
     {
         var clientIndex = Path.Combine(temp.Path, "client.sqlite");
@@ -1129,6 +1189,42 @@ public sealed class PropertyFlowTests
                 ["containingType"] = containingType,
                 ["modelKind"] = modelKind,
                 ["propertyName"] = propertyName
+            });
+    }
+
+    private static CodeFact CallFact(ScanManifest manifest, string caller, string callee, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.CallEdge,
+            RuleIds.CSharpSemanticCallGraph,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: caller,
+            targetSymbol: callee,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["callKind"] = "method"
+            });
+    }
+
+    private static CodeFact QueryPatternFact(ScanManifest manifest, string? sourceSymbol, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.QueryPatternDetected,
+            RuleIds.CSharpSyntaxQueryPattern,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: "orders",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["columnNames"] = "id;email",
+                ["operationName"] = "SELECT",
+                ["queryShapeHash"] = "shape-email-orders",
+                ["sqlSourceKind"] = "literal-string",
+                ["tableName"] = "orders"
             });
     }
 

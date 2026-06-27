@@ -1307,7 +1307,7 @@ public static class PropertyFlowReporter
                     var current = queue.Dequeue();
                     if (current.Edges.Count > 0 && IsTerminalNode(current.Node))
                     {
-                        paths.Add(ToPath(root, current.Nodes, current.Edges, paths.Count + 1));
+                        paths.Add(ToPath(root, fact, current.Nodes, current.Edges, paths.Count + 1));
                         continue;
                     }
 
@@ -1321,7 +1321,7 @@ public static class PropertyFlowReporter
                     {
                         if (current.Edges.Count > 0)
                         {
-                            paths.Add(ToPath(root, current.Nodes, current.Edges, paths.Count + 1));
+                            paths.Add(ToPath(root, fact, current.Nodes, current.Edges, paths.Count + 1));
                         }
                         continue;
                     }
@@ -2009,13 +2009,14 @@ public static class PropertyFlowReporter
             || node.NodeKind.Contains("sql", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static PropertyFlowPath ToPath(PropertyFlowRoot root, IReadOnlyList<CombinedPathNode> nodes, IReadOnlyList<CombinedPathEdge> edges, int ordinal)
+    private static PropertyFlowPath ToPath(PropertyFlowRoot root, PropertyFactRow rootFact, IReadOnlyList<CombinedPathNode> nodes, IReadOnlyList<CombinedPathEdge> edges, int ordinal)
     {
-        var pathNodes = nodes.Select(ToNode).ToArray();
+        var hasSelectedPropertyBridge = HasSelectedPropertyBridge(root, rootFact, nodes);
+        var pathNodes = nodes.Select(node => ToNode(node, includeTerminalContext: hasSelectedPropertyBridge)).ToArray();
         var nodeMap = nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
         var pathEdges = edges.Select(edge => ToEdge(edge, nodeMap)).ToArray();
         var classification = ClassifyPath(root, pathNodes, pathEdges);
-        var notes = PathNotes(pathEdges);
+        var notes = PathNotes(hasSelectedPropertyBridge ? pathNodes : [], pathEdges);
         return new PropertyFlowPath(
             $"path-{ordinal:D4}-{CombinedReportHelpers.Hash(root.RootId + ":" + string.Join(">", pathEdges.Select(edge => edge.EdgeId)), 12)}",
             classification,
@@ -2030,22 +2031,116 @@ public static class PropertyFlowReporter
             notes);
     }
 
-    private static IReadOnlyList<string> PathNotes(IReadOnlyList<PropertyFlowEdge>? edges)
+    private static bool HasSelectedPropertyBridge(PropertyFlowRoot root, PropertyFactRow rootFact, IReadOnlyList<CombinedPathNode> nodes)
     {
-        if (edges is null)
+        if (!IsPropertySpecificTerminalRoot(rootFact))
+        {
+            return false;
+        }
+
+        var symbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        AddIfPresent(symbols, root.SymbolId);
+        AddIfPresent(symbols, rootFact.TargetSymbol);
+        AddIfPresent(symbols, CombinedDependencyReporter.FirstValue(rootFact.Properties, "symbolId", "memberSymbolId", "targetSymbolId"));
+        if (root.SafeDisplay.TryGetValue("modelType", out var modelPropertyType)
+            && root.SafeDisplay.TryGetValue("propertyName", out var modelPropertyName))
+        {
+            AddIfPresent(symbols, $"{modelPropertyType}.{modelPropertyName}");
+        }
+
+        if (root.SafeDisplay.TryGetValue("dtoType", out var dtoType)
+            && root.SafeDisplay.TryGetValue("propertyName", out var dtoPropertyName))
+        {
+            AddIfPresent(symbols, $"{dtoType}.{dtoPropertyName}");
+        }
+
+        if (root.SafeDisplay.TryGetValue("displayName", out var displayName)
+            && root.SafeDisplay.TryGetValue("modelType", out var displayType))
+        {
+            AddIfPresent(symbols, $"{displayType}.{displayName}");
+        }
+
+        return nodes.Any(node => string.Equals(node.CombinedFactId, root.CombinedFactId, StringComparison.Ordinal)
+            || symbols.Contains(node.SymbolId ?? string.Empty)
+            || symbols.Contains(node.DisplayName));
+    }
+
+    private static bool IsPropertySpecificTerminalRoot(PropertyFactRow fact)
+    {
+        return fact.FactType is "UiTemplateBinding"
+            or "UiFormControlBinding"
+            or "RazorBinding"
+            or "RazorModelBindingTarget"
+            or "PropertyDeclared"
+            or "SerializerContractMember"
+            or "ParameterDeclared";
+    }
+
+    private static void AddIfPresent(HashSet<string> values, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            values.Add(value.Trim());
+        }
+    }
+
+    private static IReadOnlyList<string> PathNotes(IReadOnlyList<PropertyFlowNode>? nodes, IReadOnlyList<PropertyFlowEdge>? edges)
+    {
+        if (nodes is null && edges is null)
         {
             return [];
         }
 
         var notes = new List<string>();
-        if (edges.Any(IsRouteFlowSpecificEdge))
+        if (edges?.Any(IsRouteFlowSpecificEdge) == true)
         {
             notes.Add("StaticRouteFlowContext: route-flow hops are static endpoint-centered evidence and do not prove runtime execution, authorization, production traffic, dependency-injection target selection, branch feasibility, or persistence.");
+        }
+
+        if (nodes is not null && TerminalContextKind(nodes.LastOrDefault()) is { } terminalContextKind)
+        {
+            notes.Add($"StaticTerminalContext: selected-property path reached {terminalContextKind} through existing combined path evidence; this is static context, not runtime execution, dependency execution, database execution, or impact proof.");
         }
 
         return notes
             .OrderBy(note => note, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static string? TerminalContextKind(PropertyFlowNode? node)
+    {
+        if (node?.SafeMetadata is null || !node.SafeMetadata.TryGetValue("surfaceKind", out var surfaceKind))
+        {
+            return null;
+        }
+
+        return TerminalContextKind(surfaceKind);
+    }
+
+    private static string? TerminalContextKind(CombinedPathNode? node)
+    {
+        return TerminalContextKind(node?.SurfaceKind);
+    }
+
+    private static string? TerminalContextKind(string? surfaceKind)
+    {
+        if (string.IsNullOrWhiteSpace(surfaceKind))
+        {
+            return null;
+        }
+
+        return surfaceKind.Trim() switch
+        {
+            "http-client" or "http-route" => null,
+            "sql-query" or "sql-persistence" => "data-surface terminal context",
+            "legacy-data" => "legacy-data terminal context",
+            "package-config" => "package/config terminal context",
+            { } value when value.StartsWith("message-", StringComparison.Ordinal) => "message-surface terminal context",
+            { } value when value.StartsWith("asmx-", StringComparison.Ordinal) => "legacy-communication terminal context",
+            { } value when value.StartsWith("remoting-", StringComparison.Ordinal) => "legacy-communication terminal context",
+            "wcf-operation" => "legacy-communication terminal context",
+            _ => "dependency-surface terminal context"
+        };
     }
 
     private static bool IsRouteFlowSpecificEdge(PropertyFlowEdge? edge)
@@ -2244,7 +2339,9 @@ public static class PropertyFlowReporter
         };
     }
 
-    private static PropertyFlowNode ToNode(CombinedPathNode node)
+    private static PropertyFlowNode ToNode(CombinedPathNode node) => ToNode(node, includeTerminalContext: false);
+
+    private static PropertyFlowNode ToNode(CombinedPathNode node, bool includeTerminalContext)
     {
         return new PropertyFlowNode(
             node.NodeId,
@@ -2264,6 +2361,7 @@ public static class PropertyFlowReporter
             node.EndLine,
             SortedMetadata([
                 Pair("surfaceKind", node.SurfaceKind),
+                Pair("terminalContextKind", includeTerminalContext ? TerminalContextKind(node) : null),
                 Pair("surfaceName", node.SurfaceName),
                 Pair("httpMethod", node.HttpMethod),
                 Pair("normalizedPathKey", node.NormalizedPathKey),
