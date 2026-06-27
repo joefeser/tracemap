@@ -1,7 +1,7 @@
 # Static HTML Evidence Explorer Follow-Up Tasks
 
 Status: spec-ready
-Readiness: implementation-ready-after-review
+Readiness: implementation-ready
 Public claim level: hidden
 
 ## Spec-Only PR Scope
