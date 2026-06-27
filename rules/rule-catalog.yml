@@ -229,6 +229,29 @@ rules:
       - Gap facts preserve uncertainty and must not be read as evidence that no publisher, consumer, binding, route, topology, or runtime delivery exists.
       - Gap reasons include dynamic-destination, wildcard-pattern-destination, missing-destination-identity, unsupported-framework, unsafe-omitted, ambiguous-destination, and direction-filter-not-supported.
 
+  - id: message.flow.context.v1
+    name: Hidden static message review context
+    description: Composes already-derived message publisher, consumer, binding, and static destination candidate-edge evidence into hidden local review context.
+    evidenceTier: Tier4Unknown
+    emits:
+      - messageReviewContext row
+    limitations:
+      - Message review context is static composition evidence only and does not prove runtime broker delivery, topology, live subscriptions, production traffic, ordering, retries, auth, retention, dead-letter behavior, deployment reachability, payload compatibility, schema compatibility, or impact.
+      - Rows preserve supporting source rule IDs, evidence tiers, source labels, commit SHAs, and supporting IDs where available, but the context rule itself is Tier4Unknown because it does not independently prove source behavior.
+      - Static publish-consume candidate rows are destination-match review context only; they are not call edges, delivery edges, runtime subscription edges, or impact evidence.
+      - Unsafe raw destinations, payload values, connection strings, config values, raw remotes, hostnames, local absolute paths, and source snippets must be omitted, hashed, or represented by safe status labels.
+
+  - id: message.flow.gap.v1
+    name: Hidden static message review context gap
+    description: Records why hidden message review context is unavailable, partial, truncated, unsafe, ambiguous, reduced, or has no compatible message evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - messageReviewContext gap
+    limitations:
+      - Message context gaps preserve uncertainty and must not be read as evidence that no publisher, consumer, binding, broker route, topology, runtime delivery, payload compatibility, or impact exists.
+      - Composition gaps describe downstream review-context limits over already-derived evidence and remain distinct from extraction-layer message.surface.gap.v1 facts.
+      - Reduced coverage, dynamic or hashed destinations, one-sided evidence, duplicate identities, unsafe omissions, and truncation must remain review-tier or unknown instead of being promoted to delivery or impact claims.
+
   - id: review.priority.component.v1
     name: Deterministic review priority component
     description: Emits ordinal-only review-priority components over already-built report rows such as release-review findings, gaps, and checklist items while preserving source classifications and rule IDs.
