@@ -237,11 +237,12 @@ public struct GitMetadata {
         guard commit.range(of: #"^[0-9a-fA-F]{40}$"#, options: .regularExpression) != nil else {
             throw ScanError.gitMetadata("unable to resolve concrete git commit SHA")
         }
-        let branch = try? runGit(scanRoot, ["rev-parse", "--abbrev-ref", "HEAD"]).trimmed()
+        let branch = (try? runGit(scanRoot, ["rev-parse", "--abbrev-ref", "HEAD"]).trimmed())
+            .flatMap { $0 == "HEAD" ? nil : $0.nilIfEmpty }
         let remote = try? runGit(scanRoot, ["config", "--get", "remote.origin.url"]).trimmed()
         let gitRoot = URL(fileURLWithPath: root).standardizedFileURL
         let repoName = gitRoot.lastPathComponent.replacingOccurrences(of: ".git", with: "")
-        return GitMetadata(repoName: repoName, remoteUrl: remote?.nilIfEmpty, branch: branch?.nilIfEmpty, commitSha: commit.lowercased(), gitRoot: gitRoot)
+        return GitMetadata(repoName: repoName, remoteUrl: remote?.nilIfEmpty, branch: branch, commitSha: commit.lowercased(), gitRoot: gitRoot)
     }
 
     private static func runGit(_ repo: URL, _ args: [String]) throws -> String {
@@ -466,6 +467,7 @@ public struct EvidenceSpan: Codable, Equatable {
     public let filePath: String
     public let startLine: Int
     public let endLine: Int
+    public let ruleId: String
     public let snippetHash: String?
     public let extractorId: String
     public let extractorVersion: String
@@ -588,6 +590,7 @@ enum FactFactory {
                 filePath: filePath,
                 startLine: max(1, startLine),
                 endLine: max(max(1, startLine), endLine),
+                ruleId: ruleId,
                 snippetHash: nil,
                 extractorId: TraceMapSwiftVersion.extractorId,
                 extractorVersion: TraceMapSwiftVersion.extractorVersion
@@ -740,7 +743,7 @@ enum SQLiteWriter {
         for fact in facts.sorted(by: { $0.factId < $1.factId }) {
             sql += insertFactSQL(fact)
         }
-        _ = try runProcess(executable: "/usr/bin/sqlite3", arguments: [tmp.path], input: sql)
+        _ = try runProcess(executable: "/usr/bin/sqlite3", arguments: [tmp.path], input: sql, timeoutSeconds: 120)
         try? FileManager.default.removeItem(at: path)
         try FileManager.default.moveItem(at: tmp, to: path)
     }
@@ -822,7 +825,7 @@ enum Toolchain {
     }
 }
 
-func runProcess(executable: String, arguments: [String], input: String? = nil) throws -> String {
+func runProcess(executable: String, arguments: [String], input: String? = nil, timeoutSeconds: TimeInterval = 30) throws -> String {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: executable)
     process.arguments = arguments
@@ -853,7 +856,16 @@ func runProcess(executable: String, arguments: [String], input: String? = nil) t
     } else {
         try process.run()
     }
-    process.waitUntilExit()
+    let deadline = Date().addingTimeInterval(timeoutSeconds)
+    while process.isRunning && Date() < deadline {
+        Thread.sleep(forTimeInterval: 0.05)
+    }
+    if process.isRunning {
+        process.terminate()
+        process.waitUntilExit()
+        _ = outputGroup.wait(timeout: .now() + 5)
+        throw ScanError.io("process timed out after \(Int(timeoutSeconds))s: \(executable) \(arguments.joined(separator: " "))")
+    }
     _ = outputGroup.wait(timeout: .now() + 5)
     let out = String(decoding: outBuffer.data, as: UTF8.self)
     let err = String(decoding: errBuffer.data, as: UTF8.self)
