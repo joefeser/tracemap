@@ -221,3 +221,17 @@ git diff --check
   `codex/implement-swift-inventory-project-discovery` after this spec merges.
 - Update this state file with PR number, selected implementation slice, review
   outcomes, validation results, and any scope oddities during implementation.
+
+## PR Review Loop Notes
+
+- First ACK run for PR #392 returned `actionable_findings` on head
+  `72a84b71b78b4e53f1f49ffb21e7e5d1570ffd7a` with six unresolved review
+  threads and patch authorization.
+- Patched current actionable findings:
+  - Replaced remaining generic `tracemap scan` wording with
+    `tracemap-swift scan` / independent Swift scanner wording.
+  - Required `index.sqlite` to use the shared TraceMap SQLite index schema.
+  - Required generated/vendor/cache exclusion logic to use normalized
+    path-segment matching rather than substring containment.
+  - Made dependency identity persistence hash-first by default for
+    SwiftPM/CocoaPods/Carthage metadata.

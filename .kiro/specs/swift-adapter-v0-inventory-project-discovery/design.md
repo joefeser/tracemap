@@ -101,6 +101,9 @@ validation.
   - `vendor/**`
   - `Generated/**`
   - `*.generated.swift`
+- Match directory roots by normalized repo-relative path segments, not by
+  substring containment. For example, `Pods` should match a path segment named
+  `Pods`, not a source folder whose name merely contains those characters.
 - Keep lockfiles and package metadata parseable even if they live near vendor
   roots.
 - Persist skipped counts and exclusion reasons with rule-backed diagnostics.
@@ -278,10 +281,10 @@ This issue must not:
   values. Reports may show short prefixes only as display text.
 - Treat package identities, target labels, and bundle labels as allowlisted only
   after applying the safe-value policy.
-- For SwiftPM, CocoaPods, and Carthage dependency identity strings, allow names
-  only when they contain ASCII alphanumeric characters, hyphens, underscores,
-  and dots, with no path separators, hostnames, URL schemes, whitespace, or
-  secret-like tokens. Hash or omit all other values.
+- For SwiftPM, CocoaPods, and Carthage dependency identity strings, hash by
+  default because simple private names can look syntactically safe. Persist raw
+  identities only when a rule explicitly proves the value is public-safe and not
+  private, path-like, host-like, URL-like, whitespace-bearing, or secret-like.
 - Multi-value properties must use deterministic scalar fields rather than
   unbounded inline collections. For lockfile identities, prefer counts plus a
   bounded sorted hash sample over a variable-length array.
