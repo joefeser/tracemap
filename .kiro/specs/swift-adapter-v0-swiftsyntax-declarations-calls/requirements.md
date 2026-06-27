@@ -69,7 +69,7 @@ usage.
   that feeds those identities, but it must not diverge from #381's symbol ID or
   relationship contract once that slice exists.
 - Extract declarations for Swift files, imports, modules/packages where known,
-  classes, structs, enums, protocols, extensions, functions, methods,
+  classes, structs, actors, enums, protocols, extensions, functions, methods,
   initializers, and properties where deterministic from syntax.
 - Extract basic call facts and navigation edges only for syntax-visible
   invocation forms with a deterministic containing declaration and callee
@@ -157,8 +157,8 @@ be grounded in file and module/package context when that context is available.
    defines a deterministic configuration.
 9. WHEN issue #379 inventory provides a deterministic package/target identity,
    non-ambiguous module name, and no module-context gap for a file THEN
-   declaration facts for that file MAY be emitted at `Tier2Structural`;
-   otherwise SwiftSyntax declaration and call facts SHALL remain
+   declaration and call facts for that file MAY be emitted at
+   `Tier2Structural`; otherwise SwiftSyntax declaration and call facts SHALL remain
    `Tier3SyntaxOrTextual`.
 
 ### Requirement 3: Declaration Facts and Symbol Identity Inputs
@@ -169,9 +169,9 @@ can reason about them without raw source snippets.
 
 #### Acceptance Criteria
 
-1. WHEN SwiftSyntax finds a class, struct, enum, protocol, extension, function,
-   method, initializer, property, subscript, enum case, typealias, or associated
-   type declaration in supported scope THEN the adapter SHALL emit a
+1. WHEN SwiftSyntax finds a class, struct, actor, enum, protocol, extension,
+   function, method, initializer, property, subscript, enum case, typealias, or
+   associated type declaration in supported scope THEN the adapter SHALL emit a
    declaration fact with declaration kind, safe name when visible, containing
    declaration identity when available, file path, line span, rule ID, evidence
    tier, extractor ID, and extractor version.
@@ -184,10 +184,11 @@ can reason about them without raw source snippets.
    migration note so the #381 implementation can converge it.
 3. WHEN a declaration is anonymous, ambiguous, duplicated by conditional
    compilation, or lacks a safe name THEN the adapter SHALL derive a
-   file-scoped syntax ID from safe path, declaration kind, line span, and a
-   normalized syntax hash, SHALL mark the identity as syntax-scoped or
-   ambiguous, and SHALL keep that scheme compatible with the #381 collision
-   and migration rules.
+   file-scoped syntax ID from safe path, declaration kind, lexical containment
+   when available, deterministic source-order ordinal, and a normalized syntax
+   hash, SHALL mark the identity as syntax-scoped or ambiguous, and SHALL keep
+   that scheme compatible with the #381 collision and migration rules. Line
+   span remains evidence metadata, not default symbol-ID input.
 4. WHEN a function, method, or initializer has parameters THEN the adapter
    SHALL record safe parameter labels, argument labels, arity, async/throws
    markers when visible, and a signature hash; it SHALL NOT claim overload

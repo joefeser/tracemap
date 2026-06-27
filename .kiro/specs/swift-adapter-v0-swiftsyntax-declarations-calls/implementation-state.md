@@ -139,8 +139,8 @@ behavior changes.
 - Sonnet Medium+ findings patched:
   - Confirmed the live branch must be
     `codex/spec-swift-swiftsyntax-declarations-calls`.
-  - Added a concrete interim `swift-syntax:v0:<hash>` ID format for use only if
-    #381 has not landed.
+  - Added a concrete interim `swift-syntax:v0:<sha256-lower-64>` ID format for
+    use only if #381 has not landed.
   - Clarified rule-catalog validation hook ownership.
   - Bounded `Tier2Structural` promotion to deterministic #379 module evidence.
   - Defaulted construction evidence to a Swift-specific candidate instead of
@@ -159,7 +159,15 @@ behavior changes.
     `SwiftConstructionCandidate` cataloging, parser diagnostic SHA-256
     hashing, `@_exported import` design metadata, chained-call gaps, and
     spec-only path scope.
-- PR review loop: not yet run.
+- PR review loop: first run returned `not_merge_ready` with actionable
+  bot-review findings and merge state `UNKNOWN`. Patched current actionable
+  spec comments by:
+  - removing `lineSpan` from the default interim symbol-ID hash input while
+    keeping line span as evidence metadata;
+  - adding `actor` declaration coverage to requirements, design, and tasks;
+  - clarifying Tier2Structural promotion covers both declaration and call facts;
+  - standardizing Swift persisted/spec hashes on full 64-character lowercase
+    SHA-256.
 
 ## Follow-Up Items
 
