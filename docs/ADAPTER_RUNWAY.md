@@ -1,26 +1,32 @@
 # Adapter Runway
 
-TraceMap's next adapter work should finish the already-scoped legacy .NET lane
-before starting a new ecosystem. The goal is not perfect framework analysis; the
-goal is evidence-backed change-risk discovery with clear confidence, gaps, and
-limitations.
+TraceMap's already-scoped legacy .NET lane has reached v0. The goal was not
+perfect framework analysis; the goal was evidence-backed change-risk discovery
+with clear confidence, gaps, and limitations.
 
-## Legacy .NET V0 Finish Line
+## Legacy .NET V0 Completion
 
-Legacy .NET v0 is complete when the already-specified cleanup work is closed or
-explicitly deferred in the relevant spec state files:
+Legacy .NET v0 is complete as of the route-flow Task 10 validation and follow-up
+hardening merged through `dev`. The lane now has deterministic static evidence
+for old .NET project/toolchain diagnostics, ASP.NET routes, WebForms and
+WinForms events, WCF/SVC, ASMX/SOAP, .NET Remoting, legacy data metadata,
+legacy ORM descriptor evidence, route-flow, property-flow, evidence packs, and
+public-safe reporting/export paths.
 
-- finish the route-flow service/data composition safety gate, then explicitly
-  close or defer the remaining UI field lineage, legacy data model, and static
-  dispatch candidate slices that are already specified;
-- maintain a known unsupported and approximation register for old framework
+The v0 completion boundary is:
+
+- route-flow service/data composition safety gates are complete;
+- representative public-safe legacy sample validation is recorded through the
+  legacy sample evidence pack, smoke catalog, route-flow, data metadata, and
+  property-flow slices;
+- UI field lineage, legacy data model depth, static dispatch approximation, and
+  export polish remain valid follow-ups, not blockers for Swift v0;
+- the known unsupported and approximation register remains active for old framework
   patterns that TraceMap recognizes but cannot safely resolve;
-- ensure reports and exports explain confidence, evidence tier, rule ID, source
+- reports and exports explain confidence, evidence tier, rule ID, source
   coverage, and limitations for approximate evidence;
-- run representative public-safe legacy sample scans and record the validation
-  evidence without storing private local paths or raw source snippets;
-- mark the legacy .NET lane as v0 complete only after the lane can explain what
-  it found, what it could not prove, and what requires review.
+- future legacy .NET work should be selected as focused depth or polish slices,
+  not treated as unfinished v0 foundation.
 
 Known approximation boundaries should remain explicit. TraceMap may emit
 evidence for WCF/SVC, ASMX, remoting, WebForms/WinForms events, legacy route
@@ -29,28 +35,13 @@ claim runtime behavior, branch feasibility, dynamic binding, serializer runtime
 contracts, dependency-injection resolution, reflection targets, or complete UI
 navigation unless the evidence proves that specific claim.
 
-### Current Legacy .NET Gate
+### Current Legacy .NET State
 
-As of the route-flow Task 9 merge recorded in
-`.kiro/specs/route-flow-service-data-composition-final/implementation-state.md`,
-`dev` has completed the route-flow service/data composition implementation
-through deterministic JSON/Markdown compatibility. The remaining route-flow
-gate is the public-safe validation slice in
-`.kiro/specs/route-flow-service-data-composition-final/` Task 10. Do not mark
-legacy .NET v0 complete until that Task 10 slice is merged or explicitly
-deferred with evidence in that spec's `tasks.md` and `implementation-state.md`.
-
-After Task 10, the next legacy .NET completion order is:
-
-1. Reconcile route-flow spec state and representative validation evidence.
-2. Run public-safe legacy sample scans and record what each sample proves, what
-   is partial, and what remains unsupported.
-3. Decide whether UI field/property lineage and static dispatch approximation
-   are required for legacy .NET v0 or should be deferred behind Swift v0. Record
-   the decision in each affected spec's `tasks.md` and
-   `implementation-state.md`.
-4. Update the unsupported/approximation register before any `dev` to `main`
-   promotion that claims legacy .NET v0.
+The route-flow final spec and follow-up hardening now record the validation
+evidence that previously blocked v0 completion. Remaining unchecked items in
+legacy specs are continuation work unless their implementation-state file says
+otherwise. Use those follow-ups for targeted depth after Swift v0 planning or
+when a specific customer/sample needs the extra precision.
 
 ## Swift V0 Candidate Scope
 
