@@ -52,6 +52,7 @@ struct SwiftCallEvidence {
     let startLine: Int
     let endLine: Int
     let syntaxHash: String
+    let identityDiscriminator: String
     let unsupportedReason: String?
     let conditionalCompilation: Bool
 }
@@ -65,6 +66,7 @@ struct SwiftConstructionEvidence {
     let startLine: Int
     let endLine: Int
     let syntaxHash: String
+    let identityDiscriminator: String
     let conditionalCompilation: Bool
 }
 
@@ -249,8 +251,7 @@ final class EvidenceVisitor: SyntaxVisitor {
     override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
         let labels = node.signature.parameterClause.parameters.map { parameter in
             let first = parameter.firstName.text
-            let second = parameter.secondName?.text
-            return safeLabel(second ?? first)
+            return safeLabel(first)
         }
         enterDeclaration(
             kind: "function",
@@ -287,6 +288,9 @@ final class EvidenceVisitor: SyntaxVisitor {
     }
 
     override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+        if declarationStack.contains(where: { ["function", "initializer", "subscript"].contains($0.kind) }) {
+            return .visitChildren
+        }
         for binding in node.bindings {
             guard let pattern = binding.pattern.as(IdentifierPatternSyntax.self) else { continue }
             addDeclaration(kind: "property", name: pattern.identifier.text, node: Syntax(binding), parameterLabels: [], genericParameters: [], isAsync: false, isThrows: false)
@@ -335,6 +339,7 @@ final class EvidenceVisitor: SyntaxVisitor {
             startLine: span.start,
             endLine: span.end,
             syntaxHash: syntaxHash(node),
+            identityDiscriminator: syntaxIdentityDiscriminator(node),
             unsupportedReason: unsupported,
             conditionalCompilation: conditionalDepth > 0
         ))
@@ -348,6 +353,7 @@ final class EvidenceVisitor: SyntaxVisitor {
                 startLine: span.start,
                 endLine: span.end,
                 syntaxHash: syntaxHash(node),
+                identityDiscriminator: syntaxIdentityDiscriminator(node),
                 conditionalCompilation: conditionalDepth > 0
             ))
         }
@@ -420,6 +426,10 @@ final class EvidenceVisitor: SyntaxVisitor {
     private func syntaxHash(_ node: some SyntaxProtocol) -> String {
         sha256Hex(normalizeSwiftSyntaxForHash(node.trimmedDescription))
     }
+
+    private func syntaxIdentityDiscriminator(_ node: some SyntaxProtocol) -> String {
+        String(node.positionAfterSkippingLeadingTrivia.utf8Offset)
+    }
 }
 
 private struct CalleeDescription {
@@ -438,7 +448,7 @@ private func calleeDescription(_ expression: ExprSyntax) -> CalleeDescription {
         let base = member.base?.trimmedDescription ?? ""
         let name = safeMemberPath(base: base, member: member.declName.baseName.text)
         let isInit = member.declName.baseName.text == "init"
-        return CalleeDescription(name: name, kind: "member-access", callKind: isInit ? "initializer-call" : "member-call", isConstructionCandidate: isInit || startsLikeTypeName(base))
+        return CalleeDescription(name: name, kind: "member-access", callKind: isInit ? "initializer-call" : "member-call", isConstructionCandidate: isInit)
     }
     if let optional = expression.as(OptionalChainingExprSyntax.self) {
         let inner = calleeDescription(optional.expression)
