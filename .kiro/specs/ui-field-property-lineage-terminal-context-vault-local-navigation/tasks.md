@@ -25,8 +25,8 @@ Readiness: validated-spec-only
 - [x] Confirm diff is limited to this spec folder.
 - [x] Commit the spec branch.
 - [x] Push the branch and open a PR to `dev`.
-- [ ] Wait 3 minutes, then run ACK PR loop.
-- [ ] Follow ACK-authorized actions only; do not manually tag review bots, do
+- [x] Wait 3 minutes, then run ACK PR loop.
+- [x] Follow ACK-authorized actions only; do not manually tag review bots, do
   not force-push, do not squash, and do not target `main`.
 
 ## PR 1: Audit And Decision Gate

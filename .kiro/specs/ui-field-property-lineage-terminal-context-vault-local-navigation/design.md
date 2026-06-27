@@ -25,8 +25,10 @@ This spec was drafted from an isolated worktree created from latest
 `origin/dev`:
 
 ```text
-c37eff84 Merge pull request #405 from joefeser/codex/implement-swift-inventory-project-discovery
+c37eff84ebc12cc2b4d47bae89fb8af29b35b8bb
 ```
+
+That commit is merge commit `#405`, `implement-swift-inventory-project-discovery`.
 
 Relevant live-code observations:
 
@@ -123,36 +125,47 @@ Recommended hidden graph additions:
 | Property-flow terminal-context edge | `property-flow-terminal-context` | Connects the property-flow path or terminal source node to the terminal-context node. |
 | Terminal-context tag | `tracemap/property-flow/terminal-context` | Local filtering/navigation cue. |
 | Claim tag | `tracemap/claim/hidden` | Reinforces hidden-only claim level. |
-| Omission gap | `TerminalContextClaimLevelOmitted` or successor | Explains demo/public omission or safety omission. |
+| Omission gap | `TerminalContextClaimLevelOmitted` classification or successor | Explains demo/public omission or safety omission. |
 
 If the existing graph model cannot represent a property-flow path node cleanly,
 the first implementation may link the terminal-context node to the terminal
 source/surface node and include `propertyFlowPathId` in safe metadata. It must
 still preserve path-scoped limitations and supporting IDs.
 
-Recommended terminal-context node fields:
+Recommended terminal-context node fields, aligned with the current
+`VaultGraphNode` record:
 
 ```json
 {
+  "id": "node:terminal-context:<hash>",
   "kind": "terminal-context",
   "claimLevel": "hidden",
   "displayName": "data-surface terminal context",
+  "sourceId": "source:...",
+  "sourceScope": "property-flow-path:path:...",
   "surfaceKind": "terminal-context",
-  "ruleId": "property-flow.path.v1",
+  "commitSha": "012345...",
+  "coverage": ["partial"],
+  "ruleIds": ["property-flow.path.v1"],
   "evidenceTiers": ["Tier2Structural"],
   "supportingFactIds": [],
   "supportingEdgeIds": [],
-  "safeMetadata": {
-    "propertyFlowPathId": "path:...",
-    "terminalNodeId": "node:...",
-    "terminalContextKind": "data-surface terminal context"
-  }
+  "limitations": [
+    "Static terminal context is path-scoped local navigation, not runtime execution or impact proof."
+  ],
+  "filePath": "terminal-context/<slug>.md",
+  "evidenceLocations": [],
+  "surfaceSubtype": "data-surface-terminal-context"
 }
 ```
 
 The exact C# type shape should follow existing `VaultGraphNode` and
-`VaultGraphEdge` records. The important contract is evidence preservation, not
-field renaming.
+`VaultGraphEdge` records. Do not add an ad hoc `safeMetadata` property to
+`VaultGraphNode` unless a versioned graph schema change is explicitly designed.
+Path ID, terminal node ID, and terminal context kind should be represented via
+existing safe fields such as `SourceScope`, `DisplayName`, `SurfaceSubtype`,
+supporting IDs, and evidence locations, or through a catalogued schema
+extension.
 
 `property-flow.path.v1` in the example is the preserved source evidence rule
 for the path. If implementation emits a new terminal-context graph node or
@@ -243,7 +256,7 @@ Candidate new rules only if reuse is insufficient:
 - `vault-export.graph.property-flow-terminal-context.v1`
 - `vault-export.gap.terminal-context-omitted.v1`
 
-Candidate gap kinds:
+Candidate `VaultGraphGap.Classification` values:
 
 - `TerminalContextClaimLevelOmitted`
 - `TerminalContextMetadataUnsafe`
@@ -251,9 +264,9 @@ Candidate gap kinds:
 - `TerminalContextStructuredNoteMismatch`
 - `PropertyFlowTerminalContextSchemaUnsupported`
 
-Gap-kind mapping:
+Gap-classification mapping:
 
-| Condition | Preferred gap kind | Required rule backing |
+| Condition | Preferred gap classification | Required rule backing |
 | --- | --- | --- |
 | Hidden evidence is present but `demo-safe` or `public-safe` filtering removes terminal-context navigation. | `TerminalContextClaimLevelOmitted` | Reuse existing hidden-evidence omission rule if it fits; otherwise add `vault-export.gap.terminal-context-omitted.v1`. |
 | Structured `terminalContextKind` is present but is unrecognized by the current vault vocabulary. | `PropertyFlowTerminalContextSchemaUnsupported` | Reuse `property-flow.schema.v1` plus a vault schema gap if available; otherwise add `vault-export.gap.terminal-context-omitted.v1` with `Tier4Unknown`. |
