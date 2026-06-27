@@ -1,7 +1,7 @@
 # Legacy Data Model Relationship Completion Tasks
 
-Current state: spec-only branch in progress. No product code is implemented in
-this PR.
+Current state: spec-only PR open; ACK review-loop patch pass in progress. No
+product code is implemented in this PR.
 
 ## Spec Authoring Tasks
 
@@ -25,8 +25,10 @@ this PR.
 - [x] 0.9 Run spec delivery validation:
       `git diff --check`, `./scripts/check-private-paths.sh`, and a diff-scope
       check confirming changes are limited to this assigned spec folder.
-- [ ] 0.10 Commit, push, open PR to `dev`, run ACK, and update this file plus
-      `implementation-state.md` with final readiness.
+- [x] 0.10 Commit, push, open PR to `dev`, run initial ACK, and update this
+      file plus `implementation-state.md` with the current ACK state.
+- [ ] 0.11 Follow ACK to terminal merge-ready, merged, or handoff state, and
+      update this file plus `implementation-state.md` with final readiness.
 
 ## Implementation Tasks
 
