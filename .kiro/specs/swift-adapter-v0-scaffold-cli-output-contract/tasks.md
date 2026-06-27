@@ -69,9 +69,9 @@ All tasks are implementation tasks for a future PR. They are intentionally unche
 ### Phase 6: Downstream Compatibility Smoke
 
 - [ ] 6.1 Verify existing `.NET` readers can open the Swift scaffold `index.sqlite`.
-- [ ] 6.2 Run `tracemap report` against minimal and reduced Swift scaffold outputs and verify report artifacts are produced.
-- [ ] 6.3 Run `tracemap export --format json` against minimal and reduced Swift scaffold outputs and verify export artifacts are produced without raw snippets or unsafe values.
-- [ ] 6.4 Run `tracemap combine` against minimal and reduced Swift scaffold outputs and verify source metadata, commit SHA, analysis level, build status, rule IDs, evidence tiers, source labels, and gaps survive.
+- [ ] 6.2 Run `tracemap export --format json` against minimal and reduced single Swift scaffold indexes and verify export artifacts are produced without raw snippets or unsafe values.
+- [ ] 6.3 Run `tracemap combine` against minimal and reduced Swift scaffold indexes and verify source metadata, commit SHA, analysis level, build status, rule IDs, evidence tiers, source labels, and gaps survive.
+- [ ] 6.4 Run `tracemap report` against the combined SQLite output, not the single-language scan index, and verify report artifacts are produced.
 - [ ] 6.5 Decide whether downstream reader compatibility lives in Swift adapter tests, a .NET smoke script, or an integration test; record the decision in `implementation-state.md`.
 - [ ] 6.6 Add tests or smoke scripts for reader compatibility without requiring full Swift analyzer depth.
 - [ ] 6.7 Update docs only if implementation changes shared adapter contract, acceptance, validation, or rule catalog behavior.
@@ -84,9 +84,9 @@ All tasks are implementation tasks for a future PR. They are intentionally unche
 - [ ] 7.4 Run the Swift adapter test command documented in `src/swift/README.md`.
 - [ ] 7.5 Run a minimal Swift fixture scan.
 - [ ] 7.6 Run a reduced-coverage Swift fixture scan.
-- [ ] 7.7 Run `dotnet run --project src/dotnet/TraceMap.Cli -- report --index <swift-scan-output>/index.sqlite --out <tmp>/swift-report`.
-- [ ] 7.8 Run `dotnet run --project src/dotnet/TraceMap.Cli -- export --index <swift-scan-output>/index.sqlite --out <tmp>/swift-export --format json`.
-- [ ] 7.9 Run `dotnet run --project src/dotnet/TraceMap.Cli -- combine --index <swift-scan-output>/index.sqlite --label swift --out <tmp>/swift-combined.sqlite`.
+- [ ] 7.7 Run `dotnet run --project src/dotnet/TraceMap.Cli -- export --index <swift-scan-output>/index.sqlite --out <tmp>/swift-export --format json`.
+- [ ] 7.8 Run `dotnet run --project src/dotnet/TraceMap.Cli -- combine --index <swift-scan-output>/index.sqlite --label swift --out <tmp>/swift-combined.sqlite`.
+- [ ] 7.9 Run `dotnet run --project src/dotnet/TraceMap.Cli -- report --index <tmp>/swift-combined.sqlite --out <tmp>/swift-report`.
 - [ ] 7.10 Run `./scripts/check-private-paths.sh`.
 - [ ] 7.11 Run `git diff --check`.
 - [ ] 7.12 Run or explicitly defer relevant `docs/VALIDATION.md` pinned smoke checks if shared reader/report/reducer behavior changed.

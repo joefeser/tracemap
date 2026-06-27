@@ -77,9 +77,9 @@ dotnet test src/dotnet/TraceMap.sln
 <swift-adapter-test-command>
 <swift-scan-minimal-fixture-command>
 <swift-scan-reduced-fixture-command>
-dotnet run --project src/dotnet/TraceMap.Cli -- report --index <swift-scan-output>/index.sqlite --out <tmp>/swift-report
 dotnet run --project src/dotnet/TraceMap.Cli -- export --index <swift-scan-output>/index.sqlite --out <tmp>/swift-export --format json
 dotnet run --project src/dotnet/TraceMap.Cli -- combine --index <swift-scan-output>/index.sqlite --label swift --out <tmp>/swift-combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- report --index <tmp>/swift-combined.sqlite --out <tmp>/swift-report
 ./scripts/check-private-paths.sh
 git diff --check
 ```
