@@ -2698,6 +2698,11 @@ public static class PropertyFlowReporter
                 builder.AppendLine($"### {Cell(path.PathId)}");
                 builder.AppendLine();
                 builder.AppendLine($"Classification: `{Cell(path.Classification)}`; confidence: `{Cell(path.Confidence)}`.");
+                if (TerminalContextCue(path) is { } terminalContextCue)
+                {
+                    builder.AppendLine(terminalContextCue);
+                }
+
                 if (path.Notes.Count > 0)
                 {
                     builder.AppendLine();
@@ -2777,6 +2782,20 @@ public static class PropertyFlowReporter
         }
 
         return builder.ToString();
+    }
+
+    private static string? TerminalContextCue(PropertyFlowPath path)
+    {
+        var terminalNode = path.Nodes
+            .Where(node => node.SafeMetadata.TryGetValue("terminalContextKind", out var value) && !string.IsNullOrWhiteSpace(value))
+            .OrderBy(node => node.NodeId, StringComparer.Ordinal)
+            .FirstOrDefault();
+        if (terminalNode is null || !terminalNode.SafeMetadata.TryGetValue("terminalContextKind", out var terminalContextKind))
+        {
+            return null;
+        }
+
+        return $"Static terminal context: `{Cell(terminalContextKind)}` from path `{Cell(path.PathId)}` node `{Cell(terminalNode.NodeId)}`; static path-scoped evidence only.";
     }
 
     private static string Display(IReadOnlyDictionary<string, string> metadata)
