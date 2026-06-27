@@ -2031,7 +2031,7 @@ public static class PropertyFlowReporter
             notes);
     }
 
-    private static bool HasSelectedPropertyBridge(PropertyFlowRoot root, PropertyFactRow rootFact, IReadOnlyList<CombinedPathNode> nodes)
+    internal static bool HasSelectedPropertyBridge(PropertyFlowRoot root, PropertyFactRow rootFact, IReadOnlyList<CombinedPathNode> nodes)
     {
         if (!IsPropertySpecificTerminalRoot(rootFact))
         {
@@ -2060,9 +2060,9 @@ public static class PropertyFlowReporter
             AddIfPresent(symbols, $"{displayType}.{displayName}");
         }
 
-        return nodes.Any(node => string.Equals(node.CombinedFactId, root.CombinedFactId, StringComparison.Ordinal)
-            || symbols.Contains(node.SymbolId ?? string.Empty)
-            || symbols.Contains(node.DisplayName));
+        return nodes.Any(node => !string.Equals(node.CombinedFactId, root.CombinedFactId, StringComparison.Ordinal)
+            && (symbols.Contains(node.SymbolId ?? string.Empty)
+            || symbols.Contains(node.DisplayName)));
     }
 
     private static bool IsPropertySpecificTerminalRoot(PropertyFactRow fact)

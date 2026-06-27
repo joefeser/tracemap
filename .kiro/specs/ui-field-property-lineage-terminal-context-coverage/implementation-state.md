@@ -133,6 +133,19 @@ Deferred bridge families:
   `response`; those remain compatibility decisions, not imported
   property-flow vocabulary.
 
+PR review-loop patch:
+
+- Codex requested a non-vacuous generic-name path fixture. The generic-name
+  guard now tests `HasSelectedPropertyBridge` directly with a constructed path
+  containing a root node, generic short-name call node, and SQL terminal node.
+  It asserts the generic short-name path is rejected while an exact qualified
+  downstream node is accepted.
+- Gemini requested removal of fragile string slicing in the generic-name test.
+  The test now supplies lowercase and display-cased names explicitly.
+- `HasSelectedPropertyBridge` now excludes the root fact itself from satisfying
+  the selected-property bridge. A downstream node must carry the exact selected
+  identity before terminal context can render.
+
 ## Review Log
 
 Planned commands:
@@ -226,10 +239,13 @@ Results:
 Implementation validation:
 
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter PropertyFlowTests`:
-  passed, 31 tests.
+  passed, 31 tests. Re-run after PR review patch: passed, 31 tests.
 - `dotnet test src/dotnet/TraceMap.sln`: passed, 693 tests.
+  Re-run after PR review patch: passed, 693 tests.
 - `./scripts/check-private-paths.sh`: passed.
+  Re-run after PR review patch: passed.
 - `git diff --check`: passed.
+  Re-run after PR review patch: passed.
 
 Validation notes:
 

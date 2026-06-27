@@ -874,33 +874,30 @@ public sealed class PropertyFlowTests
     }
 
     [Theory]
-    [InlineData("id")]
-    [InlineData("name")]
-    [InlineData("type")]
-    [InlineData("value")]
-    [InlineData("state")]
-    [InlineData("status")]
-    public async Task Property_flow_generic_names_do_not_attach_terminal_context_without_exact_identity(string propertyName)
+    [InlineData("id", "Id")]
+    [InlineData("name", "Name")]
+    [InlineData("type", "Type")]
+    [InlineData("value", "Value")]
+    [InlineData("state", "State")]
+    [InlineData("status", "Status")]
+    public void Property_flow_generic_names_do_not_attach_terminal_context_without_exact_identity(string propertyName, string property)
     {
-        using var temp = new TempDirectory();
-        var index = Path.Combine(temp.Path, "server.sqlite");
-        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
-        var server = Manifest("server", "tracemap-milestone16");
-        var property = char.ToUpperInvariant(propertyName[0]) + propertyName[1..];
-        SqliteIndexWriter.Write(index, server, [
-            PropertyFact(server, "ProfileDto", property, "dto", "Models/ProfileDto.cs", 4),
-            CallFact(server, $"OtherDto.{property}", "ProfileRepository.SaveGeneric()", "Controllers/ProfileController.cs", 22),
-            QueryPatternFact(server, "ProfileRepository.SaveGeneric()", "Data/ProfileRepository.cs", 31)
-        ]);
-        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+        Assert.Equal(propertyName, property.ToLowerInvariant());
+        var root = PropertyFlowRootFor("root-fact", property);
+        var rootFact = PropertyFactRowFor("root-fact", "ProfileDto", property);
+        var genericPath = new[]
+        {
+            CombinedPathNodeFor("root", "ModelProperty", $"ProfileDto.{property}", "root-fact", null),
+            CombinedPathNodeFor("call", "Call", property, "call-fact", property),
+            CombinedPathNodeFor("sql", "SqlSurface", "orders", "sql-fact", "ProfileRepository.SaveGeneric()", "sql-query")
+        };
 
-        var report = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
-            combinedPath,
-            Path.Combine(temp.Path, $"{propertyName}-out"),
-            $"dto:ProfileDto.{property}"));
+        Assert.False(PropertyFlowReporter.HasSelectedPropertyBridge(root, rootFact, genericPath));
 
-        Assert.DoesNotContain(report.LineagePaths, path => path.Notes.Any(note => note.StartsWith("StaticTerminalContext:", StringComparison.Ordinal)));
-        Assert.DoesNotContain(report.LineagePaths.SelectMany(path => path.Nodes), node => node.SafeMetadata.ContainsKey("terminalContextKind"));
+        var exactPath = genericPath
+            .Select(node => node.NodeId == "call" ? node with { DisplayName = $"ProfileDto.{property}", SymbolId = $"ProfileDto.{property}" } : node)
+            .ToArray();
+        Assert.True(PropertyFlowReporter.HasSelectedPropertyBridge(root, rootFact, exactPath));
     }
 
     [Fact]
@@ -1322,6 +1319,97 @@ public sealed class PropertyFlowTests
                 ["kind"] = "class",
                 ["name"] = typeName
             });
+    }
+
+    private static PropertyFlowRoot PropertyFlowRootFor(string combinedFactId, string propertyName)
+    {
+        return new PropertyFlowRoot(
+            "root",
+            "ModelProperty",
+            PropertyFlowClassifications.NeedsReviewLineage,
+            "server",
+            "source-server",
+            null,
+            "scan-server",
+            "abc123",
+            combinedFactId,
+            null,
+            RuleIds.CSharpSyntaxDeclarations,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            "Models/ProfileDto.cs",
+            4,
+            4,
+            "CSharpSyntaxExtractor",
+            ScannerVersions.CSharpSyntaxExtractor,
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["modelKind"] = "dto",
+                ["propertyName"] = propertyName
+            },
+            [combinedFactId],
+            []);
+    }
+
+    private static PropertyFactRow PropertyFactRowFor(string combinedFactId, string containingType, string propertyName)
+    {
+        return new PropertyFactRow(
+            combinedFactId,
+            "source-server",
+            "server",
+            "scan-server",
+            "abc123",
+            FactTypes.PropertyDeclared,
+            RuleIds.CSharpSyntaxDeclarations,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            containingType,
+            $"{containingType}.{propertyName}",
+            propertyName,
+            "Models/ProfileDto.cs",
+            4,
+            4,
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["modelKind"] = "dto",
+                ["propertyName"] = propertyName
+            });
+    }
+
+    private static CombinedPathNode CombinedPathNodeFor(
+        string nodeId,
+        string nodeKind,
+        string displayName,
+        string combinedFactId,
+        string? symbolId,
+        string? surfaceKind = null)
+    {
+        return new CombinedPathNode(
+            nodeId,
+            nodeKind,
+            displayName,
+            "source-server",
+            "server",
+            "scan-server",
+            "abc123",
+            symbolId,
+            combinedFactId,
+            RuleIds.CSharpSyntaxDeclarations,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            "Models/ProfileDto.cs",
+            4,
+            4,
+            surfaceKind,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
     }
 
     private static async Task<string> FingerprintAsync(string path)
