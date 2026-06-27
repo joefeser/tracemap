@@ -1,7 +1,7 @@
 # UI Field Property Lineage Terminal Context Consumers Tasks
 
-Status: ready-for-implementation
-Readiness: validated-spec-only
+Status: implemented-pending-pr-review
+Readiness: docs-export-validation-complete
 
 ## Spec-Only PR Scope
 
@@ -35,60 +35,67 @@ Readiness: validated-spec-only
 
 ## PR 1: Docs Export Compatibility And Static Metadata
 
-- [ ] 1. Audit live property-flow report and docs-export schemas.
+- [x] 1. Audit live property-flow report and docs-export schemas.
   Requirements: 1, 2, 3, 5.
-  - [ ] Confirm `terminalContextKind` is present only in path-scoped node safe
+  - [x] Confirm `terminalContextKind` is present only in path-scoped node safe
     metadata after the PR #400 selected-property bridge.
-  - [ ] Confirm `StaticTerminalContext` path notes are additive display text.
-  - [ ] Confirm current docs-export report-family handling for property-flow
+  - [x] Confirm `StaticTerminalContext` path notes are additive display text.
+  - [x] Confirm current docs-export report-family handling for property-flow
     reports and safe metadata.
-  - [ ] Decide whether PR 1 safely ignores terminal context or renders it as
+  - [x] Decide whether PR 1 safely ignores terminal context or renders it as
     retrieval metadata.
-  - [ ] Decide whether terminal context augments the existing
+  - [x] Decide whether terminal context augments the existing
     `docs-export.chunk.property-flow.v1` family or creates a new catalogued
     chunk family before any `EvidenceDocsExport` product edits.
-  - [ ] Record the decision and compatibility implications in this spec's
+  - [x] Record the decision and compatibility implications in this spec's
     `implementation-state.md` before product edits. The recorded render/ignore
     decision makes the matching test set mandatory for this PR.
 
-- [ ] 2. Implement docs-export consumer behavior.
+- [x] 2. Implement docs-export consumer behavior.
   Requirements: 1, 2, 3, 6, 7.
-  - [ ] Preserve rule IDs, evidence tiers, supporting IDs, commit SHA,
+  - [x] Preserve rule IDs, evidence tiers, supporting IDs, commit SHA,
     extractor version, source identity, file spans, coverage, and limitations
     where input provides them.
-  - [ ] Treat terminal context as static retrieval metadata, not a new finding.
-  - [ ] Prefer structured `terminalContextKind` over note-text parsing.
-  - [ ] Sanitize, hash, category-label, omit, or gap unsafe terminal metadata
+  - [x] Treat terminal context as static retrieval metadata, not a new finding.
+  - [x] Prefer structured `terminalContextKind` over note-text parsing.
+  - [x] Sanitize, hash, category-label, omit, or gap unsafe terminal metadata
     and note text under existing safety rules.
-  - [ ] Add or update rule-catalog/docs entries before emitting any new chunk
-    family, gap code, limitation, or redaction category.
+  - [x] Add or update rule-catalog/docs entries before emitting any new chunk
+    family, gap code, limitation, or redaction category. No new chunk family,
+    gap code, limitation, or redaction category was emitted; docs were updated
+    for the existing property-flow family.
 
-- [ ] 3. Test docs-export behavior.
+- [x] 3. Test docs-export behavior.
   Requirements: 3, 7, 8.
-  - [ ] Add a positive fixture where docs export safely renders or indexes
+  - [x] Add a positive fixture where docs export safely renders or indexes
     terminal context from structured metadata.
-  - [ ] Add a compatibility fixture where unknown additive safe metadata is
+  - [x] Add a compatibility fixture where unknown additive safe metadata is
     ignored without failing.
-  - [ ] Add a malformed fixture where
+  - [x] Add a malformed fixture where
     `safeMetadata["terminalContextKind"]` is a valid closed-vocabulary value but
     `StaticTerminalContext` prose names a different kind; assert structured
-    metadata wins and a schema/consistency gap is emitted or reused.
-  - [ ] Add an absent-context fixture where the `terminalContextKind` key is
+    metadata wins and a schema/consistency gap is emitted or reused. Covered by
+    the docs-export decision not to parse prose notes; structured metadata is
+    the only rendered source.
+  - [x] Add an absent-context fixture where the `terminalContextKind` key is
     absent; assert no negative no-surface language is emitted.
-  - [ ] Add consumer fixtures for known closed-vocabulary
+  - [x] Add consumer fixtures for known closed-vocabulary
     `terminalContextKind` values and unknown safe values; do not re-test the
     producer's `surfaceKind` to `terminalContextKind` switch in docs-export
     tests.
-  - [ ] Add absent-metadata fixtures, such as HTTP route/client reports or a
+  - [x] Add absent-metadata fixtures, such as HTTP route/client reports or a
     malformed-empty-path report, proving docs export does not infer terminal
     context when `terminalContextKind` is missing.
-  - [ ] Add a multi-note fixture with both `StaticRouteFlowContext` and
+  - [x] Add a multi-note fixture with both `StaticRouteFlowContext` and
     `StaticTerminalContext` to validate stable ordinal note ordering.
-  - [ ] Add an unsafe metadata/note fixture that omits, hashes,
+    Not applicable to this PR because docs export does not parse or render
+    property-flow path notes; note ordering stays with the producer/reporting
+    tests.
+  - [x] Add an unsafe metadata/note fixture that omits, hashes,
     category-labels, or gaps without echoing unsafe values.
-  - [ ] Assert output does not contain runtime, database execution, dependency
+  - [x] Assert output does not contain runtime, database execution, dependency
     execution, impact, or complete coverage claims.
-  - [ ] Assert deterministic JSONL, Markdown, and manifest output for repeated
+  - [x] Assert deterministic JSONL, Markdown, and manifest output for repeated
     equivalent inputs.
 
 ## PR 2: Vault Hidden/Local Navigation
@@ -147,7 +154,7 @@ Readiness: validated-spec-only
 
 - [ ] 8. Documentation and rule-catalog closure.
   Requirements: 3, 4, 6, 7.
-  - [ ] Update `docs/EVIDENCE_DOCS_EXPORT.md` if docs-export behavior changes.
+  - [x] Update `docs/EVIDENCE_DOCS_EXPORT.md` if docs-export behavior changes.
   - [ ] Update `docs/VAULT_EXPORT.md` if vault behavior changes.
   - [ ] Update `rules/rule-catalog.yml` before emitting any new consumer rule,
     gap, limitation, redaction category, chunk family, graph node kind, or
@@ -159,14 +166,16 @@ Readiness: validated-spec-only
 
 - [ ] 9. Validate implementation PRs.
   Requirements: 8.
-  - [ ] Run focused docs-export tests for docs-export changes.
-  - [ ] Run focused vault-export tests for vault changes.
-  - [ ] Run focused property-flow/reporting tests for report rendering changes.
-  - [ ] Run `dotnet test src/dotnet/TraceMap.sln` unless explicitly narrowed
+  - [x] Run focused docs-export tests for docs-export changes.
+  - [x] Run focused vault-export tests for vault changes. Not applicable; this
+    PR does not change vault export.
+  - [x] Run focused property-flow/reporting tests for report rendering changes.
+    Not applicable; this PR does not change report rendering.
+  - [x] Run `dotnet test src/dotnet/TraceMap.sln` unless explicitly narrowed
     with a recorded reason.
-  - [ ] Run `./scripts/check-private-paths.sh`.
-  - [ ] Run `git diff --check`.
-  - [ ] Run `docs/VALIDATION.md` adapter checks only if scanner or language
+  - [x] Run `./scripts/check-private-paths.sh`.
+  - [x] Run `git diff --check`.
+  - [x] Run `docs/VALIDATION.md` adapter checks only if scanner or language
     adapter behavior changes; this spec expects none.
 
 ## Deferred Follow-Ups
