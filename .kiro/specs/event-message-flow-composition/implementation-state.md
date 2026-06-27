@@ -1,6 +1,6 @@
 # Event Message Flow Composition Implementation State
 
-Status: spec-ready-for-implementation
+Status: implemented-pending-pr-review
 
 ## Branch And Base
 
@@ -60,8 +60,33 @@ Recommended PR 1 implementation slice:
 - Require safe output by default: no raw payload values, secrets, config,
   connection strings, raw remotes, local paths, source snippets, raw broker
   URLs, raw hostnames, or unsafe raw destinations.
+- PR 1 implementation chose hidden `messageReviewContext` in
+  `CombinedDependencyReportDocument` as the one consumer path. It reads only
+  existing combined report inputs: projected message surfaces,
+  `message-publish-consume` candidate edges, source metadata, and coverage
+  warnings.
+- PR 1 adds catalogued composition rules `message.flow.context.v1` and
+  `message.flow.gap.v1`. Existing `message.surface.*` rules continue to own
+  extraction/projection/candidate-edge evidence; `message.flow.*` owns only the
+  hidden downstream review context/gap layer.
+- All PR 1 context rows use `EvidenceTiers.Tier4Unknown`,
+  `classification = NeedsReview`, and `claimLevel = hidden`.
+- Reduced source/report coverage produces `status = partial` and
+  `coverageLabel = ReducedCoverage`; compatible message context is not promoted
+  to delivery, runtime, payload compatibility, or impact language.
 
 ## Validation
+
+Implementation validation:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter MessageSurfaceTests`: passed, 8 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "MessageSurfaceTests|CombinedDependencyReportTests"`: passed, 27 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 686 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Known NuGet warning during restore/build: `SQLitePCLRaw.lib.e_sqlite3`
+  2.1.11 is flagged by NU1903/GHSA-2m69-gcr7-jv3q; pre-existing dependency
+  warning, not introduced by this implementation.
 
 Completed:
 
