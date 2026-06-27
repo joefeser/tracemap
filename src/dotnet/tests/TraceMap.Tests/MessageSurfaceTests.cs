@@ -271,15 +271,41 @@ public sealed class MessageSurfaceTests
         Assert.Contains(result.Report.DependencyEdges, edge =>
             edge.EdgeKind == "message-publish-consume"
             && edge.RuleId == RuleIds.MessageSurfaceCandidateEdge);
+        Assert.Equal("hidden", result.Report.MessageReviewContext.ClaimLevel);
+        Assert.Equal("partial", result.Report.MessageReviewContext.Status);
+        Assert.Equal("ReducedCoverage", result.Report.MessageReviewContext.CoverageLabel);
+        Assert.Contains(result.Report.MessageReviewContext.Rows, row =>
+            row.ContextKind == "static-destination-candidate"
+            && row.RuleId == RuleIds.MessageFlowContext
+            && row.EvidenceTier == EvidenceTiers.Tier4Unknown
+            && row.SupportingEdgeIds.Count == 1);
+        Assert.All(result.Report.MessageReviewContext.Rows, row =>
+        {
+            Assert.NotEqual("message-publish-consume", row.ContextKind);
+            Assert.DoesNotContain("delivery", row.ContextKind, StringComparison.OrdinalIgnoreCase);
+        });
+        Assert.Empty(result.Report.MessageReviewContext.Gaps);
 
         var markdown = await File.ReadAllTextAsync(Path.Combine(temp.Path, "report", "dependency-report.md"));
         Assert.Contains("Event/message rows are static evidence only", markdown);
+        Assert.Contains("## Message Review Context", markdown);
+        Assert.Contains("Claim level: `hidden`", markdown);
         Assert.Contains("message-publish-consume", markdown);
+        Assert.Contains("static-destination-candidate", markdown);
+        Assert.DoesNotContain("delivered message", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("payload compatible", markdown, StringComparison.OrdinalIgnoreCase);
 
         var json = await File.ReadAllTextAsync(Path.Combine(temp.Path, "report", "dependency-report.json"));
         Assert.Contains("\"operationDirection\": \"publish\"", json);
+        Assert.Contains("\"messageReviewContext\"", json);
+        Assert.Contains("\"claimLevel\": \"hidden\"", json);
+        Assert.Contains("\"ruleId\": \"message.flow.context.v1\"", json);
         Assert.Contains("Event/message rows are static evidence only", json);
         Assert.DoesNotContain(temp.Path, json, StringComparison.OrdinalIgnoreCase);
+
+        var catalog = await File.ReadAllTextAsync(Path.Combine(FindRepositoryRoot(), "rules", "rule-catalog.yml"));
+        Assert.Contains(RuleIds.MessageFlowContext, catalog);
+        Assert.Contains(RuleIds.MessageFlowGap, catalog);
     }
 
     [Fact]
@@ -452,5 +478,22 @@ public sealed class MessageSurfaceTests
 
         Assert.NotEqual(firstFact.Evidence.StartLine, secondFact.Evidence.StartLine);
         Assert.Equal(firstFact.Properties["stableMessageSurfaceKey"], secondFact.Properties["stableMessageSurfaceKey"]);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "rules", "rule-catalog.yml"))
+                && Directory.Exists(Path.Combine(directory.FullName, ".kiro")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate TraceMap repository root.");
     }
 }

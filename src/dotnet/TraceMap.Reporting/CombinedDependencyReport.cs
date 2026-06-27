@@ -28,6 +28,7 @@ public sealed record CombinedDependencyReportDocument(
     IReadOnlyList<CombinedDependencyEdgeRow> DependencyEdges,
     IReadOnlyList<CombinedNeedsReviewRow> NeedsReview,
     IReadOnlyList<CombinedKnownGapRow> KnownGaps,
+    MessageReviewContext MessageReviewContext,
     IReadOnlyList<string> Limitations);
 
 public sealed record CombinedReportSummary(
@@ -194,6 +195,47 @@ public sealed record CombinedKnownGapRow(
     int Count,
     string Example);
 
+public sealed record MessageReviewContext(
+    string ClaimLevel,
+    string Status,
+    string CoverageLabel,
+    IReadOnlyList<MessageFlowContextRow> Rows,
+    IReadOnlyList<MessageFlowContextGap> Gaps,
+    IReadOnlyList<string> Limitations);
+
+public sealed record MessageFlowContextRow(
+    string ContextId,
+    string ContextKind,
+    string Classification,
+    string RuleId,
+    string EvidenceTier,
+    string CoverageLabel,
+    IReadOnlyList<string> SourceLabels,
+    IReadOnlyList<string> CommitShas,
+    IReadOnlyList<string> ExtractorVersions,
+    IReadOnlyList<string> SupportingFactIds,
+    IReadOnlyList<string> SupportingEdgeIds,
+    IReadOnlyList<string> SurfaceKinds,
+    IReadOnlyList<string> OperationDirections,
+    string DestinationIdentityStatus,
+    string SafeDestinationDisplay,
+    IReadOnlyList<string> Caveats);
+
+public sealed record MessageFlowContextGap(
+    string GapId,
+    string GapKind,
+    string Classification,
+    string RuleId,
+    string EvidenceTier,
+    string CoverageLabel,
+    IReadOnlyList<string> SourceLabels,
+    IReadOnlyList<string> CommitShas,
+    IReadOnlyList<string> ExtractorVersions,
+    IReadOnlyList<string> SupportingFactIds,
+    IReadOnlyList<string> SupportingEdgeIds,
+    IReadOnlyList<string> OperationDirections,
+    string Message);
+
 internal sealed record CombinedFactRow(
     string CombinedFactId,
     string SourceIndexId,
@@ -258,6 +300,9 @@ public static class CombinedDependencyReporter
     private const int MarkdownRowLimit = 200;
     private const int MaxMessageCandidateEdges = 1000;
     private const int MaxMessageCandidateEdgesPerDestination = 100;
+    private const string MessageClaimLevel = "hidden";
+    private const string MessageContextRuleId = RuleIds.MessageFlowContext;
+    private const string MessageGapRuleId = RuleIds.MessageFlowGap;
 
     internal static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -311,6 +356,7 @@ public static class CombinedDependencyReporter
             .Concat(messageCandidateEdges.Warnings)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
+        var messageReviewContext = BuildMessageReviewContext(surfaces, dependencyEdges, read.Sources, warnings);
         var report = new CombinedDependencyReportDocument(
             Version,
             warnings.Length == 0 ? "FullEvidenceAvailable" : "ReducedCoverage",
@@ -338,6 +384,7 @@ public static class CombinedDependencyReporter
                 .ToArray(),
             needsReview,
             read.KnownGaps,
+            messageReviewContext,
             Limitations);
 
         var (markdownPath, jsonPath) = await WriteOutputsAsync(options.OutputPath, format, report, cancellationToken);
@@ -1101,6 +1148,160 @@ public static class CombinedDependencyReporter
         return new MessageCandidateEdgeResult(edges, warnings.ToArray());
     }
 
+    private static MessageReviewContext BuildMessageReviewContext(
+        IReadOnlyList<CombinedDependencySurfaceRow> surfaces,
+        IReadOnlyList<CombinedDependencyEdgeRow> dependencyEdges,
+        IReadOnlyList<CombinedReportSource> sources,
+        IReadOnlyList<string> warnings)
+    {
+        var messageSurfaces = surfaces
+            .Where(IsMessageSurface)
+            .OrderBy(surface => surface.SurfaceKind, StringComparer.Ordinal)
+            .ThenBy(surface => surface.OperationDirection, StringComparer.Ordinal)
+            .ThenBy(SafeDestinationDisplay, StringComparer.Ordinal)
+            .ThenBy(surface => surface.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(surface => surface.FilePath, StringComparer.Ordinal)
+            .ThenBy(surface => surface.StartLine)
+            .ThenBy(surface => surface.CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+        var candidateEdges = dependencyEdges
+            .Where(edge => edge.EdgeKind == "message-publish-consume")
+            .OrderBy(edge => edge.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(edge => edge.SourceSymbol, StringComparer.Ordinal)
+            .ThenBy(edge => edge.TargetSymbol, StringComparer.Ordinal)
+            .ThenBy(edge => edge.EdgeId, StringComparer.Ordinal)
+            .ToArray();
+        var sourceById = sources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
+        var rows = new List<MessageFlowContextRow>();
+        foreach (var edge in candidateEdges)
+        {
+            var related = messageSurfaces
+                .Where(surface => string.Equals(surface.DisplayName, edge.SourceSymbol, StringComparison.Ordinal)
+                    || string.Equals(surface.DisplayName, edge.TargetSymbol, StringComparison.Ordinal))
+                .ToArray();
+            rows.Add(new MessageFlowContextRow(
+                $"message-context:candidate:{Hash(edge.EdgeId, 24)}",
+                "static-destination-candidate",
+                "NeedsReview",
+                MessageContextRuleId,
+                EvidenceTiers.Tier4Unknown,
+                warnings.Count == 0 ? "FullEvidenceAvailable" : "ReducedCoverage",
+                SortedStrings(related.Select(surface => surface.SourceLabel).Append(edge.SourceLabel)),
+                SortedStrings(related.Select(surface => surface.CommitSha)),
+                SortedStrings(related.Select(surface => sourceById.GetValueOrDefault(surface.SourceIndexId)?.ScannerVersion)),
+                SortedStrings(related.Select(surface => surface.CombinedFactId)),
+                [edge.EdgeId],
+                SortedStrings(related.Select(surface => surface.SurfaceKind)),
+                SortedStrings(related.Select(surface => surface.OperationDirection)),
+                DestinationStatus(related),
+                SafeDestinationDisplay(related),
+                [
+                    "Static destination-match review context only.",
+                    "Not a call edge, delivery edge, runtime subscription edge, payload compatibility claim, or impact finding."
+                ]));
+        }
+
+        var candidateSurfaceIds = rows
+            .SelectMany(row => row.SupportingFactIds)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var surface in messageSurfaces.Where(surface => !candidateSurfaceIds.Contains(surface.CombinedFactId)))
+        {
+            rows.Add(new MessageFlowContextRow(
+                $"message-context:surface:{Hash(surface.CombinedFactId, 24)}",
+                surface.OperationDirection switch
+                {
+                    "publish" => "one-sided-publisher",
+                    "consume" => "one-sided-consumer",
+                    "bind" or "declare" => "binding-only",
+                    _ => "message-surface-review-context"
+                },
+                "NeedsReview",
+                MessageContextRuleId,
+                EvidenceTiers.Tier4Unknown,
+                warnings.Count == 0 ? "FullEvidenceAvailable" : "ReducedCoverage",
+                [surface.SourceLabel],
+                [surface.CommitSha],
+                sourceById.TryGetValue(surface.SourceIndexId, out var source) ? [source.ScannerVersion] : [],
+                [surface.CombinedFactId],
+                [],
+                [surface.SurfaceKind],
+                string.IsNullOrWhiteSpace(surface.OperationDirection) ? [] : [surface.OperationDirection],
+                surface.DestinationIdentityStatus ?? "unknown",
+                SafeDestinationDisplay(surface),
+                [
+                    "One-sided or binding-only static message evidence.",
+                    "Missing counterpart evidence must not be invented."
+                ]));
+        }
+
+        var gaps = new List<MessageFlowContextGap>();
+        if (rows.Count == 0)
+        {
+            gaps.Add(new MessageFlowContextGap(
+                "message-context-gap:no-compatible-evidence",
+                "MessageContextNoCompatibleEvidence",
+                "NoCompatibleMessageEvidence",
+                MessageGapRuleId,
+                EvidenceTiers.Tier4Unknown,
+                warnings.Count == 0 ? "FullEvidenceAvailable" : "ReducedCoverage",
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                "No compatible static message surface or candidate-edge evidence was available in the combined index."));
+        }
+
+        return new MessageReviewContext(
+            MessageClaimLevel,
+            rows.Count == 0 ? "no_compatible_evidence" : warnings.Count == 0 ? "available" : "partial",
+            warnings.Count == 0 ? "FullEvidenceAvailable" : "ReducedCoverage",
+            rows
+                .OrderBy(row => row.ContextKind, StringComparer.Ordinal)
+                .ThenBy(row => row.SafeDestinationDisplay, StringComparer.Ordinal)
+                .ThenBy(row => string.Join("|", row.SourceLabels), StringComparer.Ordinal)
+                .ThenBy(row => row.ContextId, StringComparer.Ordinal)
+                .ToArray(),
+            gaps,
+            [
+                "Message review context is hidden local static review context only.",
+                "It does not prove runtime broker delivery, topology, live subscriptions, production traffic, ordering, retries, auth, retention, dead-letter behavior, deployment reachability, payload compatibility, schema compatibility, or impact."
+            ]);
+    }
+
+    private static bool IsMessageSurface(CombinedDependencySurfaceRow surface)
+    {
+        return surface.SurfaceKind.StartsWith("message-", StringComparison.Ordinal);
+    }
+
+    private static string DestinationStatus(IReadOnlyList<CombinedDependencySurfaceRow> surfaces)
+    {
+        return surfaces.Select(surface => surface.DestinationIdentityStatus).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? "unknown";
+    }
+
+    private static string SafeDestinationDisplay(IReadOnlyList<CombinedDependencySurfaceRow> surfaces)
+    {
+        return surfaces.Select(SafeDestinationDisplay).FirstOrDefault(value => value != "n/a") ?? "n/a";
+    }
+
+    private static string SafeDestinationDisplay(this CombinedDependencySurfaceRow surface)
+    {
+        return !string.IsNullOrWhiteSpace(surface.NormalizedDestinationKey)
+            ? surface.NormalizedDestinationKey!
+            : ShortHash(surface.DestinationHash) ?? "n/a";
+    }
+
+    private static IReadOnlyList<string> SortedStrings(IEnumerable<string?> values)
+    {
+        return values
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
     private static string MessageDestinationKey(CombinedDependencySurfaceRow surface)
     {
         return $"{surface.SurfaceKind}|{surface.NormalizedDestinationKey}";
@@ -1195,6 +1396,18 @@ public static class CombinedDependencyReporter
         builder.AppendLine();
         AppendRows(builder, report.DependencyEdges, "| Kind | Source | From | To | Evidence |", "| --- | --- | --- | --- | --- |",
             edge => $"| {Cell(edge.EdgeKind)} | {Cell(edge.SourceLabel)} | {Cell(edge.SourceSymbol ?? "unknown")} | {Cell(edge.TargetSymbol ?? "unknown")} | {Cell($"{edge.RuleId} {edge.EvidenceTier} {edge.FilePath}:{edge.StartLine}")} |");
+
+        builder.AppendLine("## Message Review Context");
+        builder.AppendLine();
+        builder.AppendLine($"- Claim level: `{Cell(report.MessageReviewContext.ClaimLevel)}`");
+        builder.AppendLine($"- Status: `{Cell(report.MessageReviewContext.Status)}`");
+        builder.AppendLine($"- Coverage: `{Cell(report.MessageReviewContext.CoverageLabel)}`");
+        builder.AppendLine("- Message review context is static evidence only. It does not prove runtime delivery, broker topology, live subscriptions, production traffic, payload compatibility, schema compatibility, or impact.");
+        builder.AppendLine();
+        AppendRows(builder, report.MessageReviewContext.Rows, "| Kind | Classification | Destination | Sources | Evidence | Caveats |", "| --- | --- | --- | --- | --- | --- |",
+            row => $"| {Cell(row.ContextKind)} | {Cell(row.Classification)} | {Cell(row.SafeDestinationDisplay)} | {Cell(string.Join(";", row.SourceLabels))} | {Cell($"{row.RuleId} {row.EvidenceTier} facts:{string.Join(";", row.SupportingFactIds)} edges:{string.Join(";", row.SupportingEdgeIds)}")} | {Cell(string.Join(" ", row.Caveats))} |");
+        AppendRows(builder, report.MessageReviewContext.Gaps, "| Gap | Classification | Message | Evidence |", "| --- | --- | --- | --- |",
+            gap => $"| {Cell(gap.GapKind)} | {Cell(gap.Classification)} | {Cell(gap.Message)} | {Cell($"{gap.RuleId} {gap.EvidenceTier}")} |");
 
         builder.AppendLine("## Needs Review");
         builder.AppendLine();
