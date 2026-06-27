@@ -97,8 +97,8 @@ const hardPrivatePatterns = [
   /\bsk-[A-Za-z0-9_-]{12,}\b/i
 ];
 
-const boundarySectionPattern =
-  /<section\b(?=[^>]*\bid\s*=\s*["']property-flow-schema-boundaries["'])(?=[^>]*\bdata-tm-boundary\s*=\s*["']property-flow-schema-boundaries["'])[^>]*>[\s\S]*?<\/section>/gi;
+const boundarySectionStartPattern =
+  /<section\b(?=[^>]*\bid\s*=\s*["']property-flow-schema-boundaries["'])(?=[^>]*\bdata-tm-boundary\s*=\s*["']property-flow-schema-boundaries["'])[^>]*>/i;
 
 export async function validatePropertyFlowSchemaGapDist({
   baseUrl = "https://tracemap.tools",
@@ -223,17 +223,22 @@ function validateRouteEntry(routeEntry, errors) {
       errors.push(withEvidence(`Property-flow schema gap routes-index.json nonClaims are missing required term: ${term}`, routesIndexArtifact));
     }
   }
+
+  const publicMetadataText = [routeEntry.title, routeEntry.summary, ...(routeEntry.limitations ?? [])].join(" ");
+  validateForbiddenClaims(publicMetadataText, errors);
+  validateHardPrivateMaterial(JSON.stringify(routeEntry), errors);
 }
 
 function validatePage(html, errors) {
-  const strippedHtml = html.replace(boundarySectionPattern, " ");
+  const strippedHtml = stripBoundarySection(html);
   const mainHtml = extractMainHtml(html);
   const strippedMainHtml = extractMainHtml(strippedHtml);
   const pageText = normalizeRenderedText(mainHtml);
   const strippedText = normalizeRenderedText(strippedMainHtml);
   const metadataText = collectMetadataText(html);
   const attributeText = collectDecodedAttributeText(strippedHtml);
-  const allText = `${html} ${decodeHtmlEntities(html)} ${pageText} ${metadataText} ${collectDecodedAttributeText(html)}`;
+  const allAttributeText = collectDecodedAttributeText(html);
+  const allText = `${html} ${decodeHtmlEntities(html)} ${pageText} ${metadataText} ${allAttributeText}`;
 
   for (const phrase of requiredText) {
     if (!pageText.includes(phrase)) {
@@ -260,8 +265,34 @@ function validatePage(html, errors) {
   }
 
   validatePageMetadata(html, errors);
-  validateForbiddenClaims(`${strippedText} ${metadataText} ${attributeText}`, errors);
+  validateForbiddenClaims(`${pageText} ${strippedText} ${metadataText} ${allAttributeText} ${attributeText}`, errors);
   validateHardPrivateMaterial(allText, errors);
+}
+
+function stripBoundarySection(html) {
+  const match = boundarySectionStartPattern.exec(html);
+  if (!match) {
+    return html;
+  }
+
+  const startIndex = match.index;
+  const tagPattern = /<\/?section\b[^>]*>/gi;
+  tagPattern.lastIndex = startIndex;
+  let depth = 0;
+
+  for (let tagMatch = tagPattern.exec(html); tagMatch; tagMatch = tagPattern.exec(html)) {
+    if (tagMatch[0].startsWith("</")) {
+      depth -= 1;
+      if (depth === 0) {
+        return `${html.slice(0, startIndex)} ${html.slice(tagPattern.lastIndex)}`;
+      }
+      continue;
+    }
+
+    depth += 1;
+  }
+
+  return html;
 }
 
 function validatePageMetadata(html, errors) {

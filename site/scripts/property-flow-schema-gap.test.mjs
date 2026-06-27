@@ -36,7 +36,13 @@ test("validatePropertyFlowSchemaGapDist reports route metadata regressions", asy
   const parsed = JSON.parse(await readFile(path, "utf8"));
   parsed.entries = parsed.entries.map((entry) =>
     entry.path === propertyFlowSchemaGapRoute
-      ? { ...entry, publicClaimLevel: "demo", preferredProofPath: "/validation/", nonClaims: ["No runtime behavior."] }
+      ? {
+          ...entry,
+          publicClaimLevel: "demo",
+          preferredProofPath: "/validation/",
+          summary: "TraceMap proves runtime behavior for this route.",
+          nonClaims: ["No runtime behavior."]
+        }
       : entry
   );
   await writeFile(path, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
@@ -47,6 +53,27 @@ test("validatePropertyFlowSchemaGapDist reports route metadata regressions", asy
   assert.match(errors.join("\n"), /expected publicClaimLevel concept, got demo/);
   assert.match(errors.join("\n"), /expected preferredProofPath \/proof-paths\//);
   assert.match(errors.join("\n"), /nonClaims are missing required term: production traffic/);
+  assert.match(errors.join("\n"), /forbidden public claim/);
+});
+
+test("validatePropertyFlowSchemaGapDist rejects hard private route metadata", async (t) => {
+  const root = await createManagedFixture(t);
+  const path = join(root, "dist", "routes-index.json");
+  const parsed = JSON.parse(await readFile(path, "utf8"));
+  parsed.entries = parsed.entries.map((entry) =>
+    entry.path === propertyFlowSchemaGapRoute
+      ? {
+          ...entry,
+          limitations: ["ConnectionString=hidden"]
+        }
+      : entry
+  );
+  await writeFile(path, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+  const errors = [];
+
+  await validatePropertyFlowSchemaGapDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /hard private material/);
 });
 
 test("validatePropertyFlowSchemaGapDist reports missing inbound link", async (t) => {
@@ -61,6 +88,20 @@ test("validatePropertyFlowSchemaGapDist reports missing inbound link", async (t)
 test("validatePropertyFlowSchemaGapDist rejects forbidden runtime proof claim", async (t) => {
   const root = await createManagedFixture(t, {
     pageHtml: propertyFlowSchemaPage("<p>TraceMap proves runtime behavior for this property.</p>")
+  });
+  const errors = [];
+
+  await validatePropertyFlowSchemaGapDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /forbidden public claim/);
+});
+
+test("validatePropertyFlowSchemaGapDist rejects forbidden claim inside boundary section", async (t) => {
+  const root = await createManagedFixture(t, {
+    pageHtml: propertyFlowSchemaPage().replace(
+      "It does not prove runtime behavior",
+      "TraceMap proves runtime behavior"
+    )
   });
   const errors = [];
 
