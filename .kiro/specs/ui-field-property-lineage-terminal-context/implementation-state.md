@@ -1,7 +1,7 @@
 # UI Field Property Lineage Terminal Context Implementation State
 
-Status: ready-for-implementation
-Readiness: validated-spec-only
+Status: implemented-pending-pr-review
+Readiness: implementation-validated
 Spec branch: `codex/ui-field-terminal-context-spec`
 Target base: `dev`
 Public claim level: hidden
@@ -100,16 +100,38 @@ Recommended PR 1:
 
 Implementation PR 1 must fill this section before product-code changes:
 
-- Chosen terminal context kind:
-- Existing facts and tables/views consumed:
-- Existing rules reused:
-- Whether `property-flow.terminal-context.v1` is needed:
-- New gap codes, if any, and catalogued rule mapping:
+- Chosen terminal context kind: selected-property paths that already reach an
+  existing combined dependency terminal surface (`sql-query`, `sql-persistence`,
+  `legacy-data`, `package-config`, message surfaces, remoting/WCF/ASMX
+  surfaces, or another non-HTTP dependency surface). HTTP endpoint surfaces
+  remain endpoint context and are not terminal context for this slice.
+- Existing facts and tables/views consumed: existing `combined_facts`,
+  `combined_dependency_edges`, and the in-memory
+  `CombinedDependencyPathReporter.BuildGraphInventoryAsync` graph inventory
+  already consumed by `PropertyFlowReporter`. No scanner changes, persisted
+  schema changes, new tables, or new views are required.
+- Existing rules reused: `property-flow.path.v1` and `property-flow.edge.v1`
+  keep owning the property-flow path, while terminal nodes/edges retain their
+  existing combined path and source rule IDs such as
+  `combined.paths.surface-evidence.v1` and the source surface rule. The emitted
+  terminal note is explanatory metadata only.
+- Whether `property-flow.terminal-context.v1` is needed: not needed for PR 1
+  because no new evidence family, gap, edge, or top-level report contract is
+  emitted. The selected-property path remains the rule-backed evidence carrier.
+- New gap codes, if any, and catalogued rule mapping: none for PR 1. Missing
+  terminal context remains omission, not a new gap, because the slice is
+  additive and should not create unsupported conclusions from nearby surfaces.
 - Generic-name set decision, including whether `result` and `response` require
-  live `PropertyFlowReporter` and test updates:
+  live `PropertyFlowReporter` and test updates: keep the current generic-name
+  set unchanged (`id`, `name`, `type`, `value`, `state`, `status`). Do not add
+  `result` or `response` in this PR.
 - Consumer compatibility decision for report version `1.0` versus a version
-  bump:
+  bump: keep report version `1.0`. The change is additive safe metadata on
+  existing nodes plus additive path notes; existing consumers can ignore both.
 - Validation commands planned from `docs/VALIDATION.md`:
+  `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter PropertyFlowTests`,
+  `dotnet test src/dotnet/TraceMap.sln`, `./scripts/check-private-paths.sh`,
+  and `git diff --check`.
 
 Do not attach terminal context or emit candidate terminal-context gaps until
 these decisions are recorded and rule-catalog/test prerequisites are satisfied
@@ -168,6 +190,25 @@ Bounded re-review:
   to name any generic-name narrowing criterion.
 
 ## Validation Log
+
+Implementation PR validation:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter PropertyFlowTests
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Results:
+
+- Focused `PropertyFlowTests`: passed, 24 tests.
+- Full `dotnet test src/dotnet/TraceMap.sln`: passed, 686 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Known NuGet warning during restore/build: `SQLitePCLRaw.lib.e_sqlite3`
+  2.1.11 is flagged by NU1903/GHSA-2m69-gcr7-jv3q; pre-existing dependency
+  warning, not introduced by this implementation.
 
 Spec-only validation:
 

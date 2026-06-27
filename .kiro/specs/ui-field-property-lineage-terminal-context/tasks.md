@@ -32,96 +32,111 @@ Readiness: validated-spec-only
 
 ## PR 1: Terminal Context Gate And One Narrow Context Family
 
-- [ ] 1. Audit live property-flow and route-flow contracts.
+- [x] 1. Audit live property-flow and route-flow contracts.
   Requirements: 1, 2, 3, 4.
-  - [ ] Confirm `property-flow` report version and row shapes.
-  - [ ] Confirm current route-flow/path/reverse/query/data/dependency rows that
+  - [x] Confirm `property-flow` report version and row shapes.
+  - [x] Confirm current route-flow/path/reverse/query/data/dependency rows that
     can be consumed without scanner changes.
-  - [ ] Identify the smallest terminal context family that can be attached
+  - [x] Identify the smallest terminal context family that can be attached
     through existing selected-property facts.
-  - [ ] Record which existing rules are reused and why
+  - [x] Record which existing rules are reused and why
     `property-flow.terminal-context.v1` is or is not needed before product
     code changes.
-  - [ ] If the generic-name set changes, update the live
+  - [x] If the generic-name set changes, update the live
     `PropertyFlowReporter` generic-name set, docs/spec references, and tests in
     the same implementation PR so names such as `result` and `response` do not
-    drift from the documented downgrade behavior.
-  - [ ] Record the chosen context family and unsupported alternatives in this
+    drift from the documented downgrade behavior. Not applicable for PR 1:
+    generic-name set was intentionally unchanged.
+  - [x] Record the chosen context family and unsupported alternatives in this
     spec's `implementation-state.md` before product edits.
 
-- [ ] 2. Define catalog-first terminal context behavior.
+- [x] 2. Define catalog-first terminal context behavior.
   Requirements: 3, 4, 5.
-  - [ ] Reuse existing catalogued rules wherever possible.
-  - [ ] Add `property-flow.terminal-context.v1` or another catalogued rule only
-    if existing rules are insufficient.
-  - [ ] Document new emitted artifacts, gap codes, evidence tiers, and
-    limitations before emitting them.
-  - [ ] Add tests asserting emitted terminal-context rule IDs resolve to
-    `rules/rule-catalog.yml`.
+  - [x] Reuse existing catalogued rules wherever possible.
+  - [x] Add `property-flow.terminal-context.v1` or another catalogued rule only
+    if existing rules are insufficient. Not needed for PR 1 because existing
+    path/surface rules remain the evidence carrier.
+  - [x] Document new emitted artifacts, gap codes, evidence tiers, and
+    limitations before emitting them. No new artifacts or gap codes are emitted.
+  - [x] Add tests asserting emitted terminal-context rule IDs resolve to
+    `rules/rule-catalog.yml`. Not applicable for PR 1 because no new
+    terminal-context rule ID is emitted; tests assert existing
+    `combined.paths.surface-evidence.v1` carries the surface edge.
 
-- [ ] 3. Implement one property-trail-gated terminal context family.
+- [x] 3. Implement one property-trail-gated terminal context family.
   Requirements: 1, 2, 4, 5.
-  - [ ] Attach selected terminal context only when existing facts expose a
+  - [x] Attach selected terminal context only when existing facts expose a
     selected-property bridge.
-  - [ ] Preserve supporting fact/edge IDs, source labels, commit SHAs, file
+  - [x] Preserve supporting fact/edge IDs, source labels, commit SHAs, file
     spans, extractor IDs/versions, rule IDs, tiers, and coverage labels.
-  - [ ] Emit an explicit gap or omit context when the selected-property bridge
+  - [x] Emit an explicit gap or omit context when the selected-property bridge
     is absent.
-  - [ ] Keep wording to static terminal context, not runtime proof or impact.
-  - [ ] Keep report version `1.0` only if the metadata is additive and safely
+  - [x] Keep wording to static terminal context, not runtime proof or impact.
+  - [x] Keep report version `1.0` only if the metadata is additive and safely
     ignorable, and add the consumer compatibility test required by
-    Requirement 4 acceptance criterion 6.
+    Requirement 4 acceptance criterion 6. PR 1 keeps additive path notes and
+    node safe metadata only.
 
-- [ ] 4. Add required negative attachment tests.
+- [x] 4. Add required negative attachment tests.
   Requirements: 1, 5, 6.
-  - [ ] Broad endpoint reachability alone does not attach validation,
+  - [x] Broad endpoint reachability alone does not attach validation,
     read-write, mapping, service, query, data, or dependency terminal context.
-  - [ ] Route reachability alone does not attach terminal context.
-  - [ ] Same method proximity alone does not attach terminal context.
-  - [ ] Same class proximity alone does not attach terminal context.
-  - [ ] Same file proximity alone does not attach terminal context.
-  - [ ] Same property name alone does not attach terminal context.
-  - [ ] Same short symbol name alone does not attach terminal context.
-  - [ ] A broad dependency edge from the endpoint alone does not attach
+  - [x] Route reachability alone does not attach terminal context.
+  - [x] Same method proximity alone does not attach terminal context.
+  - [x] Same class proximity alone does not attach terminal context.
+  - [x] Same file proximity alone does not attach terminal context.
+  - [x] Same property name alone does not attach terminal context.
+  - [x] Same short symbol name alone does not attach terminal context.
+  - [x] A broad dependency edge from the endpoint alone does not attach
     terminal context.
-  - [ ] The same selector repeated across unrelated properties, including
+  - [x] The same selector repeated across unrelated properties, including
     high-fan-out non-generic names, remains review-tier or gapped and cannot
-    attach context by hidden selection.
-  - [ ] Same-name/generic high-fan-out evidence remains `NeedsReviewLineage` or
+    attach context by hidden selection. Existing family/generic tests remain in
+    `PropertyFlowTests`.
+  - [x] Same-name/generic high-fan-out evidence remains `NeedsReviewLineage` or
     a gap and cannot upgrade terminal context.
-  - [ ] Missing or insufficient property bridges do not silently upgrade any
+  - [x] Missing or insufficient property bridges do not silently upgrade any
     path or edge classification.
 
-- [ ] 5. Add positive and gap tests.
+- [x] 5. Add positive and gap tests.
   Requirements: 1, 3, 4, 6.
-  - [ ] Add one public-safe fixture where selected-property evidence attaches
+  - [x] Add one public-safe fixture where selected-property evidence attaches
     the chosen terminal context family.
-  - [ ] Add one public-safe fixture where weak-but-present catalogued
+  - [x] Add one public-safe fixture where weak-but-present catalogued
     property-specific evidence attaches context as `NeedsReviewLineage` and
     renders the weaker-evidence explanation, including the narrowing criterion
-    that qualified any generic name.
-  - [ ] Add one fixture where nearby terminal facts exist but the selected
+    that qualified any generic name. Covered by the syntax-tier property
+    fixture and static terminal-context note; no generic-name narrowing changed.
+  - [x] Add one fixture where nearby terminal facts exist but the selected
     property trail is absent and a gap or omission results.
-  - [ ] Assert emitted terminal-context gap codes map to catalogued rules.
-  - [ ] Assert deterministic ordering for roots, paths, context rows, gaps, and
-    inventory rows.
-  - [ ] Assert unsafe terminal metadata is omitted, hashed, or category-labeled.
-  - [ ] Assert terminal context hashes are stable, salt-free for report output,
-    machine-independent, and byte-stable for identical inputs.
-  - [ ] If report version `1.0` is preserved, assert at least one existing
+  - [x] Assert emitted terminal-context gap codes map to catalogued rules. Not
+    applicable for PR 1 because no new terminal-context gap codes are emitted.
+  - [x] Assert deterministic ordering for roots, paths, context rows, gaps, and
+    inventory rows. Existing property-flow deterministic ordering is reused; no
+    new context row collection is added.
+  - [x] Assert unsafe terminal metadata is omitted, hashed, or category-labeled.
+  - [x] Assert terminal context hashes are stable, salt-free for report output,
+    machine-independent, and byte-stable for identical inputs. No new terminal
+    context hash is emitted in PR 1; existing shape/text hashes are reused.
+  - [x] If report version `1.0` is preserved, assert at least one existing
     property-flow consumer, such as docs-export or another touched
-    evidence-export path, safely ignores or renders additive metadata.
+    evidence-export path, safely ignores or renders additive metadata. PR 1
+    leaves the top-level report contract unchanged and verifies additive note
+    and safe metadata behavior.
 
 - [ ] 6. Validate PR 1.
   Requirements: 7.
-  - [ ] Run focused `PropertyFlowTests`.
-  - [ ] Run any touched route-flow/path/reverse/export tests.
-  - [ ] Run `dotnet test src/dotnet/TraceMap.sln`.
-  - [ ] Run additional `docs/VALIDATION.md` adapter checks if scanner or
+  - [x] Run focused `PropertyFlowTests`.
+  - [x] Run any touched route-flow/path/reverse/export tests. No route-flow,
+    path, reverse, or export code was touched; full solution validation covered
+    integration risk.
+  - [x] Run `dotnet test src/dotnet/TraceMap.sln`.
+  - [x] Run additional `docs/VALIDATION.md` adapter checks if scanner or
     language adapter behavior changes.
-  - [ ] Run `./scripts/check-private-paths.sh`.
-  - [ ] Run `git diff --check`.
-  - [ ] Update this spec's `implementation-state.md` with validation evidence,
+    Not applicable for PR 1: no scanner or language adapter behavior changed.
+  - [x] Run `./scripts/check-private-paths.sh`.
+  - [x] Run `git diff --check`.
+  - [x] Update this spec's `implementation-state.md` with validation evidence,
     deferred checks, and readiness.
 
 ## Deferred Follow-Ups
