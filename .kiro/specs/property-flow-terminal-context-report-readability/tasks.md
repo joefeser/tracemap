@@ -24,9 +24,9 @@ Readiness: validated-spec-only
 - [x] Run `git diff --check`.
 - [x] Run `./scripts/check-private-paths.sh`.
 - [x] Confirm diff is limited to this spec folder.
-- [ ] Commit the spec branch.
-- [ ] Push the branch and open a PR to `dev`.
-- [ ] Wait 3 minutes, then run ACK PR loop.
+- [x] Commit the spec branch.
+- [x] Push the branch and open a PR to `dev`.
+- [x] Wait 3 minutes, then run ACK PR loop.
 - [ ] Follow ACK-authorized actions only; do not manually tag review bots, do
   not force-push, do not squash, and do not target `main`.
 
@@ -89,9 +89,10 @@ Readiness: validated-spec-only
     fixture proving no terminal-context cue appears when the structured key is
     absent.
   - [ ] Assert existing readers can ignore unknown safe metadata.
-  - [ ] Assert no runtime, database execution, dependency execution, impact,
-    complete coverage, release-safety, public/demo, LLM, embedding, vector, or
-    answer-generation claims are introduced.
+  - [ ] Assert no positive runtime, database execution, dependency execution,
+    impact, complete coverage, release-safety, public/demo, LLM, embedding,
+    vector, or answer-generation claims are introduced; explicit negated
+    disclaimers such as "not runtime execution" are allowed.
   - [ ] Assert unsafe metadata/note text is not echoed.
   - [ ] Assert rule IDs, tiers, supporting IDs, spans, commit SHA, extractor
     versions, coverage labels, and limitations are preserved where available.

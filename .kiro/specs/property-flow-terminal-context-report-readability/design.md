@@ -30,7 +30,7 @@ consumer-runway specs were present. Relevant existing behavior:
 - Terminal context is additive safe metadata on path nodes:
   `safeMetadata["terminalContextKind"]`.
 - Path notes may include bounded `StaticTerminalContext` prose.
-- `PropertyFlowReport.RenderMarkdown` already renders path notes as bullet
+- `PropertyFlowReporter.RenderMarkdown` already renders path notes as bullet
   items, so `StaticTerminalContext:` prose is already visible in the Markdown
   report with the built-in static-only disclaimer.
 - Terminal context appears only after the selected-property bridge gate.
@@ -165,6 +165,12 @@ If the current Markdown report already renders some of these near the path,
 the terminal-context cue may rely on nearby context rather than duplicate every
 field. Tests should still assert the identity is preserved in JSON/report
 fixtures.
+
+Tests should assert that generated report prose avoids positive runtime,
+database-execution, dependency-execution, impact, complete-coverage,
+release-safety, and public-claim assertions. Negated static-only disclaimers
+such as the existing "not runtime execution" wording should be preserved or
+kept equivalent.
 
 ## Documentation Closure
 
