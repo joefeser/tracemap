@@ -294,7 +294,7 @@ public static class CombinedReverseReporter
         {
             var first = ambiguousLegacyDataSelectorNodes[0];
             gaps.Add(new CombinedReverseGap(
-                $"gap:legacy-data-selector:{CombinedReportHelpers.Hash(string.Join(";", ambiguousLegacyDataSelectorNodeIds.Order(StringComparer.Ordinal)), 24)}",
+                $"gap:legacy-data-selector:{CombinedReportHelpers.Hash(string.Join(";", ambiguousLegacyDataSelectorNodeIds.OrderBy(value => value, StringComparer.Ordinal)), 24)}",
                 "AmbiguousLegacyDataModelSelector",
                 CombinedReverseClassifications.NeedsReviewSurfaceEvidence,
                 RuleIds.LegacyDataModelSurface,
@@ -334,7 +334,7 @@ public static class CombinedReverseReporter
                 "DuplicateIdentity",
                 CombinedReverseClassifications.UnknownAnalysisGap,
                 IdentityRuleId,
-                "Tier4Unknown",
+                EvidenceTiers.Tier4Unknown,
                 $"Multiple selected surfaces share stable identity hash `{CombinedReportHelpers.Hash(duplicate.Key, 24)}`; affected evidence is review-tier.",
                 null,
                 null,
@@ -1107,7 +1107,7 @@ public static class CombinedReverseReporter
         bool hasDuplicateIdentity = false,
         bool hasAmbiguousLegacyDataSelector = false)
     {
-        return hasDuplicateIdentity || hasAmbiguousLegacyDataSelector || node.EvidenceTier == "Tier3SyntaxOrTextual" || IsHashOnlySqlEvidence(node) || IsVolatileSqlIdentity(node)
+        return hasDuplicateIdentity || hasAmbiguousLegacyDataSelector || node.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual || IsHashOnlySqlEvidence(node) || IsVolatileSqlIdentity(node)
             ? CombinedReverseClassifications.NeedsReviewSurfaceEvidence
             : CombinedReverseClassifications.SelectedSurfaceEvidence;
     }
