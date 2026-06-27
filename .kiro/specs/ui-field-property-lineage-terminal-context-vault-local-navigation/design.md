@@ -129,8 +129,10 @@ Recommended hidden graph additions:
 
 If the existing graph model cannot represent a property-flow path node cleanly,
 the first implementation may link the terminal-context node to the terminal
-source/surface node and include `propertyFlowPathId` in safe metadata. It must
-still preserve path-scoped limitations and supporting IDs.
+source/surface node and represent `propertyFlowPathId` through existing safe
+graph fields such as `SourceScope`, `SupportingFactIds`, `SupportingEdgeIds`,
+or `EvidenceLocations`. It must still preserve path-scoped limitations and
+supporting IDs.
 
 Recommended terminal-context node fields, aligned with the current
 `VaultGraphNode` record:
