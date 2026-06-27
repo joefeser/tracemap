@@ -26,8 +26,8 @@ Readiness: validated-spec-only
 - [x] Confirm diff is limited to this spec folder.
 - [x] Commit the spec branch.
 - [x] Push the branch and open a PR to `dev`.
-- [ ] Wait 3 minutes, then run ACK PR loop.
-- [ ] Follow ACK-authorized actions only; do not manually tag review bots, do
+- [x] Wait 3 minutes, then run ACK PR loop.
+- [x] Follow ACK-authorized actions only; do not manually tag review bots, do
   not force-push, and do not manually merge outside the authorized
   auto-merge command.
 
@@ -97,8 +97,12 @@ Readiness: validated-spec-only
   - [ ] Same short property name alone does not attach terminal context.
   - [ ] Same short symbol or method name alone does not attach terminal
     context.
-  - [ ] Generic selected names do not attach terminal context without exact
+  - [ ] Current property-flow generic selected names (`id`, `name`, `type`,
+    `value`, `state`, `status`) do not attach terminal context without exact
     selected-property identity.
+  - [ ] Broader route-flow/high-fan-out generic examples such as `result` or
+    `response` require an explicit compatibility decision before they are
+    added to property-flow terminal-context coverage.
   - [ ] Case-boundary behavior for selected symbols is explicitly tested or
     documented as a deferred known boundary.
   - [ ] Broad endpoint dependency, route-flow context group, touched file,
