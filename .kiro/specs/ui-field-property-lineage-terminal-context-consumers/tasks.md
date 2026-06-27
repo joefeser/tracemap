@@ -75,13 +75,13 @@ Readiness: spec-drafted
     metadata wins and a schema/consistency gap is emitted or reused.
   - [ ] Add an absent-context fixture where the `terminalContextKind` key is
     absent; assert no negative no-surface language is emitted.
-  - [ ] Add fixtures for `wcf-operation` mapping to
-    `legacy-communication terminal context`, a novel unknown surface kind
-    mapping to `dependency-surface terminal context`, and `http-client` plus
-    `http-route` producing no `terminalContextKind` and no
-    `StaticTerminalContext` note.
-  - [ ] Add a zero-node or malformed-empty-path fixture proving no terminal
-    context note is inferred.
+  - [ ] Add consumer fixtures for known closed-vocabulary
+    `terminalContextKind` values and unknown safe values; do not re-test the
+    producer's `surfaceKind` to `terminalContextKind` switch in docs-export
+    tests.
+  - [ ] Add absent-metadata fixtures, such as HTTP route/client reports or a
+    malformed-empty-path report, proving docs export does not infer terminal
+    context when `terminalContextKind` is missing.
   - [ ] Add a multi-note fixture with both `StaticRouteFlowContext` and
     `StaticTerminalContext` to validate stable ordinal note ordering.
   - [ ] Add an unsafe metadata/note fixture that omits, hashes,

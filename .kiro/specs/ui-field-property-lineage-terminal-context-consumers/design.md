@@ -202,6 +202,11 @@ Unknown values should be treated as schema-compatible but unrecognized safe
 metadata: render a category label or gap if needed, and do not infer a stronger
 terminal context kind.
 
+Consumer implementation tests should not re-test the producer's
+`surfaceKind`-to-`terminalContextKind` mapping. Producer mapping coverage stays
+with property-flow; docs/vault consumers should use already-emitted structured
+metadata fixtures and absent-metadata fixtures.
+
 Structured/prose mismatch handling is defensive for malformed, tampered,
 hand-edited, or older report fixtures. The current producer derives
 `terminalContextKind` and `StaticTerminalContext` from the same surface-kind
