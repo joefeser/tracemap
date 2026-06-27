@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 public enum TraceMapSwiftVersion {
@@ -147,6 +146,7 @@ public enum SwiftScanEngine {
             throw ScanError.invalidArguments("repo path does not exist: \(repo.path)")
         }
         let git = try GitMetadata.load(scanRoot: repo)
+        try OutputWriter.validateOutputPath(scanRoot: repo, gitRoot: git.gitRoot, outputPath: options.outputPath)
         let inventory = try InventoryBuilder.build(scanRoot: repo, gitRoot: git.gitRoot, options: options)
         let scanId = stableScanId(git: git, options: options, inventory: inventory)
         var gaps = CoverageGap.defaults(inventory: inventory)
@@ -267,6 +267,8 @@ enum InventoryBuilder {
 
     static func build(scanRoot: URL, gitRoot: URL, options: SwiftScanOptions) throws -> [InventoryItem] {
         let keys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .isRegularFileKey]
+        let includeMatchers = try options.includeGlobs.map(GlobMatcher.init(pattern:))
+        let excludeMatchers = try options.excludeGlobs.map(GlobMatcher.init(pattern:))
         guard let enumerator = FileManager.default.enumerator(
             at: scanRoot,
             includingPropertiesForKeys: keys,
@@ -290,14 +292,17 @@ enum InventoryBuilder {
             let values = try url.resourceValues(forKeys: Set(keys))
             let isDirectory = values.isDirectory == true
             if isDirectory, isSupportedBundle(rel) {
+                guard matchesProjectFilters(rel, options.projectFilters),
+                      matchesIncludes(rel, includeMatchers),
+                      !matchesAnyGlob(rel, excludeMatchers) else { continue }
                 items.append(InventoryItem(relativePath: rel, kind: kind(for: rel, isDirectory: true), sizeBytes: 0, startLine: 1, endLine: 1, skippedReason: nil))
                 continue
             }
             guard values.isRegularFile == true else { continue }
             guard isSupportedFile(rel) else { continue }
             guard matchesProjectFilters(rel, options.projectFilters),
-                  matchesIncludes(rel, options.includeGlobs),
-                  !matchesAnyGlob(rel, options.excludeGlobs) else { continue }
+                  matchesIncludes(rel, includeMatchers),
+                  !matchesAnyGlob(rel, excludeMatchers) else { continue }
             let size = values.fileSize ?? 0
             let reason = size > options.maxFileByteSize ? "file-too-large" : nil
             let lines = reason == nil ? lineCount(url) : 1
@@ -311,10 +316,15 @@ enum InventoryBuilder {
 
     static func isDefaultExcluded(segments: [String]) -> Bool {
         if segments.contains(where: { excludedSegmentNames.contains($0) }) { return true }
-        for index in segments.indices {
-            let pair = segments[index...min(index + 1, segments.count - 1)].joined(separator: "/")
-            if pair == "Carthage/Build" || pair == "Carthage/Checkouts" || pair == "Pods/.build" || pair == "Pods/Build" {
-                return true
+        for index in 0..<segments.count {
+            let current = segments[index]
+            if current == "Carthage", index + 1 < segments.count {
+                let next = segments[index + 1]
+                if next == "Build" || next == "Checkouts" { return true }
+            }
+            if current == "Pods", index + 1 < segments.count {
+                let next = segments[index + 1]
+                if next == ".build" || next == "Build" { return true }
             }
         }
         return false
@@ -363,12 +373,12 @@ enum InventoryBuilder {
         }
     }
 
-    static func matchesIncludes(_ relativePath: String, _ includes: [String]) -> Bool {
+    static func matchesIncludes(_ relativePath: String, _ includes: [GlobMatcher]) -> Bool {
         includes.isEmpty || matchesAnyGlob(relativePath, includes)
     }
 
-    static func matchesAnyGlob(_ relativePath: String, _ globs: [String]) -> Bool {
-        globs.contains { globMatches(pattern: $0, value: relativePath) }
+    static func matchesAnyGlob(_ relativePath: String, _ globs: [GlobMatcher]) -> Bool {
+        globs.contains { $0.matches(relativePath) }
     }
 }
 
@@ -425,6 +435,13 @@ enum RuleIds {
     static let dynamicBoundary = "swift.unsupported.dynamic-boundary.v1"
 }
 
+public enum EvidenceTier: String, Codable, Equatable {
+    case tier1Semantic = "Tier1Semantic"
+    case tier2Structural = "Tier2Structural"
+    case tier3SyntaxOrTextual = "Tier3SyntaxOrTextual"
+    case tier4Unknown = "Tier4Unknown"
+}
+
 public struct ScanManifest: Codable, Equatable {
     public let scanId: String
     public let repoName: String
@@ -462,7 +479,7 @@ public struct CodeFact: Codable, Equatable {
     public let projectPath: String?
     public let factType: String
     public let ruleId: String
-    public let evidenceTier: String
+    public let evidenceTier: EvidenceTier
     public let sourceSymbol: String?
     public let targetSymbol: String?
     public let contractElement: String?
@@ -477,7 +494,7 @@ enum FactFactory {
             manifest: manifest,
             factType: "FileInventoried",
             ruleId: RuleIds.repoManifest,
-            evidenceTier: "Tier2Structural",
+            evidenceTier: .tier2Structural,
             filePath: "scan-manifest.json",
             startLine: 1,
             endLine: 1,
@@ -514,7 +531,7 @@ enum FactFactory {
                 manifest: manifest,
                 factType: "AnalysisGap",
                 ruleId: gap.ruleId,
-                evidenceTier: "Tier4Unknown",
+                evidenceTier: .tier4Unknown,
                 filePath: gap.filePath,
                 startLine: gap.startLine,
                 endLine: gap.endLine,
@@ -534,7 +551,7 @@ enum FactFactory {
         manifest: ScanManifest,
         factType: String,
         ruleId: String,
-        evidenceTier: String,
+        evidenceTier: EvidenceTier,
         filePath: String,
         startLine: Int,
         endLine: Int,
@@ -547,7 +564,7 @@ enum FactFactory {
             manifest.scanId,
             factType,
             ruleId,
-            evidenceTier,
+            evidenceTier.rawValue,
             filePath,
             String(startLine),
             String(endLine),
@@ -589,15 +606,30 @@ enum FactFactory {
         }
     }
 
-    private static func evidenceTier(for item: InventoryItem) -> String {
+    private static func evidenceTier(for item: InventoryItem) -> EvidenceTier {
         switch item.kind {
-        case "swift-source": return "Tier3SyntaxOrTextual"
-        default: return "Tier2Structural"
+        case "swift-source": return .tier3SyntaxOrTextual
+        default: return .tier2Structural
         }
     }
 }
 
 enum OutputWriter {
+    static func validateOutputPath(scanRoot: URL, gitRoot: URL, outputPath: URL) throws {
+        let output = normalizedDirectoryPath(outputPath)
+        let scanRootPath = normalizedDirectoryPath(scanRoot)
+        let gitRootPath = normalizedDirectoryPath(gitRoot)
+        guard output != "/" else {
+            throw ScanError.invalidArguments("--out must not be the filesystem root")
+        }
+        guard output != scanRootPath, output != gitRootPath else {
+            throw ScanError.invalidArguments("--out must not be the scan root or git root")
+        }
+        guard !isAncestor(output, of: scanRootPath), !isAncestor(output, of: gitRootPath) else {
+            throw ScanError.invalidArguments("--out must not be an ancestor of the scan root or git root")
+        }
+    }
+
     static func write(outputPath: URL, manifest: ScanManifest, facts: [CodeFact], inventory: [InventoryItem]) throws {
         let fm = FileManager.default
         if fm.fileExists(atPath: outputPath.path) {
@@ -624,7 +656,7 @@ enum OutputWriter {
     private static func report(manifest: ScanManifest, facts: [CodeFact], inventory: [InventoryItem]) -> String {
         let byType = count(facts.map(\.factType))
         let byRule = count(facts.map(\.ruleId))
-        let byTier = count(facts.map(\.evidenceTier))
+        let byTier = count(facts.map(\.evidenceTier.rawValue))
         var lines: [String] = [
             "# TraceMap Swift Scan Report",
             "",
@@ -726,7 +758,7 @@ enum SQLiteWriter {
         let propsJson = jsonString(fact.properties, pretty: false)
         return """
         insert into facts (fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier, source_symbol, target_symbol, contract_element, file_path, start_line, end_line, snippet_hash, properties_json)
-        values (\(q(fact.factId)), \(q(fact.scanId)), \(q(fact.repo)), \(q(fact.commitSha)), null, \(q(fact.factType)), \(q(fact.ruleId)), \(q(fact.evidenceTier)), null, \(q(fact.targetSymbol)), \(q(fact.contractElement)), \(q(fact.evidence.filePath)), \(fact.evidence.startLine), \(fact.evidence.endLine), null, \(q(propsJson)));
+        values (\(q(fact.factId)), \(q(fact.scanId)), \(q(fact.repo)), \(q(fact.commitSha)), null, \(q(fact.factType)), \(q(fact.ruleId)), \(q(fact.evidenceTier.rawValue)), null, \(q(fact.targetSymbol)), \(q(fact.contractElement)), \(q(fact.evidence.filePath)), \(fact.evidence.startLine), \(fact.evidence.endLine), null, \(q(propsJson)));
 
         """
     }
@@ -798,6 +830,20 @@ func runProcess(executable: String, arguments: [String], input: String? = nil) t
     let stderr = Pipe()
     process.standardOutput = stdout
     process.standardError = stderr
+    let outputGroup = DispatchGroup()
+    let outputQueue = DispatchQueue.global(qos: .utility)
+    let outBuffer = ProcessOutputBuffer()
+    let errBuffer = ProcessOutputBuffer()
+    outputGroup.enter()
+    outputQueue.async {
+        outBuffer.set(stdout.fileHandleForReading.readDataToEndOfFile())
+        outputGroup.leave()
+    }
+    outputGroup.enter()
+    outputQueue.async {
+        errBuffer.set(stderr.fileHandleForReading.readDataToEndOfFile())
+        outputGroup.leave()
+    }
     if let input {
         let stdin = Pipe()
         process.standardInput = stdin
@@ -808,17 +854,36 @@ func runProcess(executable: String, arguments: [String], input: String? = nil) t
         try process.run()
     }
     process.waitUntilExit()
-    let out = String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-    let err = String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    _ = outputGroup.wait(timeout: .now() + 5)
+    let out = String(decoding: outBuffer.data, as: UTF8.self)
+    let err = String(decoding: errBuffer.data, as: UTF8.self)
     guard process.terminationStatus == 0 else {
         throw ScanError.io(err.trimmed().isEmpty ? "process failed: \(executable) \(arguments.joined(separator: " "))" : err.trimmed())
     }
     return out
 }
 
+final class ProcessOutputBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = Data()
+
+    var data: Data {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+
+    func set(_ data: Data) {
+        lock.lock()
+        value = data
+        lock.unlock()
+    }
+}
+
 func writeJSON<T: Encodable>(_ value: T, to url: URL, pretty: Bool) throws {
-    try stableEncoder(pretty: pretty).encode(value).write(to: url)
-    try "\n".data(using: .utf8)!.append(to: url)
+    var data = try stableEncoder(pretty: pretty).encode(value)
+    data.append(0x0a)
+    try data.write(to: url)
 }
 
 func stableEncoder(pretty: Bool) -> JSONEncoder {
@@ -837,8 +902,7 @@ func q(_ value: String?) -> String {
 }
 
 func sha256Hex(_ input: String, length: Int? = nil) -> String {
-    let digest = SHA256.hash(data: Data(input.utf8))
-    let hex = digest.map { String(format: "%02x", $0) }.joined()
+    let hex = PortableSHA256.hash(Data(input.utf8)).map { String(format: "%02x", $0) }.joined()
     if let length { return String(hex.prefix(length)) }
     return hex
 }
@@ -853,6 +917,9 @@ func relativePath(from base: URL, to url: URL) -> String {
     let basePath = base.standardizedFileURL.path
     let path = url.standardizedFileURL.path
     guard path != basePath else { return "." }
+    if basePath == "/" {
+        return String(path.dropFirst())
+    }
     guard path.hasPrefix(basePath + "/") else { return URL(fileURLWithPath: path).lastPathComponent }
     return String(path.dropFirst(basePath.count + 1))
 }
@@ -864,14 +931,6 @@ func normalizeRelativePath(_ value: String) -> String {
 func lineCount(_ url: URL) -> Int {
     guard let text = try? String(contentsOf: url, encoding: .utf8), !text.isEmpty else { return 1 }
     return max(1, text.split(separator: "\n", omittingEmptySubsequences: false).count)
-}
-
-func globMatches(pattern: String, value: String) -> Bool {
-    let escaped = NSRegularExpression.escapedPattern(for: normalizeRelativePath(pattern))
-        .replacingOccurrences(of: "\\*", with: ".*")
-        .replacingOccurrences(of: "\\?", with: ".")
-    return value.range(of: "^" + escaped + "$", options: .regularExpression) != nil
-        || value.range(of: "^" + escaped + "(/.*)?$", options: .regularExpression) != nil
 }
 
 func count(_ values: [String]) -> [(String, Int)] {
@@ -892,11 +951,120 @@ extension String {
     }
 }
 
-extension Data {
-    func append(to url: URL) throws {
-        let handle = try FileHandle(forWritingTo: url)
-        defer { try? handle.close() }
-        try handle.seekToEnd()
-        try handle.write(contentsOf: self)
+func normalizedDirectoryPath(_ url: URL) -> String {
+    var path = url.standardizedFileURL.path
+    while path.count > 1 && path.hasSuffix("/") {
+        path.removeLast()
+    }
+    return path
+}
+
+func isAncestor(_ maybeAncestor: String, of path: String) -> Bool {
+    guard maybeAncestor != path, maybeAncestor != "/" else { return maybeAncestor == "/" && path != "/" }
+    return path.hasPrefix(maybeAncestor + "/")
+}
+
+struct GlobMatcher {
+    private let exact: NSRegularExpression
+    private let subtree: NSRegularExpression
+
+    init(pattern: String) throws {
+        let escaped = NSRegularExpression.escapedPattern(for: normalizeRelativePath(pattern))
+            .replacingOccurrences(of: "\\*", with: ".*")
+            .replacingOccurrences(of: "\\?", with: ".")
+        exact = try NSRegularExpression(pattern: "^" + escaped + "$")
+        subtree = try NSRegularExpression(pattern: "^" + escaped + "(/.*)?$")
+    }
+
+    func matches(_ value: String) -> Bool {
+        let range = NSRange(value.startIndex..<value.endIndex, in: value)
+        return exact.firstMatch(in: value, range: range) != nil
+            || subtree.firstMatch(in: value, range: range) != nil
+    }
+}
+
+enum PortableSHA256 {
+    private static let initialHash: [UInt32] = [
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+        0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+    ]
+
+    private static let constants: [UInt32] = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+    ]
+
+    static func hash(_ data: Data) -> [UInt8] {
+        var bytes = [UInt8](data)
+        let bitLength = UInt64(bytes.count) * 8
+        bytes.append(0x80)
+        while bytes.count % 64 != 56 {
+            bytes.append(0)
+        }
+        bytes += stride(from: 56, through: 0, by: -8).map { UInt8((bitLength >> UInt64($0)) & 0xff) }
+
+        var hash = initialHash
+        for chunkStart in stride(from: 0, to: bytes.count, by: 64) {
+            var words = Array(repeating: UInt32(0), count: 64)
+            for index in 0..<16 {
+                let offset = chunkStart + index * 4
+                words[index] = (UInt32(bytes[offset]) << 24)
+                    | (UInt32(bytes[offset + 1]) << 16)
+                    | (UInt32(bytes[offset + 2]) << 8)
+                    | UInt32(bytes[offset + 3])
+            }
+            for index in 16..<64 {
+                let s0 = rotateRight(words[index - 15], by: 7) ^ rotateRight(words[index - 15], by: 18) ^ (words[index - 15] >> 3)
+                let s1 = rotateRight(words[index - 2], by: 17) ^ rotateRight(words[index - 2], by: 19) ^ (words[index - 2] >> 10)
+                words[index] = words[index - 16] &+ s0 &+ words[index - 7] &+ s1
+            }
+
+            var a = hash[0], b = hash[1], c = hash[2], d = hash[3]
+            var e = hash[4], f = hash[5], g = hash[6], h = hash[7]
+            for index in 0..<64 {
+                let s1 = rotateRight(e, by: 6) ^ rotateRight(e, by: 11) ^ rotateRight(e, by: 25)
+                let choice = (e & f) ^ (~e & g)
+                let temp1 = h &+ s1 &+ choice &+ constants[index] &+ words[index]
+                let s0 = rotateRight(a, by: 2) ^ rotateRight(a, by: 13) ^ rotateRight(a, by: 22)
+                let majority = (a & b) ^ (a & c) ^ (b & c)
+                let temp2 = s0 &+ majority
+                h = g
+                g = f
+                f = e
+                e = d &+ temp1
+                d = c
+                c = b
+                b = a
+                a = temp1 &+ temp2
+            }
+
+            hash[0] = hash[0] &+ a
+            hash[1] = hash[1] &+ b
+            hash[2] = hash[2] &+ c
+            hash[3] = hash[3] &+ d
+            hash[4] = hash[4] &+ e
+            hash[5] = hash[5] &+ f
+            hash[6] = hash[6] &+ g
+            hash[7] = hash[7] &+ h
+        }
+
+        return hash.flatMap { word in
+            [
+                UInt8((word >> 24) & 0xff),
+                UInt8((word >> 16) & 0xff),
+                UInt8((word >> 8) & 0xff),
+                UInt8(word & 0xff)
+            ]
+        }
+    }
+
+    private static func rotateRight(_ value: UInt32, by amount: UInt32) -> UInt32 {
+        (value >> amount) | (value << (32 - amount))
     }
 }

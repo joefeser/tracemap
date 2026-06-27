@@ -8,7 +8,9 @@ struct TraceMapSwiftSmokeTests {
         try missingRepoFailsBeforeArtifacts()
         try scanWritesRequiredArtifactsAndReducedCoverage()
         try factsAreStableWhenOnlyOutputPathChanges()
+        try dangerousOutputPathsAreRejected()
         try defaultExcludesUsePathSegments()
+        try bundleFactsHonorUserFilters()
         try oversizedFilesBecomeGaps()
         try sqliteContainsSharedTablesAndFacts()
         try emittedRuleIdsAreCataloged()
@@ -87,6 +89,41 @@ struct TraceMapSwiftSmokeTests {
         assert(!paths.contains("DerivedData/App/Generated.swift"))
     }
 
+    static func dangerousOutputPathsAreRejected() throws {
+        let fixture = try SwiftFixture()
+        do {
+            _ = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: fixture.repo))
+            throw SmokeFailure("scan should reject output path equal to repo root")
+        } catch {
+            assert(String(describing: error).contains("scan root") || String(describing: error).contains("git root"))
+        }
+
+        do {
+            _ = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: fixture.temp.url))
+            throw SmokeFailure("scan should reject output path that is an ancestor of the repo root")
+        } catch {
+            assert(String(describing: error).contains("ancestor"))
+        }
+    }
+
+    static func bundleFactsHonorUserFilters() throws {
+        let fixture = try SwiftFixture(extraDirectories: [
+            "App.xcodeproj",
+            "App.xcworkspace",
+            "Sources/App/Model.xcdatamodeld"
+        ])
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(
+            repoPath: fixture.repo,
+            outputPath: fixture.temp.url.appendingPathComponent("scan"),
+            projectFilters: ["Sources/App"],
+            excludeGlobs: ["*.xcdatamodeld"]
+        ))
+        let paths = Set(result.inventory.map(\.relativePath))
+        assert(!paths.contains("App.xcodeproj"))
+        assert(!paths.contains("App.xcworkspace"))
+        assert(!paths.contains("Sources/App/Model.xcdatamodeld"))
+    }
+
     static func oversizedFilesBecomeGaps() throws {
         let fixture = try SwiftFixture(extraFiles: [
             "Sources/App/Large.swift": String(repeating: "x", count: 128)
@@ -125,7 +162,7 @@ private struct SwiftFixture {
     let temp: TempDir
     let repo: URL
 
-    init(extraFiles: [String: String] = [:]) throws {
+    init(extraFiles: [String: String] = [:], extraDirectories: [String] = []) throws {
         temp = try TempDir()
         repo = temp.url.appendingPathComponent("repo")
         try FileManager.default.createDirectory(at: repo.appendingPathComponent("Sources/App"), withIntermediateDirectories: true)
@@ -139,6 +176,9 @@ private struct SwiftFixture {
             let url = repo.appendingPathComponent(path)
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try text.write(to: url, atomically: true, encoding: .utf8)
+        }
+        for path in extraDirectories {
+            try FileManager.default.createDirectory(at: repo.appendingPathComponent(path), withIntermediateDirectories: true)
         }
         try run("/usr/bin/git", ["-C", repo.path, "init"])
         try run("/usr/bin/git", ["-C", repo.path, "config", "user.email", "swift-test@example.invalid"])

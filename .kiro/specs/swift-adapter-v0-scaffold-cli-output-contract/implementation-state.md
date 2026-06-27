@@ -35,6 +35,8 @@ The implementation slice should:
 - Test command: `swift run --package-path src/swift tracemap-swift-smoke-tests`.
 - Test runner decision: this local Swift install did not expose XCTest or the newer Testing module to SwiftPM, so the scaffold uses a deterministic smoke-test executable rather than `swift test`.
 - SQLite writer decision: the Swift adapter creates the shared schema via the system `sqlite3` command and populates `scan_manifest` plus `facts`. Shared relationship/flow tables are created empty for downstream compatibility.
+- Portability decision: the scaffold avoids Apple-only `CryptoKit`; it uses a small local SHA-256 implementation and platform-gated executable imports so `swift build --package-path src/swift` is not tied to Apple SDK modules.
+- Output safety decision: the scaffold refuses `--out` values that are the filesystem root, the scan/git root, or an ancestor of the scan/git root before recursive output cleanup.
 - Downstream reader compatibility lives in command smoke validation for this slice; deeper Swift fixtures can add integration scripts when more fact families exist.
 
 ## Source Material Paths
@@ -131,3 +133,22 @@ git diff --check
 ```
 
 `dotnet test` passed with 684 tests. The Swift scaffold downstream smoke covered scan, export, combine, and report over a generated temporary SwiftPM fixture. Broader pinned public-language smokes from `docs/VALIDATION.md` were not run because this slice adds a new adapter scaffold and does not change existing .NET, TypeScript, Python, JVM, reducer, path, reverse, impact, or release-review behavior.
+
+Completed after PR-loop review fixes:
+
+```bash
+swift build --package-path src/swift
+swift run --package-path src/swift tracemap-swift-smoke-tests
+dotnet test src/dotnet/TraceMap.sln --filter Combine_infers_jvm_python_and_swift_languages
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+swift run --package-path src/swift tracemap-swift scan --repo <tmp>/repo --out <tmp>/swift-scan
+dotnet run --project src/dotnet/TraceMap.Cli -- export --index <tmp>/swift-scan/index.sqlite --out <tmp>/swift-export --format json
+dotnet run --project src/dotnet/TraceMap.Cli -- combine --index <tmp>/swift-scan/index.sqlite --label swift --out <tmp>/swift-combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- report --index <tmp>/swift-combined.sqlite --out <tmp>/swift-report
+sqlite3 <tmp>/swift-combined.sqlite "select label || ':' || language from index_sources order by label;"
+```
+
+The post-review downstream smoke reported `swift:swift` in `index_sources`, confirming Swift scaffold indexes retain Swift language identity after combine.
