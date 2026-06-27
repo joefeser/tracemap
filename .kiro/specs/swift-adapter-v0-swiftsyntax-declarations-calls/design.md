@@ -151,7 +151,7 @@ deterministic inputs such as:
 - generic arity when visible;
 - function/init parameter labels and arity;
 - property/subscript shape when visible;
-- line span;
+- line span as evidence metadata, not default ID input;
 - normalized syntax hash only where needed to distinguish ambiguous sites.
 
 The exact canonical formula belongs to #381. This spec may require those inputs
@@ -163,7 +163,7 @@ Interim syntax IDs, used only if #380 lands before #381, should use this
 documented format:
 
 ```text
-swift-syntax:v0:<sha256-lower-32>
+swift-syntax:v0:<sha256-lower-64>
 ```
 
 The hash input is UTF-8 text joined with `\n` from:
@@ -177,17 +177,19 @@ containment=<lexical-containment-display-or-empty>
 name=<safe-name-or-empty>
 genericArity=<integer-or-0>
 parameterLabels=<comma-joined-safe-labels-or-empty>
-lineSpan=<startLine>:<startColumn>-<endLine>:<endColumn>
-syntaxHash=<sha256-lower-32-of-normalized-node-text-with-literals-masked>
+syntaxHash=<sha256-lower-64-of-normalized-node-text-with-literals-masked>
 ```
 
 The normalized node text used for `syntaxHash` masks string and numeric
 literals, strips comments, normalizes trivia whitespace to single spaces, and
-does not store the text itself. If two declarations still collide, append an
+does not store the text itself. Line span is preserved on facts as evidence
+metadata but is not part of the default interim symbol-ID hash input because
+line shifts would churn IDs. If two declarations still collide, append an
 `ordinal=<n>` line assigned by deterministic source order and emit an
-identity-collision gap. #381 may replace this interim format, but it must be
-able to map or intentionally deprecate it. If #381 has landed first, skip this
-interim format entirely.
+identity-collision gap. Anonymous or ambiguous declarations may use the ordinal
+and syntax hash as their stable file-scoped discriminator. #381 may replace
+this interim format, but it must be able to map or intentionally deprecate it.
+If #381 has landed first, skip this interim format entirely.
 
 Display signatures should be reviewer-friendly, such as:
 
@@ -207,6 +209,7 @@ for:
 - imports;
 - classes;
 - structs;
+- actors;
 - enums;
 - protocols;
 - extensions;
@@ -369,7 +372,9 @@ category and hash when needed.
 SwiftSyntax parser diagnostic messages SHALL be classified by kind/category,
 such as `parse-error` or `warning`, and message text SHALL be hashed rather
 than stored verbatim in gap facts. Use SHA-256 over UTF-8 diagnostic message
-bytes and store a lower-case 32-hex prefix, matching the syntax hash convention.
+bytes and store the full 64-character lower-case hex digest, matching the
+syntax hash convention. Reports may render a short hash prefix for readability,
+but persisted properties and stable-key inputs use the full digest.
 
 ## Artifact Contract
 

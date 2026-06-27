@@ -28,9 +28,9 @@ not implement Swift analyzer/runtime code.
   relationship semantics; if #381 has not landed, document the interim
   file-scoped syntax ID scheme and migration note before emitting IDs.
 - [ ] 0.8 Check whether #381 has landed. If it has, skip the interim
-  `swift-syntax:v0:<hash>` format entirely and emit only #381-compatible IDs;
-  if it has not, document the interim format and migration note before emitting
-  any fact.
+  `swift-syntax:v0:<sha256-lower-64>` format entirely and emit only
+  #381-compatible IDs; if it has not, document the interim format and migration
+  note before emitting any fact.
 - [ ] 0.9 Confirm and document the exact Swift `scanId` input formula from #378
   or this implementation state before any fact-emitting product code is written
   in Phase 3.
@@ -72,8 +72,8 @@ not implement Swift analyzer/runtime code.
 
 ### Phase 2: Fixtures and Test Baseline
 
-- [ ] 2.1 Add a minimal Swift fixture with imports, a struct, class, enum,
-  protocol, extension, functions, methods, initializers, and properties.
+- [ ] 2.1 Add a minimal Swift fixture with imports, a struct, class, actor,
+  enum, protocol, extension, functions, methods, initializers, and properties.
 - [ ] 2.2 Add a call fixture covering simple calls, member calls, static-looking
   calls, `self`/`super` calls, initializer calls, `.init(...)`, optional
   chaining, trailing closures, and nested closures.
@@ -124,7 +124,7 @@ not implement Swift analyzer/runtime code.
 
 ### Phase 5: Declaration Extraction
 
-- [ ] 5.1 Emit declaration facts for classes, structs, enums, protocols,
+- [ ] 5.1 Emit declaration facts for classes, structs, actors, enums, protocols,
   extensions, functions, methods, initializers, properties, subscripts, enum
   cases, typealiases, and associated types where deterministic.
 - [ ] 5.2 Generate #381-compatible Swift symbol IDs from safe module context,

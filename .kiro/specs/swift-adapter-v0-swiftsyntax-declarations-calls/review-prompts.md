@@ -31,7 +31,7 @@ Focus on:
 1. Whether the spec preserves TraceMap's deterministic evidence model.
 2. Whether SwiftSyntax declaration and call evidence is correctly capped as
    syntax-backed evidence rather than semantic/runtime proof.
-3. Whether files, modules/packages, imports, classes, structs, enums,
+3. Whether files, modules/packages, imports, classes, structs, actors, enums,
    protocols, extensions, functions, methods, initializers, properties, calls,
    object construction, and syntax navigation edges are covered at the right
    v0 depth.
@@ -103,7 +103,7 @@ Find likely bugs before implementation:
   storyboard navigation overclaimed as runtime behavior.
 - Missing module/package context causing unstable or misleading symbol IDs.
 - Interim file-scoped syntax IDs emitted without the documented
-  `swift-syntax:v0:<hash>` format or migration note for #381.
+  `swift-syntax:v0:<sha256-lower-64>` format or migration note for #381.
 - Conditional compilation or macro-generated code treated as complete coverage.
 - `#if canImport(...)` treated as unconditional evidence.
 - Generated code or unavailable files silently omitted without gaps.
