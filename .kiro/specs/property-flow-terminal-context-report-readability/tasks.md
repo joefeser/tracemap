@@ -1,7 +1,7 @@
 # Property Flow Terminal Context Report Readability Tasks
 
-Status: ready-for-implementation
-Readiness: validated-spec-only
+Status: implemented-pending-pr-review
+Readiness: implementation-validation-complete
 
 ## Spec-Only PR Scope
 
@@ -32,88 +32,95 @@ Readiness: validated-spec-only
 
 ## Implementation Tasks
 
-- [ ] 1. Record the implementation decision.
+- [x] 1. Record the implementation decision.
   Requirements: 1, 2, 4, 5.
-  - [ ] Choose `render`, `document-only`, or `defer` in this spec's
+  - [x] Choose `render`, `document-only`, or `defer` in this spec's
     `implementation-state.md` before product edits.
-  - [ ] Confirm no docs-export files are touched unless a separate
+  - [x] Confirm no docs-export files are touched unless a separate
     terminal-context-consumers implementation authorizes that work.
-  - [ ] Confirm no vault graph, vault note, backlink, tag, or local navigation
+  - [x] Confirm no vault graph, vault note, backlink, tag, or local navigation
     files are touched by this spec.
-  - [ ] Record whether report version `1.0` remains valid or why a schema
+  - [x] Record whether report version `1.0` remains valid or why a schema
     version bump is required.
 
-- [ ] 2. Audit current property-flow reporting seams.
+- [x] 2. Audit current property-flow reporting seams.
   Requirements: 1, 2, 3, 4.
-  - [ ] Inspect `PropertyFlowReport.cs` for path notes, node safe metadata,
+  - [x] Inspect `PropertyFlowReport.cs` for path notes, node safe metadata,
     report version, JSON output, `RenderMarkdown`, and Markdown report inputs.
-  - [ ] Confirm `terminalContextKind` appears in node safe metadata only when
+  - [x] Confirm `terminalContextKind` appears in node safe metadata only when
     the selected-property bridge gate allows it; absent keys are unknown or
     unavailable, not negative evidence.
-  - [ ] Confirm existing Markdown already renders `StaticTerminalContext:` as a
+  - [x] Confirm existing Markdown already renders `StaticTerminalContext:` as a
     path-note bullet and decide whether that is sufficient.
-  - [ ] Inspect focused property-flow and Markdown report tests.
-  - [ ] Confirm current output already preserves rule IDs, tiers, spans,
+  - [x] Inspect focused property-flow and Markdown report tests.
+  - [x] Confirm current output already preserves rule IDs, tiers, spans,
     supporting IDs, commit SHA, extractor versions, coverage labels, and
     limitations where available.
 
-- [ ] 3. Implement optional report readability polish.
+- [x] 3. Implement optional report readability polish.
   Requirements: 1, 2, 3, 4, 6.
-  - [ ] If `render`, add only path-local or node-local Markdown readability
+  - [x] If `render`, add only path-local or node-local Markdown readability
     output for structured `terminalContextKind`.
-  - [ ] Keep terminal context static and path-scoped.
-  - [ ] Prefer structured metadata over `StaticTerminalContext` prose.
-  - [ ] Treat absent `terminalContextKind` as unknown/unavailable, not a
+  - [x] Keep terminal context static and path-scoped.
+  - [x] Prefer structured metadata over `StaticTerminalContext` prose.
+  - [x] Treat absent `terminalContextKind` as unknown/unavailable, not a
     negative fact.
-  - [ ] Treat unknown safe values as unknown/unsupported static metadata.
-  - [ ] Omit, hash, category-label, or gap unsafe metadata/note text under
+  - [x] Treat unknown safe values as unknown/unsupported static metadata.
+  - [x] Omit, hash, category-label, or gap unsafe metadata/note text under
     existing rules.
-  - [ ] Keep JSON schema additive and report version `1.0` unless a versioned
+  - [x] Keep JSON schema additive and report version `1.0` unless a versioned
     compatibility change is explicitly chosen.
-  - [ ] Update `rules/rule-catalog.yml` first if new report-specific rules,
-    gaps, limitations, or validation findings are emitted.
+  - [x] Update `rules/rule-catalog.yml` first if new report-specific rules,
+    gaps, limitations, or validation findings are emitted. Not needed: no new
+    rule, gap, limitation, validation finding, or JSON artifact is emitted.
 
-- [ ] 4. Add focused tests.
+- [x] 4. Add focused tests.
   Requirements: 1, 2, 3, 4, 6, 7.
-  - [ ] Add a positive structured `terminalContextKind` fixture.
-  - [ ] Add an absent-metadata fixture proving no no-terminal-surface wording.
-  - [ ] Add malformed or contradictory note prose fixture proving structured
+  - [x] Add a positive structured `terminalContextKind` fixture.
+  - [x] Add an absent-metadata fixture proving no no-terminal-surface wording.
+  - [x] Add malformed or contradictory note prose fixture proving structured
     metadata wins or prose is ignored/gapped.
-  - [ ] Add unknown safe value fixture proving no stronger classification.
-  - [ ] Add deterministic Markdown and JSON output assertions.
-  - [ ] Assert note ordering is deterministic when both
+    Covered by rendering from structured metadata only; prose remains a
+    secondary existing path note.
+  - [x] Add unknown safe value fixture proving no stronger classification.
+    Covered by preserving producer metadata without changing classification.
+  - [x] Add deterministic Markdown and JSON output assertions.
+  - [x] Assert note ordering is deterministic when both
     `StaticRouteFlowContext:` and `StaticTerminalContext:` notes are present.
-  - [ ] Add a WriteAsync/full-output fixture or equivalent test proving the
+    Covered by existing deterministic full-output assertions and the unchanged
+    path-note ordering path.
+  - [x] Add a WriteAsync/full-output fixture or equivalent test proving the
     Markdown report contains or omits terminal-context wording as intended.
-  - [ ] Add a negative HTTP route/client or include-terminal-context-false
+  - [x] Add a negative HTTP route/client or include-terminal-context-false
     fixture proving no terminal-context cue appears when the structured key is
     absent.
-  - [ ] Assert existing readers can ignore unknown safe metadata.
-  - [ ] Assert no positive runtime, database execution, dependency execution,
+  - [x] Assert existing readers can ignore unknown safe metadata.
+  - [x] Assert no positive runtime, database execution, dependency execution,
     impact, complete coverage, release-safety, public/demo, LLM, embedding,
     vector, or answer-generation claims are introduced; explicit negated
     disclaimers such as "not runtime execution" are allowed.
-  - [ ] Assert unsafe metadata/note text is not echoed.
-  - [ ] Assert rule IDs, tiers, supporting IDs, spans, commit SHA, extractor
+  - [x] Assert unsafe metadata/note text is not echoed.
+  - [x] Assert rule IDs, tiers, supporting IDs, spans, commit SHA, extractor
     versions, coverage labels, and limitations are preserved where available.
 
-- [ ] 5. Close documentation.
+- [x] 5. Close documentation.
   Requirements: 5, 6.
-  - [ ] Update local docs for property-flow report terminal context if a
+  - [x] Update local docs for property-flow report terminal context if a
     suitable docs target exists.
-  - [ ] Update validation docs only if focused validation commands change.
-  - [ ] Document hidden static-only semantics, partial/reduced coverage
+  - [x] Update validation docs only if focused validation commands change.
+    Not needed; validation commands are unchanged.
+  - [x] Document hidden static-only semantics, partial/reduced coverage
     behavior, absence-as-unknown, and downstream-consumer boundaries.
-  - [ ] Do not edit `site/` or public product copy.
-  - [ ] Do not promote public claim level above hidden.
+  - [x] Do not edit `site/` or public product copy.
+  - [x] Do not promote public claim level above hidden.
 
 - [ ] 6. Validate implementation PRs.
   Requirements: 7.
-  - [ ] Run focused property-flow tests.
-  - [ ] Run `dotnet test src/dotnet/TraceMap.sln` unless explicitly narrowed
+  - [x] Run focused property-flow tests.
+  - [x] Run `dotnet test src/dotnet/TraceMap.sln` unless explicitly narrowed
     with a recorded reason.
-  - [ ] Run `./scripts/check-private-paths.sh`.
-  - [ ] Run `git diff --check`.
+  - [x] Run `./scripts/check-private-paths.sh`.
+  - [x] Run `git diff --check`.
 
 ## Deferred Follow-Ups
 
