@@ -275,10 +275,12 @@ with existing combined reports and future path/reverse/route workflows.
    `InheritsFrom`, `ImplementsInterface`, `ExtendsInterface`, and `Overrides`.
    Swift-specific vocabulary such as protocol conformance may be rendered in
    display metadata, not as a competing persisted relationship kind.
-3. WHEN relationship facts are inserted into SQLite THEN each row SHALL preserve
-   source symbol ID, target symbol ID, relationship kind, fact ID, rule ID,
-   evidence tier, file path, line span, scan ID, commit SHA, extractor ID, and
-   extractor version.
+3. WHEN relationship facts are inserted into SQLite THEN each
+   `symbol_relationships` row SHALL preserve the DDL-backed fields such as
+   source symbol ID, target symbol ID, relationship kind, and fact ID. Commit
+   SHA, extractor ID/version, rule ID, evidence tier, and file span SHALL remain
+   available through the linked `facts` row and fact envelope rather than being
+   duplicated into non-existent relationship-table columns.
 4. WHEN Swift facts participate in `tracemap combine` THEN combined outputs
    SHALL preserve source-local Swift symbol IDs and SHALL NOT infer equality
    with C#, TypeScript, JVM, or Python symbols without explicit boundary facts.
@@ -383,6 +385,9 @@ reports, and tests:
   conformance behavior are not proven by local syntax.
 - Macros and generated code are not expanded unless a future deterministic
   toolchain slice explicitly adds bounded support.
+- Property wrappers can synthesize backing storage and projected properties;
+  SwiftSyntax-only v0 must not invent those synthesized symbols without future
+  compiler-backed evidence.
 - Unresolved imports, typealiases, nested generic spellings, and external
   dependencies cap relationship confidence.
 - Raw snippets and unsafe values are not stored by default.

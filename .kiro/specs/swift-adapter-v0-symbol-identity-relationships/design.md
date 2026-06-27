@@ -100,7 +100,7 @@ swift-symbol/v1|
 module=<module-or-unknown>|
 target=<package-target-or-unknown>|
 kind=<symbol-kind>|
-parent=<parent-symbol-key-or-root>|
+parent=<parent-symbol-id-or-hash-or-root>|
 name=<normalized-display-name>|
 signature=<normalized-signature-or-empty>|
 genericArity=<n-or-unknown>|
@@ -112,6 +112,11 @@ Use source path and span as collision discriminators only when the identity
 cannot otherwise be unique. This preserves stable cross-file identity for normal
 types and members while preventing duplicate declarations from overwriting each
 other.
+
+`parent` must use a previously encoded parent symbol ID or a hash of the parent
+logical key, not the raw unescaped parent key string. Nested raw key material
+would introduce `|` and `=` delimiters into the outer key and make flat parsing
+ambiguous.
 
 Decision table:
 
@@ -262,6 +267,12 @@ Recommended behavior:
 - If the extension target resolves to one source-local type, attach member
   symbols to the extended type while preserving occurrence spans from the
   extension file.
+- If the extension target is a known external type such as a standard-library
+  type or dependency type, create a stable external target symbol and attach
+  extension members to an extension-local container that references that
+  external target. Do not treat known external extensions as source-local type
+  proof, and do not collapse them into unresolved ambiguity when the external
+  display identity is credible.
 - Preserve extension membership through occurrence metadata and supporting
   properties; do not emit `ExtensionOf` as a traversable v0 relationship.
 - If the extension target is unresolved or ambiguous, create an extension-local
@@ -348,7 +359,7 @@ rule catalog before emitted facts ship.
 
 | Rule ID | Fact types | Tier expectations | Limitation summary |
 | --- | --- | --- | --- |
-| `swift.syntax.declaration.v1` | `TypeDeclared`, `PropertyDeclared`, `FieldDeclared`, `ParameterDeclared`, symbol rows | `Tier3SyntaxOrTextual` | SwiftSyntax declaration identity, not compiler semantic identity. |
+| `swift.syntax.declaration.v1` | `TypeDeclared`, `MethodDeclared`, `PropertyDeclared`, `FieldDeclared`, `ParameterDeclared`, symbol rows | `Tier3SyntaxOrTextual` | SwiftSyntax declaration identity, not compiler semantic identity. |
 | `swift.package.module-identity.v1` | package/module facts or properties | `Tier2Structural`, `Tier4Unknown` gaps | Local metadata only; target membership and build settings may be incomplete. |
 | `swift.syntax.symbol-relationship.v1` | `SymbolRelationship` | `Tier3SyntaxOrTextual` | Direct inheritance/protocol/extension syntax only, persisted with canonical shared relationship kinds. |
 | `swift.syntax.extension-membership.v1` | declaration facts, `AnalysisGap` | `Tier3SyntaxOrTextual`, `Tier4Unknown` gaps | Ambiguous extension targets remain gaps; no v0 `ExtensionOf` traversable edge. |
@@ -368,6 +379,7 @@ Recommended `gapKind` values:
 - `swift-conditional-compilation`
 - `swift-macro-expansion-unsupported`
 - `swift-generated-code-unsupported`
+- `swift-property-wrapper-synthesis-unsupported`
 - `swift-typealias-resolution-unsupported`
 - `swift-generic-specialization-unsupported`
 - `swift-objective-c-bridging-unsupported`
@@ -381,6 +393,13 @@ stored by default.
 `candidateCount` is an integer count of distinct source-local candidate symbols
 considered before a gap was emitted. Zero is valid and means no local candidates
 were visible.
+
+Property wrappers such as `@State`, `@Published`, or similar wrapper attributes
+can synthesize backing storage and projected properties that are not visible as
+ordinary declarations in SwiftSyntax. SwiftSyntax-only v0 should emit visible
+wrapper attributes as declaration metadata or gap evidence, but it must not
+invent `_property` or `$property` symbols unless a future compiler-backed rule
+proves them.
 
 ## Determinism Rules
 
