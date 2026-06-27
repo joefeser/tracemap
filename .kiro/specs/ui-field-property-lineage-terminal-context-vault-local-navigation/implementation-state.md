@@ -14,8 +14,10 @@ Fetched `origin/dev` and created an isolated worktree from latest remote
 Starting baseline:
 
 ```text
-c37eff84 Merge pull request #405 from joefeser/codex/implement-swift-inventory-project-discovery
+c37eff84ebc12cc2b4d47bae89fb8af29b35b8bb
 ```
+
+That commit is merge commit `#405`, `implement-swift-inventory-project-discovery`.
 
 ## Scope
 
@@ -169,7 +171,17 @@ Results:
 - PR #409 opened against `dev`.
 - Initial SSH push failed with `Connection closed by 140.82.114.4 port 22`;
   retried with GitHub CLI authenticated HTTPS remote and push succeeded.
-- ACK run pending after required 3-minute wait.
+- After a bookkeeping commit, waited 3 minutes and ran:
+  `agent-control pr-loop --repo joefeser/tracemap --pr 409 --base dev --require-codex-review --quiet --json`.
+- Initial ACK returned `not_merge_ready` with stop reason
+  `MERGE_STATE_NOT_CLEAN`, merge state `UNKNOWN`, current head
+  `1e2e916f93643cf2cb7ec6bd1d9017f4da065dd8`, two Gemini Medium threads, and
+  one Qodo actionable comment.
+- Patch applied: aligned the terminal-context node example with the current
+  `VaultGraphNode` record instead of an unsupported `safeMetadata` property;
+  mapped candidate terminal-context gap names to `VaultGraphGap.Classification`;
+  changed baseline code blocks to SHA-only form with merge context outside the
+  block; kept tasks checkboxes synchronized with completed spec-only PR work.
 
 ## Follow-Up Items
 
