@@ -114,7 +114,7 @@ Readiness: implementation-validation-complete
   - [x] Do not edit `site/` or public product copy.
   - [x] Do not promote public claim level above hidden.
 
-- [ ] 6. Validate implementation PRs.
+- [x] 6. Validate implementation PRs.
   Requirements: 7.
   - [x] Run focused property-flow tests.
   - [x] Run `dotnet test src/dotnet/TraceMap.sln` unless explicitly narrowed
