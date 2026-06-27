@@ -96,6 +96,25 @@ Recommended PR 1:
    tests if touched, full `dotnet test`, private-path guard, and whitespace
    check.
 
+### PR 1 Audit Decision Placeholder
+
+Implementation PR 1 must fill this section before product-code changes:
+
+- Chosen terminal context kind:
+- Existing facts and tables/views consumed:
+- Existing rules reused:
+- Whether `property-flow.terminal-context.v1` is needed:
+- New gap codes, if any, and catalogued rule mapping:
+- Generic-name set decision, including whether `result` and `response` require
+  live `PropertyFlowReporter` and test updates:
+- Consumer compatibility decision for report version `1.0` versus a version
+  bump:
+- Validation commands planned from `docs/VALIDATION.md`:
+
+Do not attach terminal context or emit candidate terminal-context gaps until
+these decisions are recorded and rule-catalog/test prerequisites are satisfied
+in the implementation PR.
+
 ## Review Log
 
 Planned commands:
@@ -173,11 +192,31 @@ Results:
 
 ## ACK / PR State
 
-Pending. After the PR is opened, wait 3 minutes and run:
+PR opened:
 
-```bash
-agent-control pr-loop --repo joefeser/tracemap --pr <PR> --base dev --require-codex-review --quiet --json
+```text
+https://github.com/joefeser/tracemap/pull/396
 ```
 
+Initial ACK command after the requested 3-minute wait:
+
+```bash
+agent-control pr-loop --repo joefeser/tracemap --pr 396 --base dev --require-codex-review --quiet --json
+```
+
+Result: `actionable_findings` / `UNRESOLVED_REVIEW_THREADS` with
+`nextAction: patch_actionable_findings`.
+
+Patch disposition:
+
+- Added this PR 1 audit decision placeholder.
+- Added a task requiring implementation PRs to update the live
+  `PropertyFlowReporter` generic-name set/tests when documented generic names
+  such as `result` and `response` are introduced or retained.
+- Checked completed spec-only PR lifecycle tasks after commit, push, PR open,
+  wait, and initial ACK.
+
 Follow ACK-authorized actions only. Do not manually tag Codex, Qodo, Gemini,
-or Sourcery. Do not merge, do not force-push, and never squash.
+or Sourcery. Do not force-push or squash. Auto-merge is authorized only through
+the Agent Control Kit executor after ACK returns a clean exact-head
+`merge_ready` result for `dev`.
