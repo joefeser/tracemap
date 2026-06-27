@@ -166,7 +166,10 @@ Results:
 
 ## PR Loop Log
 
-Pending.
+- PR #409 opened against `dev`.
+- Initial SSH push failed with `Connection closed by 140.82.114.4 port 22`;
+  retried with GitHub CLI authenticated HTTPS remote and push succeeded.
+- ACK run pending after required 3-minute wait.
 
 ## Follow-Up Items
 
