@@ -4240,6 +4240,27 @@ rules:
       - File presence does not prove project membership, compilation, symbol resolution, runtime execution, or semantic coverage.
       - Generated, dependency, oversized, unsupported, or excluded files may be omitted with explicit reduced-coverage gaps.
 
+  - id: swift.inventory.source-file.v1
+    name: Swift source file and root inventory
+    description: Records Swift source file and source-root classification from repo-relative checked-in paths.
+    evidenceTier: Tier2Structural
+    emits:
+      - SwiftSourceFileDeclared
+      - SwiftSourceRootDeclared
+    limitations:
+      - Source-root classification is path-structural only; it does not prove target membership, compilation, semantic symbols, generated-code freshness, or runtime behavior.
+      - Custom roots, generated files, and vendor-adjacent files may be classified as custom or generated when stronger project metadata is unavailable.
+
+  - id: swift.inventory.exclusion.v1
+    name: Swift inventory exclusion boundary
+    description: Records generated, vendor, build, dependency, or cache-root exclusion and skipped-file evidence.
+    evidenceTier: Tier2Structural
+    emits:
+      - AnalysisGap
+    limitations:
+      - Exclusions are deterministic static scan boundaries and do not prove files are unused, unreachable, generated correctly, or safe to ignore.
+      - Metadata lockfiles may still be inventoried when safe and in scope.
+
   - id: swift.package.swiftpm.v1
     name: SwiftPM metadata inventory
     description: Records checked-in SwiftPM manifest or resolved-package metadata presence without resolving packages.
@@ -4249,6 +4270,28 @@ rules:
     limitations:
       - Literal checked-in metadata only; no network package resolution, build success, transitive dependency completeness, platform compatibility, or runtime use is proven.
       - Package.swift is executable Swift code; scaffold inventory does not evaluate dynamic expressions, plugins, environment variables, or generated package metadata.
+
+  - id: swift.swiftpm.manifest.v1
+    name: SwiftPM manifest metadata
+    description: Records checked-in Package.swift file metadata and token-scanned static labels without executing Swift.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftPackageManifestDeclared
+    limitations:
+      - Package.swift is executable Swift; token-scanned package, target, product, and dependency labels are syntax/textual evidence only.
+      - Dynamic expressions, conditionals, plugins, environment-dependent values, computed variables, and unsupported syntax emit gaps rather than inferred package structure.
+      - No package resolution, compatibility, registry lookup, license, vulnerability, or runtime-use conclusion is emitted.
+
+  - id: swift.swiftpm.resolved.v1
+    name: SwiftPM resolved lockfile metadata
+    description: Records supported Package.resolved schema and safe package identity counts from checked-in lockfile data.
+    evidenceTier: Tier2Structural
+    emits:
+      - SwiftPackageResolvedDeclared
+    limitations:
+      - Lockfile data is checked-in metadata only; it does not prove packages are restored, compatible, reachable, fresh, licensed, vulnerable, or used at runtime.
+      - Raw locations, URLs, hostnames, repository remotes, credentials, and local paths are omitted or represented only by hashes/counts.
+      - Unknown lockfile schemas emit reduced-coverage gaps.
 
   - id: swift.package.cocoapods.v1
     name: CocoaPods metadata inventory
@@ -4279,6 +4322,68 @@ rules:
     limitations:
       - Static project metadata only; no Xcode build success, scheme behavior, target selection, build-setting evaluation, signing, simulator/device state, deployment, or runtime behavior is proven.
       - Storyboard, xib, asset, plist, entitlement, and project metadata inventory does not prove UI navigation, permissions, storage behavior, or production use.
+
+  - id: swift.xcode.project.v1
+    name: Xcode project metadata inventory
+    description: Records checked-in .xcodeproj and project.pbxproj metadata inventory with narrow safe line/key extraction where available.
+    evidenceTier: Tier2Structural
+    emits:
+      - SwiftXcodeProjectDeclared
+    limitations:
+      - Project metadata does not prove buildability, active schemes, target reachability, selected destinations, signing, deployment, simulator/device behavior, or runtime entry points.
+      - Unbounded Xcode object-graph interpretation is out of scope; unsupported graphs emit gaps.
+      - Local absolute paths and external references are omitted or hashed.
+
+  - id: swift.xcode.workspace.v1
+    name: Xcode workspace metadata inventory
+    description: Records checked-in .xcworkspace metadata and safe referenced project counts from contents.xcworkspacedata.
+    evidenceTier: Tier2Structural
+    emits:
+      - SwiftXcodeWorkspaceDeclared
+    limitations:
+      - Workspace references do not prove buildability, scheme selection, target reachability, or runtime app behavior.
+      - External URLs, absolute paths, and missing references are reduced-coverage gaps and are not rendered raw.
+
+  - id: swift.plist.info.v1
+    name: Swift Info.plist metadata inventory
+    description: Records allowlisted or hashed checked-in Info.plist metadata from deterministic XML plist parsing.
+    evidenceTier: Tier2Structural
+    emits:
+      - SwiftInfoPlistDeclared
+    limitations:
+      - Plist metadata is checked-in configuration evidence only; it does not prove deployed configuration, permissions granted at runtime, URL route reachability, or app behavior.
+      - Raw plist values, URLs, hostnames, secrets, local paths, and private labels are omitted or hashed.
+      - Binary or malformed plist files emit reduced-coverage gaps unless a future deterministic parser is documented and tested.
+
+  - id: swift.ecosystem.metadata.v1
+    name: Swift ecosystem metadata inventory
+    description: Records CocoaPods and Carthage checked-in metadata boundaries and safe dependency identity counts.
+    evidenceTier: Tier2Structural
+    emits:
+      - SwiftEcosystemMetadataDeclared
+    limitations:
+      - Metadata inventory does not run pod install, carthage bootstrap, package checkout, builds, registry lookups, license checks, vulnerability checks, or runtime-use analysis.
+      - Raw package sources, repository URLs, hostnames, credentials, tokens, and local paths are omitted or hashed.
+
+  - id: swift.toolchain.diagnostic.v1
+    name: Swift toolchain diagnostic
+    description: Emits bounded non-mutating availability diagnostics for Swift, Xcode, CocoaPods, and Carthage tooling.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Toolchain availability or absence is diagnostic evidence only; it does not prove buildability, selected tool versions, package resolution, or runtime behavior.
+      - Probes are bounded and non-mutating; no builds, restores, installs, updates, simulators, devices, tests, or app code are run.
+
+  - id: swift.analysis-gap.v1
+    name: Swift inventory analysis gap
+    description: Emits gaps for unsupported, malformed, dynamic, external, unsafe, missing, or intentionally deferred Swift metadata.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Gaps are partial-analysis evidence and must not be interpreted as clean absence, safety, reachability, or runtime behavior.
+      - Deferred SwiftSyntax, SourceKit, Xcode graph, SwiftPM semantic loading, Objective-C bridging, macros, result builders, UI, storage, and runtime behavior remain out of scope unless future rules prove them.
 
   - id: swift.toolchain.unavailable.v1
     name: Swift toolchain unavailable gap
