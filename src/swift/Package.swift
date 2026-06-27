@@ -12,8 +12,18 @@ let package = Package(
         .executable(name: "tracemap-swift-smoke-tests", targets: ["tracemap-swift-smoke-tests"]),
         .library(name: "TraceMapSwift", targets: ["TraceMapSwift"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", exact: "603.0.2")
+    ],
     targets: [
-        .target(name: "TraceMapSwift"),
+        .target(
+            name: "TraceMapSwift",
+            dependencies: [
+                .product(name: "SwiftParser", package: "swift-syntax"),
+                .product(name: "SwiftParserDiagnostics", package: "swift-syntax"),
+                .product(name: "SwiftSyntax", package: "swift-syntax")
+            ]
+        ),
         .executableTarget(
             name: "tracemap-swift",
             dependencies: ["TraceMapSwift"]
