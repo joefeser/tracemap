@@ -13,6 +13,10 @@ struct TraceMapSwiftSmokeTests {
         try defaultExcludesUsePathSegments()
         try bundleFactsHonorUserFilters()
         try projectAndPackageMetadataFactsAreEmittedSafely()
+        try swiftSyntaxDeclarationAndCallFactsAreStored()
+        try parserDiagnosticsEmitHashedGapWithoutRawText()
+        try conditionalAndOptionalCallGapsUseSwiftSyntaxAnalysisGapRule()
+        try exportedImportsRemainSyntaxOnlyAndDoNotClaimRuntimeReexport()
         try unsupportedMetadataEmitsGaps()
         try oversizedFilesBecomeGaps()
         try sqliteContainsSharedTablesAndFacts()
@@ -63,7 +67,7 @@ struct TraceMapSwiftSmokeTests {
         assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.unsupported.dynamic-boundary.v1" })
         let report = try String(contentsOf: out.appendingPathComponent("report.md"), encoding: .utf8)
         assert(report.contains("Level1SemanticAnalysisReduced"))
-        assert(report.contains("Absence of evidence is not evidence of absence"))
+        assert(report.contains("absence of evidence is not evidence of absence"))
         assert(!report.contains(out.path))
     }
 
@@ -220,6 +224,153 @@ struct TraceMapSwiftSmokeTests {
         assert(gapKinds.contains("xcode-workspace-external-reference"))
     }
 
+    static func swiftSyntaxDeclarationAndCallFactsAreStored() throws {
+        let fixture = try SwiftFixture(extraFiles: [
+            "Sources/App/Feature.swift": """
+            import Foundation
+            @_exported import struct Foundation.URL
+
+            protocol Sending {
+              func send(_ value: Int)
+            }
+
+            actor Worker {
+              func run() {}
+            }
+
+            class Service: Sending {
+              func send(_ value: Int) {}
+            }
+
+            struct Handler {
+              let service = Service()
+
+              func run(value: Int) {
+                service.send(value)
+                Service()
+              }
+            }
+
+            #if canImport(UIKit)
+            import UIKit
+            struct ConditionalView {
+              func draw() {
+                print("conditional")
+              }
+            }
+            #endif
+            """
+        ])
+        let out = fixture.temp.url.appendingPathComponent("scan")
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: out))
+        let factTypes = Set(result.facts.map(\.factType))
+        assert(factTypes.contains("SwiftDeclarationDeclared"))
+        assert(factTypes.contains("SwiftImportDeclared"))
+        assert(factTypes.contains("SwiftCallCandidate"))
+        assert(factTypes.contains("SwiftConstructionCandidate"))
+        assert(result.facts.contains { $0.factType == "SwiftDeclarationDeclared" && $0.properties["declarationKind"] == "actor" })
+        assert(result.facts.contains { $0.factType == "SwiftImportDeclared" && $0.properties["exportedImport"] == "true" })
+        assert(result.facts.contains { $0.factType == "SwiftImportDeclared" && $0.properties["importKind"] == "struct" && $0.properties["importedModule"] == "Foundation.URL" })
+        assert(result.facts.contains { $0.properties["conditionalCompilation"] == "true" })
+        let declarations = result.facts.filter { $0.factType == "SwiftDeclarationDeclared" }
+        assert(!declarations.isEmpty)
+        assert(declarations.allSatisfy { $0.targetSymbol?.hasPrefix("swift-syntax:v0:") == true })
+        assert(declarations.allSatisfy { ($0.targetSymbol?.dropFirst("swift-syntax:v0:".count).count ?? 0) == 64 })
+        assert(result.facts.first { $0.factType == "SwiftSourceRootDeclared" }?.evidenceTier == .tier3SyntaxOrTextual)
+        let gapKinds = Set(result.facts.filter { $0.factType == "AnalysisGap" }.compactMap { $0.properties["gapKind"] })
+        assert(gapKinds.contains("ConditionalCompilationAmbiguous"))
+        assert(gapKinds.contains("CanImportConditionalAmbiguous"))
+        assert(result.facts.allSatisfy { $0.evidenceTier != .tier1Semantic })
+        assert(result.facts.filter { ["SwiftDeclarationDeclared", "SwiftImportDeclared", "SwiftCallCandidate", "SwiftConstructionCandidate"].contains($0.factType) }.allSatisfy { $0.evidenceTier == .tier3SyntaxOrTextual })
+
+        let symbols = try run("/usr/bin/sqlite3", [out.appendingPathComponent("index.sqlite").path, "select count(*) from symbols where language='swift';"]).trimmed()
+        let callEdges = try run("/usr/bin/sqlite3", [out.appendingPathComponent("index.sqlite").path, "select count(*) from call_edges where rule_id='swift.syntax.call.v1';"]).trimmed()
+        let creations = try run("/usr/bin/sqlite3", [out.appendingPathComponent("index.sqlite").path, "select count(*) from object_creations where rule_id='swift.syntax.construction.v1';"]).trimmed()
+        let supportedCallFacts = try run("/usr/bin/sqlite3", [out.appendingPathComponent("index.sqlite").path, "select count(*) from call_edges c join facts f on f.fact_id = c.fact_id where f.fact_type='SwiftCallCandidate';"]).trimmed()
+        let supportedCreationFacts = try run("/usr/bin/sqlite3", [out.appendingPathComponent("index.sqlite").path, "select count(*) from object_creations c join facts f on f.fact_id = c.fact_id where f.fact_type='SwiftConstructionCandidate';"]).trimmed()
+        assert((Int(symbols) ?? 0) > 0)
+        assert((Int(callEdges) ?? 0) > 0)
+        assert((Int(creations) ?? 0) > 0)
+        assert((Int(supportedCallFacts) ?? 0) == (Int(callEdges) ?? -1))
+        assert((Int(supportedCreationFacts) ?? 0) == (Int(creations) ?? -1))
+    }
+
+    static func parserDiagnosticsEmitHashedGapWithoutRawText() throws {
+        let sentinel = "DO_NOT_RENDER_PARSE_DIAGNOSTIC_SENTINEL"
+        let fixture = try SwiftFixture(extraFiles: [
+            "Sources/App/Broken.swift": """
+            struct Broken {
+              let value =
+              let secret = "\(sentinel)"
+            }
+            """
+        ])
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: fixture.temp.url.appendingPathComponent("scan")))
+        let gaps = result.facts.filter { $0.factType == "AnalysisGap" && $0.properties["gapKind"] == "SwiftParseDiagnostics" }
+        assert(!gaps.isEmpty)
+        assert(gaps.allSatisfy { $0.ruleId == "swift.syntax.analysis-gap.v1" })
+        assert(result.manifest.knownGaps.contains { $0.contains("diagnosticMessageHash=") })
+        assert(!result.manifest.knownGaps.contains { $0.contains(sentinel) })
+        assert(!result.facts.contains { fact in
+            fact.properties.values.contains { $0.contains(sentinel) }
+        })
+    }
+
+    static func conditionalAndOptionalCallGapsUseSwiftSyntaxAnalysisGapRule() throws {
+        let fixture = try SwiftFixture(extraFiles: [
+            "Sources/App/Conditional.swift": """
+            #if canImport(UIKit)
+            import UIKit
+            #endif
+
+            struct OptionalCaller {
+              let service: Service?
+              func run() {
+                service?.send()
+              }
+            }
+            struct Service {
+              func send() {}
+            }
+            """,
+            "Loose.swift": """
+            import Foundation
+            struct Loose {}
+            """
+        ])
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: fixture.temp.url.appendingPathComponent("scan")))
+        let gapFacts = result.facts.filter { $0.factType == "AnalysisGap" }
+        let gapKinds = Set(gapFacts.compactMap { $0.properties["gapKind"] })
+        assert(gapKinds.contains("ConditionalCompilationAmbiguous"))
+        assert(gapKinds.contains("CanImportConditionalAmbiguous"))
+        assert(gapKinds.contains("swift-module-context-unavailable"))
+        assert(gapKinds.contains("swift-call-optional-chaining-unresolved"))
+        let reviewedKinds = ["ConditionalCompilationAmbiguous", "CanImportConditionalAmbiguous", "swift-module-context-unavailable", "swift-call-optional-chaining-unresolved"]
+        assert(gapFacts.filter { reviewedKinds.contains($0.properties["gapKind"] ?? "") }.allSatisfy { $0.ruleId == "swift.syntax.analysis-gap.v1" })
+    }
+
+    static func exportedImportsRemainSyntaxOnlyAndDoNotClaimRuntimeReexport() throws {
+        let fixture = try SwiftFixture(extraFiles: [
+            "Sources/App/Exports.swift": """
+            @_exported import Foundation
+            struct UsesURL {
+              let value: URL?
+            }
+            """
+        ])
+        let out = fixture.temp.url.appendingPathComponent("scan")
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: out))
+        guard let exported = result.facts.first(where: { $0.factType == "SwiftImportDeclared" && $0.properties["exportedImport"] == "true" }) else {
+            throw SmokeFailure("missing exported import fact")
+        }
+        assert(exported.evidenceTier == .tier3SyntaxOrTextual)
+        assert(exported.ruleId == "swift.syntax.import.v1")
+        let report = try String(contentsOf: out.appendingPathComponent("report.md"), encoding: .utf8).lowercased()
+        for forbidden in ["runtime re-export", "runtime target", "will call", "executed", "injected", "impacted"] {
+            assert(!report.contains(forbidden), "report contained forbidden wording: \(forbidden)")
+        }
+    }
+
     static func oversizedFilesBecomeGaps() throws {
         let fixture = try SwiftFixture(extraFiles: [
             "Sources/App/Large.swift": String(repeating: "x", count: 128)
@@ -241,6 +392,13 @@ struct TraceMapSwiftSmokeTests {
         }
         let factCount = try run("/usr/bin/sqlite3", [out.appendingPathComponent("index.sqlite").path, "select count(*) from facts;"]).trimmed()
         assert((Int(factCount) ?? 0) > 0)
+        let db = out.appendingPathComponent("index.sqlite").path
+        let orphanCalls = try run("/usr/bin/sqlite3", [db, "select count(*) from call_edges c left join facts f on f.fact_id = c.fact_id where f.fact_id is null;"]).trimmed()
+        let orphanCreations = try run("/usr/bin/sqlite3", [db, "select count(*) from object_creations o left join facts f on f.fact_id = o.fact_id where f.fact_id is null;"]).trimmed()
+        let orphanOccurrences = try run("/usr/bin/sqlite3", [db, "select count(*) from symbol_occurrences o left join facts f on f.fact_id = o.fact_id where f.fact_id is null;"]).trimmed()
+        assert(orphanCalls == "0", "orphan call_edges without backing fact")
+        assert(orphanCreations == "0", "orphan object_creations without backing fact")
+        assert(orphanOccurrences == "0", "orphan symbol_occurrences without backing fact")
     }
 
     static func emittedRuleIdsAreCataloged() throws {
@@ -251,6 +409,7 @@ struct TraceMapSwiftSmokeTests {
         for ruleId in Set(result.facts.map(\.ruleId)) {
             assert(catalog.contains("id: \(ruleId)"), "missing rule \(ruleId)")
         }
+        assert(!catalog.contains("id: swift.syntax.not-cataloged.v1"))
     }
 
     static func requireFact(_ result: SwiftScanResult, _ factType: String) throws -> CodeFact {

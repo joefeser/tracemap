@@ -1,6 +1,6 @@
 # SwiftSyntax Declarations and Basic Call Facts Implementation State
 
-Status: ready-for-implementation
+Status: implemented-partial
 
 ## Branch
 
@@ -12,20 +12,15 @@ Status: ready-for-implementation
 - Module-context issue: [#379](https://github.com/joefeser/tracemap/issues/379)
 - Symbol/relationship owner issue:
   [#381](https://github.com/joefeser/tracemap/issues/381)
-- Scope: spec-only
+- Scope: implementation PR
 
 ## Current State
 
-This spec is ready for implementation planning. No Swift analyzer/runtime code
-has been implemented in this branch, and no tasks in `tasks.md` are marked
-complete.
+This implementation adds SwiftSyntax-backed declaration, import, basic call, and construction candidate extraction. It emits rule-backed facts, safe syntax hashes, reduced-coverage gaps, and shared SQLite rows for symbols, occurrences, fact-symbol links, call edges, and construction candidates. Canonical symbol relationship semantics remain owned by issue #381.
 
-Product-code implementation should start only after the Swift scaffold/output
-contract from issue #378 has landed on the implementation base. If the Swift
-inventory/project/package slice from issue #379 is not yet available,
-declaration and call extraction must remain file-scoped and emit module/package
-context gaps. Canonical Swift symbol IDs and relationship rows belong to issue
-#381; this slice must remain compatible with that contract.
+Implementation branch: `codex/implement-swift-swiftsyntax-declarations-calls`
+
+Issue #378 and #379 are merged into `dev`. This slice consumes the current inventory output for deterministic module context where possible. It uses interim `swift-syntax:v0:<sha256-lower-64>` syntax IDs compatible with the #381 migration boundary; canonical relationship rows remain deferred to issue #381.
 
 ## Source Material
 
@@ -65,6 +60,60 @@ context gaps. Canonical Swift symbol IDs and relationship rows belong to issue
   upgrade.
 - Store hashes, kinds, lengths, safe labels, and repo-relative paths by
   default; do not store raw snippets or raw expressions.
+
+## Implementation Decisions
+
+- Added SwiftPM dependency `swift-syntax` pinned to `603.0.2`, matching the
+  local Swift 6.3 toolchain family used for validation.
+- Added `SwiftSyntaxEvidenceExtractor` under `src/swift/Sources/TraceMapSwift/`
+  for imports, declarations, basic call candidates, and construction
+  candidates.
+- The scan ID now includes selected file content hashes in addition to
+  repo/commit/options/inventory metadata so syntax-derived fact output tracks
+  checked-in source content.
+- Emitted Swift-specific fact types rather than shared semantic fact types:
+  `SwiftDeclarationDeclared`, `SwiftImportDeclared`, `SwiftCallCandidate`, and
+  `SwiftConstructionCandidate`.
+- Reused shared SQLite tables only for navigation/storage compatibility:
+  `symbols`, `symbol_occurrences`, `fact_symbols`, `call_edges`, and
+  `object_creations`. These rows retain Swift syntax rule IDs and syntax-tier
+  evidence; they do not imply semantic dispatch.
+- `AnalysisGap` remains the shared gap fact type. Swift syntax parser,
+  conditional compilation, module-context, and unsupported-shape gaps use
+  `swift.syntax.analysis-gap.v1`.
+- Canonical symbol relationship extraction, inheritance/protocol conformance
+  rows, overrides, and fully qualified Swift symbol semantics remain deferred
+  to issue #381.
+- No `MethodInvoked`, `PropertyAccessed`, or shared `ObjectCreated` facts are
+  emitted by this slice.
+- `fact_id` is the supporting fact identifier for Swift-derived
+  `call_edges` and `object_creations` rows in the current shared TraceMap
+  schema. Smoke tests assert those rows join back to their
+  `SwiftCallCandidate` or `SwiftConstructionCandidate` facts.
+- SwiftSyntax facts remain `Tier3SyntaxOrTextual` in this slice. Tier2
+  promotion from deterministic package/target identity is deferred until a
+  later #379/#381 integration proves the backing evidence.
+- Syntax hashes normalize comments, string literals, numeric literals, and
+  whitespace before hashing, then persist full 64-character lowercase SHA-256
+  digests.
+- Conditional compilation blocks emit `ConditionalCompilationAmbiguous` gaps;
+  `#if canImport(...)` also emits `CanImportConditionalAmbiguous`, and nested
+  evidence includes `conditionalCompilation=true`.
+- Recoverable Swift parser diagnostics emit `SwiftParseDiagnostics` gaps with
+  hashed diagnostic messages. Raw SwiftSyntax diagnostic text is not stored.
+- Source-root facts derived only from repo-relative path shape are
+  `Tier3SyntaxOrTextual`; Tier2 promotion remains deferred until deterministic
+  package/target backing evidence is proven by a later slice.
+- SwiftPM XCTest/Testing modules are unavailable in the local Swift 6.3.3
+  toolchain, so this branch keeps the focused safety tests in the
+  `tracemap-swift-smoke-tests` executable rather than adding a non-runnable
+  SwiftPM test target.
+- Swift fact IDs are derived from stable structural fields
+  (`scanId`, fact type, rule ID, evidence tier, file path, span, target symbol,
+  and contract element) rather than the mutable properties bag.
+- Source inventory coverage labels use an explicit degrading-gap allowlist
+  rather than treating every non-semantic-deferred gap as reduced inventory
+  coverage.
 
 ## Safe and No-Overclaim Boundaries
 
@@ -117,9 +166,75 @@ dotnet test src/dotnet/TraceMap.sln
 git diff --check
 ```
 
+Validation completed on implementation branch:
+
+- `swift build --package-path src/swift`: passed.
+- `swift run --package-path src/swift tracemap-swift-smoke-tests`: passed,
+  including catalog-gate, parser diagnostic hashing, syntax-only tier,
+  documented interim symbol ID, conditional import, module-context gap,
+  optional-chain gap, and exported-import wording coverage.
+- `samples/swift-package-basic`: scan passed with 19 facts, including
+  SwiftSyntax declaration/import/call/construction facts, 3 symbols, 1 call
+  edge, and 1 object creation row.
+- `samples/swift-metadata-reduced`: scan passed with 26 facts.
+- `samples/swift-metadata-unsupported`: scan passed with 14 facts.
+- `samples/no-swift`: scan passed with 3 facts,
+  `Level3SyntaxAnalysis`, and `FailedOrPartial`.
+- Downstream export/combine/report passed over
+  `/tmp/tracemap-swift-package-basic/index.sqlite`.
+- Generated-output redaction sentinel passed.
+- `dotnet build src/dotnet/TraceMap.sln`: passed.
+- `dotnet test src/dotnet/TraceMap.sln`: passed with 693 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Sonnet implementation review:
+  `.tmp/kiro-reviews/swift-adapter-v0-swiftsyntax-declarations-calls/2026-06-27T191527-829Z-implementation-claude-sonnet-4.6.clean.md`
+  completed with reduced coverage because Kiro reported denied tool access.
+  Blocking findings patched:
+  - normalized syntax hash inputs instead of hashing raw `trimmedDescription`;
+  - removed path-derived Tier2 promotion for SwiftSyntax facts;
+  - documented/tested existing `fact_id` supporting-fact convention for
+    derived Swift call/object rows;
+  - added conditional compilation and `canImport` gaps with conditional fact
+    flags.
+- Sonnet implementation re-review:
+  `.tmp/kiro-reviews/swift-adapter-v0-swiftsyntax-declarations-calls/2026-06-27T192322-529Z-implementation-claude-sonnet-4.6.clean.md`
+  completed with reduced coverage because Kiro reported denied tool access.
+  Blocking findings patched:
+  - added focused smoke-test coverage for catalog gates, parser diagnostic
+    hashing, interim symbol ID format, syntax-only tiers, conditional imports,
+    module-context gaps, optional chaining gaps, and exported-import wording;
+  - aligned syntax gap rule ID to `swift.syntax.analysis-gap.v1`;
+  - changed interim symbol IDs to `swift-syntax:v0:<sha256-lower-64>`;
+  - emitted `SwiftParseDiagnostics` gaps with hashed diagnostic messages;
+  - downgraded path-derived `SwiftSourceRootDeclared` evidence to
+    `Tier3SyntaxOrTextual`.
+- Final Sonnet implementation re-review:
+  `.tmp/kiro-reviews/swift-adapter-v0-swiftsyntax-declarations-calls/2026-06-27T194042-618Z-implementation-claude-sonnet-4.6.clean.md`
+  completed with full coverage. Blocking findings patched:
+  - replaced inverted coverage-label logic with an explicit degrading-gap list;
+  - added orphan-row assertions for `call_edges`, `object_creations`, and
+    `symbol_occurrences`;
+  - removed the mutable properties bag from Swift fact ID inputs.
+
 Run additional `docs/VALIDATION.md` smokes when shared schema, reducer,
 combine, report, paths, reverse, diff, impact, release-review, or export
 behavior changes.
+
+## Implementation Validation Commands
+
+```bash
+swift build --package-path src/swift
+swift run --package-path src/swift tracemap-swift-smoke-tests
+swift run --package-path src/swift tracemap-swift scan --repo samples/swift-package-basic --out /tmp/tracemap-swift-package-basic
+dotnet run --project src/dotnet/TraceMap.Cli -- export --index /tmp/tracemap-swift-package-basic/index.sqlite --out /tmp/tracemap-swift-export --format json
+dotnet run --project src/dotnet/TraceMap.Cli -- combine --index /tmp/tracemap-swift-package-basic/index.sqlite --label swift --out /tmp/tracemap-swift-combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- report --index /tmp/tracemap-swift-combined.sqlite --out /tmp/tracemap-swift-report
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
 
 ## Review State
 
