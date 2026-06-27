@@ -2787,10 +2787,11 @@ public static class PropertyFlowReporter
     private static string? TerminalContextCue(PropertyFlowPath path)
     {
         var terminalNode = path.Nodes
-            .Where(node => node.SafeMetadata.TryGetValue("terminalContextKind", out var value) && !string.IsNullOrWhiteSpace(value))
-            .OrderBy(node => node.NodeId, StringComparer.Ordinal)
-            .FirstOrDefault();
-        if (terminalNode is null || !terminalNode.SafeMetadata.TryGetValue("terminalContextKind", out var terminalContextKind))
+            .Where(node => node.SafeMetadata is not null
+                && node.SafeMetadata.TryGetValue("terminalContextKind", out var value)
+                && !string.IsNullOrWhiteSpace(value))
+            .LastOrDefault();
+        if (terminalNode?.SafeMetadata is null || !terminalNode.SafeMetadata.TryGetValue("terminalContextKind", out var terminalContextKind))
         {
             return null;
         }
