@@ -150,7 +150,7 @@ public enum SwiftScanEngine {
         let inventory = try InventoryBuilder.build(scanRoot: repo, gitRoot: git.gitRoot, options: options)
         let scanId = stableScanId(git: git, options: options, inventory: inventory)
         var gaps = CoverageGap.defaults(inventory: inventory)
-        gaps += Toolchain.diagnostics()
+        gaps += Toolchain.diagnostics(inventory: inventory)
         gaps += MetadataGapFactory.gaps(scanRoot: repo, inventory: inventory)
         if inventory.contains(where: { $0.kind == "swiftpm-manifest" }) {
             gaps.append(CoverageGap(kind: "swiftpm-load-deferred", ruleId: RuleIds.analysisGap, message: "SwiftPM semantic package loading is deferred; checked-in Package.swift metadata is inventory-only."))
@@ -450,8 +450,9 @@ enum MetadataGapFactory {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else {
             return [CoverageGap(kind: "swiftpm-manifest-unreadable", ruleId: RuleIds.analysisGap, message: "Package.swift could not be read as UTF-8.", filePath: item.relativePath, startLine: item.startLine, endLine: item.endLine)]
         }
-        let dynamicMarkers = ["ProcessInfo.", "FileManager.", "getenv(", "#if ", "if ", "for ", "while ", "func ", "var "]
-        guard dynamicMarkers.contains(where: { text.contains($0) }) else { return [] }
+        let scanText = stripSwiftCommentsAndStringLiterals(text)
+        let dynamicMarkers = ["ProcessInfo.", "FileManager.", "getenv(", "#if ", " if ", "\nif ", " for ", "\nfor ", " while ", "\nwhile ", " func ", "\nfunc ", " var ", "\nvar "]
+        guard dynamicMarkers.contains(where: { scanText.contains($0) }) else { return [] }
         return [CoverageGap(kind: "swiftpm-manifest-dynamic", ruleId: RuleIds.analysisGap, message: "Package.swift contains dynamic or unsupported constructs; token-scanned inventory is partial.", filePath: item.relativePath, startLine: item.startLine, endLine: item.endLine)]
     }
 
@@ -479,7 +480,7 @@ enum MetadataGapFactory {
         guard let data = try? Data(contentsOf: url) else {
             return [CoverageGap(kind: "plist-unreadable", ruleId: RuleIds.analysisGap, message: "Info.plist could not be read.", filePath: item.relativePath, startLine: item.startLine, endLine: item.endLine)]
         }
-        guard String(data: data.prefix(32), encoding: .utf8)?.contains("bplist") != true else {
+        guard !isBinaryPlist(data) else {
             return [CoverageGap(kind: "plist-binary-unsupported", ruleId: RuleIds.analysisGap, message: "Binary plist parsing is deferred in v0 inventory.", filePath: item.relativePath, startLine: item.startLine, endLine: item.endLine)]
         }
         guard (try? PropertyListSerialization.propertyList(from: data, options: [], format: nil)) != nil else {
@@ -682,14 +683,10 @@ enum FactFactory {
 
     private static func ruleId(for item: InventoryItem) -> String {
         switch item.kind {
-        case "swift-source": return RuleIds.sourceFile
-        case "swiftpm-manifest": return RuleIds.swiftPMManifest
-        case "swiftpm-resolved": return RuleIds.swiftPMResolved
+        case "swiftpm-manifest", "swiftpm-resolved": return RuleIds.swiftPM
         case "cocoapods-metadata": return RuleIds.cocoaPods
         case "carthage-metadata": return RuleIds.carthage
-        case "xcode-project", "xcode-project-metadata": return RuleIds.xcodeProject
-        case "xcode-workspace", "xcode-workspace-metadata": return RuleIds.xcodeWorkspace
-        case "plist": return RuleIds.infoPlist
+        case "xcode-project", "xcode-workspace", "xcode-project-metadata", "xcode-workspace-metadata": return RuleIds.xcode
         default: return RuleIds.fileInventory
         }
     }
@@ -989,7 +986,7 @@ struct PlistMetadata {
 
     static func read(_ url: URL) -> PlistMetadata {
         guard let data = try? Data(contentsOf: url),
-              String(data: data.prefix(32), encoding: .utf8)?.contains("bplist") != true,
+              !isBinaryPlist(data),
               let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil),
               let dictionary = plist as? [String: Any] else {
             return PlistMetadata(bundleIdentifierHash: "", permissionKeyCount: 0, urlSchemeCount: 0, atsKeyPresent: false, platformLabels: "", parseStatus: "unsupported-or-malformed")
@@ -1217,18 +1214,22 @@ enum SQLiteWriter {
 }
 
 enum Toolchain {
-    static func diagnostics() -> [CoverageGap] {
+    static func diagnostics(inventory: [InventoryItem]) -> [CoverageGap] {
         var gaps: [CoverageGap] = []
-        if !toolAvailable(label: "swift", executable: "/usr/bin/swift", arguments: ["--version"]) {
+        if inventory.contains(where: { $0.kind == "swift-source" || $0.kind == "swiftpm-manifest" || $0.kind == "swiftpm-resolved" }),
+           !toolAvailable(label: "swift", executable: "/usr/bin/env", arguments: ["swift", "--version"]) {
             gaps.append(CoverageGap(kind: "swift-toolchain-unavailable", ruleId: RuleIds.toolchainDiagnostic, message: "Swift toolchain probe unavailable or timed out; file-based inventory continued."))
         }
-        if !toolAvailable(label: "xcodebuild", executable: "/usr/bin/xcodebuild", arguments: ["-version"]) {
+        if inventory.contains(where: { $0.kind.hasPrefix("xcode-") || $0.kind == "plist" }),
+           !toolAvailable(label: "xcodebuild", executable: "/usr/bin/env", arguments: ["xcodebuild", "-version"]) {
             gaps.append(CoverageGap(kind: "xcodebuild-toolchain-unavailable", ruleId: RuleIds.toolchainDiagnostic, message: "Xcode command-line probe unavailable or timed out; Xcode metadata remains checked-in inventory only."))
         }
-        if !toolAvailable(label: "pod", executable: "/usr/bin/env", arguments: ["pod", "--version"]) {
+        if inventory.contains(where: { $0.kind == "cocoapods-metadata" }),
+           !toolAvailable(label: "pod", executable: "/usr/bin/env", arguments: ["pod", "--version"]) {
             gaps.append(CoverageGap(kind: "cocoapods-toolchain-unavailable", ruleId: RuleIds.toolchainDiagnostic, message: "CocoaPods probe unavailable or timed out; CocoaPods metadata remains checked-in inventory only."))
         }
-        if !toolAvailable(label: "carthage", executable: "/usr/bin/env", arguments: ["carthage", "version"]) {
+        if inventory.contains(where: { $0.kind == "carthage-metadata" }),
+           !toolAvailable(label: "carthage", executable: "/usr/bin/env", arguments: ["carthage", "version"]) {
             gaps.append(CoverageGap(kind: "carthage-toolchain-unavailable", ruleId: RuleIds.toolchainDiagnostic, message: "Carthage probe unavailable or timed out; Carthage metadata remains checked-in inventory only."))
         }
         return gaps
@@ -1238,7 +1239,7 @@ enum Toolchain {
         if ProcessInfo.processInfo.environment["TRACEMAP_SWIFT_DISABLE_TOOLCHAIN"] == "1" {
             return false
         }
-        return toolAvailable(label: "swift", executable: "/usr/bin/swift", arguments: ["--version"])
+        return toolAvailable(label: "swift", executable: "/usr/bin/env", arguments: ["swift", "--version"])
     }
 
     private static func toolAvailable(label: String, executable: String, arguments: [String]) -> Bool {
@@ -1394,13 +1395,13 @@ func regexCaptures(_ pattern: String, in text: String) -> [String] {
 
 func parsePodIdentities(_ text: String) -> [String] {
     let podNames = regexCaptures(#"\bpod\s+['"]([^'"]+)['"]"#, in: text)
-    let lockNames = regexCaptures(#"^\s{2}-\s+([A-Za-z0-9_.+-]+)"#, in: text)
+    let lockNames = regexCaptures(#"(?m)^\s{2}-\s+([A-Za-z0-9_.+-]+)"#, in: text)
     return Array(Set((podNames + lockNames).filter(isSafeLabel))).sorted()
 }
 
 func parseCartfileIdentities(_ text: String) -> [String] {
-    let quoted = regexCaptures(#"["']([^"']+)["']"#, in: text)
-    return Array(Set(quoted.map { value in
+    let repositories = regexCaptures(#"(?m)^\s*(?:github|git|binary)\s+["']([^"']+)["']"#, in: text)
+    return Array(Set(repositories.map { value in
         value.split(separator: "/").last.map(String.init) ?? value
     }.filter(isSafeLabel))).sorted()
 }
@@ -1425,6 +1426,67 @@ func safeLabels(_ values: [String]) -> String {
 func fileHash(_ url: URL) -> String {
     guard let data = try? Data(contentsOf: url) else { return "" }
     return PortableSHA256.hash(data).map { String(format: "%02x", $0) }.joined()
+}
+
+func isBinaryPlist(_ data: Data) -> Bool {
+    data.starts(with: Data("bplist".utf8))
+}
+
+func stripSwiftCommentsAndStringLiterals(_ text: String) -> String {
+    var output = ""
+    var index = text.startIndex
+    var inLineComment = false
+    var inBlockComment = false
+    var inString = false
+    while index < text.endIndex {
+        let current = text[index]
+        let nextIndex = text.index(after: index)
+        let next = nextIndex < text.endIndex ? text[nextIndex] : "\0"
+        if inLineComment {
+            if current == "\n" {
+                inLineComment = false
+                output.append("\n")
+            } else {
+                output.append(" ")
+            }
+        } else if inBlockComment {
+            if current == "*" && next == "/" {
+                inBlockComment = false
+                output.append("  ")
+                index = nextIndex
+            } else {
+                output.append(current == "\n" ? "\n" : " ")
+            }
+        } else if inString {
+            if current == "\\" {
+                output.append(" ")
+                if nextIndex < text.endIndex {
+                    output.append(" ")
+                    index = nextIndex
+                }
+            } else if current == "\"" {
+                inString = false
+                output.append(" ")
+            } else {
+                output.append(current == "\n" ? "\n" : " ")
+            }
+        } else if current == "/" && next == "/" {
+            inLineComment = true
+            output.append("  ")
+            index = nextIndex
+        } else if current == "/" && next == "*" {
+            inBlockComment = true
+            output.append("  ")
+            index = nextIndex
+        } else if current == "\"" {
+            inString = true
+            output.append(" ")
+        } else {
+            output.append(current)
+        }
+        index = text.index(after: index)
+    }
+    return output
 }
 
 func lineCount(_ url: URL) -> Int {
