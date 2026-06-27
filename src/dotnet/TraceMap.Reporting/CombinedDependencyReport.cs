@@ -1259,6 +1259,31 @@ public static class CombinedDependencyReporter
                 "No compatible static message surface or candidate-edge evidence was available in the combined index."));
         }
 
+        if (warnings.Count > 0)
+        {
+            var truncated = warnings.Any(warning => warning.Contains("truncated", StringComparison.OrdinalIgnoreCase));
+            gaps.Add(new MessageFlowContextGap(
+                truncated
+                    ? "message-context-gap:truncated-by-limit"
+                    : "message-context-gap:reduced-coverage",
+                truncated
+                    ? "MessageContextTruncatedByLimit"
+                    : "MessageContextReducedCoverage",
+                "NeedsReview",
+                MessageGapRuleId,
+                EvidenceTiers.Tier4Unknown,
+                "ReducedCoverage",
+                SortedStrings(sources.Select(source => source.Label)),
+                SortedStrings(sources.Select(source => source.CommitSha)),
+                SortedStrings(sources.Select(source => source.ScannerVersion)),
+                SortedStrings(rows.SelectMany(row => row.SupportingFactIds)),
+                SortedStrings(rows.SelectMany(row => row.SupportingEdgeIds)),
+                SortedStrings(rows.SelectMany(row => row.OperationDirections)),
+                truncated
+                    ? "Message review context is partial because static candidate evidence was truncated by configured report limits."
+                    : "Message review context is partial because upstream combined evidence carried reduced-coverage warnings."));
+        }
+
         return new MessageReviewContext(
             MessageClaimLevel,
             rows.Count == 0 ? "no_compatible_evidence" : warnings.Count == 0 ? "available" : "partial",
