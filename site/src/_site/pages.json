@@ -265,6 +265,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/proof-paths/property-flow-schema/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/proof-paths/faq/",
     "changefreq": "monthly",
     "priority": "0.7"

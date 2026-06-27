@@ -53,6 +53,7 @@ import { proofPathFaqRoute } from "./proof-path-faq.mjs";
 import { proofPathsForManagersRoute } from "./proof-paths-for-managers.mjs";
 import { proofPathStoriesRoute } from "./proof-path-stories.mjs";
 import { proofPathTourRoute } from "./proof-path-tour.mjs";
+import { propertyFlowSchemaGapRoute } from "./property-flow-schema-gap.mjs";
 import { routeFlowEvidenceStoryRoute } from "./route-flow-evidence-story.mjs";
 import { proofSourceCatalogRoute } from "./proof-source-catalog.mjs";
 import { reducedCoveragePlaybookRoute } from "./reduced-coverage-playbook.mjs";
@@ -225,6 +226,7 @@ async function createDistFixture({
       ...ownerFollowupMapRequiredLinks,
       proofPathFaqRoute,
       proofPathsForManagersRoute,
+      propertyFlowSchemaGapRoute,
       routeFlowEvidenceStoryRoute,
       proofPathStoriesRoute,
       proofPathTourRoute,
@@ -290,6 +292,7 @@ async function createDistFixture({
     ...ownerFollowupMapRequiredLinks,
     proofPathFaqRoute,
     proofPathsForManagersRoute,
+    propertyFlowSchemaGapRoute,
     routeFlowEvidenceStoryRoute,
     proofPathStoriesRoute,
     proofPathTourRoute,
@@ -338,6 +341,7 @@ async function createDistFixture({
   await writeDiscoveryFiles(dist);
   await writeEvidenceDecisionRecordImplementationState(root);
   await writeEvidenceGapRegisterImplementationState(root);
+  await writePropertyFlowSchemaGapImplementationState(root);
   await writeRouteFlowEvidenceStoryImplementationState(root);
   await writeReviewMeetingAgendaImplementationState(root);
   await writeReviewRoomDemoPathImplementationState(root);
@@ -428,6 +432,35 @@ Current-branch evidence statements:
 
 Browser sanity checks:
 - Fixture-only state record for aggregate validation.
+`,
+    "utf8"
+  );
+}
+
+async function writePropertyFlowSchemaGapImplementationState(root) {
+  const statePath = join(
+    root,
+    ".kiro",
+    "specs",
+    "site-tracemap-tools-property-flow-schema-gap",
+    "implementation-state.md"
+  );
+  await mkdir(join(statePath, ".."), { recursive: true });
+  await writeFile(
+    statePath,
+    `Selected placement: \`/proof-paths/property-flow-schema/\`
+
+Rejected placement alternatives:
+- \`/use-cases/property-flow-schema/\`
+- \`/property-flow-schema/\`
+- section on \`/proof-paths/\`
+- section on \`/evidence/gaps/\`
+
+Verified Current-Branch Evidence:
+- Fixture-only source evidence statement for aggregate validation.
+
+desktop browser sanity: fixture-only state record.
+mobile browser sanity: fixture-only state record.
 `,
     "utf8"
   );
@@ -597,6 +630,10 @@ async function fixturePageHtml(route, path) {
     return readFile(new URL("../src/proof-paths/route-flow/index.html", import.meta.url), "utf8");
   }
 
+  if (route === propertyFlowSchemaGapRoute) {
+    return readFile(new URL("../src/proof-paths/property-flow-schema/index.html", import.meta.url), "utf8");
+  }
+
   if (route === proofPathStoriesRoute) {
     return readFile(new URL("../src/proof-path-stories/index.html", import.meta.url), "utf8");
   }
@@ -678,7 +715,7 @@ async function fixturePageHtml(route, path) {
   }
 
   return page(
-    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/limitations/" ? `<a href="${reducedCoveragePlaybookRoute}">Reduced coverage playbook</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a><a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === "/manager-packet/" ? `<a href="${proofPathsForManagersRoute}">Manager proof-path guide</a>` : ""}${route === reviewPacketAssemblyRoute ? `<a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === "/proof-paths/" ? `<a href="${proofPathTourRoute}">Guided proof-path tour</a><a href="${proofPathsForManagersRoute}">Manager proof-path guide</a><a href="${routeFlowEvidenceStoryRoute}">Route-flow evidence story</a><a href="${proofPathStoriesRoute}">Proof-path story gallery</a><a href="${proofPathFaqRoute}">Proof path FAQ</a>` : ""}`
+    `<p>${path}</p>${demoRunbookInboundLinkRoutes.includes(route) ? `<a href="${demoRunbookRoute}">Public demo runbook</a>` : ""}${managerDemoScriptInboundLinkRoutes.includes(route) ? `<a href="${managerDemoScriptRoute}">Manager demo script</a>` : ""}${reviewClaimChecklistInboundRoutes.includes(route) ? `<a href="${reviewClaimChecklistRoute}">Review claim checklist</a>` : ""}${route === "/limitations/" ? `<a href="${reducedCoveragePlaybookRoute}">Reduced coverage playbook</a>` : ""}${route === "/packets/" ? `<a href="${reviewPacketAssemblyRoute}">Review packet assembly</a><a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === "/manager-packet/" ? `<a href="${proofPathsForManagersRoute}">Manager proof-path guide</a>` : ""}${route === reviewPacketAssemblyRoute ? `<a href="${evidencePacketExamplesRoute}">Evidence packet examples</a>` : ""}${route === "/proof-paths/" ? `<a href="${proofPathTourRoute}">Guided proof-path tour</a><a href="${proofPathsForManagersRoute}">Manager proof-path guide</a><a href="${routeFlowEvidenceStoryRoute}">Route-flow evidence story</a><a href="${propertyFlowSchemaGapRoute}">Property-flow schema gap</a><a href="${proofPathStoriesRoute}">Proof-path story gallery</a><a href="${proofPathFaqRoute}">Proof path FAQ</a>` : ""}`
   );
 }
 
@@ -1173,6 +1210,24 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: [
           "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, release approval, complete coverage, business impact, runtime dependency-injection target selection, branch feasibility, SQL execution, database state, data contents, autonomous approval, or replacement for tests, code review, source review, runtime observability, service-owner judgment, or human review.",
           "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, private route values, hidden validation details, raw command output, or credential-like values are public route-flow story material."
+        ]
+      },
+      {
+        path: propertyFlowSchemaGapRoute,
+        title: "Property-Flow Schema Gap",
+        summary:
+          "Concept-level proof-path page explaining unsupported route-flow schema as an explicit property-flow evidence gap with rule ID, evidence tier, supporting IDs, commit evidence, observed schema context, limitations, and owner follow-up.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/proof-paths/",
+        limitations: [
+          "The route explains a checked-in schema compatibility stop condition; it is not a generated finding, runtime trace, production execution claim, impact proof, UI behavior proof, or complete coverage claim.",
+          "Unsupported route-flow schema means property-flow could not read the normalized route key contract it needs for route-flow-specific context; it does not prove route-flow evidence is absent."
+        ],
+        nonClaims: [
+          "No runtime behavior, runtime request execution, runtime binding, production traffic, endpoint performance, outage cause, business impact, release safety, operational safety, release approval, complete coverage, production execution, impact proof, UI behavior proof, autonomous approval, or replacement for tests, code review, source review, runtime observability, service-owner judgment, or human review.",
+          "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, private route values, hidden validation details, raw command output, or credential-like values are public property-flow schema-gap material."
         ]
       },
       {
