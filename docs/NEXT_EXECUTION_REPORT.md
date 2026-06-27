@@ -1,16 +1,15 @@
 # TraceMap Next Execution Report
 
-Date: 2026-06-26
+Date: 2026-06-27
 
 ## Current State
 
 - `dev` is the active integration branch for implementation loops.
 - Main promotions remain human-mediated and should happen only at slice
   boundaries.
-- Route-flow service/data composition is complete through Task 9 on `dev`.
-- PR #369 carries the final route-flow Task 10 public-safe validation slice.
-  Until that PR is merged or explicitly deferred, do not claim legacy .NET v0
-  complete.
+- Legacy .NET v0 is complete on `dev`. Route-flow Task 10 and the follow-up
+  hardening slices landed; remaining legacy .NET work is focused depth or polish,
+  not v0 foundation.
 - Keep the site manager lane separate from core implementation work.
 
 ## Product Shape On Main
@@ -77,8 +76,8 @@ Current CLI surface includes:
 
 ## Core Specs With Follow-Up Value
 
-These are good next implementation choices after this cleanup, ordered by
-practical value:
+These are good future implementation choices if legacy .NET depth becomes
+valuable again. They are not blockers for Swift v0.
 
 1. `route-centered-endpoint-trace-completeness`
    - First touched-file/touched-symbol slice is implemented.
@@ -129,20 +128,14 @@ practical value:
 
 ## Recommended Next Move
 
-1. Finish PR #369 or explicitly record why route-flow Task 10 is deferred.
-2. After Task 10 lands, run a legacy .NET v0 completion pass:
-   - reconcile `.kiro/specs/route-flow-service-data-composition-final/`;
-   - run representative public-safe legacy sample scans;
-   - record unsupported and approximate behavior without private paths or raw
-     snippets;
-   - update `docs/ADAPTER_RUNWAY.md` if the v0 boundary changes.
-3. Then choose the next implementation lane:
-   - first choice: `ui-field-property-lineage-next-slice`, if UI field to
-     backend property evidence is required before Swift;
-   - second choice: `interface-override-di-approximation`, if inherited
-     dispatch and DI candidate clarity remains the largest route-flow gap;
-   - third choice: start the Swift v0 spec/adapter lane after the legacy .NET
-     v0 completion evidence is recorded.
+1. Promote the current `dev` cleanup slice to `main`.
+2. Start the Swift v0 adapter lane from the Swift runway issues:
+   - #377 Swift adapter v0 runway;
+   - #378 scaffold CLI and output contract;
+   - #379 inventory and project/package discovery.
+3. Keep legacy .NET follow-ups available for targeted depth, especially
+   property-flow composition, data model depth, static dispatch approximation,
+   evidence export polish, and route-flow projection performance.
 4. In parallel, keep no more than 2 to 4 reviewed specs ahead of
    implementation. Avoid creating a large spec pile that outruns the product.
 
