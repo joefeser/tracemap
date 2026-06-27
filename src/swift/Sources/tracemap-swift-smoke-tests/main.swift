@@ -69,6 +69,11 @@ struct TraceMapSwiftSmokeTests {
         assert(report.contains("Level1SemanticAnalysisReduced"))
         assert(report.contains("absence of evidence is not evidence of absence"))
         assert(!report.contains(out.path))
+        let analyzerLog = try String(contentsOf: out.appendingPathComponent("logs/analyzer.log"), encoding: .utf8)
+        assert(analyzerLog.contains("repoNameHash="))
+        assert(analyzerLog.contains("gitRootHash="))
+        assert(analyzerLog.contains("commitSha="))
+        assert(!analyzerLog.contains(fixture.repo.path))
     }
 
     static func factsAreStableWhenOnlyOutputPathChanges() throws {
@@ -246,9 +251,18 @@ struct TraceMapSwiftSmokeTests {
               let service = Service()
 
               func run(value: Int) {
+                let localToken = Service()
                 service.send(value)
-                Service()
+                Service(); Service()
+                Logger.configure()
+                rename(from: "a")
               }
+
+              func rename(from old: String) {}
+            }
+
+            enum Logger {
+              static func configure() {}
             }
 
             #if canImport(UIKit)
@@ -272,6 +286,8 @@ struct TraceMapSwiftSmokeTests {
         assert(result.facts.contains { $0.factType == "SwiftImportDeclared" && $0.properties["exportedImport"] == "true" })
         assert(result.facts.contains { $0.factType == "SwiftImportDeclared" && $0.properties["importKind"] == "struct" && $0.properties["importedModule"] == "Foundation.URL" })
         assert(result.facts.contains { $0.properties["conditionalCompilation"] == "true" })
+        assert(!result.facts.contains { $0.factType == "SwiftDeclarationDeclared" && $0.properties["declarationKind"] == "property" && $0.properties["name"] == "localToken" })
+        assert(result.facts.contains { $0.factType == "SwiftDeclarationDeclared" && $0.properties["displaySignature"] == "function rename(from)" && $0.properties["parameterLabels"] == "from" })
         let declarations = result.facts.filter { $0.factType == "SwiftDeclarationDeclared" }
         assert(!declarations.isEmpty)
         assert(declarations.allSatisfy { $0.targetSymbol?.hasPrefix("swift-syntax:v0:") == true })
@@ -282,6 +298,11 @@ struct TraceMapSwiftSmokeTests {
         assert(gapKinds.contains("CanImportConditionalAmbiguous"))
         assert(result.facts.allSatisfy { $0.evidenceTier != .tier1Semantic })
         assert(result.facts.filter { ["SwiftDeclarationDeclared", "SwiftImportDeclared", "SwiftCallCandidate", "SwiftConstructionCandidate"].contains($0.factType) }.allSatisfy { $0.evidenceTier == .tier3SyntaxOrTextual })
+        let serviceCallFacts = result.facts.filter { $0.factType == "SwiftCallCandidate" && $0.properties["calleeName"] == "Service" }
+        assert(serviceCallFacts.count >= 3)
+        assert(Set(serviceCallFacts.map(\.factId)).count == serviceCallFacts.count)
+        assert(result.facts.contains { $0.factType == "SwiftCallCandidate" && $0.properties["calleeName"] == "rename" && $0.properties["argumentLabels"] == "from" })
+        assert(!result.facts.contains { $0.factType == "SwiftConstructionCandidate" && $0.properties["createdTypeSyntax"] == "Logger.configure" })
 
         let symbols = try run("/usr/bin/sqlite3", [out.appendingPathComponent("index.sqlite").path, "select count(*) from symbols where language='swift';"]).trimmed()
         let callEdges = try run("/usr/bin/sqlite3", [out.appendingPathComponent("index.sqlite").path, "select count(*) from call_edges where rule_id='swift.syntax.call.v1';"]).trimmed()

@@ -709,6 +709,7 @@ enum FactFactory {
                 sourceSymbol: call.callerSymbolId,
                 targetSymbol: call.calleeName,
                 contractElement: call.calleeName,
+                identityDiscriminator: call.identityDiscriminator,
                 properties: [
                     "argumentLabels": call.argumentLabels.joined(separator: ","),
                     "arity": String(call.arity),
@@ -721,6 +722,7 @@ enum FactFactory {
                     "coverageCeiling": "syntax-only",
                     "language": "swift",
                     "staticEvidenceOnly": "true",
+                    "syntaxOffset": call.identityDiscriminator,
                     "syntaxHash": call.syntaxHash,
                     "unsupportedReason": call.unsupportedReason ?? ""
                 ]
@@ -738,6 +740,7 @@ enum FactFactory {
                 sourceSymbol: construction.callerSymbolId,
                 targetSymbol: construction.createdTypeSyntax,
                 contractElement: construction.createdTypeSyntax,
+                identityDiscriminator: construction.identityDiscriminator,
                 properties: [
                     "argumentLabels": construction.argumentLabels.joined(separator: ","),
                     "callerDisplayName": construction.callerDisplayName,
@@ -748,6 +751,7 @@ enum FactFactory {
                     "language": "swift",
                     "runtimeAllocationProven": "false",
                     "staticEvidenceOnly": "true",
+                    "syntaxOffset": construction.identityDiscriminator,
                     "syntaxHash": construction.syntaxHash
                 ]
             ))
@@ -766,6 +770,7 @@ enum FactFactory {
         sourceSymbol: String? = nil,
         targetSymbol: String? = nil,
         contractElement: String? = nil,
+        identityDiscriminator: String? = nil,
         properties: [String: String]
     ) -> CodeFact {
         let sortedProperties = Dictionary(uniqueKeysWithValues: properties.sorted { $0.key < $1.key })
@@ -777,8 +782,10 @@ enum FactFactory {
             filePath,
             String(startLine),
             String(endLine),
+            sourceSymbol ?? "",
             targetSymbol ?? "",
-            contractElement ?? ""
+            contractElement ?? "",
+            identityDiscriminator ?? ""
         ].joined(separator: "\n")
         return CodeFact(
             factId: "swift-fact-" + sha256Hex(identity, length: 32),
@@ -1269,7 +1276,9 @@ enum OutputWriter {
         [
             "TraceMap Swift adapter scan",
             "scanId=\(manifest.scanId)",
+            "repoNameHash=\(sha256Hex(manifest.repoName))",
             "commitSha=\(manifest.commitSha)",
+            "gitRootHash=\(manifest.gitRootHash ?? "")",
             "analysisLevel=\(manifest.analysisLevel)",
             "buildStatus=\(manifest.buildStatus)",
             "factCount=\(facts.count)",

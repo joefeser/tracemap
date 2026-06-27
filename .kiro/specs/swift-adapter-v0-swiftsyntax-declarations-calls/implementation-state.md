@@ -114,6 +114,16 @@ Issue #378 and #379 are merged into `dev`. This slice consumes the current inven
 - Source inventory coverage labels use an explicit degrading-gap allowlist
   rather than treating every non-semantic-deferred gap as reduced inventory
   coverage.
+- PR-loop fixes added:
+  - analyzer logs now include hashed repo identity context without raw local
+    paths;
+  - Swift fact IDs include source symbol and an explicit stable syntax-position
+    discriminator for call/construction facts;
+  - function declaration signatures use Swift call-site parameter labels;
+  - local variables inside executable scopes are not emitted as property
+    declarations;
+  - static member calls are not treated as construction candidates unless the
+    syntax is an explicit initializer call.
 
 ## Safe and No-Overclaim Boundaries
 
@@ -216,6 +226,10 @@ Validation completed on implementation branch:
   - added orphan-row assertions for `call_edges`, `object_creations`, and
     `symbol_occurrences`;
   - removed the mutable properties bag from Swift fact ID inputs.
+- PR #411 review-loop findings patched:
+  - Qodo analyzer-log provenance and fact-ID collision findings;
+  - Codex duplicate call fact ID, call-site label, local variable/property, and
+    construction false-positive findings.
 
 Run additional `docs/VALIDATION.md` smokes when shared schema, reducer,
 combine, report, paths, reverse, diff, impact, release-review, or export
