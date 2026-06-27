@@ -177,8 +177,10 @@ git diff --check
 Results:
 
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter EvidenceDocsExportTests`:
-  passed 12 tests.
-- `dotnet test src/dotnet/TraceMap.sln`: passed 695 tests.
+  passed 13 tests after the review patch added property-flow report-node
+  coverage.
+- `dotnet test src/dotnet/TraceMap.sln`: passed 696 tests after the review
+  patch.
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
 - Known pre-existing warning: `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory.
@@ -214,6 +216,18 @@ Results:
   aligned `tasks.md` header to `ready-for-implementation` /
   `validated-spec-only`.
 - Post-third-patch validation: `git diff --check` passed and
+  `./scripts/check-private-paths.sh` passed.
+- Implementation PR #407 initial ACK returned `actionable_findings` on head
+  `65096e11202b7d2451662ae7731524412121f88e` with two current threads:
+  Gemini requested a blank-value guard for `terminalContextKind`; Codex
+  requested reading terminal context from property-flow report nodes instead of
+  only indexed fact properties. Patch applied: added
+  `--property-flow-report` / `PropertyFlowReportPaths`, parsed only structured
+  `lineagePaths[].nodes[].safeMetadata.terminalContextKind`, ignored path-note
+  prose, skipped blank values, redacted unsafe values, and kept output in the
+  existing property-flow chunk family.
+- Post-review-patch validation: focused docs-export tests passed 13, full
+  solution tests passed 696, `git diff --check` passed, and
   `./scripts/check-private-paths.sh` passed.
 
 ## Follow-Up Items
