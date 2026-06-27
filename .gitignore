@@ -76,6 +76,9 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 
+# SwiftPM
+src/swift/.build/
+
 # MSBuild Binary and Structured Log
 *.binlog
 
