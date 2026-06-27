@@ -100,7 +100,7 @@ validation.
   - `SourcePackages/**`
   - `vendor/**`
   - `Generated/**`
-  - `*.generated.swift`
+  - `*.generated.swift` suffixes after normalized path-segment checks
 - Match directory roots by normalized repo-relative path segments, not by
   substring containment. For example, `Pods` should match a path segment named
   `Pods`, not a source folder whose name merely contains those characters.
