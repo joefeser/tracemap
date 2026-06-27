@@ -194,6 +194,13 @@ Results:
   spec-only commit/push/PR/wait/ACK workflow tasks.
 - Post-patch validation: `git diff --check` passed and
   `./scripts/check-private-paths.sh` passed.
+- Second ACK command on head `3ab03b04651f03793c27fc5f1e4c155c8bdff23b`
+  returned `actionable_findings` with one Codex thread. Patch applied:
+  removed producer `surfaceKind` mapping test obligations from docs-export
+  consumer tests and clarified that docs/vault consumers should use
+  already-emitted structured metadata and absent-metadata fixtures.
+- Post-second-patch validation: `git diff --check` passed and
+  `./scripts/check-private-paths.sh` passed.
 
 ## Follow-Up Items
 
