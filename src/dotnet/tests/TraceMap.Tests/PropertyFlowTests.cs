@@ -824,6 +824,19 @@ public sealed class PropertyFlowTests
         Assert.Contains(path.Notes, note => note.Contains("not runtime execution, dependency execution, database execution, or impact proof", StringComparison.Ordinal));
         Assert.DoesNotContain(path.Nodes.SelectMany(node => node.SafeMetadata.Values), value => value.Contains("select ", StringComparison.OrdinalIgnoreCase));
 
+        var written = await PropertyFlowReporter.WriteAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "terminal-context-out"),
+            "dto:ProfileDto.Email"));
+        var markdown = await File.ReadAllTextAsync(written.MarkdownPath!);
+        var json = await File.ReadAllTextAsync(written.JsonPath!);
+        Assert.Contains($"Static terminal context: `data-surface terminal context` from path `{path.PathId}` node `{terminalNode.NodeId}`; static path-scoped evidence only.", markdown);
+        Assert.Contains("StaticTerminalContext: selected-property path reached data-surface terminal context", markdown);
+        Assert.Contains("\"terminalContextKind\": \"data-surface terminal context\"", json);
+        Assert.DoesNotContain(temp.Path, markdown);
+        Assert.DoesNotContain("complete coverage", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("release safety", markdown, StringComparison.OrdinalIgnoreCase);
+
         var catalog = await File.ReadAllTextAsync(Path.Combine(FindRepositoryRoot(), "rules", "rule-catalog.yml"));
         Assert.Contains("id: property-flow.path.v1", catalog);
         Assert.Contains("id: combined.paths.surface-evidence.v1", catalog);
@@ -921,6 +934,14 @@ public sealed class PropertyFlowTests
 
         Assert.DoesNotContain(report.LineagePaths, path => path.Notes.Any(note => note.StartsWith("StaticTerminalContext:", StringComparison.Ordinal)));
         Assert.DoesNotContain(report.LineagePaths.SelectMany(path => path.Nodes), node => node.SafeMetadata.ContainsKey("terminalContextKind"));
+        var written = await PropertyFlowReporter.WriteAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "endpoint-proximity-out"),
+            "dto:ProfileDto.Email"));
+        var markdown = await File.ReadAllTextAsync(written.MarkdownPath!);
+        Assert.DoesNotContain("Static terminal context:", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("no terminal", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("no surface", markdown, StringComparison.OrdinalIgnoreCase);
 
         var methodRoot = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
             combinedPath,
