@@ -259,6 +259,10 @@ public static class CombinedReverseReporter
         }
 
         var selectedSurfaceNodes = SelectSurfaceNodes(graph.Nodes, sourceFilter, surfaceKind, surfaceName, messageDirection);
+        var ambiguousLegacyDataSelectorNodes = AmbiguousLegacyDataSelectorNodes(selectedSurfaceNodes, surfaceName);
+        var ambiguousLegacyDataSelectorNodeIds = ambiguousLegacyDataSelectorNodes
+            .Select(node => node.NodeId)
+            .ToHashSet(StringComparer.Ordinal);
         var selectedSurfaceTotal = selectedSurfaceNodes.Length;
         var truncated = false;
         if (selectedSurfaceNodes.Length > options.MaxSurfaces)
@@ -286,12 +290,43 @@ public static class CombinedReverseReporter
             selectedSurfaceNodes = selectedSurfaceNodes.Take(options.MaxSurfaces).ToArray();
         }
 
+        if (ambiguousLegacyDataSelectorNodes.Count > 0)
+        {
+            var first = ambiguousLegacyDataSelectorNodes[0];
+            gaps.Add(new CombinedReverseGap(
+                $"gap:legacy-data-selector:{CombinedReportHelpers.Hash(string.Join(";", ambiguousLegacyDataSelectorNodeIds.OrderBy(value => value, StringComparer.Ordinal)), 24)}",
+                "AmbiguousLegacyDataModelSelector",
+                CombinedReverseClassifications.NeedsReviewSurfaceEvidence,
+                RuleIds.LegacyDataModelSurface,
+                EvidenceTiers.Tier4Unknown,
+                $"Legacy-data selector matched {ambiguousLegacyDataSelectorNodes.Count} model surfaces; narrow by source or stable evidence before treating the selector as a single model.",
+                first.SourceIndexId,
+                first.SourceLabel,
+                null,
+                null,
+                null,
+                first.NodeId,
+                first.CombinedFactId,
+                first.FilePath,
+                first.StartLine,
+                first.EndLine,
+                "legacy-data-selector",
+                SortedMetadata([
+                    new("commitSha", first.CommitSha),
+                    new("selectedLegacyDataSurfaceCount", ambiguousLegacyDataSelectorNodes.Count.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                ])));
+        }
+
         var duplicateSurfaceKeys = selectedSurfaceNodes
             .GroupBy(SurfaceStableKey, StringComparer.Ordinal)
             .Where(group => group.Count() > 1)
             .Select(group => group.Key)
             .ToHashSet(StringComparer.Ordinal);
-        var selectedSurfaces = selectedSurfaceNodes.Select(node => ToSurface(node, sourcesById, duplicateSurfaceKeys.Contains(SurfaceStableKey(node)))).ToArray();
+        var selectedSurfaces = selectedSurfaceNodes.Select(node => ToSurface(
+            node,
+            sourcesById,
+            duplicateSurfaceKeys.Contains(SurfaceStableKey(node)),
+            ambiguousLegacyDataSelectorNodeIds.Contains(node.NodeId))).ToArray();
         foreach (var duplicate in selectedSurfaces.GroupBy(surface => surface.StableKey, StringComparer.Ordinal).Where(group => group.Count() > 1))
         {
             gaps.Add(new CombinedReverseGap(
@@ -299,7 +334,7 @@ public static class CombinedReverseReporter
                 "DuplicateIdentity",
                 CombinedReverseClassifications.UnknownAnalysisGap,
                 IdentityRuleId,
-                "Tier4Unknown",
+                EvidenceTiers.Tier4Unknown,
                 $"Multiple selected surfaces share stable identity hash `{CombinedReportHelpers.Hash(duplicate.Key, 24)}`; affected evidence is review-tier.",
                 null,
                 null,
@@ -680,11 +715,32 @@ public static class CombinedReverseReporter
             || string.Equals(node.NormalizedPathKey, selector, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static CombinedReverseSurface ToSurface(CombinedPathNode node, IReadOnlyDictionary<string, CombinedReportSource> sourcesById, bool hasDuplicateIdentity)
+    private static IReadOnlyList<CombinedPathNode> AmbiguousLegacyDataSelectorNodes(
+        IReadOnlyList<CombinedPathNode> selectedSurfaceNodes,
+        string? surfaceName)
     {
-        var classification = ClassifySurface(node, hasDuplicateIdentity);
+        if (string.IsNullOrWhiteSpace(surfaceName))
+        {
+            return [];
+        }
+
+        var matches = selectedSurfaceNodes
+            .Where(node => string.Equals(node.SurfaceKind, "legacy-data", StringComparison.Ordinal))
+            .ToArray();
+        return matches.Length > 1
+            ? matches
+            : [];
+    }
+
+    private static CombinedReverseSurface ToSurface(
+        CombinedPathNode node,
+        IReadOnlyDictionary<string, CombinedReportSource> sourcesById,
+        bool hasDuplicateIdentity,
+        bool hasAmbiguousLegacyDataSelector = false)
+    {
+        var classification = ClassifySurface(node, hasDuplicateIdentity, hasAmbiguousLegacyDataSelector);
         var source = sourcesById.TryGetValue(node.SourceIndexId, out var found) ? found : null;
-        var caveats = SurfaceCaveats(node, source);
+        var caveats = SurfaceCaveats(node, source, hasAmbiguousLegacyDataSelector);
         return new CombinedReverseSurface(
             SurfaceId(node),
             node.SurfaceKind ?? "unknown",
@@ -1046,9 +1102,12 @@ public static class CombinedReverseReporter
 
     private static bool IsSymbol(CombinedPathNode node) => node.NodeKind is "Symbol" or "Method" or "Type";
 
-    private static string ClassifySurface(CombinedPathNode node, bool hasDuplicateIdentity = false)
+    private static string ClassifySurface(
+        CombinedPathNode node,
+        bool hasDuplicateIdentity = false,
+        bool hasAmbiguousLegacyDataSelector = false)
     {
-        return hasDuplicateIdentity || node.EvidenceTier == "Tier3SyntaxOrTextual" || IsHashOnlySqlEvidence(node) || IsVolatileSqlIdentity(node)
+        return hasDuplicateIdentity || hasAmbiguousLegacyDataSelector || node.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual || IsHashOnlySqlEvidence(node) || IsVolatileSqlIdentity(node)
             ? CombinedReverseClassifications.NeedsReviewSurfaceEvidence
             : CombinedReverseClassifications.SelectedSurfaceEvidence;
     }
@@ -1195,7 +1254,10 @@ public static class CombinedReverseReporter
         return string.Join("|", components);
     }
 
-    private static IReadOnlyList<string> SurfaceCaveats(CombinedPathNode node, CombinedReportSource? source)
+    private static IReadOnlyList<string> SurfaceCaveats(
+        CombinedPathNode node,
+        CombinedReportSource? source,
+        bool hasAmbiguousLegacyDataSelector = false)
     {
         var caveats = new List<string>();
         if (source is not null && SourceHasReducedCoverage(source))
@@ -1211,6 +1273,11 @@ public static class CombinedReverseReporter
         if (IsVolatileSqlIdentity(node))
         {
             caveats.Add("VolatileIdentity: SQL surface identity fell back to a fact hash because stable SQL metadata was unavailable; reverse evidence is review-tier.");
+        }
+
+        if (hasAmbiguousLegacyDataSelector)
+        {
+            caveats.Add("AmbiguousLegacyDataModelSelector: legacy-data selector matched multiple model surfaces; reverse evidence is review-tier until narrowed.");
         }
 
         return caveats.OrderBy(value => value, StringComparer.Ordinal).ToArray();

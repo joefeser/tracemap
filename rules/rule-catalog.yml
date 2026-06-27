@@ -653,9 +653,11 @@ rules:
       - missing required schema rejection
       - missing optional schema gap
       - route-flow unavailable gap
+      - unsupported route-flow schema gap
     limitations:
       - Schema gaps describe evidence availability only; they do not prove source behavior or source evidence absence.
       - Missing optional route-flow schema prevents route-flow-specific promotion but does not discard existing combined path evidence.
+      - Unsupported route-flow schema means property-flow could not find the normalized route key contract it needs for route-flow-specific context; it does not prove route-flow evidence is absent.
 
   - id: property-flow.truncation.v1
     name: Property flow truncation
@@ -1438,6 +1440,8 @@ rules:
       - Surface rows are static report/export context and do not prove runtime database use, query execution, schema existence, reachability, dependency impact, deployment, provider compatibility, or production usage.
       - AnalysisGap facts under legacy.data.* rules are excluded from terminal surface projection and remain gaps, caveats, or limitations.
       - Already-derived projection rows are not re-consumed by prefix-based legacy data fact readers.
+      - AmbiguousLegacyDataModelSelector gaps are emitted when a downstream selector matches multiple legacy-data model surfaces and cannot identify one model without additional source or stable-evidence scope.
+      - DuplicateIdentity gaps with reason duplicate-surface are emitted when downstream projection cannot distinguish duplicate stable model identities without additional evidence.
       - Unknown vocabulary values for descriptor role, metadata format, or source artifact type produce an unknown-vocabulary schema gap under this rule rather than being rendered as free-form display strings; implementations should register a narrower rule ID when a specific unknown vocabulary has a distinct gap cause.
       - Safe properties include surfaceKind, surfaceSubtype, modelKind, metadataFormat, stableSurfaceKey, safeDisplayName or hash label, sourceRuleIds, supportingFactIds, supportingEdgeIds, coverageLabel, and limitations.
       - Surface classification is capped for syntax-only, ambiguous, high fan-out, missing generated-code, unsupported, or reduced-coverage evidence.
