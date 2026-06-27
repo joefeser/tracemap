@@ -141,12 +141,13 @@ terminal context from being attached through nearby but unproven evidence.
    context.
 7. Tests SHALL prove same short symbol or method name alone does not attach
    terminal context.
-8. Tests SHALL prove generic property names such as `id`, `name`, `type`,
-   `value`, `state`, and `status` do not attach terminal context without exact
-   selected-property identity. If route-flow/path generic sets include
-   additional names such as `result` or `response`, the implementation PR SHALL
-   either align property-flow vocabulary or document why the sets intentionally
-   differ.
+8. Tests SHALL prove the current property-flow generic names from
+   `PropertyFlowReport.cs` (`id`, `name`, `type`, `value`, `state`, and
+   `status`) do not attach terminal context without exact selected-property
+   identity. The implementation PR SHALL not silently import broader
+   route-flow, high-fan-out, or rule-catalog example vocabularies such as
+   `result` or `response`; if it consults those broader sets, it SHALL add an
+   explicit compatibility decision and matching tests.
 9. Tests SHALL prove broad endpoint dependency evidence, route-flow context
    groups, touched files, touched symbols, and dependency-surface inventory do
    not attach property-flow terminal context without the selected-property

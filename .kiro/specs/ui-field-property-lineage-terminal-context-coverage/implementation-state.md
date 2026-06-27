@@ -175,5 +175,15 @@ Results:
 ## ACK / PR State
 
 PR: https://github.com/joefeser/tracemap/pull/404
-ACK: pending.
+ACK: review-loop in progress after required-review batch settled.
 Auto-merge: pending.
+
+ACK review-loop findings patched:
+
+- Qodo checklist-sync finding: marked completed PR workflow tasks in
+  `tasks.md`.
+- Gemini generic-name vocabulary finding: clarified that current
+  property-flow generic-name tests are scoped to the `PropertyFlowReport.cs`
+  set (`id`, `name`, `type`, `value`, `state`, `status`) and that broader
+  route-flow/high-fan-out examples such as `result` or `response` require an
+  explicit compatibility decision before use.

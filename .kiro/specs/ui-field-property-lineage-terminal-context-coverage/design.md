@@ -164,7 +164,8 @@ Required matrix:
 | same namespace/folder/project only when represented | no `StaticTerminalContext`, no `terminalContextKind` |
 | same short property name only | no `StaticTerminalContext`, no `terminalContextKind`; use an unqualified node symbol/display such as `Email` against a root whose qualified target is `ProfileDto.Email`, not the qualified form in both places |
 | same short symbol or method name only | no `StaticTerminalContext`, no `terminalContextKind` |
-| generic selected names without exact identity, including `result` or `response` if route-flow/path generic sets are consulted | no terminal context and no stronger-than-supported classification |
+| current property-flow generic selected names without exact identity (`id`, `name`, `type`, `value`, `state`, `status`) | no terminal context and no stronger-than-supported classification |
+| broader route-flow/high-fan-out generic examples such as `result` or `response` when consulted by a future implementation | explicit compatibility decision plus no terminal context without exact identity |
 | broad endpoint dependency or route-flow context only | no property-flow terminal context |
 
 These tests are not proof of complete false-positive coverage. They are
