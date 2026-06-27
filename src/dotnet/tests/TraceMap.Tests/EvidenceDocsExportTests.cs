@@ -405,6 +405,79 @@ public sealed class EvidenceDocsExportTests
     }
 
     [Fact]
+    public async Task Docs_export_reads_terminal_context_from_property_flow_report_nodes()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = CreateCombinedIndex(temp.Path);
+        var unsafeValue = string.Concat("/", "Users", "/private/source/Customer.sql");
+        var reportPath = Path.Combine(temp.Path, "property-flow-report.json");
+        await File.WriteAllTextAsync(reportPath, $$"""
+            {
+              "schemaVersion": "property-flow-report.v1",
+              "lineagePaths": [
+                {
+                  "pathId": "lineage-a",
+                  "notes": [
+                    "StaticTerminalContext: selected-property path reached legacy-data terminal context through existing combined path evidence."
+                  ],
+                  "nodes": [
+                    {
+                      "nodeId": "root-node",
+                      "nodeKind": "property-root",
+                      "safeMetadata": {}
+                    },
+                    {
+                      "nodeId": "terminal-node",
+                      "nodeKind": "data-surface",
+                      "safeMetadata": {
+                        "terminalContextKind": "data-surface terminal context"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "pathId": "lineage-b",
+                  "nodes": [
+                    {
+                      "nodeId": "unsafe-node",
+                      "nodeKind": "data-surface",
+                      "safeMetadata": {
+                        "terminalContextKind": "{{unsafeValue}}"
+                      }
+                    },
+                    {
+                      "nodeId": "blank-node",
+                      "nodeKind": "data-surface",
+                      "safeMetadata": {
+                        "terminalContextKind": "   "
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+            """);
+
+        var result = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            indexPath,
+            Path.Combine(temp.Path, "property-flow-report-docs"),
+            Families: "property-flow,gap,limitation",
+            PropertyFlowReportPaths: [reportPath]));
+
+        var reportChunk = Assert.Single(result.Chunks, chunk =>
+            chunk.ChunkFamily == "property-flow"
+            && chunk.SupportingIds.Any(id => id.StartsWith("report:", StringComparison.Ordinal)));
+        Assert.Contains("path:lineage-a node:terminal-node/data-surface kind:data-surface terminal context", reportChunk.BodyMarkdown);
+        Assert.Contains("path:lineage-b node:unsafe-node/data-surface kind:redacted-", reportChunk.BodyMarkdown);
+        Assert.DoesNotContain("legacy-data terminal context", reportChunk.BodyMarkdown);
+        Assert.DoesNotContain("blank-node", reportChunk.BodyMarkdown);
+        Assert.DoesNotContain(unsafeValue, JsonSerializer.Serialize(result), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("database execution", reportChunk.BodyMarkdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("dependency execution", reportChunk.BodyMarkdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("complete coverage", reportChunk.BodyMarkdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Docs_export_terminal_context_metadata_is_additive_and_redacted_when_unsafe()
     {
         using var temp = new TempDirectory();

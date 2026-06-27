@@ -25,7 +25,8 @@ public sealed record EvidenceDocsExportOptions(
     string? Format = null,
     string? Date = null,
     bool DryRun = false,
-    bool Force = false);
+    bool Force = false,
+    IReadOnlyList<string>? PropertyFlowReportPaths = null);
 
 public sealed record EvidenceDocsExportResult(
     EvidenceDocsManifest Manifest,
@@ -791,6 +792,7 @@ public static class EvidenceDocsExporter
         await AddReportChunksAsync(options.CombinedReportPaths ?? [], "combined-report", "dependency-surface", DependencySurfaceRuleId, selectedFamilies, sources, chunks, diagnostics, cancellationToken);
         await AddReportChunksAsync(options.ReleaseReviewReportPaths ?? [], "release-review-report", "release-review", ReleaseReviewRuleId, selectedFamilies, sources, chunks, diagnostics, cancellationToken);
         await AddReportChunksAsync(options.EvidencePackPaths ?? [], "evidence-pack", "legacy", LegacyRuleId, selectedFamilies, sources, chunks, diagnostics, cancellationToken);
+        await AddPropertyFlowReportChunksAsync(options.PropertyFlowReportPaths ?? [], selectedFamilies, sources, chunks, diagnostics, cancellationToken);
 
         await AddVaultGraphChunksAsync(options.VaultGraphPaths ?? [], selectedFamilies, sources, chunks, diagnostics, cancellationToken);
 
@@ -870,6 +872,64 @@ public static class EvidenceDocsExporter
                 }
 
                 diagnostics.Add(CreateDiagnostic("InputSchemaIncompatible", SchemaGapRuleId, "/inputs/vault-graph", "schema-incompatible", "vault-graph"));
+            }
+        }
+    }
+
+    private static async Task AddPropertyFlowReportChunksAsync(
+        IReadOnlyList<string> paths,
+        IReadOnlyList<string> selectedFamilies,
+        IReadOnlyList<DocSource> sources,
+        List<EvidenceDocChunk> chunks,
+        List<EvidenceDocsDiagnostic> diagnostics,
+        CancellationToken cancellationToken)
+    {
+        if (paths.Count == 0 || !selectedFamilies.Contains("property-flow", StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        foreach (var path in paths.OrderBy(value => value, StringComparer.Ordinal))
+        {
+            try
+            {
+                var json = await File.ReadAllTextAsync(path, cancellationToken);
+                using var document = JsonDocument.Parse(json);
+                var root = document.RootElement;
+                var reportType = StringProperty(root, "reportType")
+                    ?? StringProperty(root, "schemaVersion")
+                    ?? StringProperty(root, "version");
+                if (string.IsNullOrWhiteSpace(reportType))
+                {
+                    chunks.Add(CreateGapChunk($"property-flow-report-{Hash(path, 16)}", MissingProvenanceRuleId, "missing-provenance", "property-flow", sources, ["property-flow-report"], "hidden"));
+                    diagnostics.Add(CreateDiagnostic("InputMissingProvenance", MissingProvenanceRuleId, "/inputs/property-flow-report", "missing-provenance", "property-flow-report"));
+                    continue;
+                }
+
+                var terminalContexts = ExtractPropertyFlowTerminalContexts(root);
+                var reportId = $"report:{Hash($"property-flow-report|{reportType}|{Hash(json, 64)}", 24)}";
+                var supportingIds = DistinctSorted([reportId, .. terminalContexts.Select(context => context.SupportingId)]);
+                var body = BuildPropertyFlowReportBody(reportType, reportId, terminalContexts);
+                chunks.Add(CreateChunk(
+                    "property-flow",
+                    "claim",
+                    sources.Count == 0 ? "hidden" : MinClaim(sources.Select(source => source.ClaimLevel)),
+                    $"{TitleForFamily("property-flow")} report evidence",
+                    $"Report `{EscapeInline(reportType)}` was supplied as deterministic `property-flow-report` evidence. It is preserved as static report evidence only.",
+                    body,
+                    [CreateReportCitation(reportId, reportType, sources)],
+                    sources.Select(ToSourceRef).ToArray(),
+                    supportingIds,
+                    [PropertyFlowRuleId],
+                    [EvidenceTiers.Tier2Structural],
+                    sources.Select(source => source.CoverageLabel).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                    [],
+                    [LimitationForFamily("property-flow", supportingIds)]));
+            }
+            catch (JsonException)
+            {
+                chunks.Add(CreateGapChunk($"property-flow-report-json-{Hash("property-flow-report", 16)}", SchemaGapRuleId, "schema-incompatible", "property-flow", sources, ["property-flow-report"], "hidden"));
+                diagnostics.Add(CreateDiagnostic("InputSchemaIncompatible", SchemaGapRuleId, "/inputs/property-flow-report", "schema-incompatible", "property-flow-report"));
             }
         }
     }
@@ -2424,6 +2484,84 @@ public static class EvidenceDocsExporter
             """;
     }
 
+    private static string BuildPropertyFlowReportBody(string reportType, string reportId, IReadOnlyList<PropertyFlowTerminalContextProjection> terminalContexts)
+    {
+        var terminalContextText = terminalContexts.Count == 0
+            ? "not supplied"
+            : string.Join("; ", terminalContexts.Select(context =>
+                $"path:{context.PathLabel} node:{context.NodeLabel} kind:{context.TerminalContextKind}"));
+        return $"""
+            ## {TitleForFamily("property-flow")} report
+
+            This chunk records that a deterministic `property-flow-report` artifact with schema or type `{EscapeInline(reportType)}` was supplied.
+
+            | Field | Value |
+            | --- | --- |
+            | Report ID | `{EscapeInline(reportId)}` |
+            | Input kind | `property-flow-report` |
+            | Chunk family | `property-flow` |
+            | Terminal contexts | `{EscapeInline(terminalContextText)}` |
+
+            Docs export preserves the report as static evidence metadata and does not reinterpret report findings, parse note prose, infer missing terminal context, or add stronger execution, impact, or coverage conclusions.
+            """;
+    }
+
+    private static IReadOnlyList<PropertyFlowTerminalContextProjection> ExtractPropertyFlowTerminalContexts(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("lineagePaths", out var paths)
+            || paths.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var contexts = new List<PropertyFlowTerminalContextProjection>();
+        var pathOrdinal = 0;
+        foreach (var path in paths.EnumerateArray())
+        {
+            pathOrdinal++;
+            if (path.ValueKind != JsonValueKind.Object
+                || !path.TryGetProperty("nodes", out var nodes)
+                || nodes.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            var pathId = SafeTokenOrHash(StringProperty(path, "pathId") ?? $"path-{pathOrdinal}");
+            var nodeOrdinal = 0;
+            foreach (var node in nodes.EnumerateArray())
+            {
+                nodeOrdinal++;
+                if (node.ValueKind != JsonValueKind.Object
+                    || !node.TryGetProperty("safeMetadata", out var safeMetadata)
+                    || safeMetadata.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                var terminalContextKind = StringProperty(safeMetadata, TerminalContextKindMetadataKey);
+                if (string.IsNullOrWhiteSpace(terminalContextKind))
+                {
+                    continue;
+                }
+
+                var nodeId = SafeTokenOrHash(StringProperty(node, "nodeId") ?? $"node-{nodeOrdinal}");
+                var nodeKind = SafeTokenOrHash(StringProperty(node, "nodeKind") ?? "unknown");
+                var displayValue = IsSafeMetadataValue(terminalContextKind)
+                    ? terminalContextKind
+                    : $"redacted-{Hash(terminalContextKind, 12)}";
+                var supportingId = $"property-flow-terminal-context:{Hash($"{pathId}|{nodeId}|{displayValue}", 16)}";
+                contexts.Add(new PropertyFlowTerminalContextProjection(pathId, $"{nodeId}/{nodeKind}", displayValue, supportingId));
+            }
+        }
+
+        return contexts
+            .OrderBy(context => context.PathLabel, StringComparer.Ordinal)
+            .ThenBy(context => context.NodeLabel, StringComparer.Ordinal)
+            .ThenBy(context => context.TerminalContextKind, StringComparer.Ordinal)
+            .ToArray();
+    }
+
     private static string SafeFactMetadata(DocFact fact)
     {
         var parts = new List<string>();
@@ -2442,7 +2580,8 @@ public static class EvidenceDocsExporter
             parts.Add($"target-symbol:{SafeTokenOrHash(fact.TargetSymbol)}");
         }
 
-        if (fact.Properties.TryGetValue(TerminalContextKindMetadataKey, out var terminalContextKind))
+        if (fact.Properties.TryGetValue(TerminalContextKindMetadataKey, out var terminalContextKind)
+            && !string.IsNullOrWhiteSpace(terminalContextKind))
         {
             parts.Add(IsSafeMetadataValue(terminalContextKind)
                 ? $"{TerminalContextKindMetadataKey}:{terminalContextKind}"
@@ -2862,6 +3001,12 @@ public static class EvidenceDocsExporter
         int? StartLine,
         int? EndLine,
         IReadOnlyDictionary<string, string> Properties);
+
+    private sealed record PropertyFlowTerminalContextProjection(
+        string PathLabel,
+        string NodeLabel,
+        string TerminalContextKind,
+        string SupportingId);
 
     private sealed class DocSource(
         string sourceId,
