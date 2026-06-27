@@ -284,7 +284,15 @@ public sealed class MessageSurfaceTests
             Assert.NotEqual("message-publish-consume", row.ContextKind);
             Assert.DoesNotContain("delivery", row.ContextKind, StringComparison.OrdinalIgnoreCase);
         });
-        Assert.Empty(result.Report.MessageReviewContext.Gaps);
+        var gap = Assert.Single(result.Report.MessageReviewContext.Gaps);
+        Assert.Equal("MessageContextReducedCoverage", gap.GapKind);
+        Assert.Equal(RuleIds.MessageFlowGap, gap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal("ReducedCoverage", gap.CoverageLabel);
+        Assert.NotEmpty(gap.SourceLabels);
+        Assert.NotEmpty(gap.CommitShas);
+        Assert.NotEmpty(gap.ExtractorVersions);
+        Assert.NotEmpty(gap.SupportingFactIds);
 
         var markdown = await File.ReadAllTextAsync(Path.Combine(temp.Path, "report", "dependency-report.md"));
         Assert.Contains("Event/message rows are static evidence only", markdown);
