@@ -213,6 +213,7 @@ public static class EvidenceDocsExporter
     private const string ImpactSummaryRuleId = "docs-export.chunk.impact-summary.v1";
     private const string GapChunkRuleId = "docs-export.chunk.gap.v1";
     private const string LimitationChunkRuleId = "docs-export.chunk.limitation.v1";
+    private const string TerminalContextKindMetadataKey = "terminalContextKind";
     private const string GeneratedFileStaleRuleId = "docs-export.validation.generated-file-stale.v1";
     private const string UserFileCollisionRuleId = "docs-export.validation.user-file-collision.v1";
     private const string UnsafeRejectedRuleId = "docs-export.validation.unsafe-value-rejected.v1";
@@ -2441,7 +2442,17 @@ public static class EvidenceDocsExporter
             parts.Add($"target-symbol:{SafeTokenOrHash(fact.TargetSymbol)}");
         }
 
-        foreach (var pair in fact.Properties.OrderBy(pair => pair.Key, StringComparer.Ordinal).Take(4))
+        if (fact.Properties.TryGetValue(TerminalContextKindMetadataKey, out var terminalContextKind))
+        {
+            parts.Add(IsSafeMetadataValue(terminalContextKind)
+                ? $"{TerminalContextKindMetadataKey}:{terminalContextKind}"
+                : $"{TerminalContextKindMetadataKey}:redacted-{Hash(terminalContextKind, 12)}");
+        }
+
+        foreach (var pair in fact.Properties
+            .Where(pair => !string.Equals(pair.Key, TerminalContextKindMetadataKey, StringComparison.Ordinal))
+            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+            .Take(4))
         {
             if (IsSafeMetadataKey(pair.Key) && IsSafeMetadataValue(pair.Value))
             {

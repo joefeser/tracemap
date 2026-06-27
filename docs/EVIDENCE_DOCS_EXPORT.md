@@ -103,6 +103,13 @@ future reviewed claim context explicitly allows clear labels, and does not
 claim SQL execution, runtime provider selection, live schema existence,
 migration execution, or production database usage.
 
+Property-flow chunks may include safe `terminalContextKind` metadata when that
+key is already present on the indexed static evidence. Docs export treats this
+as retrieval metadata inside the existing `property-flow` chunk family. It does
+not parse path-note prose, create a new finding, infer missing terminal
+context, or prove runtime behavior, database execution, dependency execution,
+impact, or complete coverage.
+
 ## Stable IDs
 
 Docs-export IDs use context-separated SHA-256 inputs with length-prefixed
