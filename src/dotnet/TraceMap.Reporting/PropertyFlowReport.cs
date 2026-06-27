@@ -2033,31 +2033,47 @@ public static class PropertyFlowReporter
 
     private static bool HasSelectedPropertyBridge(PropertyFlowRoot root, PropertyFactRow rootFact, IReadOnlyList<CombinedPathNode> nodes)
     {
+        if (!IsPropertySpecificTerminalRoot(rootFact))
+        {
+            return false;
+        }
+
         var symbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         AddIfPresent(symbols, root.SymbolId);
         AddIfPresent(symbols, rootFact.TargetSymbol);
         AddIfPresent(symbols, CombinedDependencyReporter.FirstValue(rootFact.Properties, "symbolId", "memberSymbolId", "targetSymbolId"));
-        if (root.SafeDisplay.TryGetValue("modelType", out var modelType)
-            && root.SafeDisplay.TryGetValue("propertyName", out var propertyName))
+        if (root.SafeDisplay.TryGetValue("modelType", out var modelPropertyType)
+            && root.SafeDisplay.TryGetValue("propertyName", out var modelPropertyName))
         {
-            AddIfPresent(symbols, $"{modelType}.{propertyName}");
+            AddIfPresent(symbols, $"{modelPropertyType}.{modelPropertyName}");
         }
 
         if (root.SafeDisplay.TryGetValue("dtoType", out var dtoType)
-            && root.SafeDisplay.TryGetValue("propertyName", out propertyName))
+            && root.SafeDisplay.TryGetValue("propertyName", out var dtoPropertyName))
         {
-            AddIfPresent(symbols, $"{dtoType}.{propertyName}");
+            AddIfPresent(symbols, $"{dtoType}.{dtoPropertyName}");
         }
 
         if (root.SafeDisplay.TryGetValue("displayName", out var displayName)
-            && root.SafeDisplay.TryGetValue("modelType", out modelType))
+            && root.SafeDisplay.TryGetValue("modelType", out var displayType))
         {
-            AddIfPresent(symbols, $"{modelType}.{displayName}");
+            AddIfPresent(symbols, $"{displayType}.{displayName}");
         }
 
         return nodes.Any(node => string.Equals(node.CombinedFactId, root.CombinedFactId, StringComparison.Ordinal)
             || symbols.Contains(node.SymbolId ?? string.Empty)
             || symbols.Contains(node.DisplayName));
+    }
+
+    private static bool IsPropertySpecificTerminalRoot(PropertyFactRow fact)
+    {
+        return fact.FactType is "UiTemplateBinding"
+            or "UiFormControlBinding"
+            or "RazorBinding"
+            or "RazorModelBindingTarget"
+            or "PropertyDeclared"
+            or "SerializerContractMember"
+            or "ParameterDeclared";
     }
 
     private static void AddIfPresent(HashSet<string> values, string? value)

@@ -845,6 +845,14 @@ public sealed class PropertyFlowTests
 
         Assert.DoesNotContain(report.LineagePaths, path => path.Notes.Any(note => note.StartsWith("StaticTerminalContext:", StringComparison.Ordinal)));
         Assert.DoesNotContain(report.LineagePaths.SelectMany(path => path.Nodes), node => node.SafeMetadata.ContainsKey("terminalContextKind"));
+
+        var methodRoot = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "method-root-out"),
+            "symbol:Server.ProfileController.Save(ProfileDto)"));
+
+        Assert.DoesNotContain(methodRoot.LineagePaths, path => path.Notes.Any(note => note.StartsWith("StaticTerminalContext:", StringComparison.Ordinal)));
+        Assert.DoesNotContain(methodRoot.LineagePaths.SelectMany(path => path.Nodes), node => node.SafeMetadata.ContainsKey("terminalContextKind"));
     }
 
     private static async Task<(string CombinedPath, string RootFactId)> CreatePropertyFlowCombinedIndexAsync(TempDirectory temp)
