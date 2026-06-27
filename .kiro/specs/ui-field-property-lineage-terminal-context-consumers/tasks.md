@@ -1,7 +1,7 @@
 # UI Field Property Lineage Terminal Context Consumers Tasks
 
-Status: ready-for-review
-Readiness: spec-drafted
+Status: ready-for-implementation
+Readiness: validated-spec-only
 
 ## Spec-Only PR Scope
 

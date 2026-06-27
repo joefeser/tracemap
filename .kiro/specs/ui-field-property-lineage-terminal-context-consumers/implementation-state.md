@@ -201,6 +201,13 @@ Results:
   already-emitted structured metadata and absent-metadata fixtures.
 - Post-second-patch validation: `git diff --check` passed and
   `./scripts/check-private-paths.sh` passed.
+- Third ACK command on head `363eecd51475c156d9b8a0acde7b3b7d1c02cdc1`
+  still reported `actionable_findings` from the Qodo top-level comment. The
+  remaining live Qodo issue was stale `tasks.md` packet status. Patch applied:
+  aligned `tasks.md` header to `ready-for-implementation` /
+  `validated-spec-only`.
+- Post-third-patch validation: `git diff --check` passed and
+  `./scripts/check-private-paths.sh` passed.
 
 ## Follow-Up Items
 
