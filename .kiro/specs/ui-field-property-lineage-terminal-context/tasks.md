@@ -124,7 +124,7 @@ Readiness: validated-spec-only
     leaves the top-level report contract unchanged and verifies additive note
     and safe metadata behavior.
 
-- [ ] 6. Validate PR 1.
+- [x] 6. Validate PR 1.
   Requirements: 7.
   - [x] Run focused `PropertyFlowTests`.
   - [x] Run any touched route-flow/path/reverse/export tests. No route-flow,

@@ -2136,7 +2136,9 @@ public static class PropertyFlowReporter
             "legacy-data" => "legacy-data terminal context",
             "package-config" => "package/config terminal context",
             { } value when value.StartsWith("message-", StringComparison.Ordinal) => "message-surface terminal context",
-            "wcf-operation" or "asmx-operation" or "remoting-endpoint" or "remoting-object" or "remoting-registration" or "remoting-channel" => "legacy-communication terminal context",
+            { } value when value.StartsWith("asmx-", StringComparison.Ordinal) => "legacy-communication terminal context",
+            { } value when value.StartsWith("remoting-", StringComparison.Ordinal) => "legacy-communication terminal context",
+            "wcf-operation" => "legacy-communication terminal context",
             _ => "dependency-surface terminal context"
         };
     }
