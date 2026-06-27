@@ -271,8 +271,9 @@ stable, machine-readable, and honest.
 #### Acceptance Criteria
 
 1. WHEN the Swift adapter completes THEN it SHALL write
-   `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
-   `logs/analyzer.log`, including when no Swift evidence is detected. A
+   `scan-manifest.json`, `facts.ndjson`, shared-schema `index.sqlite`,
+   `report.md`, and `logs/analyzer.log`, including when no Swift evidence is
+   detected. A
    no-Swift scan SHALL use the Swift no-evidence coverage label with an empty
    fact set rather than skipping artifacts. `index.sqlite` SHALL use the shared
    TraceMap SQLite index schema required by combine/report/reducer tooling, not
