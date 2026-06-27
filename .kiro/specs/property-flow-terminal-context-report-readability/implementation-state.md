@@ -77,7 +77,7 @@ Initial Opus review:
   `.tmp/kiro-reviews/property-flow-terminal-context-report-readability/2026-06-27T190045-336Z-spec-claude-opus-4.8.clean.md`
   and matching `.meta.json`.
 - Findings patched: replaced incorrect `MarkdownReportWriter` guidance with
-  `PropertyFlowReport.RenderMarkdown` and `PropertyFlowTests`; documented that
+  `PropertyFlowReporter.RenderMarkdown` and `PropertyFlowTests`; documented that
   `StaticTerminalContext:` notes already render as Markdown path-note bullets;
   clarified display-vs-classification handling for producer-generated notes;
   marked contradictory note-prose tests as synthetic/defensive; clarified that
@@ -131,3 +131,23 @@ reason.
   of scope unless a separate spec explicitly authorizes those changes.
 - Implementation PR must preserve report compatibility or version schema
   changes explicitly.
+
+## PR Review Loop Patch Log
+
+ACK run:
+
+```bash
+agent-control pr-loop --repo joefeser/tracemap --pr 408 --base dev --require-codex-review --quiet --json
+```
+
+Initial result: `actionable_findings` with four unresolved review threads.
+
+Patched findings:
+
+- Gemini: corrected renderer wording to name the `PropertyFlowReporter`
+  static class instead of the report data record.
+- Qodo: marked completed spec-PR process tasks for commit, push, PR creation,
+  wait, and initial ACK run.
+- Codex: scoped no-overclaim assertions to positive claims, while allowing the
+  existing negated static-only disclaimer wording such as "not runtime
+  execution".

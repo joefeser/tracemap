@@ -191,9 +191,10 @@ prove the report remains deterministic and evidence-backed.
    unsupported static metadata handling without overclaiming.
 5. Tests SHALL cover deterministic Markdown and JSON output for repeated
    equivalent inputs.
-6. Tests SHALL assert output does not contain runtime, DB execution,
-   dependency execution, impact, complete coverage, release-safety, or public
-   claim wording.
+6. Tests SHALL assert output does not contain positive claims of runtime, DB
+   execution, dependency execution, impact, complete coverage, release-safety,
+   or public claim status; explicit negated disclaimers such as "not runtime
+   execution" are allowed and encouraged.
 7. Tests SHALL assert rule IDs, evidence tiers, supporting IDs, spans, commit
    SHA, extractor versions, coverage labels, and limitations are preserved in
    JSON/report data when available; Markdown cues may rely on nearby existing
