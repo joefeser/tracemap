@@ -386,8 +386,9 @@ reports, and tests:
 - Macros and generated code are not expanded unless a future deterministic
   toolchain slice explicitly adds bounded support.
 - Property wrappers can synthesize backing storage and projected properties;
-  SwiftSyntax-only v0 must not invent those synthesized symbols without future
-  compiler-backed evidence.
+  SwiftSyntax-only v0 must not invent conventional `_property` backing storage,
+  `$property` projected values, or other synthesized wrapper symbols without
+  future compiler-backed evidence.
 - Unresolved imports, typealiases, nested generic spellings, and external
   dependencies cap relationship confidence.
 - Raw snippets and unsafe values are not stored by default.
