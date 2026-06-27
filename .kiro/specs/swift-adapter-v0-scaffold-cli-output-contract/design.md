@@ -111,7 +111,7 @@ Default excludes should include:
 - hidden tool caches
 - files over `--max-file-byte-size`
 
-Default-exclude matching should normalize repository-relative paths, split them into path segments, and compare individual segment names or documented segment sequences. It should not depend on slash-delimited substring checks such as looking for `/.git/`, because relative paths may not include leading or trailing separators.
+Default-exclude matching should normalize repository-relative paths, split them into path segments, and compare individual segment names or documented segment sequences. It should not depend on slash-delimited substring checks such as looking for `/.git/`, because root-level relative paths such as `.git/config` and `.build/checkouts/...` may not include leading separators, and directory paths may or may not include trailing separators.
 
 Project metadata that requires executing code, running package resolution, invoking build scripts, reading environment-dependent settings, or accessing the network is a dynamic boundary.
 
@@ -301,9 +301,9 @@ dotnet test src/dotnet/TraceMap.sln
 <swift-adapter-test-command>
 <swift-scan-minimal-fixture-command>
 <swift-scan-reduced-fixture-command>
-dotnet run --project src/dotnet/TraceMap.Cli -- report --index <swift-scan-output>/index.sqlite --out <tmp>/swift-report
 dotnet run --project src/dotnet/TraceMap.Cli -- export --index <swift-scan-output>/index.sqlite --out <tmp>/swift-export --format json
 dotnet run --project src/dotnet/TraceMap.Cli -- combine --index <swift-scan-output>/index.sqlite --label swift --out <tmp>/swift-combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- report --index <tmp>/swift-combined.sqlite --out <tmp>/swift-report
 ./scripts/check-private-paths.sh
 git diff --check
 ```

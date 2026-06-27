@@ -135,7 +135,7 @@ Conservative v0 coverage mapping:
 1. WHEN `facts.ndjson` is written THEN it SHALL contain one deterministic JSON fact object per line and SHALL be byte-stable for identical inputs except for explicitly documented non-stable local-only fields.
 2. WHEN `index.sqlite` is written THEN it SHALL include at minimum the shared `scan_manifest` and `facts` tables compatible with existing `.NET` readers.
 3. WHEN the Swift adapter emits symbols or relationship facts THEN `index.sqlite` SHALL populate shared symbol, occurrence, fact-symbol, call-edge, object-creation, argument-flow, alias, or relationship tables using the shared schema rather than a divergent Swift-only schema.
-4. WHEN the adapter has no facts for an optional table THEN it SHALL leave the table empty or omit only where the shared schema allows; downstream compatibility SHALL be verified by running `tracemap report`, `tracemap export --format json`, and `tracemap combine` against both minimal and reduced-coverage Swift fixture outputs without schema errors or non-zero exits.
+4. WHEN the adapter has no facts for an optional table THEN it SHALL leave the table empty or omit only where the shared schema allows; downstream compatibility SHALL be verified against both minimal and reduced-coverage Swift fixture outputs by running `tracemap export --format json` on each single Swift index, running `tracemap combine` to create a combined SQLite index, and running `tracemap report` against the combined SQLite index without schema errors or non-zero exits.
 5. WHEN `report.md` is written THEN it SHALL include scan metadata, coverage, output artifact list, fact counts by type/rule/tier, known gaps, and Swift limitations without raw snippets or unsafe values.
 6. WHEN the scan produces reduced coverage THEN `report.md` SHALL visibly label reduced coverage and SHALL NOT present absence of evidence as clean absence.
 7. WHEN the Swift index is consumed by existing `tracemap combine`, `tracemap report`, `tracemap export`, `tracemap reduce`, or future path/reverse commands THEN those commands SHALL preserve Swift source labels, commit SHA, analysis level, build status, extractor versions, rule IDs, evidence tiers, gaps, and limitations.
@@ -151,7 +151,7 @@ Conservative v0 coverage mapping:
 3. WHEN CocoaPods files such as `Podfile` or `Podfile.lock` are present THEN the scanner SHALL inventory them and may emit dependency facts only from safe literal metadata.
 4. WHEN Carthage files such as `Cartfile` or `Cartfile.resolved` are present THEN the scanner SHALL inventory them and may emit dependency facts only from safe literal metadata.
 5. WHEN app configuration files such as `Info.plist`, entitlements, asset catalogs, storyboards, xibs, CoreData model files, or privacy manifests are discovered THEN v0 scaffold MAY inventory them as structural evidence, but it SHALL NOT claim runtime UI navigation, permission use, storage behavior, or deployed app state.
-6. WHEN files are under `.git`, build outputs, DerivedData, `.build`, Pods build outputs, Carthage checkouts/build outputs, SwiftPM checkouts, dependency caches, generated TraceMap output, or hidden tool caches THEN they SHALL be excluded by default unless explicitly included. The implementation SHALL normalize repository-relative paths, split them into path segments, and compare individual segment names or documented segment sequences instead of using slash-delimited substring containment.
+6. WHEN files are under `.git`, build outputs, DerivedData, `.build`, Pods build outputs, Carthage checkouts/build outputs, SwiftPM checkouts, dependency caches, generated TraceMap output, or hidden tool caches THEN they SHALL be excluded by default unless explicitly included. The implementation SHALL normalize repository-relative paths, split them into path segments, and compare individual segment names or documented segment sequences instead of using slash-delimited substring containment. This SHALL handle root-level excluded directories such as `.git` or `.build` that have no leading separator, nested excluded directories, and paths with or without trailing separators.
 7. WHEN project metadata uses executable Swift code, scripts, environment variables, generated files, plugins, or network/dependency resolution THEN the scanner SHALL treat those pieces as dynamic boundaries unless a deterministic parser extracts safe literal metadata.
 
 ### Requirement 7: Reduced-Coverage and Safe/No-Overclaim Boundaries
@@ -198,9 +198,9 @@ dotnet test src/dotnet/TraceMap.sln
 <swift-adapter-test-command>
 <swift-scan-minimal-fixture-command>
 <swift-scan-reduced-fixture-command>
-dotnet run --project src/dotnet/TraceMap.Cli -- report --index <swift-scan-output>/index.sqlite --out <tmp>/swift-report
 dotnet run --project src/dotnet/TraceMap.Cli -- export --index <swift-scan-output>/index.sqlite --out <tmp>/swift-export --format json
 dotnet run --project src/dotnet/TraceMap.Cli -- combine --index <swift-scan-output>/index.sqlite --label swift --out <tmp>/swift-combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- report --index <tmp>/swift-combined.sqlite --out <tmp>/swift-report
 ./scripts/check-private-paths.sh
 git diff --check
 ```
