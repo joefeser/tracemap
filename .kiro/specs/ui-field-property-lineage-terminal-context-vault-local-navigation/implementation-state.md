@@ -182,6 +182,12 @@ Results:
   mapped candidate terminal-context gap names to `VaultGraphGap.Classification`;
   changed baseline code blocks to SHA-only form with merge context outside the
   block; kept tasks checkboxes synchronized with completed spec-only PR work.
+- Follow-up ACK on head `49bbb9f6fa3704d0222022fb06edb873e2bf3129` still
+  reported the Gemini `safeMetadata` design thread as unresolved. Patch
+  applied: removed the remaining prose that suggested storing
+  `propertyFlowPathId` in safe metadata and redirected implementers to existing
+  `VaultGraphNode` fields such as `SourceScope`, supporting IDs, and evidence
+  locations.
 
 ## Follow-Up Items
 
