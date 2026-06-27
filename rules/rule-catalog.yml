@@ -4196,3 +4196,93 @@ rules:
       - Missing or unsupported inputs are analysis gaps and must not be interpreted as clean absence of legacy evidence.
       - Raw scan-output inputs are summarized only when they are under approved sample or ignored local storage boundaries.
       - Input availability does not prove source freshness, generated-code freshness, build completeness, or runtime reachability.
+
+  - id: swift.repo.manifest.v1
+    name: Swift repository scaffold manifest
+    description: Records Swift adapter scaffold repository and scan-root inventory context.
+    evidenceTier: Tier2Structural
+    emits:
+      - FileInventoried
+    limitations:
+      - Static scaffold inventory only; does not prove Swift build success, package resolution, runtime execution, deployment, UI navigation, storage access, network reachability, or production use.
+      - Repository names and scan-root paths are represented with safe labels or hashes; raw local paths and raw remotes must not be rendered in public-safe outputs.
+
+  - id: swift.file.inventory.v1
+    name: Swift file inventory
+    description: Records selected Swift source and supported metadata file presence for the Swift adapter scaffold.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - FileInventoried
+    limitations:
+      - File presence does not prove project membership, compilation, symbol resolution, runtime execution, or semantic coverage.
+      - Generated, dependency, oversized, unsupported, or excluded files may be omitted with explicit reduced-coverage gaps.
+
+  - id: swift.package.swiftpm.v1
+    name: SwiftPM metadata inventory
+    description: Records checked-in SwiftPM manifest or resolved-package metadata presence without resolving packages.
+    evidenceTier: Tier2Structural
+    emits:
+      - FileInventoried
+    limitations:
+      - Literal checked-in metadata only; no network package resolution, build success, transitive dependency completeness, platform compatibility, or runtime use is proven.
+      - Package.swift is executable Swift code; scaffold inventory does not evaluate dynamic expressions, plugins, environment variables, or generated package metadata.
+
+  - id: swift.package.cocoapods.v1
+    name: CocoaPods metadata inventory
+    description: Records checked-in CocoaPods metadata file presence for the Swift adapter scaffold.
+    evidenceTier: Tier2Structural
+    emits:
+      - FileInventoried
+    limitations:
+      - Literal checked-in metadata only; no pod install, build integration, transitive dependency completeness, binary compatibility, or runtime use is proven.
+      - Raw source values, private package sources, local paths, URLs, and credentials must be hashed or omitted.
+
+  - id: swift.package.carthage.v1
+    name: Carthage metadata inventory
+    description: Records checked-in Carthage metadata file presence for the Swift adapter scaffold.
+    evidenceTier: Tier2Structural
+    emits:
+      - FileInventoried
+    limitations:
+      - Literal checked-in metadata only; no checkout, build, binary compatibility, transitive dependency completeness, or runtime use is proven.
+      - Raw source values, private package sources, local paths, URLs, and credentials must be hashed or omitted.
+
+  - id: swift.project.xcode.v1
+    name: Xcode project and workspace inventory
+    description: Records deterministic Xcode project, workspace, and contained metadata presence for the Swift adapter scaffold.
+    evidenceTier: Tier2Structural
+    emits:
+      - FileInventoried
+    limitations:
+      - Static project metadata only; no Xcode build success, scheme behavior, target selection, build-setting evaluation, signing, simulator/device state, deployment, or runtime behavior is proven.
+      - Storyboard, xib, asset, plist, entitlement, and project metadata inventory does not prove UI navigation, permissions, storage behavior, or production use.
+
+  - id: swift.toolchain.unavailable.v1
+    name: Swift toolchain unavailable gap
+    description: Emits an analysis gap when Swift toolchain probing is unavailable or disabled while scaffold inventory can still produce useful static evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Toolchain absence is reduced-coverage evidence only; it does not prove absence of Swift symbols, package behavior, buildability, or app behavior.
+      - The scaffold may still emit file/project metadata facts from checked-in evidence, but full semantic conclusions remain unavailable.
+
+  - id: swift.project.load-failed.v1
+    name: Swift project load failed or deferred gap
+    description: Emits analysis gaps for SwiftPM/Xcode load failure, deferred semantic loading, skipped files, unsupported encodings, oversized files, or unavailable project metadata.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Project load failure or deferral is a coverage gap, not proof that a project is invalid, unused, unreachable, or safe.
+      - File/project fallback facts remain static evidence and must not be read as complete selected-scope coverage.
+
+  - id: swift.unsupported.dynamic-boundary.v1
+    name: Swift unsupported dynamic boundary
+    description: Emits analysis gaps for Swift runtime, dynamic, generated, bridge, macro, result-builder, protocol-dispatch, UI, storage, or lifecycle behavior outside the scaffold scope.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Unsupported dynamic boundaries are explicit unknowns; they do not prove absence of behavior, reachability, impact, runtime execution, deployment, or production use.
+      - Objective-C bridging, selectors, responder chain behavior, property wrappers, macros, result builders, dependency injection, Combine, async scheduling, SwiftUI navigation, storyboards, and xibs require later rule-backed extractors.
