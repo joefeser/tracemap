@@ -115,6 +115,7 @@ public sealed record ExplorerCompatibilityRow(
     string RuleId,
     string EvidenceTier,
     string CoverageLabel,
+    string Scope,
     IReadOnlyList<string> SupportIds,
     IReadOnlyList<string> LimitationIds,
     string Message);

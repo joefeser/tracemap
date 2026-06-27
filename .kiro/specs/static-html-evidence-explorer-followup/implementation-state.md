@@ -1,6 +1,6 @@
 # Static HTML Evidence Explorer Follow-Up Implementation State
 
-Status: spec-drafted
+Status: spec-ready
 Readiness: implementation-ready
 Public claim level: hidden
 

@@ -190,8 +190,9 @@ absence.
    the status MAY say no static evidence rows were found for that section, with
    rule IDs and coverage labels.
 3. WHEN a section lacks compatible input THEN the status SHALL say
-   unavailable, not provided, provenance-only, unsupported, or profile
-   incompatible; it SHALL NOT say no evidence exists.
+   `not-provided`, `provenance-only`, `unsupported-schema`,
+   `unsupported-artifact`, or `profile-incompatible`; it SHALL NOT say no
+   evidence exists.
 4. WHEN a section is future-supported but not implemented in the current slice
    THEN the status SHALL remain visibly partial and SHALL NOT be counted as
    complete explorer coverage.
@@ -235,11 +236,16 @@ the slice without expanding product scope.
 
 1. WHEN implementation lands THEN focused .NET tests SHALL cover ledger rows
    for supported rendered inputs, provenance-only inputs, missing inputs,
-   unsupported JSON inputs, present-but-empty compatible inputs, and
-   profile-incompatible inputs.
-2. WHEN implementation lands THEN tests SHALL cover claim-level/profile
-   conflicts without emitting unsafe raw values in HTML, JSON, manifest,
-   README, or diagnostics.
+   unsupported JSON inputs, and present-but-empty compatible inputs. Tests for
+   `profile-incompatible` rows are required only when implementation introduces
+   a compatible artifact fixture with safe structured profile metadata.
+2. WHEN implementation lands THEN tests SHALL cover currently implemented
+   conflict dimensions, such as commit SHA conflicts, without emitting unsafe
+   raw values in HTML, JSON, manifest, README, or diagnostics. Claim-level and
+   profile conflict tests are required only when implementation introduces a
+   compatible artifact fixture with safe structured claim/profile metadata; PR 1
+   otherwise SHALL test the all-unknown claim/profile metadata path and confirm
+   it does not emit a claim/profile conflict row.
 3. WHEN implementation lands THEN tests SHALL cover deterministic ordering of
    ledger rows, section statuses, anchors, support IDs, and downloadable data.
 4. WHEN implementation lands THEN tests SHALL cover public/demo strictness and
