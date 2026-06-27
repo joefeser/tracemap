@@ -69,10 +69,10 @@ Completed on 2026-06-27:
 - `cd site && npm run validate`: passed; built static site and validated
   78 HTML files, 2736 internal references, and 77 sitemap URLs.
 - `cd site && npm run build`: passed.
-- Desktop browser sanity: passed at 1440x1100 against
+- desktop browser sanity: passed at 1440x1100 against
   `/proof-paths/property-flow-schema/`; title and H1 rendered, no horizontal
   overflow, no broken images, and expected main links were present.
-- Mobile browser sanity: passed at 390x844 against
+- mobile browser sanity: passed at 390x844 against
   `/proof-paths/property-flow-schema/`; title and H1 rendered, no horizontal
   overflow, no broken images, and expected hero links were present.
 - `git diff --check`: passed.

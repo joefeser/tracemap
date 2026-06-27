@@ -71,7 +71,7 @@ test("validatePropertyFlowSchemaGapDist rejects forbidden runtime proof claim", 
 
 test("validatePropertyFlowSchemaGapDist rejects hard private material", async (t) => {
   const root = await createManagedFixture(t, {
-    pageHtml: propertyFlowSchemaPage("<p>Review /Users/example/private-output.</p>")
+    pageHtml: propertyFlowSchemaPage("<p>Review ConnectionString=hidden.</p>")
   });
   const errors = [];
 
