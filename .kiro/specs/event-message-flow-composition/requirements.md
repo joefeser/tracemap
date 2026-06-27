@@ -177,9 +177,12 @@ Acceptance Criteria:
 2. WHEN a stable destination match is the only bridge between publisher and
    consumer evidence THEN context SHALL classify it as `NeedsReview` or
    equivalent review-tier static context.
-3. WHEN path, reverse, route-flow, or reducer context is unavailable THEN the
-   output SHALL emit an explicit gap rather than silently omitting the missing
-   context.
+3. WHEN an enabled or requested consumer path such as path, reverse, route-flow,
+   or reducer context is unavailable THEN the output for that requested
+   consumer SHALL emit an explicit gap rather than silently omitting the missing
+   context. Deferred consumers that are not requested in PR 1 SHALL remain
+   documented follow-ups instead of producing unavailable gaps in
+   `tracemap report`.
 4. WHEN noisy names such as `status`, `update`, `event`, `message`, or `data`
    create high fan-out context THEN output SHALL cap and downgrade instead of
    promoting stronger findings.
