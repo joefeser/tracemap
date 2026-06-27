@@ -1,7 +1,7 @@
 # Legacy Data Model ORM Mapping Completion Tasks
 
-Current state: ready-for-implementation after reviewed spec loop. Product
-implementation has not started in this branch.
+Current state: implementation slice 1 merged in PR #373. Broad follow-up
+implementation tasks remain open.
 
 ## Spec Authoring Tasks
 
@@ -36,10 +36,13 @@ implementation has not started in this branch.
         `AmbiguousLegacyDataModelSelector`, and
         `UnknownLegacyDataModelDescriptorRole` catalog coverage before emitting
         them from projection/report compatibility code.
+        Slice 1 added regression assertions for existing rule-catalog
+        vocabulary ownership text; exact new gap entries remain open until
+        product code emits them.
   - [ ] Document limitations for every changed rule: static evidence only,
         reduced coverage, parser safety, redaction, unsupported shapes, and no
         runtime ORM/database proof.
-  - [ ] Add exact classification tests for any new or reused gap strings.
+  - [x] Add exact classification tests for any new or reused gap strings.
 
 - [ ] 2. Harden safe normalized descriptor identity. Requirements: 2, 9.
   - [ ] Centralize identity fields for metadata format, source artifact type,
@@ -58,6 +61,8 @@ implementation has not started in this branch.
   - [ ] Add a cross-format identity collision test proving identical display
         names in different metadata formats or source artifact types keep
         separate stable keys and downgrade ambiguous selectors.
+        Slice 1 proves cross-format descriptor identity separation. Ambiguous
+        selector downgrade coverage remains open.
 
 - [ ] 3. Complete relationship extraction and gap behavior. Requirements: 3, 8.
   - [ ] Add or harden deterministic DBML association relationship evidence and
@@ -74,7 +79,7 @@ implementation has not started in this branch.
   - [ ] Add tests proving ambiguous or unsupported relationship shapes produce
         `AnalysisGap` rows and downstream needs-review/reduced-coverage labels,
         not arbitrary relationships.
-  - [ ] Add a no-double-count regression proving source relationship facts and
+  - [x] Add a no-double-count regression proving source relationship facts and
         normalized relationship projection do not create duplicate terminal
         `legacy-data` surfaces.
         The regression must assert the SQLite/report surface-count path, not
@@ -164,7 +169,7 @@ implementation has not started in this branch.
         schema or availability gap.
   - [ ] Keep `AnalysisGap` facts under `legacy.data.*` out of terminal
         `legacy-data` surfaces.
-  - [ ] Add compatibility tests only for workflows touched by this slice.
+  - [x] Add compatibility tests only for workflows touched by this slice.
   - [ ] Record broad diff, impact, release-review, portfolio, evidence graph,
         vault, RAG/docs-export, and static HTML expansion as follow-up unless
         touched directly.
@@ -174,7 +179,7 @@ implementation has not started in this branch.
   - [ ] Add small synthetic fixtures for DBML, EDMX, typed DataSet/TableAdapter,
         NHibernate, unsupported ORM gaps, generated-code links, ambiguity, parser
         safety, and unsafe value suppression.
-  - [ ] Add focused tests for extractor behavior, relationship evidence,
+  - [x] Add focused tests for extractor behavior, relationship evidence,
         unsupported gaps, generated-link boundaries, descriptor tier ceilings,
         deterministic ordering, and privacy suppression.
   - [ ] Add SQLite privacy assertions for metadata-derived properties.

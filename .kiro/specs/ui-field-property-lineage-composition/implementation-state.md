@@ -1,7 +1,7 @@
 # UI Field Property Lineage Composition Implementation State
 
-Status: ready-for-implementation-after-route-flow-contract
-Readiness: ready-after-current-route-flow-worker
+Status: implementation-slice-1-ready-for-pr
+Readiness: implementation-slice-1-validated
 Spec branch: `codex/spec-ui-field-property-lineage-composition`
 Target base: `dev`
 Primary issue: `#165`
@@ -199,3 +199,83 @@ ACK PR loop:
    when the selected property trail reaches it.
 4. Validate safe output for reports, vault/RAG/docs-export chunks, evidence
    graph exports, evidence-pack, and static explorer consumers when touched.
+
+## Implementation Slice 1: Contract Audit And Route-Flow Schema Gap
+
+Branch: `codex/impl-ui-property-composition-audit-20260626183337`
+Base: `origin/dev` at `d5885133`
+
+Selected scope: PR 1 contract audit plus one narrow route-flow schema
+hardening. This slice does not add Angular/Razor bridge families, backend
+terminal context, report version changes, vault/docs/export consumers, or
+persisted derived property-flow rows.
+
+Live contract audit:
+
+- `tracemap property-flow` remains report version `1.0` and writes
+  `PropertyFlowReport` with selected roots, lineage paths, gaps, inventory,
+  coverage warnings, observed evidence, and a `PropertyFlowSchemaSummary`.
+- Current selectors are `field:`, `control:`, `binding:`, `model:`, `dto:`,
+  `symbol:`, and `fact:`.
+- Current classifications are `StrongStaticLineage`,
+  `ProbableStaticLineage`, `NeedsReviewLineage`, `UnknownAnalysisGap`,
+  `NoLineageEvidence`, `SelectorNoMatch`, `TruncatedByLimit`, and
+  `ObservedDemoContext`.
+- Existing property-flow composition already emits route-flow availability
+  signals, `RouteFlowUnavailable`, and `RouteFlowNoPropertyContext` when
+  route-flow evidence is broad endpoint context rather than property-specific
+  context.
+- Current route-flow reuse is schema-level and path-level only. Property-flow
+  consumes the optional `combined_route_flow_edges` signal and requires a
+  normalized route key column such as `normalizedPathKey`,
+  `normalized_path_key`, `routeKey`, `route_key`, `pathKey`, or `path_key`.
+- Route-flow context groups, touched files, touched symbols, logic rows,
+  dependency surfaces, argument projection, and fact-symbol projection remain
+  route-flow report surfaces. Property-flow does not attach those rows as
+  property lineage in this slice.
+- Report version `1.0` remains compatible because this slice adds only a
+  closed schema signal value and catalogued gap; it does not change row meaning
+  or add unsafe metadata.
+
+Implemented in this slice:
+
+- Added `unsupported` route-flow schema signal when `combined_route_flow_edges`
+  exists but lacks a compatible normalized route key column.
+- Added `UnsupportedRouteFlowSchema` gap under `property-flow.schema.v1` so
+  incompatible route-flow contracts are distinct from missing or empty
+  route-flow evidence.
+- Updated the rule catalog for the unsupported route-flow schema gap and
+  limitation.
+- Added focused regression coverage for compatible empty route-flow schema and
+  incompatible route-flow schema.
+
+Validation:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter PropertyFlowTests`:
+  passed, 22 tests. Re-run after PR-loop patch also passed, 22 tests.
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter CombinedRouteFlowTests`:
+  passed, 70 tests. Re-run after PR-loop patch also passed, 70 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 684 tests. Re-run after
+  PR-loop patch also passed, 684 tests.
+- `git diff --check`: passed before and after PR-loop patch.
+- `./scripts/check-private-paths.sh`: passed before and after PR-loop patch.
+- NuGet emitted the existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory
+  warning during .NET restore/test.
+
+PR-loop patch notes:
+
+- ACK for PR #376 returned `actionable_findings` with two unresolved threads.
+- Patched Gemini readability feedback by grouping route-flow schema gap ID,
+  kind, and message in one switch expression.
+- Patched Qodo required metadata feedback by carrying observed
+  `combined_route_flow_edges` column names, selected root supporting fact IDs,
+  source/commit metadata, and an anchor span when available on
+  `UnsupportedRouteFlowSchema` gaps.
+
+Deferred:
+
+- Mapper, terminal-context, unsafe-input, redaction, and route-flow consumer
+  compatibility gaps beyond the schema boundary.
+- Angular/Razor bridge expansion and backend terminal context.
+- Vault, docs-export, evidence-pack, explorer, and graph export compatibility
+  work because this slice does not change their consumed row shapes.

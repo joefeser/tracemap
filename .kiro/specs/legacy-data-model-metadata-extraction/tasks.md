@@ -78,8 +78,12 @@
         selector downgrade behavior.
     - [x] Completed in slice 3: relationship ambiguity and inherited
           unsupported-shape classification tests.
+    - [x] Completed in slice 11: reverse-query legacy-data selector ambiguity
+          emits `AmbiguousLegacyDataModelSelector` under
+          `legacy.data.model.surface.v1` and downgrades selected model surfaces
+          to `NeedsReviewSurfaceEvidence`.
     - [ ] Deferred: selector downgrade behavior tests for downstream
-          surface/query workflows.
+          workflows beyond reverse query.
 
 - [ ] 4. Add NHibernate mapping XML MVP. Requirements: 1, 3, 7, 8.
   - [x] Safely parse checked-in `.hbm.xml` files with DTD/entity resolution
@@ -191,6 +195,9 @@
         fact projection to prevent duplicate surfaces.
   - [ ] Cap downstream classifications for syntax-only, ambiguous, high fan-out,
         missing generated code, or reduced-coverage evidence.
+    - [x] Completed in slice 11: reverse-query legacy-data selectors that match
+          multiple model surfaces are capped to review-tier selected-surface
+          evidence with an explicit caveat and rule-backed gap.
   - [ ] Add tests for surface projection, duplicate surface gaps, selector
         behavior, gap exclusion, no-double-projection, backward compatibility
         for existing `legacy-data` surfaces, and report redaction.
@@ -203,9 +210,12 @@
           NHibernate formula, filter, query, config/provider-like values,
           remotes, local paths, and unsafe descriptor labels do not appear in
           `graph.json` or generated vault Markdown.
+    - [x] Completed in slice 11: reverse-query selector behavior regression for
+          ambiguous legacy-data model surface selection.
     - [ ] Deferred: persisted derived-row no-double-projection tests, broader
-          selector downgrade behavior, portfolio privacy, and broader
-          end-to-end NHibernate unsafe-value redaction outside graph/vault.
+          selector downgrade behavior outside reverse query, portfolio privacy,
+          and broader end-to-end NHibernate unsafe-value redaction outside
+          graph/vault.
   - [ ] Include a gap-exclusion regression for a pre-existing source rule such
         as `legacy.data.dbml.v1`, not only new old ORM gaps.
     - [x] Completed in earlier projection coverage and asserted in combined

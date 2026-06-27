@@ -50,6 +50,13 @@ public sealed class LegacyDataModelRuleCatalogTests
         Assert.Contains(FactTypes.LegacyDataMetadataDeclared, RuleBlock(catalog, RuleIds.LegacyDataOrmNHibernate), StringComparison.Ordinal);
         Assert.Contains(FactTypes.LegacyDataMappingDeclared, RuleBlock(catalog, RuleIds.LegacyDataOrmNHibernate), StringComparison.Ordinal);
         Assert.Contains(FactTypes.LegacyDataGeneratedCodeLinked, RuleBlock(catalog, RuleIds.LegacyDataModelGeneratedLink), StringComparison.Ordinal);
+
+        Assert.Contains("Ambiguous, duplicate, unsupported, reduced-coverage, malformed, parser-rejected, or too-large metadata", RuleBlock(catalog, RuleIds.LegacyDataModelIdentity), StringComparison.Ordinal);
+        Assert.Contains("unidirectional, ambiguous, duplicate, inherited, split, conditional, many-to-many, provider-specific, or unsupported shapes", RuleBlock(catalog, RuleIds.LegacyDataModelRelationship), StringComparison.Ordinal);
+        Assert.Contains("Unsupported descriptors produce gaps, not invented entity, table, column, relationship, or generated-code facts", RuleBlock(catalog, RuleIds.LegacyDataOrmUnsupported), StringComparison.Ordinal);
+        Assert.Contains("AmbiguousLegacyDataModelSelector gaps", RuleBlock(catalog, RuleIds.LegacyDataModelSurface), StringComparison.Ordinal);
+        Assert.Contains("DuplicateIdentity gaps with reason duplicate-surface", RuleBlock(catalog, RuleIds.LegacyDataModelSurface), StringComparison.Ordinal);
+        Assert.Contains("Unknown vocabulary values for descriptor role, metadata format, or source artifact type", RuleBlock(catalog, RuleIds.LegacyDataModelSurface), StringComparison.Ordinal);
     }
 
     [Fact]
