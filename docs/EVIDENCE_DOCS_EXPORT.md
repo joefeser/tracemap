@@ -17,9 +17,10 @@ tracemap docs-export \
   --format markdown,jsonl
 ```
 
-Optional inputs include `--route-flow-report`, `--paths-report`,
-`--reverse-report`, `--combined-report`, `--release-review-report`,
-`--vault-graph`, `--evidence-pack`, and `--source-claim-catalog`.
+Optional inputs include `--route-flow-report`, `--property-flow-report`,
+`--paths-report`, `--reverse-report`, `--combined-report`,
+`--release-review-report`, `--vault-graph`, `--evidence-pack`, and
+`--source-claim-catalog`.
 
 `--format` accepts one comma-separated value from `markdown`, `jsonl`, or
 `markdown,jsonl`. `manifest.json` is always the generated-file integrity anchor
@@ -102,6 +103,15 @@ terminal static descriptor facts are present. The chunk cites both the source
 future reviewed claim context explicitly allows clear labels, and does not
 claim SQL execution, runtime provider selection, live schema existence,
 migration execution, or production database usage.
+
+Property-flow chunks may include safe `terminalContextKind` metadata when that
+key is already present on indexed static evidence or in a supplied
+`property-flow-report.json` under
+`lineagePaths[].nodes[].safeMetadata.terminalContextKind`. Docs export treats
+this as retrieval metadata inside the existing `property-flow` chunk family. It
+does not parse path-note prose, create a new finding, infer missing terminal
+context, or prove runtime behavior, database execution, dependency execution,
+impact, or complete coverage.
 
 ## Stable IDs
 
