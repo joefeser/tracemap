@@ -65,7 +65,9 @@ Reviewed before writing public copy:
 
 Completed on 2026-06-27:
 
-- `cd site && npm test`: passed, 607 tests.
+- `cd site && npm test`: passed, 609 tests after ACK-authorized validator
+  hardening for metadata claim scans, private route metadata scans, and
+  boundary-section claim scans.
 - `cd site && npm run validate`: passed; built static site and validated
   78 HTML files, 2736 internal references, and 77 sitemap URLs.
 - `cd site && npm run build`: passed.
@@ -75,6 +77,8 @@ Completed on 2026-06-27:
 - mobile browser sanity: passed at 390x844 against
   `/proof-paths/property-flow-schema/`; title and H1 rendered, no horizontal
   overflow, no broken images, and expected hero links were present.
+- Browser sanity was not repeated after the ACK-authorized validator-only
+  patch because no page source, CSS, layout, or metadata content changed.
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed; private path guard passed.
 
