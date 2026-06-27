@@ -1,8 +1,8 @@
 # UI Field Property Lineage Terminal Context Consumers Implementation State
 
-Status: ready-for-implementation
-Readiness: validated-spec-only
-Spec branch: `codex/ui-field-property-lineage-terminal-context-consumers`
+Status: implemented-pending-pr-review
+Readiness: docs-export-validation-complete
+Spec branch: `codex/impl-terminal-context-consumers-20260627135700`
 Target base: `dev`
 Public claim level: hidden
 
@@ -22,12 +22,12 @@ That commit is `[codex] Add property-flow terminal context gate (#400)` on
 
 ## Scope
 
-This is a spec-only branch. It creates an implementation-ready follow-up spec
-for backend/docs-export/vault/reporting consumers of PR #400 property-flow
-terminal-context metadata.
+This implementation branch handles PR 1 from the spec: docs-export
+compatibility and static metadata for PR #400 property-flow terminal-context
+metadata.
 
-No product code, site files, generated output, rule catalog entries, scanner
-logic, reducer logic, export code, or existing specs are changed by this branch.
+It does not change scanner logic, reducer logic, generated output, site files,
+or public claim copy.
 
 ## Source Material Reviewed
 
@@ -108,8 +108,12 @@ audit proves a smaller shared consumer helper is required.
 Before any consumer implementation edits product code, the implementation PR
 must fill the relevant decision:
 
-- Docs export decision: pending. Choose `ignore`, `render`, or `schema-gap`.
-  The chosen behavior makes the matching tests mandatory.
+- Docs export decision: `render`. Docs export will render structured
+  `terminalContextKind` as static retrieval metadata inside the existing
+  `docs-export.chunk.property-flow.v1` property-flow chunk family. This is an
+  additive body/metadata cue, not a new chunk family, gap code, limitation,
+  rule ID, finding, or public claim. Structured metadata wins over any prose
+  note text because docs export does not parse `StaticTerminalContext` prose.
 - Vault export decision: pending. Choose `ignore`, `hidden-local-render`, or
   `omission-gap`. The chosen behavior makes the matching tests mandatory.
 - Reporting decision: pending. Choose `unchanged`, `additive-render`, or
@@ -161,20 +165,25 @@ Initial review results:
 
 ## Validation Log
 
-Spec-only validation planned:
+Implementation validation:
 
 ```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter EvidenceDocsExportTests
+dotnet test src/dotnet/TraceMap.sln
 git diff --check
 ./scripts/check-private-paths.sh
-git diff --name-only origin/dev...HEAD
 ```
 
 Results:
 
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter EvidenceDocsExportTests`:
+  passed 13 tests after the review patch added property-flow report-node
+  coverage.
+- `dotnet test src/dotnet/TraceMap.sln`: passed 696 tests after the review
+  patch.
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
-- Diff scope check: only `.kiro/specs/ui-field-property-lineage-terminal-context-consumers/`
-  is changed.
+- Known pre-existing warning: `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory.
 
 ## PR Loop Log
 
@@ -207,6 +216,18 @@ Results:
   aligned `tasks.md` header to `ready-for-implementation` /
   `validated-spec-only`.
 - Post-third-patch validation: `git diff --check` passed and
+  `./scripts/check-private-paths.sh` passed.
+- Implementation PR #407 initial ACK returned `actionable_findings` on head
+  `65096e11202b7d2451662ae7731524412121f88e` with two current threads:
+  Gemini requested a blank-value guard for `terminalContextKind`; Codex
+  requested reading terminal context from property-flow report nodes instead of
+  only indexed fact properties. Patch applied: added
+  `--property-flow-report` / `PropertyFlowReportPaths`, parsed only structured
+  `lineagePaths[].nodes[].safeMetadata.terminalContextKind`, ignored path-note
+  prose, skipped blank values, redacted unsafe values, and kept output in the
+  existing property-flow chunk family.
+- Post-review-patch validation: focused docs-export tests passed 13, full
+  solution tests passed 696, `git diff --check` passed, and
   `./scripts/check-private-paths.sh` passed.
 
 ## Follow-Up Items
