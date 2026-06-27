@@ -4383,7 +4383,7 @@ rules:
       - AnalysisGap
     limitations:
       - Gaps are partial-analysis evidence and must not be interpreted as clean absence, safety, reachability, or runtime behavior.
-      - Deferred SwiftSyntax, SourceKit, Xcode graph, SwiftPM semantic loading, Objective-C bridging, macros, result builders, UI, storage, and runtime behavior remain out of scope unless future rules prove them.
+      - Deferred SourceKit, Xcode graph, SwiftPM semantic loading, Objective-C bridging, macros, result builders, UI, storage, and runtime behavior remain out of scope unless future rules prove them.
 
   - id: swift.toolchain.unavailable.v1
     name: Swift toolchain unavailable gap
@@ -4414,3 +4414,54 @@ rules:
     limitations:
       - Unsupported dynamic boundaries are explicit unknowns; they do not prove absence of behavior, reachability, impact, runtime execution, deployment, or production use.
       - Objective-C bridging, selectors, responder chain behavior, property wrappers, macros, result builders, dependency injection, Combine, async scheduling, SwiftUI navigation, storyboards, and xibs require later rule-backed extractors.
+
+  - id: swift.syntax.declaration.v1
+    name: SwiftSyntax declaration evidence
+    description: Records SwiftSyntax-backed declaration evidence for classes, structs, actors, enums, protocols, extensions, functions, initializers, properties, subscripts, enum cases, typealiases, and associated types.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftDeclarationDeclared
+    limitations:
+      - SwiftSyntax declaration evidence is static syntax evidence; it does not prove compiler semantic resolution, overload identity, protocol witness selection, runtime dispatch, macro-expanded members, Objective-C bridging, or build success.
+      - Module and target identity may be promoted only when deterministic checked-in project inventory supports it; otherwise identities remain file scoped with reduced-coverage gaps.
+      - Display signatures are reviewer aids and must not be treated as fully qualified compiler symbols.
+
+  - id: swift.syntax.import.v1
+    name: SwiftSyntax import evidence
+    description: Records SwiftSyntax-backed import declarations, scoped import kinds, and exported-import syntax markers.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftImportDeclared
+    limitations:
+      - Import declarations do not prove the imported module exists, builds, is linked, is re-exported at runtime, or is used by consumers.
+      - Conditional imports, canImport checks, and unavailable module context remain reduced-coverage gaps unless a future deterministic configuration is supplied.
+
+  - id: swift.syntax.call.v1
+    name: SwiftSyntax call candidate evidence
+    description: Records syntax-visible Swift call candidates with containing declaration, visible callee syntax, argument labels, arity, file spans, and syntax hashes.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftCallCandidate
+    limitations:
+      - Call candidates do not prove runtime dispatch targets, selected overloads, protocol witnesses, Objective-C selectors, closure values, dependency injection, branch feasibility, scheduling, or execution order.
+      - Optional chaining, dynamic member lookup, operators, key paths, macro-generated calls, result builders, and unsupported callee expressions remain reduced-coverage gaps or syntax-only placeholders.
+
+  - id: swift.syntax.construction.v1
+    name: SwiftSyntax construction candidate evidence
+    description: Records initializer-like Swift construction candidates with visible created type syntax, argument labels, file spans, and syntax hashes.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftConstructionCandidate
+    limitations:
+      - Construction candidates do not prove runtime allocation, selected initializer overload, dependency injection behavior, property-wrapper behavior, or object lifetime.
+      - Shared ObjectCreated semantics are not implied by this syntax-only rule; downstream tools must preserve the syntax-only tier and limitations.
+
+  - id: swift.syntax.analysis-gap.v1
+    name: SwiftSyntax parser and syntax coverage gap
+    description: Emits gaps for unreadable Swift files, unavailable module context, parser limitations, unsupported call shapes, optional chaining, macros, generated code, Objective-C bridging, and dynamic syntax that v0 cannot resolve.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Parser and syntax gaps are unknowns, not clean absence of declarations, calls, relationships, navigation, or runtime behavior.
+      - Diagnostic text and raw source expressions must be omitted or hashed; no raw snippets, URLs, local paths, secrets, or private labels should be emitted.

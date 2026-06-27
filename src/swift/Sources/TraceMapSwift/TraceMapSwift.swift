@@ -148,17 +148,19 @@ public enum SwiftScanEngine {
         let git = try GitMetadata.load(scanRoot: repo)
         try OutputWriter.validateOutputPath(scanRoot: repo, gitRoot: git.gitRoot, outputPath: options.outputPath)
         let inventory = try InventoryBuilder.build(scanRoot: repo, gitRoot: git.gitRoot, options: options)
-        let scanId = stableScanId(git: git, options: options, inventory: inventory)
+        let scanId = stableScanId(git: git, options: options, inventory: inventory, scanRoot: repo)
+        let syntax = SwiftSyntaxEvidenceExtractor.extract(scanRoot: repo, inventory: inventory)
         var gaps = CoverageGap.defaults(inventory: inventory)
         gaps += Toolchain.diagnostics(inventory: inventory)
         gaps += MetadataGapFactory.gaps(scanRoot: repo, inventory: inventory)
+        gaps += syntax.gaps
         if inventory.contains(where: { $0.kind == "swiftpm-manifest" }) {
             gaps.append(CoverageGap(kind: "swiftpm-load-deferred", ruleId: RuleIds.analysisGap, message: "SwiftPM semantic package loading is deferred; checked-in Package.swift metadata is inventory-only."))
         }
         if inventory.contains(where: { $0.kind == "xcode-project" || $0.kind == "xcode-workspace" }) {
             gaps.append(CoverageGap(kind: "xcode-load-deferred", ruleId: RuleIds.analysisGap, message: "Xcode project/workspace semantic loading is deferred; checked-in metadata is inventory-only."))
         }
-        gaps.append(CoverageGap(kind: "swift-semantic-extractor-deferred", ruleId: RuleIds.dynamicBoundary, message: "SwiftSyntax, SourceKit, protocol dispatch, Objective-C bridging, UI, storage, and runtime analysis are out of scope for this inventory slice."))
+        gaps.append(CoverageGap(kind: "swift-semantic-extractor-deferred", ruleId: RuleIds.dynamicBoundary, message: "SourceKit, Swift semantic resolution, protocol dispatch, Objective-C bridging, UI, storage, and runtime analysis are out of scope for this syntax slice."))
 
         let manifest = ScanManifest(
             scanId: scanId,
@@ -180,12 +182,12 @@ public enum SwiftScanEngine {
             extractorVersions: [TraceMapSwiftVersion.extractorId: TraceMapSwiftVersion.extractorVersion]
         )
 
-        let facts = FactFactory.facts(manifest: manifest, inventory: inventory, gaps: gaps, scanRoot: repo)
+        let facts = FactFactory.facts(manifest: manifest, inventory: inventory, gaps: gaps, scanRoot: repo, syntax: syntax)
         try OutputWriter.write(outputPath: options.outputPath, manifest: manifest, facts: facts, inventory: inventory)
         return SwiftScanResult(manifest: manifest, facts: facts, inventory: inventory)
     }
 
-    private static func stableScanId(git: GitMetadata, options: SwiftScanOptions, inventory: [InventoryItem]) -> String {
+    private static func stableScanId(git: GitMetadata, options: SwiftScanOptions, inventory: [InventoryItem], scanRoot: URL) -> String {
         let optionSignature = [
             "project=\(options.projectFilters.sorted().joined(separator: ","))",
             "include=\(options.includeGlobs.sorted().joined(separator: ","))",
@@ -193,7 +195,10 @@ public enum SwiftScanEngine {
             "max=\(options.maxFileByteSize)"
         ].joined(separator: ";")
         let inventorySignature = inventory
-            .map { "\($0.relativePath)|\($0.kind)|\($0.sizeBytes)|\($0.skippedReason ?? "selected")" }
+            .map { item in
+                let hash = item.selected ? fileHash(scanRoot.appendingPathComponent(item.relativePath)) : ""
+                return "\(item.relativePath)|\(item.kind)|\(item.sizeBytes)|\(item.skippedReason ?? "selected")|\(hash)"
+            }
             .sorted()
             .joined(separator: "\n")
         return "swift-" + sha256Hex([
@@ -510,6 +515,11 @@ enum RuleIds {
     static let toolchainUnavailable = "swift.toolchain.unavailable.v1"
     static let projectLoadFailed = "swift.project.load-failed.v1"
     static let dynamicBoundary = "swift.unsupported.dynamic-boundary.v1"
+    static let swiftSyntaxDeclaration = "swift.syntax.declaration.v1"
+    static let swiftSyntaxImport = "swift.syntax.import.v1"
+    static let swiftSyntaxCall = "swift.syntax.call.v1"
+    static let swiftSyntaxConstruction = "swift.syntax.construction.v1"
+    static let swiftSyntaxAnalysisGap = "swift.syntax.analysis-gap.v1"
 }
 
 public enum EvidenceTier: String, Codable, Equatable {
@@ -566,7 +576,7 @@ public struct CodeFact: Codable, Equatable {
 }
 
 enum FactFactory {
-    static func facts(manifest: ScanManifest, inventory: [InventoryItem], gaps: [CoverageGap], scanRoot: URL) -> [CodeFact] {
+    static func facts(manifest: ScanManifest, inventory: [InventoryItem], gaps: [CoverageGap], scanRoot: URL, syntax: SwiftSyntaxExtraction = SwiftSyntaxExtraction(declarations: [], imports: [], calls: [], constructions: [], gaps: [])) -> [CodeFact] {
         var facts: [CodeFact] = []
         facts.append(makeFact(
             manifest: manifest,
@@ -610,6 +620,7 @@ enum FactFactory {
         for item in inventory where item.selected {
             facts += metadataFacts(manifest: manifest, item: item, scanRoot: scanRoot)
         }
+        facts += syntaxFacts(manifest: manifest, syntax: syntax)
         for gap in gaps {
             facts.append(makeFact(
                 manifest: manifest,
@@ -631,6 +642,119 @@ enum FactFactory {
         return facts.sorted { $0.factId < $1.factId }
     }
 
+    private static func syntaxFacts(manifest: ScanManifest, syntax: SwiftSyntaxExtraction) -> [CodeFact] {
+        var facts: [CodeFact] = []
+        for declaration in syntax.declarations {
+            facts.append(makeFact(
+                manifest: manifest,
+                factType: "SwiftDeclarationDeclared",
+                ruleId: RuleIds.swiftSyntaxDeclaration,
+                evidenceTier: .tier3SyntaxOrTextual,
+                filePath: declaration.filePath,
+                startLine: declaration.startLine,
+                endLine: declaration.endLine,
+                sourceSymbol: declaration.containingSymbolId,
+                targetSymbol: declaration.symbolId,
+                contractElement: declaration.displaySignature,
+                properties: [
+                    "coverageCeiling": "syntax-or-structural",
+                    "declarationKind": declaration.kind,
+                    "displaySignature": declaration.displaySignature,
+                    "genericArity": String(declaration.genericArity),
+                    "isAsync": declaration.isAsync ? "true" : "false",
+                    "isThrows": declaration.isThrows ? "true" : "false",
+                    "language": "swift",
+                    "moduleName": declaration.moduleName,
+                    "name": declaration.name,
+                    "parameterLabels": declaration.parameterLabels.joined(separator: ","),
+                    "staticEvidenceOnly": "true",
+                    "symbolId": declaration.symbolId,
+                    "syntaxHash": declaration.syntaxHash,
+                    "conditionalCompilation": declaration.conditionalCompilation ? "true" : "false"
+                ]
+            ))
+        }
+        for imported in syntax.imports {
+            facts.append(makeFact(
+                manifest: manifest,
+                factType: "SwiftImportDeclared",
+                ruleId: RuleIds.swiftSyntaxImport,
+                evidenceTier: .tier3SyntaxOrTextual,
+                filePath: imported.filePath,
+                startLine: imported.startLine,
+                endLine: imported.endLine,
+                targetSymbol: imported.importedModule,
+                contractElement: imported.importedModule,
+                properties: [
+                    "coverageCeiling": "syntax-or-structural",
+                    "conditionalCompilation": imported.conditionalCompilation ? "true" : "false",
+                    "exportedImport": imported.exportedImport ? "true" : "false",
+                    "importKind": imported.importKind,
+                    "importedModule": imported.importedModule,
+                    "language": "swift",
+                    "staticEvidenceOnly": "true",
+                    "syntaxHash": imported.syntaxHash
+                ]
+            ))
+        }
+        for call in syntax.calls {
+            facts.append(makeFact(
+                manifest: manifest,
+                factType: "SwiftCallCandidate",
+                ruleId: RuleIds.swiftSyntaxCall,
+                evidenceTier: .tier3SyntaxOrTextual,
+                filePath: call.filePath,
+                startLine: call.startLine,
+                endLine: call.endLine,
+                sourceSymbol: call.callerSymbolId,
+                targetSymbol: call.calleeName,
+                contractElement: call.calleeName,
+                properties: [
+                    "argumentLabels": call.argumentLabels.joined(separator: ","),
+                    "arity": String(call.arity),
+                    "callKind": call.callKind,
+                    "calleeName": call.calleeName,
+                    "calleeSyntaxKind": call.calleeSyntaxKind,
+                    "callerDisplayName": call.callerDisplayName,
+                    "callerSymbolId": call.callerSymbolId ?? "",
+                    "conditionalCompilation": call.conditionalCompilation ? "true" : "false",
+                    "coverageCeiling": "syntax-only",
+                    "language": "swift",
+                    "staticEvidenceOnly": "true",
+                    "syntaxHash": call.syntaxHash,
+                    "unsupportedReason": call.unsupportedReason ?? ""
+                ]
+            ))
+        }
+        for construction in syntax.constructions {
+            facts.append(makeFact(
+                manifest: manifest,
+                factType: "SwiftConstructionCandidate",
+                ruleId: RuleIds.swiftSyntaxConstruction,
+                evidenceTier: .tier3SyntaxOrTextual,
+                filePath: construction.filePath,
+                startLine: construction.startLine,
+                endLine: construction.endLine,
+                sourceSymbol: construction.callerSymbolId,
+                targetSymbol: construction.createdTypeSyntax,
+                contractElement: construction.createdTypeSyntax,
+                properties: [
+                    "argumentLabels": construction.argumentLabels.joined(separator: ","),
+                    "callerDisplayName": construction.callerDisplayName,
+                    "callerSymbolId": construction.callerSymbolId ?? "",
+                    "conditionalCompilation": construction.conditionalCompilation ? "true" : "false",
+                    "coverageCeiling": "syntax-only",
+                    "createdTypeSyntax": construction.createdTypeSyntax,
+                    "language": "swift",
+                    "runtimeAllocationProven": "false",
+                    "staticEvidenceOnly": "true",
+                    "syntaxHash": construction.syntaxHash
+                ]
+            ))
+        }
+        return facts
+    }
+
     private static func makeFact(
         manifest: ScanManifest,
         factType: String,
@@ -639,6 +763,7 @@ enum FactFactory {
         filePath: String,
         startLine: Int,
         endLine: Int,
+        sourceSymbol: String? = nil,
         targetSymbol: String? = nil,
         contractElement: String? = nil,
         properties: [String: String]
@@ -653,8 +778,7 @@ enum FactFactory {
             String(startLine),
             String(endLine),
             targetSymbol ?? "",
-            contractElement ?? "",
-            properties.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "|")
+            contractElement ?? ""
         ].joined(separator: "\n")
         return CodeFact(
             factId: "swift-fact-" + sha256Hex(identity, length: 32),
@@ -665,7 +789,7 @@ enum FactFactory {
             factType: factType,
             ruleId: ruleId,
             evidenceTier: evidenceTier,
-            sourceSymbol: nil,
+            sourceSymbol: sourceSymbol,
             targetSymbol: targetSymbol,
             contractElement: contractElement,
             evidence: EvidenceSpan(
@@ -700,7 +824,32 @@ enum FactFactory {
 
     private static func coverageLabel(inventory: [InventoryItem], gaps: [CoverageGap]) -> String {
         if inventory.isEmpty { return "SwiftInventoryNotDetected" }
-        if gaps.contains(where: { $0.kind != "swift-semantic-extractor-deferred" }) {
+        let degradingKinds: Set<String> = [
+            "CanImportConditionalAmbiguous",
+            "ConditionalCompilationAmbiguous",
+            "SwiftParseDiagnostics",
+            "carthage-toolchain-unavailable",
+            "cocoapods-toolchain-unavailable",
+            "file-too-large",
+            "no-supported-swift-inputs",
+            "plist-binary-unsupported",
+            "plist-malformed",
+            "plist-unreadable",
+            "swift-call-optional-chaining-unresolved",
+            "swift-call-unsupported-shape",
+            "swift-module-context-unavailable",
+            "swift-source-unreadable",
+            "swift-toolchain-unavailable",
+            "swiftpm-manifest-dynamic",
+            "swiftpm-manifest-unreadable",
+            "swiftpm-resolved-malformed",
+            "swiftpm-resolved-unknown-version",
+            "xcode-project-graph-deferred",
+            "xcode-workspace-external-reference",
+            "xcode-workspace-unreadable",
+            "xcodebuild-toolchain-unavailable"
+        ]
+        if gaps.contains(where: { degradingKinds.contains($0.kind) }) {
             return "SwiftInventoryReduced"
         }
         return "SwiftInventoryFileBasedSucceeded"
@@ -715,7 +864,7 @@ enum FactFactory {
                 manifest: manifest,
                 factType: "SwiftSourceRootDeclared",
                 ruleId: RuleIds.sourceFile,
-                evidenceTier: .tier2Structural,
+                evidenceTier: .tier3SyntaxOrTextual,
                 filePath: root,
                 startLine: 1,
                 endLine: 1,
@@ -1078,7 +1227,7 @@ enum OutputWriter {
             "",
             "## Coverage",
             "",
-            "This Swift v0 scaffold is reduced coverage. Absence of evidence is not evidence of absence.",
+            "This Swift v0 adapter emits deterministic static inventory, metadata, SwiftSyntax declaration, call candidate, and construction candidate evidence. Coverage is reduced; absence of evidence is not evidence of absence.",
             "",
             "## Fact Counts By Type",
             ""
@@ -1100,8 +1249,8 @@ enum OutputWriter {
             "",
             "## Swift Limitations",
             "",
-            "- Static scaffold evidence only; no build, package resolution, simulator, device, runtime, UI navigation, network reachability, storage access, deployment, or production-use proof.",
-            "- SwiftSyntax, SourceKit, SwiftPM semantic loading, Xcode semantic loading, Objective-C bridging, macros, result builders, protocol dispatch, property wrappers, and generated-code semantics are future slices.",
+            "- Static syntax and metadata evidence only; no build, package resolution, simulator, device, runtime, UI navigation, network reachability, storage access, deployment, or production-use proof.",
+            "- SourceKit, SwiftPM semantic loading, Xcode semantic loading, Objective-C bridging, macros, result builders, protocol dispatch, property wrappers, generated-code semantics, and canonical Swift relationship semantics are future slices.",
             "- Raw source snippets, local absolute paths, raw remotes, secrets, provisioning details, and unsafe values are omitted or hashed.",
             "",
             "## Downstream Commands",
@@ -1118,7 +1267,7 @@ enum OutputWriter {
 
     private static func analyzerLog(manifest: ScanManifest, facts: [CodeFact]) -> String {
         [
-            "TraceMap Swift scaffold scan",
+            "TraceMap Swift adapter scan",
             "scanId=\(manifest.scanId)",
             "commitSha=\(manifest.commitSha)",
             "analysisLevel=\(manifest.analysisLevel)",
@@ -1139,6 +1288,7 @@ enum SQLiteWriter {
         sql += insertManifestSQL(manifest)
         for fact in facts.sorted(by: { $0.factId < $1.factId }) {
             sql += insertFactSQL(fact)
+            sql += insertDerivedRowsSQL(fact)
         }
         _ = try runProcess(executable: "/usr/bin/sqlite3", arguments: [tmp.path], input: sql, timeoutSeconds: 120)
         try? FileManager.default.removeItem(at: path)
@@ -1158,9 +1308,50 @@ enum SQLiteWriter {
         let propsJson = jsonString(fact.properties, pretty: false)
         return """
         insert into facts (fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier, source_symbol, target_symbol, contract_element, file_path, start_line, end_line, snippet_hash, properties_json)
-        values (\(q(fact.factId)), \(q(fact.scanId)), \(q(fact.repo)), \(q(fact.commitSha)), null, \(q(fact.factType)), \(q(fact.ruleId)), \(q(fact.evidenceTier.rawValue)), null, \(q(fact.targetSymbol)), \(q(fact.contractElement)), \(q(fact.evidence.filePath)), \(fact.evidence.startLine), \(fact.evidence.endLine), null, \(q(propsJson)));
+        values (\(q(fact.factId)), \(q(fact.scanId)), \(q(fact.repo)), \(q(fact.commitSha)), null, \(q(fact.factType)), \(q(fact.ruleId)), \(q(fact.evidenceTier.rawValue)), \(q(fact.sourceSymbol)), \(q(fact.targetSymbol)), \(q(fact.contractElement)), \(q(fact.evidence.filePath)), \(fact.evidence.startLine), \(fact.evidence.endLine), null, \(q(propsJson)));
 
         """
+    }
+
+    private static func insertDerivedRowsSQL(_ fact: CodeFact) -> String {
+        switch fact.factType {
+        case "SwiftDeclarationDeclared":
+            guard let symbolId = fact.targetSymbol else { return "" }
+            let occurrenceId = "swift-occurrence-" + sha256Hex([fact.scanId, fact.factId, symbolId, "declaration"].joined(separator: "|"), length: 32)
+            return """
+            insert into symbols (scan_id, symbol_id, language, symbol_kind, display_name, assembly_name, assembly_version, containing_symbol_id)
+            values (\(q(fact.scanId)), \(q(symbolId)), 'swift', \(q(fact.properties["declarationKind"])), \(q(fact.properties["displaySignature"])), \(q(fact.properties["moduleName"])), null, \(q(fact.sourceSymbol)));
+            insert into symbol_occurrences (occurrence_id, scan_id, symbol_id, fact_id, role, occurrence_kind, evidence_tier, rule_id, file_path, start_line, end_line)
+            values (\(q(occurrenceId)), \(q(fact.scanId)), \(q(symbolId)), \(q(fact.factId)), 'declared', 'declaration', \(q(fact.evidenceTier.rawValue)), \(q(fact.ruleId)), \(q(fact.evidence.filePath)), \(fact.evidence.startLine), \(fact.evidence.endLine));
+            insert into fact_symbols (fact_id, scan_id, symbol_id, role)
+            values (\(q(fact.factId)), \(q(fact.scanId)), \(q(symbolId)), 'declared');
+
+            """
+        case "SwiftCallCandidate":
+            guard let callee = fact.targetSymbol else { return "" }
+            var sql = """
+            insert into call_edges (fact_id, scan_id, repo, commit_sha, evidence_tier, rule_id, caller_symbol, caller_assembly_name, caller_assembly_version, callee_symbol, callee_assembly_name, callee_assembly_version, callee_containing_type, call_kind, file_path, start_line, end_line)
+            values (\(q(fact.factId)), \(q(fact.scanId)), \(q(fact.repo)), \(q(fact.commitSha)), \(q(fact.evidenceTier.rawValue)), \(q(fact.ruleId)), \(q(fact.sourceSymbol)), null, null, \(q(callee)), null, null, null, \(q(fact.properties["callKind"])), \(q(fact.evidence.filePath)), \(fact.evidence.startLine), \(fact.evidence.endLine));
+
+            """
+            if let caller = fact.sourceSymbol, !caller.isEmpty {
+                sql += """
+                insert into fact_symbols (fact_id, scan_id, symbol_id, role)
+                values (\(q(fact.factId)), \(q(fact.scanId)), \(q(caller)), 'caller');
+
+                """
+            }
+            return sql
+        case "SwiftConstructionCandidate":
+            guard let created = fact.targetSymbol else { return "" }
+            return """
+            insert into object_creations (fact_id, scan_id, repo, commit_sha, evidence_tier, rule_id, caller_symbol, caller_assembly_name, caller_assembly_version, created_type, created_type_assembly_name, created_type_assembly_version, constructor_symbol, assigned_to, file_path, start_line, end_line)
+            values (\(q(fact.factId)), \(q(fact.scanId)), \(q(fact.repo)), \(q(fact.commitSha)), \(q(fact.evidenceTier.rawValue)), \(q(fact.ruleId)), \(q(fact.sourceSymbol)), null, null, \(q(created)), null, null, null, null, \(q(fact.evidence.filePath)), \(fact.evidence.startLine), \(fact.evidence.endLine));
+
+            """
+        default:
+            return ""
+        }
     }
 
     private static func schemaSQL() -> String {
