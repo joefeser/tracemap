@@ -1,8 +1,8 @@
 # Property Flow Terminal Context Report Readability Implementation State
 
-Status: ready-for-implementation
-Readiness: validated-spec-only
-Spec branch: `codex/spec-property-flow-terminal-context-report-readability`
+Status: implemented-pending-pr-review
+Readiness: implementation-validation-complete
+Spec branch: `codex/impl-property-flow-report-readability-20260627142200`
 Target base: `dev`
 Public claim level: hidden
 
@@ -22,9 +22,11 @@ That commit is the `dev` merge for PR #405,
 
 ## Scope Decisions
 
-- This is a spec-only PR.
-- The future implementation slice is optional property-flow report
-  readability and documentation closure after terminal-context coverage.
+- This implementation PR selects `render`.
+- The implementation adds a compact path-local Markdown cue from structured
+  `PropertyFlowNode.SafeMetadata["terminalContextKind"]`.
+- Property-flow report version remains `1.0` because the JSON schema is
+  unchanged and the Markdown rendering is additive.
 - Public claim level remains hidden.
 - Hidden static-only semantics must be preserved.
 - No scanner facts, reducer conclusions, impact claims, schema migrations,
@@ -36,11 +38,13 @@ That commit is the `dev` merge for PR #405,
 - Active vault-local-navigation implementation is intentionally excluded; this
   spec must not add vault graph nodes, edges, backlinks, tags, or local
   navigation.
-- Future product edits must first record `render`, `document-only`, or `defer`
-  as the selected implementation decision in this file.
+- Docs-export files, vault files, site files, and public product copy are not
+  touched by this branch.
 - Prefer no new rule IDs; reuse existing property-flow path/node/source rules
   unless a new emitted reporting artifact, gap, limitation, or validation
   finding requires catalog-first documentation.
+- No new rule IDs are needed because the change emits no new machine-readable
+  artifact, gap, limitation, or validation finding.
 
 ## Source Material Reviewed
 
@@ -122,6 +126,24 @@ Spec-only validation does not run product tests because this PR only adds a
 Kiro spec folder and no product code. Future implementation PRs must run the
 focused and full validation listed in `tasks.md` unless they record a narrower
 reason.
+
+Implementation validation:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter PropertyFlowTests
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Results:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter PropertyFlowTests`:
+  passed 31 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed 696 tests.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Known pre-existing warning: `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory.
 
 ## Follow-Up Items
 
