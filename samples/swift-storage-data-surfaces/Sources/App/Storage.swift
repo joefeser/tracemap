@@ -17,6 +17,16 @@ final class PreferencesStore {
         _ = UserDefaults.standard.string(forKey: PreferenceKeys.sensitivePreference)
         UserDefaults.standard.removeObject(forKey: dynamicKey)
     }
+
+    func firstScopedAlias() {
+        let key = "firstScopedPreference"
+        _ = UserDefaults.standard.string(forKey: key)
+    }
+
+    func secondScopedAlias() {
+        let key = "secondScopedPreference"
+        _ = UserDefaults.standard.string(forKey: key)
+    }
 }
 
 final class CredentialStore {
