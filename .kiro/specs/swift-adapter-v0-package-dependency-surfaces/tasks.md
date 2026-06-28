@@ -117,6 +117,9 @@ until product code, tests, validation, and PR-loop evidence have landed.
 - [ ] Add Cartfile `binary` fixture proving unsafe source location handling.
 - [ ] Assert binary-source Cartfile facts use `sourceLocationStatus` of
   `hashed` or `unsafe-omitted` and never `safe`.
+- [ ] Add Carthage `github "AcmeSecret/PaymentsSDK"`-style fixture proving
+  private-looking owner/repo and repo-only labels are hashed or omitted by
+  default unless the shared safe-value policy explicitly allows rendering.
 - [ ] Add mixed safe/dynamic Podfile fixture proving safe rows and gap rows
   coexist.
 - [ ] Add multi-line pod declaration fixture, for example `pod 'Alamofire',`
