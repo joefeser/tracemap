@@ -606,7 +606,7 @@ struct TraceMapSwiftSmokeTests {
         assert(storageFacts.contains { $0.factType == "SwiftUserDefaultsKeyAccessed" && $0.properties["operationDirection"] == "read" && $0.properties["normalizedKey"] == "launchCount" })
         assert(storageFacts.contains { $0.factType == "SwiftUserDefaultsKeyAccessed" && $0.properties["keyIdentityStatus"] == "hashed" && $0.properties["keyHash"] != nil })
         assert(storageFacts.contains { $0.factType == "SwiftKeychainAccessPattern" && $0.properties["apiName"] == "SecItemAdd" && $0.properties["serviceHash"] != nil })
-        assert(storageFacts.contains { $0.factType == "SqlTextUsed" && $0.properties["sqlSourceKind"] == "grdb-literal" && $0.properties["textHash"] != nil })
+        assert(storageFacts.contains { $0.factType == "SqlTextUsed" && $0.properties["sqlSourceKind"] == "literal-string" && $0.properties["textHash"] != nil })
         assert(storageFacts.contains { $0.factType == "SqlTextUsed" && $0.properties["sqlSourceKind"] == "sql-file" && $0.evidenceTier == .tier2Structural })
         assert(storageFacts.contains { $0.factType == "QueryPatternDetected" && $0.properties["queryShapeHash"] != nil && $0.properties["tableName"] == "users" })
         assert(storageFacts.contains { $0.factType == "SwiftRealmModelDeclared" && $0.properties["frameworkFamily"] == "realm" && $0.properties["typeName"] == "AccountObject" })

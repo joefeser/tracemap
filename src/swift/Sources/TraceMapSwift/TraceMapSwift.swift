@@ -1494,6 +1494,7 @@ enum SwiftStorageExtractor {
                     properties: [
                         "frameworkFamily": "coredata",
                         "modelDescriptorKind": "model-bundle",
+                        "modelHash": roleHash("coredata-model-bundle", item.relativePath),
                         "modelPathHash": roleHash("coredata-path", item.relativePath),
                         "runtimeModelChoiceProven": "false"
                     ]
@@ -1776,10 +1777,10 @@ enum SwiftStorageExtractor {
 
     private static func swiftSQLRecords(text: String, searchable: String, item: InventoryItem) -> SwiftStorageExtraction {
         let patterns: [(String, String)] = [
-            (#"\bexecute\s*\(\s*sql\s*:\s*"([^"]+)""#, "grdb-literal"),
-            (#"\b(?:fetchAll|fetchOne|fetchCursor)\s*\([^)]*sql\s*:\s*"([^"]+)""#, "grdb-literal"),
-            (#"\bexecute(?:Query|Update)\s*\(\s*"([^"]+)""#, "fmdatabase-literal"),
-            (#"\bsqlite3_prepare_v2\s*\([^,]+,\s*"([^"]+)""#, "sqlite3-literal")
+            (#"\bexecute\s*\(\s*sql\s*:\s*"([^"]+)""#, "literal-string"),
+            (#"\b(?:fetchAll|fetchOne|fetchCursor)\s*\([^)]*sql\s*:\s*"([^"]+)""#, "literal-string"),
+            (#"\bexecute(?:Query|Update)\s*\(\s*"([^"]+)""#, "literal-string"),
+            (#"\bsqlite3_prepare_v2\s*\([^,]+,\s*"([^"]+)""#, "literal-string")
         ]
         var records: [SwiftStorageRecord] = []
         var gaps: [CoverageGap] = []
