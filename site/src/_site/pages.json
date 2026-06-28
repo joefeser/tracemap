@@ -180,6 +180,36 @@
     "priority": "0.8"
   },
   {
+    "path": "/swift/story/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/swift/static-inventory/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/swift/symbols-calls/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/swift/surface-discovery/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/swift/storage-data/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/swift/evidence-safety/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/docs/",
     "changefreq": "monthly",
     "priority": "0.8"

@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="The story behind TraceMap Swift v0: a shipped static evidence adapter that makes Swift repositories easier to review without claiming runtime or build proof."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Why Swift Evidence Matters | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/swift/story/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Why Swift Evidence Matters | TraceMap">
+    <meta
+      property="og:description"
+      content="Swift v0 gives mobile and Apple-platform repositories the same deterministic evidence contract TraceMap uses elsewhere: proof, limitations, and safe handoff language."
+    >
+    <meta property="og:url" content="https://tracemap.tools/swift/story/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Swift adapter story</p>
+        <h1>Swift repositories deserve the same evidence contract.</h1>
+        <p class="hero-subhead">
+          Swift code often carries product behavior, mobile workflows, API calls,
+          UI surfaces, package dependencies, and local data paths. TraceMap Swift
+          v0 gives reviewers a static way to name those surfaces with rule IDs,
+          evidence tiers, file spans, commit SHA, coverage labels, and limitations.
+        </p>
+        <p class="hero-note">
+          Public claim level: shipped. Proof: PR
+          <a href="https://github.com/joefeser/tracemap/pull/425">#425</a>,
+          merge commit <code>e8813daaf763e277e7c5d88a2c0b2ad0b570f25a</code>.
+          This is the story layer for the <a href="/swift/">Swift evidence lane</a>;
+          it does not replace the proof matrix.
+        </p>
+        <nav class="hero-actions" aria-label="Swift adapter story links">
+          <a class="button primary" href="/swift/">Open the evidence lane</a>
+          <a class="button secondary" href="/capabilities/">Capabilities</a>
+          <a class="button secondary" href="/validation/">Validation</a>
+          <a class="button secondary" href="#story-boundaries">Boundaries</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Why this matters</p>
+          <h2>Reviewers need evidence they can repeat without overstating it.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>For managers</strong><span>Swift v0 turns adapter coverage into a readable claim: what static evidence exists, what proof anchors it, and what remains outside the claim.</span></div>
+          <div><strong>For reviewers</strong><span>The evidence lane gives review packets a shared vocabulary for Swift inventory, symbols, calls, surfaces, storage/data evidence, tiers, and reduced coverage.</span></div>
+          <div><strong>For architects</strong><span>Swift now fits the same cross-language evidence model as the rest of TraceMap instead of becoming a one-off mobile exception.</span></div>
+          <div><strong>For engineers</strong><span>The output can help inspect where supported Swift surfaces appear in a repository snapshot before runtime, test, or owner review takes over.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="story-proof" aria-labelledby="story-proof-heading">
+        <div class="section-header">
+          <p class="section-kicker">The proof shape</p>
+          <h2 id="story-proof-heading">Swift v0 is not a prettier claim. It is a bounded evidence packet.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Inventory first</h3>
+            <p>TraceMap can inventory supported Swift package/project surfaces, source files, module-ish metadata, and reduced-coverage labels. That is static repository evidence, not Xcode build proof or simulator execution.</p>
+          </article>
+          <article>
+            <h3>Symbols and calls next</h3>
+            <p>SwiftSyntax-backed declarations, call candidates, construction candidates, and direct relationships can be reported where syntax evidence supports them. The tier tells readers when the evidence is syntax-backed rather than compiler-resolved.</p>
+          </article>
+          <article>
+            <h3>Surfaces stay labeled</h3>
+            <p>HTTP/API client, SwiftUI/UIKit-ish, package/dependency, CoreData, UserDefaults, Keychain, SQLite, and Realm-style surfaces stay attached to rule IDs, evidence tiers, coverage labels, and limitations.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">How to talk about it</p>
+          <h2>Use Swift v0 to guide review, not to shortcut review.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-swift-adapter-story>
+            <caption>Safe Swift story language keeps the proof path attached to the claim.</caption>
+            <thead>
+              <tr>
+                <th scope="col">Question</th>
+                <th scope="col">Safe story answer</th>
+                <th scope="col">Where to verify</th>
+                <th scope="col">Boundary</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-story-row="adapter-landed">
+                <td><strong>Did Swift support land?</strong></td>
+                <td>Swift v0 is shipped on <code>main</code> as deterministic static evidence coverage.</td>
+                <td><a href="https://github.com/joefeser/tracemap/pull/425">PR #425</a> and the <a href="/swift/">Swift evidence lane</a>.</td>
+                <td>Do not imply complete Swift understanding or runtime behavior.</td>
+              </tr>
+              <tr data-story-row="review-use">
+                <td><strong>What can teams do with it?</strong></td>
+                <td>They can inspect supported static Swift surfaces and hand off proof, gaps, and limitations in a repeatable way.</td>
+                <td><a href="/validation/">Validation</a>, <a href="/limitations/">limitations</a>, and <a href="/limitations/reduced-coverage/">reduced coverage</a>.</td>
+                <td>Do not present static surfaces as production traffic, release safety, endpoint performance, stored-value proof, or query execution proof.</td>
+              </tr>
+              <tr data-story-row="claim-safety">
+                <td><strong>Why does this help public copy?</strong></td>
+                <td>The story keeps each Swift claim connected to rule IDs, evidence tiers, coverage labels, public claim level, and non-claims.</td>
+                <td><a href="/site-claim-guardrails/">Site claim guardrails</a>, <a href="/static-vs-runtime/">static-vs-runtime boundaries</a>, and <a href="/proof-source-catalog/">proof source catalog</a>.</td>
+                <td>Do not publish raw source snippets, raw SQL, secrets, local paths, raw remotes, credentials, stored values, private scan artifacts, or hidden validation details.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Evidence families</p>
+          <h2>The adapter story points to the proof matrix instead of repeating every row.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>static inventory</code><span><a href="/swift/static-inventory/">Supported Swift package/project and source-file evidence</a> with reduced-coverage labels.</span></div>
+          <div><code>symbols and calls</code><span><a href="/swift/symbols-calls/">Declarations, call candidates, construction candidates, and relationships</a> where syntax/static evidence supports them.</span></div>
+          <div><code>surface discovery</code><span><a href="/swift/surface-discovery/">HTTP/API client, SwiftUI/UIKit-ish, package, dependency, and dynamic-composition gap evidence</a>.</span></div>
+          <div><code>storage/data surfaces</code><span><a href="/swift/storage-data/">CoreData metadata, UserDefaults keys, Keychain access patterns, SQLite text/shape evidence, and Realm model/property surfaces</a> where supported.</span></div>
+          <div><code>evidence safety</code><span><a href="/swift/evidence-safety/">Rule IDs, evidence tiers, coverage labels, reduced-coverage gaps, and public-safe wording boundaries</a>.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="story-boundaries" aria-labelledby="story-boundaries-heading">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2 id="story-boundaries-heading">The Swift story stays static, deterministic, and evidence-backed.</h2>
+        </div>
+        <ul>
+          <li>TraceMap Swift v0 does not run Swift apps, simulators, devices, Xcode builds, SwiftPM restores, production traffic, or runtime persistence.</li>
+          <li>TraceMap Swift v0 does not prove runtime behavior, app navigation, rendered UI, complete navigation, user actions, production usage, endpoint performance, deployment state, release safety, stored values, query execution, live schema, Keychain item existence, or UserDefaults values.</li>
+          <li>TraceMap core scanning and reduction do not use AI impact analysis, LLM analysis, prompt-based classification, embeddings, or vector database analysis.</li>
+          <li>TraceMap should not describe a Swift surface as affected by a change unless reducer-backed public-safe evidence supports that wording.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Follow the evidence</p>
+          <h2>Use the story to orient, then open the proof route.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/swift/">Swift evidence lane</a>
+          <a href="/swift/static-inventory/">Swift static inventory</a>
+          <a href="/swift/symbols-calls/">Swift symbols and calls</a>
+          <a href="/swift/surface-discovery/">Swift surface discovery</a>
+          <a href="/swift/storage-data/">Swift storage and data surfaces</a>
+          <a href="/swift/evidence-safety/">Swift evidence safety</a>
+          <a href="/capabilities/">Capabilities</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/limitations/reduced-coverage/">Reduced coverage</a>
+          <a href="/static-vs-runtime/">Static vs runtime</a>
+          <a href="/site-claim-guardrails/">Site claim guardrails</a>
+          <a href="/proof-source-catalog/">Proof source catalog</a>
+          <a href="https://github.com/joefeser/tracemap/pull/425">Swift v0 PR #425</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Next, open the
+        <a href="/swift/">Swift evidence lane</a>,
+        compare the
+        <a href="/capabilities/">capability matrix</a>,
+        or review the
+        <a href="/static-vs-runtime/">static-vs-runtime boundary</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

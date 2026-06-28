@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Swift symbols and calls story for TraceMap: SwiftSyntax-backed declarations, call candidates, construction candidates, and syntax-backed relationship evidence.">
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Swift Symbols And Calls | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/swift/symbols-calls/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Swift Symbols And Calls | TraceMap">
+    <meta property="og:description" content="A shipped Swift v0 story page for declarations, call candidates, construction candidates, and syntax-tier limitations.">
+    <meta property="og:url" content="https://tracemap.tools/swift/symbols-calls/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main data-swift-story-page>
+      <section class="page-hero">
+        <p class="eyebrow">Swift story</p>
+        <h1>Swift symbols and calls make syntax evidence reviewable.</h1>
+        <p class="hero-subhead">
+          Swift v0 can report SwiftSyntax-backed declarations, call candidates,
+          construction candidates, and relationship evidence where syntax evidence
+          supports the row.
+        </p>
+        <p class="hero-note">
+          Public claim level: shipped. Proof: PR
+          <a href="https://github.com/joefeser/tracemap/pull/425">#425</a>.
+          These rows are static evidence and not runtime dispatch proof.
+        </p>
+        <nav class="hero-actions" aria-label="Swift symbol evidence links">
+          <a class="button primary" href="/swift/">Swift evidence lane</a>
+          <a class="button secondary" href="/swift/story/">Swift story</a>
+          <a class="button secondary" href="/validation/">Validation</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Use</p>
+          <h2>Syntax candidates are useful when their tier stays attached.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Declarations</strong><span>Classes, structs, protocols, enums, functions, and related declaration shapes can become reviewable static facts.</span></div>
+          <div><strong>Calls</strong><span>Call candidates and construction candidates help reviewers inspect where names appear without claiming dispatch certainty.</span></div>
+          <div><strong>Relationships</strong><span>Inheritance, conformance-style, and direct reference relationships remain bounded to the available static evidence.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Boundary</p>
+          <h2>Do not turn candidates into compiler or runtime certainty.</h2>
+        </div>
+        <ul>
+          <li>Swift symbols and calls do not prove runtime behavior, runtime dispatch, protocol witness behavior, dependency injection behavior, app navigation, rendered UI, production usage, build success, deployment state, or release safety.</li>
+          <li>TraceMap core scanning and reduction do not use AI impact analysis, LLM analysis, prompt-based classification, embeddings, or vector database analysis.</li>
+          <li>Public pages must not publish raw source snippets, raw SQL, secrets, local absolute paths, raw remotes, credentials, stored values, private scan artifacts, or hidden validation details.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Proof path</p>
+          <h2>Use the symbol row to ask the next review question.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/swift/">Swift evidence lane</a>
+          <a href="/swift/story/">Why Swift evidence matters</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/limitations/reduced-coverage/">Reduced coverage</a>
+          <a href="/site-claim-guardrails/">Site claim guardrails</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Next, compare Swift evidence with the <a href="/static-vs-runtime/">static-vs-runtime boundary</a>.</p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

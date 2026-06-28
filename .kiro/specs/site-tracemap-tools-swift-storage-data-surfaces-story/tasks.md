@@ -2,7 +2,7 @@
 
 Status: implemented
 Readiness: implemented
-Public claim level: shipped/demo
+Public claim level: demo
 
 - [x] Decide whether this story is pure shipped capability copy or demo-backed
       output.

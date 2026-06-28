@@ -1,8 +1,8 @@
 # Site TraceMap Tools Swift Surface Discovery Story Requirements
 
-Status: not-started
-Readiness: backlog
-Public claim level: shipped/demo
+Status: implemented
+Readiness: implemented
+Public claim level: demo
 
 ## Objective
 
@@ -20,8 +20,8 @@ composition.
 
 ## Requirements
 
-- Public copy must describe this as shipped/demo depending on whether the final
-  implementation links to checked-in public demo output.
+- Public copy must describe this route as demo, with shipped capability context
+  anchored to PR #425.
 - HTTP/API surfaces must not be described as runtime network reachability.
 - UI surfaces must not be described as rendered UI, complete navigation, or user
   action proof.
@@ -33,6 +33,6 @@ composition.
 
 - Future public copy names supported Swift surface families and their
   limitations.
-- Claim level is upgraded to `shipped` only when the page is anchored solely to
-  main-shipped capability copy; use `demo` when demo artifacts are presented.
+- Claim level stays `demo` for the story route because public-safe demo framing
+  and generated summaries remain part of the public proof boundary.
 - Site validation passes after implementation.

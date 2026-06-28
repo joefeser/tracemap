@@ -1,8 +1,8 @@
 # Site TraceMap Tools Swift Storage And Data Surfaces Story Requirements
 
-Status: not-started
-Readiness: backlog
-Public claim level: shipped/demo
+Status: implemented
+Readiness: implemented
+Public claim level: demo
 
 ## Objective
 
@@ -32,6 +32,6 @@ impact.
 
 - Future public copy names supported storage/data surface families and their
   explicit non-claims.
-- Claim level is `demo` only when linked to public-safe generated artifacts;
-  otherwise it remains shipped capability copy.
+- Claim level stays `demo` for the story route because public-safe generated
+  summaries remain part of the public proof boundary.
 - Site validation passes after implementation.
