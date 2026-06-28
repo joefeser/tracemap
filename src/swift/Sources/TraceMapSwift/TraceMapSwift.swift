@@ -1498,6 +1498,9 @@ enum SwiftStorageExtractor {
                         "runtimeModelChoiceProven": "false"
                     ]
                 ))
+                let extracted = coreDataModelBundle(url: url, item: item)
+                records += extracted.records
+                gaps += extracted.gaps
             case "sql-resource":
                 let extracted = sqlResource(url: url, item: item)
                 records += extracted.records
@@ -1517,6 +1520,42 @@ enum SwiftStorageExtractor {
         )
     }
 
+    private static func coreDataModelBundle(url: URL, item: InventoryItem) -> SwiftStorageExtraction {
+        guard let enumerator = FileManager.default.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+            options: [.skipsHiddenFiles],
+            errorHandler: nil
+        ) else {
+            return SwiftStorageExtraction(records: [], gaps: [gap("swift-storage-coredata-unreadable", item, item.startLine, item.endLine, "CoreData model bundle could not be enumerated; storage extraction is partial.")])
+        }
+
+        var records: [SwiftStorageRecord] = []
+        var gaps: [CoverageGap] = []
+        for case let child as URL in enumerator {
+            guard child.lastPathComponent == "contents",
+                  child.deletingLastPathComponent().pathExtension == "xcdatamodel",
+                  (try? child.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { continue }
+            let childRelativePath = item.relativePath + "/" + relativePath(from: url, to: child)
+            let size = (try? child.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            let modelItem = InventoryItem(
+                relativePath: childRelativePath,
+                kind: "coredata-model",
+                sizeBytes: size,
+                startLine: 1,
+                endLine: lineCount(child),
+                skippedReason: nil
+            )
+            let extracted = coreDataModel(url: child, item: modelItem)
+            records += extracted.records
+            gaps += extracted.gaps
+        }
+        if records.isEmpty && gaps.isEmpty {
+            gaps.append(gap("swift-storage-coredata-unsupported", item, item.startLine, item.endLine, "CoreData model bundle did not contain parseable checked-in model contents."))
+        }
+        return SwiftStorageExtraction(records: records, gaps: gaps)
+    }
+
     private static func coreDataModel(url: URL, item: InventoryItem) -> SwiftStorageExtraction {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else {
             return SwiftStorageExtraction(records: [], gaps: [gap("swift-storage-coredata-unreadable", item, item.startLine, item.endLine, "CoreData model metadata could not be read; storage extraction is partial.")])
@@ -1524,7 +1563,7 @@ enum SwiftStorageExtractor {
         guard text.range(of: #"<(?:model|entity)\b"#, options: .regularExpression) != nil else {
             return SwiftStorageExtraction(records: [], gaps: [gap("swift-storage-coredata-unsupported", item, item.startLine, item.endLine, "CoreData model metadata is unsupported or malformed; storage extraction is partial.")])
         }
-        let modelName = safeLabel(URL(fileURLWithPath: item.relativePath).deletingPathExtension().lastPathComponent)
+        let modelName = coreDataModelName(for: item.relativePath)
         let modelHash = roleHash("coredata-model", text)
         var records: [SwiftStorageRecord] = [
             record(
@@ -1577,6 +1616,14 @@ enum SwiftStorageExtractor {
         return SwiftStorageExtraction(records: records, gaps: [])
     }
 
+    private static func coreDataModelName(for relativePath: String) -> String {
+        let url = URL(fileURLWithPath: relativePath)
+        if url.lastPathComponent == "contents", url.deletingLastPathComponent().pathExtension == "xcdatamodel" {
+            return safeLabel(url.deletingLastPathComponent().deletingPathExtension().lastPathComponent)
+        }
+        return safeLabel(url.deletingPathExtension().lastPathComponent)
+    }
+
     private static func coreDataPropertyRecords(text: String, item: InventoryItem, modelHash: String, pattern: String, propertyKind: String) -> [SwiftStorageRecord] {
         regexMatches(pattern, in: text).enumerated().compactMap { ordinal, match in
             guard let tag = matchText(match, in: text) else { return nil }
@@ -1621,7 +1668,7 @@ enum SwiftStorageExtractor {
         let realm = realmRecords(text: text, searchable: searchable, item: item)
         records += realm.records
         gaps += realm.gaps
-        gaps += storageDynamicGaps(text: text, searchable: searchable, item: item)
+        gaps += storageDynamicGaps(text: text, searchable: searchable, item: item, constants: stringConstants)
         return SwiftStorageExtraction(records: records, gaps: gaps)
     }
 
@@ -1741,7 +1788,7 @@ enum SwiftStorageExtractor {
                 guard isCodeRange(match.range, in: searchable),
                       let sql = capture(match, 1, in: text) else { continue }
                 let start = lineNumber(atUTF16Offset: match.range.location, in: text)
-                if sql.contains("\\(") || sql.contains("+") {
+                if sql.contains("\\(") || isFollowedBySwiftConcatenation(match.range(at: 1), in: text) {
                     gaps.append(gap("swift-storage-dynamic-sql", item, start, start, "Swift SQL text is dynamic or interpolated; complete SqlTextUsed evidence omitted."))
                     continue
                 }
@@ -1753,6 +1800,14 @@ enum SwiftStorageExtractor {
             gaps.append(gap("swift-storage-dynamic-sql", item, start, start, "Swift SQL argument is indirect; complete SqlTextUsed evidence omitted."))
         }
         return SwiftStorageExtraction(records: records, gaps: gaps)
+    }
+
+    private static func isFollowedBySwiftConcatenation(_ range: NSRange, in text: String) -> Bool {
+        let end = range.location + range.length
+        guard end <= text.utf16.count else { return false }
+        let tailStart = String.Index(utf16Offset: end, in: text)
+        let tail = text[tailStart...]
+        return tail.first { !$0.isWhitespace } == "+"
     }
 
     private static func sqlResource(url: URL, item: InventoryItem) -> SwiftStorageExtraction {
@@ -1878,13 +1933,19 @@ enum SwiftStorageExtractor {
         return SwiftStorageExtraction(records: records, gaps: gaps)
     }
 
-    private static func storageDynamicGaps(text: String, searchable: String, item: InventoryItem) -> [CoverageGap] {
+    private static func storageDynamicGaps(text: String, searchable: String, item: InventoryItem, constants: [String: String]) -> [CoverageGap] {
         var gaps: [CoverageGap] = []
         let patterns: [(String, String, String)] = [
-            (#"\bUserDefaults(?:\.standard)?\.[A-Za-z0-9_]+\s*\([^)]*forKey\s*:\s*(?!\")"#, "swift-storage-dynamic-userdefaults-key", "UserDefaults key is dynamic or unsupported; key surface evidence omitted."),
             (#"\bSecItem(?:Add|CopyMatching|Update|Delete)\s*\([^)]*(?:merged|config|payload|request)"#, "swift-storage-dynamic-keychain-query", "Keychain query is dynamic or config-derived; access-pattern evidence is partial."),
             (#"\bNSPersistentContainer\s*\("#, "swift-storage-coredata-runtime-container", "CoreData runtime container setup is detected but runtime store loading is not proven.")
         ]
+        for match in regexMatches(#"\bUserDefaults(?:\.standard)?\.[A-Za-z0-9_]+\s*\([^)]*forKey\s*:\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?|[^\"),\s][^),\s]*)"#, in: text) {
+            guard isCodeRange(match.range, in: searchable),
+                  let argument = capture(match, 1, in: text),
+                  !resolvesToLiteralConstant(argument, constants: constants) else { continue }
+            let start = lineNumber(atUTF16Offset: match.range.location, in: text)
+            gaps.append(gap("swift-storage-dynamic-userdefaults-key", item, start, start, "UserDefaults key is dynamic or unsupported; key surface evidence omitted."))
+        }
         for (pattern, kind, message) in patterns {
             for match in regexMatches(pattern, in: searchable, dotMatchesLineSeparators: true) {
                 let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
@@ -1892,6 +1953,12 @@ enum SwiftStorageExtractor {
             }
         }
         return gaps
+    }
+
+    private static func resolvesToLiteralConstant(_ argument: String, constants: [String: String]) -> Bool {
+        if constants[argument] != nil { return true }
+        if let last = argument.split(separator: ".").last.map(String.init), constants[last] != nil { return true }
+        return false
     }
 
     private static func literalStringConstants(text: String, searchable: String) -> [String: String] {
