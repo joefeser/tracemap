@@ -89,7 +89,7 @@ const forbiddenClaims = [
   /\bTraceMap\b[^.]{0,100}\b(?:proves|guarantees|certifies|approves|validates)\b[^.]{0,100}\b(?:runtime|build|navigation|production|release|stored values?|query execution|live schema|network reachability)\b/i,
   /\bSwift v0\b[^.]{0,100}\b(?:proves|guarantees|certifies|approves|validates)\b[^.]{0,100}\b(?:runtime|build|navigation|production|release|stored values?|query execution|live schema|network reachability)\b/i,
   /\b(?:safe to release|ready to release|approved to merge|complete Swift analysis)\b/i,
-  /\bTraceMap\b[^.]{0,100}\b(?:uses|performs|provides|runs|adds)\b[^.]{0,100}\b(?:LLM analysis|prompt-based classification|embedding search|vector database analysis)\b/i
+  /\bTraceMap\b[^.]{0,100}\b(?:uses|performs|provides|runs|adds)\b[^.]{0,100}\b(?:AI impact analysis|LLM analysis|prompt-based classification|embedding search|vector database analysis)\b/i
 ];
 
 export async function validateSwiftEvidenceLaneDist({ baseUrl = "https://tracemap.tools", dist, errors }) {

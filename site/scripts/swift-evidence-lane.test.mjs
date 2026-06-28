@@ -92,6 +92,7 @@ test("validateSwiftEvidenceLaneDist rejects private paths and unsupported claims
     ["<p>facts.ndjson</p>", /private or raw artifact text/],
     ["<p>TraceMap proves Swift runtime behavior.</p>", /unsupported Swift claim wording/],
     ["<p>Swift v0 validates build success.</p>", /unsupported Swift claim wording/],
+    ["<p>TraceMap performs AI impact analysis.</p>", /unsupported Swift claim wording/],
     ["<p>TraceMap uses vector database analysis.</p>", /unsupported Swift claim wording/]
   ];
 
@@ -115,7 +116,7 @@ test("validateSwiftEvidenceLaneDist rejects private paths and unsupported claims
   routesIndex.entries[0].summary = `Swift static evidence lane from ${localPathLeak}.`;
   routesIndex.entries[0].nonClaims = [
     "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector databases, raw source snippets, raw SQL, secrets, local absolute paths, raw remotes, credentials, stored values, analyzer logs, or hidden validation details are public Swift claims.",
-    "TraceMap proves Swift runtime behavior."
+    "TraceMap performs AI impact analysis."
   ];
   await writeFile(routesIndexPath, `${JSON.stringify(routesIndex, null, 2)}\n`, "utf8");
   const errors = [];
