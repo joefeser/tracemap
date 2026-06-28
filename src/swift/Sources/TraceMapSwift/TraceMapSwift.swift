@@ -159,9 +159,11 @@ public enum SwiftScanEngine {
         let dependencies = DependencyExtractor.extract(scanRoot: repo, inventory: inventory)
         let http = SwiftHttpExtractor.extract(scanRoot: repo, inventory: inventory)
         let ui = SwiftUiExtractor.extract(scanRoot: repo, inventory: inventory)
+        let storage = SwiftStorageExtractor.extract(scanRoot: repo, inventory: inventory)
         gaps += dependencies.gaps
         gaps += http.gaps
         gaps += ui.gaps
+        gaps += storage.gaps
         if inventory.contains(where: { $0.kind == "swiftpm-manifest" }) {
             gaps.append(CoverageGap(kind: "swiftpm-load-deferred", ruleId: RuleIds.analysisGap, message: "SwiftPM semantic package loading is deferred; checked-in Package.swift metadata is inventory-only."))
         }
@@ -190,7 +192,7 @@ public enum SwiftScanEngine {
             extractorVersions: [TraceMapSwiftVersion.extractorId: TraceMapSwiftVersion.extractorVersion]
         )
 
-        let facts = FactFactory.facts(manifest: manifest, inventory: inventory, gaps: gaps, toolchainDiagnostics: toolchain.diagnostics, scanRoot: repo, syntax: syntax, dependencies: dependencies, http: http, ui: ui)
+        let facts = FactFactory.facts(manifest: manifest, inventory: inventory, gaps: gaps, toolchainDiagnostics: toolchain.diagnostics, scanRoot: repo, syntax: syntax, dependencies: dependencies, http: http, ui: ui, storage: storage)
         try OutputWriter.write(outputPath: options.outputPath, manifest: manifest, facts: facts, inventory: inventory)
         return SwiftScanResult(manifest: manifest, facts: facts, inventory: inventory)
     }
@@ -353,7 +355,7 @@ enum InventoryBuilder {
         if ["Package.swift", "Package.resolved", "Podfile", "Podfile.lock", "Cartfile", "Cartfile.resolved", "Info.plist", "PrivacyInfo.xcprivacy", "project.pbxproj", "contents.xcworkspacedata"].contains(name) {
             return true
         }
-        return [".swift", ".entitlements", ".xcdatamodel", ".storyboard", ".xib", ".plist"].contains { relativePath.hasSuffix($0) }
+        return [".swift", ".entitlements", ".xcdatamodel", ".storyboard", ".xib", ".plist", ".sql"].contains { relativePath.hasSuffix($0) }
     }
 
     static func kind(for relativePath: String, isDirectory: Bool) -> String {
@@ -376,6 +378,7 @@ enum InventoryBuilder {
             if relativePath.hasSuffix(".xib") { return "xib" }
             if relativePath.hasSuffix(".entitlements") { return "entitlements" }
             if relativePath.hasSuffix(".xcdatamodel") { return "coredata-model" }
+            if relativePath.hasSuffix(".sql") { return "sql-resource" }
             return "metadata"
         }
     }
@@ -615,6 +618,13 @@ enum RuleIds {
     static let swiftUIKitAction = "swift.ui.uikit.action.v1"
     static let swiftUIKitBinding = "swift.ui.uikit.binding.v1"
     static let swiftUiAnalysisGap = "swift.ui.analysis-gap.v1"
+    static let swiftStorageCoreData = "swift.storage.coredata.metadata.v1"
+    static let swiftStorageUserDefaults = "swift.storage.userdefaults.key.v1"
+    static let swiftStorageKeychain = "swift.storage.keychain.access.v1"
+    static let swiftStorageSQLiteSQL = "swift.storage.sqlite.sql.v1"
+    static let swiftStorageSQLiteTable = "swift.storage.sqlite.table.v1"
+    static let swiftStorageRealmModel = "swift.storage.realm.model.v1"
+    static let swiftStorageAnalysisGap = "swift.storage.analysis-gap.v1"
     static let toolchainDiagnostic = "swift.toolchain.diagnostic.v1"
     static let reducedCoverageGap = "swift.reduced-coverage.gap.v1"
     static let analysisGap = "swift.analysis-gap.v1"
@@ -1441,6 +1451,715 @@ enum SwiftUiExtractor {
     }
 }
 
+struct SwiftStorageExtraction {
+    let records: [SwiftStorageRecord]
+    let gaps: [CoverageGap]
+}
+
+struct SwiftStorageRecord {
+    let factType: String
+    let ruleId: String
+    let evidenceTier: EvidenceTier
+    let filePath: String
+    let startLine: Int
+    let endLine: Int
+    let targetSymbol: String?
+    let contractElement: String?
+    let identityDiscriminator: String
+    let properties: [String: String]
+}
+
+enum SwiftStorageExtractor {
+    static func extract(scanRoot: URL, inventory: [InventoryItem]) -> SwiftStorageExtraction {
+        var records: [SwiftStorageRecord] = []
+        var gaps: [CoverageGap] = []
+        for item in inventory where item.selected {
+            let url = scanRoot.appendingPathComponent(item.relativePath)
+            switch item.kind {
+            case "coredata-model":
+                let extracted = coreDataModel(url: url, item: item)
+                records += extracted.records
+                gaps += extracted.gaps
+            case "coredata-model-bundle":
+                records.append(record(
+                    factType: "SwiftCoreDataModelDeclared",
+                    ruleId: RuleIds.swiftStorageCoreData,
+                    tier: .tier2Structural,
+                    item: item,
+                    start: item.startLine,
+                    end: item.endLine,
+                    safeIdentity: safeLabel(URL(fileURLWithPath: item.relativePath).deletingPathExtension().lastPathComponent),
+                    role: "coredata-model-bundle",
+                    ordinal: 0,
+                    properties: [
+                        "frameworkFamily": "coredata",
+                        "modelDescriptorKind": "model-bundle",
+                        "modelHash": roleHash("coredata-model-bundle", item.relativePath),
+                        "modelPathHash": roleHash("coredata-path", item.relativePath),
+                        "runtimeModelChoiceProven": "false"
+                    ]
+                ))
+                let extracted = coreDataModelBundle(url: url, item: item)
+                records += extracted.records
+                gaps += extracted.gaps
+            case "sql-resource":
+                let extracted = sqlResource(url: url, item: item)
+                records += extracted.records
+                gaps += extracted.gaps
+            case "swift-source":
+                guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+                let extracted = swiftSource(text: text, item: item)
+                records += extracted.records
+                gaps += extracted.gaps
+            default:
+                break
+            }
+        }
+        return SwiftStorageExtraction(
+            records: records.sorted(by: recordSortPrecedes),
+            gaps: collapseDuplicateGaps(gaps).sorted(by: gapSortPrecedes)
+        )
+    }
+
+    private static func coreDataModelBundle(url: URL, item: InventoryItem) -> SwiftStorageExtraction {
+        guard let enumerator = FileManager.default.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+            options: [.skipsHiddenFiles],
+            errorHandler: nil
+        ) else {
+            return SwiftStorageExtraction(records: [], gaps: [gap("swift-storage-coredata-unreadable", item, item.startLine, item.endLine, "CoreData model bundle could not be enumerated; storage extraction is partial.")])
+        }
+
+        var records: [SwiftStorageRecord] = []
+        var gaps: [CoverageGap] = []
+        for case let child as URL in enumerator {
+            guard child.lastPathComponent == "contents",
+                  child.deletingLastPathComponent().pathExtension == "xcdatamodel",
+                  (try? child.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { continue }
+            let childRelativePath = item.relativePath + "/" + relativePath(from: url, to: child)
+            let size = (try? child.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            let modelItem = InventoryItem(
+                relativePath: childRelativePath,
+                kind: "coredata-model",
+                sizeBytes: size,
+                startLine: 1,
+                endLine: lineCount(child),
+                skippedReason: nil
+            )
+            let extracted = coreDataModel(url: child, item: modelItem)
+            records += extracted.records
+            gaps += extracted.gaps
+        }
+        if records.isEmpty && gaps.isEmpty {
+            gaps.append(gap("swift-storage-coredata-unsupported", item, item.startLine, item.endLine, "CoreData model bundle did not contain parseable checked-in model contents."))
+        }
+        return SwiftStorageExtraction(records: records, gaps: gaps)
+    }
+
+    private static func coreDataModel(url: URL, item: InventoryItem) -> SwiftStorageExtraction {
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            return SwiftStorageExtraction(records: [], gaps: [gap("swift-storage-coredata-unreadable", item, item.startLine, item.endLine, "CoreData model metadata could not be read; storage extraction is partial.")])
+        }
+        guard text.range(of: #"<(?:model|entity)\b"#, options: .regularExpression) != nil else {
+            return SwiftStorageExtraction(records: [], gaps: [gap("swift-storage-coredata-unsupported", item, item.startLine, item.endLine, "CoreData model metadata is unsupported or malformed; storage extraction is partial.")])
+        }
+        let modelName = coreDataModelName(for: item.relativePath)
+        let modelHash = roleHash("coredata-model", text)
+        var records: [SwiftStorageRecord] = [
+            record(
+                factType: "SwiftCoreDataModelDeclared",
+                ruleId: RuleIds.swiftStorageCoreData,
+                tier: .tier2Structural,
+                item: item,
+                start: item.startLine,
+                end: item.endLine,
+                safeIdentity: modelName,
+                role: "coredata-model",
+                ordinal: 0,
+                properties: [
+                    "frameworkFamily": "coredata",
+                    "modelDescriptorKind": "model",
+                    "modelHash": modelHash,
+                    "modelName": modelName,
+                    "runtimeStoreProven": "false"
+                ]
+            )
+        ]
+        for (ordinal, match) in regexMatches(#"<entity\b[^>]*>"#, in: text).enumerated() {
+            guard let tag = matchText(match, in: text) else { continue }
+            let attributes = xmlAttributes(tag)
+            let entity = safeOrHash(attributes["name"], role: "coredata-entity")
+            let start = lineNumber(atUTF16Offset: match.range.location, in: text)
+            var properties = coreDataProperties(kind: "entity", modelHash: modelHash, entity: entity)
+            properties["abstract"] = boolString(attributes["isAbstract"])
+            properties["managedClassName"] = safeOrHash(attributes["representedClassName"], role: "coredata-class").display
+            if let parent = attributes["parentEntity"] {
+                properties["parentEntityName"] = safeOrHash(parent, role: "coredata-parent").display
+            }
+            records.append(record(
+                factType: "SwiftCoreDataEntityDeclared",
+                ruleId: RuleIds.swiftStorageCoreData,
+                tier: .tier2Structural,
+                item: item,
+                start: start,
+                end: start,
+                safeIdentity: entity.display,
+                role: "coredata-entity",
+                ordinal: ordinal,
+                properties: properties
+            ))
+        }
+        records += coreDataPropertyRecords(text: text, item: item, modelHash: modelHash, pattern: #"<attribute\b[^>]*>"#, propertyKind: "attribute")
+        records += coreDataPropertyRecords(text: text, item: item, modelHash: modelHash, pattern: #"<relationship\b[^>]*>"#, propertyKind: "relationship")
+        records += coreDataPropertyRecords(text: text, item: item, modelHash: modelHash, pattern: #"<fetchedProperty\b[^>]*>"#, propertyKind: "fetched-property")
+        records += coreDataPropertyRecords(text: text, item: item, modelHash: modelHash, pattern: #"<fetchRequest\b[^>]*>"#, propertyKind: "fetch-request")
+        return SwiftStorageExtraction(records: records, gaps: [])
+    }
+
+    private static func coreDataModelName(for relativePath: String) -> String {
+        let url = URL(fileURLWithPath: relativePath)
+        if url.lastPathComponent == "contents", url.deletingLastPathComponent().pathExtension == "xcdatamodel" {
+            return safeLabel(url.deletingLastPathComponent().deletingPathExtension().lastPathComponent)
+        }
+        return safeLabel(url.deletingPathExtension().lastPathComponent)
+    }
+
+    private static func coreDataPropertyRecords(text: String, item: InventoryItem, modelHash: String, pattern: String, propertyKind: String) -> [SwiftStorageRecord] {
+        regexMatches(pattern, in: text).enumerated().compactMap { ordinal, match in
+            guard let tag = matchText(match, in: text) else { return nil }
+            let attributes = xmlAttributes(tag)
+            let property = safeOrHash(attributes["name"], role: "coredata-property")
+            let destination = safeOrHash(attributes["destinationEntity"], role: "coredata-destination")
+            let start = lineNumber(atUTF16Offset: match.range.location, in: text)
+            var properties = coreDataProperties(kind: propertyKind, modelHash: modelHash, entity: property)
+            properties["propertyName"] = property.display
+            properties["propertyNameStatus"] = property.status
+            properties["propertyKind"] = propertyKind
+            properties["attributeType"] = safeLabel(attributes["attributeType"])
+            properties["relationshipDestinationName"] = destination.display
+            properties["relationshipDestinationStatus"] = destination.status
+            properties["optional"] = boolString(attributes["optional"])
+            properties["toMany"] = boolString(attributes["toMany"])
+            return record(
+                factType: "SwiftCoreDataPropertyDeclared",
+                ruleId: RuleIds.swiftStorageCoreData,
+                tier: .tier2Structural,
+                item: item,
+                start: start,
+                end: start,
+                safeIdentity: property.display,
+                role: "coredata-\(propertyKind)",
+                ordinal: ordinal,
+                properties: properties
+            )
+        }
+    }
+
+    private static func swiftSource(text: String, item: InventoryItem) -> SwiftStorageExtraction {
+        let searchable = maskSwiftCommentsAndStringLiterals(text)
+        let stringConstants = literalStringConstants(text: text, searchable: searchable)
+        var records: [SwiftStorageRecord] = []
+        var gaps: [CoverageGap] = []
+        records += userDefaultsRecords(text: text, searchable: searchable, item: item, constants: stringConstants)
+        records += keychainRecords(text: text, searchable: searchable, item: item)
+        let sql = swiftSQLRecords(text: text, searchable: searchable, item: item)
+        records += sql.records
+        gaps += sql.gaps
+        let realm = realmRecords(text: text, searchable: searchable, item: item)
+        records += realm.records
+        gaps += realm.gaps
+        gaps += storageDynamicGaps(text: text, searchable: searchable, item: item, constants: stringConstants)
+        return SwiftStorageExtraction(records: records, gaps: gaps)
+    }
+
+    private static func userDefaultsRecords(text: String, searchable: String, item: InventoryItem, constants: [String: String]) -> [SwiftStorageRecord] {
+        let patterns: [(String, String, Int, String)] = [
+            (#"\bUserDefaults(?:\.standard)?\.(string|bool|integer|double|data|object|array|dictionary)\s*\(\s*forKey\s*:\s*"([^"]+)""#, "read", 2, "typed-getter"),
+            (#"\bUserDefaults(?:\.standard)?\.set\s*\([^,\n]+,\s*forKey\s*:\s*"([^"]+)""#, "write", 1, "set"),
+            (#"\bUserDefaults(?:\.standard)?\.removeObject\s*\(\s*forKey\s*:\s*"([^"]+)""#, "remove", 1, "removeObject"),
+            (#"\bUserDefaults(?:\.standard)?\.register\s*\(\s*defaults\s*:\s*\[[^\]]*"([^"]+)"\s*:"#, "registration-defaults", 1, "register")
+        ]
+        var records: [SwiftStorageRecord] = []
+        for (pattern, direction, keyCapture, apiName) in patterns {
+            for (ordinal, match) in regexMatches(pattern, in: text, dotMatchesLineSeparators: true).enumerated() {
+                guard isCodeRange(match.range, in: searchable),
+                      let key = capture(match, keyCapture, in: text) else { continue }
+                let start = lineNumber(atUTF16Offset: match.range.location, in: text)
+                records.append(userDefaultsRecord(key: key, item: item, start: start, end: start, apiName: apiName, direction: direction, ordinal: match.range.location + ordinal))
+            }
+        }
+        let aliasPatterns: [(String, String)] = [
+            (#"\bUserDefaults(?:\.standard)?\.(?:string|bool|integer|double|data|object|array|dictionary)\s*\(\s*forKey\s*:\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)"#, "read"),
+            (#"\bUserDefaults(?:\.standard)?\.set\s*\([^,\n]+,\s*forKey\s*:\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)"#, "write"),
+            (#"\bUserDefaults(?:\.standard)?\.removeObject\s*\(\s*forKey\s*:\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)"#, "remove")
+        ]
+        for (pattern, direction) in aliasPatterns {
+            for (ordinal, match) in regexMatches(pattern, in: searchable).enumerated() {
+                guard let name = capture(match, 1, in: searchable),
+                      let key = constants[name] ?? constants[name.split(separator: ".").last.map(String.init) ?? name] else { continue }
+                let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+                records.append(userDefaultsRecord(key: key, item: item, start: start, end: start, apiName: "literal-alias", direction: direction, ordinal: match.range.location + ordinal))
+            }
+        }
+        return records
+    }
+
+    private static func userDefaultsRecord(key: String, item: InventoryItem, start: Int, end: Int, apiName: String, direction: String, ordinal: Int) -> SwiftStorageRecord {
+        let identity = safeOrHash(key, role: "userdefaults-key")
+        var properties = baseProperties(framework: "userdefaults")
+        properties["apiName"] = apiName
+        properties["operationDirection"] = direction
+        properties["keyIdentityStatus"] = identity.status
+        properties["keyLength"] = String(key.count)
+        if identity.status == "normalized" {
+            properties["normalizedKey"] = identity.display
+        } else {
+            properties["keyHash"] = identity.hash
+        }
+        return record(
+            factType: "SwiftUserDefaultsKeyAccessed",
+            ruleId: RuleIds.swiftStorageUserDefaults,
+            tier: .tier3SyntaxOrTextual,
+            item: item,
+            start: start,
+            end: end,
+            safeIdentity: identity.display,
+            role: "userdefaults-key",
+            ordinal: ordinal,
+            properties: properties
+        )
+    }
+
+    private static func keychainRecords(text: String, searchable: String, item: InventoryItem) -> [SwiftStorageRecord] {
+        let operations: [(String, String)] = [
+            ("SecItemAdd", "write"),
+            ("SecItemCopyMatching", "read"),
+            ("SecItemUpdate", "write"),
+            ("SecItemDelete", "remove")
+        ]
+        var records: [SwiftStorageRecord] = []
+        for (apiName, direction) in operations {
+            for (ordinal, match) in regexMatches(#"\b\#(apiName)\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)?"#, in: searchable).enumerated() {
+                let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+                let contextStart = max(0, match.range.location - 1500)
+                let startIndex = String.Index(utf16Offset: contextStart, in: text)
+                let endIndex = String.Index(utf16Offset: min(match.range.location + 300, text.utf16.count), in: text)
+                let context = String(text[startIndex..<endIndex])
+                if let argument = capture(match, 1, in: searchable), !argument.isEmpty {
+                    let declarationPattern = #"\b(?:let|var)\s+\#(argument)\b[\s\S]{0,1200}?\["#
+                    guard firstMatch(declarationPattern, in: context) != nil else { continue }
+                }
+                var properties = baseProperties(framework: "keychain")
+                properties["apiName"] = apiName
+                properties["operationDirection"] = direction
+                properties["keychainClass"] = firstCapture(#"kSecClass\s+as\s+String\s*:\s*(kSecClass[A-Za-z0-9_]+)"#, in: context).map(safeLabel) ?? "unknown"
+                addHashedDescriptor("service", pattern: #"kSecAttrService\s+as\s+String\s*:\s*"([^"]+)""#, context: context, properties: &properties)
+                addHashedDescriptor("account", pattern: #"kSecAttrAccount\s+as\s+String\s*:\s*"([^"]+)""#, context: context, properties: &properties)
+                addHashedDescriptor("accessGroup", pattern: #"kSecAttrAccessGroup\s+as\s+String\s*:\s*"([^"]+)""#, context: context, properties: &properties)
+                properties["queryIdentityStatus"] = properties.keys.contains { $0.hasSuffix("Hash") } ? "hashed-descriptors" : "constants-only"
+                records.append(record(
+                    factType: "SwiftKeychainAccessPattern",
+                    ruleId: RuleIds.swiftStorageKeychain,
+                    tier: .tier3SyntaxOrTextual,
+                    item: item,
+                    start: start,
+                    end: start,
+                    safeIdentity: apiName,
+                    role: "keychain-access",
+                    ordinal: match.range.location + ordinal,
+                    properties: properties
+                ))
+            }
+        }
+        return records
+    }
+
+    private static func swiftSQLRecords(text: String, searchable: String, item: InventoryItem) -> SwiftStorageExtraction {
+        let patterns: [(String, String)] = [
+            (#"\bexecute\s*\(\s*sql\s*:\s*"([^"]+)""#, "literal-string"),
+            (#"\b(?:fetchAll|fetchOne|fetchCursor)\s*\([^)]*sql\s*:\s*"([^"]+)""#, "literal-string"),
+            (#"\bexecute(?:Query|Update)\s*\(\s*"([^"]+)""#, "literal-string"),
+            (#"\bsqlite3_prepare_v2\s*\([^,]+,\s*"([^"]+)""#, "literal-string")
+        ]
+        var records: [SwiftStorageRecord] = []
+        var gaps: [CoverageGap] = []
+        for (pattern, sourceKind) in patterns {
+            for match in regexMatches(pattern, in: text, dotMatchesLineSeparators: true) {
+                guard isCodeRange(match.range, in: searchable),
+                      let sql = capture(match, 1, in: text) else { continue }
+                let start = lineNumber(atUTF16Offset: match.range.location, in: text)
+                if sql.contains("\\(") || isFollowedBySwiftConcatenation(match.range(at: 1), in: text) {
+                    gaps.append(gap("swift-storage-dynamic-sql", item, start, start, "Swift SQL text is dynamic or interpolated; complete SqlTextUsed evidence omitted."))
+                    continue
+                }
+                records += sqlRecords(sql: sql, sourceKind: sourceKind, item: item, start: start, end: start, tier: .tier3SyntaxOrTextual, ordinal: match.range.location)
+            }
+        }
+        for match in regexMatches(#"\bsql\s*:\s*[A-Za-z_][A-Za-z0-9_]*|\bexecute(?:Query|Update)\s*\(\s*[A-Za-z_][A-Za-z0-9_]*"#, in: searchable) {
+            let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+            gaps.append(gap("swift-storage-dynamic-sql", item, start, start, "Swift SQL argument is indirect; complete SqlTextUsed evidence omitted."))
+        }
+        return SwiftStorageExtraction(records: records, gaps: gaps)
+    }
+
+    private static func isFollowedBySwiftConcatenation(_ range: NSRange, in text: String) -> Bool {
+        let end = range.location + range.length
+        guard end <= text.utf16.count else { return false }
+        let tailStart = String.Index(utf16Offset: end, in: text)
+        let tail = text[tailStart...]
+        return tail.first { !$0.isWhitespace } == "+"
+    }
+
+    private static func sqlResource(url: URL, item: InventoryItem) -> SwiftStorageExtraction {
+        guard let sql = try? String(contentsOf: url, encoding: .utf8) else {
+            return SwiftStorageExtraction(records: [], gaps: [gap("swift-storage-sql-resource-unreadable", item, item.startLine, item.endLine, "SQL resource could not be read; SQL evidence omitted.")])
+        }
+        return SwiftStorageExtraction(records: sqlRecords(sql: sql, sourceKind: "sql-file", item: item, start: item.startLine, end: item.endLine, tier: .tier2Structural, ordinal: 0), gaps: [])
+    }
+
+    private static func sqlRecords(sql: String, sourceKind: String, item: InventoryItem, start: Int, end: Int, tier: EvidenceTier, ordinal: Int) -> [SwiftStorageRecord] {
+        let textHash = sha256Hex(sql, length: 32)
+        let shape = sqlShape(sql)
+        var base = baseProperties(framework: "sqlite")
+        base["sqlSourceKind"] = sourceKind
+        base["textHash"] = textHash
+        base["textLength"] = String(sql.utf8.count)
+        if let operation = shape.operationName {
+            base["operationName"] = operation
+        }
+        let textFact = record(
+            factType: "SqlTextUsed",
+            ruleId: RuleIds.swiftStorageSQLiteSQL,
+            tier: tier,
+            item: item,
+            start: start,
+            end: end,
+            safeIdentity: textHash,
+            role: "sql-text",
+            ordinal: ordinal,
+            properties: base
+        )
+        var records = [textFact]
+        if let queryShapeHash = shape.queryShapeHash {
+            var properties = base
+            properties["queryShapeHash"] = queryShapeHash
+            if let tableName = shape.tableName {
+                let table = safeOrHash(tableName, role: "sql-table")
+                if table.status == "normalized" {
+                    properties["tableName"] = table.display
+                } else {
+                    properties["tableNameHash"] = table.hash
+                }
+            }
+            records.append(record(
+                factType: "QueryPatternDetected",
+                ruleId: RuleIds.swiftStorageSQLiteSQL,
+                tier: tier,
+                item: item,
+                start: start,
+                end: end,
+                safeIdentity: queryShapeHash,
+                role: "sql-shape",
+                ordinal: ordinal,
+                properties: properties
+            ))
+        }
+        return records
+    }
+
+    private static func realmRecords(text: String, searchable: String, item: InventoryItem) -> SwiftStorageExtraction {
+        var records: [SwiftStorageRecord] = []
+        var gaps: [CoverageGap] = []
+        let modelPattern = #"\b(?:final\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*[^{}\n]*(Object|EmbeddedObject|RealmSwiftObject)\b[^{]*\{"#
+        for (ordinal, match) in regexMatches(modelPattern, in: searchable).enumerated() {
+            guard let typeName = capture(match, 1, in: searchable) else { continue }
+            let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+            let open = match.range.location + match.range.length - 1
+            let close = matchingBraceOffset(in: searchable, openOffset: open) ?? min(searchable.utf16.count, open + 1500)
+            let body = textSlice(text, start: open, end: close)
+            let primaryKey = firstCapture(#"primaryKey\s*\(\s*\)\s*->\s*String\??\s*\{[^\"]*\"([^\"]+)\""#, in: body)
+            var properties = baseProperties(framework: "realm")
+            properties["realmModelKind"] = safeLabel(capture(match, 2, in: searchable))
+            properties["typeName"] = safeLabel(typeName)
+            properties["runtimeSchemaProven"] = "false"
+            if let primaryKey {
+                properties["primaryKeyName"] = safeOrHash(primaryKey, role: "realm-primary-key").display
+            }
+            records.append(record(
+                factType: "SwiftRealmModelDeclared",
+                ruleId: RuleIds.swiftStorageRealmModel,
+                tier: .tier3SyntaxOrTextual,
+                item: item,
+                start: start,
+                end: start,
+                safeIdentity: safeLabel(typeName),
+                role: "realm-model",
+                ordinal: ordinal,
+                properties: properties
+            ))
+            for propertyMatch in regexMatches(#"@Persisted(?:\([^)]*\))?\s+var\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*([A-Za-z_][A-Za-z0-9_<>\[\]?\.]*)"#, in: body) {
+                guard let propertyName = capture(propertyMatch, 1, in: body) else { continue }
+                let propertyStart = lineNumber(atUTF16Offset: open + propertyMatch.range.location, in: searchable)
+                let column = safeOrHash(propertyName, role: "realm-property")
+                var propertyInfo = baseProperties(framework: "realm")
+                propertyInfo["mappingKind"] = "RealmPersistedProperty"
+                propertyInfo["propertyKind"] = "persisted"
+                propertyInfo["propertyName"] = column.display
+                propertyInfo["propertyNameStatus"] = column.status
+                propertyInfo["tableName"] = safeLabel(typeName)
+                propertyInfo["columnName"] = column.display
+                propertyInfo["runtimeSchemaProven"] = "false"
+                if let propertyType = capture(propertyMatch, 2, in: body) {
+                    propertyInfo["propertyType"] = safeLabel(propertyType.replacingOccurrences(of: "?", with: ""))
+                }
+                records.append(record(
+                    factType: "DatabaseColumnMapping",
+                    ruleId: RuleIds.swiftStorageRealmModel,
+                    tier: .tier3SyntaxOrTextual,
+                    item: item,
+                    start: propertyStart,
+                    end: propertyStart,
+                    safeIdentity: "\(safeLabel(typeName)).\(column.display)",
+                    role: "realm-property",
+                    ordinal: open + propertyMatch.range.location,
+                    properties: propertyInfo
+                ))
+            }
+        }
+        for match in regexMatches(#"\.filter\s*\(\s*"#, in: searchable) {
+            let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+            gaps.append(gap("swift-storage-realm-dynamic-query", item, start, start, "Realm predicate strings are static syntax only; runtime query execution and object graph behavior are not proven."))
+        }
+        return SwiftStorageExtraction(records: records, gaps: gaps)
+    }
+
+    private static func storageDynamicGaps(text: String, searchable: String, item: InventoryItem, constants: [String: String]) -> [CoverageGap] {
+        var gaps: [CoverageGap] = []
+        let patterns: [(String, String, String)] = [
+            (#"\bSecItem(?:Add|CopyMatching|Update|Delete)\s*\([^)]*(?:merged|config|payload|request)"#, "swift-storage-dynamic-keychain-query", "Keychain query is dynamic or config-derived; access-pattern evidence is partial."),
+            (#"\bNSPersistentContainer\s*\("#, "swift-storage-coredata-runtime-container", "CoreData runtime container setup is detected but runtime store loading is not proven.")
+        ]
+        for match in regexMatches(#"\bUserDefaults(?:\.standard)?\.[A-Za-z0-9_]+\s*\([^)]*forKey\s*:\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?|[^\"),\s][^),\s]*)"#, in: text) {
+            guard isCodeRange(match.range, in: searchable),
+                  let argument = capture(match, 1, in: text),
+                  !resolvesToLiteralConstant(argument, constants: constants) else { continue }
+            let start = lineNumber(atUTF16Offset: match.range.location, in: text)
+            gaps.append(gap("swift-storage-dynamic-userdefaults-key", item, start, start, "UserDefaults key is dynamic or unsupported; key surface evidence omitted."))
+        }
+        for (pattern, kind, message) in patterns {
+            for match in regexMatches(pattern, in: searchable, dotMatchesLineSeparators: true) {
+                let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+                gaps.append(gap(kind, item, start, start, message))
+            }
+        }
+        return gaps
+    }
+
+    private static func resolvesToLiteralConstant(_ argument: String, constants: [String: String]) -> Bool {
+        if constants[argument] != nil { return true }
+        if let last = argument.split(separator: ".").last.map(String.init), constants[last] != nil { return true }
+        return false
+    }
+
+    private static func literalStringConstants(text: String, searchable: String) -> [String: String] {
+        var constants: [String: String] = [:]
+        for match in regexMatches(#"\b(?:static\s+)?let\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"([^"]+)""#, in: text) {
+            guard isCodeRange(match.range, in: searchable),
+                  let name = capture(match, 1, in: text),
+                  let value = capture(match, 2, in: text) else { continue }
+            constants[name] = value
+        }
+        return constants
+    }
+
+    private static func record(factType: String, ruleId: String, tier: EvidenceTier, item: InventoryItem, start: Int, end: Int, safeIdentity: String, role: String, ordinal: Int, properties: [String: String]) -> SwiftStorageRecord {
+        var safeProperties = properties
+        safeProperties["coverageCeiling"] = tier == .tier2Structural ? "structural" : "syntax-or-textual"
+        safeProperties["language"] = "swift"
+        safeProperties["runtimeProof"] = "false"
+        safeProperties["staticEvidenceOnly"] = "true"
+        return SwiftStorageRecord(
+            factType: factType,
+            ruleId: ruleId,
+            evidenceTier: tier,
+            filePath: item.relativePath,
+            startLine: max(1, start),
+            endLine: max(max(1, start), end),
+            targetSymbol: safeIdentity,
+            contractElement: safeIdentity,
+            identityDiscriminator: ["swift-storage/v1", role, item.relativePath, String(start), String(end), safeIdentity, String(ordinal)].joined(separator: "\u{1f}"),
+            properties: safeProperties
+        )
+    }
+
+    private static func coreDataProperties(kind: String, modelHash: String, entity: SafeIdentity) -> [String: String] {
+        var properties = baseProperties(framework: "coredata")
+        properties["modelDescriptorKind"] = kind
+        properties["modelHash"] = modelHash
+        properties["entityName"] = entity.display
+        properties["entityNameStatus"] = entity.status
+        properties["runtimeStoreProven"] = "false"
+        return properties
+    }
+
+    private static func baseProperties(framework: String) -> [String: String] {
+        [
+            "frameworkFamily": framework,
+            "storageRuntimeProof": "false"
+        ]
+    }
+
+    private struct SafeIdentity {
+        let display: String
+        let status: String
+        let hash: String
+    }
+
+    private static func safeOrHash(_ value: String?, role: String) -> SafeIdentity {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let hash = roleHash(role, trimmed)
+        guard !trimmed.isEmpty else {
+            return SafeIdentity(display: "", status: "absent", hash: "")
+        }
+        guard isStorageSafeLabel(trimmed) else {
+            return SafeIdentity(display: "sha256:\(hash.prefix(24))", status: "hashed", hash: hash)
+        }
+        return SafeIdentity(display: trimmed, status: "normalized", hash: hash)
+    }
+
+    private static func isStorageSafeLabel(_ value: String) -> Bool {
+        guard isSafeLabel(value), value.range(of: #"(secret|token|password|passwd|credential|bearer|apikey|api-key|private|keychain)"#, options: [.regularExpression, .caseInsensitive]) == nil else {
+            return false
+        }
+        return true
+    }
+
+    private static func addHashedDescriptor(_ name: String, pattern: String, context: String, properties: inout [String: String]) {
+        guard let value = firstCapture(pattern, in: context) else { return }
+        properties["\(name)Hash"] = roleHash("keychain-\(name)", value)
+        properties["\(name)IdentityStatus"] = "hashed"
+    }
+
+    private struct SqlShape {
+        let queryShapeHash: String?
+        let operationName: String?
+        let tableName: String?
+    }
+
+    private static func sqlShape(_ sql: String) -> SqlShape {
+        let masked = normalizeSQLForShape(sql)
+        guard !masked.isEmpty else {
+            return SqlShape(queryShapeHash: nil, operationName: nil, tableName: nil)
+        }
+        let operation = firstCapture(#"(?i)^\s*(SELECT|INSERT|UPDATE|DELETE|MERGE|CREATE|ALTER|DROP|TRUNCATE|CALL|EXEC|EXECUTE)\b"#, in: masked)?.uppercased()
+        let tablePatterns = [
+            #"(?i)\bFROM\s+([A-Za-z_][A-Za-z0-9_.$]*)"#,
+            #"(?i)\bJOIN\s+([A-Za-z_][A-Za-z0-9_.$]*)"#,
+            #"(?i)\bINTO\s+([A-Za-z_][A-Za-z0-9_.$]*)"#,
+            #"(?i)^\s*UPDATE\s+([A-Za-z_][A-Za-z0-9_.$]*)"#,
+            #"(?i)^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Za-z_][A-Za-z0-9_.$]*)"#
+        ]
+        let table = tablePatterns.compactMap { firstCapture($0, in: masked) }.first
+        return SqlShape(queryShapeHash: sha256Hex(masked, length: 32), operationName: operation, tableName: table)
+    }
+
+    private static func normalizeSQLForShape(_ sql: String) -> String {
+        var value = sql.replacingOccurrences(of: #"(?s)/\*.*?\*/"#, with: " ", options: .regularExpression)
+        value = value.replacingOccurrences(of: #"--[^\n\r]*"#, with: " ", options: .regularExpression)
+        value = value.replacingOccurrences(of: #"'([^']|'')*'"#, with: "?", options: .regularExpression)
+        value = value.replacingOccurrences(of: #""([^"]|"")*""#, with: "?", options: .regularExpression)
+        value = value.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        while value.hasSuffix(";") {
+            value = String(value.dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return value
+    }
+
+    private static func xmlAttributes(_ tag: String) -> [String: String] {
+        var attributes: [String: String] = [:]
+        for match in regexMatches(#"([A-Za-z_:][A-Za-z0-9_.:-]*)\s*=\s*"([^"]*)""#, in: tag) {
+            guard let key = capture(match, 1, in: tag),
+                  let value = capture(match, 2, in: tag) else { continue }
+            attributes[key] = value
+        }
+        return attributes
+    }
+
+    private static func matchText(_ match: NSTextCheckingResult, in text: String) -> String? {
+        guard let range = Range(match.range, in: text) else { return nil }
+        return String(text[range])
+    }
+
+    private static func textSlice(_ text: String, start: Int, end: Int) -> String {
+        let startIndex = String.Index(utf16Offset: max(0, min(start, text.utf16.count)), in: text)
+        let endIndex = String.Index(utf16Offset: max(0, min(end, text.utf16.count)), in: text)
+        return String(text[startIndex..<endIndex])
+    }
+
+    private static func isCodeRange(_ range: NSRange, in maskedText: String) -> Bool {
+        guard let swiftRange = Range(range, in: maskedText) else { return false }
+        return maskedText[swiftRange].contains { !$0.isWhitespace }
+    }
+
+    private static func boolString(_ value: String?) -> String {
+        guard let value else { return "unknown" }
+        return ["YES", "true", "1"].contains(value) ? "true" : "false"
+    }
+
+    private static func roleHash(_ role: String, _ value: String) -> String {
+        sha256Hex("swift.storage|\(role)|\(value)")
+    }
+
+    private static func matchingBraceOffset(in text: String, openOffset: Int) -> Int? {
+        let utf16 = text.utf16
+        guard openOffset >= 0, openOffset < utf16.count else { return nil }
+        let openBrace = Character("{").utf16.first!
+        let closeBrace = Character("}").utf16.first!
+        var depth = 0
+        var index = utf16.index(utf16.startIndex, offsetBy: openOffset)
+        while index < utf16.endIndex {
+            if utf16[index] == openBrace {
+                depth += 1
+            } else if utf16[index] == closeBrace {
+                depth -= 1
+                if depth == 0 { return utf16.distance(from: utf16.startIndex, to: index) }
+            }
+            index = utf16.index(after: index)
+        }
+        return nil
+    }
+
+    private static func recordSortPrecedes(_ lhs: SwiftStorageRecord, _ rhs: SwiftStorageRecord) -> Bool {
+        if lhs.filePath != rhs.filePath { return lhs.filePath < rhs.filePath }
+        if lhs.startLine != rhs.startLine { return lhs.startLine < rhs.startLine }
+        if lhs.factType != rhs.factType { return lhs.factType < rhs.factType }
+        return lhs.identityDiscriminator < rhs.identityDiscriminator
+    }
+
+    private static func gapSortPrecedes(_ lhs: CoverageGap, _ rhs: CoverageGap) -> Bool {
+        if lhs.filePath != rhs.filePath { return lhs.filePath < rhs.filePath }
+        if lhs.startLine != rhs.startLine { return lhs.startLine < rhs.startLine }
+        return lhs.kind < rhs.kind
+    }
+
+    private static func collapseDuplicateGaps(_ gaps: [CoverageGap]) -> [CoverageGap] {
+        var seen: Set<String> = []
+        var collapsed: [CoverageGap] = []
+        for gap in gaps {
+            let key = [gap.filePath, String(gap.startLine), gap.kind].joined(separator: "|")
+            guard seen.insert(key).inserted else { continue }
+            collapsed.append(gap)
+        }
+        return collapsed
+    }
+
+    private static func gap(_ kind: String, _ item: InventoryItem, _ startLine: Int, _ endLine: Int, _ message: String) -> CoverageGap {
+        CoverageGap(kind: kind, ruleId: RuleIds.swiftStorageAnalysisGap, message: message, filePath: item.relativePath, startLine: max(1, startLine), endLine: max(max(1, startLine), endLine))
+    }
+}
+
 enum DependencyExtractor {
     static func extract(scanRoot: URL, inventory: [InventoryItem]) -> DependencyExtraction {
         var records: [DependencyRecord] = []
@@ -1843,7 +2562,8 @@ enum FactFactory {
         syntax: SwiftSyntaxExtraction = SwiftSyntaxExtraction(declarations: [], imports: [], calls: [], constructions: [], relationships: [], gaps: []),
         dependencies: DependencyExtraction? = nil,
         http: SwiftHttpExtraction? = nil,
-        ui: SwiftUiExtraction? = nil
+        ui: SwiftUiExtraction? = nil,
+        storage: SwiftStorageExtraction? = nil
     ) -> [CodeFact] {
         var facts: [CodeFact] = []
         facts.append(makeFact(
@@ -1962,6 +2682,29 @@ enum FactFactory {
                 ]
             ))
         }
+        let storage = storage ?? SwiftStorageExtractor.extract(scanRoot: scanRoot, inventory: inventory)
+        facts += storageFacts(manifest: manifest, records: storage.records)
+        for (gapOrdinal, gap) in storage.gaps.enumerated() {
+            facts.append(makeFact(
+                manifest: manifest,
+                factType: "AnalysisGap",
+                ruleId: gap.ruleId,
+                evidenceTier: .tier4Unknown,
+                filePath: gap.filePath,
+                startLine: gap.startLine,
+                endLine: gap.endLine,
+                targetSymbol: gap.kind,
+                contractElement: gap.kind,
+                identityDiscriminator: sha256Hex("\(gap.filePath)|\(gap.startLine)|\(gap.endLine)|\(gap.kind)|\(gapOrdinal)|\(gap.message)"),
+                properties: [
+                    "frameworkFamily": storageGapFramework(gap.kind),
+                    "gapKind": gap.kind,
+                    "gapOrdinal": String(gapOrdinal),
+                    "messageHash": sha256Hex(gap.message),
+                    "staticEvidenceOnly": "true"
+                ]
+            ))
+        }
         facts += syntaxFacts(manifest: manifest, syntax: syntax)
         for gap in gaps where !isSpecializedExtractorGap(gap.kind) {
             facts.append(makeFact(
@@ -1989,6 +2732,7 @@ enum FactFactory {
         kind.hasPrefix("swift-dependency-")
             || kind.hasPrefix("swift-http-")
             || kind.hasPrefix("swift-ui-")
+            || kind.hasPrefix("swift-storage-")
     }
 
     private static func toolchainFacts(manifest: ScanManifest, diagnostics: [ToolchainDiagnostic]) -> [CodeFact] {
@@ -2082,6 +2826,33 @@ enum FactFactory {
                 properties: record.properties
             )
         }
+    }
+
+    private static func storageFacts(manifest: ScanManifest, records: [SwiftStorageRecord]) -> [CodeFact] {
+        records.map { record in
+            makeFact(
+                manifest: manifest,
+                factType: record.factType,
+                ruleId: record.ruleId,
+                evidenceTier: record.evidenceTier,
+                filePath: record.filePath,
+                startLine: record.startLine,
+                endLine: record.endLine,
+                targetSymbol: record.targetSymbol,
+                contractElement: record.contractElement,
+                identityDiscriminator: record.identityDiscriminator,
+                properties: record.properties
+            )
+        }
+    }
+
+    private static func storageGapFramework(_ kind: String) -> String {
+        if kind.contains("coredata") { return "coredata" }
+        if kind.contains("userdefaults") { return "userdefaults" }
+        if kind.contains("keychain") { return "keychain" }
+        if kind.contains("sql") { return "sqlite" }
+        if kind.contains("realm") { return "realm" }
+        return "storage"
     }
 
     private static func syntaxFacts(manifest: ScanManifest, syntax: SwiftSyntaxExtraction) -> [CodeFact] {
@@ -2294,6 +3065,8 @@ enum FactFactory {
         case "cocoapods-metadata": return RuleIds.cocoaPods
         case "carthage-metadata": return RuleIds.carthage
         case "xcode-project", "xcode-workspace", "xcode-project-metadata", "xcode-workspace-metadata": return RuleIds.xcode
+        case "coredata-model", "coredata-model-bundle": return RuleIds.swiftStorageCoreData
+        case "sql-resource": return RuleIds.swiftStorageSQLiteSQL
         default: return RuleIds.fileInventory
         }
     }
@@ -2301,6 +3074,7 @@ enum FactFactory {
     private static func evidenceTier(for item: InventoryItem) -> EvidenceTier {
         switch item.kind {
         case "swift-source": return .tier3SyntaxOrTextual
+        case "coredata-model", "coredata-model-bundle", "sql-resource": return .tier2Structural
         default: return .tier2Structural
         }
     }
@@ -2358,6 +3132,7 @@ enum FactFactory {
                 || gap.kind.hasPrefix("swift-dependency-")
                 || gap.kind.hasPrefix("swift-http-")
                 || gap.kind.hasPrefix("swift-ui-")
+                || gap.kind.hasPrefix("swift-storage-")
         }) {
             return "SwiftInventoryReduced"
         }
@@ -2799,6 +3574,26 @@ enum OutputWriter {
             if !uiGaps.isEmpty {
                 lines += ["", "### UI Gap Kinds", ""]
                 lines += markdownTable(count(uiGaps.compactMap { $0.properties["gapKind"] }))
+            }
+        }
+        let storageFacts = facts.filter { fact in
+            fact.ruleId.hasPrefix("swift.storage.") && fact.factType != "AnalysisGap" && fact.factType != "FileInventoried"
+        }
+        let storageGaps = facts.filter { $0.factType == "AnalysisGap" && $0.ruleId == RuleIds.swiftStorageAnalysisGap }
+        if !storageFacts.isEmpty || !storageGaps.isEmpty {
+            lines += ["", "## Swift Storage/Data Static Surfaces", ""]
+            lines += ["Static source and checked-in metadata evidence only; these rows do not prove runtime persistence, database existence, query execution, stored values, migrations, Keychain item presence, Realm live schema, or impact.", ""]
+            if !storageFacts.isEmpty {
+                lines += ["### By Framework Family", ""]
+                lines += markdownTable(count(storageFacts.compactMap { $0.properties["frameworkFamily"] }))
+                lines += ["", "### By Fact Type", ""]
+                lines += markdownTable(count(storageFacts.map(\.factType)))
+                lines += ["", "### By Rule", ""]
+                lines += markdownTable(count(storageFacts.map(\.ruleId)))
+            }
+            if !storageGaps.isEmpty {
+                lines += ["", "### Storage/Data Gap Kinds", ""]
+                lines += markdownTable(count(storageGaps.compactMap { $0.properties["gapKind"] }))
             }
         }
         let diagnosticFacts = facts.filter { $0.factType == "SwiftToolchainDiagnostic" || ($0.factType == "AnalysisGap" && ($0.ruleId == RuleIds.reducedCoverageGap || $0.ruleId == RuleIds.toolchainDiagnostic)) }

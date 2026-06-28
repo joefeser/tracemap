@@ -101,6 +101,7 @@ swift run --package-path src/swift tracemap-swift scan --repo samples/swift-pack
 swift run --package-path src/swift tracemap-swift scan --repo samples/swift-dependency-surfaces --out /tmp/tracemap-swift-dependency-surfaces
 swift run --package-path src/swift tracemap-swift scan --repo samples/swift-http-api-client-surfaces --out /tmp/tracemap-swift-http-api-client-surfaces
 swift run --package-path src/swift tracemap-swift scan --repo samples/swift-ui-surfaces --out /tmp/tracemap-swift-ui-surfaces
+swift run --package-path src/swift tracemap-swift scan --repo samples/swift-storage-data-surfaces --out /tmp/tracemap-swift-storage-data-surfaces
 swift run --package-path src/swift tracemap-swift scan --repo samples/swift-diagnostics-reduced --out /tmp/tracemap-swift-diagnostics-reduced
 swift run --package-path src/swift tracemap-swift scan --repo samples/swift-metadata-reduced --out /tmp/tracemap-swift-metadata-reduced
 swift run --package-path src/swift tracemap-swift scan --repo samples/swift-metadata-unsupported --out /tmp/tracemap-swift-metadata-unsupported
@@ -117,6 +118,11 @@ test -f /tmp/tracemap-swift-http-api-client-surfaces/report.md
 test -f /tmp/tracemap-swift-ui-surfaces/facts.ndjson
 test -f /tmp/tracemap-swift-ui-surfaces/index.sqlite
 test -f /tmp/tracemap-swift-ui-surfaces/report.md
+test -f /tmp/tracemap-swift-storage-data-surfaces/scan-manifest.json
+test -f /tmp/tracemap-swift-storage-data-surfaces/facts.ndjson
+test -f /tmp/tracemap-swift-storage-data-surfaces/index.sqlite
+test -f /tmp/tracemap-swift-storage-data-surfaces/report.md
+test -f /tmp/tracemap-swift-storage-data-surfaces/logs/analyzer.log
 test -f /tmp/tracemap-swift-diagnostics-reduced/scan-manifest.json
 test -f /tmp/tracemap-swift-diagnostics-reduced/facts.ndjson
 test -f /tmp/tracemap-swift-diagnostics-reduced/index.sqlite
@@ -128,6 +134,8 @@ test -f /tmp/tracemap-no-swift/scan-manifest.json
 dotnet run --project src/dotnet/TraceMap.Cli -- export --index /tmp/tracemap-swift-package-basic/index.sqlite --out /tmp/tracemap-swift-export --format json
 dotnet run --project src/dotnet/TraceMap.Cli -- combine --index /tmp/tracemap-swift-package-basic/index.sqlite --label swift --out /tmp/tracemap-swift-combined.sqlite
 dotnet run --project src/dotnet/TraceMap.Cli -- report --index /tmp/tracemap-swift-combined.sqlite --out /tmp/tracemap-swift-report
+dotnet run --project src/dotnet/TraceMap.Cli -- combine --index /tmp/tracemap-swift-storage-data-surfaces/index.sqlite --label swift --out /tmp/tracemap-swift-storage-combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- report --index /tmp/tracemap-swift-storage-combined.sqlite --out /tmp/tracemap-swift-storage-report
 ./scripts/check-private-paths.sh
 git diff --check
 ```
@@ -135,9 +143,13 @@ git diff --check
 Expected Swift behavior: scans remain deterministic static evidence over
 checked-in files, emit repo and commit SHA provenance, rule IDs, evidence
 tiers, extractor versions, coverage labels, public-safe repo-relative paths,
-and syntax-backed declarations, call candidates, construction candidates, and
-direct source-local symbol relationships where supported. Swift relationship
-facts remain syntax-backed and must not claim compiler semantic coverage, build
+and syntax-backed declarations, call candidates, construction candidates,
+direct source-local symbol relationships, HTTP/API client surfaces, UI
+surfaces, and storage/data surfaces where supported. Swift storage/data
+evidence remains static metadata or syntax/text evidence and must not claim
+runtime persistence, query execution, stored values, schema existence,
+migration success, Keychain item presence, Realm live schema, production data,
+or impact. Swift relationship facts remain syntax-backed and must not claim compiler semantic coverage, build
 success, package compatibility, Xcode scheme behavior, simulator/device
 behavior, runtime behavior, protocol witness selection, Objective-C dispatch,
 dependency vulnerability/license/freshness, or impact. Generated Swift
