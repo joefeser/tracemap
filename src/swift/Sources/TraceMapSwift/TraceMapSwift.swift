@@ -1697,6 +1697,9 @@ enum SwiftStorageExtractor {
                 guard isCodeRange(match.range, in: searchable),
                       let key = capture(match, keyCapture, in: text) else { continue }
                 let start = lineNumber(atUTF16Offset: match.range.location, in: text)
+                if key.contains("\\(") {
+                    continue
+                }
                 records.append(userDefaultsRecord(key: key, item: item, start: start, end: start, apiName: apiName, direction: direction, ordinal: match.range.location + ordinal))
             }
         }
@@ -1707,6 +1710,9 @@ enum SwiftStorageExtractor {
                 guard let key = capture(keyMatch, 1, in: dictionary) else { continue }
                 let keyOffset = match.range(at: 1).location + keyMatch.range.location
                 let start = lineNumber(atUTF16Offset: keyOffset, in: text)
+                if key.contains("\\(") {
+                    continue
+                }
                 records.append(userDefaultsRecord(key: key, item: item, start: start, end: start, apiName: "register", direction: "registration-defaults", ordinal: keyOffset + ordinal))
             }
         }
@@ -1974,6 +1980,16 @@ enum SwiftStorageExtractor {
             let start = lineNumber(atUTF16Offset: match.range.location, in: text)
             gaps.append(gap("swift-storage-dynamic-userdefaults-key", item, start, start, "UserDefaults key is dynamic or unsupported; key surface evidence omitted."))
         }
+        for match in regexMatches(#"\bUserDefaults(?:\.standard)?\.[A-Za-z0-9_]+\s*\([^)]*forKey\s*:\s*"[^"]*\\\([^"]*""#, in: text) {
+            guard isCodeRange(match.range, in: searchable) else { continue }
+            let start = lineNumber(atUTF16Offset: match.range.location, in: text)
+            gaps.append(gap("swift-storage-dynamic-userdefaults-key", item, start, start, "UserDefaults key is interpolated; key surface evidence omitted."))
+        }
+        for match in regexMatches(#"\bUserDefaults(?:\.standard)?\.register\s*\(\s*defaults\s*:\s*\[[\s\S]*?"[^"]*\\\([^"]*"\s*:"#, in: text, dotMatchesLineSeparators: true) {
+            guard isCodeRange(match.range, in: searchable) else { continue }
+            let start = lineNumber(atUTF16Offset: match.range.location, in: text)
+            gaps.append(gap("swift-storage-dynamic-userdefaults-key", item, start, start, "UserDefaults registered key is interpolated; key surface evidence omitted."))
+        }
         for (pattern, kind, message) in patterns {
             for match in regexMatches(pattern, in: searchable, dotMatchesLineSeparators: true) {
                 let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
@@ -2010,9 +2026,13 @@ enum SwiftStorageExtractor {
     }
 
     private static func literalConstantValue(for name: String, constants: [String: String], text: String, beforeOffset: Int) -> String? {
-        if let value = constants[name] { return value }
-        guard !name.contains(".") else { return nil }
-        return nearestLocalLiteralConstant(name: name, text: text, beforeOffset: beforeOffset) ?? constants[name]
+        if name.contains(".") {
+            return constants[name]
+        }
+        if let local = nearestLocalLiteralConstant(name: name, text: text, beforeOffset: beforeOffset) {
+            return local
+        }
+        return constants[name]
     }
 
     private static func nearestLocalLiteralConstant(name: String, text: String, beforeOffset: Int) -> String? {
