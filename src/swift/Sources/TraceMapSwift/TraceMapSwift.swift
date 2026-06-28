@@ -1689,8 +1689,7 @@ enum SwiftStorageExtractor {
         let patterns: [(String, String, Int, String)] = [
             (#"\bUserDefaults(?:\.standard)?\.(string|bool|integer|double|data|object|array|dictionary)\s*\(\s*forKey\s*:\s*"([^"]+)""#, "read", 2, "typed-getter"),
             (#"\bUserDefaults(?:\.standard)?\.set\s*\([^,\n]+,\s*forKey\s*:\s*"([^"]+)""#, "write", 1, "set"),
-            (#"\bUserDefaults(?:\.standard)?\.removeObject\s*\(\s*forKey\s*:\s*"([^"]+)""#, "remove", 1, "removeObject"),
-            (#"\bUserDefaults(?:\.standard)?\.register\s*\(\s*defaults\s*:\s*\[[^\]]*"([^"]+)"\s*:"#, "registration-defaults", 1, "register")
+            (#"\bUserDefaults(?:\.standard)?\.removeObject\s*\(\s*forKey\s*:\s*"([^"]+)""#, "remove", 1, "removeObject")
         ]
         var records: [SwiftStorageRecord] = []
         for (pattern, direction, keyCapture, apiName) in patterns {
@@ -1699,6 +1698,16 @@ enum SwiftStorageExtractor {
                       let key = capture(match, keyCapture, in: text) else { continue }
                 let start = lineNumber(atUTF16Offset: match.range.location, in: text)
                 records.append(userDefaultsRecord(key: key, item: item, start: start, end: start, apiName: apiName, direction: direction, ordinal: match.range.location + ordinal))
+            }
+        }
+        for match in regexMatches(#"\bUserDefaults(?:\.standard)?\.register\s*\(\s*defaults\s*:\s*\[([\s\S]*?)\]\s*\)"#, in: text, dotMatchesLineSeparators: true) {
+            guard isCodeRange(match.range, in: searchable),
+                  let dictionary = capture(match, 1, in: text) else { continue }
+            for (ordinal, keyMatch) in regexMatches(#""([^"]+)"\s*:"#, in: dictionary).enumerated() {
+                guard let key = capture(keyMatch, 1, in: dictionary) else { continue }
+                let keyOffset = match.range(at: 1).location + keyMatch.range.location
+                let start = lineNumber(atUTF16Offset: keyOffset, in: text)
+                records.append(userDefaultsRecord(key: key, item: item, start: start, end: start, apiName: "register", direction: "registration-defaults", ordinal: keyOffset + ordinal))
             }
         }
         let aliasPatterns: [(String, String)] = [
@@ -1819,8 +1828,11 @@ enum SwiftStorageExtractor {
         let end = range.location + range.length
         guard end <= text.utf16.count else { return false }
         let tailStart = String.Index(utf16Offset: end, in: text)
-        let tail = text[tailStart...]
-        return tail.first { !$0.isWhitespace } == "+"
+        var tail = text[tailStart...].drop { $0.isWhitespace }
+        if tail.first == "\"" {
+            tail = tail.dropFirst().drop { $0.isWhitespace }
+        }
+        return tail.first == "+"
     }
 
     private static func sqlResource(url: URL, item: InventoryItem) -> SwiftStorageExtraction {

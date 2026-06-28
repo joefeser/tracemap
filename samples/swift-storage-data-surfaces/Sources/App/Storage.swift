@@ -11,6 +11,7 @@ enum PreferenceKeys {
 
 final class PreferencesStore {
     func update(flag: Bool, dynamicKey: String) {
+        UserDefaults.standard.register(defaults: ["welcomeMessage": "hello", "syncEnabled": true])
         UserDefaults.standard.set(flag, forKey: "hasCompletedOnboarding")
         _ = UserDefaults.standard.integer(forKey: PreferenceKeys.launchCount)
         _ = UserDefaults.standard.string(forKey: PreferenceKeys.sensitivePreference)

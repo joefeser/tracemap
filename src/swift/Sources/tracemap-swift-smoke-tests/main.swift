@@ -605,6 +605,8 @@ struct TraceMapSwiftSmokeTests {
         assert(storageFacts.contains { $0.factType == "SwiftCoreDataPropertyDeclared" && $0.properties["propertyName"] == "total" && $0.properties["entityName"] == "Order" })
         assert(storageFacts.contains { $0.factType == "SwiftUserDefaultsKeyAccessed" && $0.properties["operationDirection"] == "write" && $0.properties["normalizedKey"] == "hasCompletedOnboarding" })
         assert(storageFacts.contains { $0.factType == "SwiftUserDefaultsKeyAccessed" && $0.properties["operationDirection"] == "read" && $0.properties["normalizedKey"] == "launchCount" })
+        assert(storageFacts.contains { $0.factType == "SwiftUserDefaultsKeyAccessed" && $0.properties["operationDirection"] == "registration-defaults" && $0.properties["normalizedKey"] == "welcomeMessage" })
+        assert(storageFacts.contains { $0.factType == "SwiftUserDefaultsKeyAccessed" && $0.properties["operationDirection"] == "registration-defaults" && $0.properties["normalizedKey"] == "syncEnabled" })
         assert(storageFacts.contains { $0.factType == "SwiftUserDefaultsKeyAccessed" && $0.properties["keyIdentityStatus"] == "hashed" && $0.properties["keyHash"] != nil })
         assert(storageFacts.contains { $0.factType == "SwiftKeychainAccessPattern" && $0.properties["apiName"] == "SecItemAdd" && $0.properties["serviceHash"] != nil })
         assert(storageFacts.contains { $0.factType == "SqlTextUsed" && $0.properties["sqlSourceKind"] == "literal-string" && $0.properties["textHash"] != nil })
