@@ -10,6 +10,8 @@ struct TraceMapSwiftSmokeTests {
         try factsAreStableWhenOnlyOutputPathChanges()
         try symbolIdsIgnoreDeclarationBodyEdits()
         try duplicateSymbolIdentitiesEmitGapsAndDistinctIds()
+        try duplicateSymbolRelationshipsUseRewrittenIds()
+        try malformedMultipleSuperclassCandidatesDoNotCrash()
         try dangerousOutputPathsAreRejected()
         try detachedHeadBranchIsUnknown()
         try defaultExcludesUsePathSegments()
@@ -99,6 +101,12 @@ struct TraceMapSwiftSmokeTests {
               func run(value: Int) -> Int {
                 value + 1
               }
+              func parse(_ value: String) -> Int {
+                value.count
+              }
+              func parse(_ value: Data) -> Int {
+                value.count
+              }
             }
             """
         ])
@@ -109,6 +117,13 @@ struct TraceMapSwiftSmokeTests {
             let adjusted = value + 2
             return adjusted
           }
+          func parse(_ value: String) -> Int {
+            let adjusted = value.count + 1
+            return adjusted
+          }
+          func parse(_ value: Data) -> Int {
+            value.count
+          }
         }
         """.write(to: fixture.repo.appendingPathComponent("Sources/App/Stable.swift"), atomically: true, encoding: .utf8)
         let second = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: fixture.temp.url.appendingPathComponent("second")))
@@ -116,6 +131,10 @@ struct TraceMapSwiftSmokeTests {
         let secondRun = second.facts.first { $0.factType == "SwiftDeclarationDeclared" && $0.properties["name"] == "run" }
         assert(firstRun?.targetSymbol == secondRun?.targetSymbol)
         assert(firstRun?.properties["syntaxHash"] != secondRun?.properties["syntaxHash"])
+        let firstParseSymbols = Set(first.facts.filter { $0.factType == "SwiftDeclarationDeclared" && $0.properties["name"] == "parse" }.compactMap(\.targetSymbol))
+        let secondParseSymbols = Set(second.facts.filter { $0.factType == "SwiftDeclarationDeclared" && $0.properties["name"] == "parse" }.compactMap(\.targetSymbol))
+        assert(firstParseSymbols.count == 2)
+        assert(firstParseSymbols == secondParseSymbols)
     }
 
     static func duplicateSymbolIdentitiesEmitGapsAndDistinctIds() throws {
@@ -138,6 +157,45 @@ struct TraceMapSwiftSmokeTests {
         assert(duplicateTypes.count == 2)
         assert(Set(duplicateTypes.compactMap(\.targetSymbol)).count == 2)
         assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.syntax.identity-gap.v1" && $0.properties["gapKind"] == "swift-duplicate-symbol-identity" })
+    }
+
+    static func duplicateSymbolRelationshipsUseRewrittenIds() throws {
+        let fixture = try SwiftFixture(extraFiles: [
+            "Sources/App/DuplicateRelationshipsA.swift": """
+            protocol DuplicateProtocol {}
+            struct RewrittenDuplicate: DuplicateProtocol {}
+            """,
+            "Sources/App/DuplicateRelationshipsB.swift": """
+            struct RewrittenDuplicate: DuplicateProtocol {}
+            """
+        ])
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: fixture.temp.url.appendingPathComponent("scan")))
+        let duplicateSymbols = Set(result.facts.filter { $0.factType == "SwiftDeclarationDeclared" && $0.properties["name"] == "RewrittenDuplicate" }.compactMap(\.targetSymbol))
+        let relationships = result.facts.filter { $0.factType == "SymbolRelationship" && $0.properties["relationshipKind"] == "ImplementsInterface" && $0.properties["targetSymbolDisplayName"] == "App.protocol DuplicateProtocol" }
+        let relationshipSources = Set(relationships.compactMap { $0.properties["sourceSymbolId"] })
+        assert(duplicateSymbols.count == 2)
+        assert(relationshipSources == duplicateSymbols)
+        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.properties["gapKind"] == "swift-duplicate-symbol-identity" })
+    }
+
+    static func malformedMultipleSuperclassCandidatesDoNotCrash() throws {
+        let fixture = try SwiftFixture(extraFiles: [
+            "Sources/App/MalformedInheritance.swift": """
+            class BaseOne {
+              func run() {}
+            }
+            class BaseTwo {
+              func run() {}
+            }
+            class StrangeChild: BaseOne, BaseTwo {
+              override func run() {}
+            }
+            """
+        ])
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: fixture.temp.url.appendingPathComponent("scan")))
+        assert(result.facts.contains { $0.factType == "SymbolRelationship" && $0.properties["relationshipKind"] == "InheritsFrom" })
+        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.syntax.identity-gap.v1" && $0.properties["gapKind"] == "swift-ambiguous-symbol-identity" })
+        assert(!result.facts.contains { $0.factType == "SymbolRelationship" && $0.properties["relationshipKind"] == "Overrides" && ($0.properties["sourceSymbolDisplayName"] ?? "").contains("run") })
     }
 
     static func defaultExcludesUsePathSegments() throws {
