@@ -152,11 +152,11 @@ as dependency fact identity hashes or stable-key inputs.
 `SwiftDependencyLockfileEntryDeclared` facts only. `AnalysisGap` facts do not use
 this property.
 
-For Carthage `github "owner/repo"` entries, the first cut should normalize the
-repo component as the candidate dependency identity and retain owner/repo only
-as hashed source material unless a future shared safety policy explicitly allows
-owner/repo rendering. This preserves stable package labels without leaking
-organization-like owner names by default.
+For Carthage `github "owner/repo"` entries, the first cut should treat the full
+owner/repo value and the repo component as non-rendered identity material by
+default. Store a full SHA-256 hash and `sourceKind=github` unless the shared
+safe-value policy explicitly allows rendering that exact candidate. This avoids
+leaking private SDK or repository names such as `AcmeSecret/PaymentsSDK`.
 
 ## Parser Strategy
 
