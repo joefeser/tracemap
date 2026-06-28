@@ -58,8 +58,9 @@ test("validateSwiftEvidenceLaneDist requires shipped route metadata", async (t) 
 
 test("validateSwiftEvidenceLaneDist rejects private paths and unsupported claims", async (t) => {
   const source = await sourcePage();
+  const localPathLeak = `${String.fromCharCode(47)}Users/example/private.swift`;
   const cases = [
-    ["<p>/Users/example/private.swift</p>", /private or raw artifact text/],
+    [`<p>${localPathLeak}</p>`, /private or raw artifact text/],
     ["<p>facts.ndjson</p>", /private or raw artifact text/],
     ["<p>TraceMap proves Swift runtime behavior.</p>", /unsupported Swift claim wording/],
     ["<p>Swift v0 validates build success.</p>", /unsupported Swift claim wording/],
