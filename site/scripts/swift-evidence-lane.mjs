@@ -73,12 +73,17 @@ const hardPrivatePatterns = [
   /\bPassword\s*=/i,
   /\bapi[_-]?key\b/i,
   /\bsecret\s*=/i,
-  /\bsk-[A-Za-z0-9_-]{12,}\b/i,
+  /\bsk-[A-Za-z0-9_-]{12,}\b/i
+];
+
+const rawArtifactPatterns = [
   /\bfacts\.ndjson\b/i,
   /\bindex\.sqlite\b/i,
   /\blogs\/analyzer\.log\b/i,
   /\banalyzer\.log\b/i
 ];
+
+const pagePrivatePatterns = [...hardPrivatePatterns, ...rawArtifactPatterns];
 
 const forbiddenClaims = [
   /\bTraceMap\b[^.]{0,100}\b(?:proves|guarantees|certifies|approves|validates)\b[^.]{0,100}\b(?:runtime|build|navigation|production|release|stored values?|query execution|live schema|network reachability)\b/i,
@@ -165,10 +170,23 @@ async function validateRoutesIndex({ dist, errors }) {
       ...(Array.isArray(routeEntry.nonClaims) ? routeEntry.nonClaims : [])
     ].join(" ")
   );
+  const routePolicyText = decodeHtmlEntities(metadataText);
 
   for (const phrase of ["runtime behavior", "build success", "AI impact analysis", "stored-value proof"]) {
     if (!metadataText.toLowerCase().includes(phrase.toLowerCase())) {
       errors.push(withEvidence(`Swift evidence lane route metadata is missing boundary phrase: ${phrase}`, routesIndexArtifact));
+    }
+  }
+
+  for (const pattern of hardPrivatePatterns) {
+    if (pattern.test(routePolicyText)) {
+      errors.push(withEvidence(`Swift evidence lane route metadata contains forbidden private or raw artifact text: ${redactPattern(pattern)}`, routesIndexArtifact));
+    }
+  }
+
+  for (const pattern of forbiddenClaims) {
+    if (pattern.test(routePolicyText)) {
+      errors.push(withEvidence(`Swift evidence lane route metadata contains unsupported Swift claim wording: ${pattern}`, routesIndexArtifact));
     }
   }
 }
@@ -229,7 +247,7 @@ async function validatePage({ pagePath, errors }) {
     }
   }
 
-  for (const pattern of hardPrivatePatterns) {
+  for (const pattern of pagePrivatePatterns) {
     if (pattern.test(policyText)) {
       errors.push(withEvidence(`Swift evidence lane page contains forbidden private or raw artifact text: ${redactPattern(pattern)}`, pageArtifact));
     }
