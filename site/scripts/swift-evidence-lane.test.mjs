@@ -107,6 +107,25 @@ test("validateSwiftEvidenceLaneDist rejects private paths and unsupported claims
   }
 });
 
+test("validateSwiftEvidenceLaneDist rejects private paths and unsupported claims in route metadata", async (t) => {
+  const localPathLeak = `${String.fromCharCode(47)}Users/example/private.swift`;
+  const root = await createManagedSwiftDistFixture(t);
+  const routesIndexPath = join(root, "dist", "routes-index.json");
+  const routesIndex = JSON.parse(await readFile(routesIndexPath, "utf8"));
+  routesIndex.entries[0].summary = `Swift static evidence lane from ${localPathLeak}.`;
+  routesIndex.entries[0].nonClaims = [
+    "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector databases, raw source snippets, raw SQL, secrets, local absolute paths, raw remotes, credentials, stored values, analyzer logs, or hidden validation details are public Swift claims.",
+    "TraceMap proves Swift runtime behavior."
+  ];
+  await writeFile(routesIndexPath, `${JSON.stringify(routesIndex, null, 2)}\n`, "utf8");
+  const errors = [];
+
+  await validateSwiftEvidenceLaneDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /route metadata contains forbidden private or raw artifact text/);
+  assert.match(errors.join("\n"), /route metadata contains unsupported Swift claim wording/);
+});
+
 async function createManagedSwiftDistFixture(t, options = {}) {
   const root = await createSwiftDistFixture(options);
   t.after(() => rm(root, { recursive: true, force: true }));
