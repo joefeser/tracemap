@@ -610,6 +610,7 @@ struct TraceMapSwiftSmokeTests {
         assert(storageFacts.contains { $0.factType == "SqlTextUsed" && $0.properties["sqlSourceKind"] == "literal-string" && $0.properties["textHash"] != nil })
         assert(storageFacts.contains { $0.factType == "SqlTextUsed" && $0.properties["sqlSourceKind"] == "sql-file" && $0.evidenceTier == .tier2Structural })
         assert(storageFacts.contains { $0.factType == "QueryPatternDetected" && $0.properties["queryShapeHash"] != nil && $0.properties["tableName"] == "users" })
+        assert(storageFacts.contains { $0.factType == "QueryPatternDetected" && $0.properties["queryShapeHash"] == "4c07c535e8f2757372eb1b0fc3d9164e" && $0.properties["operationName"] == "UPDATE" && $0.properties["tableName"] == "orders" })
         assert(storageFacts.contains { $0.factType == "SwiftRealmModelDeclared" && $0.properties["frameworkFamily"] == "realm" && $0.properties["typeName"] == "AccountObject" })
         assert(storageFacts.contains { $0.factType == "DatabaseColumnMapping" && $0.ruleId == "swift.storage.realm.model.v1" && $0.properties["propertyName"] == "email" })
         assert(storageFacts.allSatisfy { $0.properties["staticEvidenceOnly"] == "true" && $0.properties["runtimeProof"] == "false" })
