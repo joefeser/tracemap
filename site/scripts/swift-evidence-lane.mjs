@@ -29,8 +29,8 @@ const expectedRows = new Map([
   ["v0-evidence-lane", "shipped"],
   ["static-inventory", "shipped"],
   ["symbol-call-evidence", "shipped"],
-  ["surface-discovery", "shipped/demo"],
-  ["storage-data-surfaces", "shipped/demo"],
+  ["surface-discovery", "demo"],
+  ["storage-data-surfaces", "demo"],
   ["evidence-safety", "shipped"]
 ]);
 
