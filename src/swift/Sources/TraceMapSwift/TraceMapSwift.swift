@@ -929,12 +929,23 @@ enum SwiftUiExtractor {
     static func extract(scanRoot: URL, inventory: [InventoryItem]) -> SwiftUiExtraction {
         var records: [SwiftUiRecord] = []
         var gaps: [CoverageGap] = []
+        var swiftTexts: [String: String] = [:]
+        var viewNameCounts: [String: Int] = [:]
+        for item in inventory where item.selected && item.kind == "swift-source" {
+            let url = scanRoot.appendingPathComponent(item.relativePath)
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            swiftTexts[item.relativePath] = text
+            let searchable = maskSwiftCommentsAndStringLiterals(text)
+            for declaration in swiftUIViewDeclarations(searchable: searchable) {
+                viewNameCounts[declaration.name, default: 0] += 1
+            }
+        }
         for item in inventory where item.selected {
             let url = scanRoot.appendingPathComponent(item.relativePath)
             switch item.kind {
             case "swift-source":
-                guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
-                let extracted = swiftFile(text: text, item: item)
+                guard let text = swiftTexts[item.relativePath] ?? (try? String(contentsOf: url, encoding: .utf8)) else { continue }
+                let extracted = swiftFile(text: text, item: item, viewNameCounts: viewNameCounts)
                 records += extracted.records
                 gaps += extracted.gaps
             case "storyboard":
@@ -946,16 +957,38 @@ enum SwiftUiExtractor {
             }
         }
         return SwiftUiExtraction(
-            records: records.sorted { [$0.filePath, String(format: "%08d", $0.startLine), $0.factType, $0.safeIdentity, $0.identityDiscriminator].joined(separator: "|") < [$1.filePath, String(format: "%08d", $1.startLine), $1.factType, $1.safeIdentity, $1.identityDiscriminator].joined(separator: "|") },
-            gaps: gaps.sorted { [$0.filePath, String(format: "%08d", $0.startLine), $0.kind].joined(separator: "|") < [$1.filePath, String(format: "%08d", $1.startLine), $1.kind].joined(separator: "|") }
+            records: records.sorted(by: recordSortPrecedes),
+            gaps: gaps.sorted(by: gapSortPrecedes)
         )
     }
 
-    private static func swiftFile(text: String, item: InventoryItem) -> SwiftUiExtraction {
+    private struct SwiftUIViewDeclaration {
+        let name: String
+        let match: NSTextCheckingResult
+        let bodyStartOffset: Int
+        let bodyEndOffset: Int
+    }
+
+    private struct RecordDuplicateKey: Hashable {
+        let factType: String
+        let ruleId: String
+        let filePath: String
+        let startLine: Int
+        let safeIdentity: String
+        let surfaceKind: String
+        let uiRole: String
+    }
+
+    private struct GapDuplicateKey: Hashable {
+        let filePath: String
+        let startLine: Int
+        let kind: String
+    }
+
+    private static func swiftFile(text: String, item: InventoryItem, viewNameCounts: [String: Int]) -> SwiftUiExtraction {
         let searchable = maskSwiftCommentsAndStringLiterals(text)
         var records: [SwiftUiRecord] = []
         var gaps: [CoverageGap] = []
-        let viewNameCounts = swiftUIViewNameCounts(searchable: searchable)
         records += swiftUIViewRecords(text: text, searchable: searchable, item: item)
         records += swiftUISceneRootRecords(text: text, searchable: searchable, item: item)
         records += swiftUINavigationRecords(text: text, searchable: searchable, item: item, viewNameCounts: viewNameCounts)
@@ -972,13 +1005,9 @@ enum SwiftUiExtractor {
     }
 
     private static func swiftUIViewRecords(text: String, searchable: String, item: InventoryItem) -> [SwiftUiRecord] {
-        let propertyWrappers = safePropertyWrappers(in: searchable)
-        return regexMatches(#"\b(?:struct|class|enum)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*[^{}\n]*\bView\b[^{}]*\{"#, in: searchable).compactMap { match -> SwiftUiRecord? in
-            guard let name = capture(match, 1, in: searchable),
-                  declarationBodyContains(#"\bvar\s+body\s*:\s*some\s+View\b"#, match: match, searchable: searchable) else {
-                return nil
-            }
-            let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+        swiftUIViewDeclarations(searchable: searchable).map { declaration in
+            let propertyWrappers = safePropertyWrappers(in: searchable, declaration: declaration)
+            let start = lineNumber(atUTF16Offset: declaration.match.range.location, in: searchable)
             var properties = [
                 "surfaceKind": "view",
                 "uiFramework": "swiftui",
@@ -994,9 +1023,9 @@ enum SwiftUiExtractor {
                 item: item,
                 start: start,
                 end: start,
-                safeIdentity: safeLabel(name),
+                safeIdentity: safeLabel(declaration.name),
                 role: "swiftui-view",
-                ordinal: match.range.location,
+                ordinal: declaration.match.range.location,
                 properties: properties
             )
         }
@@ -1067,16 +1096,22 @@ enum SwiftUiExtractor {
         return records
     }
 
-    private static func swiftUIViewNameCounts(searchable: String) -> [String: Int] {
-        var counts: [String: Int] = [:]
-        for match in regexMatches(#"\b(?:struct|class|enum)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*[^{}\n]*\bView\b[^{}]*\{"#, in: searchable) {
-            guard let name = capture(match, 1, in: searchable),
-                  declarationBodyContains(#"\bvar\s+body\s*:\s*some\s+View\b"#, match: match, searchable: searchable) else {
-                continue
+    private static func swiftUIViewDeclarations(searchable: String) -> [SwiftUIViewDeclaration] {
+        regexMatches(#"\b(?:struct|class|enum)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*[^{}\n]*\bView\b[^{}]*\{"#, in: searchable).compactMap { match in
+            guard let name = capture(match, 1, in: searchable) else {
+                return nil
             }
-            counts[name, default: 0] += 1
+            let open = match.range.location + match.range.length - 1
+            guard let close = matchingBraceOffset(in: searchable, openOffset: open), close > open else {
+                return nil
+            }
+            let startIndex = String.Index(utf16Offset: open, in: searchable)
+            let endIndex = String.Index(utf16Offset: close, in: searchable)
+            guard firstMatch(#"\bvar\s+body\s*:\s*some\s+View\b"#, in: String(searchable[startIndex..<endIndex])) != nil else {
+                return nil
+            }
+            return SwiftUIViewDeclaration(name: name, match: match, bodyStartOffset: open, bodyEndOffset: close)
         }
-        return counts
     }
 
     private static func destinationIdentityStatus(_ destination: String, viewNameCounts: [String: Int]) -> String {
@@ -1091,6 +1126,29 @@ enum SwiftUiExtractor {
         let allowed = Set(["State", "Binding", "ObservedObject", "StateObject", "Environment", "EnvironmentObject"])
         let names = regexCaptures(#"@(State|Binding|ObservedObject|StateObject|Environment|EnvironmentObject)\b"#, in: searchable)
         return Array(Set(names.filter { allowed.contains($0) }.map(safeLabel))).sorted()
+    }
+
+    private static func safePropertyWrappers(in searchable: String, declaration: SwiftUIViewDeclaration) -> [String] {
+        guard declaration.bodyEndOffset > declaration.bodyStartOffset else {
+            return []
+        }
+        let startIndex = String.Index(utf16Offset: declaration.bodyStartOffset, in: searchable)
+        let endIndex = String.Index(utf16Offset: declaration.bodyEndOffset, in: searchable)
+        return safePropertyWrappers(in: String(searchable[startIndex..<endIndex]))
+    }
+
+    private static func recordSortPrecedes(_ lhs: SwiftUiRecord, _ rhs: SwiftUiRecord) -> Bool {
+        if lhs.filePath != rhs.filePath { return lhs.filePath < rhs.filePath }
+        if lhs.startLine != rhs.startLine { return lhs.startLine < rhs.startLine }
+        if lhs.factType != rhs.factType { return lhs.factType < rhs.factType }
+        if lhs.safeIdentity != rhs.safeIdentity { return lhs.safeIdentity < rhs.safeIdentity }
+        return lhs.identityDiscriminator < rhs.identityDiscriminator
+    }
+
+    private static func gapSortPrecedes(_ lhs: CoverageGap, _ rhs: CoverageGap) -> Bool {
+        if lhs.filePath != rhs.filePath { return lhs.filePath < rhs.filePath }
+        if lhs.startLine != rhs.startLine { return lhs.startLine < rhs.startLine }
+        return lhs.kind < rhs.kind
     }
 
     private static func swiftUIContainerRecords(text: String, searchable: String, item: InventoryItem) -> [SwiftUiRecord] {
@@ -1320,10 +1378,18 @@ enum SwiftUiExtractor {
     }
 
     private static func collapseDuplicateRecords(_ records: [SwiftUiRecord]) -> [SwiftUiRecord] {
-        var seen: Set<String> = []
+        var seen: Set<RecordDuplicateKey> = []
         var collapsed: [SwiftUiRecord] = []
         for record in records {
-            let key = [record.factType, record.ruleId, record.filePath, String(record.startLine), record.safeIdentity, record.properties["surfaceKind"] ?? "", record.properties["uiRole"] ?? ""].joined(separator: "|")
+            let key = RecordDuplicateKey(
+                factType: record.factType,
+                ruleId: record.ruleId,
+                filePath: record.filePath,
+                startLine: record.startLine,
+                safeIdentity: record.safeIdentity,
+                surfaceKind: record.properties["surfaceKind"] ?? "",
+                uiRole: record.properties["uiRole"] ?? ""
+            )
             guard seen.insert(key).inserted else { continue }
             collapsed.append(record)
         }
@@ -1331,10 +1397,10 @@ enum SwiftUiExtractor {
     }
 
     private static func collapseDuplicateGaps(_ gaps: [CoverageGap]) -> [CoverageGap] {
-        var seen: Set<String> = []
+        var seen: Set<GapDuplicateKey> = []
         var collapsed: [CoverageGap] = []
         for gap in gaps {
-            let key = [gap.filePath, String(gap.startLine), gap.kind].joined(separator: "|")
+            let key = GapDuplicateKey(filePath: gap.filePath, startLine: gap.startLine, kind: gap.kind)
             guard seen.insert(key).inserted else { continue }
             collapsed.append(gap)
         }
@@ -1346,18 +1412,22 @@ enum SwiftUiExtractor {
     }
 
     private static func matchingBraceOffset(in text: String, openOffset: Int) -> Int? {
-        let units = Array(text.utf16)
-        guard openOffset >= 0, openOffset < units.count else { return nil }
+        let utf16 = text.utf16
+        guard openOffset >= 0, openOffset < utf16.count else { return nil }
         let openBrace = Character("{").utf16.first!
         let closeBrace = Character("}").utf16.first!
         var depth = 0
-        for index in openOffset..<units.count {
-            if units[index] == openBrace {
+        var index = utf16.index(utf16.startIndex, offsetBy: openOffset)
+        while index < utf16.endIndex {
+            if utf16[index] == openBrace {
                 depth += 1
-            } else if units[index] == closeBrace {
+            } else if utf16[index] == closeBrace {
                 depth -= 1
-                if depth == 0 { return index }
+                if depth == 0 {
+                    return utf16.distance(from: utf16.startIndex, to: index)
+                }
             }
+            index = utf16.index(after: index)
         }
         return nil
     }
