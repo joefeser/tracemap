@@ -38,6 +38,7 @@ final class SQLStore {
     func load(db: Database, fmdb: FMDatabase, rawDb: OpaquePointer?, name: String) throws {
         try db.execute(sql: "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, email TEXT)")
         _ = try Row.fetchAll(db, sql: "SELECT id, email FROM users WHERE email = ?")
+        try db.execute(sql: "UPDATE orders SET status = 'shipped', total = 10 WHERE id = 1;")
         fmdb.executeUpdate("INSERT INTO audit_events (name) VALUES (?)")
         sqlite3_prepare_v2(rawDb, "DELETE FROM sessions WHERE expires_at < ?", -1, nil, nil)
         try db.execute(sql: "SELECT * FROM " + name)

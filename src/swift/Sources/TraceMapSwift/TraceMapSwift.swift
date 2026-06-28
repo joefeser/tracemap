@@ -1836,7 +1836,7 @@ enum SwiftStorageExtractor {
         var base = baseProperties(framework: "sqlite")
         base["sqlSourceKind"] = sourceKind
         base["textHash"] = textHash
-        base["textLength"] = String(sql.utf8.count)
+        base["textLength"] = String(sql.count)
         if let operation = shape.operationName {
             base["operationName"] = operation
         }
@@ -2098,8 +2098,8 @@ enum SwiftStorageExtractor {
         var value = sql.trimmingCharacters(in: .whitespacesAndNewlines)
         value = value.replacingOccurrences(of: #"--[^\n\r]*"#, with: " ", options: .regularExpression)
         value = value.replacingOccurrences(of: #"(?s)/\*.*?\*/"#, with: " ", options: .regularExpression)
-        value = value.replacingOccurrences(of: #"'([^']|'')*'"#, with: "?", options: .regularExpression)
-        value = value.replacingOccurrences(of: #""([^"]|"")*""#, with: "?", options: .regularExpression)
+        value = value.replacingOccurrences(of: #"'(?:''|\\['"]|[^'])*'"#, with: "' '", options: .regularExpression)
+        value = value.replacingOccurrences(of: #""(?:""|\\["']|[^"])*""#, with: #"" ""#, options: .regularExpression)
         value = value.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
         value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         while value.hasSuffix(";") {
