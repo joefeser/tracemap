@@ -702,6 +702,7 @@ Each fixture should document:
 | Python Flask/FastAPI route | `HttpRouteBinding` with normalized route key when static decorator syntax is visible |
 | Python SQLAlchemy column | `DatabaseColumnMapping` with table/column/member evidence when declarative syntax is visible |
 | Python static SQL pattern | `QueryPatternDetected` with operation, table/column metadata, text hash, and query shape hash; SQL-like `WITH`/CTE may be shape-hash-only |
+| Swift static storage/data surface | CoreData metadata, UserDefaults keys, Keychain access patterns, static SQL text/shape, and Realm model/property evidence under `swift.storage.*` rules; raw SQL, credentials, values, snippets, local paths, and runtime persistence claims are omitted |
 | Cross-adapter SQL shape fixture | `.NET`, TypeScript, JVM, and Python SQL-shape helpers match `samples/sql-shape-fixtures/sql-shape-v1.json` for v1 text/shape hashes |
 | Combined SQL surface identity | SQL surface display prefers `queryShapeHash`, keeps same-table/different-shape surfaces separate, and preserves different `sqlSourceKind` values in diff/reverse identity |
 | Combined SQL weak evidence caveat | hash-only SQL evidence emits `HashOnlyEvidence`, fact-hash fallback emits `VolatileIdentity`, and both remain review-tier in diff/impact |

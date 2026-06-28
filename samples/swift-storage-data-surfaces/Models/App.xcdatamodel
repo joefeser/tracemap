@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0">
+  <entity name="User" representedClassName="UserEntity" syncable="YES">
+    <attribute name="email" optional="YES" attributeType="String"/>
+    <attribute name="createdAt" optional="YES" attributeType="Date"/>
+    <relationship name="orders" optional="YES" toMany="YES" destinationEntity="Order"/>
+  </entity>
+  <entity name="Order" representedClassName="OrderEntity" syncable="YES">
+    <attribute name="total" optional="YES" attributeType="Decimal"/>
+  </entity>
+</model>
