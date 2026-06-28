@@ -1,13 +1,30 @@
 # Site TraceMap Tools Swift Surface Discovery Story Implementation State
 
-Status: not-started
-Readiness: backlog
+Status: implemented
+Readiness: implemented
 Public claim level: shipped/demo
 
 Last updated: 2026-06-28
-Source of truth: origin/main after PR #425
+Source of truth: implementation branch `codex/site-swift-public-stories`
 
-## Backlog Note
+## Implementation Summary
 
-Queued site story for Swift surface discovery. Final claim level depends on
-whether the implementation publishes demo artifacts or only capability copy.
+Implemented on `/swift/` as the `surface-discovery` matrix row. The page
+describes supported static HTTP/API client, SwiftUI/UIKit-ish, package, and
+dependency surface evidence.
+
+## Claim Boundary
+
+The route keeps the story at `shipped/demo`: shipped capability copy is anchored
+to PR #425, while demo proof still requires checked-in public-safe generated
+output before stronger demo rows are presented. It does not claim runtime
+network reachability, rendered UI, complete navigation, user action, dependency
+vulnerability/license/freshness, or build compatibility analysis.
+
+## Validation
+
+- `node --test scripts/swift-evidence-lane.test.mjs scripts/validate.test.mjs`
+- `npm test`
+- `npm run validate`
+- `npm run build`
+- `git diff --check`
