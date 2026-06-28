@@ -19,6 +19,7 @@ struct TraceMapSwiftSmokeTests {
         try projectAndPackageMetadataFactsAreEmittedSafely()
         try dependencySurfaceFactsAreEmittedSafely()
         try swiftHttpClientSurfaceFactsAreEmittedSafely()
+        try swiftUiSurfaceFactsAreEmittedSafely()
         try swiftSyntaxDeclarationAndCallFactsAreStored()
         try swiftSyntaxSymbolRelationshipsAreStored()
         try parserDiagnosticsEmitHashedGapWithoutRawText()
@@ -515,6 +516,52 @@ struct TraceMapSwiftSmokeTests {
         let result2 = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: out2))
         let ids1 = result.facts.filter { $0.factType == "HttpCallDetected" }.map(\.factId).sorted()
         let ids2 = result2.facts.filter { $0.factType == "HttpCallDetected" }.map(\.factId).sorted()
+        assert(ids1 == ids2)
+    }
+
+    static func swiftUiSurfaceFactsAreEmittedSafely() throws {
+        let repo = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("samples/swift-ui-surfaces")
+        let temp = try TempDir()
+        let out = temp.url.appendingPathComponent("scan-ui")
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: repo, outputPath: out))
+        let uiFacts = result.facts.filter { $0.ruleId.hasPrefix("swift.ui.") && $0.factType != "AnalysisGap" }
+        assert(uiFacts.contains { $0.factType == "SwiftUiSurfaceDeclared" && $0.ruleId == "swift.ui.swiftui.view.v1" && $0.targetSymbol == "HomeView" })
+        assert(uiFacts.contains { $0.factType == "SwiftUiSurfaceDeclared" && $0.ruleId == "swift.ui.swiftui.view.v1" && $0.targetSymbol == "DetailView" })
+        assert(uiFacts.contains { $0.factType == "SwiftUiSurfaceDeclared" && $0.ruleId == "swift.ui.swiftui.view.v1" && $0.targetSymbol == "RemoteDetailView" })
+        assert(uiFacts.contains { $0.factType == "SwiftUiSurfaceDeclared" && $0.targetSymbol == "HomeView" && $0.properties["propertyWrappers"] == "State" })
+        assert(uiFacts.contains { $0.factType == "SwiftUiSurfaceDeclared" && $0.targetSymbol == "DetailView" && $0.properties["propertyWrappers"] == nil })
+        assert(!uiFacts.contains { $0.targetSymbol == "NotActuallyAView" })
+        assert(uiFacts.contains { $0.factType == "SwiftUiNavigationCandidate" && $0.ruleId == "swift.ui.swiftui.navigation.v1" && $0.properties["destinationBacked"] == "true" && $0.targetSymbol == "DetailView" })
+        assert(uiFacts.contains { $0.factType == "SwiftUiNavigationCandidate" && $0.ruleId == "swift.ui.swiftui.navigation.v1" && $0.properties["destinationBacked"] == "true" && $0.properties["destinationIdentityStatus"] == "resolved" && $0.targetSymbol == "RemoteDetailView" })
+        assert(uiFacts.contains { $0.factType == "SwiftUiNavigationCandidate" && $0.properties["surfaceKind"] == "container" && $0.properties["destinationBacked"] == "false" })
+        assert(uiFacts.contains { $0.factType == "SwiftUiActionCandidate" && $0.ruleId == "swift.ui.swiftui.action.v1" && $0.properties["actionKind"] == "button" })
+        assert(uiFacts.contains { $0.factType == "SwiftUiActionCandidate" && $0.properties["actionKind"] == "alert-presentation" && $0.properties["destinationBacked"] == "false" })
+        assert(!uiFacts.contains { $0.factType == "SwiftUiNavigationCandidate" && $0.properties["navigationKind"] == "alert" })
+        assert(uiFacts.contains { $0.factType == "UIKitControllerDeclared" && $0.ruleId == "swift.ui.uikit.controller.v1" && $0.targetSymbol == "LegacyViewController" })
+        assert(uiFacts.contains { $0.factType == "UIKitActionDeclared" && $0.ruleId == "swift.ui.uikit.action.v1" && $0.properties["actionKind"] == "ibaction" })
+        assert(uiFacts.contains { $0.factType == "UIKitActionBindingCandidate" && $0.ruleId == "swift.ui.uikit.binding.v1" && $0.properties["bindingKind"] == "outlet" && $0.properties["wiringProven"] == "false" })
+        assert(uiFacts.contains { $0.factType == "UIKitActionBindingCandidate" && $0.properties["bindingKind"] == "add-target-selector" && $0.properties["wiringProven"] == "false" })
+        assert(uiFacts.allSatisfy { $0.evidenceTier == .tier3SyntaxOrTextual })
+        assert(uiFacts.allSatisfy { $0.properties["staticEvidenceOnly"] == "true" && $0.properties["runtimeProof"] == "false" })
+        let gapKinds = Set(result.facts.filter { $0.factType == "AnalysisGap" && $0.ruleId == "swift.ui.analysis-gap.v1" }.compactMap { $0.properties["gapKind"] })
+        assert(gapKinds.contains("swift-ui-storyboard-wiring-unresolved"))
+        assert(gapKinds.contains("swift-ui-xib-wiring-unresolved"))
+        assert(gapKinds.contains("swift-ui-dynamic-presentation"))
+        assert(gapKinds.contains("swift-ui-objective-c-selector-reduced"))
+        let factsText = try String(contentsOf: out.appendingPathComponent("facts.ndjson"), encoding: .utf8)
+        for forbidden in ["Saved", "OK", repo.path, "<document", "touchUpInside"] {
+            assert(!factsText.contains(forbidden), "UI facts leaked forbidden text \(forbidden)")
+        }
+        let report = try String(contentsOf: out.appendingPathComponent("report.md"), encoding: .utf8)
+        assert(report.contains("## Swift UI Static Surfaces"))
+        assert(report.contains("Static source evidence only"))
+        for forbidden in ["rendered screens are proven", "runtime navigation is proven", "tapped", "impacted"] {
+            assert(!report.lowercased().contains(forbidden))
+        }
+        let out2 = temp.url.appendingPathComponent("scan-ui-again")
+        let result2 = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: repo, outputPath: out2))
+        let ids1 = result.facts.filter { $0.ruleId.hasPrefix("swift.ui.") }.map(\.factId).sorted()
+        let ids2 = result2.facts.filter { $0.ruleId.hasPrefix("swift.ui.") }.map(\.factId).sorted()
         assert(ids1 == ids2)
     }
 
