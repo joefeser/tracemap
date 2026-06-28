@@ -602,6 +602,13 @@ enum RuleIds {
     static let swiftHttpURLSession = "swift.http.urlsession.v1"
     static let swiftHttpClientLibrary = "swift.http.client-library.v1"
     static let swiftHttpAnalysisGap = "swift.http.analysis-gap.v1"
+    static let swiftUiView = "swift.ui.swiftui.view.v1"
+    static let swiftUiNavigation = "swift.ui.swiftui.navigation.v1"
+    static let swiftUiAction = "swift.ui.swiftui.action.v1"
+    static let swiftUIKitController = "swift.ui.uikit.controller.v1"
+    static let swiftUIKitAction = "swift.ui.uikit.action.v1"
+    static let swiftUIKitBinding = "swift.ui.uikit.binding.v1"
+    static let swiftUiAnalysisGap = "swift.ui.analysis-gap.v1"
     static let toolchainDiagnostic = "swift.toolchain.diagnostic.v1"
     static let reducedCoverageGap = "swift.reduced-coverage.gap.v1"
     static let analysisGap = "swift.analysis-gap.v1"
@@ -899,6 +906,460 @@ enum SwiftHttpExtractor {
 
     private static func roleHash(_ role: String, _ value: String) -> String {
         sha256Hex("swift.http|\(role)|\(value)")
+    }
+}
+
+struct SwiftUiExtraction {
+    let records: [SwiftUiRecord]
+    let gaps: [CoverageGap]
+}
+
+struct SwiftUiRecord {
+    let factType: String
+    let ruleId: String
+    let filePath: String
+    let startLine: Int
+    let endLine: Int
+    let safeIdentity: String
+    let identityDiscriminator: String
+    let properties: [String: String]
+}
+
+enum SwiftUiExtractor {
+    static func extract(scanRoot: URL, inventory: [InventoryItem]) -> SwiftUiExtraction {
+        var records: [SwiftUiRecord] = []
+        var gaps: [CoverageGap] = []
+        for item in inventory where item.selected {
+            let url = scanRoot.appendingPathComponent(item.relativePath)
+            switch item.kind {
+            case "swift-source":
+                guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+                let extracted = swiftFile(text: text, item: item)
+                records += extracted.records
+                gaps += extracted.gaps
+            case "storyboard":
+                gaps.append(gap("swift-ui-storyboard-wiring-unresolved", item, item.startLine, item.endLine, "Storyboard is checked-in UI metadata only; controller, outlet, action, segue, and runtime wiring are not proven."))
+            case "xib":
+                gaps.append(gap("swift-ui-xib-wiring-unresolved", item, item.startLine, item.endLine, "XIB is checked-in UI metadata only; controller, outlet, action, and runtime wiring are not proven."))
+            default:
+                break
+            }
+        }
+        return SwiftUiExtraction(
+            records: records.sorted { [$0.filePath, String(format: "%08d", $0.startLine), $0.factType, $0.safeIdentity, $0.identityDiscriminator].joined(separator: "|") < [$1.filePath, String(format: "%08d", $1.startLine), $1.factType, $1.safeIdentity, $1.identityDiscriminator].joined(separator: "|") },
+            gaps: gaps.sorted { [$0.filePath, String(format: "%08d", $0.startLine), $0.kind].joined(separator: "|") < [$1.filePath, String(format: "%08d", $1.startLine), $1.kind].joined(separator: "|") }
+        )
+    }
+
+    private static func swiftFile(text: String, item: InventoryItem) -> SwiftUiExtraction {
+        let searchable = maskSwiftCommentsAndStringLiterals(text)
+        var records: [SwiftUiRecord] = []
+        var gaps: [CoverageGap] = []
+        let viewNameCounts = swiftUIViewNameCounts(searchable: searchable)
+        records += swiftUIViewRecords(text: text, searchable: searchable, item: item)
+        records += swiftUISceneRootRecords(text: text, searchable: searchable, item: item)
+        records += swiftUINavigationRecords(text: text, searchable: searchable, item: item, viewNameCounts: viewNameCounts)
+        records += swiftUIContainerRecords(text: text, searchable: searchable, item: item)
+        records += swiftUIActionRecords(text: text, searchable: searchable, item: item)
+        records += uiKitControllerRecords(text: text, searchable: searchable, item: item)
+        records += uiKitActionRecords(text: text, searchable: searchable, item: item)
+        records += uiKitBindingRecords(text: text, searchable: searchable, item: item)
+        gaps += dynamicSwiftUIGaps(text: text, searchable: searchable, item: item)
+        if item.relativePath.split(separator: "/").contains("Generated") || item.relativePath.hasSuffix(".generated.swift") {
+            gaps.append(gap("swift-ui-generated-source-reduced", item, item.startLine, item.endLine, "Generated Swift UI source is static evidence only; generated-code semantics are reduced coverage."))
+        }
+        return SwiftUiExtraction(records: collapseDuplicateRecords(records), gaps: collapseDuplicateGaps(gaps))
+    }
+
+    private static func swiftUIViewRecords(text: String, searchable: String, item: InventoryItem) -> [SwiftUiRecord] {
+        let propertyWrappers = safePropertyWrappers(in: searchable)
+        return regexMatches(#"\b(?:struct|class|enum)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*[^{}\n]*\bView\b[^{}]*\{"#, in: searchable).compactMap { match -> SwiftUiRecord? in
+            guard let name = capture(match, 1, in: searchable),
+                  declarationBodyContains(#"\bvar\s+body\s*:\s*some\s+View\b"#, match: match, searchable: searchable) else {
+                return nil
+            }
+            let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+            var properties = [
+                "surfaceKind": "view",
+                "uiFramework": "swiftui",
+                "uiRole": "view",
+                "viewIdentityStatus": "syntax-local"
+            ]
+            if !propertyWrappers.isEmpty {
+                properties["propertyWrappers"] = propertyWrappers.joined(separator: ",")
+            }
+            return record(
+                factType: "SwiftUiSurfaceDeclared",
+                ruleId: RuleIds.swiftUiView,
+                item: item,
+                start: start,
+                end: start,
+                safeIdentity: safeLabel(name),
+                role: "swiftui-view",
+                ordinal: match.range.location,
+                properties: properties
+            )
+        }
+    }
+
+    private static func swiftUISceneRootRecords(text: String, searchable: String, item: InventoryItem) -> [SwiftUiRecord] {
+        let pattern = #"\b(WindowGroup|DocumentGroup)\b[^{]*\{[\s\S]{0,500}?\b([A-Z][A-Za-z0-9_]*)\s*\("#
+        return regexMatches(pattern, in: searchable, dotMatchesLineSeparators: true).compactMap { match in
+            guard let sceneKind = capture(match, 1, in: searchable),
+                  let destination = capture(match, 2, in: searchable) else { return nil }
+            let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+            let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: searchable)
+            return record(
+                factType: "SwiftUiSurfaceDeclared",
+                ruleId: RuleIds.swiftUiView,
+                item: item,
+                start: start,
+                end: end,
+                safeIdentity: safeLabel(destination),
+                role: "swiftui-scene-root",
+                ordinal: match.range.location,
+                properties: [
+                    "sceneKind": safeLabel(sceneKind),
+                    "surfaceKind": "scene-root",
+                    "uiFramework": "swiftui",
+                    "uiRole": "root-view",
+                    "viewIdentityStatus": "syntax-local"
+                ]
+            )
+        }
+    }
+
+    private static func swiftUINavigationRecords(text: String, searchable: String, item: InventoryItem, viewNameCounts: [String: Int]) -> [SwiftUiRecord] {
+        let patterns: [(String, String)] = [
+            (#"\bNavigationLink\s*\(\s*destination\s*:\s*([A-Z][A-Za-z0-9_]*)\s*\("#, "navigationlink"),
+            (#"\bNavigationLink\b[^{]*\{[\s\S]{0,500}?\b([A-Z][A-Za-z0-9_]*)\s*\("#, "navigationlink"),
+            (#"\.(navigationDestination|sheet|fullScreenCover|popover)\b[^{]*\{[\s\S]{0,500}?\b([A-Z][A-Za-z0-9_]*)\s*\("#, "modifier")
+        ]
+        var records: [SwiftUiRecord] = []
+        for (pattern, kind) in patterns {
+            for match in regexMatches(pattern, in: searchable, dotMatchesLineSeparators: true) {
+                let destinationIndex = kind == "modifier" ? 2 : 1
+                guard let destination = capture(match, destinationIndex, in: searchable) else { continue }
+                let navigationKind = kind == "modifier" ? safeLabel(capture(match, 1, in: searchable) ?? "modifier") : kind
+                let destinationStatus = destinationIdentityStatus(destination, viewNameCounts: viewNameCounts)
+                let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+                let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: searchable)
+                records.append(record(
+                    factType: "SwiftUiNavigationCandidate",
+                    ruleId: RuleIds.swiftUiNavigation,
+                    item: item,
+                    start: start,
+                    end: end,
+                    safeIdentity: safeLabel(destination),
+                    role: "swiftui-navigation",
+                    ordinal: match.range.location,
+                    properties: [
+                        "destinationBacked": "true",
+                        "destinationIdentityStatus": destinationStatus,
+                        "navigationKind": navigationKind,
+                        "surfaceKind": "navigation-or-presentation",
+                        "uiFramework": "swiftui",
+                        "uiRole": "navigation-candidate"
+                    ]
+                ))
+            }
+        }
+        return records
+    }
+
+    private static func swiftUIViewNameCounts(searchable: String) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for match in regexMatches(#"\b(?:struct|class|enum)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*[^{}\n]*\bView\b[^{}]*\{"#, in: searchable) {
+            guard let name = capture(match, 1, in: searchable),
+                  declarationBodyContains(#"\bvar\s+body\s*:\s*some\s+View\b"#, match: match, searchable: searchable) else {
+                continue
+            }
+            counts[name, default: 0] += 1
+        }
+        return counts
+    }
+
+    private static func destinationIdentityStatus(_ destination: String, viewNameCounts: [String: Int]) -> String {
+        switch viewNameCounts[destination] ?? 0 {
+        case 1: return "resolved"
+        case 2...: return "ambiguous"
+        default: return "unresolved"
+        }
+    }
+
+    private static func safePropertyWrappers(in searchable: String) -> [String] {
+        let allowed = Set(["State", "Binding", "ObservedObject", "StateObject", "Environment", "EnvironmentObject"])
+        let names = regexCaptures(#"@(State|Binding|ObservedObject|StateObject|Environment|EnvironmentObject)\b"#, in: searchable)
+        return Array(Set(names.filter { allowed.contains($0) }.map(safeLabel))).sorted()
+    }
+
+    private static func swiftUIContainerRecords(text: String, searchable: String, item: InventoryItem) -> [SwiftUiRecord] {
+        regexMatches(#"\b(NavigationStack|NavigationSplitView|TabView|List)\b\s*\{"#, in: searchable).map { match in
+            let container = capture(match, 1, in: searchable) ?? "Container"
+            let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+            return record(
+                factType: "SwiftUiNavigationCandidate",
+                ruleId: RuleIds.swiftUiNavigation,
+                item: item,
+                start: start,
+                end: start,
+                safeIdentity: safeLabel(container),
+                role: "swiftui-container",
+                ordinal: match.range.location,
+                properties: [
+                    "destinationBacked": "false",
+                    "destinationIdentityStatus": "not-applicable",
+                    "navigationKind": "container",
+                    "surfaceKind": "container",
+                    "uiContainerKind": safeLabel(container),
+                    "uiFramework": "swiftui",
+                    "uiRole": "container-context"
+                ]
+            )
+        }
+    }
+
+    private static func swiftUIActionRecords(text: String, searchable: String, item: InventoryItem) -> [SwiftUiRecord] {
+        let patterns: [(String, String, Int)] = [
+            (#"\bButton\s*\("#, "button", 0),
+            (#"\.(onTapGesture|onSubmit|onAppear|task|refreshable|swipeActions)\b"#, "modifier", 1),
+            (#"\bToolbarItem\s*\("#, "toolbar-item", 0),
+            (#"\.alert\b"#, "alert-presentation", 0)
+        ]
+        var records: [SwiftUiRecord] = []
+        for (pattern, fallbackKind, captureIndex) in patterns {
+            for match in regexMatches(pattern, in: searchable) {
+                let actionKind = captureIndex > 0 ? safeLabel(capture(match, captureIndex, in: searchable) ?? fallbackKind) : fallbackKind
+                let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+                records.append(record(
+                    factType: "SwiftUiActionCandidate",
+                    ruleId: RuleIds.swiftUiAction,
+                    item: item,
+                    start: start,
+                    end: start,
+                    safeIdentity: actionKind,
+                    role: "swiftui-action",
+                    ordinal: match.range.location,
+                    properties: [
+                        "actionKind": actionKind,
+                        "destinationBacked": "false",
+                        "surfaceKind": "action",
+                        "uiFramework": "swiftui",
+                        "uiRole": "action-candidate"
+                    ]
+                ))
+            }
+        }
+        return records
+    }
+
+    private static func uiKitControllerRecords(text: String, searchable: String, item: InventoryItem) -> [SwiftUiRecord] {
+        let bases = "UIViewController|UITableViewController|UICollectionViewController|UITabBarController|UINavigationController"
+        return regexMatches(#"\bclass\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s*[^{}\n]*\b(\#(bases))\b"#, in: searchable).compactMap { match in
+            guard let name = capture(match, 1, in: searchable),
+                  let base = capture(match, 2, in: searchable) else { return nil }
+            let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+            return record(
+                factType: "UIKitControllerDeclared",
+                ruleId: RuleIds.swiftUIKitController,
+                item: item,
+                start: start,
+                end: start,
+                safeIdentity: safeLabel(name),
+                role: "uikit-controller",
+                ordinal: match.range.location,
+                properties: [
+                    "controllerBase": safeLabel(base),
+                    "surfaceKind": "controller",
+                    "uiFramework": "uikit",
+                    "uiRole": "controller"
+                ]
+            )
+        }
+    }
+
+    private static func uiKitActionRecords(text: String, searchable: String, item: InventoryItem) -> [SwiftUiRecord] {
+        var records: [SwiftUiRecord] = []
+        for match in regexMatches(#"@IBAction\b[\s\S]{0,160}?\bfunc\s+([A-Za-z_][A-Za-z0-9_]*)\s*\("#, in: searchable, dotMatchesLineSeparators: true) {
+            guard let name = capture(match, 1, in: searchable) else { continue }
+            let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+            let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: searchable)
+            records.append(record(
+                factType: "UIKitActionDeclared",
+                ruleId: RuleIds.swiftUIKitAction,
+                item: item,
+                start: start,
+                end: end,
+                safeIdentity: safeLabel(name),
+                role: "uikit-action",
+                ordinal: match.range.location,
+                properties: [
+                    "actionKind": "ibaction",
+                    "surfaceKind": "action",
+                    "uiFramework": "uikit",
+                    "uiRole": "action"
+                ]
+            ))
+        }
+        if searchable.range(of: #"\bclass\s+[A-Za-z_][A-Za-z0-9_]*\s*:\s*[^{}\n]*\bUI(?:View|TableView|CollectionView|TabBar|Navigation)Controller\b"#, options: .regularExpression) != nil {
+            for match in regexMatches(#"\boverride\s+func\s+(viewDidLoad|viewWillAppear|viewDidAppear|prepare)\s*\("#, in: searchable) {
+                guard let name = capture(match, 1, in: searchable) else { continue }
+                let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+                records.append(record(
+                    factType: "UIKitActionDeclared",
+                    ruleId: RuleIds.swiftUIKitAction,
+                    item: item,
+                    start: start,
+                    end: start,
+                    safeIdentity: safeLabel(name),
+                    role: "uikit-lifecycle",
+                    ordinal: match.range.location,
+                    properties: [
+                        "actionKind": "lifecycle",
+                        "surfaceKind": "lifecycle",
+                        "uiFramework": "uikit",
+                        "uiRole": "lifecycle-candidate"
+                    ]
+                ))
+            }
+        }
+        return records
+    }
+
+    private static func uiKitBindingRecords(text: String, searchable: String, item: InventoryItem) -> [SwiftUiRecord] {
+        var records: [SwiftUiRecord] = []
+        for match in regexMatches(#"@IBOutlet\b[\s\S]{0,180}?\b(?:weak\s+)?var\s+([A-Za-z_][A-Za-z0-9_]*)\b"#, in: searchable, dotMatchesLineSeparators: true) {
+            guard let name = capture(match, 1, in: searchable) else { continue }
+            let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+            let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: searchable)
+            records.append(record(
+                factType: "UIKitActionBindingCandidate",
+                ruleId: RuleIds.swiftUIKitBinding,
+                item: item,
+                start: start,
+                end: end,
+                safeIdentity: safeLabel(name),
+                role: "uikit-outlet",
+                ordinal: match.range.location,
+                properties: [
+                    "bindingKind": "outlet",
+                    "surfaceKind": "binding",
+                    "uiFramework": "uikit",
+                    "uiRole": "outlet-context",
+                    "wiringProven": "false"
+                ]
+            ))
+        }
+        for match in regexMatches(#"\.addTarget\s*\([^)]*#selector\s*\(\s*([A-Za-z_][A-Za-z0-9_\.]*)"#, in: searchable, dotMatchesLineSeparators: true) {
+            let selector = capture(match, 1, in: searchable) ?? "selector"
+            let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+            let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: searchable)
+            records.append(record(
+                factType: "UIKitActionBindingCandidate",
+                ruleId: RuleIds.swiftUIKitBinding,
+                item: item,
+                start: start,
+                end: end,
+                safeIdentity: safeLabel(selector.replacingOccurrences(of: ".", with: "_")),
+                role: "uikit-addtarget",
+                ordinal: match.range.location,
+                properties: [
+                    "bindingKind": "add-target-selector",
+                    "selectorStatus": "syntax-local",
+                    "surfaceKind": "binding",
+                    "uiFramework": "uikit",
+                    "uiRole": "action-binding-candidate",
+                    "wiringProven": "false"
+                ]
+            ))
+        }
+        return records
+    }
+
+    private static func dynamicSwiftUIGaps(text: String, searchable: String, item: InventoryItem) -> [CoverageGap] {
+        var gaps: [CoverageGap] = []
+        let dynamicPatterns = [
+            (#"\.(navigationDestination|sheet|fullScreenCover|popover)\b[^{\n]*(?:item|isPresented|for)\s*:"#, "swift-ui-dynamic-presentation"),
+            (#"\bNavigationLink\s*\(\s*value\s*:"#, "swift-ui-dynamic-navigation-value"),
+            (#"#selector\s*\("#, "swift-ui-objective-c-selector-reduced")
+        ]
+        for (pattern, kind) in dynamicPatterns {
+            for match in regexMatches(pattern, in: searchable, dotMatchesLineSeparators: true) {
+                let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+                let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: searchable)
+                gaps.append(gap(kind, item, start, end, "Swift UI evidence uses dynamic or runtime-mediated syntax; static extraction records reduced coverage only."))
+            }
+        }
+        return gaps
+    }
+
+    private static func declarationBodyContains(_ pattern: String, match: NSTextCheckingResult, searchable: String) -> Bool {
+        let open = match.range.location + match.range.length - 1
+        guard let close = matchingBraceOffset(in: searchable, openOffset: open), close > open else { return false }
+        let startIndex = String.Index(utf16Offset: open, in: searchable)
+        let endIndex = String.Index(utf16Offset: close, in: searchable)
+        return firstMatch(pattern, in: String(searchable[startIndex..<endIndex])) != nil
+    }
+
+    private static func record(factType: String, ruleId: String, item: InventoryItem, start: Int, end: Int, safeIdentity: String, role: String, ordinal: Int, properties: [String: String]) -> SwiftUiRecord {
+        var safeProperties = properties
+        safeProperties["coverageCeiling"] = "syntax-only"
+        safeProperties["language"] = "swift"
+        safeProperties["runtimeProof"] = "false"
+        safeProperties["staticEvidenceOnly"] = "true"
+        return SwiftUiRecord(
+            factType: factType,
+            ruleId: ruleId,
+            filePath: item.relativePath,
+            startLine: max(1, start),
+            endLine: max(max(1, start), end),
+            safeIdentity: safeIdentity,
+            identityDiscriminator: ["swift-ui/v1", role, item.relativePath, String(start), String(end), safeIdentity, String(ordinal)].joined(separator: "\u{1f}"),
+            properties: safeProperties
+        )
+    }
+
+    private static func collapseDuplicateRecords(_ records: [SwiftUiRecord]) -> [SwiftUiRecord] {
+        var seen: Set<String> = []
+        var collapsed: [SwiftUiRecord] = []
+        for record in records {
+            let key = [record.factType, record.ruleId, record.filePath, String(record.startLine), record.safeIdentity, record.properties["surfaceKind"] ?? "", record.properties["uiRole"] ?? ""].joined(separator: "|")
+            guard seen.insert(key).inserted else { continue }
+            collapsed.append(record)
+        }
+        return collapsed
+    }
+
+    private static func collapseDuplicateGaps(_ gaps: [CoverageGap]) -> [CoverageGap] {
+        var seen: Set<String> = []
+        var collapsed: [CoverageGap] = []
+        for gap in gaps {
+            let key = [gap.filePath, String(gap.startLine), gap.kind].joined(separator: "|")
+            guard seen.insert(key).inserted else { continue }
+            collapsed.append(gap)
+        }
+        return collapsed
+    }
+
+    private static func gap(_ kind: String, _ item: InventoryItem, _ startLine: Int, _ endLine: Int, _ message: String) -> CoverageGap {
+        CoverageGap(kind: kind, ruleId: RuleIds.swiftUiAnalysisGap, message: message, filePath: item.relativePath, startLine: max(1, startLine), endLine: max(max(1, startLine), endLine))
+    }
+
+    private static func matchingBraceOffset(in text: String, openOffset: Int) -> Int? {
+        let units = Array(text.utf16)
+        guard openOffset >= 0, openOffset < units.count else { return nil }
+        let openBrace = Character("{").utf16.first!
+        let closeBrace = Character("}").utf16.first!
+        var depth = 0
+        for index in openOffset..<units.count {
+            if units[index] == openBrace {
+                depth += 1
+            } else if units[index] == closeBrace {
+                depth -= 1
+                if depth == 0 { return index }
+            }
+        }
+        return nil
     }
 }
 
@@ -1398,6 +1859,27 @@ enum FactFactory {
                 ]
             ))
         }
+        let ui = SwiftUiExtractor.extract(scanRoot: scanRoot, inventory: inventory)
+        facts += uiFacts(manifest: manifest, records: ui.records)
+        for gap in ui.gaps {
+            facts.append(makeFact(
+                manifest: manifest,
+                factType: "AnalysisGap",
+                ruleId: gap.ruleId,
+                evidenceTier: .tier4Unknown,
+                filePath: gap.filePath,
+                startLine: gap.startLine,
+                endLine: gap.endLine,
+                targetSymbol: gap.kind,
+                contractElement: gap.kind,
+                identityDiscriminator: sha256Hex(gap.message),
+                properties: [
+                    "gapKind": gap.kind,
+                    "messageHash": sha256Hex(gap.message),
+                    "staticEvidenceOnly": "true"
+                ]
+            ))
+        }
         facts += syntaxFacts(manifest: manifest, syntax: syntax)
         for gap in gaps {
             facts.append(makeFact(
@@ -1490,6 +1972,24 @@ enum FactFactory {
                 endLine: record.endLine,
                 targetSymbol: "\(record.method) \(record.normalizedPathKey)",
                 contractElement: record.normalizedPathKey,
+                identityDiscriminator: record.identityDiscriminator,
+                properties: record.properties
+            )
+        }
+    }
+
+    private static func uiFacts(manifest: ScanManifest, records: [SwiftUiRecord]) -> [CodeFact] {
+        records.map { record in
+            makeFact(
+                manifest: manifest,
+                factType: record.factType,
+                ruleId: record.ruleId,
+                evidenceTier: .tier3SyntaxOrTextual,
+                filePath: record.filePath,
+                startLine: record.startLine,
+                endLine: record.endLine,
+                targetSymbol: record.safeIdentity,
+                contractElement: record.safeIdentity,
                 identityDiscriminator: record.identityDiscriminator,
                 properties: record.properties
             )
@@ -2187,6 +2687,26 @@ enum OutputWriter {
             lines += markdownTable(count(httpFacts.compactMap { $0.properties["methodStatus"] }))
             lines += ["", "### By Path Status", ""]
             lines += markdownTable(count(httpFacts.compactMap { $0.properties["pathStatus"] }))
+        }
+        let uiFacts = facts.filter { $0.ruleId.hasPrefix("swift.ui.") && $0.factType != "AnalysisGap" }
+        let uiGaps = facts.filter { $0.factType == "AnalysisGap" && $0.ruleId == RuleIds.swiftUiAnalysisGap }
+        if !uiFacts.isEmpty || !uiGaps.isEmpty {
+            lines += ["", "## Swift UI Static Surfaces", ""]
+            lines += ["Static source evidence only; these rows do not prove rendered screens, runtime navigation, user actions, storyboard/nib wiring, or impact.", ""]
+            if !uiFacts.isEmpty {
+                lines += ["### By UI Framework", ""]
+                lines += markdownTable(count(uiFacts.compactMap { $0.properties["uiFramework"] }))
+                lines += ["", "### By Surface Kind", ""]
+                lines += markdownTable(count(uiFacts.compactMap { $0.properties["surfaceKind"] }))
+                lines += ["", "### By UI Role", ""]
+                lines += markdownTable(count(uiFacts.compactMap { $0.properties["uiRole"] }))
+                lines += ["", "### By Rule", ""]
+                lines += markdownTable(count(uiFacts.map(\.ruleId)))
+            }
+            if !uiGaps.isEmpty {
+                lines += ["", "### UI Gap Kinds", ""]
+                lines += markdownTable(count(uiGaps.compactMap { $0.properties["gapKind"] }))
+            }
         }
         let diagnosticFacts = facts.filter { $0.factType == "SwiftToolchainDiagnostic" || ($0.factType == "AnalysisGap" && ($0.ruleId == RuleIds.reducedCoverageGap || $0.ruleId == RuleIds.toolchainDiagnostic)) }
         if !diagnosticFacts.isEmpty {
