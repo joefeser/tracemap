@@ -91,15 +91,24 @@ All tasks are implementation tasks for a future PR. They are intentionally unche
 - [x] 7.11 Run `git diff --check`.
 - [x] 7.12 Run or explicitly defer relevant `docs/VALIDATION.md` pinned smoke checks if shared reader/report/reducer behavior changed.
 
-## Future Backlog After Issue #378
+## Follow-On Swift V0 Slices After Issue #378
 
-- [ ] Add SwiftSyntax declaration/call/object extraction.
-- [ ] Add stable Swift symbol identity and relationship rows.
-- [ ] Add deterministic SwiftPM metadata and optional semantic enrichment.
-- [ ] Add optional SourceKit/sourcekit-lsp enrichment with toolchain diagnostics.
-- [ ] Add Xcode project/workspace support with explicit reduced-coverage behavior.
-- [ ] Add package/dependency surfaces for SwiftPM, CocoaPods, and Carthage beyond scaffold metadata.
-- [ ] Add HTTP/client endpoint surfaces where statically visible.
-- [ ] Add SwiftUI/UIKit UI surfaces where evidence-backed.
-- [ ] Add CoreData, UserDefaults, Keychain, SQLite/GRDB, and Realm static storage/data surfaces where evidence-backed.
-- [ ] Add validation docs for pinned public Swift smoke repos.
+- [x] Add SwiftSyntax declaration/call/object extraction.
+- [x] Add stable Swift symbol identity and relationship rows.
+- [x] Add deterministic SwiftPM metadata and reduced-coverage project
+  metadata.
+- [x] Add Xcode project/workspace inventory support with explicit
+  reduced-coverage behavior.
+- [x] Add package/dependency surfaces for SwiftPM, CocoaPods, and Carthage
+  beyond scaffold metadata.
+- [x] Add HTTP/client endpoint surfaces where statically visible.
+- [x] Add SwiftUI/UIKit UI surfaces where evidence-backed.
+- [x] Add CoreData, UserDefaults, Keychain, SQLite/GRDB, and Realm static
+  storage/data surfaces where evidence-backed.
+- [x] Add validation docs for checked-in public-safe Swift smoke fixtures.
+
+## Deferred Beyond Swift V0
+
+- Optional SourceKit/sourcekit-lsp or compiler semantic enrichment.
+- Xcode build execution, simulator/device inspection, or runtime
+  instrumentation.
