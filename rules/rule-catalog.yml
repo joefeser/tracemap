@@ -4440,6 +4440,67 @@ rules:
       - Future composed surfaces must remain static metadata composition only and must not prove package restore, install, build, compatibility, link, load, runtime use, production use, vulnerability status, license status, freshness, or impact.
       - Future composed surfaces must not be emitted when any supporting dependency evidence is Tier4Unknown.
 
+  - id: swift.http.urlsession.v1
+    status: active
+    name: Swift Foundation HTTP client surface
+    description: Records static URLRequest/URLSession outbound HTTP client evidence when a safe path and static HTTP method are visible in checked-in Swift source.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - HttpCallDetected
+    requiredProperties:
+      - httpMethod
+      - normalizedPathKey
+      - methodStatus
+      - pathStatus
+      - queryStatus
+      - swiftClientKind
+      - swiftApiName
+      - framework
+    limitations:
+      - Evidence is syntax/textual only and does not prove runtime network traffic, server existence, endpoint reachability, authentication, authorization, production use, or impact.
+      - Shared HttpCallDetected projection is emitted only when a static HTTP method and safe normalized path are both visible; unknown-method paths emit gaps to avoid broad ANY-style matching.
+      - URL literals stored in intermediate variables, URLComponents builders, request adapters, dependency injection, Combine/async scheduling, feature flags, and branch feasibility are not resolved by this rule.
+      - Raw URLs, hosts, queries, headers, bodies, credentials, tokens, snippets, and unsafe path values are omitted or represented only by role-prefixed hashes.
+      - False positives may occur for user-defined APIs that mimic Foundation request shapes; false negatives are expected for wrappers, generated clients, and dynamic builders.
+
+  - id: swift.http.client-library.v1
+    status: active
+    name: Swift HTTP client library surface
+    description: Records static outbound HTTP client evidence from recognized Alamofire-style and Moya-style source shapes without requiring package restore or compilation.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - HttpCallDetected
+    requiredProperties:
+      - httpMethod
+      - normalizedPathKey
+      - methodStatus
+      - pathStatus
+      - queryStatus
+      - swiftClientKind
+      - swiftApiName
+      - framework
+    limitations:
+      - Evidence is syntax/textual only and does not prove package presence, restore, runtime request execution, server existence, endpoint reachability, authentication, production use, or impact.
+      - Shared HttpCallDetected projection is emitted only when a static HTTP method and safe normalized path are both visible.
+      - Moya baseURL/path joins remain partial static metadata and emit companion gaps; full route reachability is not proven.
+      - Custom clients, wrappers, interceptors, plugins, request adapters, generated clients, nonstandard method builders, and dynamic arguments emit gaps or are missed.
+      - Raw URLs, hosts, queries, headers, bodies, credentials, tokens, snippets, private labels, and unsafe path values are omitted or represented only by role-prefixed hashes.
+
+  - id: swift.http.analysis-gap.v1
+    status: active
+    name: Swift HTTP client analysis gap
+    description: Records dynamic, ambiguous, unsafe, unsupported, or intentionally omitted Swift HTTP/API client extraction boundaries.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    requiredProperties:
+      - gapKind
+      - messageHash
+    limitations:
+      - Gaps describe static extraction limits only and do not prove an endpoint is absent, safe, unsafe, reachable, unreachable, authenticated, used in production, or impacted.
+      - Gap messages must use safe closed vocabulary and hashes only; raw URLs, hosts, queries, headers, bodies, credentials, tokens, snippets, remotes, and local paths must not be rendered.
+      - Conservative gaps may be false positives for values that a future semantic/data-flow pass can resolve; runtime-only behavior and binary/generated clients may remain false negatives.
+
   - id: swift.toolchain.diagnostic.v1
     name: Swift toolchain diagnostic
     description: Emits bounded non-mutating availability diagnostics for Swift, Xcode, CocoaPods, and Carthage tooling.

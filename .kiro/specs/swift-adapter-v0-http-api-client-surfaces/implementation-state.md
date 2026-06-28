@@ -1,6 +1,6 @@
 # Swift Adapter v0 HTTP And API Client Surfaces Implementation State
 
-Status: `spec-draft`
+Status: `implemented`
 
 Issue: [#383](https://github.com/joefeser/tracemap/issues/383)
 
@@ -11,17 +11,32 @@ Spec branch: `codex/spec-swift-http-api-client-surfaces`
 Intended implementation branch:
 `codex/implement-swift-http-api-client-surfaces`
 
+Implementation branch:
+`codex/implement-swift-http-api-client-surfaces`
+
 ## Current Scope
 
-This spec defines a future Swift v0 HTTP/API client surface extraction slice.
-It is not implementation by itself.
-
-The implementation should extract conservative static outbound HTTP/API
+This implementation extracts conservative static outbound HTTP/API
 evidence from Swift source shapes such as Foundation `URLSession`/`URLRequest`,
 Alamofire-style request calls, and Moya target-type declarations. It must emit
 the shared `HttpCallDetected` fact shape, safe metadata, and reduced-coverage
 gaps without runtime, network, build, simulator, device, package-install, or
 endpoint-reachability claims.
+
+Implemented behavior:
+
+- Emits shared `HttpCallDetected` facts for static Foundation URLRequest +
+  URLSession evidence when a static method and safe normalized path are visible.
+- Emits shared `HttpCallDetected` facts for static Alamofire-style request
+  calls.
+- Emits shared `HttpCallDetected` facts plus companion partial gaps for
+  Moya-style static path/method evidence.
+- Emits `AnalysisGap` facts for unknown methods, dynamic URLs, unsafe paths,
+  and partial Moya targets.
+- Uses `swiftClientKind` and `swiftApiName` for Swift-local metadata; it does
+  not use shared-reader `surfaceKind` or `methodName` for Swift API names.
+- Adds local Swift report counts for HTTP/API client surfaces.
+- Adds checked-in sample fixture under `samples/swift-http-api-client-surfaces`.
 
 ## Public Claim Level
 
@@ -98,6 +113,39 @@ dotnet test src/dotnet/TraceMap.sln
 ./scripts/check-private-paths.sh
 git diff --check
 ```
+
+## Implementation Validation
+
+Run on `codex/implement-swift-http-api-client-surfaces`:
+
+```bash
+swift build --package-path src/swift
+swift run --package-path src/swift tracemap-swift-smoke-tests
+swift run --package-path src/swift tracemap-swift scan --repo samples/swift-http-api-client-surfaces --out /tmp/tracemap-swift-http-api-client-surfaces
+dotnet run --project src/dotnet/TraceMap.Cli -- export --index /tmp/tracemap-swift-http-api-client-surfaces/index.sqlite --out /tmp/tracemap-swift-http-export --format json
+dotnet run --project src/dotnet/TraceMap.Cli -- combine --index /tmp/tracemap-swift-http-api-client-surfaces/index.sqlite --label swift --out /tmp/tracemap-swift-http-combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- report --index /tmp/tracemap-swift-http-combined.sqlite --out /tmp/tracemap-swift-http-report
+rg -n "http-client|/v1/users/\\{\\}/roles" /tmp/tracemap-swift-http-report/dependency-report.md
+rg -n "https://api\\.example\\.invalid|super-secret|do-not-render|api_key|token=|api\\.example" /tmp/tracemap-swift-http-api-client-surfaces /tmp/tracemap-swift-http-export /tmp/tracemap-swift-http-report || true
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Results:
+
+- Swift build passed.
+- Swift smoke tests passed.
+- Swift HTTP sample scan emitted 69 facts.
+- Export/combine/report over the Swift HTTP index passed.
+- Combined dependency report contained `http-client` rows and
+  `/v1/users/{}/roles`.
+- Redaction grep found no raw sample URL/secret/query values.
+- .NET build passed.
+- .NET test passed: 696 tests.
+- Private-path guard passed.
+- `git diff --check` passed.
 
 ## Follow-Ups
 
