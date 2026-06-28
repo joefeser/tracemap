@@ -1,0 +1,33 @@
+{
+  "originHash": "public-sample",
+  "pins": [
+    {
+      "identity": "alamofire",
+      "kind": "remoteSourceControl",
+      "location": "https://example.invalid/Alamofire.git",
+      "state": {
+        "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "version": "5.0.0"
+      }
+    },
+    {
+      "identity": "alamofire",
+      "kind": "remoteSourceControl",
+      "location": "https://example.invalid/Alamofire.git",
+      "state": {
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "version": "5.0.1"
+      }
+    },
+    {
+      "identity": "swift-argument-parser",
+      "kind": "remoteSourceControl",
+      "location": "https://example.invalid/swift-argument-parser.git",
+      "state": {
+        "branch": "main",
+        "revision": "cccccccccccccccccccccccccccccccccccccccc"
+      }
+    }
+  ],
+  "version": 2
+}

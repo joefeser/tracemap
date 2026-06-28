@@ -1,3 +1,7 @@
+# Optional rule status vocabulary:
+# - active: implemented and may appear in emitted facts.
+# - deferred: documented future/planned rule that must not appear in emitted facts.
+# Existing rules without an explicit status are treated as active.
 rules:
   - id: explorer.input.unsupported-schema.v1
     name: Static HTML explorer unsupported input schema
@@ -4375,6 +4379,66 @@ rules:
     limitations:
       - Metadata inventory does not run pod install, carthage bootstrap, package checkout, builds, registry lookups, license checks, vulnerability checks, or runtime-use analysis.
       - Raw package sources, repository URLs, hostnames, credentials, tokens, and local paths are omitted or hashed.
+
+  - id: swift.dependency.manifest.v1
+    status: active
+    name: Swift dependency manifest row
+    description: Records deterministic per-dependency rows from checked-in SwiftPM, CocoaPods, or Carthage manifest metadata without executing package managers.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftDependencyDeclared
+    limitations:
+      - Manifest rows are syntax/text evidence only and do not prove package restore, install, build, compatibility, license, vulnerability, freshness, link, load, runtime use, production use, or impact.
+      - Dynamic Swift, Ruby, or unsupported manifest shapes emit dependency analysis gaps rather than inferred rows.
+      - Raw URLs, hostnames, local paths, remotes, credentials, private owner/repo labels, snippets, and unsafe values are omitted or represented only by hashes.
+
+  - id: swift.dependency.lockfile.swiftpm.v1
+    status: active
+    name: SwiftPM dependency lockfile row
+    description: Records per-pin dependency rows from supported checked-in Package.resolved v1/v2 JSON schemas.
+    evidenceTier: Tier2Structural
+    emits:
+      - SwiftDependencyLockfileEntryDeclared
+    limitations:
+      - Lockfile rows are checked-in static metadata only and do not prove packages are restored, installed, linked, loaded, compatible, licensed, vulnerable, fresh, reachable, or used at runtime.
+      - Unsupported schema versions, malformed JSON, duplicate pins, and missing expected pin fields emit dependency analysis gaps.
+      - Raw locations, URLs, hostnames, remotes, credentials, revisions, and private labels are omitted or represented only by hashes/status flags.
+
+  - id: swift.dependency.lockfile.text.v1
+    status: active
+    name: Swift text dependency lockfile row
+    description: Records per-entry dependency rows from checked-in Podfile.lock and Cartfile.resolved text metadata using conservative section or line scanning.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftDependencyLockfileEntryDeclared
+    limitations:
+      - Text lockfile rows are syntax/text evidence only and do not prove package restore, install, transitive completeness, compatibility, license, vulnerability, freshness, link, load, runtime use, production use, or impact.
+      - Unknown sections, malformed entries, duplicate checksum keys, unsafe locations, and unsupported text shapes emit gaps or hash-only evidence.
+      - Raw source URLs, hostnames, remotes, local paths, snippets, credentials, and private labels are omitted or represented only by hashes/status flags.
+
+  - id: swift.dependency.analysis-gap.v1
+    status: active
+    name: Swift dependency metadata analysis gap
+    description: Records dynamic, malformed, unsupported, ambiguous, unsafe, omitted, or too-weak dependency metadata boundaries for Swift package/dependency surface extraction.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Dependency gaps describe static extraction limits only; they do not prove a dependency is absent, unused, safe, unsafe, compatible, vulnerable, licensed, loaded, reachable, or production-used.
+      - Gap messages must use safe labels, hashes, counts, or closed gap kinds rather than raw snippets, URLs, hosts, paths, remotes, credentials, or private labels.
+      - Scan-level coverage labels remain owned by the Swift inventory and metadata phases; dependency gaps document package-surface extraction boundaries.
+
+  - id: swift.dependency.surface.v1
+    status: deferred
+    name: Swift composed dependency surface
+    description: Reserved for a future composed Swift dependency surface that links static declaration and lockfile evidence for the same safe identity.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftDependencySurfaceDeclared
+    limitations:
+      - Deferred rule; no emitted fact may use this rule until the rule is promoted to active and composed output tests exist.
+      - Future composed surfaces must remain static metadata composition only and must not prove package restore, install, build, compatibility, link, load, runtime use, production use, vulnerability status, license status, freshness, or impact.
+      - Future composed surfaces must not be emitted when any supporting dependency evidence is Tier4Unknown.
 
   - id: swift.toolchain.diagnostic.v1
     name: Swift toolchain diagnostic

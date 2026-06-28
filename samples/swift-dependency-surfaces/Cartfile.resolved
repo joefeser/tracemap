@@ -1,0 +1,3 @@
+github "ReactiveX/RxSwift" "6.0.0"
+git "https://example.invalid/UtilityKit.git" "abcdef123456"
+binary "https://example.invalid/BinaryKit.json" "2.0.0"

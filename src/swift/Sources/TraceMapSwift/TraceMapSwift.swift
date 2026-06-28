@@ -510,6 +510,11 @@ enum RuleIds {
     static let xcodeWorkspace = "swift.xcode.workspace.v1"
     static let infoPlist = "swift.plist.info.v1"
     static let ecosystemMetadata = "swift.ecosystem.metadata.v1"
+    static let dependencyManifest = "swift.dependency.manifest.v1"
+    static let dependencyLockfileSwiftPM = "swift.dependency.lockfile.swiftpm.v1"
+    static let dependencyLockfileText = "swift.dependency.lockfile.text.v1"
+    static let dependencySurface = "swift.dependency.surface.v1"
+    static let dependencyAnalysisGap = "swift.dependency.analysis-gap.v1"
     static let toolchainDiagnostic = "swift.toolchain.diagnostic.v1"
     static let analysisGap = "swift.analysis-gap.v1"
     static let toolchainUnavailable = "swift.toolchain.unavailable.v1"
@@ -578,6 +583,415 @@ public struct CodeFact: Codable, Equatable {
     public let properties: [String: String]
 }
 
+struct DependencyExtraction {
+    let records: [DependencyRecord]
+    let gaps: [CoverageGap]
+}
+
+struct DependencyRecord {
+    let factType: String
+    let ruleId: String
+    let evidenceTier: EvidenceTier
+    let filePath: String
+    let startLine: Int
+    let endLine: Int
+    let safeIdentity: String?
+    let identityDiscriminator: String
+    let properties: [String: String]
+}
+
+enum DependencyExtractor {
+    static func extract(scanRoot: URL, inventory: [InventoryItem]) -> DependencyExtraction {
+        var records: [DependencyRecord] = []
+        var gaps: [CoverageGap] = []
+        for item in inventory where item.selected {
+            let url = scanRoot.appendingPathComponent(item.relativePath)
+            let fileName = URL(fileURLWithPath: item.relativePath).lastPathComponent
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+                if knownDependencyMetadataFile(fileName) {
+                    gaps.append(gap("swift-dependency-metadata-unreadable", item, 1, item.endLine, "\(fileName) could not be read as UTF-8; dependency surface extraction is partial."))
+                }
+                continue
+            }
+            switch fileName {
+            case "Package.swift":
+                let extracted = swiftPMManifest(text: text, item: item)
+                records += extracted.records
+                gaps += extracted.gaps
+            case "Package.resolved":
+                let extracted = packageResolved(text: text, item: item)
+                records += extracted.records
+                gaps += extracted.gaps
+            case "Podfile":
+                let extracted = podfile(text: text, item: item)
+                records += extracted.records
+                gaps += extracted.gaps
+            case "Podfile.lock":
+                let extracted = podfileLock(text: text, item: item)
+                records += extracted.records
+                gaps += extracted.gaps
+            case "Cartfile":
+                let extracted = cartfile(text: text, item: item, resolved: false)
+                records += extracted.records
+                gaps += extracted.gaps
+            case "Cartfile.resolved":
+                let extracted = cartfile(text: text, item: item, resolved: true)
+                records += extracted.records
+                gaps += extracted.gaps
+            default:
+                break
+            }
+        }
+        return DependencyExtraction(
+            records: records.sorted {
+                [$0.filePath, String(format: "%08d", $0.startLine), String(format: "%08d", $0.endLine), $0.identityDiscriminator].joined(separator: "|")
+                    < [$1.filePath, String(format: "%08d", $1.startLine), String(format: "%08d", $1.endLine), $1.identityDiscriminator].joined(separator: "|")
+            },
+            gaps: gaps.sorted { [$0.filePath, String($0.startLine), $0.kind].joined(separator: "|") < [$1.filePath, String($1.startLine), $1.kind].joined(separator: "|") }
+        )
+    }
+
+    private static func swiftPMManifest(text: String, item: InventoryItem) -> DependencyExtraction {
+        let searchableText = maskSwiftCommentsAndStringLiterals(text)
+        let matches = regexMatches(#"\.package\s*\((.*?)\)"#, in: searchableText, dotMatchesLineSeparators: true)
+        var records: [DependencyRecord] = []
+        var gaps: [CoverageGap] = []
+        for (ordinal, match) in matches.enumerated() {
+            let body = capture(match, 1, in: text) ?? ""
+            let start = lineNumber(atUTF16Offset: match.range.location, in: text)
+            let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: text)
+            let offset = utf8Offset(atUTF16Offset: match.range.location, in: text)
+            if body.contains("\\(") || body.contains("ProcessInfo") || body.contains("FileManager") {
+                gaps.append(gap("swift-dependency-manifest-dynamic", item, start, end, "Package.swift dependency declaration contains dynamic syntax; dependency surface extraction is partial."))
+                continue
+            }
+            if body.contains("path:") {
+                let hash = sha256Hex(body)
+                gaps.append(gap("swift-dependency-local-path-omitted", item, start, end, "Package.swift local path dependency omitted; pathHash=\(hash)."))
+                continue
+            }
+            let explicitName = firstCapture(#"name\s*:\s*"([^"]+)""#, in: body)
+            let url = firstCapture(#"url\s*:\s*"([^"]+)""#, in: body)
+            let candidate = explicitName ?? url.flatMap(urlIdentityCandidate)
+            let safe = candidate.flatMap { isSafeLabel($0) ? $0 : nil }
+            let identityHash = sha256Hex([candidate ?? "", url ?? body].joined(separator: "\n"))
+            var properties = baseProperties(
+                packageManager: "swiftpm",
+                sourceMetadataKind: "Package.swift",
+                declarationKind: "swiftpm-manifest-dependency",
+                identity: safe,
+                identityHash: identityHash,
+                identityStatus: safe == nil ? "hashed" : "safe",
+                versionStatus: body.contains("from:") || body.contains("exact:") || body.contains("branch:") || body.contains("revision:") ? "present" : "absent",
+                revisionStatus: body.contains("revision:") || body.contains("branch:") ? "present" : "absent",
+                sourceLocationStatus: url == nil ? "unknown" : "hashed"
+            )
+            properties["occurrenceIndex"] = String(ordinal + 1)
+            if let url {
+                properties["sourceLocationHash"] = sha256Hex(url)
+            }
+            records.append(DependencyRecord(
+                factType: "SwiftDependencyDeclared",
+                ruleId: RuleIds.dependencyManifest,
+                evidenceTier: .tier3SyntaxOrTextual,
+                filePath: item.relativePath,
+                startLine: start,
+                endLine: end,
+                safeIdentity: safe,
+                identityDiscriminator: discriminator(item, start, end, offset, "swiftpm-manifest", ordinal),
+                properties: properties
+            ))
+        }
+        return DependencyExtraction(records: records, gaps: gaps)
+    }
+
+    private static func packageResolved(text: String, item: InventoryItem) -> DependencyExtraction {
+        guard let data = text.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return DependencyExtraction(records: [], gaps: [gap("swift-dependency-lockfile-malformed", item, 1, item.endLine, "Package.resolved is malformed JSON; dependency lockfile evidence is partial.")])
+        }
+        let version = root["version"] as? Int ?? -1
+        guard version == 1 || version == 2 else {
+            return DependencyExtraction(records: [], gaps: [gap("swift-dependency-lockfile-unsupported-schema", item, 1, item.endLine, "Package.resolved schemaVersion=\(version) is unsupported by dependency surface extraction.")])
+        }
+        let pins = root["pins"] as? [[String: Any]] ?? ((root["object"] as? [String: Any])?["pins"] as? [[String: Any]] ?? [])
+        var records: [DependencyRecord] = []
+        var gaps: [CoverageGap] = []
+        var seen: Set<String> = []
+        var duplicateSeen = false
+        let keyOffsets = jsonKeyOffsets(["identity", "package"], in: text)
+        for (index, pin) in pins.enumerated() {
+            guard let identity = pin["identity"] as? String ?? pin["package"] as? String else {
+                gaps.append(gap("swift-dependency-lockfile-malformed", item, 1, item.endLine, "Package.resolved pin is missing identity/package; dependency lockfile evidence is partial."))
+                continue
+            }
+            if !seen.insert(identity).inserted {
+                duplicateSeen = true
+            }
+            let state = pin["state"] as? [String: Any] ?? [:]
+            let location = pin["location"] as? String ?? pin["repositoryURL"] as? String
+            let safe = isSafeLabel(identity) ? identity : nil
+            let offset = keyOffsets.indices.contains(index) ? keyOffsets[index] : 0
+            let line = lineNumber(atUTF16Offset: offset, in: text)
+            var properties = baseProperties(
+                packageManager: "swiftpm",
+                sourceMetadataKind: "Package.resolved",
+                declarationKind: "swiftpm-lockfile-pin",
+                identity: safe,
+                identityHash: sha256Hex(identity),
+                identityStatus: safe == nil ? "hashed" : "safe",
+                versionStatus: state["version"] == nil ? "absent" : "present",
+                revisionStatus: state["revision"] == nil ? "absent" : "hashed",
+                sourceLocationStatus: location == nil ? "unknown" : "hashed"
+            )
+            properties["schemaVersion"] = String(version)
+            properties["stateKind"] = state.keys.sorted().joined(separator: ",")
+            properties["occurrenceIndex"] = String(index + 1)
+            if let location {
+                properties["sourceLocationHash"] = sha256Hex(location)
+            }
+            if let revision = state["revision"] as? String {
+                properties["revisionHash"] = sha256Hex(revision)
+            }
+            records.append(DependencyRecord(
+                factType: "SwiftDependencyLockfileEntryDeclared",
+                ruleId: RuleIds.dependencyLockfileSwiftPM,
+                evidenceTier: .tier2Structural,
+                filePath: item.relativePath,
+                startLine: line,
+                endLine: line,
+                safeIdentity: safe,
+                identityDiscriminator: discriminator(item, line, line, offset, "swiftpm-lockfile", index),
+                properties: properties
+            ))
+        }
+        if duplicateSeen {
+            gaps.append(gap("swift-dependency-lockfile-malformed", item, 1, item.endLine, "Package.resolved contains duplicate pin identities; distinct rows were preserved with occurrence discriminators."))
+        }
+        return DependencyExtraction(records: records, gaps: gaps)
+    }
+
+    private static func podfile(text: String, item: InventoryItem) -> DependencyExtraction {
+        var records: [DependencyRecord] = []
+        var gaps: [CoverageGap] = []
+        let lines = text.components(separatedBy: "\n")
+        var lineOffsets: [Int] = []
+        var utf16Offset = 0
+        for line in lines {
+            lineOffsets.append(utf16Offset)
+            utf16Offset += line.utf16.count + 1
+        }
+        var lineIndex = 0
+        while lineIndex < lines.count {
+            let line = lines[lineIndex]
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            defer { lineIndex += 1 }
+            guard trimmed.hasPrefix("pod ") else { continue }
+            let match = firstMatch(#"\bpod\s+['"]([^'"]+)['"]"#, in: line)
+            guard let match, let name = capture(match, 1, in: line) else {
+                gaps.append(gap("swift-dependency-manifest-dynamic", item, lineIndex + 1, lineIndex + 1, "Podfile pod declaration is dynamic or unsupported; dependency evidence is partial."))
+                continue
+            }
+            let safe = isSafeLabel(name) ? name : nil
+            let declaration = podDeclarationBody(lines: lines, startIndex: lineIndex)
+            let body = declaration.body
+            let endLine = declaration.endIndex + 1
+            var properties = baseProperties(
+                packageManager: "cocoapods",
+                sourceMetadataKind: "Podfile",
+                declarationKind: "podfile-declaration",
+                identity: safe,
+                identityHash: sha256Hex(name),
+                identityStatus: safe == nil ? "hashed" : "safe",
+                versionStatus: body.contains("~>") || body.contains(">=") || body.contains("=") ? "present" : "absent",
+                revisionStatus: "absent",
+                sourceLocationStatus: body.contains(":git") || body.contains(":path") || body.contains(":source") ? "hashed" : "absent"
+            )
+            properties["occurrenceIndex"] = String(records.count + 1)
+            if body.contains(":path") {
+                gaps.append(gap("swift-dependency-local-path-omitted", item, lineIndex + 1, endLine, "Podfile local path dependency option omitted; dependency evidence is partial."))
+            }
+            let anchor = lineOffsets[lineIndex] + match.range.location
+            records.append(DependencyRecord(
+                factType: "SwiftDependencyDeclared",
+                ruleId: RuleIds.dependencyManifest,
+                evidenceTier: .tier3SyntaxOrTextual,
+                filePath: item.relativePath,
+                startLine: lineIndex + 1,
+                endLine: endLine,
+                safeIdentity: safe,
+                identityDiscriminator: discriminator(item, lineIndex + 1, endLine, anchor, "podfile", records.count),
+                properties: properties
+            ))
+        }
+        return DependencyExtraction(records: records, gaps: gaps)
+    }
+
+    private static func podfileLock(text: String, item: InventoryItem) -> DependencyExtraction {
+        var records: [DependencyRecord] = []
+        var gaps: [CoverageGap] = []
+        var section = ""
+        var checksumNames: Set<String> = []
+        var duplicateChecksum = false
+        let lines = text.components(separatedBy: "\n")
+        var utf16Offset = 0
+        for (lineIndex, line) in lines.enumerated() {
+            defer { utf16Offset += line.utf16.count + 1 }
+            if let heading = firstCapture(#"^([A-Z][A-Z0-9 _-]+):\s*$"#, in: line) {
+                section = heading
+                continue
+            }
+            guard section == "PODS" || section == "DEPENDENCIES" || section == "SPEC CHECKSUMS" else { continue }
+            if section == "SPEC CHECKSUMS" {
+                if let name = firstCapture(#"^\s{2}([A-Za-z0-9_.+-]+):"#, in: line), !checksumNames.insert(name).inserted {
+                    duplicateChecksum = true
+                }
+                continue
+            }
+            guard let name = firstCapture(#"^\s{2}-\s+([A-Za-z0-9_.+-]+)"#, in: line) else { continue }
+            let safe = isSafeLabel(name) ? name : nil
+            var properties = baseProperties(
+                packageManager: "cocoapods",
+                sourceMetadataKind: "Podfile.lock",
+                declarationKind: "podfile-lock-entry",
+                identity: safe,
+                identityHash: sha256Hex(name),
+                identityStatus: safe == nil ? "hashed" : "safe",
+                versionStatus: line.contains("(") ? "present" : "absent",
+                revisionStatus: "absent",
+                sourceLocationStatus: "absent"
+            )
+            properties["sourceSection"] = safeSection(section) ?? sha256Hex(section)
+            properties["occurrenceIndex"] = String(records.count + 1)
+            records.append(DependencyRecord(
+                factType: "SwiftDependencyLockfileEntryDeclared",
+                ruleId: RuleIds.dependencyLockfileText,
+                evidenceTier: .tier3SyntaxOrTextual,
+                filePath: item.relativePath,
+                startLine: lineIndex + 1,
+                endLine: lineIndex + 1,
+                safeIdentity: safe,
+                identityDiscriminator: discriminator(item, lineIndex + 1, lineIndex + 1, utf16Offset, "podfile-lock-\(section)", records.count),
+                properties: properties
+            ))
+        }
+        if duplicateChecksum {
+            gaps.append(gap("swift-dependency-lockfile-malformed", item, 1, item.endLine, "Podfile.lock SPEC CHECKSUMS contains duplicate pod names; checksum hash input was deduplicated."))
+        }
+        return DependencyExtraction(records: records, gaps: gaps)
+    }
+
+    private static func cartfile(text: String, item: InventoryItem, resolved: Bool) -> DependencyExtraction {
+        var records: [DependencyRecord] = []
+        var gaps: [CoverageGap] = []
+        let lines = text.components(separatedBy: "\n")
+        var utf16Offset = 0
+        for (lineIndex, line) in lines.enumerated() {
+            defer { utf16Offset += line.utf16.count + 1 }
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty || trimmed.hasPrefix("#") { continue }
+            guard let match = firstMatch(#"^\s*(github|git|binary)\s+["']([^"']+)["'](?:\s+(.+))?"#, in: line),
+                  let sourceKind = capture(match, 1, in: line),
+                  let location = capture(match, 2, in: line) else {
+                gaps.append(gap("swift-dependency-manifest-unsupported-shape", item, lineIndex + 1, lineIndex + 1, "Cartfile entry is unsupported; dependency evidence is partial."))
+                continue
+            }
+            let versionPart = capture(match, 3, in: line)?.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+            let identityCandidate: String? = sourceKind == "github" ? nil : urlIdentityCandidate(location)
+            let safe = identityCandidate.flatMap { isSafeLabel($0) ? $0 : nil }
+            var properties = baseProperties(
+                packageManager: "carthage",
+                sourceMetadataKind: resolved ? "Cartfile.resolved" : "Cartfile",
+                declarationKind: resolved ? "cartfile-resolved-entry" : "cartfile-declaration",
+                identity: safe,
+                identityHash: sha256Hex(location),
+                identityStatus: safe == nil ? "hashed" : "safe",
+                versionStatus: versionPart == nil ? "absent" : (isSemVer(versionPart!) && resolved ? "present" : "hashed"),
+                revisionStatus: resolved ? (versionPart == nil ? "absent" : (isSemVer(versionPart!) ? "absent" : "hashed")) : "absent",
+                sourceLocationStatus: sourceKind == "binary" || location.contains("://") || location.contains("/") ? "hashed" : "unknown"
+            )
+            properties["sourceKind"] = ["github", "git", "binary"].contains(sourceKind) ? sourceKind : "unknown"
+            properties["occurrenceIndex"] = String(records.count + 1)
+            properties["sourceLocationHash"] = sha256Hex(location)
+            if let versionPart, isSemVer(versionPart), resolved {
+                properties["version"] = versionPart
+            } else if let versionPart {
+                properties["versionHash"] = sha256Hex(versionPart)
+            }
+            records.append(DependencyRecord(
+                factType: resolved ? "SwiftDependencyLockfileEntryDeclared" : "SwiftDependencyDeclared",
+                ruleId: resolved ? RuleIds.dependencyLockfileText : RuleIds.dependencyManifest,
+                evidenceTier: .tier3SyntaxOrTextual,
+                filePath: item.relativePath,
+                startLine: lineIndex + 1,
+                endLine: lineIndex + 1,
+                safeIdentity: safe,
+                identityDiscriminator: discriminator(item, lineIndex + 1, lineIndex + 1, utf16Offset + match.range.location, "cartfile-\(sourceKind)-\(resolved ? "resolved" : "manifest")", records.count),
+                properties: properties
+            ))
+        }
+        return DependencyExtraction(records: records, gaps: gaps)
+    }
+
+    private static func baseProperties(packageManager: String, sourceMetadataKind: String, declarationKind: String, identity: String?, identityHash: String, identityStatus: String, versionStatus: String, revisionStatus: String, sourceLocationStatus: String) -> [String: String] {
+        var properties: [String: String] = [
+            "packageManager": packageManager,
+            "sourceMetadataKind": sourceMetadataKind,
+            "declarationKind": declarationKind,
+            "dependencyIdentityStatus": identityStatus,
+            "dependencyIdentityHash": identityHash,
+            "versionStatus": versionStatus,
+            "revisionStatus": revisionStatus,
+            "sourceLocationStatus": sourceLocationStatus
+        ]
+        if let identity, identityStatus == "safe" {
+            properties["normalizedDependencyIdentity"] = identity
+        }
+        return properties
+    }
+
+    private static func gap(_ kind: String, _ item: InventoryItem, _ startLine: Int, _ endLine: Int, _ message: String) -> CoverageGap {
+        CoverageGap(kind: kind, ruleId: RuleIds.dependencyAnalysisGap, message: message, filePath: item.relativePath, startLine: max(1, startLine), endLine: max(max(1, startLine), endLine))
+    }
+
+    private static func knownDependencyMetadataFile(_ fileName: String) -> Bool {
+        switch fileName {
+        case "Package.swift", "Package.resolved", "Podfile", "Podfile.lock", "Cartfile", "Cartfile.resolved":
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func podDeclarationBody(lines: [String], startIndex: Int) -> (body: String, endIndex: Int) {
+        var endIndex = startIndex
+        var parts = [lines[startIndex]]
+        var index = startIndex + 1
+        while index < lines.count {
+            let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty || trimmed == "end" || trimmed.hasPrefix("pod ") || trimmed.hasPrefix("target ") || trimmed.hasPrefix("abstract_target ") {
+                break
+            }
+            parts.append(lines[index])
+            endIndex = index
+            index += 1
+        }
+        return (parts.joined(separator: "\n"), endIndex)
+    }
+
+    private static func discriminator(_ item: InventoryItem, _ startLine: Int, _ endLine: Int, _ offset: Int, _ kind: String, _ ordinal: Int) -> String {
+        [
+            "swift-dependency/v1",
+            item.relativePath,
+            String(startLine),
+            String(endLine),
+            kind,
+            String(offset),
+            String(ordinal + 1)
+        ].joined(separator: "\u{1f}")
+    }
+}
+
 enum FactFactory {
     static func facts(manifest: ScanManifest, inventory: [InventoryItem], gaps: [CoverageGap], scanRoot: URL, syntax: SwiftSyntaxExtraction = SwiftSyntaxExtraction(declarations: [], imports: [], calls: [], constructions: [], relationships: [], gaps: [])) -> [CodeFact] {
         var facts: [CodeFact] = []
@@ -620,8 +1034,38 @@ enum FactFactory {
             ))
         }
         facts += sourceRootFacts(manifest: manifest, inventory: inventory)
+        var aggregateFactIdsByPath: [String: [String]] = [:]
         for item in inventory where item.selected {
-            facts += metadataFacts(manifest: manifest, item: item, scanRoot: scanRoot)
+            let metadata = metadataFacts(manifest: manifest, item: item, scanRoot: scanRoot)
+            for fact in metadata where [
+                "SwiftPackageManifestDeclared",
+                "SwiftPackageResolvedDeclared",
+                "SwiftEcosystemMetadataDeclared"
+            ].contains(fact.factType) {
+                aggregateFactIdsByPath[fact.evidence.filePath, default: []].append(fact.factId)
+            }
+            facts += metadata
+        }
+        let dependencies = DependencyExtractor.extract(scanRoot: scanRoot, inventory: inventory)
+        facts += dependencyFacts(manifest: manifest, dependencies: dependencies.records, aggregateFactIdsByPath: aggregateFactIdsByPath)
+        for gap in dependencies.gaps {
+            facts.append(makeFact(
+                manifest: manifest,
+                factType: "AnalysisGap",
+                ruleId: gap.ruleId,
+                evidenceTier: .tier4Unknown,
+                filePath: gap.filePath,
+                startLine: gap.startLine,
+                endLine: gap.endLine,
+                targetSymbol: gap.kind,
+                contractElement: gap.kind,
+                identityDiscriminator: sha256Hex(gap.message),
+                properties: [
+                    "gapKind": gap.kind,
+                    "messageHash": sha256Hex(gap.message),
+                    "staticEvidenceOnly": "true"
+                ]
+            ))
         }
         facts += syntaxFacts(manifest: manifest, syntax: syntax)
         for gap in gaps {
@@ -643,7 +1087,33 @@ enum FactFactory {
                 ]
             ))
         }
-        return facts.sorted { $0.factId < $1.factId }
+        return facts
+    }
+
+    private static func dependencyFacts(manifest: ScanManifest, dependencies: [DependencyRecord], aggregateFactIdsByPath: [String: [String]]) -> [CodeFact] {
+        dependencies.map { dependency in
+            var properties = dependency.properties
+            let supporting = (aggregateFactIdsByPath[dependency.filePath] ?? []).sorted()
+            if !supporting.isEmpty {
+                properties["supportingFactIds"] = supporting.joined(separator: ",")
+            }
+            properties["coverageCeiling"] = dependency.evidenceTier == .tier2Structural ? "structural" : "syntax-or-textual"
+            properties["language"] = "swift"
+            properties["staticEvidenceOnly"] = "true"
+            return makeFact(
+                manifest: manifest,
+                factType: dependency.factType,
+                ruleId: dependency.ruleId,
+                evidenceTier: dependency.evidenceTier,
+                filePath: dependency.filePath,
+                startLine: dependency.startLine,
+                endLine: dependency.endLine,
+                targetSymbol: dependency.safeIdentity,
+                contractElement: dependency.safeIdentity,
+                identityDiscriminator: dependency.identityDiscriminator,
+                properties: properties
+            )
+        }
     }
 
     private static func syntaxFacts(manifest: ScanManifest, syntax: SwiftSyntaxExtraction) -> [CodeFact] {
@@ -1113,6 +1583,20 @@ enum FactFactory {
         let unsafeCount = text.components(separatedBy: .whitespacesAndNewlines).filter { token in
             token.contains("://") || token.hasPrefix("/") || token.contains("@")
         }.count
+        var properties = [
+            "coverageCeiling": "syntax-or-structural",
+            "dependencyIdentityCount": String(identities.count),
+            "ecosystem": ecosystem,
+            "identityHashSample": identities.map { sha256Hex($0) }.sorted().prefix(3).joined(separator: ","),
+            "language": "swift",
+            "metadataKind": URL(fileURLWithPath: item.relativePath).lastPathComponent,
+            "parserStatus": "inventory-only",
+            "unsafeValueCount": String(unsafeCount)
+        ]
+        if URL(fileURLWithPath: item.relativePath).lastPathComponent == "Podfile.lock",
+           let checksumHash = podChecksumSectionHash(text) {
+            properties["podChecksumSectionHash"] = checksumHash
+        }
         return makeFact(
             manifest: manifest,
             factType: "SwiftEcosystemMetadataDeclared",
@@ -1123,16 +1607,7 @@ enum FactFactory {
             endLine: item.endLine,
             targetSymbol: item.relativePath,
             contractElement: item.relativePath,
-            properties: [
-                "coverageCeiling": "syntax-or-structural",
-                "dependencyIdentityCount": String(identities.count),
-                "ecosystem": ecosystem,
-                "identityHashSample": identities.map { sha256Hex($0) }.sorted().prefix(3).joined(separator: ","),
-                "language": "swift",
-                "metadataKind": URL(fileURLWithPath: item.relativePath).lastPathComponent,
-                "parserStatus": "inventory-only",
-                "unsafeValueCount": String(unsafeCount)
-            ]
+            properties: properties
         )
     }
 }
@@ -1247,7 +1722,7 @@ enum OutputWriter {
     private static func writeFacts(_ facts: [CodeFact], to url: URL) throws {
         let encoder = stableEncoder(pretty: false)
         var output = ""
-        for fact in facts.sorted(by: { $0.factId < $1.factId }) {
+        for fact in facts {
             output += String(decoding: try encoder.encode(fact), as: UTF8.self) + "\n"
         }
         try output.write(to: url, atomically: true, encoding: .utf8)
@@ -1292,6 +1767,19 @@ enum OutputWriter {
         if !byRelationshipKind.isEmpty {
             lines += ["", "## Symbol Relationships By Kind", ""]
             lines += markdownTable(byRelationshipKind)
+        }
+        let dependencyFacts = facts.filter { $0.factType == "SwiftDependencyDeclared" || $0.factType == "SwiftDependencyLockfileEntryDeclared" }
+        if !dependencyFacts.isEmpty {
+            lines += ["", "## Swift Dependency Metadata", ""]
+            lines += [
+                "### By Package Manager",
+                ""
+            ]
+            lines += markdownTable(count(dependencyFacts.compactMap { $0.properties["packageManager"] }))
+            lines += ["", "### By Metadata Kind", ""]
+            lines += markdownTable(count(dependencyFacts.compactMap { $0.properties["sourceMetadataKind"] }))
+            lines += ["", "### By Identity Status", ""]
+            lines += markdownTable(count(dependencyFacts.compactMap { $0.properties["dependencyIdentityStatus"] }))
         }
         lines += ["", "## Known Gaps", ""]
         lines += manifest.knownGaps.isEmpty ? ["- None"] : manifest.knownGaps.map { "- \($0)" }
@@ -1663,10 +2151,193 @@ func regexCaptures(_ pattern: String, in text: String) -> [String] {
     }
 }
 
+func regexMatches(_ pattern: String, in text: String, dotMatchesLineSeparators: Bool = false) -> [NSTextCheckingResult] {
+    let options: NSRegularExpression.Options = dotMatchesLineSeparators ? [.dotMatchesLineSeparators] : []
+    guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return [] }
+    let range = NSRange(text.startIndex..<text.endIndex, in: text)
+    return regex.matches(in: text, range: range)
+}
+
+func firstMatch(_ pattern: String, in text: String) -> NSTextCheckingResult? {
+    regexMatches(pattern, in: text).first
+}
+
+func firstCapture(_ pattern: String, in text: String) -> String? {
+    guard let match = firstMatch(pattern, in: text) else { return nil }
+    return capture(match, 1, in: text)
+}
+
+func capture(_ match: NSTextCheckingResult, _ index: Int, in text: String) -> String? {
+    guard index < match.numberOfRanges,
+          let range = Range(match.range(at: index), in: text) else {
+        return nil
+    }
+    return String(text[range])
+}
+
+func maskSwiftCommentsAndStringLiterals(_ text: String) -> String {
+    let scalars = Array(text.unicodeScalars)
+    var output: [UnicodeScalar] = []
+    output.reserveCapacity(scalars.count)
+    var index = 0
+    var inLineComment = false
+    var blockCommentDepth = 0
+    var inString = false
+    var escapingString = false
+
+    func isSlash(_ offset: Int = 0) -> Bool {
+        index + offset < scalars.count && scalars[index + offset] == "/"
+    }
+
+    func isAsterisk(_ offset: Int = 0) -> Bool {
+        index + offset < scalars.count && scalars[index + offset] == "*"
+    }
+
+    while index < scalars.count {
+        let scalar = scalars[index]
+        if inLineComment {
+            if scalar == "\n" {
+                inLineComment = false
+                output.append(scalar)
+            } else {
+                output.append(" ")
+            }
+            index += 1
+            continue
+        }
+
+        if blockCommentDepth > 0 {
+            if isSlash() && isAsterisk(1) {
+                output.append(" ")
+                output.append(" ")
+                blockCommentDepth += 1
+                index += 2
+                continue
+            }
+            if isAsterisk() && isSlash(1) {
+                output.append(" ")
+                output.append(" ")
+                blockCommentDepth -= 1
+                index += 2
+                continue
+            }
+            output.append(scalar == "\n" ? scalar : " ")
+            index += 1
+            continue
+        }
+
+        if inString {
+            if scalar == "\n" {
+                inString = false
+                escapingString = false
+                output.append(scalar)
+            } else if escapingString {
+                escapingString = false
+                output.append(" ")
+            } else if scalar == "\\" {
+                escapingString = true
+                output.append(" ")
+            } else if scalar == "\"" {
+                inString = false
+                output.append(" ")
+            } else {
+                output.append(" ")
+            }
+            index += 1
+            continue
+        }
+
+        if isSlash() && isSlash(1) {
+            output.append(" ")
+            output.append(" ")
+            inLineComment = true
+            index += 2
+            continue
+        }
+
+        if isSlash() && isAsterisk(1) {
+            output.append(" ")
+            output.append(" ")
+            blockCommentDepth = 1
+            index += 2
+            continue
+        }
+
+        if scalar == "\"" {
+            inString = true
+            output.append(" ")
+            index += 1
+            continue
+        }
+
+        output.append(scalar)
+        index += 1
+    }
+
+    return String(String.UnicodeScalarView(output))
+}
+
+func lineNumber(atUTF16Offset offset: Int, in text: String) -> Int {
+    let bounded = max(0, min(offset, text.utf16.count))
+    let index = String.Index(utf16Offset: bounded, in: text)
+    return text[..<index].reduce(1) { count, character in count + (character == "\n" ? 1 : 0) }
+}
+
+func utf8Offset(atUTF16Offset offset: Int, in text: String) -> Int {
+    let bounded = max(0, min(offset, text.utf16.count))
+    let index = String.Index(utf16Offset: bounded, in: text)
+    guard let utf8Index = index.samePosition(in: text.utf8) else {
+        return bounded
+    }
+    return text.utf8.distance(from: text.utf8.startIndex, to: utf8Index)
+}
+
+func urlIdentityCandidate(_ value: String) -> String? {
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+    let withoutQuery = trimmed.split(separator: "?", maxSplits: 1).first.map(String.init) ?? trimmed
+    var last = withoutQuery.split(separator: "/").last.map(String.init) ?? withoutQuery
+    if last.hasSuffix(".git") {
+        last = String(last.dropLast(4))
+    }
+    return last.nilIfEmpty
+}
+
+func jsonKeyOffsets(_ keys: [String], in text: String) -> [Int] {
+    let keyPattern = keys.map(NSRegularExpression.escapedPattern).joined(separator: "|")
+    return regexMatches(#""\#(keyPattern)"\s*:"#, in: text).map(\.range.location)
+}
+
+func safeSection(_ value: String) -> String? {
+    isSafeLabel(value.replacingOccurrences(of: " ", with: "-")) ? value : nil
+}
+
+func isSemVer(_ value: String) -> Bool {
+    value.range(of: #"^[0-9]+(\.[0-9]+){1,2}([.-][A-Za-z0-9]+)?$"#, options: .regularExpression) != nil
+}
+
 func parsePodIdentities(_ text: String) -> [String] {
     let podNames = regexCaptures(#"\bpod\s+['"]([^'"]+)['"]"#, in: text)
     let lockNames = regexCaptures(#"(?m)^\s{2}-\s+([A-Za-z0-9_.+-]+)"#, in: text)
     return Array(Set((podNames + lockNames).filter(isSafeLabel))).sorted()
+}
+
+func podChecksumSectionHash(_ text: String) -> String? {
+    var section = ""
+    var names: Set<String> = []
+    for line in text.components(separatedBy: "\n") {
+        if let heading = firstCapture(#"^([A-Z][A-Z0-9 _-]+):\s*$"#, in: line) {
+            section = heading
+            continue
+        }
+        guard section == "SPEC CHECKSUMS",
+              let name = firstCapture(#"^\s{2}([A-Za-z0-9_.+-]+):"#, in: line) else {
+            continue
+        }
+        names.insert(name)
+    }
+    guard !names.isEmpty else { return nil }
+    return sha256Hex(names.sorted().joined(separator: "\n"))
 }
 
 func parseCartfileIdentities(_ text: String) -> [String] {

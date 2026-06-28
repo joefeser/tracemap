@@ -1,6 +1,6 @@
 # Swift Adapter v0 Package And Dependency Surfaces Implementation State
 
-Status: `ready-for-implementation`
+Status: `implemented`
 
 Issue: [#382](https://github.com/joefeser/tracemap/issues/382)
 
@@ -11,15 +11,19 @@ Spec branch: `codex/spec-swift-package-dependency-surfaces`
 Intended implementation branch:
 `codex/implement-swift-package-dependency-surfaces`
 
+Implementation branch:
+`codex/implement-swift-package-dependency-surfaces`
+
 ## Current Scope
 
 This spec prepares the Swift v0 package/dependency surface slice. It should
 turn checked-in SwiftPM, CocoaPods, and Carthage metadata into deterministic
 static dependency facts and gap facts.
 
-This spec does not implement analyzer code. All implementation tasks in
-`tasks.md` remain unchecked until code, tests, validation, and PR-loop evidence
-land.
+This branch implements the v0 slice: per-row SwiftPM, CocoaPods, and Carthage
+dependency facts from checked-in metadata, dependency-specific gaps, public-safe
+hashing/omission, Swift report counts, rule catalog entries, checked-in sample
+fixtures, smoke assertions, and shared export/combine/report validation.
 
 ## Source Material
 
@@ -85,6 +89,13 @@ freshness, production use, or impact.
 - Hash or omit unsafe raw values by default.
 - Preserve useful evidence even when SwiftPM, CocoaPods, Carthage, or Xcode
   tools are unavailable.
+- Keep `SwiftDependencySurfaceDeclared` composition deferred. The implementation
+  does not emit `SwiftDependencySurfaceDeclared`, `swift.dependency.surface.v1`,
+  or `stableDependencySurfaceKey`.
+- Treat aggregate-before-per-row `facts.ndjson` ordering as Swift-specific for
+  this slice. A future cross-adapter contract can lift it into
+  `docs/LANGUAGE_ADAPTER_CONTRACT.md` if another adapter needs the same
+  supporting-fact emission invariant.
 
 ## Review Notes
 
@@ -92,6 +103,28 @@ freshness, production use, or impact.
 - Follow-up Sonnet blockers were patched by making deferred surface activation,
   checksum hashing, Cartfile `sourceKind`, duplicate `Package.resolved` pins,
   and report-safety checks machine-checkable.
+
+## Implementation Validation
+
+Run on `codex/implement-swift-package-dependency-surfaces`:
+
+```bash
+swift build --package-path src/swift
+swift run --package-path src/swift tracemap-swift-smoke-tests
+swift run --package-path src/swift tracemap-swift scan --repo samples/swift-dependency-surfaces --out /tmp/tracemap-swift-dependency-surfaces
+dotnet run --project src/dotnet/TraceMap.Cli -- export --index /tmp/tracemap-swift-dependency-surfaces/index.sqlite --out /tmp/tracemap-swift-export --format json
+dotnet run --project src/dotnet/TraceMap.Cli -- combine --index /tmp/tracemap-swift-dependency-surfaces/index.sqlite --label swift --out /tmp/tracemap-swift-combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- report --index /tmp/tracemap-swift-combined.sqlite --out /tmp/tracemap-swift-report
+```
+
+Additional gates still expected before PR publication:
+
+```bash
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
 
 ## Validation Plan
 
