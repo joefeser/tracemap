@@ -4293,6 +4293,17 @@ rules:
       - Raw locations, URLs, hostnames, repository remotes, credentials, and local paths are omitted or represented only by hashes/counts.
       - Unknown lockfile schemas emit reduced-coverage gaps.
 
+  - id: swift.package.module-identity.v1
+    name: Swift package and module identity
+    description: Reserved Swift package/module identity rule documenting how Swift v0 handles module identity evidence and unknown-module gaps.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - The current SwiftSyntax-only v0 implementation derives module labels from deterministic `Sources/<Module>` or `Tests/<Module>` paths and records declarations under `swift.syntax.declaration.v1`; it does not yet emit standalone module identity facts under this rule.
+      - Files outside deterministic SwiftPM-style roots use an `unknown-module` sentinel and emit `swift-module-identity-unknown` gaps under `swift.syntax.identity-gap.v1`.
+      - Xcode target membership, build settings, conditional target inclusion, generated source membership, and SourceKit/compiler module identity are future deterministic enrichment work.
+
   - id: swift.package.cocoapods.v1
     name: CocoaPods metadata inventory
     description: Records checked-in CocoaPods metadata file presence for the Swift adapter scaffold.
@@ -4455,6 +4466,56 @@ rules:
     limitations:
       - Construction candidates do not prove runtime allocation, selected initializer overload, dependency injection behavior, property-wrapper behavior, or object lifetime.
       - Shared ObjectCreated semantics are not implied by this syntax-only rule; downstream tools must preserve the syntax-only tier and limitations.
+
+  - id: swift.syntax.symbol-relationship.v1
+    name: SwiftSyntax symbol relationship evidence
+    description: Records source-local SwiftSyntax-backed direct inheritance, protocol conformance, and protocol inheritance relationships using shared canonical relationship kinds.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SymbolRelationship
+      - symbol_relationships table rows
+    limitations:
+      - SwiftSyntax relationship evidence is static syntax evidence; it does not prove compiler semantic binding, runtime dispatch, selected protocol witnesses, Objective-C bridging, availability, or build success.
+      - Relationships are emitted only when source and target identities resolve to exactly one source-local symbol in the current scan scope.
+      - Imported, unresolved, ambiguous, typealias-dependent, generic-specialized, macro-generated, conditional, or generated-code targets remain identity gaps instead of definitive relationship rows.
+      - Extension membership does not emit a traversable ExtensionOf edge in v0; extension protocol adoption may emit ImplementsInterface only when both endpoints are source-local and unambiguous.
+      - Unsupported canonical relationship shapes emit `swift-relationship-kind-unsupported` under `swift.syntax.identity-gap.v1` rather than inventing Swift-specific traversable relationship kinds.
+
+  - id: swift.syntax.extension-membership.v1
+    name: SwiftSyntax extension membership evidence
+    description: Reserved SwiftSyntax rule for explicit extension membership evidence when extension-local containers or source-local extended-type attachment are emitted by a future slice.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - SwiftDeclarationDeclared
+      - AnalysisGap
+    limitations:
+      - The current v0 relationship slice does not emit this rule; extension declarations are emitted under `swift.syntax.declaration.v1`, extension protocol adoption uses `swift.syntax.symbol-relationship.v1` when both endpoints are source-local, and unresolved membership uses `swift.syntax.identity-gap.v1`.
+      - Extension membership evidence must not emit a traversable ExtensionOf relationship without a future reader contract and tests.
+      - Extension members on imported, typealias-dependent, generic-specialized, conditional, or ambiguous targets remain syntax-only or gaps.
+
+  - id: swift.syntax.override-candidate.v1
+    name: SwiftSyntax override candidate evidence
+    description: Records explicit Swift override relationships only when a source-local superclass member can be matched without ambiguity.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SymbolRelationship
+      - symbol_relationships table rows
+      - AnalysisGap
+    limitations:
+      - Override evidence is syntax-backed and does not prove runtime dispatch, selected dynamic method target, Objective-C selector behavior, availability, generic specialization, or branch execution.
+      - If the containing superclass or target member cannot be identified exactly once, the adapter emits an AnalysisGap instead of a definitive Overrides row.
+      - Protocol witness selection and default protocol implementation matching are out of scope for this rule.
+
+  - id: swift.syntax.identity-gap.v1
+    name: SwiftSyntax identity and relationship gap
+    description: Emits analysis gaps for duplicate, ambiguous, unresolved, external, extension-membership, override-target, conditional, generated, macro, or unsupported Swift symbol identity and relationship evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Identity gaps are unknowns, not proof that a relationship, member, protocol conformance, override, or runtime behavior is absent.
+      - Candidate names and unsupported syntax are rendered only as safe labels, counts, hashes, rule IDs, and repo-relative spans; raw source snippets, URLs, local paths, secrets, and private labels must not be emitted.
+      - Stable gap kinds include `swift-module-identity-unknown`, `swift-duplicate-symbol-identity`, `swift-unresolved-external-symbol`, `swift-ambiguous-symbol-identity`, `swift-module-context-unavailable`, `swift-extension-membership-syntax-only`, `swift-relationship-kind-unsupported`, and `swift-override-target-unresolved`.
 
   - id: swift.syntax.analysis-gap.v1
     name: SwiftSyntax parser and syntax coverage gap

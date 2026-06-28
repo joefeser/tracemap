@@ -379,6 +379,8 @@ Recommended `gapKind` values:
 - `swift-unresolved-import`
 - `swift-unresolved-external-symbol`
 - `swift-ambiguous-extension-target`
+- `swift-extension-membership-syntax-only`
+- `swift-relationship-kind-unsupported`
 - `swift-conditional-compilation`
 - `swift-macro-expansion-unsupported`
 - `swift-generated-code-unsupported`

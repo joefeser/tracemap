@@ -8,12 +8,17 @@ struct TraceMapSwiftSmokeTests {
         try missingRepoFailsBeforeArtifacts()
         try scanWritesRequiredArtifactsAndReducedCoverage()
         try factsAreStableWhenOnlyOutputPathChanges()
+        try symbolIdsIgnoreDeclarationBodyEdits()
+        try duplicateSymbolIdentitiesEmitGapsAndDistinctIds()
+        try duplicateSymbolRelationshipsUseRewrittenIds()
+        try malformedMultipleSuperclassCandidatesDoNotCrash()
         try dangerousOutputPathsAreRejected()
         try detachedHeadBranchIsUnknown()
         try defaultExcludesUsePathSegments()
         try bundleFactsHonorUserFilters()
         try projectAndPackageMetadataFactsAreEmittedSafely()
         try swiftSyntaxDeclarationAndCallFactsAreStored()
+        try swiftSyntaxSymbolRelationshipsAreStored()
         try parserDiagnosticsEmitHashedGapWithoutRawText()
         try conditionalAndOptionalCallGapsUseSwiftSyntaxAnalysisGapRule()
         try exportedImportsRemainSyntaxOnlyAndDoNotClaimRuntimeReexport()
@@ -57,8 +62,8 @@ struct TraceMapSwiftSmokeTests {
         let fixture = try SwiftFixture()
         let out = fixture.temp.url.appendingPathComponent("scan")
         let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: out))
-        assert(result.manifest.analysisLevel == "Level1SemanticAnalysisReduced")
-        assert(result.manifest.buildStatus == "FailedOrPartial")
+        assert(result.manifest.analysisLevel == "Level3SyntaxAnalysis")
+        assert(result.manifest.buildStatus == "NotRun")
         for artifact in ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log"] {
             assert(FileManager.default.fileExists(atPath: out.appendingPathComponent(artifact).path), "missing \(artifact)")
         }
@@ -66,7 +71,7 @@ struct TraceMapSwiftSmokeTests {
         assert(result.facts.contains { $0.factType == "SwiftSourceFileDeclared" && $0.ruleId == "swift.inventory.source-file.v1" })
         assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.unsupported.dynamic-boundary.v1" })
         let report = try String(contentsOf: out.appendingPathComponent("report.md"), encoding: .utf8)
-        assert(report.contains("Level1SemanticAnalysisReduced"))
+        assert(report.contains("Level3SyntaxAnalysis"))
         assert(report.contains("absence of evidence is not evidence of absence"))
         assert(!report.contains(out.path))
         let analyzerLog = try String(contentsOf: out.appendingPathComponent("logs/analyzer.log"), encoding: .utf8)
@@ -87,6 +92,110 @@ struct TraceMapSwiftSmokeTests {
         let firstFacts = try String(contentsOf: first.appendingPathComponent("facts.ndjson"), encoding: .utf8)
         let secondFacts = try String(contentsOf: second.appendingPathComponent("facts.ndjson"), encoding: .utf8)
         assert(firstFacts == secondFacts)
+    }
+
+    static func symbolIdsIgnoreDeclarationBodyEdits() throws {
+        let fixture = try SwiftFixture(extraFiles: [
+            "Sources/App/Stable.swift": """
+            struct StableWorker {
+              func run(value: Int) -> Int {
+                value + 1
+              }
+              func parse(_ value: String) -> Int {
+                value.count
+              }
+              func parse(_ value: Data) -> Int {
+                value.count
+              }
+            }
+            """
+        ])
+        let first = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: fixture.temp.url.appendingPathComponent("first")))
+        try """
+        struct StableWorker {
+          func run(value: Int) -> Int {
+            let adjusted = value + 2
+            return adjusted
+          }
+          func parse(_ value: String) -> Int {
+            let adjusted = value.count + 1
+            return adjusted
+          }
+          func parse(_ value: Data) -> Int {
+            value.count
+          }
+        }
+        """.write(to: fixture.repo.appendingPathComponent("Sources/App/Stable.swift"), atomically: true, encoding: .utf8)
+        let second = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: fixture.temp.url.appendingPathComponent("second")))
+        let firstRun = first.facts.first { $0.factType == "SwiftDeclarationDeclared" && $0.properties["name"] == "run" }
+        let secondRun = second.facts.first { $0.factType == "SwiftDeclarationDeclared" && $0.properties["name"] == "run" }
+        assert(firstRun?.targetSymbol == secondRun?.targetSymbol)
+        assert(firstRun?.properties["syntaxHash"] != secondRun?.properties["syntaxHash"])
+        let firstParseSymbols = Set(first.facts.filter { $0.factType == "SwiftDeclarationDeclared" && $0.properties["name"] == "parse" }.compactMap(\.targetSymbol))
+        let secondParseSymbols = Set(second.facts.filter { $0.factType == "SwiftDeclarationDeclared" && $0.properties["name"] == "parse" }.compactMap(\.targetSymbol))
+        assert(firstParseSymbols.count == 2)
+        assert(firstParseSymbols == secondParseSymbols)
+    }
+
+    static func duplicateSymbolIdentitiesEmitGapsAndDistinctIds() throws {
+        let fixture = try SwiftFixture(extraFiles: [
+            "Sources/App/DuplicateA.swift": """
+            struct DuplicateShape {
+              func render() {}
+            }
+            """,
+            "Sources/App/DuplicateB.swift": """
+            struct DuplicateShape {
+              func render() {
+                print("other")
+              }
+            }
+            """
+        ])
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: fixture.temp.url.appendingPathComponent("scan")))
+        let duplicateTypes = result.facts.filter { $0.factType == "SwiftDeclarationDeclared" && $0.properties["name"] == "DuplicateShape" }
+        assert(duplicateTypes.count == 2)
+        assert(Set(duplicateTypes.compactMap(\.targetSymbol)).count == 2)
+        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.syntax.identity-gap.v1" && $0.properties["gapKind"] == "swift-duplicate-symbol-identity" })
+    }
+
+    static func duplicateSymbolRelationshipsUseRewrittenIds() throws {
+        let fixture = try SwiftFixture(extraFiles: [
+            "Sources/App/DuplicateRelationshipsA.swift": """
+            protocol DuplicateProtocol {}
+            struct RewrittenDuplicate: DuplicateProtocol {}
+            """,
+            "Sources/App/DuplicateRelationshipsB.swift": """
+            struct RewrittenDuplicate: DuplicateProtocol {}
+            """
+        ])
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: fixture.temp.url.appendingPathComponent("scan")))
+        let duplicateSymbols = Set(result.facts.filter { $0.factType == "SwiftDeclarationDeclared" && $0.properties["name"] == "RewrittenDuplicate" }.compactMap(\.targetSymbol))
+        let relationships = result.facts.filter { $0.factType == "SymbolRelationship" && $0.properties["relationshipKind"] == "ImplementsInterface" && $0.properties["targetSymbolDisplayName"] == "App.protocol DuplicateProtocol" }
+        let relationshipSources = Set(relationships.compactMap { $0.properties["sourceSymbolId"] })
+        assert(duplicateSymbols.count == 2)
+        assert(relationshipSources == duplicateSymbols)
+        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.properties["gapKind"] == "swift-duplicate-symbol-identity" })
+    }
+
+    static func malformedMultipleSuperclassCandidatesDoNotCrash() throws {
+        let fixture = try SwiftFixture(extraFiles: [
+            "Sources/App/MalformedInheritance.swift": """
+            class BaseOne {
+              func run() {}
+            }
+            class BaseTwo {
+              func run() {}
+            }
+            class StrangeChild: BaseOne, BaseTwo {
+              override func run() {}
+            }
+            """
+        ])
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: fixture.temp.url.appendingPathComponent("scan")))
+        assert(result.facts.contains { $0.factType == "SymbolRelationship" && $0.properties["relationshipKind"] == "InheritsFrom" })
+        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.syntax.identity-gap.v1" && $0.properties["gapKind"] == "swift-ambiguous-symbol-identity" })
+        assert(!result.facts.contains { $0.factType == "SymbolRelationship" && $0.properties["relationshipKind"] == "Overrides" && ($0.properties["sourceSymbolDisplayName"] ?? "").contains("run") })
     }
 
     static func defaultExcludesUsePathSegments() throws {
@@ -239,6 +348,17 @@ struct TraceMapSwiftSmokeTests {
               func send(_ value: Int)
             }
 
+            protocol AdvancedSending: Sending {}
+
+            class BaseService {
+              func refresh() {}
+            }
+
+            class ChildService: BaseService, AdvancedSending {
+              override func refresh() {}
+              func send(_ value: Int) {}
+            }
+
             actor Worker {
               func run() {}
             }
@@ -316,6 +436,75 @@ struct TraceMapSwiftSmokeTests {
         assert((Int(supportedCreationFacts) ?? 0) == (Int(creations) ?? -1))
     }
 
+    static func swiftSyntaxSymbolRelationshipsAreStored() throws {
+        let fixture = try SwiftFixture(extraFiles: [
+            "Sources/App/Relationships.swift": """
+            protocol BaseProtocol {
+              func send(_ value: Int)
+            }
+
+            protocol DerivedProtocol: BaseProtocol {}
+
+            class BaseController {
+              func refresh() {}
+            }
+
+            class ChildController: BaseController, DerivedProtocol {
+              override func refresh() {}
+              func send(_ value: Int) {}
+            }
+
+            struct Worker: DerivedProtocol {
+              func send(_ value: Int) {}
+            }
+
+            extension Worker: Codable {}
+            extension MissingExternal: Codable {}
+            """,
+            "LooseExtension.swift": """
+            extension Worker: Codable {}
+            """
+        ])
+        let out = fixture.temp.url.appendingPathComponent("scan")
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: out))
+        let relationships = result.facts.filter { $0.factType == "SymbolRelationship" }
+        assert(!relationships.isEmpty)
+        let relationshipKinds = Set(relationships.compactMap { $0.properties["relationshipKind"] })
+        assert(relationshipKinds.contains("InheritsFrom"))
+        assert(relationshipKinds.contains("ImplementsInterface"))
+        assert(relationshipKinds.contains("ExtendsInterface"))
+        assert(relationshipKinds.contains("Overrides"))
+        assert(!relationshipKinds.contains("ExtensionOf"))
+        assert(!relationshipKinds.contains("ImplementsInterfaceMember"))
+        assert(relationships.allSatisfy { $0.evidenceTier == .tier3SyntaxOrTextual })
+        assert(relationships.allSatisfy { $0.properties["sourceSymbolLanguage"] == "swift" && $0.properties["targetSymbolLanguage"] == "swift" })
+        assert(relationships.allSatisfy { $0.properties["runtimeDispatchProven"] == "false" })
+        assert(relationships.allSatisfy { $0.properties["sourceSymbolId"]?.hasPrefix("swift-syntax:v0:") == true })
+        assert(relationships.allSatisfy { $0.properties["targetSymbolId"]?.hasPrefix("swift-syntax:v0:") == true })
+        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.syntax.identity-gap.v1" && $0.properties["gapKind"] == "swift-unresolved-external-symbol" })
+        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.syntax.identity-gap.v1" && $0.properties["gapKind"] == "swift-module-identity-unknown" })
+        assert(result.facts.contains { $0.factType == "SwiftDeclarationDeclared" && $0.properties["moduleName"] == "unknown-module" })
+        assert(!result.facts.contains { $0.factType == "SymbolRelationship" && $0.properties["relationshipKind"] == "ImplementsInterfaceMember" })
+        assert(!result.facts.contains { $0.factType == "SymbolRelationship" && $0.properties["relationshipKind"] == "Overrides" && ($0.properties["sourceSymbolDisplayName"] ?? "").contains("send") })
+
+        let db = out.appendingPathComponent("index.sqlite").path
+        let relationshipRows = try run("/usr/bin/sqlite3", [db, "select count(*) from symbol_relationships where rule_id in ('swift.syntax.symbol-relationship.v1','swift.syntax.override-candidate.v1');"]).trimmed()
+        let sourceRoleRows = try run("/usr/bin/sqlite3", [db, "select count(*) from fact_symbols where role='source';"]).trimmed()
+        let targetRoleRows = try run("/usr/bin/sqlite3", [db, "select count(*) from fact_symbols where role='target';"]).trimmed()
+        let orphanRelationships = try run("/usr/bin/sqlite3", [db, "select count(*) from symbol_relationships r left join facts f on f.fact_id = r.relationship_id where f.fact_id is null;"]).trimmed()
+        let relationshipColumns = try run("/usr/bin/sqlite3", [db, "pragma table_info(symbol_relationships);"])
+            .split(separator: "\n")
+            .map { String($0.split(separator: "|")[1]) }
+        assert((Int(relationshipRows) ?? 0) == relationships.count)
+        assert((Int(sourceRoleRows) ?? 0) >= relationships.count)
+        assert((Int(targetRoleRows) ?? 0) >= relationships.count)
+        assert(orphanRelationships == "0", "orphan symbol_relationships without backing fact")
+        assert(relationshipColumns == ["relationship_id", "scan_id", "source_symbol_id", "target_symbol_id", "relationship_kind", "rule_id", "evidence_tier", "file_path", "start_line", "end_line"])
+        let report = try String(contentsOf: out.appendingPathComponent("report.md"), encoding: .utf8)
+        assert(report.contains("## Symbol Relationships By Kind"))
+        assert(!report.lowercased().contains("runtime dispatch proven"))
+    }
+
     static func parserDiagnosticsEmitHashedGapWithoutRawText() throws {
         let sentinel = "DO_NOT_RENDER_PARSE_DIAGNOSTIC_SENTINEL"
         let fixture = try SwiftFixture(extraFiles: [
@@ -364,10 +553,11 @@ struct TraceMapSwiftSmokeTests {
         let gapKinds = Set(gapFacts.compactMap { $0.properties["gapKind"] })
         assert(gapKinds.contains("ConditionalCompilationAmbiguous"))
         assert(gapKinds.contains("CanImportConditionalAmbiguous"))
-        assert(gapKinds.contains("swift-module-context-unavailable"))
+        assert(gapKinds.contains("swift-module-identity-unknown"))
         assert(gapKinds.contains("swift-call-optional-chaining-unresolved"))
-        let reviewedKinds = ["ConditionalCompilationAmbiguous", "CanImportConditionalAmbiguous", "swift-module-context-unavailable", "swift-call-optional-chaining-unresolved"]
-        assert(gapFacts.filter { reviewedKinds.contains($0.properties["gapKind"] ?? "") }.allSatisfy { $0.ruleId == "swift.syntax.analysis-gap.v1" })
+        let syntaxGapKinds = ["ConditionalCompilationAmbiguous", "CanImportConditionalAmbiguous", "swift-call-optional-chaining-unresolved"]
+        assert(gapFacts.filter { syntaxGapKinds.contains($0.properties["gapKind"] ?? "") }.allSatisfy { $0.ruleId == "swift.syntax.analysis-gap.v1" })
+        assert(gapFacts.filter { $0.properties["gapKind"] == "swift-module-identity-unknown" }.allSatisfy { $0.ruleId == "swift.syntax.identity-gap.v1" })
     }
 
     static func exportedImportsRemainSyntaxOnlyAndDoNotClaimRuntimeReexport() throws {

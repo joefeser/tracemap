@@ -170,8 +170,8 @@ public enum SwiftScanEngine {
             commitSha: git.commitSha,
             scannerVersion: TraceMapSwiftVersion.scanner,
             scannedAt: isoNow(),
-            analysisLevel: inventory.isEmpty ? "Level3SyntaxAnalysis" : "Level1SemanticAnalysisReduced",
-            buildStatus: "FailedOrPartial",
+            analysisLevel: "Level3SyntaxAnalysis",
+            buildStatus: "NotRun",
             solutions: [],
             projects: inventory.projectIdentifiers,
             targetFrameworks: [],
@@ -519,6 +519,9 @@ enum RuleIds {
     static let swiftSyntaxImport = "swift.syntax.import.v1"
     static let swiftSyntaxCall = "swift.syntax.call.v1"
     static let swiftSyntaxConstruction = "swift.syntax.construction.v1"
+    static let swiftSyntaxSymbolRelationship = "swift.syntax.symbol-relationship.v1"
+    static let swiftSyntaxOverrideCandidate = "swift.syntax.override-candidate.v1"
+    static let swiftSyntaxIdentityGap = "swift.syntax.identity-gap.v1"
     static let swiftSyntaxAnalysisGap = "swift.syntax.analysis-gap.v1"
 }
 
@@ -576,7 +579,7 @@ public struct CodeFact: Codable, Equatable {
 }
 
 enum FactFactory {
-    static func facts(manifest: ScanManifest, inventory: [InventoryItem], gaps: [CoverageGap], scanRoot: URL, syntax: SwiftSyntaxExtraction = SwiftSyntaxExtraction(declarations: [], imports: [], calls: [], constructions: [], gaps: [])) -> [CodeFact] {
+    static func facts(manifest: ScanManifest, inventory: [InventoryItem], gaps: [CoverageGap], scanRoot: URL, syntax: SwiftSyntaxExtraction = SwiftSyntaxExtraction(declarations: [], imports: [], calls: [], constructions: [], relationships: [], gaps: [])) -> [CodeFact] {
         var facts: [CodeFact] = []
         facts.append(makeFact(
             manifest: manifest,
@@ -632,6 +635,7 @@ enum FactFactory {
                 endLine: gap.endLine,
                 targetSymbol: gap.kind,
                 contractElement: gap.kind,
+                identityDiscriminator: sha256Hex(gap.message),
                 properties: [
                     "gapKind": gap.kind,
                     "messageHash": sha256Hex(gap.message),
@@ -756,6 +760,40 @@ enum FactFactory {
                 ]
             ))
         }
+        for relationship in syntax.relationships {
+            let ruleId = relationship.relationshipKind == "Overrides" ? RuleIds.swiftSyntaxOverrideCandidate : RuleIds.swiftSyntaxSymbolRelationship
+            facts.append(makeFact(
+                manifest: manifest,
+                factType: "SymbolRelationship",
+                ruleId: ruleId,
+                evidenceTier: .tier3SyntaxOrTextual,
+                filePath: relationship.filePath,
+                startLine: relationship.startLine,
+                endLine: relationship.endLine,
+                sourceSymbol: relationship.sourceSymbolId,
+                targetSymbol: relationship.targetSymbolId,
+                contractElement: relationship.relationshipKind,
+                properties: [
+                    "conditionalCompilation": relationship.conditionalCompilation ? "true" : "false",
+                    "coverageCeiling": "syntax-only",
+                    "identityStatus": "source-local",
+                    "language": "swift",
+                    "relationshipKind": relationship.relationshipKind,
+                    "runtimeDispatchProven": "false",
+                    "sourceSymbolDisplayName": relationship.sourceSymbolDisplayName,
+                    "sourceSymbolId": relationship.sourceSymbolId,
+                    "sourceSymbolKind": relationship.sourceSymbolKind,
+                    "sourceSymbolLanguage": "swift",
+                    "staticEvidenceOnly": "true",
+                    "swiftRelationshipDisplayKind": relationship.swiftRelationshipDisplayKind,
+                    "syntaxHash": relationship.syntaxHash,
+                    "targetSymbolDisplayName": relationship.targetSymbolDisplayName,
+                    "targetSymbolId": relationship.targetSymbolId,
+                    "targetSymbolKind": relationship.targetSymbolKind,
+                    "targetSymbolLanguage": "swift"
+                ]
+            ))
+        }
         return facts
     }
 
@@ -844,8 +882,14 @@ enum FactFactory {
             "plist-unreadable",
             "swift-call-optional-chaining-unresolved",
             "swift-call-unsupported-shape",
+            "swift-ambiguous-symbol-identity",
+            "swift-extension-membership-syntax-only",
             "swift-module-context-unavailable",
+            "swift-module-identity-unknown",
+            "swift-override-target-unresolved",
+            "swift-relationship-kind-unsupported",
             "swift-source-unreadable",
+            "swift-unresolved-external-symbol",
             "swift-toolchain-unavailable",
             "swiftpm-manifest-dynamic",
             "swiftpm-manifest-unreadable",
@@ -1213,6 +1257,7 @@ enum OutputWriter {
         let byType = count(facts.map(\.factType))
         let byRule = count(facts.map(\.ruleId))
         let byTier = count(facts.map(\.evidenceTier.rawValue))
+        let byRelationshipKind = count(facts.filter { $0.factType == "SymbolRelationship" }.compactMap { $0.properties["relationshipKind"] })
         var lines: [String] = [
             "# TraceMap Swift Scan Report",
             "",
@@ -1234,7 +1279,7 @@ enum OutputWriter {
             "",
             "## Coverage",
             "",
-            "This Swift v0 adapter emits deterministic static inventory, metadata, SwiftSyntax declaration, call candidate, and construction candidate evidence. Coverage is reduced; absence of evidence is not evidence of absence.",
+            "This Swift v0 adapter emits deterministic static inventory, metadata, SwiftSyntax declaration, call candidate, construction candidate, and direct source-local symbol relationship evidence. Coverage is reduced; absence of evidence is not evidence of absence.",
             "",
             "## Fact Counts By Type",
             ""
@@ -1244,6 +1289,10 @@ enum OutputWriter {
         lines += markdownTable(byRule)
         lines += ["", "## Fact Counts By Evidence Tier", ""]
         lines += markdownTable(byTier)
+        if !byRelationshipKind.isEmpty {
+            lines += ["", "## Symbol Relationships By Kind", ""]
+            lines += markdownTable(byRelationshipKind)
+        }
         lines += ["", "## Known Gaps", ""]
         lines += manifest.knownGaps.isEmpty ? ["- None"] : manifest.knownGaps.map { "- \($0)" }
         lines += [
@@ -1257,7 +1306,7 @@ enum OutputWriter {
             "## Swift Limitations",
             "",
             "- Static syntax and metadata evidence only; no build, package resolution, simulator, device, runtime, UI navigation, network reachability, storage access, deployment, or production-use proof.",
-            "- SourceKit, SwiftPM semantic loading, Xcode semantic loading, Objective-C bridging, macros, result builders, protocol dispatch, property wrappers, generated-code semantics, and canonical Swift relationship semantics are future slices.",
+            "- SourceKit, SwiftPM semantic loading, Xcode semantic loading, Objective-C bridging, macros, result builders, protocol dispatch, property wrappers, generated-code semantics, and compiler-proven Swift relationship semantics are future slices.",
             "- Raw source snippets, local absolute paths, raw remotes, secrets, provisioning details, and unsafe values are omitted or hashed.",
             "",
             "## Downstream Commands",
@@ -1294,9 +1343,9 @@ enum SQLiteWriter {
         let tmp = URL(fileURLWithPath: path.path + ".tmp")
         try? FileManager.default.removeItem(at: tmp)
         var sql = schemaSQL()
-        sql += insertManifestSQL(manifest)
+        sql += try insertManifestSQL(manifest)
         for fact in facts.sorted(by: { $0.factId < $1.factId }) {
-            sql += insertFactSQL(fact)
+            sql += try insertFactSQL(fact)
             sql += insertDerivedRowsSQL(fact)
         }
         _ = try runProcess(executable: "/usr/bin/sqlite3", arguments: [tmp.path], input: sql, timeoutSeconds: 120)
@@ -1304,8 +1353,8 @@ enum SQLiteWriter {
         try FileManager.default.moveItem(at: tmp, to: path)
     }
 
-    private static func insertManifestSQL(_ manifest: ScanManifest) -> String {
-        let manifestJson = jsonString(manifest, pretty: false)
+    private static func insertManifestSQL(_ manifest: ScanManifest) throws -> String {
+        let manifestJson = try jsonString(manifest, pretty: false)
         return """
         insert into scan_manifest (scan_id, repo, commit_sha, scanner_version, scanned_at, analysis_level, build_status, manifest_json)
         values (\(q(manifest.scanId)), \(q(manifest.repoName)), \(q(manifest.commitSha)), \(q(manifest.scannerVersion)), \(q(manifest.scannedAt)), \(q(manifest.analysisLevel)), \(q(manifest.buildStatus)), \(q(manifestJson)));
@@ -1313,8 +1362,8 @@ enum SQLiteWriter {
         """
     }
 
-    private static func insertFactSQL(_ fact: CodeFact) -> String {
-        let propsJson = jsonString(fact.properties, pretty: false)
+    private static func insertFactSQL(_ fact: CodeFact) throws -> String {
+        let propsJson = try jsonString(fact.properties, pretty: false)
         return """
         insert into facts (fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier, source_symbol, target_symbol, contract_element, file_path, start_line, end_line, snippet_hash, properties_json)
         values (\(q(fact.factId)), \(q(fact.scanId)), \(q(fact.repo)), \(q(fact.commitSha)), null, \(q(fact.factType)), \(q(fact.ruleId)), \(q(fact.evidenceTier.rawValue)), \(q(fact.sourceSymbol)), \(q(fact.targetSymbol)), \(q(fact.contractElement)), \(q(fact.evidence.filePath)), \(fact.evidence.startLine), \(fact.evidence.endLine), null, \(q(propsJson)));
@@ -1356,6 +1405,21 @@ enum SQLiteWriter {
             return """
             insert into object_creations (fact_id, scan_id, repo, commit_sha, evidence_tier, rule_id, caller_symbol, caller_assembly_name, caller_assembly_version, created_type, created_type_assembly_name, created_type_assembly_version, constructor_symbol, assigned_to, file_path, start_line, end_line)
             values (\(q(fact.factId)), \(q(fact.scanId)), \(q(fact.repo)), \(q(fact.commitSha)), \(q(fact.evidenceTier.rawValue)), \(q(fact.ruleId)), \(q(fact.sourceSymbol)), null, null, \(q(created)), null, null, null, null, \(q(fact.evidence.filePath)), \(fact.evidence.startLine), \(fact.evidence.endLine));
+
+            """
+        case "SymbolRelationship":
+            guard let source = fact.properties["sourceSymbolId"],
+                  let target = fact.properties["targetSymbolId"],
+                  let relationshipKind = fact.properties["relationshipKind"] else {
+                return ""
+            }
+            return """
+            insert or ignore into symbol_relationships (relationship_id, scan_id, source_symbol_id, target_symbol_id, relationship_kind, rule_id, evidence_tier, file_path, start_line, end_line)
+            values (\(q(fact.factId)), \(q(fact.scanId)), \(q(source)), \(q(target)), \(q(relationshipKind)), \(q(fact.ruleId)), \(q(fact.evidenceTier.rawValue)), \(q(fact.evidence.filePath)), \(fact.evidence.startLine), \(fact.evidence.endLine));
+            insert into fact_symbols (fact_id, scan_id, symbol_id, role)
+            values (\(q(fact.factId)), \(q(fact.scanId)), \(q(source)), 'source');
+            insert into fact_symbols (fact_id, scan_id, symbol_id, role)
+            values (\(q(fact.factId)), \(q(fact.scanId)), \(q(target)), 'target');
 
             """
         default:
@@ -1408,6 +1472,12 @@ enum SQLiteWriter {
         create index ix_facts_target_symbol on facts(target_symbol);
         create index ix_facts_contract_element on facts(contract_element);
         create index ix_facts_file on facts(file_path);
+        create index ix_symbols_display on symbols(language, display_name);
+        create index ix_symbol_occurrences_symbol on symbol_occurrences(scan_id, symbol_id);
+        create index ix_fact_symbols_symbol on fact_symbols(scan_id, symbol_id);
+        create index ix_symbol_relationships_source on symbol_relationships(scan_id, source_symbol_id);
+        create index ix_symbol_relationships_target on symbol_relationships(scan_id, target_symbol_id);
+        create index ix_symbol_relationships_kind on symbol_relationships(relationship_kind);
 
         """
     }
@@ -1529,8 +1599,8 @@ func stableEncoder(pretty: Bool) -> JSONEncoder {
     return encoder
 }
 
-func jsonString<T: Encodable>(_ value: T, pretty: Bool) -> String {
-    String(decoding: try! stableEncoder(pretty: pretty).encode(value), as: UTF8.self)
+func jsonString<T: Encodable>(_ value: T, pretty: Bool) throws -> String {
+    String(decoding: try stableEncoder(pretty: pretty).encode(value), as: UTF8.self)
 }
 
 func q(_ value: String?) -> String {

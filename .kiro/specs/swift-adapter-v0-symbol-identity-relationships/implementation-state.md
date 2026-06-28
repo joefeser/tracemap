@@ -1,28 +1,30 @@
 # Swift Adapter v0 Symbol Identity And Relationships Implementation State
 
-Status: ready-for-implementation
+Status: implemented-partial
 
 Issue: [#381](https://github.com/joefeser/tracemap/issues/381)
 
 Parent: [#377](https://github.com/joefeser/tracemap/issues/377)
 
-Current branch: `codex/spec-swift-symbol-identity-relationships`
+Current branch: `codex/implement-swift-symbol-identity-relationships`
 
 ## Current Scope
 
-This is a spec-only state note. No Swift analyzer/runtime code has been
-implemented. The spec defines the intended Swift v0 symbol identity and direct
-relationship model for a future implementation slice.
+This implementation lands the SwiftSyntax-only v0 direct relationship subset.
+It emits source-local `SymbolRelationship` facts and `symbol_relationships`
+rows for unambiguous class inheritance, protocol conformance, protocol
+inheritance, and resolvable explicit overrides. Unsupported, unresolved, or
+ambiguous relationship targets emit identity/relationship gaps instead of
+definitive edges.
 
 ## Public Claim Level
 
-Current PR: implementation-ready design only.
+Current PR: SwiftSyntax-only implementation subset.
 
-Future implementation may claim deterministic static Swift symbol identity and
-direct relationship evidence only after fixtures, storage validation, reports,
-and reduced-coverage gaps pass review. It must not claim runtime proof, protocol
-witness resolution, Objective-C bridging, macro expansion, Xcode build success,
-or AI impact analysis.
+After validation, TraceMap may claim deterministic static Swift direct
+relationship evidence for supported source-local shapes. It must still not
+claim runtime proof, protocol witness resolution, Objective-C bridging, macro
+expansion, Xcode build success, or AI impact analysis.
 
 ## Source Material Paths
 
@@ -42,53 +44,103 @@ or AI impact analysis.
 
 ## Scope Decisions
 
-- Start with SwiftSyntax-backed static declaration and relationship evidence.
+- Implemented SwiftSyntax-backed static declaration and relationship evidence.
 - Reserve `Tier1Semantic` for future deterministic compiler/SourceKit evidence;
   SwiftSyntax-only symbol and relationship facts are not semantic proof.
-- Use shared role-symbol properties and shared SQLite tables so combine/report
+- Used shared role-symbol properties and shared SQLite tables so combine/report
   and future path/reverse/route workflows can consume Swift rows.
-- Use existing canonical relationship kinds for traversable rows:
+- Used existing canonical relationship kinds for traversable rows:
   `InheritsFrom`, `ImplementsInterface`, `ExtendsInterface`, and `Overrides`.
   Swift-specific protocol/conformance language may appear in display metadata,
   not as a competing persisted relationship kind.
-- Treat ambiguous identity, unresolved imports, conditional compilation, macros,
+- Treated ambiguous identity, unresolved imports, conditional compilation, macros,
   generated code, typealias uncertainty, Objective-C bridging, generic
   specialization, protocol witness selection, and runtime dispatch as explicit
   gaps or lower-tier candidate evidence.
-- Keep implementation tasks unchecked until a future implementation PR lands.
 
-## Out Of Scope For This Spec PR
+## Implemented In This Slice
 
-- Creating `src/swift` or any Swift adapter code.
-- Updating shared storage schemas or rule catalog files.
-- Adding fixtures or test projects.
-- Running app code, Xcode builds, simulators, devices, SourceKit, or Swift
-  package tests.
+- Added SwiftSyntax inheritance/protocol/extension conformance candidates.
+- Resolved relationship endpoints only against exactly one source-local symbol.
+- Emitted `SymbolRelationship` facts with shared role properties:
+  `sourceSymbolId`, `targetSymbolId`, symbol language/kind/display names, and
+  canonical `relationshipKind`.
+- Populated `symbol_relationships` and source/target `fact_symbols` rows.
+- Added Swift scan report relationship counts by kind.
+- Added catalog entries for `swift.syntax.symbol-relationship.v1`,
+  `swift.syntax.override-candidate.v1`, and
+  `swift.syntax.identity-gap.v1`.
+- Added smoke validation for relationship facts, SQLite rows, unresolved-target
+  gaps, and no `ExtensionOf`/`ImplementsInterfaceMember` promotion.
+- Added public-safe Swift sample relationship declarations under
+  `samples/swift-package-basic`.
+
+## Deferred / Out Of Scope
+
+- Compiler/SourceKit semantic relationship proof.
+- Protocol witness selection, default implementation matching, conditional
+  conformance proof, Objective-C selector/bridge resolution, macro expansion,
+  generated-code freshness, property-wrapper synthesis, availability reasoning,
+  and runtime dispatch.
+- `ImplementsInterfaceMember` and protocol requirement implementation
+  relationships.
+- Optional protocol requirement candidate facts remain deferred; the v0 smoke
+  fixture asserts that signature-shaped protocol satisfaction does not emit
+  `ImplementsInterfaceMember` or synthetic override evidence.
+- Traversable `ExtensionOf` edges.
+- Source-local extension-member reparenting to the extended type remains
+  deferred. Extension declarations and members keep extension-local/container
+  evidence in v0 unless a direct protocol-adoption relationship is proven.
+- Complex nested/generic/typealias relationship resolution.
+- Cross-target/module relationship resolution is limited. Source-local loose
+  extensions may resolve a unique target across modules, but qualified names,
+  typealiases, generic specialization, and ambiguous cross-module names remain
+  gaps.
+- Running app code, Xcode builds, simulators, devices, or SourceKit.
 - Making public site/product claims.
 
-## Exact Spec Validation Commands
+## Validation Commands
 
 ```bash
-node scripts/kiro-review.mjs --phase swift-adapter-v0-symbol-identity-relationships --kind spec --model claude-opus-4.8 --fresh --timeout-ms 600000 --save-review-text
-node scripts/kiro-review.mjs --phase swift-adapter-v0-symbol-identity-relationships --kind spec --model claude-sonnet-4.6 --fresh --timeout-ms 600000 --save-review-text
-git diff --check
-./scripts/check-private-paths.sh
-```
-
-## Future Implementation Validation Commands
-
-Do not run these for this spec-only PR. `src/swift` does not exist yet.
-
-```bash
+swift build --package-path src/swift
+swift run --package-path src/swift tracemap-swift-smoke-tests
+swift run --package-path src/swift tracemap-swift scan --repo samples/swift-package-basic --out /tmp/tracemap-swift-package-basic
+dotnet run --project src/dotnet/TraceMap.Cli -- combine --index /tmp/tracemap-swift-package-basic/index.sqlite --label swift --out /tmp/tracemap-swift-combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- report --index /tmp/tracemap-swift-combined.sqlite --out /tmp/tracemap-swift-report
 dotnet build src/dotnet/TraceMap.sln
 dotnet test src/dotnet/TraceMap.sln
-swift test --package-path src/swift
-dotnet run --project src/dotnet/TraceMap.Cli -- combine --index <swift-scan>/index.sqlite --label swift --out <tmp>/combined.sqlite
-dotnet run --project src/dotnet/TraceMap.Cli -- report --index <tmp>/combined.sqlite --out <tmp>/combined-report
-dotnet run --project src/dotnet/TraceMap.Cli -- paths --index <tmp>/combined.sqlite --out <tmp>/combined-paths
-./scripts/check-private-paths.sh
 git diff --check
+./scripts/check-private-paths.sh
 ```
+
+Latest local validation:
+
+- `swift build --package-path src/swift` passed.
+- `swift run --package-path src/swift tracemap-swift-smoke-tests` passed.
+- Checked-in Swift sample scans passed for `samples/swift-package-basic`,
+  `samples/swift-metadata-reduced`, `samples/swift-metadata-unsupported`, and
+  `samples/no-swift`.
+- Swift package basic scan emitted 33 facts, `Level3SyntaxAnalysis`,
+  `NotRun`, and 4 exported/imported relationships.
+- `tracemap export`, `tracemap combine`, `tracemap report`, and
+  `tracemap paths` passed against the generated Swift sample index.
+- `dotnet build src/dotnet/TraceMap.sln` passed.
+- `dotnet test src/dotnet/TraceMap.sln` passed: 696 tests.
+- `./scripts/check-private-paths.sh` passed.
+- `git diff --check` passed.
+- `swift test --package-path src/swift` reports no test targets; Swift
+  assertions are currently run by `tracemap-swift-smoke-tests`.
+- Kiro Sonnet implementation review initially reported blockers around analysis
+  level, symbol ID stability, gap vocabulary, module identity, relationship DDL,
+  and deferred protocol/extension scope. Those items were patched or explicitly
+  documented. The final local validation above was rerun after the patches.
+- PR-loop review on PR #412 reported three current findings:
+  duplicate inheritance lookup could trap, relationship candidates could retain
+  pre-dedup source IDs, and overload duplicate IDs still used body-sensitive
+  syntax hashes. Those were patched by body-independent duplicate
+  discriminators, post-dedup relationship candidate rewrites, non-trapping
+  relationship lookups, and focused smoke assertions. Validation above was
+  rerun after these PR-loop fixes.
 
 ## Safe / No-Overclaim Boundaries
 
@@ -114,10 +166,9 @@ Unsafe language:
 
 ## Follow-Up Items
 
-- Future implementation should decide the concrete Swift package path and CLI
-  name.
-- Future implementation should add rule catalog entries before emitting any new
-  Swift facts.
-- Future implementation should add local Swift fixtures for full supported paths
-  and reduced/unsupported paths.
-- Future implementation should update validation docs only when commands exist.
+- Consider a future SourceKit/compiler enrichment slice if Tier1 Swift symbol
+  relationship proof becomes worth the toolchain cost.
+- Add richer nested/generic/typealias fixtures if future route/path work needs
+  those relationships.
+- Keep downstream reports conservative: these rows are static syntax evidence,
+  not runtime dispatch proof.

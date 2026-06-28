@@ -1,8 +1,10 @@
 # TraceMap Swift Adapter
 
 This is the v0 Swift adapter. It provides a deterministic scan command, output
-contract, and checked-in inventory/project metadata discovery before deeper
-SwiftSyntax, SourceKit, UI, HTTP, storage, or relationship extraction is added.
+contract, checked-in inventory/project metadata discovery, SwiftSyntax-backed
+declarations, call/construction candidates, and source-local direct symbol
+relationships. SourceKit, UI, HTTP, storage, and runtime behavior remain future
+evidence-backed slices.
 
 The scanner emits static evidence only. It does not build the app, resolve
 packages over the network, launch a simulator or device, inspect runtime state,
@@ -65,5 +67,5 @@ This adapter reports non-semantic inventory coverage:
 
 These labels do not prove Swift compiler semantic coverage, build success,
 package compatibility, Xcode scheme behavior, runtime behavior, or impact.
-Manifest analysis remains `Level1SemanticAnalysisReduced` or lower with
-`FailedOrPartial`.
+Manifest analysis remains `Level3SyntaxAnalysis` with `NotRun` for
+SwiftSyntax-only v0 scans.
