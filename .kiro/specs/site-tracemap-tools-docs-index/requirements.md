@@ -1,5 +1,9 @@
 # Requirements
 
+Status: implemented
+Readiness: implemented
+Public claim level: demo
+
 ## Introduction
 
 TraceMap already has public repository docs for requirements, validation,

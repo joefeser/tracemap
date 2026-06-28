@@ -1,5 +1,8 @@
 # Requirements
 
+Status: implemented
+Readiness: implemented
+
 ## Introduction
 
 The static site has repeated header and top-navigation markup across

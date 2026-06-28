@@ -1,7 +1,7 @@
 # Site TraceMap Tools Live Deploy Audit Requirements
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Public claim level: demo
 
 ## Summary

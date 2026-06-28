@@ -1,5 +1,8 @@
 # Site TraceMap Tools Demo Proof Upgrades Requirements
 
+Status: implemented
+Readiness: implemented
+
 Public claim level: demo
 
 ## Objective

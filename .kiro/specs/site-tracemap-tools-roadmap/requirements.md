@@ -1,5 +1,8 @@
 # Site TraceMap Tools Roadmap Requirements
 
+Status: implemented
+Readiness: implemented
+
 Public claim level: concept
 
 ## Objective

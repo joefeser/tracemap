@@ -1,5 +1,8 @@
 # Site TraceMap Tools Navigation Paths Requirements
 
+Status: implemented
+Readiness: implemented
+
 Public claim level: demo
 
 ## Summary

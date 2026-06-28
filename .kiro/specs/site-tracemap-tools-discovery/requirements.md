@@ -1,5 +1,9 @@
 # Requirements
 
+Status: implemented
+Readiness: implemented
+Public claim level: demo
+
 ## Introduction
 
 The first `tracemap.tools` launch published a single static homepage. This slice

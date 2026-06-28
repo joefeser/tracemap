@@ -1,5 +1,9 @@
 # Requirements
 
+Status: implemented
+Readiness: implemented
+Public claim level: hidden
+
 ## Introduction
 
 The TraceMap site has a local generated-site validation command. Deployment and

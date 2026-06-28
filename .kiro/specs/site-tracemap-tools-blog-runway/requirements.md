@@ -1,5 +1,9 @@
 # Requirements
 
+Status: implemented
+Readiness: implemented
+Public claim level: concept
+
 ## Introduction
 
 `tracemap.tools` needs a small blog/editorial runway that explains why TraceMap
