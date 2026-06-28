@@ -1,0 +1,3 @@
+struct GeneratedClient {
+    func run() {}
+}
