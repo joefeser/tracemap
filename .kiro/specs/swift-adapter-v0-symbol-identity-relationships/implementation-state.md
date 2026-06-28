@@ -1,12 +1,17 @@
 # Swift Adapter v0 Symbol Identity And Relationships Implementation State
 
-Status: implemented-partial
+Status: implemented-v0
 
 Issue: [#381](https://github.com/joefeser/tracemap/issues/381)
 
 Parent: [#377](https://github.com/joefeser/tracemap/issues/377)
 
-Current branch: `codex/implement-swift-symbol-identity-relationships`
+Implementation branch: `codex/implement-swift-symbol-identity-relationships`
+
+Implementation PR: [#412](https://github.com/joefeser/tracemap/pull/412)
+
+Merged to `dev`: 2026-06-28, merge commit
+`45e4dd7eb001d5b3ee55f6807e683d29ea616c20`.
 
 ## Current Scope
 

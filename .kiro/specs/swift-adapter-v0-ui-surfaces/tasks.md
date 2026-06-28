@@ -4,14 +4,14 @@ Issue: [#384](https://github.com/joefeser/tracemap/issues/384)
 
 Parent: [#377](https://github.com/joefeser/tracemap/issues/377)
 
-Implementation is present on `codex/implement-swift-adapter-v0-ui-surfaces`.
-Keep the final PR-loop task unchecked until the implementation PR is merged.
+Implementation merged through
+[#421](https://github.com/joefeser/tracemap/pull/421).
 
 ## Spec And Review
 
 - [x] Create the Kiro spec for issue #384.
-- [ ] Run Opus spec review.
-- [ ] Run Sonnet spec review.
+- [x] Run Opus spec review.
+- [x] Run Sonnet spec review.
 - [x] Patch Medium+ review findings or document explicit non-actionable
   dispositions.
 - [x] Run `git diff --check`.
@@ -125,8 +125,6 @@ Keep the final PR-loop task unchecked until the implementation PR is merged.
   generic, feature-flagged, dynamic, or unsupported destinations.
 - [x] Emit `SwiftUiActionCandidate` for supported static `Button`, gesture,
   submit, lifecycle-ish modifier, toolbar, swipe, task, and refreshable syntax.
-- [ ] Link direct source-local call/declaration support through sorted
-  `supportingFactIds` when existing Swift call facts prove them.
 - [x] Do not summarize closure behavior, async scheduling, Combine pipelines,
   branch feasibility, downstream calls, or impact beyond direct visible syntax.
 
@@ -150,8 +148,6 @@ Keep the final PR-loop task unchecked until the implementation PR is merged.
 
 - [x] Persist UI facts in `facts.ndjson` and `index.sqlite` with sorted
   properties and stable fact IDs.
-- [ ] Populate shared symbol/fact-symbol support when existing Swift
-  declaration or call facts provide symbol IDs.
 - [x] Add local Swift report counts for UI framework, surface kind,
   action/navigation kind, evidence tier, rule ID, and gap kind.
 - [x] Verify `tracemap export` over the Swift UI index preserves rule IDs,
@@ -179,19 +175,21 @@ Keep the final PR-loop task unchecked until the implementation PR is merged.
 - [x] Run `git diff --check`.
 - [x] Update implementation-state with final validation results and follow-up
   items.
-- [ ] Open an implementation PR to `dev`, complete the PR review loop, and
+- [x] Open an implementation PR to `dev`, complete the PR review loop, and
   merge when ACK returns `merge_ready`.
 
 ## Follow-Ups Out Of Scope
 
-- [ ] Storyboard/nib/xib parser for static Interface Builder wiring.
-- [ ] Objective-C source and selector resolution.
-- [ ] Swift compiler/SourceKit semantic UI evidence.
-- [ ] Runtime UI automation, simulator/device instrumentation, or screenshot
+- Storyboard/nib/xib parser for static Interface Builder wiring.
+- Objective-C source and selector resolution.
+- Swift compiler/SourceKit semantic UI evidence.
+- Runtime UI automation, simulator/device instrumentation, or screenshot
   proof.
-- [ ] SwiftUI state graph, navigation path, environment, property wrapper, or
+- SwiftUI state graph, navigation path, environment, property wrapper, or
   Combine/async flow modeling.
-- [ ] Cross-language shared UI surface vocabulary beyond generic fact export.
-- [ ] Public site claims beyond static evidence-backed Swift UI discovery.
-- [ ] Add source-local `supportingFactIds` linkage from Swift UI action rows to
+- Cross-language shared UI surface vocabulary beyond generic fact export.
+- Public site claims beyond static evidence-backed Swift UI discovery.
+- Add source-local `supportingFactIds` linkage from Swift UI action rows to
   existing Swift call/declaration facts.
+- Populate shared symbol/fact-symbol support for UI rows when existing Swift
+  declaration or call facts provide stable symbol IDs.
