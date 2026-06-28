@@ -167,7 +167,7 @@ public enum SwiftScanEngine {
         let manifest = ScanManifest(
             scanId: scanId,
             repoName: git.repoName,
-            remoteUrl: git.remoteUrl,
+            remoteUrl: git.remoteUrl.map { "sha256:\(sha256Hex($0))" },
             branch: git.branch,
             commitSha: git.commitSha,
             scannerVersion: TraceMapSwiftVersion.scanner,
@@ -1910,7 +1910,7 @@ enum FactFactory {
         }
         let http = SwiftHttpExtractor.extract(scanRoot: scanRoot, inventory: inventory)
         facts += httpFacts(manifest: manifest, records: http.records)
-        for gap in http.gaps {
+        for (gapOrdinal, gap) in http.gaps.enumerated() {
             facts.append(makeFact(
                 manifest: manifest,
                 factType: "AnalysisGap",
@@ -1921,8 +1921,9 @@ enum FactFactory {
                 endLine: gap.endLine,
                 targetSymbol: gap.kind,
                 contractElement: gap.kind,
-                identityDiscriminator: sha256Hex(gap.message),
+                identityDiscriminator: sha256Hex("\(gap.filePath)|\(gap.startLine)|\(gap.endLine)|\(gap.kind)|\(gapOrdinal)|\(gap.message)"),
                 properties: [
+                    "gapOrdinal": String(gapOrdinal),
                     "gapKind": gap.kind,
                     "messageHash": sha256Hex(gap.message),
                     "staticEvidenceOnly": "true"
