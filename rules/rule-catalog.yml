@@ -4503,13 +4503,26 @@ rules:
 
   - id: swift.toolchain.diagnostic.v1
     name: Swift toolchain diagnostic
-    description: Emits bounded non-mutating availability diagnostics for Swift, Xcode, CocoaPods, and Carthage tooling.
+    description: Emits bounded non-mutating availability diagnostics for Swift, SourceKit/sourcekit-lsp, Xcode, CocoaPods, and Carthage tooling.
     evidenceTier: Tier4Unknown
     emits:
+      - SwiftToolchainDiagnostic
       - AnalysisGap
     limitations:
       - Toolchain availability or absence is diagnostic evidence only; it does not prove buildability, selected tool versions, package resolution, or runtime behavior.
       - Probes are bounded and non-mutating; no builds, restores, installs, updates, simulators, devices, tests, or app code are run.
+      - Status values are intentionally coarse (`available`, `not-found`, `timeout`, `unsupported`, `not-probed`, or `error-redacted`) and must not render local absolute tool paths, shell output, usernames, machine names, environment values, credentials, or private repository data.
+
+  - id: swift.reduced-coverage.gap.v1
+    name: Swift reduced coverage feature gap
+    description: Emits closed-vocabulary analysis gaps for unsupported Swift feature boundaries such as macros, conditional compilation, Objective-C bridging, selectors, storyboards, xibs, generated code, reflection, and protocol dispatch uncertainty.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Reduced-coverage gaps are static extraction boundaries only; they do not prove behavior is absent, unreachable, safe, unsafe, unused, or impacted.
+      - Gap detection is conservative and syntax-local; future SourceKit/compiler, storyboard, UI, storage, or data-flow slices may replace some gaps with stronger rule-backed evidence.
+      - Gap messages and properties must use safe closed vocabulary, counts, hashes, rule IDs, and repo-relative spans only; raw source snippets, local paths, URLs, remotes, secrets, private labels, and shell output must not be emitted.
 
   - id: swift.analysis-gap.v1
     name: Swift inventory analysis gap

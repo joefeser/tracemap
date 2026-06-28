@@ -150,9 +150,11 @@ public enum SwiftScanEngine {
         let inventory = try InventoryBuilder.build(scanRoot: repo, gitRoot: git.gitRoot, options: options)
         let scanId = stableScanId(git: git, options: options, inventory: inventory, scanRoot: repo)
         let syntax = SwiftSyntaxEvidenceExtractor.extract(scanRoot: repo, inventory: inventory)
+        let toolchain = Toolchain.diagnostics(inventory: inventory)
         var gaps = CoverageGap.defaults(inventory: inventory)
-        gaps += Toolchain.diagnostics(inventory: inventory)
+        gaps += toolchain.gaps
         gaps += MetadataGapFactory.gaps(scanRoot: repo, inventory: inventory)
+        gaps += UnsupportedSwiftFeatureGapFactory.gaps(scanRoot: repo, inventory: inventory)
         gaps += syntax.gaps
         if inventory.contains(where: { $0.kind == "swiftpm-manifest" }) {
             gaps.append(CoverageGap(kind: "swiftpm-load-deferred", ruleId: RuleIds.analysisGap, message: "SwiftPM semantic package loading is deferred; checked-in Package.swift metadata is inventory-only."))
@@ -182,7 +184,7 @@ public enum SwiftScanEngine {
             extractorVersions: [TraceMapSwiftVersion.extractorId: TraceMapSwiftVersion.extractorVersion]
         )
 
-        let facts = FactFactory.facts(manifest: manifest, inventory: inventory, gaps: gaps, scanRoot: repo, syntax: syntax)
+        let facts = FactFactory.facts(manifest: manifest, inventory: inventory, gaps: gaps, toolchainDiagnostics: toolchain.diagnostics, scanRoot: repo, syntax: syntax)
         try OutputWriter.write(outputPath: options.outputPath, manifest: manifest, facts: facts, inventory: inventory)
         return SwiftScanResult(manifest: manifest, facts: facts, inventory: inventory)
     }
@@ -429,6 +431,20 @@ struct CoverageGap: Codable, Equatable {
     }
 }
 
+struct ToolchainExtraction {
+    let diagnostics: [ToolchainDiagnostic]
+    let gaps: [CoverageGap]
+}
+
+struct ToolchainDiagnostic {
+    let toolName: String
+    let category: String
+    let status: String
+    let requiredFor: String
+    let gapKind: String?
+    let message: String
+}
+
 enum MetadataGapFactory {
     static func gaps(scanRoot: URL, inventory: [InventoryItem]) -> [CoverageGap] {
         var gaps: [CoverageGap] = []
@@ -495,6 +511,74 @@ enum MetadataGapFactory {
     }
 }
 
+enum UnsupportedSwiftFeatureGapFactory {
+    static func gaps(scanRoot: URL, inventory: [InventoryItem]) -> [CoverageGap] {
+        var gaps: [CoverageGap] = []
+        for item in inventory where item.selected {
+            let url = scanRoot.appendingPathComponent(item.relativePath)
+            switch item.kind {
+            case "swift-source":
+                guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+                gaps += swiftSourceGaps(text: text, item: item)
+                if isGeneratedPath(item.relativePath) {
+                    gaps.append(gap("swift-generated-code-reduced", item, item.startLine, item.endLine, "Generated Swift source is static evidence only; generated-code semantics are reduced coverage."))
+                }
+            case "storyboard":
+                gaps.append(gap("swift-storyboard-wiring-unresolved", item, item.startLine, item.endLine, "Storyboard wiring is checked-in metadata only; runtime UI navigation and outlet/action binding are not proven."))
+            case "xib":
+                gaps.append(gap("swift-nib-wiring-unresolved", item, item.startLine, item.endLine, "XIB wiring is checked-in metadata only; runtime UI navigation and outlet/action binding are not proven."))
+            default:
+                break
+            }
+        }
+        return gaps.sorted { [$0.filePath, String($0.startLine), $0.kind].joined(separator: "|") < [$1.filePath, String($1.startLine), $1.kind].joined(separator: "|") }
+    }
+
+    private static func swiftSourceGaps(text: String, item: InventoryItem) -> [CoverageGap] {
+        let searchable = maskSwiftCommentsAndStringLiterals(text)
+        var gaps: [CoverageGap] = []
+        gaps += patternGaps(#"(?m)^[ \t]*#(?!if\b|elseif\b|else\b|endif\b|available\b|unavailable\b|selector\b|keyPath\b|file\b|fileID\b|filePath\b|line\b|column\b|function\b|dsohandle\b|sourceLocation\b|warning\b|error\b)[A-Za-z_][A-Za-z0-9_]*\b|@(?:attached|freestanding)\b"#, "swift-macro-expansion-unsupported", "Swift macro or macro declaration evidence is not expanded in v0; macro-generated declarations and calls are reduced coverage.", searchable, text, item)
+        gaps += patternGaps(#"(?m)^[ \t]*#(?:if|elseif|if\s+canImport)\b"#, "swift-conditional-compilation-reduced", "Conditional compilation changes selected declarations or calls; inactive branch behavior is reduced coverage.", searchable, text, item)
+        gaps += patternGaps(#"@objc(?:Members)?\b|@IBAction\b|@IBOutlet\b"#, "swift-objective-c-bridging-reduced", "Objective-C bridging, outlets, and actions are static markers only; runtime selector binding is not proven.", searchable, text, item)
+        gaps += patternGaps(#"#selector\s*\("#, "swift-selector-dynamic", "Swift selector expression is static syntax only; Objective-C runtime dispatch target is not proven.", searchable, text, item)
+        gaps += patternGaps(#"\b(?:NSClassFromString|NSSelectorFromString|Selector)\s*\(|\bMirror\s*\(\s*reflecting\s*:"#, "swift-reflection-dynamic", "Reflection-style Swift or Objective-C lookup is dynamic; static extraction cannot prove target behavior.", searchable, text, item)
+        gaps += patternGaps(#"(?ms)\bprotocol\s+[A-Za-z_][A-Za-z0-9_]*\b[^{]*\{.*?\}\s*extension\s+[A-Za-z_][A-Za-z0-9_]*\b"#, "swift-protocol-dispatch-reduced", "Protocol/default-implementation dispatch is syntax evidence only; runtime witness selection is not proven.", searchable, text, item)
+        return collapseDuplicateGaps(gaps)
+    }
+
+    private static func patternGaps(_ pattern: String, _ kind: String, _ message: String, _ searchable: String, _ original: String, _ item: InventoryItem) -> [CoverageGap] {
+        regexMatches(pattern, in: searchable, dotMatchesLineSeparators: true).compactMap { match in
+            guard let range = Range(match.range, in: searchable),
+                  searchable[range].contains(where: { !$0.isWhitespace }) else {
+                return nil
+            }
+            let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+            let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: searchable)
+            return gap(kind, item, start, end, message)
+        }
+    }
+
+    private static func collapseDuplicateGaps(_ gaps: [CoverageGap]) -> [CoverageGap] {
+        var seen: Set<String> = []
+        var collapsed: [CoverageGap] = []
+        for gap in gaps.sorted(by: { [$0.filePath, String($0.startLine), $0.kind].joined(separator: "|") < [$1.filePath, String($1.startLine), $1.kind].joined(separator: "|") }) {
+            let key = [gap.filePath, String(gap.startLine), gap.kind].joined(separator: "|")
+            guard seen.insert(key).inserted else { continue }
+            collapsed.append(gap)
+        }
+        return collapsed
+    }
+
+    private static func isGeneratedPath(_ relativePath: String) -> Bool {
+        let segments = relativePath.split(separator: "/").map(String.init)
+        return segments.contains("Generated") || relativePath.hasSuffix(".generated.swift")
+    }
+
+    private static func gap(_ kind: String, _ item: InventoryItem, _ startLine: Int, _ endLine: Int, _ message: String) -> CoverageGap {
+        CoverageGap(kind: kind, ruleId: RuleIds.reducedCoverageGap, message: message, filePath: item.relativePath, startLine: max(1, startLine), endLine: max(max(1, startLine), endLine))
+    }
+}
+
 enum RuleIds {
     static let repoManifest = "swift.repo.manifest.v1"
     static let fileInventory = "swift.file.inventory.v1"
@@ -519,6 +603,7 @@ enum RuleIds {
     static let swiftHttpClientLibrary = "swift.http.client-library.v1"
     static let swiftHttpAnalysisGap = "swift.http.analysis-gap.v1"
     static let toolchainDiagnostic = "swift.toolchain.diagnostic.v1"
+    static let reducedCoverageGap = "swift.reduced-coverage.gap.v1"
     static let analysisGap = "swift.analysis-gap.v1"
     static let toolchainUnavailable = "swift.toolchain.unavailable.v1"
     static let projectLoadFailed = "swift.project.load-failed.v1"
@@ -1210,7 +1295,14 @@ enum DependencyExtractor {
 }
 
 enum FactFactory {
-    static func facts(manifest: ScanManifest, inventory: [InventoryItem], gaps: [CoverageGap], scanRoot: URL, syntax: SwiftSyntaxExtraction = SwiftSyntaxExtraction(declarations: [], imports: [], calls: [], constructions: [], relationships: [], gaps: [])) -> [CodeFact] {
+    static func facts(
+        manifest: ScanManifest,
+        inventory: [InventoryItem],
+        gaps: [CoverageGap],
+        toolchainDiagnostics: [ToolchainDiagnostic] = [],
+        scanRoot: URL,
+        syntax: SwiftSyntaxExtraction = SwiftSyntaxExtraction(declarations: [], imports: [], calls: [], constructions: [], relationships: [], gaps: [])
+    ) -> [CodeFact] {
         var facts: [CodeFact] = []
         facts.append(makeFact(
             manifest: manifest,
@@ -1230,6 +1322,7 @@ enum FactFactory {
                 "scanRootRelativePath": manifest.scanRootRelativePath ?? "."
             ]
         ))
+        facts += toolchainFacts(manifest: manifest, diagnostics: toolchainDiagnostics)
         for item in inventory where item.selected {
             facts.append(makeFact(
                 manifest: manifest,
@@ -1326,6 +1419,37 @@ enum FactFactory {
             ))
         }
         return facts
+    }
+
+    private static func toolchainFacts(manifest: ScanManifest, diagnostics: [ToolchainDiagnostic]) -> [CodeFact] {
+        diagnostics.sorted { [$0.category, $0.toolName, $0.status].joined(separator: "|") < [$1.category, $1.toolName, $1.status].joined(separator: "|") }.map { diagnostic in
+            var properties = [
+                "coverageCeiling": "diagnostic",
+                "diagnosticKind": "toolchain",
+                "language": "swift",
+                "requiredFor": diagnostic.requiredFor,
+                "staticEvidenceOnly": "true",
+                "toolCategory": diagnostic.category,
+                "toolName": diagnostic.toolName,
+                "toolStatus": diagnostic.status
+            ]
+            if let gapKind = diagnostic.gapKind {
+                properties["gapKind"] = gapKind
+            }
+            return makeFact(
+                manifest: manifest,
+                factType: "SwiftToolchainDiagnostic",
+                ruleId: RuleIds.toolchainDiagnostic,
+                evidenceTier: .tier4Unknown,
+                filePath: "scan-manifest.json",
+                startLine: 1,
+                endLine: 1,
+                targetSymbol: diagnostic.toolName,
+                contractElement: diagnostic.status,
+                identityDiscriminator: [diagnostic.category, diagnostic.toolName, diagnostic.status, diagnostic.requiredFor].joined(separator: "\u{1f}"),
+                properties: properties
+            )
+        }
     }
 
     private static func dependencyFacts(manifest: ScanManifest, dependencies: [DependencyRecord], aggregateFactIdsByPath: [String: [String]]) -> [CodeFact] {
@@ -1600,12 +1724,25 @@ enum FactFactory {
             "ConditionalCompilationAmbiguous",
             "SwiftParseDiagnostics",
             "carthage-toolchain-unavailable",
+            "carthage-toolchain-timeout",
             "cocoapods-toolchain-unavailable",
+            "cocoapods-toolchain-timeout",
             "file-too-large",
             "no-supported-swift-inputs",
             "plist-binary-unsupported",
             "plist-malformed",
             "plist-unreadable",
+            "swift-conditional-compilation-reduced",
+            "swift-generated-code-reduced",
+            "swift-macro-expansion-unsupported",
+            "swift-nib-wiring-unresolved",
+            "swift-objective-c-bridging-reduced",
+            "swift-protocol-dispatch-reduced",
+            "swift-reflection-dynamic",
+            "swift-selector-dynamic",
+            "swift-sourcekit-timeout",
+            "swift-sourcekit-unavailable",
+            "swift-storyboard-wiring-unresolved",
             "swift-call-optional-chaining-unresolved",
             "swift-call-unsupported-shape",
             "swift-ambiguous-symbol-identity",
@@ -1617,6 +1754,7 @@ enum FactFactory {
             "swift-source-unreadable",
             "swift-unresolved-external-symbol",
             "swift-toolchain-unavailable",
+            "swift-toolchain-timeout",
             "swiftpm-manifest-dynamic",
             "swiftpm-manifest-unreadable",
             "swiftpm-resolved-malformed",
@@ -1624,7 +1762,8 @@ enum FactFactory {
             "xcode-project-graph-deferred",
             "xcode-workspace-external-reference",
             "xcode-workspace-unreadable",
-            "xcodebuild-toolchain-unavailable"
+            "xcodebuild-toolchain-unavailable",
+            "xcodebuild-toolchain-timeout"
         ]
         if gaps.contains(where: { degradingKinds.contains($0.kind) }) {
             return "SwiftInventoryReduced"
@@ -2049,6 +2188,23 @@ enum OutputWriter {
             lines += ["", "### By Path Status", ""]
             lines += markdownTable(count(httpFacts.compactMap { $0.properties["pathStatus"] }))
         }
+        let diagnosticFacts = facts.filter { $0.factType == "SwiftToolchainDiagnostic" || ($0.factType == "AnalysisGap" && ($0.ruleId == RuleIds.reducedCoverageGap || $0.ruleId == RuleIds.toolchainDiagnostic)) }
+        if !diagnosticFacts.isEmpty {
+            lines += ["", "## Swift Diagnostics And Coverage", ""]
+            let toolchainFacts = diagnosticFacts.filter { $0.factType == "SwiftToolchainDiagnostic" }
+            if !toolchainFacts.isEmpty {
+                lines += ["### Toolchain Status", ""]
+                lines += markdownTable(count(toolchainFacts.compactMap { fact in
+                    guard let name = fact.properties["toolName"], let status = fact.properties["toolStatus"] else { return nil }
+                    return "\(name):\(status)"
+                }))
+            }
+            let unsupportedGaps = diagnosticFacts.filter { $0.factType == "AnalysisGap" }
+            if !unsupportedGaps.isEmpty {
+                lines += ["", "### Reduced-Coverage Gap Kinds", ""]
+                lines += markdownTable(count(unsupportedGaps.compactMap { $0.properties["gapKind"] }))
+            }
+        }
         lines += ["", "## Known Gaps", ""]
         lines += manifest.knownGaps.isEmpty ? ["- None"] : manifest.knownGaps.map { "- \($0)" }
         lines += [
@@ -2240,40 +2396,105 @@ enum SQLiteWriter {
 }
 
 enum Toolchain {
-    static func diagnostics(inventory: [InventoryItem]) -> [CoverageGap] {
-        var gaps: [CoverageGap] = []
-        if inventory.contains(where: { $0.kind == "swift-source" || $0.kind == "swiftpm-manifest" || $0.kind == "swiftpm-resolved" }),
-           !toolAvailable(label: "swift", executable: "/usr/bin/env", arguments: ["swift", "--version"]) {
-            gaps.append(CoverageGap(kind: "swift-toolchain-unavailable", ruleId: RuleIds.toolchainDiagnostic, message: "Swift toolchain probe unavailable or timed out; file-based inventory continued."))
+    static func diagnostics(inventory: [InventoryItem]) -> ToolchainExtraction {
+        let probes = requiredProbes(inventory: inventory)
+        let diagnostics = probes.map { probe -> ToolchainDiagnostic in
+            let status = toolStatus(probe: probe)
+            return ToolchainDiagnostic(
+                toolName: probe.name,
+                category: probe.category,
+                status: status,
+                requiredFor: probe.requiredFor,
+                gapKind: status == "available" ? nil : probe.gapKind(status: status),
+                message: probe.message(status: status)
+            )
         }
-        if inventory.contains(where: { $0.kind.hasPrefix("xcode-") || $0.kind == "plist" }),
-           !toolAvailable(label: "xcodebuild", executable: "/usr/bin/env", arguments: ["xcodebuild", "-version"]) {
-            gaps.append(CoverageGap(kind: "xcodebuild-toolchain-unavailable", ruleId: RuleIds.toolchainDiagnostic, message: "Xcode command-line probe unavailable or timed out; Xcode metadata remains checked-in inventory only."))
+        let gaps = diagnostics.compactMap { diagnostic -> CoverageGap? in
+            guard let gapKind = diagnostic.gapKind else { return nil }
+            return CoverageGap(kind: gapKind, ruleId: RuleIds.toolchainDiagnostic, message: diagnostic.message)
         }
-        if inventory.contains(where: { $0.kind == "cocoapods-metadata" }),
-           !toolAvailable(label: "pod", executable: "/usr/bin/env", arguments: ["pod", "--version"]) {
-            gaps.append(CoverageGap(kind: "cocoapods-toolchain-unavailable", ruleId: RuleIds.toolchainDiagnostic, message: "CocoaPods probe unavailable or timed out; CocoaPods metadata remains checked-in inventory only."))
-        }
-        if inventory.contains(where: { $0.kind == "carthage-metadata" }),
-           !toolAvailable(label: "carthage", executable: "/usr/bin/env", arguments: ["carthage", "version"]) {
-            gaps.append(CoverageGap(kind: "carthage-toolchain-unavailable", ruleId: RuleIds.toolchainDiagnostic, message: "Carthage probe unavailable or timed out; Carthage metadata remains checked-in inventory only."))
-        }
-        return gaps
+        return ToolchainExtraction(diagnostics: diagnostics, gaps: gaps.sorted { $0.kind < $1.kind })
     }
 
     static func swiftAvailable() -> Bool {
-        if ProcessInfo.processInfo.environment["TRACEMAP_SWIFT_DISABLE_TOOLCHAIN"] == "1" {
+        if env("TRACEMAP_SWIFT_DISABLE_TOOLCHAIN") == "1" {
             return false
         }
-        return toolAvailable(label: "swift", executable: "/usr/bin/env", arguments: ["swift", "--version"])
+        return toolStatus(probe: ToolProbe(name: "swift", category: "swift", requiredFor: "swift-source", executable: "/usr/bin/env", arguments: ["swift", "--version"], unavailableGapKind: "swift-toolchain-unavailable", timeoutGapKind: "swift-toolchain-timeout", unavailableMessage: "Swift toolchain probe unavailable; file-based inventory continued.", timeoutMessage: "Swift toolchain probe timed out; file-based inventory continued.")) == "available"
     }
 
-    private static func toolAvailable(label: String, executable: String, arguments: [String]) -> Bool {
-        if ProcessInfo.processInfo.environment["TRACEMAP_SWIFT_DISABLE_TOOLCHAIN"] == "1" {
-            return false
+    private static func requiredProbes(inventory: [InventoryItem]) -> [ToolProbe] {
+        var probes: [ToolProbe] = []
+        if inventory.contains(where: { $0.kind == "swift-source" || $0.kind == "swiftpm-manifest" || $0.kind == "swiftpm-resolved" }) {
+            probes.append(ToolProbe(name: "swift", category: "swift", requiredFor: "swift-source", executable: "/usr/bin/env", arguments: ["swift", "--version"], unavailableGapKind: "swift-toolchain-unavailable", timeoutGapKind: "swift-toolchain-timeout", unavailableMessage: "Swift toolchain probe unavailable; file-based inventory continued.", timeoutMessage: "Swift toolchain probe timed out; file-based inventory continued."))
+            probes.append(ToolProbe(name: "sourcekit-lsp", category: "sourcekit", requiredFor: "semantic-enrichment", executable: "/usr/bin/env", arguments: ["sourcekit-lsp", "--help"], unavailableGapKind: "swift-sourcekit-unavailable", timeoutGapKind: "swift-sourcekit-timeout", unavailableMessage: "SourceKit/sourcekit-lsp probe unavailable; semantic enrichment remains unavailable.", timeoutMessage: "SourceKit/sourcekit-lsp probe timed out; semantic enrichment remains unavailable."))
         }
-        return (try? runProcess(executable: executable, arguments: arguments, timeoutSeconds: 5)) != nil
+        if inventory.contains(where: { $0.kind.hasPrefix("xcode-") || ["plist", "storyboard", "xib"].contains($0.kind) }) {
+            probes.append(ToolProbe(name: "xcodebuild", category: "xcode", requiredFor: "xcode-metadata", executable: "/usr/bin/env", arguments: ["xcodebuild", "-version"], unavailableGapKind: "xcodebuild-toolchain-unavailable", timeoutGapKind: "xcodebuild-toolchain-timeout", unavailableMessage: "Xcode command-line probe unavailable; Xcode metadata remains checked-in inventory only.", timeoutMessage: "Xcode command-line probe timed out; Xcode metadata remains checked-in inventory only."))
+        }
+        if inventory.contains(where: { $0.kind == "cocoapods-metadata" }) {
+            probes.append(ToolProbe(name: "pod", category: "cocoapods", requiredFor: "cocoapods-metadata", executable: "/usr/bin/env", arguments: ["pod", "--version"], unavailableGapKind: "cocoapods-toolchain-unavailable", timeoutGapKind: "cocoapods-toolchain-timeout", unavailableMessage: "CocoaPods probe unavailable; CocoaPods metadata remains checked-in inventory only.", timeoutMessage: "CocoaPods probe timed out; CocoaPods metadata remains checked-in inventory only."))
+        }
+        if inventory.contains(where: { $0.kind == "carthage-metadata" }) {
+            probes.append(ToolProbe(name: "carthage", category: "carthage", requiredFor: "carthage-metadata", executable: "/usr/bin/env", arguments: ["carthage", "version"], unavailableGapKind: "carthage-toolchain-unavailable", timeoutGapKind: "carthage-toolchain-timeout", unavailableMessage: "Carthage probe unavailable; Carthage metadata remains checked-in inventory only.", timeoutMessage: "Carthage probe timed out; Carthage metadata remains checked-in inventory only."))
+        }
+        return probes.sorted { [$0.category, $0.name].joined(separator: "|") < [$1.category, $1.name].joined(separator: "|") }
     }
+
+    private static func toolStatus(probe: ToolProbe) -> String {
+        if let override = statusOverride(for: probe.name) {
+            return override
+        }
+        if env("TRACEMAP_SWIFT_DISABLE_TOOLCHAIN") == "1" {
+            return "not-found"
+        }
+        do {
+            _ = try runProcess(executable: probe.executable, arguments: probe.arguments, timeoutSeconds: 5)
+            return "available"
+        } catch {
+            if String(describing: error).contains("timed out") {
+                return "timeout"
+            }
+            let description = String(describing: error)
+            return description.contains("No such file") || description.contains("not found") ? "not-found" : "error-redacted"
+        }
+    }
+
+    private static func statusOverride(for tool: String) -> String? {
+        guard let raw = env("TRACEMAP_SWIFT_TOOL_STATUS_OVERRIDES") else { return nil }
+        let allowed = Set(["available", "not-found", "timeout", "unsupported", "not-probed", "error-redacted"])
+        for entry in raw.split(separator: ",") {
+            let parts = entry.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            guard parts.count == 2, parts[0] == tool, allowed.contains(parts[1]) else { continue }
+            return parts[1]
+        }
+        return nil
+    }
+}
+
+private struct ToolProbe {
+    let name: String
+    let category: String
+    let requiredFor: String
+    let executable: String
+    let arguments: [String]
+    let unavailableGapKind: String
+    let timeoutGapKind: String
+    let unavailableMessage: String
+    let timeoutMessage: String
+
+    func gapKind(status: String) -> String {
+        status == "timeout" ? timeoutGapKind : unavailableGapKind
+    }
+
+    func message(status: String) -> String {
+        status == "timeout" ? timeoutMessage : unavailableMessage
+    }
+}
+
+func env(_ name: String) -> String? {
+    guard let value = getenv(name) else { return nil }
+    return String(cString: value)
 }
 
 func runProcess(executable: String, arguments: [String], input: String? = nil, timeoutSeconds: TimeInterval = 30) throws -> String {
