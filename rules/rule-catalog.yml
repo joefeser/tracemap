@@ -4743,7 +4743,7 @@ rules:
   - id: swift.syntax.extension-membership.v1
     name: SwiftSyntax extension membership evidence
     description: Reserved SwiftSyntax rule for explicit extension membership evidence when extension-local containers or source-local extended-type attachment are emitted by a future slice.
-    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    evidenceTier: Tier3SyntaxOrTextual
     emits:
       - SwiftDeclarationDeclared
       - AnalysisGap
