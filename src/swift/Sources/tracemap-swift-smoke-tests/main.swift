@@ -601,7 +601,8 @@ struct TraceMapSwiftSmokeTests {
         let storageFacts = result.facts.filter { $0.ruleId.hasPrefix("swift.storage.") && $0.factType != "AnalysisGap" && $0.factType != "FileInventoried" }
         assert(storageFacts.contains { $0.factType == "SwiftCoreDataModelDeclared" && $0.properties["frameworkFamily"] == "coredata" })
         assert(storageFacts.contains { $0.factType == "SwiftCoreDataEntityDeclared" && $0.properties["entityName"] == "User" })
-        assert(storageFacts.contains { $0.factType == "SwiftCoreDataPropertyDeclared" && $0.properties["propertyName"] == "email" })
+        assert(storageFacts.contains { $0.factType == "SwiftCoreDataPropertyDeclared" && $0.properties["propertyName"] == "email" && $0.properties["entityName"] == "User" })
+        assert(storageFacts.contains { $0.factType == "SwiftCoreDataPropertyDeclared" && $0.properties["propertyName"] == "total" && $0.properties["entityName"] == "Order" })
         assert(storageFacts.contains { $0.factType == "SwiftUserDefaultsKeyAccessed" && $0.properties["operationDirection"] == "write" && $0.properties["normalizedKey"] == "hasCompletedOnboarding" })
         assert(storageFacts.contains { $0.factType == "SwiftUserDefaultsKeyAccessed" && $0.properties["operationDirection"] == "read" && $0.properties["normalizedKey"] == "launchCount" })
         assert(storageFacts.contains { $0.factType == "SwiftUserDefaultsKeyAccessed" && $0.properties["keyIdentityStatus"] == "hashed" && $0.properties["keyHash"] != nil })

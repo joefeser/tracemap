@@ -159,7 +159,7 @@ public enum SwiftScanEngine {
         let dependencies = DependencyExtractor.extract(scanRoot: repo, inventory: inventory)
         let http = SwiftHttpExtractor.extract(scanRoot: repo, inventory: inventory)
         let ui = SwiftUiExtractor.extract(scanRoot: repo, inventory: inventory)
-        let storage = SwiftStorageExtractor.extract(scanRoot: repo, inventory: inventory)
+        let storage = SwiftStorageExtractor.extract(scanRoot: repo, inventory: inventory, maxFileByteSize: options.maxFileByteSize)
         gaps += dependencies.gaps
         gaps += http.gaps
         gaps += ui.gaps
@@ -1470,7 +1470,7 @@ struct SwiftStorageRecord {
 }
 
 enum SwiftStorageExtractor {
-    static func extract(scanRoot: URL, inventory: [InventoryItem]) -> SwiftStorageExtraction {
+    static func extract(scanRoot: URL, inventory: [InventoryItem], maxFileByteSize: Int = TraceMapSwiftVersion.defaultMaxFileByteSize) -> SwiftStorageExtraction {
         var records: [SwiftStorageRecord] = []
         var gaps: [CoverageGap] = []
         for item in inventory where item.selected {
@@ -1499,7 +1499,7 @@ enum SwiftStorageExtractor {
                         "runtimeModelChoiceProven": "false"
                     ]
                 ))
-                let extracted = coreDataModelBundle(url: url, item: item)
+                let extracted = coreDataModelBundle(url: url, item: item, maxFileByteSize: maxFileByteSize)
                 records += extracted.records
                 gaps += extracted.gaps
             case "sql-resource":
@@ -1521,7 +1521,7 @@ enum SwiftStorageExtractor {
         )
     }
 
-    private static func coreDataModelBundle(url: URL, item: InventoryItem) -> SwiftStorageExtraction {
+    private static func coreDataModelBundle(url: URL, item: InventoryItem, maxFileByteSize: Int) -> SwiftStorageExtraction {
         guard let enumerator = FileManager.default.enumerator(
             at: url,
             includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
@@ -1539,6 +1539,10 @@ enum SwiftStorageExtractor {
                   (try? child.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { continue }
             let childRelativePath = item.relativePath + "/" + relativePath(from: url, to: child)
             let size = (try? child.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            guard size <= maxFileByteSize else {
+                gaps.append(gap("swift-storage-coredata-too-large", item, item.startLine, item.endLine, "CoreData model bundle content exceeded the configured file-size limit; storage extraction is partial."))
+                continue
+            }
             let modelItem = InventoryItem(
                 relativePath: childRelativePath,
                 kind: "coredata-model",
@@ -1586,11 +1590,13 @@ enum SwiftStorageExtractor {
                 ]
             )
         ]
+        var entityRanges: [(range: NSRange, entity: SafeIdentity)] = []
         for (ordinal, match) in regexMatches(#"<entity\b[^>]*>"#, in: text).enumerated() {
             guard let tag = matchText(match, in: text) else { continue }
             let attributes = xmlAttributes(tag)
             let entity = safeOrHash(attributes["name"], role: "coredata-entity")
             let start = lineNumber(atUTF16Offset: match.range.location, in: text)
+            entityRanges.append((match.range, entity))
             var properties = coreDataProperties(kind: "entity", modelHash: modelHash, entity: entity)
             properties["abstract"] = boolString(attributes["isAbstract"])
             properties["managedClassName"] = safeOrHash(attributes["representedClassName"], role: "coredata-class").display
@@ -1610,10 +1616,10 @@ enum SwiftStorageExtractor {
                 properties: properties
             ))
         }
-        records += coreDataPropertyRecords(text: text, item: item, modelHash: modelHash, pattern: #"<attribute\b[^>]*>"#, propertyKind: "attribute")
-        records += coreDataPropertyRecords(text: text, item: item, modelHash: modelHash, pattern: #"<relationship\b[^>]*>"#, propertyKind: "relationship")
-        records += coreDataPropertyRecords(text: text, item: item, modelHash: modelHash, pattern: #"<fetchedProperty\b[^>]*>"#, propertyKind: "fetched-property")
-        records += coreDataPropertyRecords(text: text, item: item, modelHash: modelHash, pattern: #"<fetchRequest\b[^>]*>"#, propertyKind: "fetch-request")
+        records += coreDataPropertyRecords(text: text, item: item, modelHash: modelHash, pattern: #"<attribute\b[^>]*>"#, propertyKind: "attribute", entityRanges: entityRanges)
+        records += coreDataPropertyRecords(text: text, item: item, modelHash: modelHash, pattern: #"<relationship\b[^>]*>"#, propertyKind: "relationship", entityRanges: entityRanges)
+        records += coreDataPropertyRecords(text: text, item: item, modelHash: modelHash, pattern: #"<fetchedProperty\b[^>]*>"#, propertyKind: "fetched-property", entityRanges: entityRanges)
+        records += coreDataPropertyRecords(text: text, item: item, modelHash: modelHash, pattern: #"<fetchRequest\b[^>]*>"#, propertyKind: "fetch-request", entityRanges: entityRanges)
         return SwiftStorageExtraction(records: records, gaps: [])
     }
 
@@ -1625,14 +1631,15 @@ enum SwiftStorageExtractor {
         return safeLabel(url.deletingPathExtension().lastPathComponent)
     }
 
-    private static func coreDataPropertyRecords(text: String, item: InventoryItem, modelHash: String, pattern: String, propertyKind: String) -> [SwiftStorageRecord] {
+    private static func coreDataPropertyRecords(text: String, item: InventoryItem, modelHash: String, pattern: String, propertyKind: String, entityRanges: [(range: NSRange, entity: SafeIdentity)]) -> [SwiftStorageRecord] {
         regexMatches(pattern, in: text).enumerated().compactMap { ordinal, match in
             guard let tag = matchText(match, in: text) else { return nil }
             let attributes = xmlAttributes(tag)
             let property = safeOrHash(attributes["name"], role: "coredata-property")
             let destination = safeOrHash(attributes["destinationEntity"], role: "coredata-destination")
             let start = lineNumber(atUTF16Offset: match.range.location, in: text)
-            var properties = coreDataProperties(kind: propertyKind, modelHash: modelHash, entity: property)
+            let containingEntity = coreDataContainingEntity(for: match.range.location, entityRanges: entityRanges)
+            var properties = coreDataProperties(kind: propertyKind, modelHash: modelHash, entity: containingEntity)
             properties["propertyName"] = property.display
             properties["propertyNameStatus"] = property.status
             properties["propertyKind"] = propertyKind
@@ -1654,6 +1661,11 @@ enum SwiftStorageExtractor {
                 properties: properties
             )
         }
+    }
+
+    private static func coreDataContainingEntity(for offset: Int, entityRanges: [(range: NSRange, entity: SafeIdentity)]) -> SafeIdentity {
+        let candidates = entityRanges.filter { range, _ in range.location <= offset }
+        return candidates.max { left, right in left.range.location < right.range.location }?.entity ?? safeOrHash(nil, role: "coredata-entity")
     }
 
     private static func swiftSource(text: String, item: InventoryItem) -> SwiftStorageExtraction {
@@ -1697,7 +1709,7 @@ enum SwiftStorageExtractor {
         for (pattern, direction) in aliasPatterns {
             for (ordinal, match) in regexMatches(pattern, in: searchable).enumerated() {
                 guard let name = capture(match, 1, in: searchable),
-                      let key = constants[name] ?? constants[name.split(separator: ".").last.map(String.init) ?? name] else { continue }
+                      let key = literalConstantValue(for: name, constants: constants) else { continue }
                 let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
                 records.append(userDefaultsRecord(key: key, item: item, start: start, end: start, apiName: "literal-alias", direction: direction, ordinal: match.range.location + ordinal))
             }
@@ -1879,9 +1891,11 @@ enum SwiftStorageExtractor {
             let close = matchingBraceOffset(in: searchable, openOffset: open) ?? min(searchable.utf16.count, open + 1500)
             let body = textSlice(text, start: open, end: close)
             let primaryKey = firstCapture(#"primaryKey\s*\(\s*\)\s*->\s*String\??\s*\{[^\"]*\"([^\"]+)\""#, in: body)
+            let modelIdentity = safeOrHash(typeName, role: "realm-model")
             var properties = baseProperties(framework: "realm")
             properties["realmModelKind"] = safeLabel(capture(match, 2, in: searchable))
-            properties["typeName"] = safeLabel(typeName)
+            properties["typeName"] = modelIdentity.display
+            properties["typeNameStatus"] = modelIdentity.status
             properties["runtimeSchemaProven"] = "false"
             if let primaryKey {
                 properties["primaryKeyName"] = safeOrHash(primaryKey, role: "realm-primary-key").display
@@ -1893,7 +1907,7 @@ enum SwiftStorageExtractor {
                 item: item,
                 start: start,
                 end: start,
-                safeIdentity: safeLabel(typeName),
+                safeIdentity: modelIdentity.display,
                 role: "realm-model",
                 ordinal: ordinal,
                 properties: properties
@@ -1907,7 +1921,8 @@ enum SwiftStorageExtractor {
                 propertyInfo["propertyKind"] = "persisted"
                 propertyInfo["propertyName"] = column.display
                 propertyInfo["propertyNameStatus"] = column.status
-                propertyInfo["tableName"] = safeLabel(typeName)
+                propertyInfo["tableName"] = modelIdentity.display
+                propertyInfo["tableNameStatus"] = modelIdentity.status
                 propertyInfo["columnName"] = column.display
                 propertyInfo["runtimeSchemaProven"] = "false"
                 if let propertyType = capture(propertyMatch, 2, in: body) {
@@ -1920,7 +1935,7 @@ enum SwiftStorageExtractor {
                     item: item,
                     start: propertyStart,
                     end: propertyStart,
-                    safeIdentity: "\(safeLabel(typeName)).\(column.display)",
+                    safeIdentity: "\(modelIdentity.display).\(column.display)",
                     role: "realm-property",
                     ordinal: open + propertyMatch.range.location,
                     properties: propertyInfo
@@ -1957,9 +1972,7 @@ enum SwiftStorageExtractor {
     }
 
     private static func resolvesToLiteralConstant(_ argument: String, constants: [String: String]) -> Bool {
-        if constants[argument] != nil { return true }
-        if let last = argument.split(separator: ".").last.map(String.init), constants[last] != nil { return true }
-        return false
+        literalConstantValue(for: argument, constants: constants) != nil
     }
 
     private static func literalStringConstants(text: String, searchable: String) -> [String: String] {
@@ -1970,7 +1983,24 @@ enum SwiftStorageExtractor {
                   let value = capture(match, 2, in: text) else { continue }
             constants[name] = value
         }
+        for containerMatch in regexMatches(#"\b(?:enum|struct|class)\s+([A-Za-z_][A-Za-z0-9_]*)\b[^{]*\{"#, in: searchable) {
+            guard let containerName = capture(containerMatch, 1, in: searchable) else { continue }
+            let open = containerMatch.range.location + containerMatch.range.length - 1
+            guard let close = matchingBraceOffset(in: searchable, openOffset: open), close > open else { continue }
+            let body = textSlice(text, start: open, end: close)
+            for constantMatch in regexMatches(#"\bstatic\s+let\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"([^"]+)""#, in: body) {
+                guard let name = capture(constantMatch, 1, in: body),
+                      let value = capture(constantMatch, 2, in: body) else { continue }
+                constants["\(containerName).\(name)"] = value
+            }
+        }
         return constants
+    }
+
+    private static func literalConstantValue(for name: String, constants: [String: String]) -> String? {
+        if let value = constants[name] { return value }
+        guard !name.contains(".") else { return nil }
+        return constants[name]
     }
 
     private static func record(factType: String, ruleId: String, tier: EvidenceTier, item: InventoryItem, start: Int, end: Int, safeIdentity: String, role: String, ordinal: Int, properties: [String: String]) -> SwiftStorageRecord {
@@ -2065,8 +2095,9 @@ enum SwiftStorageExtractor {
     }
 
     private static func normalizeSQLForShape(_ sql: String) -> String {
-        var value = sql.replacingOccurrences(of: #"(?s)/\*.*?\*/"#, with: " ", options: .regularExpression)
+        var value = sql.trimmingCharacters(in: .whitespacesAndNewlines)
         value = value.replacingOccurrences(of: #"--[^\n\r]*"#, with: " ", options: .regularExpression)
+        value = value.replacingOccurrences(of: #"(?s)/\*.*?\*/"#, with: " ", options: .regularExpression)
         value = value.replacingOccurrences(of: #"'([^']|'')*'"#, with: "?", options: .regularExpression)
         value = value.replacingOccurrences(of: #""([^"]|"")*""#, with: "?", options: .regularExpression)
         value = value.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
