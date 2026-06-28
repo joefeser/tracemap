@@ -12,6 +12,7 @@ struct TraceMapSwiftSmokeTests {
         try duplicateSymbolIdentitiesEmitGapsAndDistinctIds()
         try duplicateSymbolRelationshipsUseRewrittenIds()
         try malformedMultipleSuperclassCandidatesDoNotCrash()
+        try remoteUrlsAreHashedInManifest()
         try dangerousOutputPathsAreRejected()
         try detachedHeadBranchIsUnknown()
         try defaultExcludesUsePathSegments()
@@ -200,6 +201,19 @@ struct TraceMapSwiftSmokeTests {
         assert(result.facts.contains { $0.factType == "SymbolRelationship" && $0.properties["relationshipKind"] == "InheritsFrom" })
         assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.syntax.identity-gap.v1" && $0.properties["gapKind"] == "swift-ambiguous-symbol-identity" })
         assert(!result.facts.contains { $0.factType == "SymbolRelationship" && $0.properties["relationshipKind"] == "Overrides" && ($0.properties["sourceSymbolDisplayName"] ?? "").contains("run") })
+    }
+
+    static func remoteUrlsAreHashedInManifest() throws {
+        let fixture = try SwiftFixture()
+        let rawRemote = "https://token@example.invalid/customer/private.git"
+        try run("/usr/bin/git", ["-C", fixture.repo.path, "remote", "add", "origin", rawRemote])
+        let out = fixture.temp.url.appendingPathComponent("scan")
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: out))
+        let manifestText = try String(contentsOf: out.appendingPathComponent("scan-manifest.json"), encoding: .utf8)
+        assert(result.manifest.remoteUrl?.hasPrefix("sha256:") == true)
+        assert(!manifestText.contains(rawRemote))
+        assert(!manifestText.contains("customer/private"))
+        assert(!manifestText.contains("token@"))
     }
 
     static func defaultExcludesUsePathSegments() throws {
@@ -463,6 +477,7 @@ struct TraceMapSwiftSmokeTests {
           var dynamicRequest = URLRequest(url: dynamicURL)
           dynamicRequest.httpMethod = "GET"
           URLSession.shared.dataTask(with: dynamicRequest)
+          let dynamicOne = URLRequest(url: dynamicURL); let dynamicTwo = URLRequest(url: dynamicURL)
 
           // AF.request("https://api.example.invalid/v1/commented-out", method: .get)
           AF.request("https://api.example.invalid/v1/orders/42", method: .get)
@@ -499,6 +514,10 @@ struct TraceMapSwiftSmokeTests {
         assert(gapKinds.contains("swift-http-method-unknown-projection-omitted"))
         assert(gapKinds.contains("swift-http-url-dynamic"))
         assert(gapKinds.contains("swift-http-moya-target-partial"))
+        let dynamicHttpGaps = result.facts.filter { $0.factType == "AnalysisGap" && $0.ruleId == "swift.http.analysis-gap.v1" && $0.properties["gapKind"] == "swift-http-url-dynamic" }
+        assert(dynamicHttpGaps.count >= 3)
+        assert(Set(dynamicHttpGaps.map(\.factId)).count == dynamicHttpGaps.count)
+        assert(dynamicHttpGaps.allSatisfy { $0.properties["gapOrdinal"] != nil })
         assert(!httpFacts.contains { $0.properties["normalizedPathKey"] == "/v1/unknown" })
         assert(!httpFacts.contains { $0.properties["normalizedPathKey"] == "/v1/missing-method" })
         assert(!httpFacts.contains { $0.properties["normalizedPathKey"] == "/v1/commented-out" })
