@@ -99,6 +99,7 @@ swift build --package-path src/swift
 swift run --package-path src/swift tracemap-swift-smoke-tests
 swift run --package-path src/swift tracemap-swift scan --repo samples/swift-package-basic --out /tmp/tracemap-swift-package-basic
 swift run --package-path src/swift tracemap-swift scan --repo samples/swift-dependency-surfaces --out /tmp/tracemap-swift-dependency-surfaces
+swift run --package-path src/swift tracemap-swift scan --repo samples/swift-http-api-client-surfaces --out /tmp/tracemap-swift-http-api-client-surfaces
 swift run --package-path src/swift tracemap-swift scan --repo samples/swift-metadata-reduced --out /tmp/tracemap-swift-metadata-reduced
 swift run --package-path src/swift tracemap-swift scan --repo samples/swift-metadata-unsupported --out /tmp/tracemap-swift-metadata-unsupported
 swift run --package-path src/swift tracemap-swift scan --repo samples/no-swift --out /tmp/tracemap-no-swift
@@ -108,6 +109,9 @@ test -f /tmp/tracemap-swift-package-basic/index.sqlite
 test -f /tmp/tracemap-swift-package-basic/report.md
 test -f /tmp/tracemap-swift-package-basic/logs/analyzer.log
 test -f /tmp/tracemap-swift-dependency-surfaces/facts.ndjson
+test -f /tmp/tracemap-swift-http-api-client-surfaces/facts.ndjson
+test -f /tmp/tracemap-swift-http-api-client-surfaces/index.sqlite
+test -f /tmp/tracemap-swift-http-api-client-surfaces/report.md
 test -f /tmp/tracemap-swift-metadata-reduced/scan-manifest.json
 test -f /tmp/tracemap-swift-metadata-unsupported/scan-manifest.json
 test -f /tmp/tracemap-no-swift/scan-manifest.json

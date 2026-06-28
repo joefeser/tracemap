@@ -515,6 +515,9 @@ enum RuleIds {
     static let dependencyLockfileText = "swift.dependency.lockfile.text.v1"
     static let dependencySurface = "swift.dependency.surface.v1"
     static let dependencyAnalysisGap = "swift.dependency.analysis-gap.v1"
+    static let swiftHttpURLSession = "swift.http.urlsession.v1"
+    static let swiftHttpClientLibrary = "swift.http.client-library.v1"
+    static let swiftHttpAnalysisGap = "swift.http.analysis-gap.v1"
     static let toolchainDiagnostic = "swift.toolchain.diagnostic.v1"
     static let analysisGap = "swift.analysis-gap.v1"
     static let toolchainUnavailable = "swift.toolchain.unavailable.v1"
@@ -598,6 +601,177 @@ struct DependencyRecord {
     let safeIdentity: String?
     let identityDiscriminator: String
     let properties: [String: String]
+}
+
+struct SwiftHttpExtraction {
+    let records: [SwiftHttpRecord]
+    let gaps: [CoverageGap]
+}
+
+struct SwiftHttpRecord {
+    let ruleId: String
+    let filePath: String
+    let startLine: Int
+    let endLine: Int
+    let method: String
+    let normalizedPathKey: String
+    let identityDiscriminator: String
+    let properties: [String: String]
+}
+
+enum SwiftHttpExtractor {
+    static func extract(scanRoot: URL, inventory: [InventoryItem]) -> SwiftHttpExtraction {
+        var records: [SwiftHttpRecord] = []
+        var gaps: [CoverageGap] = []
+        for item in inventory where item.selected && item.relativePath.hasSuffix(".swift") {
+            let url = scanRoot.appendingPathComponent(item.relativePath)
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            let extracted = swiftFile(text: text, item: item)
+            records += extracted.records
+            gaps += extracted.gaps
+        }
+        return SwiftHttpExtraction(
+            records: records.sorted { [$0.filePath, String(format: "%08d", $0.startLine), $0.method, $0.normalizedPathKey, $0.identityDiscriminator].joined(separator: "|") < [$1.filePath, String(format: "%08d", $1.startLine), $1.method, $1.normalizedPathKey, $1.identityDiscriminator].joined(separator: "|") },
+            gaps: gaps.sorted { [$0.filePath, String($0.startLine), $0.kind].joined(separator: "|") < [$1.filePath, String($1.startLine), $1.kind].joined(separator: "|") }
+        )
+    }
+
+    private static func swiftFile(text: String, item: InventoryItem) -> SwiftHttpExtraction {
+        let searchable = maskSwiftCommentsAndStringLiterals(text)
+        var records: [SwiftHttpRecord] = []
+        var gaps: [CoverageGap] = []
+        let requestVarMatches = regexMatches(#"\b(?:let|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*URLRequest\s*\(\s*url\s*:\s*URL\s*\(\s*string\s*:\s*"[^"]+"\s*\)\s*!?\s*\)"#, in: text, dotMatchesLineSeparators: true)
+        for (ordinal, match) in requestVarMatches.enumerated() {
+            let variable = capture(match, 1, in: text) ?? ""
+            guard let sourceRange = Range(match.range, in: text) else { continue }
+            let source = String(text[sourceRange])
+            guard let rawUrl = firstCapture(#"URL\s*\(\s*string\s*:\s*"([^"]+)""#, in: source) else { continue }
+            let start = lineNumber(atUTF16Offset: match.range.location, in: text)
+            let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: text)
+            guard let use = firstURLSessionUse(of: variable, after: match.range.location + match.range.length, in: searchable) else {
+                gaps.append(gap("swift-http-method-unknown-projection-omitted", item, start, end, "URLRequest is not passed to a recognized URLSession call in this slice; shared HTTP projection omitted."))
+                continue
+            }
+            let assignments = httpMethodAssignments(to: variable, after: match.range.location + match.range.length, before: use.range.location, in: searchable, originalText: text)
+            guard assignments.count == 1, let method = standardMethod(assignments[0].method) else {
+                gaps.append(gap(assignments.isEmpty ? "swift-http-method-unknown-projection-omitted" : "swift-http-method-dynamic", item, start, end, "URLRequest method is missing, ambiguous, or unsupported; shared HTTP projection omitted."))
+                continue
+            }
+            if let record = record(rawUrl: rawUrl, method: method, item: item, start: start, end: end, ruleId: RuleIds.swiftHttpURLSession, framework: "foundation", clientKind: "urlrequest", apiName: "URLSession.\(use.apiName)", ordinal: ordinal) {
+                records.append(record)
+            } else {
+                gaps.append(gap("swift-http-path-unsafe-omitted", item, start, end, "URLRequest path could not be safely normalized; shared HTTP projection omitted."))
+            }
+        }
+
+        let alamofireMatches = regexMatches(#"\b(AF|Alamofire|Session\.default)\.request\s*\(\s*"([^"]+)"\s*,\s*method\s*:\s*\.([A-Za-z]+)"#, in: text)
+        for (ordinal, match) in alamofireMatches.enumerated() {
+            guard let rawUrl = capture(match, 2, in: text),
+                  let method = standardMethod(capture(match, 3, in: text) ?? "") else { continue }
+            let start = lineNumber(atUTF16Offset: match.range.location, in: text)
+            let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: text)
+            if let record = record(rawUrl: rawUrl, method: method, item: item, start: start, end: end, ruleId: RuleIds.swiftHttpClientLibrary, framework: "alamofire", clientKind: "alamofire", apiName: "request", ordinal: ordinal) {
+                records.append(record)
+            } else {
+                gaps.append(gap("swift-http-path-unsafe-omitted", item, start, end, "Alamofire request path could not be safely normalized; shared HTTP projection omitted."))
+            }
+        }
+        let dynamicAlamofire = regexMatches(#"\b(AF|Alamofire|Session\.default)\.request\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*method\s*:\s*\.([A-Za-z]+)"#, in: searchable)
+        for match in dynamicAlamofire {
+            let start = lineNumber(atUTF16Offset: match.range.location, in: text)
+            let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: text)
+            gaps.append(gap("swift-http-url-dynamic", item, start, end, "Alamofire request URL argument is dynamic; shared HTTP projection omitted."))
+        }
+
+        if searchable.contains("TargetType") {
+            let pathMatch = firstMatch(#"(?m)^\s*var\s+path\s*:\s*String\s*\{\s*"([^"]+)""#, in: text)
+            let methodMatch = firstMatch(#"(?m)^\s*var\s+method\s*:[^{]+\{\s*\.([A-Za-z]+)"#, in: text)
+            let baseMatch = firstMatch(#"(?m)^\s*var\s+baseURL\s*:[^{]+\{\s*URL\s*\(\s*string\s*:\s*"([^"]+)""#, in: text)
+            let boundaryLine = lineNumber(atUTF16Offset: pathMatch?.range.location ?? methodMatch?.range.location ?? 0, in: text)
+            if let pathMatch, let rawPath = capture(pathMatch, 1, in: text), let methodMatch, let method = standardMethod(capture(methodMatch, 1, in: text) ?? "") {
+                let start = lineNumber(atUTF16Offset: pathMatch.range.location, in: text)
+                let end = lineNumber(atUTF16Offset: pathMatch.range.location + pathMatch.range.length, in: text)
+                if let record = record(rawUrl: rawPath, method: method, item: item, start: start, end: end, ruleId: RuleIds.swiftHttpClientLibrary, framework: "moya", clientKind: "moya", apiName: "TargetType.path", ordinal: records.count) {
+                    records.append(record)
+                }
+                gaps.append(gap("swift-http-moya-target-partial", item, boundaryLine, boundaryLine, baseMatch == nil ? "Moya target baseURL is missing or dynamic; full route join is not proven." : "Moya target baseURL/path join is static metadata only; runtime route reachability is not proven."))
+            } else if pathMatch != nil {
+                gaps.append(gap("swift-http-method-unknown-projection-omitted", item, boundaryLine, boundaryLine, "Moya target path is static but method is missing or dynamic; shared HTTP projection omitted."))
+            } else if searchable.contains("TargetType") {
+                gaps.append(gap("swift-http-moya-target-partial", item, boundaryLine, boundaryLine, "Moya target path is missing or dynamic; shared HTTP projection omitted."))
+            }
+        }
+        return SwiftHttpExtraction(records: records, gaps: gaps)
+    }
+
+    private static func record(rawUrl: String, method: String, item: InventoryItem, start: Int, end: Int, ruleId: String, framework: String, clientKind: String, apiName: String, ordinal: Int) -> SwiftHttpRecord? {
+        guard let parsed = parseURLSurface(rawUrl) else { return nil }
+        var properties: [String: String] = [
+            "coverageCeiling": "syntax-only",
+            "framework": framework,
+            "httpMethod": method,
+            "language": "swift",
+            "methodStatus": "present",
+            "normalizedPathKey": parsed.normalizedPathKey,
+            "pathStatus": "present",
+            "queryStatus": parsed.queryStatus,
+            "sourceLocationStatus": "literal",
+            "staticEvidenceOnly": "true",
+            "swiftApiName": apiName,
+            "swiftClientKind": clientKind,
+            "urlHash": roleHash("url", rawUrl)
+        ]
+        if let host = parsed.host {
+            properties["hostHash"] = roleHash("host", host)
+        }
+        return SwiftHttpRecord(
+            ruleId: ruleId,
+            filePath: item.relativePath,
+            startLine: start,
+            endLine: end,
+            method: method,
+            normalizedPathKey: parsed.normalizedPathKey,
+            identityDiscriminator: ["swift-http/v1", item.relativePath, String(start), String(end), method, parsed.normalizedPathKey, String(ordinal + 1), roleHash("url", rawUrl)].joined(separator: "\u{1f}"),
+            properties: properties
+        )
+    }
+
+    private static func firstURLSessionUse(of variable: String, after offset: Int, in text: String) -> (range: NSRange, apiName: String)? {
+        let rest = String(text[String.Index(utf16Offset: min(offset, text.utf16.count), in: text)...])
+        let patterns = [
+            (#"URLSession(?:\.shared)?\.dataTask\s*\(\s*with\s*:\s*\#(variable)\b"#, "dataTask(with:)"),
+            (#"URLSession(?:\.shared)?\.data\s*\(\s*for\s*:\s*\#(variable)\b"#, "data(for:)"),
+            (#"URLSession(?:\.shared)?\.data\s*\(\s*from\s*:\s*\#(variable)\b"#, "data(from:)")
+        ]
+        return patterns.compactMap { pattern, apiName -> (NSRange, String)? in
+            guard let match = firstMatch(pattern, in: rest) else { return nil }
+            return (NSRange(location: offset + match.range.location, length: match.range.length), apiName)
+        }.sorted { $0.0.location < $1.0.location }.first
+    }
+
+    private static func httpMethodAssignments(to variable: String, after start: Int, before end: Int, in text: String, originalText: String) -> [(range: NSRange, method: String)] {
+        guard end > start else { return [] }
+        let startIndex = String.Index(utf16Offset: min(start, text.utf16.count), in: text)
+        let endIndex = String.Index(utf16Offset: min(end, text.utf16.count), in: text)
+        let originalSlice = String(originalText[startIndex..<endIndex])
+        return regexMatches(#"\b\#(variable)\.httpMethod\s*=\s*"([^"]+)""#, in: originalSlice).map { match in
+            let range = NSRange(location: start + match.range.location, length: match.range.length)
+            return (range, capture(match, 1, in: originalSlice) ?? "")
+        }
+    }
+
+    private static func standardMethod(_ value: String) -> String? {
+        let method = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].contains(method) ? method : nil
+    }
+
+    private static func gap(_ kind: String, _ item: InventoryItem, _ startLine: Int, _ endLine: Int, _ message: String) -> CoverageGap {
+        CoverageGap(kind: kind, ruleId: RuleIds.swiftHttpAnalysisGap, message: message, filePath: item.relativePath, startLine: max(1, startLine), endLine: max(max(1, startLine), endLine))
+    }
+
+    private static func roleHash(_ role: String, _ value: String) -> String {
+        sha256Hex("swift.http|\(role)|\(value)")
+    }
 }
 
 enum DependencyExtractor {
@@ -1067,6 +1241,27 @@ enum FactFactory {
                 ]
             ))
         }
+        let http = SwiftHttpExtractor.extract(scanRoot: scanRoot, inventory: inventory)
+        facts += httpFacts(manifest: manifest, records: http.records)
+        for gap in http.gaps {
+            facts.append(makeFact(
+                manifest: manifest,
+                factType: "AnalysisGap",
+                ruleId: gap.ruleId,
+                evidenceTier: .tier4Unknown,
+                filePath: gap.filePath,
+                startLine: gap.startLine,
+                endLine: gap.endLine,
+                targetSymbol: gap.kind,
+                contractElement: gap.kind,
+                identityDiscriminator: sha256Hex(gap.message),
+                properties: [
+                    "gapKind": gap.kind,
+                    "messageHash": sha256Hex(gap.message),
+                    "staticEvidenceOnly": "true"
+                ]
+            ))
+        }
         facts += syntaxFacts(manifest: manifest, syntax: syntax)
         for gap in gaps {
             facts.append(makeFact(
@@ -1112,6 +1307,24 @@ enum FactFactory {
                 contractElement: dependency.safeIdentity,
                 identityDiscriminator: dependency.identityDiscriminator,
                 properties: properties
+            )
+        }
+    }
+
+    private static func httpFacts(manifest: ScanManifest, records: [SwiftHttpRecord]) -> [CodeFact] {
+        records.map { record in
+            makeFact(
+                manifest: manifest,
+                factType: "HttpCallDetected",
+                ruleId: record.ruleId,
+                evidenceTier: .tier3SyntaxOrTextual,
+                filePath: record.filePath,
+                startLine: record.startLine,
+                endLine: record.endLine,
+                targetSymbol: "\(record.method) \(record.normalizedPathKey)",
+                contractElement: record.normalizedPathKey,
+                identityDiscriminator: record.identityDiscriminator,
+                properties: record.properties
             )
         }
     }
@@ -1781,6 +1994,18 @@ enum OutputWriter {
             lines += ["", "### By Identity Status", ""]
             lines += markdownTable(count(dependencyFacts.compactMap { $0.properties["dependencyIdentityStatus"] }))
         }
+        let httpFacts = facts.filter { $0.factType == "HttpCallDetected" && $0.ruleId.hasPrefix("swift.http.") }
+        if !httpFacts.isEmpty {
+            lines += ["", "## Swift HTTP/API Client Surfaces", ""]
+            lines += ["### By Client Kind", ""]
+            lines += markdownTable(count(httpFacts.compactMap { $0.properties["swiftClientKind"] }))
+            lines += ["", "### By Framework", ""]
+            lines += markdownTable(count(httpFacts.compactMap { $0.properties["framework"] }))
+            lines += ["", "### By Method Status", ""]
+            lines += markdownTable(count(httpFacts.compactMap { $0.properties["methodStatus"] }))
+            lines += ["", "### By Path Status", ""]
+            lines += markdownTable(count(httpFacts.compactMap { $0.properties["pathStatus"] }))
+        }
         lines += ["", "## Known Gaps", ""]
         lines += manifest.knownGaps.isEmpty ? ["- None"] : manifest.knownGaps.map { "- \($0)" }
         lines += [
@@ -2301,6 +2526,63 @@ func urlIdentityCandidate(_ value: String) -> String? {
         last = String(last.dropLast(4))
     }
     return last.nilIfEmpty
+}
+
+struct ParsedURLSurface {
+    let normalizedPathKey: String
+    let host: String?
+    let queryStatus: String
+}
+
+func parseURLSurface(_ value: String) -> ParsedURLSurface? {
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty, !trimmed.contains("\\("), !trimmed.contains("+") else { return nil }
+    var host: String?
+    var path = trimmed
+    var queryStatus = "unknown"
+    if let components = URLComponents(string: trimmed), components.scheme != nil || components.host != nil {
+        host = components.host
+        path = components.path.isEmpty ? "/" : components.path
+        queryStatus = components.query == nil ? "absent" : "present-omitted"
+    } else if trimmed.hasPrefix("/") {
+        let split = trimmed.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
+        path = String(split.first ?? "/")
+        queryStatus = split.count > 1 ? "present-omitted" : "absent"
+    } else {
+        return nil
+    }
+    guard let normalized = normalizeHTTPPath(path) else { return nil }
+    return ParsedURLSurface(normalizedPathKey: normalized, host: host, queryStatus: queryStatus)
+}
+
+func normalizeHTTPPath(_ value: String) -> String? {
+    let collapsed = value.replacingOccurrences(of: #"/+"#, with: "/", options: .regularExpression)
+    let trimmedSlash = collapsed.count > 1 ? collapsed.trimmingCharacters(in: CharacterSet(charactersIn: "/")) : collapsed
+    let rawSegments = trimmedSlash == "/" ? [] : trimmedSlash.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+    var segments: [String] = []
+    for raw in rawSegments {
+        let lower = raw.lowercased()
+        if lower.hasPrefix("{") && lower.hasSuffix("}") {
+            segments.append("{}")
+        } else if lower.hasPrefix(":") {
+            segments.append("{}")
+        } else if lower.range(of: #"^\d+$"#, options: .regularExpression) != nil || lower.range(of: #"^[0-9a-f]{8,}$"#, options: .regularExpression) != nil || lower.range(of: #"^[0-9a-f-]{32,}$"#, options: .regularExpression) != nil {
+            segments.append("{}")
+        } else {
+            guard isSafePathSegment(lower) else { return nil }
+            segments.append(lower)
+        }
+    }
+    return "/" + segments.joined(separator: "/")
+}
+
+func isSafePathSegment(_ segment: String) -> Bool {
+    guard !segment.isEmpty, segment.count <= 48 else { return false }
+    if segment.contains(".") || segment.contains("@") || segment.contains("\\") { return false }
+    if segment.range(of: #"^\d{1,3}(\.\d{1,3}){3}$"#, options: .regularExpression) != nil { return false }
+    if segment.range(of: #"^[a-z0-9-]+\.[a-z]{2,}$"#, options: .regularExpression) != nil { return false }
+    if segment.range(of: #"(secret|token|password|apikey|api-key|credential|bearer)"#, options: .regularExpression) != nil { return false }
+    return segment.range(of: #"^[a-z0-9_-]+$"#, options: .regularExpression) != nil
 }
 
 func jsonKeyOffsets(_ keys: [String], in text: String) -> [Int] {
