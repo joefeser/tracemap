@@ -60,14 +60,14 @@
 - [x] Run `dotnet test src/dotnet/TraceMap.sln`.
 - [x] Run `./scripts/check-private-paths.sh`.
 - [x] Run `git diff --check`.
-- [ ] Open an implementation PR to `dev`, complete the PR review loop, and
+- [x] Open an implementation PR to `dev`, complete the PR review loop, and
   merge when ACK returns `merge_ready`.
 
 ## Follow-Ups Out Of Scope
 
-- [ ] Cross-repo client/server endpoint alignment from Swift mobile apps to
+- Cross-repo client/server endpoint alignment from Swift mobile apps to
   backend services.
-- [ ] Runtime network capture or simulator/device instrumentation.
-- [ ] Deep semantic resolution of builder functions, request middleware,
+- Runtime network capture or simulator/device instrumentation.
+- Deep semantic resolution of builder functions, request middleware,
   dependency injection, Combine/async chains, or protocol dispatch.
-- [ ] Public site claims beyond static evidence-backed Swift HTTP/API discovery.
+- Public site claims beyond static evidence-backed Swift HTTP/API discovery.

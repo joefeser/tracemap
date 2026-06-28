@@ -709,6 +709,14 @@ Each fixture should document:
 | Python endpoint smoke | `MatchedEndpoint` from public Python client/server sample indexes |
 | Python syntax invocation | `CallEdge` with containing function/module and callee syntax name |
 | Python broken file | reduced coverage with `AnalysisGap`, while other files continue scanning |
+| Swift required output contract | `tracemap-swift scan` writes `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and `logs/analyzer.log` with repo and commit SHA provenance |
+| Swift inventory/project metadata | Swift package/project/workspace/lockfile metadata emits static inventory facts and reduced-coverage gaps without running Xcode, SwiftPM builds, simulators, or devices |
+| Swift syntax declarations and calls | SwiftSyntax-backed declarations, imports, call candidates, construction candidates, and derived navigation rows remain syntax-tier evidence and do not claim runtime call targets |
+| Swift symbol relationships | Source-local inheritance, protocol conformance, protocol inheritance, and explicit override relationships emit static relationship facts/rows; protocol witness and Objective-C dispatch proof remain out of scope |
+| Swift dependency surfaces | SwiftPM, CocoaPods, and Carthage metadata emit dependency facts with safe labels or hashes; package restore, vulnerability/license/freshness, and build compatibility are not claimed |
+| Swift HTTP/API client surfaces | URLSession, URLRequest, Alamofire, and Moya static evidence emits HTTP/API client surfaces with safe normalized path keys or gaps; runtime network reachability is not claimed |
+| Swift UI surfaces | SwiftUI/UIKit source-visible view, navigation/action candidate, controller, action, and binding evidence emits static UI surface facts; rendering, navigation reachability, storyboard runtime wiring, and user action are not claimed |
+| Swift reduced coverage diagnostics | Toolchain, macro, Objective-C bridge, storyboard/nib, generated-code, conditional-compilation, protocol-dispatch, and missing-module limits emit explicit analysis gaps and reduced coverage labels |
 
 ## Performance Smoke Targets
 

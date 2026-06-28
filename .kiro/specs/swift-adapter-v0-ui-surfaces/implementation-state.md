@@ -1,6 +1,6 @@
 # Swift Adapter v0 UI Surfaces Implementation State
 
-Status: `implemented-pending-pr`
+Status: `implemented`
 
 Issue: [#384](https://github.com/joefeser/tracemap/issues/384)
 
@@ -10,6 +10,11 @@ Spec branch: `codex/spec-swift-adapter-v0-ui-surfaces`
 
 Implementation branch:
 `codex/implement-swift-adapter-v0-ui-surfaces`
+
+Implementation PR: [#421](https://github.com/joefeser/tracemap/pull/421)
+
+Merged to `dev`: 2026-06-28, merge commit
+`6d4b956fdfff9d5d8705ed6f468fa12584801a85`.
 
 ## Current Scope
 
@@ -38,9 +43,9 @@ or full SwiftUI state/data flow.
 
 ## Public Claim Level
 
-Claim level: `dev-only until merged`.
+Claim level: `dev-only until promoted to main`.
 
-Allowed claim after merge:
+Allowed claim after dev/main promotion:
 
 - TraceMap emits deterministic static SwiftUI and UIKit UI surface evidence for
   selected narrow source-visible patterns.
