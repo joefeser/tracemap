@@ -478,6 +478,37 @@ public sealed class EvidenceDocsExportTests
     }
 
     [Fact]
+    public async Task Docs_export_bounds_property_flow_report_input_size()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = CreateCombinedIndex(temp.Path);
+        var reportPath = Path.Combine(temp.Path, "too-large-property-flow-report.json");
+        await using (var stream = File.Create(reportPath))
+        {
+            stream.SetLength((4 * 1024 * 1024) + 1);
+        }
+
+        var result = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            indexPath,
+            Path.Combine(temp.Path, "property-flow-report-too-large-docs"),
+            Families: "property-flow,gap,limitation",
+            PropertyFlowReportPaths: [reportPath]));
+
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == "InputTooLarge"
+            && diagnostic.RuleId == "docs-export.gap.schema-incompatible.v1"
+            && diagnostic.Category == "input-too-large");
+        Assert.Contains(result.Chunks, chunk =>
+            chunk.ChunkFamily == "gap"
+            && chunk.ClaimLevel == "hidden"
+            && chunk.RuleIds.Contains("docs-export.gap.schema-incompatible.v1")
+            && chunk.SupportingIds.Contains("property-flow-report"));
+        Assert.DoesNotContain(result.Chunks, chunk =>
+            chunk.ChunkFamily == "property-flow"
+            && chunk.SupportingIds.Any(id => id.StartsWith("report:", StringComparison.Ordinal)));
+    }
+
+    [Fact]
     public async Task Docs_export_terminal_context_metadata_is_additive_and_redacted_when_unsafe()
     {
         using var temp = new TempDirectory();
