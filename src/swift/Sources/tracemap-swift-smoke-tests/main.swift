@@ -527,8 +527,12 @@ struct TraceMapSwiftSmokeTests {
         let uiFacts = result.facts.filter { $0.ruleId.hasPrefix("swift.ui.") && $0.factType != "AnalysisGap" }
         assert(uiFacts.contains { $0.factType == "SwiftUiSurfaceDeclared" && $0.ruleId == "swift.ui.swiftui.view.v1" && $0.targetSymbol == "HomeView" })
         assert(uiFacts.contains { $0.factType == "SwiftUiSurfaceDeclared" && $0.ruleId == "swift.ui.swiftui.view.v1" && $0.targetSymbol == "DetailView" })
+        assert(uiFacts.contains { $0.factType == "SwiftUiSurfaceDeclared" && $0.ruleId == "swift.ui.swiftui.view.v1" && $0.targetSymbol == "RemoteDetailView" })
+        assert(uiFacts.contains { $0.factType == "SwiftUiSurfaceDeclared" && $0.targetSymbol == "HomeView" && $0.properties["propertyWrappers"] == "State" })
+        assert(uiFacts.contains { $0.factType == "SwiftUiSurfaceDeclared" && $0.targetSymbol == "DetailView" && $0.properties["propertyWrappers"] == nil })
         assert(!uiFacts.contains { $0.targetSymbol == "NotActuallyAView" })
         assert(uiFacts.contains { $0.factType == "SwiftUiNavigationCandidate" && $0.ruleId == "swift.ui.swiftui.navigation.v1" && $0.properties["destinationBacked"] == "true" && $0.targetSymbol == "DetailView" })
+        assert(uiFacts.contains { $0.factType == "SwiftUiNavigationCandidate" && $0.ruleId == "swift.ui.swiftui.navigation.v1" && $0.properties["destinationBacked"] == "true" && $0.properties["destinationIdentityStatus"] == "resolved" && $0.targetSymbol == "RemoteDetailView" })
         assert(uiFacts.contains { $0.factType == "SwiftUiNavigationCandidate" && $0.properties["surfaceKind"] == "container" && $0.properties["destinationBacked"] == "false" })
         assert(uiFacts.contains { $0.factType == "SwiftUiActionCandidate" && $0.ruleId == "swift.ui.swiftui.action.v1" && $0.properties["actionKind"] == "button" })
         assert(uiFacts.contains { $0.factType == "SwiftUiActionCandidate" && $0.properties["actionKind"] == "alert-presentation" && $0.properties["destinationBacked"] == "false" })

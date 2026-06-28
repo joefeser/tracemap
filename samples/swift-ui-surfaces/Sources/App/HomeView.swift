@@ -9,6 +9,9 @@ struct HomeView: View {
                 NavigationLink(destination: DetailView()) {
                     Text("Details")
                 }
+                NavigationLink(destination: RemoteDetailView()) {
+                    Text("Remote")
+                }
                 Button("Refresh") {
                     refresh()
                 }
