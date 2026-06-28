@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Swift evidence safety story for TraceMap: rule IDs, evidence tiers, coverage labels, reduced-coverage gaps, hashed sensitive identifiers, and public-safe boundaries.">
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Swift Evidence Safety | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/swift/evidence-safety/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Swift Evidence Safety | TraceMap">
+    <meta property="og:description" content="A shipped Swift v0 story page for safe public Swift evidence wording and redaction boundaries.">
+    <meta property="og:url" content="https://tracemap.tools/swift/evidence-safety/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main data-swift-story-page>
+      <section class="page-hero">
+        <p class="eyebrow">Swift story</p>
+        <h1>Swift evidence safety keeps proof usable without leaking private material.</h1>
+        <p class="hero-subhead">
+          Swift public copy should carry rule IDs, evidence tiers, coverage labels,
+          reduced-coverage gaps, and hashed sensitive identifiers where supported,
+          while keeping raw private evidence out of the site.
+        </p>
+        <p class="hero-note">
+          Public claim level: shipped. Proof: PR
+          <a href="https://github.com/joefeser/tracemap/pull/425">#425</a>.
+          Public pages must not publish raw source snippets.
+        </p>
+        <nav class="hero-actions" aria-label="Swift evidence safety links">
+          <a class="button primary" href="/swift/">Swift evidence lane</a>
+          <a class="button secondary" href="/swift/story/">Swift story</a>
+          <a class="button secondary" href="/site-claim-guardrails/">Claim guardrails</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Use</p>
+          <h2>Safety is part of the evidence contract, not an afterthought.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Attach the rule</strong><span>Every public Swift claim should route back to a rule ID, evidence tier, proof path, and limitation.</span></div>
+          <div><strong>Keep gaps visible</strong><span>Reduced coverage is a useful label because it stops weak evidence from becoming stronger public copy.</span></div>
+          <div><strong>Keep private material out</strong><span>Use public-safe summaries and hashed sensitive identifiers where supported instead of raw values or local evidence.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div>
+          <p class="section-kicker">Boundary</p>
+          <h2>Safety language prevents accidental claim upgrades.</h2>
+        </div>
+        <ul>
+          <li>Swift evidence safety does not prove runtime behavior, app navigation, rendered UI, production usage, endpoint performance, build success, deployment state, release safety, stored values, query execution, or live schema.</li>
+          <li>TraceMap core scanning and reduction do not use AI impact analysis, LLM analysis, prompt-based classification, embeddings, or vector database analysis.</li>
+          <li>Public pages must not publish raw source snippets, raw SQL, secrets, local absolute paths, raw remotes, credentials, stored values, private scan artifacts, analyzer logs, facts.ndjson, index.sqlite, or hidden validation details.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Proof path</p>
+          <h2>Use safety checks before stronger wording appears.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/swift/">Swift evidence lane</a>
+          <a href="/swift/story/">Why Swift evidence matters</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/limitations/reduced-coverage/">Reduced coverage</a>
+          <a href="/site-claim-guardrails/">Site claim guardrails</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Next, open the <a href="/proof-source-catalog/">proof source catalog</a> before repeating a Swift claim.</p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

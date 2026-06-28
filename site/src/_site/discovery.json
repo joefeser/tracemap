@@ -68,6 +68,91 @@
     ]
   },
   {
+    "path": "/swift/static-inventory/",
+    "title": "Swift Static Inventory",
+    "summary": "Shipped Swift v0 story page for package/project inventory, source file selection, module-ish metadata, and reduced-coverage labels.",
+    "publicClaimLevel": "shipped",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/swift/",
+    "limitations": [
+      "Swift static inventory is deterministic static evidence and does not prove runtime behavior, app navigation, build success, production usage, deployment state, release safety, or complete module understanding.",
+      "Reduced-coverage labels remain visible when toolchain, generated-code, macro, unavailable module, conditional-compilation, or unsupported-surface gaps apply."
+    ],
+    "nonClaims": [
+      "No Xcode build proof, SwiftPM restore proof, simulator/device execution proof, rendered UI proof, production traffic proof, endpoint performance proof, deployment proof, release safety proof, stored-value proof, query execution proof, live schema proof, or complete Swift understanding.",
+      "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector databases, raw source snippets, raw SQL, secrets, local absolute paths, raw remotes, credentials, stored values, private scan artifacts, analyzer logs, or hidden validation details are public Swift inventory claims."
+    ]
+  },
+  {
+    "path": "/swift/symbols-calls/",
+    "title": "Swift Symbols And Calls",
+    "summary": "Shipped Swift v0 story page for SwiftSyntax-backed declarations, call candidates, construction candidates, and static relationship evidence.",
+    "publicClaimLevel": "shipped",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/swift/",
+    "limitations": [
+      "Swift symbol and call evidence is deterministic static evidence and does not prove runtime behavior, app navigation, build success, production usage, deployment state, release safety, runtime dispatch, or protocol witness behavior.",
+      "Syntax-backed candidates must keep evidence tiers, coverage labels, and limitations attached."
+    ],
+    "nonClaims": [
+      "No compiler semantic resolution proof, runtime dispatch proof, protocol witness proof, dependency injection proof, SwiftUI runtime reachability proof, production traffic proof, endpoint performance proof, deployment proof, release safety proof, stored-value proof, query execution proof, live schema proof, or complete Swift understanding.",
+      "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector databases, raw source snippets, raw SQL, secrets, local absolute paths, raw remotes, credentials, stored values, private scan artifacts, analyzer logs, or hidden validation details are public Swift symbol claims."
+    ]
+  },
+  {
+    "path": "/swift/surface-discovery/",
+    "title": "Swift Surface Discovery",
+    "summary": "Shipped/demo Swift v0 story page for supported static HTTP/API client, SwiftUI/UIKit-ish, package, and dependency surface evidence.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/swift/",
+    "limitations": [
+      "Swift surface discovery is deterministic static evidence and does not prove runtime behavior, app navigation, build success, production usage, deployment state, release safety, network reachability, rendered UI, or dependency quality.",
+      "Demo-level rows need checked-in public-safe generated summaries before being presented as demo proof."
+    ],
+    "nonClaims": [
+      "No runtime network reachability proof, rendered UI proof, complete navigation proof, user action proof, vulnerability proof, license proof, freshness proof, build compatibility proof, production traffic proof, endpoint performance proof, deployment proof, release safety proof, stored-value proof, query execution proof, live schema proof, or complete Swift understanding.",
+      "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector databases, raw source snippets, raw SQL, secrets, local absolute paths, raw remotes, credentials, stored values, private scan artifacts, analyzer logs, or hidden validation details are public Swift surface claims."
+    ]
+  },
+  {
+    "path": "/swift/storage-data/",
+    "title": "Swift Storage And Data Surfaces",
+    "summary": "Shipped/demo Swift v0 story page for CoreData metadata, UserDefaults keys, Keychain access patterns, SQLite SQL text/shape evidence, and Realm model/property surfaces.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/swift/",
+    "limitations": [
+      "Swift storage and data surface evidence is deterministic static evidence and does not prove runtime behavior, app navigation, build success, production usage, deployment state, release safety, stored values, query execution, live schema, or runtime persistence.",
+      "Public storage/data stories must use reviewed summaries instead of private storage details."
+    ],
+    "nonClaims": [
+      "No stored-value proof, query execution proof, live schema proof, runtime persistence proof, Keychain item existence proof, UserDefaults value proof, credential proof, data impact proof, production traffic proof, endpoint performance proof, deployment proof, release safety proof, or complete Swift understanding.",
+      "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector databases, raw source snippets, raw SQL, secrets, local absolute paths, raw remotes, credentials, stored values, private scan artifacts, analyzer logs, or hidden validation details are public Swift storage claims."
+    ]
+  },
+  {
+    "path": "/swift/evidence-safety/",
+    "title": "Swift Evidence Safety",
+    "summary": "Shipped Swift v0 story page for rule IDs, evidence tiers, coverage labels, reduced-coverage gaps, hashed sensitive identifiers, and public-safe wording boundaries.",
+    "publicClaimLevel": "shipped",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/swift/",
+    "limitations": [
+      "Swift evidence safety explains public wording boundaries and does not prove runtime behavior, app navigation, build success, production usage, deployment state, release safety, stored values, query execution, or live schema.",
+      "Public pages must keep rule IDs, evidence tiers, coverage labels, limitations, and proof paths attached before a Swift claim is repeated."
+    ],
+    "nonClaims": [
+      "No runtime behavior proof, rendered UI proof, complete navigation proof, production traffic proof, endpoint performance proof, deployment proof, release safety proof, stored-value proof, query execution proof, live schema proof, raw source publication, raw SQL publication, or complete Swift understanding.",
+      "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector databases, raw source snippets, raw SQL, secrets, local absolute paths, raw remotes, credentials, stored values, private scan artifacts, analyzer logs, facts.ndjson, index.sqlite, or hidden validation details are public Swift safety claims."
+    ]
+  },
+  {
     "path": "/docs/",
     "title": "Docs",
     "summary": "Public documentation hub linking source-of-truth repository docs, validation notes, acceptance criteria, and packet guidance.",
