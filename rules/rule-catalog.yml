@@ -4683,7 +4683,7 @@ rules:
     status: active
     name: Swift static SQL text and shape surface
     description: Records complete static SQL literals from Swift SQLite/GRDB/FMDatabase shapes and checked-in SQL resources using shared SQL hash and shape properties.
-    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    evidenceTier: Tier3SyntaxOrTextual
     emits:
       - SqlTextUsed
       - QueryPatternDetected
