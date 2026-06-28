@@ -3272,6 +3272,16 @@ func maskSwiftCommentsAndStringLiterals(_ text: String) -> String {
         index + offset < scalars.count && scalars[index + offset] == "*"
     }
 
+    func appendMasked(_ scalar: UnicodeScalar) {
+        if scalar == "\n" {
+            output.append(scalar)
+            return
+        }
+        for _ in scalar.utf16 {
+            output.append(" ")
+        }
+    }
+
     while index < scalars.count {
         let scalar = scalars[index]
         if inLineComment {
@@ -3279,7 +3289,7 @@ func maskSwiftCommentsAndStringLiterals(_ text: String) -> String {
                 inLineComment = false
                 output.append(scalar)
             } else {
-                output.append(" ")
+                appendMasked(scalar)
             }
             index += 1
             continue
@@ -3300,7 +3310,7 @@ func maskSwiftCommentsAndStringLiterals(_ text: String) -> String {
                 index += 2
                 continue
             }
-            output.append(scalar == "\n" ? scalar : " ")
+            appendMasked(scalar)
             index += 1
             continue
         }
@@ -3312,7 +3322,7 @@ func maskSwiftCommentsAndStringLiterals(_ text: String) -> String {
                 output.append(scalar)
             } else if escapingString {
                 escapingString = false
-                output.append(" ")
+                appendMasked(scalar)
             } else if scalar == "\\" {
                 escapingString = true
                 output.append(" ")
@@ -3320,7 +3330,7 @@ func maskSwiftCommentsAndStringLiterals(_ text: String) -> String {
                 inString = false
                 output.append(" ")
             } else {
-                output.append(" ")
+                appendMasked(scalar)
             }
             index += 1
             continue
