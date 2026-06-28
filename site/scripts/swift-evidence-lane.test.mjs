@@ -32,6 +32,25 @@ test("validateSwiftEvidenceLaneDist requires all story rows", async (t) => {
   assert.match(errors.join("\n"), /missing story row: surface-discovery/);
 });
 
+test("validateSwiftEvidenceLaneDist requires real anchor hrefs and tolerates href spacing", async (t) => {
+  const source = await sourcePage();
+  const spacedHref = source.replace('href="/capabilities/"', 'href = "/capabilities/"');
+  const spacedRoot = await createManagedSwiftDistFixture(t, { pageHtml: spacedHref });
+  const spacedErrors = [];
+
+  await validateSwiftEvidenceLaneDist({ dist: join(spacedRoot, "dist"), errors: spacedErrors });
+
+  assert.deepEqual(spacedErrors, []);
+
+  const nonAnchorHref = source.replaceAll(/<a\b([^>]*)href="\/capabilities\/"([^>]*)>/g, '<span$1href="/capabilities/"$2>');
+  const nonAnchorRoot = await createManagedSwiftDistFixture(t, { pageHtml: nonAnchorHref });
+  const nonAnchorErrors = [];
+
+  await validateSwiftEvidenceLaneDist({ dist: join(nonAnchorRoot, "dist"), errors: nonAnchorErrors });
+
+  assert.match(nonAnchorErrors.join("\n"), /missing required link: \/capabilities\//);
+});
+
 test("validateSwiftEvidenceLaneDist requires shipped route metadata", async (t) => {
   const root = await createManagedSwiftDistFixture(t, {
     discoveryRoutes: [
@@ -54,6 +73,15 @@ test("validateSwiftEvidenceLaneDist requires shipped route metadata", async (t) 
 
   assert.match(errors.join("\n"), /expected publicClaimLevel shipped, got concept/);
   assert.match(errors.join("\n"), /expected preferredProofPath \/validation\//);
+});
+
+test("validateSwiftEvidenceLaneDist reports invalid baseUrl values", async (t) => {
+  const root = await createManagedSwiftDistFixture(t);
+  const errors = [];
+
+  await validateSwiftEvidenceLaneDist({ baseUrl: "not a url", dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /baseUrl must be a valid absolute URL/);
 });
 
 test("validateSwiftEvidenceLaneDist rejects private paths and unsupported claims", async (t) => {
