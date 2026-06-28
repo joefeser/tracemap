@@ -642,17 +642,18 @@ enum SwiftHttpExtractor {
         var gaps: [CoverageGap] = []
         let requestVarMatches = regexMatches(#"\b(?:let|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*URLRequest\s*\(\s*url\s*:\s*URL\s*\(\s*string\s*:\s*"[^"]+"\s*\)\s*!?\s*\)"#, in: text, dotMatchesLineSeparators: true)
         for (ordinal, match) in requestVarMatches.enumerated() {
+            guard isCodeRange(match.range, in: searchable) else { continue }
             let variable = capture(match, 1, in: text) ?? ""
             guard let sourceRange = Range(match.range, in: text) else { continue }
             let source = String(text[sourceRange])
             guard let rawUrl = firstCapture(#"URL\s*\(\s*string\s*:\s*"([^"]+)""#, in: source) else { continue }
             let start = lineNumber(atUTF16Offset: match.range.location, in: text)
             let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: text)
-            guard let use = firstURLSessionUse(of: variable, after: match.range.location + match.range.length, in: searchable) else {
+            guard let use = firstURLSessionUse(of: variable, after: match.range.location + match.range.length, in: text) else {
                 gaps.append(gap("swift-http-method-unknown-projection-omitted", item, start, end, "URLRequest is not passed to a recognized URLSession call in this slice; shared HTTP projection omitted."))
                 continue
             }
-            let assignments = httpMethodAssignments(to: variable, after: match.range.location + match.range.length, before: use.range.location, in: searchable, originalText: text)
+            let assignments = httpMethodAssignments(to: variable, after: match.range.location + match.range.length, before: use.range.location, in: text, originalText: text)
             guard assignments.count == 1, let method = standardMethod(assignments[0].method) else {
                 gaps.append(gap(assignments.isEmpty ? "swift-http-method-unknown-projection-omitted" : "swift-http-method-dynamic", item, start, end, "URLRequest method is missing, ambiguous, or unsupported; shared HTTP projection omitted."))
                 continue
@@ -663,9 +664,16 @@ enum SwiftHttpExtractor {
                 gaps.append(gap("swift-http-path-unsafe-omitted", item, start, end, "URLRequest path could not be safely normalized; shared HTTP projection omitted."))
             }
         }
+        let dynamicRequestMatches = regexMatches(#"\b(?:let|var)\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*URLRequest\s*\(\s*url\s*:\s*(?!URL\s*\(\s*string\s*:\s*"[^"]+")[^)]+\)"#, in: searchable, dotMatchesLineSeparators: true)
+        for match in dynamicRequestMatches where isCodeRange(match.range, in: searchable) {
+            let start = lineNumber(atUTF16Offset: match.range.location, in: text)
+            let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: text)
+            gaps.append(gap("swift-http-url-dynamic", item, start, end, "URLRequest URL argument is dynamic or indirect; shared HTTP projection omitted."))
+        }
 
         let alamofireMatches = regexMatches(#"\b(AF|Alamofire|Session\.default)\.request\s*\(\s*"([^"]+)"\s*,\s*method\s*:\s*\.([A-Za-z]+)"#, in: text)
         for (ordinal, match) in alamofireMatches.enumerated() {
+            guard isCodeRange(match.range, in: searchable) else { continue }
             guard let rawUrl = capture(match, 2, in: text),
                   let method = standardMethod(capture(match, 3, in: text) ?? "") else { continue }
             let start = lineNumber(atUTF16Offset: match.range.location, in: text)
@@ -677,27 +685,28 @@ enum SwiftHttpExtractor {
             }
         }
         let dynamicAlamofire = regexMatches(#"\b(AF|Alamofire|Session\.default)\.request\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*method\s*:\s*\.([A-Za-z]+)"#, in: searchable)
-        for match in dynamicAlamofire {
+        for match in dynamicAlamofire where isCodeRange(match.range, in: searchable) {
             let start = lineNumber(atUTF16Offset: match.range.location, in: text)
             let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: text)
             gaps.append(gap("swift-http-url-dynamic", item, start, end, "Alamofire request URL argument is dynamic; shared HTTP projection omitted."))
         }
 
-        if searchable.contains("TargetType") {
-            let pathMatch = firstMatch(#"(?m)^\s*var\s+path\s*:\s*String\s*\{\s*"([^"]+)""#, in: text)
-            let methodMatch = firstMatch(#"(?m)^\s*var\s+method\s*:[^{]+\{\s*\.([A-Za-z]+)"#, in: text)
-            let baseMatch = firstMatch(#"(?m)^\s*var\s+baseURL\s*:[^{]+\{\s*URL\s*\(\s*string\s*:\s*"([^"]+)""#, in: text)
-            let boundaryLine = lineNumber(atUTF16Offset: pathMatch?.range.location ?? methodMatch?.range.location ?? 0, in: text)
-            if let pathMatch, let rawPath = capture(pathMatch, 1, in: text), let methodMatch, let method = standardMethod(capture(methodMatch, 1, in: text) ?? "") {
-                let start = lineNumber(atUTF16Offset: pathMatch.range.location, in: text)
-                let end = lineNumber(atUTF16Offset: pathMatch.range.location + pathMatch.range.length, in: text)
+        for target in targetTypeBodies(in: text, searchable: searchable) {
+            let body = target.body
+            let pathMatch = firstMatch(#"(?m)^\s*var\s+path\s*:\s*String\s*\{\s*"([^"]+)""#, in: body)
+            let methodMatch = firstMatch(#"(?m)^\s*var\s+method\s*:[^{]+\{\s*\.([A-Za-z]+)"#, in: body)
+            let baseMatch = firstMatch(#"(?m)^\s*var\s+baseURL\s*:[^{]+\{\s*URL\s*\(\s*string\s*:\s*"([^"]+)""#, in: body)
+            let boundaryLine = lineNumber(atUTF16Offset: target.startOffset + (pathMatch?.range.location ?? methodMatch?.range.location ?? 0), in: text)
+            if let pathMatch, let rawPath = capture(pathMatch, 1, in: body), let methodMatch, let method = standardMethod(capture(methodMatch, 1, in: body) ?? "") {
+                let start = lineNumber(atUTF16Offset: target.startOffset + pathMatch.range.location, in: text)
+                let end = lineNumber(atUTF16Offset: target.startOffset + pathMatch.range.location + pathMatch.range.length, in: text)
                 if let record = record(rawUrl: rawPath, method: method, item: item, start: start, end: end, ruleId: RuleIds.swiftHttpClientLibrary, framework: "moya", clientKind: "moya", apiName: "TargetType.path", ordinal: records.count) {
                     records.append(record)
                 }
                 gaps.append(gap("swift-http-moya-target-partial", item, boundaryLine, boundaryLine, baseMatch == nil ? "Moya target baseURL is missing or dynamic; full route join is not proven." : "Moya target baseURL/path join is static metadata only; runtime route reachability is not proven."))
             } else if pathMatch != nil {
                 gaps.append(gap("swift-http-method-unknown-projection-omitted", item, boundaryLine, boundaryLine, "Moya target path is static but method is missing or dynamic; shared HTTP projection omitted."))
-            } else if searchable.contains("TargetType") {
+            } else {
                 gaps.append(gap("swift-http-moya-target-partial", item, boundaryLine, boundaryLine, "Moya target path is missing or dynamic; shared HTTP projection omitted."))
             }
         }
@@ -758,6 +767,40 @@ enum SwiftHttpExtractor {
             let range = NSRange(location: start + match.range.location, length: match.range.length)
             return (range, capture(match, 1, in: originalSlice) ?? "")
         }
+    }
+
+    private static func isCodeRange(_ range: NSRange, in maskedText: String) -> Bool {
+        guard let swiftRange = Range(range, in: maskedText) else { return false }
+        return maskedText[swiftRange].contains { !$0.isWhitespace }
+    }
+
+    private static func targetTypeBodies(in text: String, searchable: String) -> [(body: String, startOffset: Int)] {
+        regexMatches(#"\b(?:enum|struct|class)\s+[A-Za-z_][A-Za-z0-9_]*\s*:\s*TargetType\s*\{"#, in: searchable).compactMap { match in
+            let open = match.range.location + match.range.length - 1
+            guard let close = matchingBraceOffset(in: searchable, openOffset: open), close > open else { return nil }
+            let start = open + 1
+            guard start <= text.utf16.count, close <= text.utf16.count else { return nil }
+            let startIndex = String.Index(utf16Offset: start, in: text)
+            let endIndex = String.Index(utf16Offset: close, in: text)
+            return (String(text[startIndex..<endIndex]), start)
+        }
+    }
+
+    private static func matchingBraceOffset(in text: String, openOffset: Int) -> Int? {
+        let units = Array(text.utf16)
+        guard openOffset >= 0, openOffset < units.count else { return nil }
+        let openBrace = Character("{").utf16.first!
+        let closeBrace = Character("}").utf16.first!
+        var depth = 0
+        for index in openOffset..<units.count {
+            if units[index] == openBrace {
+                depth += 1
+            } else if units[index] == closeBrace {
+                depth -= 1
+                if depth == 0 { return index }
+            }
+        }
+        return nil
     }
 
     private static func standardMethod(_ value: String) -> String? {

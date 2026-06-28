@@ -445,6 +445,7 @@ struct TraceMapSwiftSmokeTests {
         import Foundation
 
         func requests(endpoint: String) {
+          // Non-ASCII before HTTP calls checks UTF-16 offsets: 🧭
           var postRequest = URLRequest(url: URL(string: "https://api.example.invalid/v1/users/123/roles?token=super-secret")!)
           postRequest.httpMethod = "POST"
           URLSession.shared.dataTask(with: postRequest)
@@ -456,6 +457,12 @@ struct TraceMapSwiftSmokeTests {
           var unknownMethod = URLRequest(url: URL(string: "https://api.example.invalid/v1/unknown")!)
           URLSession.shared.dataTask(with: unknownMethod)
 
+          let dynamicURL = URL(string: "https://api.example.invalid/v1/" + endpoint)!
+          var dynamicRequest = URLRequest(url: dynamicURL)
+          dynamicRequest.httpMethod = "GET"
+          URLSession.shared.dataTask(with: dynamicRequest)
+
+          // AF.request("https://api.example.invalid/v1/commented-out", method: .get)
           AF.request("https://api.example.invalid/v1/orders/42", method: .get)
           Alamofire.request("https://api.example.invalid/v1/orders/43?api_key=do-not-render", method: .post)
           AF.request(endpoint, method: .put)
@@ -492,6 +499,7 @@ struct TraceMapSwiftSmokeTests {
         assert(gapKinds.contains("swift-http-moya-target-partial"))
         assert(!httpFacts.contains { $0.properties["normalizedPathKey"] == "/v1/unknown" })
         assert(!httpFacts.contains { $0.properties["normalizedPathKey"] == "/v1/missing-method" })
+        assert(!httpFacts.contains { $0.properties["normalizedPathKey"] == "/v1/commented-out" })
         let factsText = try String(contentsOf: out.appendingPathComponent("facts.ndjson"), encoding: .utf8)
         assert(!factsText.contains("https://api.example.invalid"))
         assert(!factsText.contains("super-secret"))
