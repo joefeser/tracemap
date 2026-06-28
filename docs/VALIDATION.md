@@ -119,13 +119,15 @@ git diff --check
 Expected Swift behavior: scans remain deterministic static evidence over
 checked-in files, emit repo and commit SHA provenance, rule IDs, evidence
 tiers, extractor versions, coverage labels, public-safe repo-relative paths,
-and syntax-backed declarations/call candidates where supported. Swift v0 must
-not claim compiler semantic coverage, build success, package compatibility,
-Xcode scheme behavior, simulator/device behavior, runtime behavior, dependency
-vulnerability/license/freshness, or impact. Generated Swift artifacts must not
-contain raw source snippets, manifest snippets, plist values, raw URLs,
-hostnames, local absolute paths, raw remotes, credentials, secrets, or private
-labels.
+and syntax-backed declarations, call candidates, construction candidates, and
+direct source-local symbol relationships where supported. Swift relationship
+facts remain syntax-backed and must not claim compiler semantic coverage, build
+success, package compatibility, Xcode scheme behavior, simulator/device
+behavior, runtime behavior, protocol witness selection, Objective-C dispatch,
+dependency vulnerability/license/freshness, or impact. Generated Swift
+artifacts must not contain raw source snippets, manifest snippets, plist
+values, raw URLs, hostnames, local absolute paths, raw remotes, credentials,
+secrets, or private labels.
 
 For query-pattern report rendering changes, inspect generated scan reports from the affected adapters:
 
