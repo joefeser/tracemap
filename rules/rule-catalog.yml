@@ -1,3 +1,7 @@
+# Optional rule status vocabulary:
+# - active: implemented and may appear in emitted facts.
+# - deferred: documented future/planned rule that must not appear in emitted facts.
+# Existing rules without an explicit status are treated as active.
 rules:
   - id: explorer.input.unsupported-schema.v1
     name: Static HTML explorer unsupported input schema
@@ -228,6 +232,29 @@ rules:
     limitations:
       - Gap facts preserve uncertainty and must not be read as evidence that no publisher, consumer, binding, route, topology, or runtime delivery exists.
       - Gap reasons include dynamic-destination, wildcard-pattern-destination, missing-destination-identity, unsupported-framework, unsafe-omitted, ambiguous-destination, and direction-filter-not-supported.
+
+  - id: message.flow.context.v1
+    name: Hidden static message review context
+    description: Composes already-derived message publisher, consumer, binding, and static destination candidate-edge evidence into hidden local review context.
+    evidenceTier: Tier4Unknown
+    emits:
+      - messageReviewContext row
+    limitations:
+      - Message review context is static composition evidence only and does not prove runtime broker delivery, topology, live subscriptions, production traffic, ordering, retries, auth, retention, dead-letter behavior, deployment reachability, payload compatibility, schema compatibility, or impact.
+      - Rows preserve supporting source rule IDs, evidence tiers, source labels, commit SHAs, and supporting IDs where available, but the context rule itself is Tier4Unknown because it does not independently prove source behavior.
+      - Static publish-consume candidate rows are destination-match review context only; they are not call edges, delivery edges, runtime subscription edges, or impact evidence.
+      - Unsafe raw destinations, payload values, connection strings, config values, raw remotes, hostnames, local absolute paths, and source snippets must be omitted, hashed, or represented by safe status labels.
+
+  - id: message.flow.gap.v1
+    name: Hidden static message review context gap
+    description: Records why hidden message review context is unavailable, partial, truncated, unsafe, ambiguous, reduced, or has no compatible message evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - messageReviewContext gap
+    limitations:
+      - Message context gaps preserve uncertainty and must not be read as evidence that no publisher, consumer, binding, broker route, topology, runtime delivery, payload compatibility, or impact exists.
+      - Composition gaps describe downstream review-context limits over already-derived evidence and remain distinct from extraction-layer message.surface.gap.v1 facts.
+      - Reduced coverage, dynamic or hashed destinations, one-sided evidence, duplicate identities, unsafe omissions, and truncation must remain review-tier or unknown instead of being promoted to delivery or impact claims.
 
   - id: review.priority.component.v1
     name: Deterministic review priority component
@@ -4196,3 +4223,565 @@ rules:
       - Missing or unsupported inputs are analysis gaps and must not be interpreted as clean absence of legacy evidence.
       - Raw scan-output inputs are summarized only when they are under approved sample or ignored local storage boundaries.
       - Input availability does not prove source freshness, generated-code freshness, build completeness, or runtime reachability.
+
+  - id: swift.repo.manifest.v1
+    name: Swift repository scaffold manifest
+    description: Records Swift adapter scaffold repository and scan-root inventory context.
+    evidenceTier: Tier2Structural
+    emits:
+      - FileInventoried
+    limitations:
+      - Static scaffold inventory only; does not prove Swift build success, package resolution, runtime execution, deployment, UI navigation, storage access, network reachability, or production use.
+      - Repository names and scan-root paths are represented with safe labels or hashes; raw local paths and raw remotes must not be rendered in public-safe outputs.
+
+  - id: swift.file.inventory.v1
+    name: Swift file inventory
+    description: Records selected Swift source and supported metadata file presence for the Swift adapter scaffold.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - FileInventoried
+    limitations:
+      - File presence does not prove project membership, compilation, symbol resolution, runtime execution, or semantic coverage.
+      - Generated, dependency, oversized, unsupported, or excluded files may be omitted with explicit reduced-coverage gaps.
+
+  - id: swift.inventory.source-file.v1
+    name: Swift source file and root inventory
+    description: Records Swift source file and source-root classification from repo-relative checked-in paths.
+    evidenceTier: Tier2Structural
+    emits:
+      - SwiftSourceFileDeclared
+      - SwiftSourceRootDeclared
+    limitations:
+      - Source-root classification is path-structural only; it does not prove target membership, compilation, semantic symbols, generated-code freshness, or runtime behavior.
+      - Custom roots, generated files, and vendor-adjacent files may be classified as custom or generated when stronger project metadata is unavailable.
+
+  - id: swift.inventory.exclusion.v1
+    name: Swift inventory exclusion boundary
+    description: Records generated, vendor, build, dependency, or cache-root exclusion and skipped-file evidence.
+    evidenceTier: Tier2Structural
+    emits:
+      - AnalysisGap
+    limitations:
+      - Exclusions are deterministic static scan boundaries and do not prove files are unused, unreachable, generated correctly, or safe to ignore.
+      - Metadata lockfiles may still be inventoried when safe and in scope.
+
+  - id: swift.package.swiftpm.v1
+    name: SwiftPM metadata inventory
+    description: Records checked-in SwiftPM manifest or resolved-package metadata presence without resolving packages.
+    evidenceTier: Tier2Structural
+    emits:
+      - FileInventoried
+    limitations:
+      - Literal checked-in metadata only; no network package resolution, build success, transitive dependency completeness, platform compatibility, or runtime use is proven.
+      - Package.swift is executable Swift code; scaffold inventory does not evaluate dynamic expressions, plugins, environment variables, or generated package metadata.
+
+  - id: swift.swiftpm.manifest.v1
+    name: SwiftPM manifest metadata
+    description: Records checked-in Package.swift file metadata and token-scanned static labels without executing Swift.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftPackageManifestDeclared
+    limitations:
+      - Package.swift is executable Swift; token-scanned package, target, product, and dependency labels are syntax/textual evidence only.
+      - Dynamic expressions, conditionals, plugins, environment-dependent values, computed variables, and unsupported syntax emit gaps rather than inferred package structure.
+      - No package resolution, compatibility, registry lookup, license, vulnerability, or runtime-use conclusion is emitted.
+
+  - id: swift.swiftpm.resolved.v1
+    name: SwiftPM resolved lockfile metadata
+    description: Records supported Package.resolved schema and safe package identity counts from checked-in lockfile data.
+    evidenceTier: Tier2Structural
+    emits:
+      - SwiftPackageResolvedDeclared
+    limitations:
+      - Lockfile data is checked-in metadata only; it does not prove packages are restored, compatible, reachable, fresh, licensed, vulnerable, or used at runtime.
+      - Raw locations, URLs, hostnames, repository remotes, credentials, and local paths are omitted or represented only by hashes/counts.
+      - Unknown lockfile schemas emit reduced-coverage gaps.
+
+  - id: swift.package.module-identity.v1
+    name: Swift package and module identity
+    description: Reserved Swift package/module identity rule documenting how Swift v0 handles module identity evidence and unknown-module gaps.
+    evidenceTier: Tier2Structural
+    emits:
+      - AnalysisGap
+    limitations:
+      - The current SwiftSyntax-only v0 implementation derives module labels from deterministic `Sources/<Module>` or `Tests/<Module>` paths and records declarations under `swift.syntax.declaration.v1`; it does not yet emit standalone module identity facts under this rule.
+      - Files outside deterministic SwiftPM-style roots use an `unknown-module` sentinel and emit `swift-module-identity-unknown` gaps under `swift.syntax.identity-gap.v1`.
+      - Xcode target membership, build settings, conditional target inclusion, generated source membership, and SourceKit/compiler module identity are future deterministic enrichment work.
+
+  - id: swift.package.cocoapods.v1
+    name: CocoaPods metadata inventory
+    description: Records checked-in CocoaPods metadata file presence for the Swift adapter scaffold.
+    evidenceTier: Tier2Structural
+    emits:
+      - FileInventoried
+    limitations:
+      - Literal checked-in metadata only; no pod install, build integration, transitive dependency completeness, binary compatibility, or runtime use is proven.
+      - Raw source values, private package sources, local paths, URLs, and credentials must be hashed or omitted.
+
+  - id: swift.package.carthage.v1
+    name: Carthage metadata inventory
+    description: Records checked-in Carthage metadata file presence for the Swift adapter scaffold.
+    evidenceTier: Tier2Structural
+    emits:
+      - FileInventoried
+    limitations:
+      - Literal checked-in metadata only; no checkout, build, binary compatibility, transitive dependency completeness, or runtime use is proven.
+      - Raw source values, private package sources, local paths, URLs, and credentials must be hashed or omitted.
+
+  - id: swift.project.xcode.v1
+    name: Xcode project and workspace inventory
+    description: Records deterministic Xcode project, workspace, and contained metadata presence for the Swift adapter scaffold.
+    evidenceTier: Tier2Structural
+    emits:
+      - FileInventoried
+    limitations:
+      - Static project metadata only; no Xcode build success, scheme behavior, target selection, build-setting evaluation, signing, simulator/device state, deployment, or runtime behavior is proven.
+      - Storyboard, xib, asset, plist, entitlement, and project metadata inventory does not prove UI navigation, permissions, storage behavior, or production use.
+
+  - id: swift.xcode.project.v1
+    name: Xcode project metadata inventory
+    description: Records checked-in .xcodeproj and project.pbxproj metadata inventory with narrow safe line/key extraction where available.
+    evidenceTier: Tier2Structural
+    emits:
+      - SwiftXcodeProjectDeclared
+    limitations:
+      - Project metadata does not prove buildability, active schemes, target reachability, selected destinations, signing, deployment, simulator/device behavior, or runtime entry points.
+      - Unbounded Xcode object-graph interpretation is out of scope; unsupported graphs emit gaps.
+      - Local absolute paths and external references are omitted or hashed.
+
+  - id: swift.xcode.workspace.v1
+    name: Xcode workspace metadata inventory
+    description: Records checked-in .xcworkspace metadata and safe referenced project counts from contents.xcworkspacedata.
+    evidenceTier: Tier2Structural
+    emits:
+      - SwiftXcodeWorkspaceDeclared
+    limitations:
+      - Workspace references do not prove buildability, scheme selection, target reachability, or runtime app behavior.
+      - External URLs, absolute paths, and missing references are reduced-coverage gaps and are not rendered raw.
+
+  - id: swift.plist.info.v1
+    name: Swift Info.plist metadata inventory
+    description: Records allowlisted or hashed checked-in Info.plist metadata from deterministic XML plist parsing.
+    evidenceTier: Tier2Structural
+    emits:
+      - SwiftInfoPlistDeclared
+    limitations:
+      - Plist metadata is checked-in configuration evidence only; it does not prove deployed configuration, permissions granted at runtime, URL route reachability, or app behavior.
+      - Raw plist values, URLs, hostnames, secrets, local paths, and private labels are omitted or hashed.
+      - Binary or malformed plist files emit reduced-coverage gaps unless a future deterministic parser is documented and tested.
+
+  - id: swift.ecosystem.metadata.v1
+    name: Swift ecosystem metadata inventory
+    description: Records CocoaPods and Carthage checked-in metadata boundaries and safe dependency identity counts.
+    evidenceTier: Tier2Structural
+    emits:
+      - SwiftEcosystemMetadataDeclared
+    limitations:
+      - Metadata inventory does not run pod install, carthage bootstrap, package checkout, builds, registry lookups, license checks, vulnerability checks, or runtime-use analysis.
+      - Raw package sources, repository URLs, hostnames, credentials, tokens, and local paths are omitted or hashed.
+
+  - id: swift.dependency.manifest.v1
+    status: active
+    name: Swift dependency manifest row
+    description: Records deterministic per-dependency rows from checked-in SwiftPM, CocoaPods, or Carthage manifest metadata without executing package managers.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftDependencyDeclared
+    limitations:
+      - Manifest rows are syntax/text evidence only and do not prove package restore, install, build, compatibility, license, vulnerability, freshness, link, load, runtime use, production use, or impact.
+      - Dynamic Swift, Ruby, or unsupported manifest shapes emit dependency analysis gaps rather than inferred rows.
+      - Raw URLs, hostnames, local paths, remotes, credentials, private owner/repo labels, snippets, and unsafe values are omitted or represented only by hashes.
+
+  - id: swift.dependency.lockfile.swiftpm.v1
+    status: active
+    name: SwiftPM dependency lockfile row
+    description: Records per-pin dependency rows from supported checked-in Package.resolved v1/v2 JSON schemas.
+    evidenceTier: Tier2Structural
+    emits:
+      - SwiftDependencyLockfileEntryDeclared
+    limitations:
+      - Lockfile rows are checked-in static metadata only and do not prove packages are restored, installed, linked, loaded, compatible, licensed, vulnerable, fresh, reachable, or used at runtime.
+      - Unsupported schema versions, malformed JSON, duplicate pins, and missing expected pin fields emit dependency analysis gaps.
+      - Raw locations, URLs, hostnames, remotes, credentials, revisions, and private labels are omitted or represented only by hashes/status flags.
+
+  - id: swift.dependency.lockfile.text.v1
+    status: active
+    name: Swift text dependency lockfile row
+    description: Records per-entry dependency rows from checked-in Podfile.lock and Cartfile.resolved text metadata using conservative section or line scanning.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftDependencyLockfileEntryDeclared
+    limitations:
+      - Text lockfile rows are syntax/text evidence only and do not prove package restore, install, transitive completeness, compatibility, license, vulnerability, freshness, link, load, runtime use, production use, or impact.
+      - Unknown sections, malformed entries, duplicate checksum keys, unsafe locations, and unsupported text shapes emit gaps or hash-only evidence.
+      - Raw source URLs, hostnames, remotes, local paths, snippets, credentials, and private labels are omitted or represented only by hashes/status flags.
+
+  - id: swift.dependency.analysis-gap.v1
+    status: active
+    name: Swift dependency metadata analysis gap
+    description: Records dynamic, malformed, unsupported, ambiguous, unsafe, omitted, or too-weak dependency metadata boundaries for Swift package/dependency surface extraction.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Dependency gaps describe static extraction limits only; they do not prove a dependency is absent, unused, safe, unsafe, compatible, vulnerable, licensed, loaded, reachable, or production-used.
+      - Gap messages must use safe labels, hashes, counts, or closed gap kinds rather than raw snippets, URLs, hosts, paths, remotes, credentials, or private labels.
+      - Scan-level coverage labels remain owned by the Swift inventory and metadata phases; dependency gaps document package-surface extraction boundaries.
+
+  - id: swift.dependency.surface.v1
+    status: deferred
+    name: Swift composed dependency surface
+    description: Reserved for a future composed Swift dependency surface that links static declaration and lockfile evidence for the same safe identity.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftDependencySurfaceDeclared
+    limitations:
+      - Deferred rule; no emitted fact may use this rule until the rule is promoted to active and composed output tests exist.
+      - Future composed surfaces must remain static metadata composition only and must not prove package restore, install, build, compatibility, link, load, runtime use, production use, vulnerability status, license status, freshness, or impact.
+      - Future composed surfaces must not be emitted when any supporting dependency evidence is Tier4Unknown.
+
+  - id: swift.http.urlsession.v1
+    status: active
+    name: Swift Foundation HTTP client surface
+    description: Records static URLRequest/URLSession outbound HTTP client evidence when a safe path and static HTTP method are visible in checked-in Swift source.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - HttpCallDetected
+    requiredProperties:
+      - httpMethod
+      - normalizedPathKey
+      - methodStatus
+      - pathStatus
+      - queryStatus
+      - swiftClientKind
+      - swiftApiName
+      - framework
+    limitations:
+      - Evidence is syntax/textual only and does not prove runtime network traffic, server existence, endpoint reachability, authentication, authorization, production use, or impact.
+      - Shared HttpCallDetected projection is emitted only when a static HTTP method and safe normalized path are both visible; unknown-method paths emit gaps to avoid broad ANY-style matching.
+      - URL literals stored in intermediate variables, URLComponents builders, request adapters, dependency injection, Combine/async scheduling, feature flags, and branch feasibility are not resolved by this rule.
+      - Raw URLs, hosts, queries, headers, bodies, credentials, tokens, snippets, and unsafe path values are omitted or represented only by role-prefixed hashes.
+      - False positives may occur for user-defined APIs that mimic Foundation request shapes; false negatives are expected for wrappers, generated clients, and dynamic builders.
+
+  - id: swift.http.client-library.v1
+    status: active
+    name: Swift HTTP client library surface
+    description: Records static outbound HTTP client evidence from recognized Alamofire-style and Moya-style source shapes without requiring package restore or compilation.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - HttpCallDetected
+    requiredProperties:
+      - httpMethod
+      - normalizedPathKey
+      - methodStatus
+      - pathStatus
+      - queryStatus
+      - swiftClientKind
+      - swiftApiName
+      - framework
+    limitations:
+      - Evidence is syntax/textual only and does not prove package presence, restore, runtime request execution, server existence, endpoint reachability, authentication, production use, or impact.
+      - Shared HttpCallDetected projection is emitted only when a static HTTP method and safe normalized path are both visible.
+      - Moya baseURL/path joins remain partial static metadata and emit companion gaps; full route reachability is not proven.
+      - Custom clients, wrappers, interceptors, plugins, request adapters, generated clients, nonstandard method builders, and dynamic arguments emit gaps or are missed.
+      - Raw URLs, hosts, queries, headers, bodies, credentials, tokens, snippets, private labels, and unsafe path values are omitted or represented only by role-prefixed hashes.
+
+  - id: swift.http.analysis-gap.v1
+    status: active
+    name: Swift HTTP client analysis gap
+    description: Records dynamic, ambiguous, unsafe, unsupported, or intentionally omitted Swift HTTP/API client extraction boundaries.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    requiredProperties:
+      - gapKind
+      - messageHash
+    limitations:
+      - Gaps describe static extraction limits only and do not prove an endpoint is absent, safe, unsafe, reachable, unreachable, authenticated, used in production, or impacted.
+      - Gap messages must use safe closed vocabulary and hashes only; raw URLs, hosts, queries, headers, bodies, credentials, tokens, snippets, remotes, and local paths must not be rendered.
+      - Conservative gaps may be false positives for values that a future semantic/data-flow pass can resolve; runtime-only behavior and binary/generated clients may remain false negatives.
+
+  - id: swift.ui.swiftui.view.v1
+    status: active
+    name: SwiftUI static view surface
+    description: Records syntax-visible SwiftUI view and scene-root evidence from checked-in Swift source without executing app code or building the scanned app.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftUiSurfaceDeclared
+    requiredProperties:
+      - uiFramework
+      - surfaceKind
+      - uiRole
+      - staticEvidenceOnly
+      - runtimeProof
+    limitations:
+      - Evidence is syntax/textual only and does not prove rendered screens, app launch, navigation reachability, user actions, production use, or impact.
+      - SwiftUI result-builder semantics, property wrapper values, environment injection, macro expansion, conditional compilation branches, and generated-code semantics are not resolved.
+      - Raw view-builder source text, labels, accessibility text, snippets, local paths, URLs, secrets, and unsafe literal values must not be emitted.
+
+  - id: swift.ui.swiftui.navigation.v1
+    status: active
+    name: SwiftUI static navigation and presentation candidate
+    description: Records narrow syntax-visible SwiftUI navigation, presentation, and container context evidence when destination or container syntax is visible.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftUiNavigationCandidate
+    requiredProperties:
+      - uiFramework
+      - surfaceKind
+      - uiRole
+      - navigationKind
+      - destinationBacked
+      - destinationIdentityStatus
+    limitations:
+      - Evidence is static candidate evidence only and does not prove runtime navigation, selected tab, navigation stack contents, route reachability, screen presentation, user action, production use, or impact.
+      - Container context such as TabView, NavigationStack, NavigationSplitView, or List must not be treated as a destination-backed navigation edge.
+      - Dynamic destinations, helper-built views, generics, feature flags, runtime navigation paths, and indirect builders emit gaps or remain false negatives.
+
+  - id: swift.ui.swiftui.action.v1
+    status: active
+    name: SwiftUI static action candidate
+    description: Records obvious syntax-visible SwiftUI action-bearing shapes such as Button and lifecycle/gesture modifiers as review entry points.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftUiActionCandidate
+    requiredProperties:
+      - uiFramework
+      - surfaceKind
+      - uiRole
+      - actionKind
+    limitations:
+      - Evidence does not prove the action is reachable, rendered, tapped, submitted, scheduled, executed, successful, production-used, or impactful.
+      - Closure behavior, async scheduling, branch feasibility, Combine pipelines, downstream calls, property wrapper state, and environment values are not summarized.
+      - Raw labels, strings, snippets, accessibility text, local paths, URLs, secrets, and unsafe literal values must not be emitted.
+
+  - id: swift.ui.uikit.controller.v1
+    status: active
+    name: UIKit static controller surface
+    description: Records syntax-visible UIKit controller subclass declarations from Swift source.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - UIKitControllerDeclared
+    requiredProperties:
+      - uiFramework
+      - surfaceKind
+      - uiRole
+      - controllerBase
+    limitations:
+      - Evidence does not prove storyboard/nib loading, controller instantiation, responder-chain behavior, navigation reachability, lifecycle execution, production use, or impact.
+      - Objective-C bridging, Interface Builder wiring, runtime construction, custom controller hierarchies, and generated controllers may be missed or emitted only as gaps.
+      - Raw snippets, storyboard/nib XML, labels, local paths, URLs, secrets, and unsafe values must not be emitted.
+
+  - id: swift.ui.uikit.action.v1
+    status: active
+    name: UIKit static action and lifecycle candidate
+    description: Records syntax-visible @IBAction methods and selected UIKit lifecycle methods as static review entry points.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - UIKitActionDeclared
+    requiredProperties:
+      - uiFramework
+      - surfaceKind
+      - uiRole
+      - actionKind
+    limitations:
+      - Evidence does not prove Interface Builder wiring, selector dispatch, responder-chain routing, lifecycle execution, user action, production use, or impact.
+      - Dynamic selectors, Objective-C runtime dispatch, segues, storyboard/nib wiring, helper-built bindings, and generated actions emit gaps or remain false negatives.
+      - Raw snippets, user-facing strings, local paths, URLs, secrets, and unsafe values must not be emitted.
+
+  - id: swift.ui.uikit.binding.v1
+    status: active
+    name: UIKit static action or outlet binding candidate
+    description: Records syntax-visible IBOutlet context and simple addTarget/#selector shapes as static binding candidates.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - UIKitActionBindingCandidate
+    requiredProperties:
+      - uiFramework
+      - surfaceKind
+      - uiRole
+      - bindingKind
+      - wiringProven
+    limitations:
+      - Evidence is syntax-local binding context only and does not prove storyboard/nib wiring, responder-chain routing, target lifetime, runtime selector dispatch, user action, production use, or impact.
+      - Nil targets, external selectors, helper-built bindings, Interface Builder XML, Objective-C source, and dynamic runtime wiring emit gaps or remain false negatives.
+      - Raw selector strings beyond safe syntax labels, snippets, storyboard/nib XML, local paths, URLs, secrets, and unsafe values must not be emitted.
+
+  - id: swift.ui.analysis-gap.v1
+    status: active
+    name: Swift UI static extraction analysis gap
+    description: Records static extraction limits for SwiftUI/UIKit UI surfaces, storyboard/nib wiring, dynamic navigation, selectors, generated UI code, and unsupported UI evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    requiredProperties:
+      - gapKind
+      - messageHash
+    limitations:
+      - UI gaps describe static extraction limits only and do not prove screens, actions, routes, bindings, storyboards, nibs, or controllers are absent, unreachable, safe, unsafe, unused, production-used, or impacted.
+      - Gap messages must use closed vocabulary and hashes only; raw UI labels, source snippets, storyboard/nib XML, local paths, URLs, secrets, hostnames, accessibility text, and private labels must not be rendered.
+      - Conservative gaps may be replaced by future SourceKit/compiler, Interface Builder parser, Objective-C, or data-flow slices; runtime-only behavior remains out of scope.
+
+  - id: swift.toolchain.diagnostic.v1
+    name: Swift toolchain diagnostic
+    description: Emits bounded non-mutating availability diagnostics for Swift, SourceKit/sourcekit-lsp, Xcode, CocoaPods, and Carthage tooling.
+    evidenceTier: Tier4Unknown
+    emits:
+      - SwiftToolchainDiagnostic
+      - AnalysisGap
+    limitations:
+      - Toolchain availability or absence is diagnostic evidence only; it does not prove buildability, selected tool versions, package resolution, or runtime behavior.
+      - Probes are bounded and non-mutating; no builds, restores, installs, updates, simulators, devices, tests, or app code are run.
+      - Status values are intentionally coarse (`available`, `not-found`, `timeout`, `unsupported`, `not-probed`, or `error-redacted`) and must not render local absolute tool paths, shell output, usernames, machine names, environment values, credentials, or private repository data.
+
+  - id: swift.reduced-coverage.gap.v1
+    name: Swift reduced coverage feature gap
+    description: Emits closed-vocabulary analysis gaps for unsupported Swift feature boundaries such as macros, conditional compilation, Objective-C bridging, selectors, storyboards, xibs, generated code, reflection, and protocol dispatch uncertainty.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Reduced-coverage gaps are static extraction boundaries only; they do not prove behavior is absent, unreachable, safe, unsafe, unused, or impacted.
+      - Gap detection is conservative and syntax-local; future SourceKit/compiler, storyboard, UI, storage, or data-flow slices may replace some gaps with stronger rule-backed evidence.
+      - Gap messages and properties must use safe closed vocabulary, counts, hashes, rule IDs, and repo-relative spans only; raw source snippets, local paths, URLs, remotes, secrets, private labels, and shell output must not be emitted.
+
+  - id: swift.analysis-gap.v1
+    name: Swift inventory analysis gap
+    description: Emits gaps for unsupported, malformed, dynamic, external, unsafe, missing, or intentionally deferred Swift metadata.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Gaps are partial-analysis evidence and must not be interpreted as clean absence, safety, reachability, or runtime behavior.
+      - Deferred SourceKit, Xcode graph, SwiftPM semantic loading, Objective-C bridging, macros, result builders, UI, storage, and runtime behavior remain out of scope unless future rules prove them.
+
+  - id: swift.toolchain.unavailable.v1
+    name: Swift toolchain unavailable gap
+    description: Emits an analysis gap when Swift toolchain probing is unavailable or disabled while scaffold inventory can still produce useful static evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Toolchain absence is reduced-coverage evidence only; it does not prove absence of Swift symbols, package behavior, buildability, or app behavior.
+      - The scaffold may still emit file/project metadata facts from checked-in evidence, but full semantic conclusions remain unavailable.
+
+  - id: swift.project.load-failed.v1
+    name: Swift project load failed or deferred gap
+    description: Emits analysis gaps for SwiftPM/Xcode load failure, deferred semantic loading, skipped files, unsupported encodings, oversized files, or unavailable project metadata.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Project load failure or deferral is a coverage gap, not proof that a project is invalid, unused, unreachable, or safe.
+      - File/project fallback facts remain static evidence and must not be read as complete selected-scope coverage.
+
+  - id: swift.unsupported.dynamic-boundary.v1
+    name: Swift unsupported dynamic boundary
+    description: Emits analysis gaps for Swift runtime, dynamic, generated, bridge, macro, result-builder, protocol-dispatch, UI, storage, or lifecycle behavior outside the scaffold scope.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Unsupported dynamic boundaries are explicit unknowns; they do not prove absence of behavior, reachability, impact, runtime execution, deployment, or production use.
+      - Objective-C bridging, selectors, responder chain behavior, property wrappers, macros, result builders, dependency injection, Combine, async scheduling, SwiftUI navigation, storyboards, and xibs require later rule-backed extractors.
+
+  - id: swift.syntax.declaration.v1
+    name: SwiftSyntax declaration evidence
+    description: Records SwiftSyntax-backed declaration evidence for classes, structs, actors, enums, protocols, extensions, functions, initializers, properties, subscripts, enum cases, typealiases, and associated types.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftDeclarationDeclared
+    limitations:
+      - SwiftSyntax declaration evidence is static syntax evidence; it does not prove compiler semantic resolution, overload identity, protocol witness selection, runtime dispatch, macro-expanded members, Objective-C bridging, or build success.
+      - Module and target identity may be promoted only when deterministic checked-in project inventory supports it; otherwise identities remain file scoped with reduced-coverage gaps.
+      - Display signatures are reviewer aids and must not be treated as fully qualified compiler symbols.
+
+  - id: swift.syntax.import.v1
+    name: SwiftSyntax import evidence
+    description: Records SwiftSyntax-backed import declarations, scoped import kinds, and exported-import syntax markers.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftImportDeclared
+    limitations:
+      - Import declarations do not prove the imported module exists, builds, is linked, is re-exported at runtime, or is used by consumers.
+      - Conditional imports, canImport checks, and unavailable module context remain reduced-coverage gaps unless a future deterministic configuration is supplied.
+
+  - id: swift.syntax.call.v1
+    name: SwiftSyntax call candidate evidence
+    description: Records syntax-visible Swift call candidates with containing declaration, visible callee syntax, argument labels, arity, file spans, and syntax hashes.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftCallCandidate
+    limitations:
+      - Call candidates do not prove runtime dispatch targets, selected overloads, protocol witnesses, Objective-C selectors, closure values, dependency injection, branch feasibility, scheduling, or execution order.
+      - Optional chaining, dynamic member lookup, operators, key paths, macro-generated calls, result builders, and unsupported callee expressions remain reduced-coverage gaps or syntax-only placeholders.
+
+  - id: swift.syntax.construction.v1
+    name: SwiftSyntax construction candidate evidence
+    description: Records initializer-like Swift construction candidates with visible created type syntax, argument labels, file spans, and syntax hashes.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftConstructionCandidate
+    limitations:
+      - Construction candidates do not prove runtime allocation, selected initializer overload, dependency injection behavior, property-wrapper behavior, or object lifetime.
+      - Shared ObjectCreated semantics are not implied by this syntax-only rule; downstream tools must preserve the syntax-only tier and limitations.
+
+  - id: swift.syntax.symbol-relationship.v1
+    name: SwiftSyntax symbol relationship evidence
+    description: Records source-local SwiftSyntax-backed direct inheritance, protocol conformance, and protocol inheritance relationships using shared canonical relationship kinds.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SymbolRelationship
+      - symbol_relationships table rows
+    limitations:
+      - SwiftSyntax relationship evidence is static syntax evidence; it does not prove compiler semantic binding, runtime dispatch, selected protocol witnesses, Objective-C bridging, availability, or build success.
+      - Relationships are emitted only when source and target identities resolve to exactly one source-local symbol in the current scan scope.
+      - Imported, unresolved, ambiguous, typealias-dependent, generic-specialized, macro-generated, conditional, or generated-code targets remain identity gaps instead of definitive relationship rows.
+      - Extension membership does not emit a traversable ExtensionOf edge in v0; extension protocol adoption may emit ImplementsInterface only when both endpoints are source-local and unambiguous.
+      - Unsupported canonical relationship shapes emit `swift-relationship-kind-unsupported` under `swift.syntax.identity-gap.v1` rather than inventing Swift-specific traversable relationship kinds.
+
+  - id: swift.syntax.extension-membership.v1
+    name: SwiftSyntax extension membership evidence
+    description: Reserved SwiftSyntax rule for explicit extension membership evidence when extension-local containers or source-local extended-type attachment are emitted by a future slice.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftDeclarationDeclared
+      - AnalysisGap
+    limitations:
+      - The current v0 relationship slice does not emit this rule; extension declarations are emitted under `swift.syntax.declaration.v1`, extension protocol adoption uses `swift.syntax.symbol-relationship.v1` when both endpoints are source-local, and unresolved membership uses `swift.syntax.identity-gap.v1`.
+      - Extension membership evidence must not emit a traversable ExtensionOf relationship without a future reader contract and tests.
+      - Extension members on imported, typealias-dependent, generic-specialized, conditional, or ambiguous targets remain syntax-only or gaps.
+
+  - id: swift.syntax.override-candidate.v1
+    name: SwiftSyntax override candidate evidence
+    description: Records explicit Swift override relationships only when a source-local superclass member can be matched without ambiguity.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SymbolRelationship
+      - symbol_relationships table rows
+      - AnalysisGap
+    limitations:
+      - Override evidence is syntax-backed and does not prove runtime dispatch, selected dynamic method target, Objective-C selector behavior, availability, generic specialization, or branch execution.
+      - If the containing superclass or target member cannot be identified exactly once, the adapter emits an AnalysisGap instead of a definitive Overrides row.
+      - Protocol witness selection and default protocol implementation matching are out of scope for this rule.
+
+  - id: swift.syntax.identity-gap.v1
+    name: SwiftSyntax identity and relationship gap
+    description: Emits analysis gaps for duplicate, ambiguous, unresolved, external, extension-membership, override-target, conditional, generated, macro, or unsupported Swift symbol identity and relationship evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Identity gaps are unknowns, not proof that a relationship, member, protocol conformance, override, or runtime behavior is absent.
+      - Candidate names and unsupported syntax are rendered only as safe labels, counts, hashes, rule IDs, and repo-relative spans; raw source snippets, URLs, local paths, secrets, and private labels must not be emitted.
+      - Stable gap kinds include `swift-module-identity-unknown`, `swift-duplicate-symbol-identity`, `swift-unresolved-external-symbol`, `swift-ambiguous-symbol-identity`, `swift-module-context-unavailable`, `swift-extension-membership-syntax-only`, `swift-relationship-kind-unsupported`, and `swift-override-target-unresolved`.
+
+  - id: swift.syntax.analysis-gap.v1
+    name: SwiftSyntax parser and syntax coverage gap
+    description: Emits gaps for unreadable Swift files, unavailable module context, parser limitations, unsupported call shapes, optional chaining, macros, generated code, Objective-C bridging, and dynamic syntax that v0 cannot resolve.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Parser and syntax gaps are unknowns, not clean absence of declarations, calls, relationships, navigation, or runtime behavior.
+      - Diagnostic text and raw source expressions must be omitted or hashed; no raw snippets, URLs, local paths, secrets, or private labels should be emitted.

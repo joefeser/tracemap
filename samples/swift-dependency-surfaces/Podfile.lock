@@ -1,0 +1,14 @@
+PODS:
+  - Alamofire (5.0.0)
+  - RxSwift (6.0.0)
+
+DEPENDENCIES:
+  - Alamofire
+  - RxSwift
+
+SPEC CHECKSUMS:
+  Alamofire: publicchecksum1
+  Alamofire: duplicatechecksum
+  RxSwift: publicchecksum2
+
+COCOAPODS: 1.15.0

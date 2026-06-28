@@ -1,0 +1,8 @@
+PODS:
+  - Alamofire
+DEPENDENCIES:
+  - Alamofire
+SPEC CHECKSUMS:
+  Alamofire: publicsample
+PODFILE CHECKSUM: publicsample
+COCOAPODS: 1.15.0

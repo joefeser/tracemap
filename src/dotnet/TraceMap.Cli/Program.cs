@@ -1025,7 +1025,8 @@ public static class TraceMapCommand
                 values.GetMany("--format").Count == 0 ? null : string.Join(',', values.GetMany("--format")),
                 values.GetValueOrDefault("--date"),
                 values.HasFlag("--dry-run"),
-                values.HasFlag("--force")),
+                values.HasFlag("--force"),
+                values.GetMany("--property-flow-report")),
             cancellationToken);
 
         await output.WriteLineAsync(values.HasFlag("--dry-run")
@@ -2255,6 +2256,7 @@ public static class TraceMapCommand
             Inputs:
               --index <path>                    Existing TraceMap scan or combined SQLite index. Read-only.
               --route-flow-report <path>        Existing route-flow JSON report. Repeatable.
+              --property-flow-report <path>     Existing property-flow JSON report. Repeatable.
               --paths-report <path>             Existing paths-report JSON. Repeatable.
               --reverse-report <path>           Existing reverse-report JSON. Repeatable.
               --combined-report <path>          Existing combined dependency report JSON. Repeatable.

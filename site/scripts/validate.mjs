@@ -37,6 +37,7 @@ import { validateManagerFaqDist } from "./manager-faq.mjs";
 import { validateOwnerFollowupMapDist } from "./owner-followup-map.mjs";
 import { validateProofPathFaqDist } from "./proof-path-faq.mjs";
 import { validateProofPathsForManagersDist } from "./proof-paths-for-managers.mjs";
+import { validatePropertyFlowSchemaGapDist } from "./property-flow-schema-gap.mjs";
 import { validateRouteFlowEvidenceStoryDist } from "./route-flow-evidence-story.mjs";
 import { validateProofPathStoriesDist } from "./proof-path-stories.mjs";
 import { validateProofPathTourDist } from "./proof-path-tour.mjs";
@@ -139,6 +140,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateOwnerFollowupMapDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofPathFaqDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofPathsForManagersDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validatePropertyFlowSchemaGapDist({ baseUrl: normalizedBaseUrl, dist, errors, root });
     await validateRouteFlowEvidenceStoryDist({ baseUrl: normalizedBaseUrl, dist, errors, root });
     await validateProofPathStoriesDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofPathTourDist({ baseUrl: normalizedBaseUrl, dist, errors });

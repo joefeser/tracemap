@@ -795,6 +795,163 @@ public sealed class PropertyFlowTests
         Assert.DoesNotContain(report.Gaps, gap => gap.GapKind == "RouteFlowUnavailable");
     }
 
+    [Fact]
+    public async Task Property_flow_attaches_terminal_context_only_after_selected_property_path_reaches_surface()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone16");
+        SqliteIndexWriter.Write(index, server, [
+            PropertyFact(server, "ProfileDto", "Email", "dto", "Models/ProfileDto.cs", 4),
+            CallFact(server, "ProfileDto.Email", "ProfileRepository.SaveEmail()", "Controllers/ProfileController.cs", 22),
+            QueryPatternFact(server, "ProfileRepository.SaveEmail()", "Data/ProfileRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        var report = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "out"),
+            "dto:ProfileDto.Email"));
+
+        Assert.Equal("1.0", report.Version);
+        var path = Assert.Single(report.LineagePaths, path => path.Nodes.Any(node => node.SafeMetadata.GetValueOrDefault("surfaceKind") == "sql-query"));
+        Assert.Equal(PropertyFlowClassifications.NeedsReviewLineage, path.Classification);
+        Assert.Contains(path.Notes, note => note.StartsWith("StaticTerminalContext: selected-property path reached data-surface terminal context", StringComparison.Ordinal));
+        var terminalNode = Assert.Single(path.Nodes, node => node.SafeMetadata.GetValueOrDefault("terminalContextKind") == "data-surface terminal context");
+        Assert.Equal("SqlSurface", terminalNode.NodeKind);
+        Assert.Contains(path.Edges, edge => edge.EdgeKind == "surface-evidence" && edge.RuleId == "combined.paths.surface-evidence.v1");
+        Assert.Contains(path.Notes, note => note.Contains("not runtime execution, dependency execution, database execution, or impact proof", StringComparison.Ordinal));
+        Assert.DoesNotContain(path.Nodes.SelectMany(node => node.SafeMetadata.Values), value => value.Contains("select ", StringComparison.OrdinalIgnoreCase));
+
+        var written = await PropertyFlowReporter.WriteAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "terminal-context-out"),
+            "dto:ProfileDto.Email"));
+        var markdown = await File.ReadAllTextAsync(written.MarkdownPath!);
+        var json = await File.ReadAllTextAsync(written.JsonPath!);
+        Assert.Contains($"Static terminal context: `data-surface terminal context` from path `{path.PathId}` node `{terminalNode.NodeId}`; static path-scoped evidence only.", markdown);
+        Assert.Contains("StaticTerminalContext: selected-property path reached data-surface terminal context", markdown);
+        Assert.Contains("\"terminalContextKind\": \"data-surface terminal context\"", json);
+        Assert.DoesNotContain(temp.Path, markdown);
+        Assert.DoesNotContain("complete coverage", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("release safety", markdown, StringComparison.OrdinalIgnoreCase);
+
+        var catalog = await File.ReadAllTextAsync(Path.Combine(FindRepositoryRoot(), "rules", "rule-catalog.yml"));
+        Assert.Contains("id: property-flow.path.v1", catalog);
+        Assert.Contains("id: combined.paths.surface-evidence.v1", catalog);
+    }
+
+    [Fact]
+    public void Property_flow_terminal_context_mapper_covers_closed_surface_vocabulary()
+    {
+        var expected = new SortedDictionary<string, string?>(StringComparer.Ordinal)
+        {
+            ["asmx-client"] = "legacy-communication terminal context",
+            ["asmx-config"] = "legacy-communication terminal context",
+            ["asmx-metadata"] = "legacy-communication terminal context",
+            ["asmx-operation"] = "legacy-communication terminal context",
+            ["asmx-service"] = "legacy-communication terminal context",
+            ["dependency-surface"] = "dependency-surface terminal context",
+            ["http-client"] = null,
+            ["http-route"] = null,
+            ["legacy-data"] = "legacy-data terminal context",
+            ["message-channel"] = "message-surface terminal context",
+            ["message-event"] = "message-surface terminal context",
+            ["message-exchange"] = "message-surface terminal context",
+            ["message-queue"] = "message-surface terminal context",
+            ["message-stream"] = "message-surface terminal context",
+            ["message-subscription"] = "message-surface terminal context",
+            ["message-topic"] = "message-surface terminal context",
+            ["message-unknown"] = "message-surface terminal context",
+            ["package-config"] = "package/config terminal context",
+            ["remoting-api"] = "legacy-communication terminal context",
+            ["remoting-channel"] = "legacy-communication terminal context",
+            ["remoting-endpoint"] = "legacy-communication terminal context",
+            ["remoting-object"] = "legacy-communication terminal context",
+            ["remoting-registration"] = "legacy-communication terminal context",
+            ["sql-persistence"] = "data-surface terminal context",
+            ["sql-query"] = "data-surface terminal context",
+            ["wcf-operation"] = "legacy-communication terminal context"
+        };
+
+        Assert.Equal(expected.Keys, CombinedTerminalSurfaceKinds.All.OrderBy(value => value, StringComparer.Ordinal));
+        foreach (var (surfaceKind, contextKind) in expected)
+        {
+            Assert.Equal(contextKind, PropertyFlowReporter.TerminalContextKind(surfaceKind));
+        }
+
+        Assert.Equal("dependency-surface terminal context", PropertyFlowReporter.TerminalContextKind("wcf-service"));
+        Assert.Equal("dependency-surface terminal context", PropertyFlowReporter.TerminalContextKind("wcf-binding"));
+        Assert.Equal("dependency-surface terminal context", PropertyFlowReporter.TerminalContextKind("custom-terminal-surface"));
+    }
+
+    [Theory]
+    [InlineData("id", "Id")]
+    [InlineData("name", "Name")]
+    [InlineData("type", "Type")]
+    [InlineData("value", "Value")]
+    [InlineData("state", "State")]
+    [InlineData("status", "Status")]
+    public void Property_flow_generic_names_do_not_attach_terminal_context_without_exact_identity(string propertyName, string property)
+    {
+        Assert.Equal(propertyName, property.ToLowerInvariant());
+        var root = PropertyFlowRootFor("root-fact", property);
+        var rootFact = PropertyFactRowFor("root-fact", "ProfileDto", property);
+        var genericPath = new[]
+        {
+            CombinedPathNodeFor("root", "ModelProperty", $"ProfileDto.{property}", "root-fact", null),
+            CombinedPathNodeFor("call", "Call", property, "call-fact", property),
+            CombinedPathNodeFor("sql", "SqlSurface", "orders", "sql-fact", "ProfileRepository.SaveGeneric()", "sql-query")
+        };
+
+        Assert.False(PropertyFlowReporter.HasSelectedPropertyBridge(root, rootFact, genericPath));
+
+        var exactPath = genericPath
+            .Select(node => node.NodeId == "call" ? node with { DisplayName = $"ProfileDto.{property}", SymbolId = $"ProfileDto.{property}" } : node)
+            .ToArray();
+        Assert.True(PropertyFlowReporter.HasSelectedPropertyBridge(root, rootFact, exactPath));
+    }
+
+    [Fact]
+    public async Task Property_flow_does_not_attach_terminal_context_from_endpoint_proximity_alone()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone16");
+        SqliteIndexWriter.Write(index, server, [
+            PropertyFact(server, "ProfileDto", "Email", "dto", "Models/ProfileDto.cs", 4),
+            RouteFact(server, "POST", "/api/profile", "/api/profile", "Server.ProfileController.Save(ProfileDto)", "Controllers/ProfileController.cs", 8),
+            QueryPatternFact(server, "Server.ProfileController.Save(ProfileDto)", "Controllers/ProfileController.cs", 30)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combinedPath, ["server"]));
+
+        var report = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "out"),
+            "dto:ProfileDto.Email"));
+
+        Assert.DoesNotContain(report.LineagePaths, path => path.Notes.Any(note => note.StartsWith("StaticTerminalContext:", StringComparison.Ordinal)));
+        Assert.DoesNotContain(report.LineagePaths.SelectMany(path => path.Nodes), node => node.SafeMetadata.ContainsKey("terminalContextKind"));
+        var written = await PropertyFlowReporter.WriteAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "endpoint-proximity-out"),
+            "dto:ProfileDto.Email"));
+        var markdown = await File.ReadAllTextAsync(written.MarkdownPath!);
+        Assert.DoesNotContain("Static terminal context:", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("no terminal", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("no surface", markdown, StringComparison.OrdinalIgnoreCase);
+
+        var methodRoot = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "method-root-out"),
+            "symbol:Server.ProfileController.Save(ProfileDto)"));
+
+        Assert.DoesNotContain(methodRoot.LineagePaths, path => path.Notes.Any(note => note.StartsWith("StaticTerminalContext:", StringComparison.Ordinal)));
+        Assert.DoesNotContain(methodRoot.LineagePaths.SelectMany(path => path.Nodes), node => node.SafeMetadata.ContainsKey("terminalContextKind"));
+    }
+
     private static async Task<(string CombinedPath, string RootFactId)> CreatePropertyFlowCombinedIndexAsync(TempDirectory temp)
     {
         var clientIndex = Path.Combine(temp.Path, "client.sqlite");
@@ -1132,6 +1289,42 @@ public sealed class PropertyFlowTests
             });
     }
 
+    private static CodeFact CallFact(ScanManifest manifest, string caller, string callee, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.CallEdge,
+            RuleIds.CSharpSemanticCallGraph,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: caller,
+            targetSymbol: callee,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["callKind"] = "method"
+            });
+    }
+
+    private static CodeFact QueryPatternFact(ScanManifest manifest, string? sourceSymbol, string file, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.QueryPatternDetected,
+            RuleIds.CSharpSyntaxQueryPattern,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: "orders",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["columnNames"] = "id;email",
+                ["operationName"] = "SELECT",
+                ["queryShapeHash"] = "shape-email-orders",
+                ["sqlSourceKind"] = "literal-string",
+                ["tableName"] = "orders"
+            });
+    }
+
     private static CodeFact TypeFact(ScanManifest manifest, string typeName, string file, int line)
     {
         return FactFactory.Create(
@@ -1149,11 +1342,119 @@ public sealed class PropertyFlowTests
             });
     }
 
+    private static PropertyFlowRoot PropertyFlowRootFor(string combinedFactId, string propertyName)
+    {
+        return new PropertyFlowRoot(
+            "root",
+            "ModelProperty",
+            PropertyFlowClassifications.NeedsReviewLineage,
+            "server",
+            "source-server",
+            null,
+            "scan-server",
+            "abc123",
+            combinedFactId,
+            null,
+            RuleIds.CSharpSyntaxDeclarations,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            "Models/ProfileDto.cs",
+            4,
+            4,
+            "CSharpSyntaxExtractor",
+            ScannerVersions.CSharpSyntaxExtractor,
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["modelKind"] = "dto",
+                ["propertyName"] = propertyName
+            },
+            [combinedFactId],
+            []);
+    }
+
+    private static PropertyFactRow PropertyFactRowFor(string combinedFactId, string containingType, string propertyName)
+    {
+        return new PropertyFactRow(
+            combinedFactId,
+            "source-server",
+            "server",
+            "scan-server",
+            "abc123",
+            FactTypes.PropertyDeclared,
+            RuleIds.CSharpSyntaxDeclarations,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            containingType,
+            $"{containingType}.{propertyName}",
+            propertyName,
+            "Models/ProfileDto.cs",
+            4,
+            4,
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["modelKind"] = "dto",
+                ["propertyName"] = propertyName
+            });
+    }
+
+    private static CombinedPathNode CombinedPathNodeFor(
+        string nodeId,
+        string nodeKind,
+        string displayName,
+        string combinedFactId,
+        string? symbolId,
+        string? surfaceKind = null)
+    {
+        return new CombinedPathNode(
+            nodeId,
+            nodeKind,
+            displayName,
+            "source-server",
+            "server",
+            "scan-server",
+            "abc123",
+            symbolId,
+            combinedFactId,
+            RuleIds.CSharpSyntaxDeclarations,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            "Models/ProfileDto.cs",
+            4,
+            4,
+            surfaceKind,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    }
+
     private static async Task<string> FingerprintAsync(string path)
     {
         await using var connection = new SqliteConnection($"Data Source={path};Mode=ReadOnly");
         await connection.OpenAsync();
         return await ScalarAsync(connection, "select count(*) || ':' || coalesce(group_concat(name, ','), '') from sqlite_master where name not like 'sqlite_%';");
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "rules", "rule-catalog.yml"))
+                && Directory.Exists(Path.Combine(directory.FullName, ".kiro")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root.");
     }
 
     private static async Task<string> ScalarAsync(SqliteConnection connection, string sql, params (string Name, string Value)[] parameters)
