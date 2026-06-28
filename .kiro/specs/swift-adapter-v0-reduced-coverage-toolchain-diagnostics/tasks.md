@@ -69,8 +69,8 @@
 
 ## Follow-Ups Out Of Scope
 
-- [ ] SourceKit/compiler semantic enrichment.
-- [ ] Storyboard/nib wiring extraction.
-- [ ] SwiftUI/UIKit surface extraction.
-- [ ] Swift storage/data surface extraction.
-- [ ] Runtime instrumentation or simulator/device checks.
+- SourceKit/compiler semantic enrichment.
+- Storyboard/nib wiring extraction.
+- SwiftUI/UIKit surface extraction.
+- Swift storage/data surface extraction.
+- Runtime instrumentation or simulator/device checks.
