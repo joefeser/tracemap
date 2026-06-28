@@ -1718,7 +1718,7 @@ enum SwiftStorageExtractor {
         for (pattern, direction) in aliasPatterns {
             for (ordinal, match) in regexMatches(pattern, in: searchable).enumerated() {
                 guard let name = capture(match, 1, in: searchable),
-                      let key = literalConstantValue(for: name, constants: constants) else { continue }
+                      let key = literalConstantValue(for: name, constants: constants, text: text, beforeOffset: match.range.location) else { continue }
                 let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
                 records.append(userDefaultsRecord(key: key, item: item, start: start, end: start, apiName: "literal-alias", direction: direction, ordinal: match.range.location + ordinal))
             }
@@ -1970,7 +1970,7 @@ enum SwiftStorageExtractor {
         for match in regexMatches(#"\bUserDefaults(?:\.standard)?\.[A-Za-z0-9_]+\s*\([^)]*forKey\s*:\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?|[^\"),\s][^),\s]*)"#, in: text) {
             guard isCodeRange(match.range, in: searchable),
                   let argument = capture(match, 1, in: text),
-                  !resolvesToLiteralConstant(argument, constants: constants) else { continue }
+                  !resolvesToLiteralConstant(argument, constants: constants, text: text, beforeOffset: match.range.location) else { continue }
             let start = lineNumber(atUTF16Offset: match.range.location, in: text)
             gaps.append(gap("swift-storage-dynamic-userdefaults-key", item, start, start, "UserDefaults key is dynamic or unsupported; key surface evidence omitted."))
         }
@@ -1983,13 +1983,13 @@ enum SwiftStorageExtractor {
         return gaps
     }
 
-    private static func resolvesToLiteralConstant(_ argument: String, constants: [String: String]) -> Bool {
-        literalConstantValue(for: argument, constants: constants) != nil
+    private static func resolvesToLiteralConstant(_ argument: String, constants: [String: String], text: String, beforeOffset: Int) -> Bool {
+        literalConstantValue(for: argument, constants: constants, text: text, beforeOffset: beforeOffset) != nil
     }
 
     private static func literalStringConstants(text: String, searchable: String) -> [String: String] {
         var constants: [String: String] = [:]
-        for match in regexMatches(#"\b(?:static\s+)?let\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"([^"]+)""#, in: text) {
+        for match in regexMatches(#"\bstatic\s+let\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"([^"]+)""#, in: text) {
             guard isCodeRange(match.range, in: searchable),
                   let name = capture(match, 1, in: text),
                   let value = capture(match, 2, in: text) else { continue }
@@ -2009,10 +2009,21 @@ enum SwiftStorageExtractor {
         return constants
     }
 
-    private static func literalConstantValue(for name: String, constants: [String: String]) -> String? {
+    private static func literalConstantValue(for name: String, constants: [String: String], text: String, beforeOffset: Int) -> String? {
         if let value = constants[name] { return value }
         guard !name.contains(".") else { return nil }
-        return constants[name]
+        return nearestLocalLiteralConstant(name: name, text: text, beforeOffset: beforeOffset) ?? constants[name]
+    }
+
+    private static func nearestLocalLiteralConstant(name: String, text: String, beforeOffset: Int) -> String? {
+        guard beforeOffset > 0 else { return nil }
+        let contextStart = max(0, beforeOffset - 2000)
+        let startIndex = String.Index(utf16Offset: contextStart, in: text)
+        let endIndex = String.Index(utf16Offset: min(beforeOffset, text.utf16.count), in: text)
+        let context = String(text[startIndex..<endIndex])
+        let scopedContext = context.split(separator: "{", omittingEmptySubsequences: false).last.map(String.init) ?? context
+        let pattern = #"\b(?:let|var)\s+\#(name)\s*=\s*"([^"]+)""#
+        return regexMatches(pattern, in: scopedContext).compactMap { capture($0, 1, in: scopedContext) }.last
     }
 
     private static func record(factType: String, ruleId: String, tier: EvidenceTier, item: InventoryItem, start: Int, end: Int, safeIdentity: String, role: String, ordinal: Int, properties: [String: String]) -> SwiftStorageRecord {
