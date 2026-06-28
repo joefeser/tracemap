@@ -606,8 +606,14 @@ enum DependencyExtractor {
         var gaps: [CoverageGap] = []
         for item in inventory where item.selected {
             let url = scanRoot.appendingPathComponent(item.relativePath)
-            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
-            switch URL(fileURLWithPath: item.relativePath).lastPathComponent {
+            let fileName = URL(fileURLWithPath: item.relativePath).lastPathComponent
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+                if knownDependencyMetadataFile(fileName) {
+                    gaps.append(gap("swift-dependency-metadata-unreadable", item, 1, item.endLine, "\(fileName) could not be read as UTF-8; dependency surface extraction is partial."))
+                }
+                continue
+            }
+            switch fileName {
             case "Package.swift":
                 let extracted = swiftPMManifest(text: text, item: item)
                 records += extracted.records
@@ -646,7 +652,8 @@ enum DependencyExtractor {
     }
 
     private static func swiftPMManifest(text: String, item: InventoryItem) -> DependencyExtraction {
-        let matches = regexMatches(#"\.package\s*\((.*?)\)"#, in: text, dotMatchesLineSeparators: true)
+        let searchableText = maskSwiftCommentsAndStringLiterals(text)
+        let matches = regexMatches(#"\.package\s*\((.*?)\)"#, in: searchableText, dotMatchesLineSeparators: true)
         var records: [DependencyRecord] = []
         var gaps: [CoverageGap] = []
         for (ordinal, match) in matches.enumerated() {
@@ -675,7 +682,7 @@ enum DependencyExtractor {
                 identity: safe,
                 identityHash: identityHash,
                 identityStatus: safe == nil ? "hashed" : "safe",
-                versionStatus: body.contains("from:") || body.contains("branch:") || body.contains("revision:") ? "present" : "absent",
+                versionStatus: body.contains("from:") || body.contains("exact:") || body.contains("branch:") || body.contains("revision:") ? "present" : "absent",
                 revisionStatus: body.contains("revision:") || body.contains("branch:") ? "present" : "absent",
                 sourceLocationStatus: url == nil ? "unknown" : "hashed"
             )
@@ -768,10 +775,17 @@ enum DependencyExtractor {
         var records: [DependencyRecord] = []
         var gaps: [CoverageGap] = []
         let lines = text.components(separatedBy: "\n")
+        var lineOffsets: [Int] = []
         var utf16Offset = 0
-        for (lineIndex, line) in lines.enumerated() {
-            defer { utf16Offset += line.utf16.count + 1 }
+        for line in lines {
+            lineOffsets.append(utf16Offset)
+            utf16Offset += line.utf16.count + 1
+        }
+        var lineIndex = 0
+        while lineIndex < lines.count {
+            let line = lines[lineIndex]
             let trimmed = line.trimmingCharacters(in: .whitespaces)
+            defer { lineIndex += 1 }
             guard trimmed.hasPrefix("pod ") else { continue }
             let match = firstMatch(#"\bpod\s+['"]([^'"]+)['"]"#, in: line)
             guard let match, let name = capture(match, 1, in: line) else {
@@ -779,7 +793,9 @@ enum DependencyExtractor {
                 continue
             }
             let safe = isSafeLabel(name) ? name : nil
-            let body = line
+            let declaration = podDeclarationBody(lines: lines, startIndex: lineIndex)
+            let body = declaration.body
+            let endLine = declaration.endIndex + 1
             var properties = baseProperties(
                 packageManager: "cocoapods",
                 sourceMetadataKind: "Podfile",
@@ -793,18 +809,18 @@ enum DependencyExtractor {
             )
             properties["occurrenceIndex"] = String(records.count + 1)
             if body.contains(":path") {
-                gaps.append(gap("swift-dependency-local-path-omitted", item, lineIndex + 1, lineIndex + 1, "Podfile local path dependency option omitted; dependency evidence is partial."))
+                gaps.append(gap("swift-dependency-local-path-omitted", item, lineIndex + 1, endLine, "Podfile local path dependency option omitted; dependency evidence is partial."))
             }
-            let anchor = utf16Offset + match.range.location
+            let anchor = lineOffsets[lineIndex] + match.range.location
             records.append(DependencyRecord(
                 factType: "SwiftDependencyDeclared",
                 ruleId: RuleIds.dependencyManifest,
                 evidenceTier: .tier3SyntaxOrTextual,
                 filePath: item.relativePath,
                 startLine: lineIndex + 1,
-                endLine: lineIndex + 1,
+                endLine: endLine,
                 safeIdentity: safe,
-                identityDiscriminator: discriminator(item, lineIndex + 1, lineIndex + 1, anchor, "podfile", records.count),
+                identityDiscriminator: discriminator(item, lineIndex + 1, endLine, anchor, "podfile", records.count),
                 properties: properties
             ))
         }
@@ -936,6 +952,31 @@ enum DependencyExtractor {
 
     private static func gap(_ kind: String, _ item: InventoryItem, _ startLine: Int, _ endLine: Int, _ message: String) -> CoverageGap {
         CoverageGap(kind: kind, ruleId: RuleIds.dependencyAnalysisGap, message: message, filePath: item.relativePath, startLine: max(1, startLine), endLine: max(max(1, startLine), endLine))
+    }
+
+    private static func knownDependencyMetadataFile(_ fileName: String) -> Bool {
+        switch fileName {
+        case "Package.swift", "Package.resolved", "Podfile", "Podfile.lock", "Cartfile", "Cartfile.resolved":
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func podDeclarationBody(lines: [String], startIndex: Int) -> (body: String, endIndex: Int) {
+        var endIndex = startIndex
+        var parts = [lines[startIndex]]
+        var index = startIndex + 1
+        while index < lines.count {
+            let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty || trimmed == "end" || trimmed.hasPrefix("pod ") || trimmed.hasPrefix("target ") || trimmed.hasPrefix("abstract_target ") {
+                break
+            }
+            parts.append(lines[index])
+            endIndex = index
+            index += 1
+        }
+        return (parts.joined(separator: "\n"), endIndex)
     }
 
     private static func discriminator(_ item: InventoryItem, _ startLine: Int, _ endLine: Int, _ offset: Int, _ kind: String, _ ordinal: Int) -> String {
@@ -2132,6 +2173,108 @@ func capture(_ match: NSTextCheckingResult, _ index: Int, in text: String) -> St
         return nil
     }
     return String(text[range])
+}
+
+func maskSwiftCommentsAndStringLiterals(_ text: String) -> String {
+    let scalars = Array(text.unicodeScalars)
+    var output: [UnicodeScalar] = []
+    output.reserveCapacity(scalars.count)
+    var index = 0
+    var inLineComment = false
+    var blockCommentDepth = 0
+    var inString = false
+    var escapingString = false
+
+    func isSlash(_ offset: Int = 0) -> Bool {
+        index + offset < scalars.count && scalars[index + offset] == "/"
+    }
+
+    func isAsterisk(_ offset: Int = 0) -> Bool {
+        index + offset < scalars.count && scalars[index + offset] == "*"
+    }
+
+    while index < scalars.count {
+        let scalar = scalars[index]
+        if inLineComment {
+            if scalar == "\n" {
+                inLineComment = false
+                output.append(scalar)
+            } else {
+                output.append(" ")
+            }
+            index += 1
+            continue
+        }
+
+        if blockCommentDepth > 0 {
+            if isSlash() && isAsterisk(1) {
+                output.append(" ")
+                output.append(" ")
+                blockCommentDepth += 1
+                index += 2
+                continue
+            }
+            if isAsterisk() && isSlash(1) {
+                output.append(" ")
+                output.append(" ")
+                blockCommentDepth -= 1
+                index += 2
+                continue
+            }
+            output.append(scalar == "\n" ? scalar : " ")
+            index += 1
+            continue
+        }
+
+        if inString {
+            if scalar == "\n" {
+                inString = false
+                escapingString = false
+                output.append(scalar)
+            } else if escapingString {
+                escapingString = false
+                output.append(" ")
+            } else if scalar == "\\" {
+                escapingString = true
+                output.append(" ")
+            } else if scalar == "\"" {
+                inString = false
+                output.append(" ")
+            } else {
+                output.append(" ")
+            }
+            index += 1
+            continue
+        }
+
+        if isSlash() && isSlash(1) {
+            output.append(" ")
+            output.append(" ")
+            inLineComment = true
+            index += 2
+            continue
+        }
+
+        if isSlash() && isAsterisk(1) {
+            output.append(" ")
+            output.append(" ")
+            blockCommentDepth = 1
+            index += 2
+            continue
+        }
+
+        if scalar == "\"" {
+            inString = true
+            output.append(" ")
+            index += 1
+            continue
+        }
+
+        output.append(scalar)
+        index += 1
+    }
+
+    return String(String.UnicodeScalarView(output))
 }
 
 func lineNumber(atUTF16Offset offset: Int, in text: String) -> Int {

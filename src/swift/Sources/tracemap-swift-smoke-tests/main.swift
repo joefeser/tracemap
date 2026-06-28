@@ -344,10 +344,13 @@ struct TraceMapSwiftSmokeTests {
             "Package.swift": """
             // swift-tools-version: 6.0
             import PackageDescription
+            let ignored = ".package(url: \"https://example.invalid/StringOnly.git\", from: \"1.0.0\")"
             let package = Package(
               name: "Deps",
               dependencies: [
+                // .package(url: "https://example.invalid/CommentOnly.git", from: "1.0.0"),
                 .package(url: "https://example.invalid/Alamofire.git", from: "5.0.0"),
+                .package(url: "https://example.invalid/ExactKit.git", exact: "1.2.3"),
                 .package(path: "../LocalOnly")
               ],
               targets: [.executableTarget(name: "App")]
@@ -361,6 +364,7 @@ struct TraceMapSwiftSmokeTests {
             ]}
             """,
             "Unsupported/Package.resolved": #"{"version":3,"pins":[]}"#,
+            "Unreadable/Package.resolved": #"{"version":2,"pins":[]}"#,
             "Podfile": """
             target 'App' do
               pod 'Alamofire', '~> 5.0'
@@ -393,9 +397,14 @@ struct TraceMapSwiftSmokeTests {
             github "ReactiveX/RxSwift" "6.0.0"
             binary "https://example.invalid/BinaryKit.json" "2.0.0"
             """
-        ])
-        let out = fixture.temp.url.appendingPathComponent("scan")
-        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: out))
+	        ])
+	        let unreadable = fixture.repo.appendingPathComponent("Unreadable/Package.resolved")
+	        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: unreadable.path)
+	        defer {
+	            try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: unreadable.path)
+	        }
+	        let out = fixture.temp.url.appendingPathComponent("scan")
+	        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: out))
         let declarations = result.facts.filter { $0.factType == "SwiftDependencyDeclared" }
         let lockfileEntries = result.facts.filter { $0.factType == "SwiftDependencyLockfileEntryDeclared" }
         assert(!declarations.isEmpty)
@@ -404,13 +413,17 @@ struct TraceMapSwiftSmokeTests {
         assert(lockfileEntries.contains { $0.ruleId == "swift.dependency.lockfile.swiftpm.v1" && $0.evidenceTier == .tier2Structural })
         assert(lockfileEntries.contains { $0.ruleId == "swift.dependency.lockfile.text.v1" && $0.evidenceTier == .tier3SyntaxOrTextual })
         assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.dependency.analysis-gap.v1" && $0.properties["gapKind"] == "swift-dependency-local-path-omitted" })
-        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.dependency.analysis-gap.v1" && $0.properties["gapKind"] == "swift-dependency-lockfile-unsupported-schema" && $0.evidence.filePath == "Unsupported/Package.resolved" })
-        assert(!result.facts.contains { $0.factType == "SwiftDependencyLockfileEntryDeclared" && $0.evidence.filePath == "Unsupported/Package.resolved" })
-        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.properties["gapKind"] == "swift-dependency-lockfile-malformed" })
-        assert(result.facts.contains { $0.factType == "SwiftEcosystemMetadataDeclared" && $0.properties["podChecksumSectionHash"]?.count == 64 })
-        assert(result.facts.allSatisfy { $0.properties["stableDependencySurfaceKey"] == nil })
-        assert(result.facts.filter { $0.properties["dependencyIdentityStatus"] == "hashed" || $0.properties["dependencyIdentityStatus"] == "unsafe-omitted" }.allSatisfy { $0.properties["normalizedDependencyIdentity"] == nil })
-        let factsText = try String(contentsOf: out.appendingPathComponent("facts.ndjson"), encoding: .utf8)
+	        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.dependency.analysis-gap.v1" && $0.properties["gapKind"] == "swift-dependency-lockfile-unsupported-schema" && $0.evidence.filePath == "Unsupported/Package.resolved" })
+	        assert(!result.facts.contains { $0.factType == "SwiftDependencyLockfileEntryDeclared" && $0.evidence.filePath == "Unsupported/Package.resolved" })
+	        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.dependency.analysis-gap.v1" && $0.properties["gapKind"] == "swift-dependency-metadata-unreadable" && $0.evidence.filePath == "Unreadable/Package.resolved" })
+	        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.properties["gapKind"] == "swift-dependency-lockfile-malformed" })
+	        assert(result.facts.contains { $0.factType == "SwiftEcosystemMetadataDeclared" && $0.properties["podChecksumSectionHash"]?.count == 64 })
+	        assert(result.facts.allSatisfy { $0.properties["stableDependencySurfaceKey"] == nil })
+	        assert(result.facts.filter { $0.properties["dependencyIdentityStatus"] == "hashed" || $0.properties["dependencyIdentityStatus"] == "unsafe-omitted" }.allSatisfy { $0.properties["normalizedDependencyIdentity"] == nil })
+	        assert(declarations.contains { $0.properties["normalizedDependencyIdentity"] == "ExactKit" && $0.properties["versionStatus"] == "present" })
+	        assert(declarations.contains { $0.evidence.filePath == "Podfile" && $0.properties["normalizedDependencyIdentity"] == "RxSwift" && $0.properties["versionStatus"] == "present" && $0.evidence.endLine > $0.evidence.startLine })
+	        assert(!declarations.contains { $0.properties["normalizedDependencyIdentity"] == "CommentOnly" || $0.properties["normalizedDependencyIdentity"] == "StringOnly" })
+	        let factsText = try String(contentsOf: out.appendingPathComponent("facts.ndjson"), encoding: .utf8)
         assert(!factsText.contains("https://example.invalid"))
         assert(!factsText.contains("../LocalOnly"))
         assert(!factsText.contains("AcmeSecret"))
