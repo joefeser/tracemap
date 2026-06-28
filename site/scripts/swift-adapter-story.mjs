@@ -44,7 +44,7 @@ const requiredText = [
   "coverage labels",
   "reduced-coverage",
   "TraceMap core scanning and reduction do not use AI impact analysis, LLM analysis, prompt-based classification, embeddings, or vector database analysis",
-  "TraceMap should not call a Swift surface impacted unless reducer-backed public-safe evidence supports that wording"
+  "TraceMap should not describe a Swift surface as affected by a change unless reducer-backed public-safe evidence supports that wording"
 ];
 
 const expectedRows = ["adapter-landed", "review-use", "claim-safety"];
