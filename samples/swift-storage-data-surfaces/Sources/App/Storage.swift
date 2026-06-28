@@ -7,12 +7,15 @@ import GRDB
 enum PreferenceKeys {
     static let launchCount = "launchCount"
     static let sensitivePreference = "authToken"
+    static let key = "staticScopedPreference"
 }
 
 final class PreferencesStore {
     func update(flag: Bool, dynamicKey: String) {
         UserDefaults.standard.register(defaults: ["welcomeMessage": "hello", "syncEnabled": true])
+        UserDefaults.standard.register(defaults: ["tenant-\(dynamicKey)": true])
         UserDefaults.standard.set(flag, forKey: "hasCompletedOnboarding")
+        _ = UserDefaults.standard.string(forKey: "user-\(dynamicKey)")
         _ = UserDefaults.standard.integer(forKey: PreferenceKeys.launchCount)
         _ = UserDefaults.standard.string(forKey: PreferenceKeys.sensitivePreference)
         UserDefaults.standard.removeObject(forKey: dynamicKey)
