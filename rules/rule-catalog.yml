@@ -4501,6 +4501,127 @@ rules:
       - Gap messages must use safe closed vocabulary and hashes only; raw URLs, hosts, queries, headers, bodies, credentials, tokens, snippets, remotes, and local paths must not be rendered.
       - Conservative gaps may be false positives for values that a future semantic/data-flow pass can resolve; runtime-only behavior and binary/generated clients may remain false negatives.
 
+  - id: swift.ui.swiftui.view.v1
+    status: active
+    name: SwiftUI static view surface
+    description: Records syntax-visible SwiftUI view and scene-root evidence from checked-in Swift source without executing app code or building the scanned app.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftUiSurfaceDeclared
+    requiredProperties:
+      - uiFramework
+      - surfaceKind
+      - uiRole
+      - staticEvidenceOnly
+      - runtimeProof
+    limitations:
+      - Evidence is syntax/textual only and does not prove rendered screens, app launch, navigation reachability, user actions, production use, or impact.
+      - SwiftUI result-builder semantics, property wrapper values, environment injection, macro expansion, conditional compilation branches, and generated-code semantics are not resolved.
+      - Raw view-builder source text, labels, accessibility text, snippets, local paths, URLs, secrets, and unsafe literal values must not be emitted.
+
+  - id: swift.ui.swiftui.navigation.v1
+    status: active
+    name: SwiftUI static navigation and presentation candidate
+    description: Records narrow syntax-visible SwiftUI navigation, presentation, and container context evidence when destination or container syntax is visible.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftUiNavigationCandidate
+    requiredProperties:
+      - uiFramework
+      - surfaceKind
+      - uiRole
+      - navigationKind
+      - destinationBacked
+      - destinationIdentityStatus
+    limitations:
+      - Evidence is static candidate evidence only and does not prove runtime navigation, selected tab, navigation stack contents, route reachability, screen presentation, user action, production use, or impact.
+      - Container context such as TabView, NavigationStack, NavigationSplitView, or List must not be treated as a destination-backed navigation edge.
+      - Dynamic destinations, helper-built views, generics, feature flags, runtime navigation paths, and indirect builders emit gaps or remain false negatives.
+
+  - id: swift.ui.swiftui.action.v1
+    status: active
+    name: SwiftUI static action candidate
+    description: Records obvious syntax-visible SwiftUI action-bearing shapes such as Button and lifecycle/gesture modifiers as review entry points.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftUiActionCandidate
+    requiredProperties:
+      - uiFramework
+      - surfaceKind
+      - uiRole
+      - actionKind
+    limitations:
+      - Evidence does not prove the action is reachable, rendered, tapped, submitted, scheduled, executed, successful, production-used, or impactful.
+      - Closure behavior, async scheduling, branch feasibility, Combine pipelines, downstream calls, property wrapper state, and environment values are not summarized.
+      - Raw labels, strings, snippets, accessibility text, local paths, URLs, secrets, and unsafe literal values must not be emitted.
+
+  - id: swift.ui.uikit.controller.v1
+    status: active
+    name: UIKit static controller surface
+    description: Records syntax-visible UIKit controller subclass declarations from Swift source.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - UIKitControllerDeclared
+    requiredProperties:
+      - uiFramework
+      - surfaceKind
+      - uiRole
+      - controllerBase
+    limitations:
+      - Evidence does not prove storyboard/nib loading, controller instantiation, responder-chain behavior, navigation reachability, lifecycle execution, production use, or impact.
+      - Objective-C bridging, Interface Builder wiring, runtime construction, custom controller hierarchies, and generated controllers may be missed or emitted only as gaps.
+      - Raw snippets, storyboard/nib XML, labels, local paths, URLs, secrets, and unsafe values must not be emitted.
+
+  - id: swift.ui.uikit.action.v1
+    status: active
+    name: UIKit static action and lifecycle candidate
+    description: Records syntax-visible @IBAction methods and selected UIKit lifecycle methods as static review entry points.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - UIKitActionDeclared
+    requiredProperties:
+      - uiFramework
+      - surfaceKind
+      - uiRole
+      - actionKind
+    limitations:
+      - Evidence does not prove Interface Builder wiring, selector dispatch, responder-chain routing, lifecycle execution, user action, production use, or impact.
+      - Dynamic selectors, Objective-C runtime dispatch, segues, storyboard/nib wiring, helper-built bindings, and generated actions emit gaps or remain false negatives.
+      - Raw snippets, user-facing strings, local paths, URLs, secrets, and unsafe values must not be emitted.
+
+  - id: swift.ui.uikit.binding.v1
+    status: active
+    name: UIKit static action or outlet binding candidate
+    description: Records syntax-visible IBOutlet context and simple addTarget/#selector shapes as static binding candidates.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - UIKitActionBindingCandidate
+    requiredProperties:
+      - uiFramework
+      - surfaceKind
+      - uiRole
+      - bindingKind
+      - wiringProven
+    limitations:
+      - Evidence is syntax-local binding context only and does not prove storyboard/nib wiring, responder-chain routing, target lifetime, runtime selector dispatch, user action, production use, or impact.
+      - Nil targets, external selectors, helper-built bindings, Interface Builder XML, Objective-C source, and dynamic runtime wiring emit gaps or remain false negatives.
+      - Raw selector strings beyond safe syntax labels, snippets, storyboard/nib XML, local paths, URLs, secrets, and unsafe values must not be emitted.
+
+  - id: swift.ui.analysis-gap.v1
+    status: active
+    name: Swift UI static extraction analysis gap
+    description: Records static extraction limits for SwiftUI/UIKit UI surfaces, storyboard/nib wiring, dynamic navigation, selectors, generated UI code, and unsupported UI evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    requiredProperties:
+      - gapKind
+      - messageHash
+    limitations:
+      - UI gaps describe static extraction limits only and do not prove screens, actions, routes, bindings, storyboards, nibs, or controllers are absent, unreachable, safe, unsafe, unused, production-used, or impacted.
+      - Gap messages must use closed vocabulary and hashes only; raw UI labels, source snippets, storyboard/nib XML, local paths, URLs, secrets, hostnames, accessibility text, and private labels must not be rendered.
+      - Conservative gaps may be replaced by future SourceKit/compiler, Interface Builder parser, Objective-C, or data-flow slices; runtime-only behavior remains out of scope.
+
   - id: swift.toolchain.diagnostic.v1
     name: Swift toolchain diagnostic
     description: Emits bounded non-mutating availability diagnostics for Swift, SourceKit/sourcekit-lsp, Xcode, CocoaPods, and Carthage tooling.
