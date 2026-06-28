@@ -272,13 +272,18 @@ as coverage gaps instead of disappearing or being reported as clean absence.
    absence, or parser failure THEN it SHALL emit `AnalysisGap` facts with
    stable `gapKind`, `gapReason`, `frameworkFamily`, `operationDirection` where
    visible, `identityStatus`, and safe hash metadata.
-2. WHEN a supported framework is imported or referenced but no static surface is
-   extractable THEN the adapter SHALL emit a reduced-coverage gap instead of a
-   clean no-storage conclusion.
-3. WHEN an unsafe value is omitted or hashed for public safety THEN the adapter
+2. WHEN a supported storage/data framework is referenced through a storage-
+   specific type, member, descriptor file, wrapper, or call shape but no static
+   surface is extractable THEN the adapter SHALL emit a reduced-coverage gap
+   instead of a clean no-storage conclusion.
+3. WHEN a broad framework import such as `Foundation` is visible without a
+   storage-specific type, member, descriptor file, wrapper, or call shape THEN
+   the adapter SHALL NOT emit a storage/data reduced-coverage gap from the
+   import alone.
+4. WHEN an unsafe value is omitted or hashed for public safety THEN the adapter
    SHALL preserve enough role metadata to explain what was omitted without
    exposing the raw value.
-4. WHEN scan coverage is reduced because storage/data extraction falls back to
+5. WHEN scan coverage is reduced because storage/data extraction falls back to
    syntax/textual evidence or skips unsupported files THEN `scan-manifest.json`
    and `report.md` SHALL make that reduced coverage visible.
 

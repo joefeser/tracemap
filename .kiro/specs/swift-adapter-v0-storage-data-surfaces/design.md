@@ -123,7 +123,6 @@ Static model descriptors should derive stable keys from:
 
 ```text
 swift-coredata/v1|
-repoCommit=<commit-sha>|
 path=<repo-relative-model-path>|
 modelHash=<metadata-hash>|
 descriptorKind=<model|entity|attribute|relationship|fetch-request|configuration>|
@@ -132,6 +131,8 @@ safeNameOrHash=<role-separated-name-or-hash>
 
 The model metadata hash should hash the normalized model descriptor content or a
 stable structural subset. It must not store raw XML or snippets in facts.
+Commit SHA is scan/fact provenance and must not be part of descriptor stable
+identity keys, otherwise unchanged descriptor identities churn across commits.
 
 Limitations to document:
 
