@@ -30,9 +30,11 @@ the implementation branch lands code, tests, validation, and PR-loop evidence.
   prerequisite specs before implementation.
 - [ ] Confirm the implementation starts from latest `origin/dev` after required
   Swift v0 prerequisite slices are merged.
-- [ ] Confirm no runtime app execution, Xcode build, package restore, simulator,
-  device, storyboard runtime loading, nib runtime loading, LLM, embedding,
-  vector database, or prompt-based classification is in scope.
+- [ ] Confirm no runtime app execution, Xcode build, scanned-app package
+  restore/build requirement, simulator, device, storyboard runtime loading, nib
+  runtime loading, LLM, embedding, vector database, or prompt-based
+  classification is in scope. Building the TraceMap Swift adapter package for
+  validation is allowed.
 - [ ] Confirm all new fact types and rule IDs are added to
   `rules/rule-catalog.yml` before emission.
 
@@ -66,8 +68,12 @@ the implementation branch lands code, tests, validation, and PR-loop evidence.
 - [ ] Add SwiftUI fixtures for `View` declarations, `body`, `@main App`,
   `WindowGroup`, and common containers.
 - [ ] Add SwiftUI navigation/presentation fixtures for `NavigationLink`,
-  `.navigationDestination`, `.sheet`, `.fullScreenCover`, `.popover`,
-  `.alert`, `NavigationStack`, `NavigationSplitView`, and `TabView`.
+  `.navigationDestination`, `.sheet`, `.fullScreenCover`, and `.popover`.
+- [ ] Add presentation/action-ish fixtures for `.alert` that prove it does not
+  become a destination-backed navigation edge.
+- [ ] Add container fixtures for `NavigationStack`, `NavigationSplitView`,
+  `TabView`, and `List` that prove containers emit container context, not
+  destination edges.
 - [ ] Add SwiftUI action-ish fixtures for `Button`, `.onTapGesture`,
   `.onSubmit`, `.onAppear`, `.task`, `.refreshable`, `.swipeActions`, and
   `ToolbarItem`.
@@ -106,10 +112,13 @@ the implementation branch lands code, tests, validation, and PR-loop evidence.
 
 ## Phase 4: SwiftUI Navigation And Action-ish Extraction
 
-- [ ] Emit `SwiftUiNavigationCandidate` for supported static
-  `NavigationLink`, `.navigationDestination`, `.sheet`, `.fullScreenCover`,
-  `.popover`, `.alert`, `TabView`, `NavigationStack`, and
-  `NavigationSplitView` evidence where syntax exists.
+- [ ] Emit `SwiftUiNavigationCandidate` only for supported destination-backed
+  static `NavigationLink`, `.navigationDestination`, `.sheet`,
+  `.fullScreenCover`, and `.popover` evidence where destination syntax exists.
+- [ ] Emit `.alert` as presentation/action-ish context or a gap, not as a
+  destination-backed navigation candidate.
+- [ ] Emit `TabView`, `NavigationStack`, `NavigationSplitView`, and `List` as
+  container context facts or gaps, not as navigation destination edges.
 - [ ] Populate destination identity status as `resolved`, `unresolved`,
   `ambiguous`, or `dynamic`.
 - [ ] Emit gaps instead of destination facts for helper-built, variable,
