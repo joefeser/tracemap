@@ -56,6 +56,7 @@ import { validateStaticTriageDist } from "./static-triage.mjs";
 import { validateStaticVsRuntimeDist } from "./static-vs-runtime.mjs";
 import { validateStakeholderObjectionGuideDist } from "./stakeholder-objection-guide.mjs";
 import { validateStakeholderQuestionIndexDist } from "./stakeholder-question-index.mjs";
+import { validateSwiftEvidenceLaneDist } from "./swift-evidence-lane.mjs";
 import { validateTeamEvidenceHandoffDist } from "./team-evidence-handoff.mjs";
 import { validateTestPlanningHandoffDist } from "./test-planning-handoff.mjs";
 import { validateDemoSummary } from "./validate-demo-summary.mjs";
@@ -159,6 +160,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateStaticVsRuntimeDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStakeholderObjectionGuideDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStakeholderQuestionIndexDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateSwiftEvidenceLaneDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateTeamEvidenceHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateTestPlanningHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }

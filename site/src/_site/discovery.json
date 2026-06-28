@@ -34,6 +34,23 @@
     ]
   },
   {
+    "path": "/swift/",
+    "title": "Swift Evidence Lane",
+    "summary": "Shipped Swift v0 public evidence lane for static inventory, symbols and calls, surface discovery, storage/data surfaces, and evidence safety, anchored to PR #425.",
+    "publicClaimLevel": "shipped",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/validation/",
+    "limitations": [
+      "Swift v0 evidence is deterministic static evidence and does not prove runtime behavior, app navigation, build success, production usage, deployment state, or release safety.",
+      "Surface discovery and storage/data rows remain bounded by syntax, structural, textual, and reduced-coverage evidence."
+    ],
+    "nonClaims": [
+      "No rendered UI proof, complete navigation proof, runtime network reachability proof, stored-value proof, query execution proof, live schema proof, dependency vulnerability/license/freshness proof, or build compatibility proof.",
+      "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector databases, raw source snippets, raw SQL, secrets, local absolute paths, raw remotes, credentials, stored values, facts.ndjson, index.sqlite, analyzer logs, or hidden validation details are public Swift claims."
+    ]
+  },
+  {
     "path": "/docs/",
     "title": "Docs",
     "summary": "Public documentation hub linking source-of-truth repository docs, validation notes, acceptance criteria, and packet guidance.",
