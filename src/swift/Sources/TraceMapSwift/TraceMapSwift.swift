@@ -537,8 +537,8 @@ enum UnsupportedSwiftFeatureGapFactory {
     private static func swiftSourceGaps(text: String, item: InventoryItem) -> [CoverageGap] {
         let searchable = maskSwiftCommentsAndStringLiterals(text)
         var gaps: [CoverageGap] = []
-        gaps += patternGaps(#"(?m)^\s*#(?:Preview|Predicate|externalMacro|stringify)\b|@(?:attached|freestanding)\b"#, "swift-macro-expansion-unsupported", "Swift macro or macro declaration evidence is not expanded in v0; macro-generated declarations and calls are reduced coverage.", searchable, text, item)
-        gaps += patternGaps(#"(?m)^\s*#(?:if|elseif|if\s+canImport)\b"#, "swift-conditional-compilation-reduced", "Conditional compilation changes selected declarations or calls; inactive branch behavior is reduced coverage.", searchable, text, item)
+        gaps += patternGaps(#"(?m)^[ \t]*#(?!if\b|elseif\b|else\b|endif\b|available\b|unavailable\b|selector\b|keyPath\b|file\b|fileID\b|filePath\b|line\b|column\b|function\b|dsohandle\b|sourceLocation\b|warning\b|error\b)[A-Za-z_][A-Za-z0-9_]*\b|@(?:attached|freestanding)\b"#, "swift-macro-expansion-unsupported", "Swift macro or macro declaration evidence is not expanded in v0; macro-generated declarations and calls are reduced coverage.", searchable, text, item)
+        gaps += patternGaps(#"(?m)^[ \t]*#(?:if|elseif|if\s+canImport)\b"#, "swift-conditional-compilation-reduced", "Conditional compilation changes selected declarations or calls; inactive branch behavior is reduced coverage.", searchable, text, item)
         gaps += patternGaps(#"@objc(?:Members)?\b|@IBAction\b|@IBOutlet\b"#, "swift-objective-c-bridging-reduced", "Objective-C bridging, outlets, and actions are static markers only; runtime selector binding is not proven.", searchable, text, item)
         gaps += patternGaps(#"#selector\s*\("#, "swift-selector-dynamic", "Swift selector expression is static syntax only; Objective-C runtime dispatch target is not proven.", searchable, text, item)
         gaps += patternGaps(#"\b(?:NSClassFromString|NSSelectorFromString|Selector)\s*\(|\bMirror\s*\(\s*reflecting\s*:"#, "swift-reflection-dynamic", "Reflection-style Swift or Objective-C lookup is dynamic; static extraction cannot prove target behavior.", searchable, text, item)
@@ -552,8 +552,8 @@ enum UnsupportedSwiftFeatureGapFactory {
                   searchable[range].contains(where: { !$0.isWhitespace }) else {
                 return nil
             }
-            let start = lineNumber(atUTF16Offset: match.range.location, in: original)
-            let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: original)
+            let start = lineNumber(atUTF16Offset: match.range.location, in: searchable)
+            let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: searchable)
             return gap(kind, item, start, end, message)
         }
     }
@@ -2427,7 +2427,7 @@ enum Toolchain {
         var probes: [ToolProbe] = []
         if inventory.contains(where: { $0.kind == "swift-source" || $0.kind == "swiftpm-manifest" || $0.kind == "swiftpm-resolved" }) {
             probes.append(ToolProbe(name: "swift", category: "swift", requiredFor: "swift-source", executable: "/usr/bin/env", arguments: ["swift", "--version"], unavailableGapKind: "swift-toolchain-unavailable", timeoutGapKind: "swift-toolchain-timeout", unavailableMessage: "Swift toolchain probe unavailable; file-based inventory continued.", timeoutMessage: "Swift toolchain probe timed out; file-based inventory continued."))
-            probes.append(ToolProbe(name: "sourcekit-lsp", category: "sourcekit", requiredFor: "semantic-enrichment", executable: "/usr/bin/env", arguments: ["sourcekit-lsp", "--version"], unavailableGapKind: "swift-sourcekit-unavailable", timeoutGapKind: "swift-sourcekit-timeout", unavailableMessage: "SourceKit/sourcekit-lsp probe unavailable; semantic enrichment remains unavailable.", timeoutMessage: "SourceKit/sourcekit-lsp probe timed out; semantic enrichment remains unavailable."))
+            probes.append(ToolProbe(name: "sourcekit-lsp", category: "sourcekit", requiredFor: "semantic-enrichment", executable: "/usr/bin/env", arguments: ["sourcekit-lsp", "--help"], unavailableGapKind: "swift-sourcekit-unavailable", timeoutGapKind: "swift-sourcekit-timeout", unavailableMessage: "SourceKit/sourcekit-lsp probe unavailable; semantic enrichment remains unavailable.", timeoutMessage: "SourceKit/sourcekit-lsp probe timed out; semantic enrichment remains unavailable."))
         }
         if inventory.contains(where: { $0.kind.hasPrefix("xcode-") || ["plist", "storyboard", "xib"].contains($0.kind) }) {
             probes.append(ToolProbe(name: "xcodebuild", category: "xcode", requiredFor: "xcode-metadata", executable: "/usr/bin/env", arguments: ["xcodebuild", "-version"], unavailableGapKind: "xcodebuild-toolchain-unavailable", timeoutGapKind: "xcodebuild-toolchain-timeout", unavailableMessage: "Xcode command-line probe unavailable; Xcode metadata remains checked-in inventory only.", timeoutMessage: "Xcode command-line probe timed out; Xcode metadata remains checked-in inventory only."))
@@ -2455,7 +2455,8 @@ enum Toolchain {
             if String(describing: error).contains("timed out") {
                 return "timeout"
             }
-            return "not-found"
+            let description = String(describing: error)
+            return description.contains("No such file") || description.contains("not found") ? "not-found" : "error-redacted"
         }
     }
 

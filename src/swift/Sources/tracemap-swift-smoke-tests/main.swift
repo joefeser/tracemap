@@ -763,7 +763,7 @@ struct TraceMapSwiftSmokeTests {
     }
 
     static func swiftReducedCoverageDiagnosticsAreStructuredAndSafe() throws {
-        try withEnvironment("TRACEMAP_SWIFT_TOOL_STATUS_OVERRIDES", "swift=timeout,sourcekit-lsp=not-found,xcodebuild=not-found") {
+        try withEnvironment("TRACEMAP_SWIFT_TOOL_STATUS_OVERRIDES", "swift=timeout,sourcekit-lsp=not-found,xcodebuild=error-redacted") {
             let fixture = try SwiftFixture(extraFiles: [
                 "Sources/App/FeatureBoundaries.swift": """
                 import Foundation
@@ -792,6 +792,13 @@ struct TraceMapSwiftSmokeTests {
                   func run() {}
                 }
                 """,
+                "Sources/App/OffsetDrift.swift": """
+                /*
+                 Non-BMP in masked comment before later gap: 🧭
+                 */
+                #CustomTraceMacro
+                struct AfterMacro {}
+                """,
                 "Sources/App/Generated/Client.generated.swift": """
                 struct GeneratedClient {
                   func run() {}
@@ -805,7 +812,7 @@ struct TraceMapSwiftSmokeTests {
             let toolFacts = result.facts.filter { $0.factType == "SwiftToolchainDiagnostic" }
             assert(toolFacts.contains { $0.properties["toolName"] == "swift" && $0.properties["toolStatus"] == "timeout" })
             assert(toolFacts.contains { $0.properties["toolName"] == "sourcekit-lsp" && $0.properties["toolStatus"] == "not-found" })
-            assert(toolFacts.contains { $0.properties["toolName"] == "xcodebuild" && $0.properties["toolStatus"] == "not-found" })
+            assert(toolFacts.contains { $0.properties["toolName"] == "xcodebuild" && $0.properties["toolStatus"] == "error-redacted" })
             assert(toolFacts.allSatisfy { $0.ruleId == "swift.toolchain.diagnostic.v1" && $0.evidenceTier == .tier4Unknown })
             let gapKinds = Set(result.facts.filter { $0.factType == "AnalysisGap" }.compactMap { $0.properties["gapKind"] })
             for kind in [
@@ -824,6 +831,12 @@ struct TraceMapSwiftSmokeTests {
             ] {
                 assert(gapKinds.contains(kind), "missing diagnostic gap \(kind)")
             }
+            assert(result.facts.contains {
+                $0.factType == "AnalysisGap" &&
+                $0.properties["gapKind"] == "swift-macro-expansion-unsupported" &&
+                $0.evidence.filePath == "Sources/App/OffsetDrift.swift" &&
+                $0.evidence.startLine == 4
+            })
             let report = try String(contentsOf: out.appendingPathComponent("report.md"), encoding: .utf8)
             assert(report.contains("## Swift Diagnostics And Coverage"))
             assert(report.contains("### Toolchain Status"))

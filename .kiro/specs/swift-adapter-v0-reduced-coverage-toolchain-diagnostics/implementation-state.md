@@ -57,7 +57,7 @@ Implemented behavior:
 
 - `swift build --package-path src/swift` - passed.
 - `swift run --package-path src/swift tracemap-swift-smoke-tests` - passed.
-- `TRACEMAP_SWIFT_TOOL_STATUS_OVERRIDES='swift=timeout,sourcekit-lsp=not-found,xcodebuild=not-found' swift run --package-path src/swift tracemap-swift scan --repo samples/swift-diagnostics-reduced --out /tmp/tracemap-swift-diagnostics-reduced` - passed.
+- `TRACEMAP_SWIFT_TOOL_STATUS_OVERRIDES='swift=timeout,sourcekit-lsp=not-found,xcodebuild=error-redacted' swift run --package-path src/swift tracemap-swift scan --repo samples/swift-diagnostics-reduced --out /tmp/tracemap-swift-diagnostics-reduced` - passed.
 - `dotnet run --project src/dotnet/TraceMap.Cli -- export --index /tmp/tracemap-swift-diagnostics-reduced/index.sqlite --out /tmp/tracemap-swift-diagnostics-export --format json` - passed.
 - `dotnet run --project src/dotnet/TraceMap.Cli -- combine --index /tmp/tracemap-swift-diagnostics-reduced/index.sqlite --label swift --out /tmp/tracemap-swift-diagnostics-combined.sqlite` - passed.
 - `dotnet run --project src/dotnet/TraceMap.Cli -- report --index /tmp/tracemap-swift-diagnostics-combined.sqlite --out /tmp/tracemap-swift-diagnostics-report` - passed.
