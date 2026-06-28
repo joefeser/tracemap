@@ -23,6 +23,7 @@ struct SwiftDeclarationEvidence {
     let endLine: Int
     let containingSymbolId: String?
     let parameterLabels: [String]
+    let parameterTypeSyntaxes: [String]
     let genericArity: Int
     let isAsync: Bool
     let isThrows: Bool
@@ -42,6 +43,7 @@ struct SwiftDeclarationEvidence {
             endLine: endLine,
             containingSymbolId: containingSymbolId,
             parameterLabels: parameterLabels,
+            parameterTypeSyntaxes: parameterTypeSyntaxes,
             genericArity: genericArity,
             isAsync: isAsync,
             isThrows: isThrows,
@@ -79,6 +81,21 @@ private struct SwiftRelationshipCandidate {
     let endLine: Int
     let syntaxHash: String
     let conditionalCompilation: Bool
+
+    func replacingSourceSymbolId(_ replacement: String) -> SwiftRelationshipCandidate {
+        SwiftRelationshipCandidate(
+            sourceSymbolId: replacement,
+            sourceTypeSyntax: sourceTypeSyntax,
+            targetTypeSyntax: targetTypeSyntax,
+            sourceKind: sourceKind,
+            contextKind: contextKind,
+            filePath: filePath,
+            startLine: startLine,
+            endLine: endLine,
+            syntaxHash: syntaxHash,
+            conditionalCompilation: conditionalCompilation
+        )
+    }
 }
 
 struct SwiftImportEvidence {
@@ -156,6 +173,7 @@ enum SwiftSyntaxEvidenceExtractor {
 
         let deduplicated = deduplicateDeclarations(declarations)
         declarations = deduplicated.declarations
+        relationshipCandidates = rewriteRelationshipCandidates(relationshipCandidates, using: deduplicated.rewrites)
         gaps += deduplicated.gaps
 
         let resolved = resolveRelationships(declarations: declarations, candidates: relationshipCandidates)
@@ -200,21 +218,68 @@ enum SwiftSyntaxEvidenceExtractor {
         }
     }
 
-    private static func deduplicateDeclarations(_ declarations: [SwiftDeclarationEvidence]) -> (declarations: [SwiftDeclarationEvidence], gaps: [CoverageGap]) {
+    private struct DeclarationRewrite {
+        let oldSymbolId: String
+        let newSymbolId: String
+        let filePath: String
+        let startLine: Int
+        let endLine: Int
+        let kind: String
+        let name: String
+    }
+
+    private static func deduplicateDeclarations(_ declarations: [SwiftDeclarationEvidence]) -> (declarations: [SwiftDeclarationEvidence], gaps: [CoverageGap], rewrites: [String: [DeclarationRewrite]]) {
         let groups = Dictionary(grouping: declarations, by: \.symbolId)
         var gaps: [CoverageGap] = []
         for (symbolId, group) in groups where group.count > 1 {
             let first = group.sorted { [$0.filePath, String($0.startLine), $0.name].joined(separator: "|") < [$1.filePath, String($1.startLine), $1.name].joined(separator: "|") }.first!
-            gaps.append(CoverageGap(kind: "swift-duplicate-symbol-identity", ruleId: RuleIds.swiftSyntaxIdentityGap, message: "Swift declarations produced a duplicate syntax identity; deterministic source-span discriminators were applied. candidateCount=\(group.count); identityHash=\(sha256Hex(symbolId, length: 24)).", filePath: first.filePath, startLine: first.startLine, endLine: first.endLine))
+            gaps.append(CoverageGap(kind: "swift-duplicate-symbol-identity", ruleId: RuleIds.swiftSyntaxIdentityGap, message: "Swift declarations produced a duplicate syntax identity; deterministic body-independent discriminators were applied where available. candidateCount=\(group.count); identityHash=\(sha256Hex(symbolId, length: 24)).", filePath: first.filePath, startLine: first.startLine, endLine: first.endLine))
         }
         let duplicateIds = Set(groups.filter { $0.value.count > 1 }.map(\.key))
-        guard !duplicateIds.isEmpty else { return (declarations, []) }
+        guard !duplicateIds.isEmpty else { return (declarations, [], [:]) }
+        let duplicateOrdinalSuffixesByLocator: [String: Int] = groups
+            .filter { $0.value.count > 1 }
+            .flatMap { _, group -> [(String, Int)] in
+                group
+                    .enumerated()
+                    .map { (declaration: $0.element, originalIndex: $0.offset) }
+                    .reduce(into: [String: [(declaration: SwiftDeclarationEvidence, originalIndex: Int)]]()) { result, item in
+                        result[stableDuplicateDiscriminator(item.declaration), default: []].append(item)
+                    }
+                    .values
+                    .filter { $0.count > 1 }
+                    .flatMap { sameStableKey -> [(String, Int)] in
+                        sameStableKey
+                            .sorted { lhs, rhs in
+                                duplicateSourceOrderKey(lhs.declaration, originalIndex: lhs.originalIndex) < duplicateSourceOrderKey(rhs.declaration, originalIndex: rhs.originalIndex)
+                            }
+                            .enumerated()
+                            .map { ordinal, item in (declarationLocator(item.declaration), ordinal) }
+                    }
+            }
+            .reduce(into: [:]) { result, item in result[item.0] = item.1 }
+
         func replacementSymbolId(for declaration: SwiftDeclarationEvidence) -> String {
-            let discriminator = [declaration.filePath, String(declaration.startLine), declaration.kind, declaration.name, declaration.syntaxHash].joined(separator: "|")
+            var discriminator = stableDuplicateDiscriminator(declaration)
+            if let ordinal = duplicateOrdinalSuffixesByLocator[declarationLocator(declaration)] {
+                discriminator += "|ordinal:\(ordinal)"
+            }
             return "swift-syntax:v0:" + sha256Hex([declaration.symbolId, discriminator].joined(separator: "\n"))
         }
+        var rewrites: [String: [DeclarationRewrite]] = [:]
         let rewritten = declarations.map { declaration -> SwiftDeclarationEvidence in
             let replacement = duplicateIds.contains(declaration.symbolId) ? replacementSymbolId(for: declaration) : declaration.symbolId
+            if replacement != declaration.symbolId {
+                rewrites[declaration.symbolId, default: []].append(DeclarationRewrite(
+                    oldSymbolId: declaration.symbolId,
+                    newSymbolId: replacement,
+                    filePath: declaration.filePath,
+                    startLine: declaration.startLine,
+                    endLine: declaration.endLine,
+                    kind: declaration.kind,
+                    name: declaration.name
+                ))
+            }
             var containing = declaration.containingSymbolId
             if let containingSymbolId = declaration.containingSymbolId,
                duplicateIds.contains(containingSymbolId),
@@ -227,13 +292,72 @@ enum SwiftSyntaxEvidenceExtractor {
             }
             return declaration.replacing(symbolId: replacement, containingSymbolId: containing)
         }
-        return (rewritten, gaps)
+        return (rewritten, gaps, rewrites)
+    }
+
+    private static func stableDuplicateDiscriminator(_ declaration: SwiftDeclarationEvidence) -> String {
+        [
+            declaration.filePath,
+            declaration.kind,
+            declaration.name,
+            String(declaration.genericArity),
+            declaration.parameterLabels.joined(separator: ","),
+            declaration.parameterTypeSyntaxes.joined(separator: ",")
+        ].joined(separator: "|")
+    }
+
+    private static func duplicateSourceOrderKey(_ declaration: SwiftDeclarationEvidence, originalIndex: Int) -> String {
+        [
+            declaration.filePath,
+            String(declaration.startLine),
+            String(declaration.endLine),
+            declaration.kind,
+            declaration.name,
+            String(declaration.genericArity),
+            declaration.parameterLabels.joined(separator: ","),
+            declaration.parameterTypeSyntaxes.joined(separator: ","),
+            String(originalIndex)
+        ].joined(separator: "|")
+    }
+
+    private static func declarationLocator(_ declaration: SwiftDeclarationEvidence) -> String {
+        [
+            declaration.symbolId,
+            declaration.filePath,
+            String(declaration.startLine),
+            String(declaration.endLine),
+            declaration.kind,
+            declaration.name
+        ].joined(separator: "|")
+    }
+
+    private static func rewriteRelationshipCandidates(_ candidates: [SwiftRelationshipCandidate], using rewrites: [String: [DeclarationRewrite]]) -> [SwiftRelationshipCandidate] {
+        guard !rewrites.isEmpty else { return candidates }
+        return candidates.map { candidate in
+            guard let sourceSymbolId = candidate.sourceSymbolId,
+                  let candidates = rewrites[sourceSymbolId] else {
+                return candidate
+            }
+            let matches = candidates.filter { rewrite in
+                rewrite.filePath == candidate.filePath
+                    && rewrite.startLine == candidate.startLine
+                    && rewrite.endLine == candidate.endLine
+                    && rewrite.kind == candidate.sourceKind
+            }
+            guard matches.count == 1, let match = matches.first else {
+                return candidate
+            }
+            return candidate.replacingSourceSymbolId(match.newSymbolId)
+        }
     }
 
     private static func resolveRelationships(declarations: [SwiftDeclarationEvidence], candidates: [SwiftRelationshipCandidate]) -> (relationships: [SwiftRelationshipEvidence], gaps: [CoverageGap]) {
         let typeKinds: Set<String> = ["class", "struct", "enum", "actor", "protocol"]
         let typeDeclarations = declarations.filter { typeKinds.contains($0.kind) }
-        let declarationsById = Dictionary(uniqueKeysWithValues: declarations.map { ($0.symbolId, $0) })
+        let declarationsById = Dictionary(grouping: declarations, by: \.symbolId)
+            .compactMapValues { grouped -> SwiftDeclarationEvidence? in
+                grouped.count == 1 ? grouped.first : nil
+            }
         let typesByModuleAndName = Dictionary(grouping: typeDeclarations) { declaration in
             "\(declaration.moduleName)|\(declaration.name)"
         }
@@ -302,7 +426,21 @@ enum SwiftSyntaxEvidenceExtractor {
             ))
         }
 
-        let inheritanceBySource = Dictionary(uniqueKeysWithValues: relationships.filter { $0.relationshipKind == "InheritsFrom" }.map { ($0.sourceSymbolId, $0.targetSymbolId) })
+        let inheritanceGroups = Dictionary(grouping: relationships.filter { $0.relationshipKind == "InheritsFrom" }, by: \.sourceSymbolId)
+        for (_, relationships) in inheritanceGroups {
+            let targets = Set(relationships.map(\.targetSymbolId))
+            guard targets.count > 1,
+                  let first = relationships.sorted(by: { [$0.filePath, String($0.startLine), $0.targetSymbolId].joined(separator: "|") < [$1.filePath, String($1.startLine), $1.targetSymbolId].joined(separator: "|") }).first else {
+                continue
+            }
+            gaps.append(CoverageGap(kind: "swift-ambiguous-symbol-identity", ruleId: RuleIds.swiftSyntaxIdentityGap, message: "Swift class inheritance resolved to multiple source-local superclass targets; override resolution for that type was skipped. candidateCount=\(targets.count).", filePath: first.filePath, startLine: first.startLine, endLine: first.endLine))
+        }
+
+        let inheritanceBySource = inheritanceGroups
+            .compactMapValues { relationships -> String? in
+                let targets = Set(relationships.map(\.targetSymbolId))
+                return targets.count == 1 ? targets.first : nil
+            }
         for declaration in declarations where declaration.isOverride {
             guard let containingSymbolId = declaration.containingSymbolId,
                   let superclassSymbolId = inheritanceBySource[containingSymbolId] else {
@@ -497,6 +635,7 @@ final class EvidenceVisitor: SyntaxVisitor {
             name: node.name.text,
             node: node,
             parameterLabels: labels,
+            parameterTypeSyntaxes: node.signature.parameterClause.parameters.map { safeTypeSyntax($0.type.trimmedDescription) },
             genericParameters: node.genericParameterClause?.parameters.map(\.name.text) ?? [],
             isAsync: node.signature.effectSpecifiers?.asyncSpecifier != nil,
             isThrows: node.signature.effectSpecifiers?.throwsClause != nil,
@@ -516,6 +655,7 @@ final class EvidenceVisitor: SyntaxVisitor {
             name: "init",
             node: node,
             parameterLabels: labels,
+            parameterTypeSyntaxes: node.signature.parameterClause.parameters.map { safeTypeSyntax($0.type.trimmedDescription) },
             genericParameters: [],
             isAsync: node.signature.effectSpecifiers?.asyncSpecifier != nil,
             isThrows: node.signature.effectSpecifiers?.throwsClause != nil,
@@ -534,29 +674,29 @@ final class EvidenceVisitor: SyntaxVisitor {
         }
         for binding in node.bindings {
             guard let pattern = binding.pattern.as(IdentifierPatternSyntax.self) else { continue }
-            addDeclaration(kind: "property", name: pattern.identifier.text, node: Syntax(binding), parameterLabels: [], genericParameters: [], isAsync: false, isThrows: false, isOverride: hasOverrideModifier(node.modifiers))
+            addDeclaration(kind: "property", name: pattern.identifier.text, node: Syntax(binding), parameterLabels: [], parameterTypeSyntaxes: [], genericParameters: [], isAsync: false, isThrows: false, isOverride: hasOverrideModifier(node.modifiers))
         }
         return .visitChildren
     }
 
     override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
-        addDeclaration(kind: "typealias", name: node.name.text, node: Syntax(node), parameterLabels: [], genericParameters: node.genericParameterClause?.parameters.map(\.name.text) ?? [], isAsync: false, isThrows: false, isOverride: false)
+        addDeclaration(kind: "typealias", name: node.name.text, node: Syntax(node), parameterLabels: [], parameterTypeSyntaxes: [], genericParameters: node.genericParameterClause?.parameters.map(\.name.text) ?? [], isAsync: false, isThrows: false, isOverride: false)
         return .skipChildren
     }
 
     override func visit(_ node: AssociatedTypeDeclSyntax) -> SyntaxVisitorContinueKind {
-        addDeclaration(kind: "associatedtype", name: node.name.text, node: Syntax(node), parameterLabels: [], genericParameters: [], isAsync: false, isThrows: false, isOverride: false)
+        addDeclaration(kind: "associatedtype", name: node.name.text, node: Syntax(node), parameterLabels: [], parameterTypeSyntaxes: [], genericParameters: [], isAsync: false, isThrows: false, isOverride: false)
         return .skipChildren
     }
 
     override func visit(_ node: EnumCaseElementSyntax) -> SyntaxVisitorContinueKind {
-        addDeclaration(kind: "enum-case", name: node.name.text, node: Syntax(node), parameterLabels: [], genericParameters: [], isAsync: false, isThrows: false, isOverride: false)
+        addDeclaration(kind: "enum-case", name: node.name.text, node: Syntax(node), parameterLabels: [], parameterTypeSyntaxes: [], genericParameters: [], isAsync: false, isThrows: false, isOverride: false)
         return .skipChildren
     }
 
     override func visit(_ node: SubscriptDeclSyntax) -> SyntaxVisitorContinueKind {
         let labels = node.parameterClause.parameters.map { safeLabel($0.firstName.text) }
-        addDeclaration(kind: "subscript", name: "subscript", node: Syntax(node), parameterLabels: labels, genericParameters: node.genericParameterClause?.parameters.map(\.name.text) ?? [], isAsync: false, isThrows: false, isOverride: hasOverrideModifier(node.modifiers))
+        addDeclaration(kind: "subscript", name: "subscript", node: Syntax(node), parameterLabels: labels, parameterTypeSyntaxes: node.parameterClause.parameters.map { safeTypeSyntax($0.type.trimmedDescription) }, genericParameters: node.genericParameterClause?.parameters.map(\.name.text) ?? [], isAsync: false, isThrows: false, isOverride: hasOverrideModifier(node.modifiers))
         return .visitChildren
     }
 
@@ -604,8 +744,8 @@ final class EvidenceVisitor: SyntaxVisitor {
         return .visitChildren
     }
 
-    private func enterDeclaration(kind: String, name: String, node: some SyntaxProtocol, parameterLabels: [String] = [], genericParameters: [String], isAsync: Bool = false, isThrows: Bool = false, isOverride: Bool = false) {
-        let declaration = makeDeclaration(kind: kind, name: name, node: Syntax(node), parameterLabels: parameterLabels, genericParameters: genericParameters, isAsync: isAsync, isThrows: isThrows, isOverride: isOverride)
+    private func enterDeclaration(kind: String, name: String, node: some SyntaxProtocol, parameterLabels: [String] = [], parameterTypeSyntaxes: [String] = [], genericParameters: [String], isAsync: Bool = false, isThrows: Bool = false, isOverride: Bool = false) {
+        let declaration = makeDeclaration(kind: kind, name: name, node: Syntax(node), parameterLabels: parameterLabels, parameterTypeSyntaxes: parameterTypeSyntaxes, genericParameters: genericParameters, isAsync: isAsync, isThrows: isThrows, isOverride: isOverride)
         declarations.append(declaration)
         declarationStack.append(declaration)
     }
@@ -616,11 +756,11 @@ final class EvidenceVisitor: SyntaxVisitor {
         }
     }
 
-    private func addDeclaration(kind: String, name: String, node: Syntax, parameterLabels: [String], genericParameters: [String], isAsync: Bool, isThrows: Bool, isOverride: Bool) {
-        declarations.append(makeDeclaration(kind: kind, name: name, node: node, parameterLabels: parameterLabels, genericParameters: genericParameters, isAsync: isAsync, isThrows: isThrows, isOverride: isOverride))
+    private func addDeclaration(kind: String, name: String, node: Syntax, parameterLabels: [String], parameterTypeSyntaxes: [String], genericParameters: [String], isAsync: Bool, isThrows: Bool, isOverride: Bool) {
+        declarations.append(makeDeclaration(kind: kind, name: name, node: node, parameterLabels: parameterLabels, parameterTypeSyntaxes: parameterTypeSyntaxes, genericParameters: genericParameters, isAsync: isAsync, isThrows: isThrows, isOverride: isOverride))
     }
 
-    private func makeDeclaration(kind: String, name: String, node: Syntax, parameterLabels: [String], genericParameters: [String], isAsync: Bool, isThrows: Bool, isOverride: Bool) -> SwiftDeclarationEvidence {
+    private func makeDeclaration(kind: String, name: String, node: Syntax, parameterLabels: [String], parameterTypeSyntaxes: [String], genericParameters: [String], isAsync: Bool, isThrows: Bool, isOverride: Bool) -> SwiftDeclarationEvidence {
         let span = lineSpan(node)
         let rawModule = moduleName(for: filePath)
         let module = rawModule.isEmpty ? "unknown-module" : safeLabel(rawModule)
@@ -628,6 +768,7 @@ final class EvidenceVisitor: SyntaxVisitor {
         let safeName = safeLabel(name)
         let containing = declarationStack.last
         let safeLabels = parameterLabels.map(safeLabel)
+        let safeParameterTypes = parameterTypeSyntaxes.map(safeTypeSyntax)
         let signature = displaySignature(kind: kind, name: safeName, parameterLabels: safeLabels, isAsync: isAsync, isThrows: isThrows)
         let hash = syntaxHash(node)
         let identity = [
@@ -651,6 +792,7 @@ final class EvidenceVisitor: SyntaxVisitor {
             endLine: span.end,
             containingSymbolId: containing?.symbolId,
             parameterLabels: safeLabels,
+            parameterTypeSyntaxes: safeParameterTypes,
             genericArity: genericParameters.count,
             isAsync: isAsync,
             isThrows: isThrows,
@@ -795,6 +937,12 @@ private func moduleName(for path: String) -> String {
 
 private func safeImportPath(_ value: String) -> String {
     value.split(separator: ".").map { safeLabel(String($0)) }.joined(separator: ".")
+}
+
+private func safeTypeSyntax(_ value: String) -> String {
+    let normalized = normalizeSwiftSyntaxForHash(value)
+    guard !normalized.isEmpty else { return "" }
+    return "sha256:\(sha256Hex(normalized, length: 24))"
 }
 
 private func safeMemberPath(base: String, member: String) -> String {

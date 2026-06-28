@@ -134,6 +134,13 @@ Latest local validation:
   level, symbol ID stability, gap vocabulary, module identity, relationship DDL,
   and deferred protocol/extension scope. Those items were patched or explicitly
   documented. The final local validation above was rerun after the patches.
+- PR-loop review on PR #412 reported three current findings:
+  duplicate inheritance lookup could trap, relationship candidates could retain
+  pre-dedup source IDs, and overload duplicate IDs still used body-sensitive
+  syntax hashes. Those were patched by body-independent duplicate
+  discriminators, post-dedup relationship candidate rewrites, non-trapping
+  relationship lookups, and focused smoke assertions. Validation above was
+  rerun after these PR-loop fixes.
 
 ## Safe / No-Overclaim Boundaries
 
