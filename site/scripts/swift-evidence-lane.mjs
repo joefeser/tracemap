@@ -5,7 +5,6 @@ import {
   decodeHtmlEntities,
   escapeRegExp,
   fileExists,
-  normalizeBaseUrl,
   normalizeRenderedText,
   readSitemapLocSet
 } from "./validate-utils.mjs";
@@ -244,7 +243,24 @@ async function validatePage({ pagePath, errors }) {
 }
 
 function hasHref(html, href) {
-  return new RegExp(`href=["']${escapeRegExp(href)}["']`, "i").test(html);
+  return new RegExp(`<a\\b(?=[^>]*\\bhref\\s*=\\s*["']${escapeRegExp(href)}["'])[^>]*>`, "i").test(html);
+}
+
+function normalizeBaseUrl(value, errors) {
+  let url;
+  try {
+    url = new URL(String(value));
+  } catch {
+    errors.push(withEvidence(`Swift evidence lane baseUrl must be a valid absolute URL: ${String(value)}`, "baseUrl input"));
+    return null;
+  }
+
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    errors.push(withEvidence(`Swift evidence lane baseUrl must use http or https: ${String(value)}`, "baseUrl input"));
+    return null;
+  }
+
+  return url.origin;
 }
 
 function getAttribute(tag, name) {
