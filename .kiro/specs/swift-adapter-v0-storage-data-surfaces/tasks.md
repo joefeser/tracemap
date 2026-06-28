@@ -166,9 +166,9 @@ git diff --check
 
 ## Deferred Follow-Ups
 
-- [ ] SourceKit/compiler semantic enrichment for storage symbol attachment.
-- [ ] Full CoreData `.xcdatamodel/contents` and version-selection semantics.
-- [ ] Advanced wrapper/data-flow resolution for UserDefaults, Keychain, GRDB,
+- SourceKit/compiler semantic enrichment for storage symbol attachment.
+- Full CoreData `.xcdatamodel/contents` and version-selection semantics.
+- Advanced wrapper/data-flow resolution for UserDefaults, Keychain, GRDB,
   FMDatabase, SQLite, and Realm.
-- [ ] Runtime instrumentation, simulator/device checks, database connections,
+- Runtime instrumentation, simulator/device checks, database connections,
   Keychain access, Realm file inspection, or production-data proof.
