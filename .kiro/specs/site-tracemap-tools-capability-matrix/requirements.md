@@ -1,5 +1,8 @@
 # Requirements
 
+Status: implemented
+Readiness: implemented
+
 ## Introduction
 
 TraceMap has enough implemented scanner, reducer, combined-index, reporting, and

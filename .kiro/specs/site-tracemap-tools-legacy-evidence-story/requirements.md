@@ -1,7 +1,7 @@
 # site-tracemap-tools-legacy-evidence-story
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Public claim level: concept
 
 ## Summary

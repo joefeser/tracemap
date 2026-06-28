@@ -1,5 +1,9 @@
 # Requirements
 
+Status: implemented
+Readiness: implemented
+Public claim level: hidden
+
 ## Introduction
 
 The TraceMap site now has static pages, generated blog articles, and queued

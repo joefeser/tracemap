@@ -1,5 +1,9 @@
 # Requirements
 
+Status: implemented
+Readiness: implemented
+Public claim level: concept
+
 ## Overview
 
 Create a concept-level public site page at `/legacy-modernization/review-handoff/` that bridges existing legacy evidence surfaces into a modernization review handoff. The page must help managers, reviewers, architects, and engineers move from deterministic static evidence to owner questions without implying runtime proof, migration success, release approval, database execution, or complete coverage.

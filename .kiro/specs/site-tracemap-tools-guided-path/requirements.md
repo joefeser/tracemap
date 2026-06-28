@@ -1,5 +1,9 @@
 # Requirements
 
+Status: implemented
+Readiness: implemented
+Public claim level: demo
+
 ## Introduction
 
 `tracemap.tools` needs a clearer first-visit path for teammates and reviewers

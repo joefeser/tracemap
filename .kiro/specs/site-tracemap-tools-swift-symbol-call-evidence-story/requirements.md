@@ -1,7 +1,7 @@
 # Site TraceMap Tools Swift Symbol And Call Evidence Story Requirements
 
-Status: not-started
-Readiness: backlog
+Status: implemented
+Readiness: implemented
 Public claim level: shipped
 
 ## Objective

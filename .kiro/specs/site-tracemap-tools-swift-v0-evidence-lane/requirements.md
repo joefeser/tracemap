@@ -1,7 +1,7 @@
 # Site TraceMap Tools Swift V0 Evidence Lane Requirements
 
-Status: not-started
-Readiness: backlog
+Status: implemented
+Readiness: implemented
 Public claim level: shipped
 
 ## Objective

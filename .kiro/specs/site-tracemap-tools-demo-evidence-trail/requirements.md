@@ -1,7 +1,7 @@
 # Site TraceMap Tools Demo Evidence Trail Requirements
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: demo
 
 ## Summary

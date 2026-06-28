@@ -1,5 +1,8 @@
 # Site TraceMap Tools Manager Packet Requirements
 
+Status: implemented
+Readiness: implemented
+
 Public claim level: demo
 
 ## Objective

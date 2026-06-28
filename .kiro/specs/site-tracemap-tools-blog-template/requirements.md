@@ -1,5 +1,9 @@
 # Requirements
 
+Status: implemented
+Readiness: implemented
+Public claim level: hidden
+
 ## Introduction
 
 The initial TraceMap blog runway is implemented, but each article currently

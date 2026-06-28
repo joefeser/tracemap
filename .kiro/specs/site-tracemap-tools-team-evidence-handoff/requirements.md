@@ -1,7 +1,7 @@
 # Site TraceMap Tools Team Evidence Handoff Requirements
 
-Status: in-review
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Summary
