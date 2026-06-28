@@ -1,6 +1,6 @@
 # SwiftSyntax Declarations and Basic Call Facts Implementation State
 
-Status: implemented-partial
+Status: implemented-v0
 
 ## Branch
 
@@ -16,7 +16,12 @@ Status: implemented-partial
 
 ## Current State
 
-This implementation adds SwiftSyntax-backed declaration, import, basic call, and construction candidate extraction. It emits rule-backed facts, safe syntax hashes, reduced-coverage gaps, and shared SQLite rows for symbols, occurrences, fact-symbol links, call edges, and construction candidates. Canonical symbol relationship semantics remain owned by issue #381.
+This implementation adds SwiftSyntax-backed declaration, import, basic call,
+and construction candidate extraction for Swift v0. It emits rule-backed facts,
+safe syntax hashes, reduced-coverage gaps, and shared SQLite rows for symbols,
+occurrences, fact-symbol links, call edges, and construction candidates.
+Canonical direct symbol relationship semantics are implemented by issue #381;
+semantic/compiler enrichment remains deferred beyond Swift v0.
 
 Implementation branch: `codex/implement-swift-swiftsyntax-declarations-calls`
 

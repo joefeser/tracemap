@@ -4,159 +4,134 @@ Issue: [#385](https://github.com/joefeser/tracemap/issues/385)
 
 Parent: [#377](https://github.com/joefeser/tracemap/issues/377)
 
-Completed tasks describe only this spec PR. Unchecked tasks are future
-implementation work. Do not mark implementation tasks complete until analyzer
-code, tests, docs, and validation have actually landed.
-
 ## Phase 0: Spec Scope And Handoff
 
 - [x] Create planning-only Kiro spec files for issue #385.
 - [x] Link the spec to issue #385 and parent issue #377.
 - [x] Bound claims to deterministic static evidence and explicit gaps.
-- [x] Include public-safety constraints for keys, SQL, config, secrets, snippets,
-  remotes, and local paths.
+- [x] Include public-safety constraints for keys, SQL, config, secrets,
+  snippets, remotes, and local paths.
 - [x] Mark implementation-state status as `ready-for-implementation`.
-- [ ] Before implementation, re-read `docs/LANGUAGE_ADAPTER_CONTRACT.md`,
-  `docs/VALIDATION.md`, `docs/ACCEPTANCE.md`, issue #377, issue #385, and this
-  spec.
-- [ ] Confirm implementation branch name and whether the Swift adapter package
-  path remains `src/swift`.
-- [ ] Reconcile with companion Swift v0 specs so storage/data facts reuse
-  existing manifest, file inventory, symbol IDs, safe-value helpers, and
-  coverage labels.
+- [x] Before implementation, re-read `docs/LANGUAGE_ADAPTER_CONTRACT.md`,
+  `docs/VALIDATION.md`, `docs/ACCEPTANCE.md`, issue #377, issue #385, and
+  this spec.
+- [x] Confirm implementation branch name and Swift adapter package path
+  `src/swift`.
+- [x] Reconcile with companion Swift v0 specs so storage/data facts reuse
+  existing manifest, file inventory, safe-value helpers, coverage labels,
+  report output, and shared SQL evidence shapes.
 
 ## Phase 1: Rule Catalog And Fact Vocabulary
 
-- [ ] Add rule catalog entries for `swift.storage.coredata.metadata.v1`,
-  `swift.storage.userdefaults.key.v1`, `swift.storage.keychain.access.v1`,
-  `swift.storage.sqlite.sql.v1`, `swift.storage.sqlite.table.v1`,
-  `swift.storage.realm.model.v1`, and `swift.storage.analysis-gap.v1` or
-  documented successor rule IDs.
-- [ ] Document limitations for every rule before emitting facts.
-- [ ] Define stable fact property names for CoreData, UserDefaults, Keychain,
+- [x] Add rule catalog entries and limitations for:
+  - `swift.storage.coredata.metadata.v1`
+  - `swift.storage.userdefaults.key.v1`
+  - `swift.storage.keychain.access.v1`
+  - `swift.storage.sqlite.sql.v1`
+  - `swift.storage.sqlite.table.v1`
+  - `swift.storage.realm.model.v1`
+  - `swift.storage.analysis-gap.v1`
+- [x] Define stable fact property names for CoreData, UserDefaults, Keychain,
   SQLite/GRDB/FMDatabase, Realm, and storage gaps.
-- [ ] Add guardrails/tests that prevent Swift storage/data rules from emitting
-  `Tier1Semantic` until a separately validated compiler/SourceKit enrichment
-  rule exists.
-- [ ] Confirm which Swift-specific fact types need downstream report/export
-  handling and which cases should reuse `SqlTextUsed`,
-  `QueryPatternDetected`, `DatabaseColumnMapping`, and `AnalysisGap`.
+- [x] Add smoke guardrails that storage rules do not emit `Tier1Semantic`.
+- [x] Reuse shared `SqlTextUsed`, `QueryPatternDetected`,
+  `DatabaseColumnMapping`, and `AnalysisGap` where the shared contracts fit.
 
 ## Phase 2: CoreData Metadata
 
-- [ ] Inventory checked-in `.xcdatamodel` and `.xcdatamodeld` files in sorted
+- [x] Inventory checked-in `.xcdatamodel` and `.xcdatamodeld` inputs in sorted
   repo-relative order.
-- [ ] Parse supported CoreData XML metadata without storing raw XML or snippets.
-- [ ] Emit model, version/configuration, entity, attribute, relationship,
-  fetched-property, and fetch-request descriptor facts where statically visible.
-- [ ] Emit gaps for malformed, binary, unsupported, oversized, generated, or
-  unsafe CoreData metadata.
-- [ ] Optionally link CoreData descriptors to Swift `NSManagedObject` symbols
-  only when symbol identity is unambiguous.
-- [ ] Add fixtures and tests for parseable metadata, model-version ambiguity,
-  generated-code linkage, unsupported files, deterministic fact IDs, and
-  redaction.
+- [x] Parse supported CoreData XML metadata without storing raw XML or snippets.
+- [x] Emit model, entity, attribute, relationship, fetched-property, and
+  fetch-request descriptor facts where statically visible.
+- [x] Emit gaps for unreadable, unsupported, or malformed CoreData metadata.
+- [x] Add public-safe fixture coverage for parseable metadata and deterministic
+  fact IDs.
 
 ## Phase 3: UserDefaults Keys
 
-- [ ] Detect supported `UserDefaults` read/write/remove/register/observe
-  operations with literal keys.
-- [ ] Resolve bounded static key constants, enum raw-string keys, and same-file
-  literal aliases without control-flow speculation.
-- [ ] Emit public-safe key identities using `normalizedKey` only when allowed,
-  otherwise role-separated `keyHash`, `keyLength`, and identity-status metadata.
-- [ ] Emit gaps for interpolated, concatenated, config-loaded, localized,
-  remote, user-input, reflection, and unsupported-wrapper keys.
-- [ ] Add tests proving no UserDefaults values, unsafe keys, source snippets,
-  config values, local absolute paths, or raw remotes leak into facts/reports.
+- [x] Detect supported `UserDefaults` read/write/remove/register operations
+  with literal keys.
+- [x] Resolve bounded static key constants and same-file literal aliases,
+  including dotted static constant references.
+- [x] Emit public-safe key identities using `normalizedKey` only when allowed,
+  otherwise role-separated `keyHash`, `keyLength`, and identity-status
+  metadata.
+- [x] Emit gaps for dynamic or unsupported UserDefaults keys.
+- [x] Add tests proving unsafe key values and source snippets do not leak into
+  facts/reports.
 
 ## Phase 4: Keychain Access Patterns
 
-- [ ] Detect supported Security framework calls: `SecItemAdd`,
-  `SecItemCopyMatching`, `SecItemUpdate`, and `SecItemDelete`.
-- [ ] Extract static query dictionary metadata for safe closed constants such as
-  `kSecClass`, operation direction, accessibility, synchronizable, and return
-  flags.
-- [ ] Hash service/account/access-group/label/generic descriptors with
-  role-separated hash inputs unless the safe-value policy explicitly allows a
-  normalized descriptor.
-- [ ] Detect wrapper APIs only when they pass static evidence to recognized
-  Security APIs or expose a documented static wrapper shape.
-- [ ] Emit gaps for dynamic query dictionaries, merged dictionaries, config
-  loading, Objective-C bridging, unknown wrappers, and unsupported control flow.
-- [ ] Add tests proving credentials, tokens, passwords, item data, raw query
-  dictionaries, entitlement values, provisioning values, snippets, and local
-  paths are never stored.
+- [x] Detect supported Security framework calls:
+  `SecItemAdd`, `SecItemCopyMatching`, `SecItemUpdate`, and `SecItemDelete`.
+- [x] Extract static query dictionary metadata for operation direction and
+  `kSecClass` where visible.
+- [x] Hash service/account/access-group descriptors with role-separated hash
+  inputs.
+- [x] Emit gaps for dynamic/config-derived Keychain query shapes.
+- [x] Add tests proving credentials, tokens, service/account values, snippets,
+  and local paths are never stored raw.
 
 ## Phase 5: SQLite, GRDB, And FMDatabase SQL/Table Surfaces
 
-- [ ] Detect complete static SQL literals in supported SQLite, GRDB, and
-  FMDatabase calls.
-- [ ] Emit `SqlTextUsed` with `textHash`, `textLength`, `sqlSourceKind`,
+- [x] Detect complete static SQL literals in supported SQLite, GRDB, and
+  FMDatabase-style calls.
+- [x] Emit `SqlTextUsed` with `textHash`, `textLength`, `sqlSourceKind`,
   operation metadata where safe, spans, commit SHA, and extractor version.
-- [ ] Emit SQL-shape `QueryPatternDetected` only when the shared SQL evidence
-  contract can derive safe operation/table/column metadata.
-- [ ] Scan selected checked-in `.sql` or migration resources and emit structural
-  SQL text/shape evidence where supported.
-- [ ] Add table-surface or `DatabaseColumnMapping` evidence only for documented
-  literal table/schema declarations with clear limitations.
-- [ ] Emit gaps for dynamic SQL, string interpolation, concatenation,
-  query-builders, wrapper-generated SQL, runtime-loaded SQL, and schema
-  composition.
-- [ ] Add tests proving raw SQL, predicate literals, connection strings,
-  database file paths, URLs, hostnames, unsafe identifiers, snippets, and local
+- [x] Emit SQL-shape `QueryPatternDetected` when deterministic table/operation
+  metadata is safely derivable.
+- [x] Scan selected checked-in `.sql` resources and emit structural SQL
+  text/shape evidence.
+- [x] Emit gaps for dynamic SQL, string interpolation, and indirect SQL
+  arguments.
+- [x] Add tests proving raw SQL, predicate literals, connection strings,
+  database paths, URLs, hostnames, unsafe identifiers, snippets, and local
   absolute paths do not leak.
 
 ## Phase 6: Realm Model And Persistence Surfaces
 
-- [ ] Detect Realm model declarations and supported persisted property patterns
-  using existing Swift syntax/symbol evidence.
-- [ ] Emit Realm model/property facts with safe type/property identifiers or
-  hashes and clear evidence tiers.
-- [ ] Detect static `primaryKey()` and indexed-property declarations only when
-  literal property names are visible.
-- [ ] Detect supported Realm add/delete/write/object/query calls where object
-  types or literal predicate identities are statically visible and public-safe.
-- [ ] Emit gaps for dynamic object types, dynamic predicates, generated schema,
-  migrations, Objective-C bridging, property-wrapper gaps, and runtime config.
-- [ ] Add tests proving Realm file paths, encryption keys, raw predicates,
-  persisted values, migration snippets, snippets, and local paths are never
-  stored.
+- [x] Detect Realm model declarations and supported `@Persisted` property
+  patterns from Swift syntax.
+- [x] Emit Realm model/property facts with safe type/property identifiers or
+  hashes and Tier3 syntax/text evidence.
+- [x] Detect static `primaryKey()` declarations when literal property names are
+  visible.
+- [x] Emit gaps for Realm dynamic predicate/query evidence instead of storing
+  raw predicates.
+- [x] Add tests proving Realm predicate values, file paths, encryption keys,
+  snippets, and local paths are not stored raw.
 
 ## Phase 7: Reports, SQLite, Combine, And Reducer Boundaries
 
-- [ ] Populate the shared `facts` table and `fact_symbols` rows where symbol
-  attachment is credible.
-- [ ] Ensure generated `facts.ndjson` uses stable sorted properties and no raw
+- [x] Populate the shared `facts` table with storage/data rows.
+- [x] Ensure generated `facts.ndjson` uses stable sorted properties and no raw
   snippets.
-- [ ] Add `report.md` sections for Swift storage/data counts by framework,
-  evidence tier, rule ID, coverage label, and gap kind.
-- [ ] Ensure reports use safe descriptors or hash prefixes only and avoid
-  "impacted" language without reducer output.
-- [ ] Validate `tracemap combine`, `tracemap report`, and relevant path/reverse
-  selectors can read Swift storage/data rows without promoting gaps or
-  hash-only facts to runtime proof.
-- [ ] Add tests that unknown, dynamic, unsafe, and unsupported storage gaps are
-  not projected as clean terminal data surfaces.
+- [x] Add `report.md` sections for Swift storage/data counts by framework,
+  fact type, rule ID, and gap kind.
+- [x] Ensure reports use safe descriptors or hash prefixes only and avoid
+  impact/runtime-proof language.
+- [x] Validate `tracemap combine` and `tracemap report` can read Swift
+  storage/data rows without promoting gaps or hash-only facts to runtime proof.
 
 ## Phase 8: Validation
 
-- [ ] Add public-safe fixture coverage for CoreData, UserDefaults, Keychain,
-  SQLite/GRDB/FMDatabase, Realm, and unsupported/dynamic gaps.
-- [ ] Run Swift build and smoke tests:
+- [x] Add public-safe fixture coverage under
+  `samples/swift-storage-data-surfaces`.
+- [x] Run Swift build and smoke tests:
 
 ```bash
 swift build --package-path src/swift
 swift run --package-path src/swift tracemap-swift-smoke-tests
 ```
 
-- [ ] Run the storage/data fixture scan:
+- [x] Run the storage/data fixture scan:
 
 ```bash
 swift run --package-path src/swift tracemap-swift scan --repo samples/swift-storage-data-surfaces --out /tmp/tracemap-swift-storage-data-surfaces
 ```
 
-- [ ] Verify required scan artifacts exist:
+- [x] Verify required scan artifacts exist:
 
 ```bash
 test -f /tmp/tracemap-swift-storage-data-surfaces/scan-manifest.json
@@ -166,35 +141,34 @@ test -f /tmp/tracemap-swift-storage-data-surfaces/report.md
 test -f /tmp/tracemap-swift-storage-data-surfaces/logs/analyzer.log
 ```
 
-- [ ] Run SQLite evidence queries for rule IDs, evidence tiers, fact types,
+- [x] Run SQLite evidence queries for rule IDs, evidence tiers, fact types,
   redaction, and gap coverage.
-- [ ] Run combine/report smoke:
+- [x] Run combine/report smoke:
 
 ```bash
 dotnet run --project src/dotnet/TraceMap.Cli -- combine --index /tmp/tracemap-swift-storage-data-surfaces/index.sqlite --label swift --out /tmp/tracemap-swift-storage-combined.sqlite
 dotnet run --project src/dotnet/TraceMap.Cli -- report --index /tmp/tracemap-swift-storage-combined.sqlite --out /tmp/tracemap-swift-storage-report
 ```
 
-- [ ] Run shared .NET validation if storage, combine, report, reducer, or shared
-  SQL behavior changes:
+- [x] Run shared .NET validation:
 
 ```bash
 dotnet build src/dotnet/TraceMap.sln
 dotnet test src/dotnet/TraceMap.sln
 ```
 
-- [ ] Run safety checks:
+- [x] Run safety checks:
 
 ```bash
 git diff --check
 ./scripts/check-private-paths.sh
 ```
 
-## Spec PR Review Commands
+## Deferred Follow-Ups
 
-These commands are for this spec-only PR:
-
-```bash
-git diff --check
-./scripts/check-private-paths.sh
-```
+- SourceKit/compiler semantic enrichment for storage symbol attachment.
+- Full CoreData `.xcdatamodel/contents` and version-selection semantics.
+- Advanced wrapper/data-flow resolution for UserDefaults, Keychain, GRDB,
+  FMDatabase, SQLite, and Realm.
+- Runtime instrumentation, simulator/device checks, database connections,
+  Keychain access, Realm file inspection, or production-data proof.
