@@ -479,6 +479,10 @@ struct TraceMapSwiftSmokeTests {
           URLSession.shared.dataTask(with: dynamicRequest)
           let dynamicOne = URLRequest(url: dynamicURL); let dynamicTwo = URLRequest(url: dynamicURL)
 
+          var commentOnlyRequest = URLRequest(url: URL(string: "https://api.example.invalid/v1/comment-method")!)
+          // commentOnlyRequest.httpMethod = "POST"
+          URLSession.shared.dataTask(with: commentOnlyRequest)
+
           // AF.request("https://api.example.invalid/v1/commented-out", method: .get)
           AF.request("https://api.example.invalid/v1/orders/42", method: .get)
           Alamofire.request("https://api.example.invalid/v1/orders/43?api_key=do-not-render", method: .post)
@@ -521,6 +525,10 @@ struct TraceMapSwiftSmokeTests {
         assert(!httpFacts.contains { $0.properties["normalizedPathKey"] == "/v1/unknown" })
         assert(!httpFacts.contains { $0.properties["normalizedPathKey"] == "/v1/missing-method" })
         assert(!httpFacts.contains { $0.properties["normalizedPathKey"] == "/v1/commented-out" })
+        assert(!httpFacts.contains { $0.properties["normalizedPathKey"] == "/v1/comment-method" })
+        let manifestFact = try requireFact(result, "FileInventoried")
+        assert(manifestFact.properties["coverageLabel"] == "SwiftInventoryReduced")
+        assert(result.manifest.knownGaps.contains { $0.contains("URLRequest URL argument is dynamic") })
         let factsText = try String(contentsOf: out.appendingPathComponent("facts.ndjson"), encoding: .utf8)
         assert(!factsText.contains("https://api.example.invalid"))
         assert(!factsText.contains("super-secret"))
