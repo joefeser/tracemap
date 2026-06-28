@@ -60,6 +60,7 @@
         </p>
         <nav class="hero-actions" aria-label="Swift evidence links">
           <a class="button primary" href="#swift-evidence-matrix">Open evidence matrix</a>
+          <a class="button secondary" href="/swift/story/">Read the Swift story</a>
           <a class="button secondary" href="#swift-boundaries">Read boundaries</a>
           <a class="button secondary" href="/capabilities/">Capabilities</a>
           <a class="button secondary" href="/validation/">Validation</a>
@@ -109,35 +110,35 @@
                 <td>Does not prove Swift runtime behavior, app navigation, production usage, build success, deployment state, release safety, or AI impact analysis.</td>
               </tr>
               <tr data-swift-story="static-inventory" data-public-claim-level="shipped">
-                <td><strong>Swift static inventory</strong></td>
+                <td><strong><a href="/swift/static-inventory/">Swift static inventory</a></strong></td>
                 <td><code>shipped</code></td>
                 <td>Swift package/project inventory, source file selection, module-ish metadata, and reduced-coverage labels when project or toolchain context is limited.</td>
                 <td>PR <a href="https://github.com/joefeser/tracemap/pull/425">#425</a> and repository validation docs.</td>
                 <td>Inventory is not Xcode build proof, SwiftPM restore proof, simulator/device execution, or complete module understanding.</td>
               </tr>
               <tr data-swift-story="symbol-call-evidence" data-public-claim-level="shipped">
-                <td><strong>Swift symbols and calls</strong></td>
+                <td><strong><a href="/swift/symbols-calls/">Swift symbols and calls</a></strong></td>
                 <td><code>shipped</code></td>
                 <td>SwiftSyntax-backed declarations, call candidates, construction candidates, inheritance/conformance-style relationship evidence, and syntax-tier usage rows.</td>
                 <td>PR <a href="https://github.com/joefeser/tracemap/pull/425">#425</a> and <a href="https://github.com/joefeser/tracemap/blob/main/docs/ACCEPTANCE.md">acceptance criteria</a>.</td>
                 <td>Syntax-backed candidates are not compiler semantic resolution, runtime dispatch, protocol witness proof, dependency injection proof, or SwiftUI runtime reachability.</td>
               </tr>
-              <tr data-swift-story="surface-discovery" data-public-claim-level="shipped/demo">
-                <td><strong>Swift surface discovery</strong></td>
-                <td><code>shipped/demo</code></td>
+              <tr data-swift-story="surface-discovery" data-public-claim-level="demo">
+                <td><strong><a href="/swift/surface-discovery/">Swift surface discovery</a></strong></td>
+                <td><code>demo</code></td>
                 <td>Supported static HTTP/API client, SwiftUI/UIKit-ish, package, and dependency surface evidence, with dynamic composition gaps visible.</td>
                 <td>PR <a href="https://github.com/joefeser/tracemap/pull/425">#425</a>; demo rows need checked-in public-safe generated output before being presented as demo proof.</td>
                 <td>HTTP/API surfaces are not runtime network reachability; UI surfaces are not rendered UI, complete navigation, or user action proof; dependency surfaces are not vulnerability, license, freshness, or build compatibility analysis.</td>
               </tr>
-              <tr data-swift-story="storage-data-surfaces" data-public-claim-level="shipped/demo">
-                <td><strong>Swift storage and data surfaces</strong></td>
-                <td><code>shipped/demo</code></td>
+              <tr data-swift-story="storage-data-surfaces" data-public-claim-level="demo">
+                <td><strong><a href="/swift/storage-data/">Swift storage and data surfaces</a></strong></td>
+                <td><code>demo</code></td>
                 <td>CoreData metadata, UserDefaults keys, Keychain access patterns, SQLite SQL text/shape evidence, and Realm model/property surfaces where statically supported.</td>
                 <td>PR <a href="https://github.com/joefeser/tracemap/pull/425">#425</a>; demo rows need public-safe generated summaries.</td>
                 <td>Does not prove stored values, query execution, live schema, runtime persistence, Keychain item existence, UserDefaults values, credentials, or data impact.</td>
               </tr>
               <tr data-swift-story="evidence-safety" data-public-claim-level="shipped">
-                <td><strong>Swift evidence safety</strong></td>
+                <td><strong><a href="/swift/evidence-safety/">Swift evidence safety</a></strong></td>
                 <td><code>shipped</code></td>
                 <td>Rule IDs, evidence tiers, coverage labels, reduced-coverage gaps, and hashed sensitive identifiers where supported.</td>
                 <td>PR <a href="https://github.com/joefeser/tracemap/pull/425">#425</a>, <a href="/site-claim-guardrails/">site claim guardrails</a>, and <a href="/limitations/">limitations</a>.</td>
@@ -181,6 +182,12 @@
         </div>
         <div class="link-grid">
           <a href="https://github.com/joefeser/tracemap/pull/425">Swift v0 promotion PR</a>
+          <a href="/swift/story/">Why Swift evidence matters</a>
+          <a href="/swift/static-inventory/">Swift static inventory</a>
+          <a href="/swift/symbols-calls/">Swift symbols and calls</a>
+          <a href="/swift/surface-discovery/">Swift surface discovery</a>
+          <a href="/swift/storage-data/">Swift storage and data surfaces</a>
+          <a href="/swift/evidence-safety/">Swift evidence safety</a>
           <a href="https://github.com/joefeser/tracemap/blob/main/docs/ACCEPTANCE.md">Acceptance criteria</a>
           <a href="https://github.com/joefeser/tracemap/blob/main/docs/VALIDATION.md">Validation guide</a>
           <a href="https://github.com/joefeser/tracemap/blob/main/docs/ADAPTER_RUNWAY.md">Adapter runway</a>

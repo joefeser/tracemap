@@ -11,7 +11,8 @@ Source of truth: implementation branch `codex/site-swift-public-stories`
 
 Implemented on `/swift/` as the `evidence-safety` matrix row, the "How to read
 it" section, and related proof links to site claim guardrails, limitations,
-proof paths, and validation.
+proof paths, and validation, then expanded with a dedicated story route at
+`/swift/evidence-safety/`.
 
 ## Claim Boundary
 
@@ -24,6 +25,7 @@ or hidden validation details.
 ## Validation
 
 - `node --test scripts/swift-evidence-lane.test.mjs scripts/validate.test.mjs`
+- `node --test scripts/swift-story-pages.test.mjs`
 - `npm test`
 - `npm run validate`
 - `npm run build`
