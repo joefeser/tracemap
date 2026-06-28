@@ -1,102 +1,35 @@
 # Swift Adapter v0 Storage And Data Surfaces Implementation State
 
-Status: ready-for-implementation
+Status: implemented
 
 Issue: [#385](https://github.com/joefeser/tracemap/issues/385)
 
 Parent: [#377](https://github.com/joefeser/tracemap/issues/377)
 
-Current branch: `codex/swift-adapter-v0-storage-data-surfaces`
+Implementation branch: `codex/implement-swift-storage-data-surfaces`
 
-## Current Scope
+## Implemented Scope
 
-This PR is spec-only. It creates Kiro requirements, design, tasks, and
-implementation-state notes for the Swift adapter v0 storage/data surface slice.
-It does not implement analyzer code, change scanner output, update generated
-artifacts, or alter the rule catalog.
+This slice adds deterministic static Swift storage/data surface evidence for:
+
+- checked-in CoreData model/entity/property metadata;
+- UserDefaults literal and same-file static key references;
+- Security framework Keychain access patterns with role-hashed descriptors;
+- SQLite/GRDB/FMDatabase complete static SQL literals and checked-in `.sql`
+  resources;
+- Realm model declarations and simple persisted property metadata;
+- explicit storage/data analysis gaps for dynamic keys, dynamic SQL, dynamic
+  Keychain query shapes, malformed metadata, and dynamic Realm query evidence.
+
+The scanner emits `swift.storage.*` rule IDs, stable fact properties, evidence
+tiers, spans, commit SHA, extractor version, and reduced coverage labels when
+storage gaps are present. Reports summarize Swift storage/data counts by
+framework, fact type, rule ID, and gap kind without raw snippets or runtime
+proof language.
 
 ## Public Claim Level
 
-Current PR: implementation-ready planning for deterministic static Swift
-storage/data surface evidence.
-
-Future implementation may claim static evidence for supported CoreData
-metadata, UserDefaults keys, Keychain access patterns, SQLite/GRDB/FMDatabase
-literal SQL/table surfaces, and Realm model/persistence surfaces only after
-rule catalog entries, tests, fixtures, and validation land.
-
-Unsafe claims remain out of scope: runtime data-flow proof, database proof,
-query execution, schema existence, migration success, Keychain item existence,
-UserDefaults value contents, Realm live schema, production data, or app impact.
-
-## Source Material Paths
-
-- `docs/LANGUAGE_ADAPTER_CONTRACT.md`
-- `docs/VALIDATION.md`
-- `docs/ACCEPTANCE.md`
-- `rules/rule-catalog.yml`
-- `.kiro/specs/swift-adapter-v0-scaffold-cli-output-contract/`
-- `.kiro/specs/swift-adapter-v0-symbol-identity-relationships/`
-- GitHub issue #377 Swift adapter v0 runway
-- GitHub issue #385 Swift adapter v0 storage and data surfaces
-
-## Scope Decisions
-
-- Keep this as a storage/data-surface slice only.
-- Reuse the shared SQL evidence contract for `SqlTextUsed` and
-  `QueryPatternDetected`.
-- Reuse `DatabaseColumnMapping` only where future implementation documents
-  concrete static mapping evidence; otherwise prefer Swift-specific descriptor
-  facts or gaps.
-- Cap CoreData checked-in metadata at `Tier2Structural`.
-- Cap SwiftSyntax/textual UserDefaults, Keychain, SQLite call, GRDB, FMDatabase,
-  and Realm source evidence at `Tier3SyntaxOrTextual`.
-- Reserve `Tier1Semantic` for a future deterministic compiler/SourceKit
-  enrichment rule; this spec does not need Tier1 evidence.
-- Treat dynamic keys, dynamic SQL, generated schemas, runtime config, wrappers,
-  Objective-C bridging, migrations, and unsafe values as explicit gaps.
-- Store repo-relative paths, line spans, hashes, lengths, kinds, counts, rule
-  IDs, evidence tiers, extractor versions, and coverage labels instead of raw
-  snippets or unsafe values.
-
-## Planned Rule IDs
-
-- `swift.storage.coredata.metadata.v1`
-- `swift.storage.userdefaults.key.v1`
-- `swift.storage.keychain.access.v1`
-- `swift.storage.sqlite.sql.v1`
-- `swift.storage.sqlite.table.v1`
-- `swift.storage.realm.model.v1`
-- `swift.storage.analysis-gap.v1`
-
-Future implementation may rename these only if it updates the spec/state notes
-and keeps issue #385 linkage clear.
-
-## Validation Commands For This Spec PR
-
-```bash
-git diff --check
-./scripts/check-private-paths.sh
-```
-
-Latest local validation:
-
-- `git diff --check` passed.
-- `./scripts/check-private-paths.sh` passed.
-
-## Future Implementation Validation
-
-```bash
-swift build --package-path src/swift
-swift run --package-path src/swift tracemap-swift-smoke-tests
-swift run --package-path src/swift tracemap-swift scan --repo samples/swift-storage-data-surfaces --out /tmp/tracemap-swift-storage-data-surfaces
-dotnet run --project src/dotnet/TraceMap.Cli -- combine --index /tmp/tracemap-swift-storage-data-surfaces/index.sqlite --label swift --out /tmp/tracemap-swift-storage-combined.sqlite
-dotnet run --project src/dotnet/TraceMap.Cli -- report --index /tmp/tracemap-swift-storage-combined.sqlite --out /tmp/tracemap-swift-storage-report
-git diff --check
-./scripts/check-private-paths.sh
-```
-
-## Safe / No-Overclaim Boundaries
+Implemented claim level: static evidence only.
 
 Safe language:
 
@@ -123,12 +56,65 @@ Unsafe language:
 - app behavior impacted;
 - AI impact analysis.
 
-## Follow-Up Items
+## Source Material Paths
 
-- Implement the future unchecked tasks in `tasks.md`.
-- Add rule catalog entries before emitting storage/data facts.
-- Add public-safe Swift storage/data fixtures.
-- Update `docs/VALIDATION.md` after implementation adds runnable storage/data
-  fixture commands.
-- Keep public copy bounded to static evidence, rule IDs, evidence tiers,
-  coverage labels, limitations, and generated artifacts.
+- `docs/LANGUAGE_ADAPTER_CONTRACT.md`
+- `docs/VALIDATION.md`
+- `docs/ACCEPTANCE.md`
+- `rules/rule-catalog.yml`
+- `.kiro/specs/swift-adapter-v0-scaffold-cli-output-contract/`
+- `.kiro/specs/swift-adapter-v0-symbol-identity-relationships/`
+- GitHub issue #377 Swift adapter v0 runway
+- GitHub issue #385 Swift adapter v0 storage and data surfaces
+
+## Files And Fixtures
+
+- `src/swift/Sources/TraceMapSwift/TraceMapSwift.swift`
+- `src/swift/Sources/tracemap-swift-smoke-tests/main.swift`
+- `samples/swift-storage-data-surfaces/`
+- `rules/rule-catalog.yml`
+- `docs/VALIDATION.md`
+- `docs/ACCEPTANCE.md`
+
+## Rule IDs
+
+- `swift.storage.coredata.metadata.v1`
+- `swift.storage.userdefaults.key.v1`
+- `swift.storage.keychain.access.v1`
+- `swift.storage.sqlite.sql.v1`
+- `swift.storage.sqlite.table.v1`
+- `swift.storage.realm.model.v1`
+- `swift.storage.analysis-gap.v1`
+
+## Validation
+
+Latest local validation passed:
+
+```bash
+swift build --package-path src/swift
+swift run --package-path src/swift tracemap-swift-smoke-tests
+swift run --package-path src/swift tracemap-swift scan --repo samples/swift-storage-data-surfaces --out /tmp/tracemap-swift-storage-data-surfaces
+test -f /tmp/tracemap-swift-storage-data-surfaces/scan-manifest.json
+test -f /tmp/tracemap-swift-storage-data-surfaces/facts.ndjson
+test -f /tmp/tracemap-swift-storage-data-surfaces/index.sqlite
+test -f /tmp/tracemap-swift-storage-data-surfaces/report.md
+test -f /tmp/tracemap-swift-storage-data-surfaces/logs/analyzer.log
+/usr/bin/sqlite3 /tmp/tracemap-swift-storage-data-surfaces/index.sqlite "select rule_id, evidence_tier, fact_type from facts where rule_id like 'swift.storage.%' order by rule_id, fact_type limit 20;"
+dotnet run --project src/dotnet/TraceMap.Cli -- combine --index /tmp/tracemap-swift-storage-data-surfaces/index.sqlite --label swift --out /tmp/tracemap-swift-storage-combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- report --index /tmp/tracemap-swift-storage-combined.sqlite --out /tmp/tracemap-swift-storage-report
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Observed full .NET test result: `697 passed, 0 failed`.
+
+## Deferred Follow-Ups
+
+- SourceKit/compiler semantic enrichment for storage symbol attachment.
+- Full CoreData `.xcdatamodel/contents` and version-selection semantics.
+- Advanced wrapper/data-flow resolution for UserDefaults, Keychain, GRDB,
+  FMDatabase, SQLite, and Realm.
+- Runtime instrumentation, simulator/device checks, database connections,
+  Keychain access, Realm file inspection, or production-data proof.

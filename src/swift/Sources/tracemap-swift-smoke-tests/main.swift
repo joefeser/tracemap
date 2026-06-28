@@ -21,6 +21,7 @@ struct TraceMapSwiftSmokeTests {
         try dependencySurfaceFactsAreEmittedSafely()
         try swiftHttpClientSurfaceFactsAreEmittedSafely()
         try swiftUiSurfaceFactsAreEmittedSafely()
+        try swiftStorageDataSurfaceFactsAreEmittedSafely()
         try swiftSyntaxDeclarationAndCallFactsAreStored()
         try swiftSyntaxSymbolRelationshipsAreStored()
         try parserDiagnosticsEmitHashedGapWithoutRawText()
@@ -589,6 +590,60 @@ struct TraceMapSwiftSmokeTests {
         let result2 = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: repo, outputPath: out2))
         let ids1 = result.facts.filter { $0.ruleId.hasPrefix("swift.ui.") }.map(\.factId).sorted()
         let ids2 = result2.facts.filter { $0.ruleId.hasPrefix("swift.ui.") }.map(\.factId).sorted()
+        assert(ids1 == ids2)
+    }
+
+    static func swiftStorageDataSurfaceFactsAreEmittedSafely() throws {
+        let repo = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("samples/swift-storage-data-surfaces")
+        let temp = try TempDir()
+        let out = temp.url.appendingPathComponent("scan-storage")
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: repo, outputPath: out))
+        let storageFacts = result.facts.filter { $0.ruleId.hasPrefix("swift.storage.") && $0.factType != "AnalysisGap" && $0.factType != "FileInventoried" }
+        assert(storageFacts.contains { $0.factType == "SwiftCoreDataModelDeclared" && $0.properties["frameworkFamily"] == "coredata" })
+        assert(storageFacts.contains { $0.factType == "SwiftCoreDataEntityDeclared" && $0.properties["entityName"] == "User" })
+        assert(storageFacts.contains { $0.factType == "SwiftCoreDataPropertyDeclared" && $0.properties["propertyName"] == "email" })
+        assert(storageFacts.contains { $0.factType == "SwiftUserDefaultsKeyAccessed" && $0.properties["operationDirection"] == "write" && $0.properties["normalizedKey"] == "hasCompletedOnboarding" })
+        assert(storageFacts.contains { $0.factType == "SwiftUserDefaultsKeyAccessed" && $0.properties["operationDirection"] == "read" && $0.properties["normalizedKey"] == "launchCount" })
+        assert(storageFacts.contains { $0.factType == "SwiftUserDefaultsKeyAccessed" && $0.properties["keyIdentityStatus"] == "hashed" && $0.properties["keyHash"] != nil })
+        assert(storageFacts.contains { $0.factType == "SwiftKeychainAccessPattern" && $0.properties["apiName"] == "SecItemAdd" && $0.properties["serviceHash"] != nil })
+        assert(storageFacts.contains { $0.factType == "SqlTextUsed" && $0.properties["sqlSourceKind"] == "grdb-literal" && $0.properties["textHash"] != nil })
+        assert(storageFacts.contains { $0.factType == "SqlTextUsed" && $0.properties["sqlSourceKind"] == "sql-file" && $0.evidenceTier == .tier2Structural })
+        assert(storageFacts.contains { $0.factType == "QueryPatternDetected" && $0.properties["queryShapeHash"] != nil && $0.properties["tableName"] == "users" })
+        assert(storageFacts.contains { $0.factType == "SwiftRealmModelDeclared" && $0.properties["frameworkFamily"] == "realm" && $0.properties["typeName"] == "AccountObject" })
+        assert(storageFacts.contains { $0.factType == "DatabaseColumnMapping" && $0.ruleId == "swift.storage.realm.model.v1" && $0.properties["propertyName"] == "email" })
+        assert(storageFacts.allSatisfy { $0.properties["staticEvidenceOnly"] == "true" && $0.properties["runtimeProof"] == "false" })
+        assert(!storageFacts.contains { $0.evidenceTier == .tier1Semantic })
+        let storageGaps = result.facts.filter { $0.factType == "AnalysisGap" && $0.ruleId == "swift.storage.analysis-gap.v1" }
+        let gapKinds = Set(storageGaps.compactMap { $0.properties["gapKind"] })
+        assert(gapKinds.contains("swift-storage-dynamic-userdefaults-key"))
+        assert(gapKinds.contains("swift-storage-dynamic-sql"))
+        assert(gapKinds.contains("swift-storage-realm-dynamic-query"))
+        let manifestFact = try requireFact(result, "FileInventoried")
+        assert(manifestFact.properties["coverageLabel"] == "SwiftInventoryReduced")
+        let factsText = try String(contentsOf: out.appendingPathComponent("facts.ndjson"), encoding: .utf8)
+        for forbidden in [
+            "SELECT id, email FROM users",
+            "private@example.invalid",
+            "primary-user@example.invalid",
+            "payments-service",
+            "authToken",
+            repo.path
+        ] {
+            assert(!factsText.contains(forbidden), "storage facts leaked forbidden text \(forbidden)")
+        }
+        let report = try String(contentsOf: out.appendingPathComponent("report.md"), encoding: .utf8)
+        assert(report.contains("## Swift Storage/Data Static Surfaces"))
+        assert(report.contains("Static source and checked-in metadata evidence only"))
+        for forbidden in ["query execution is proven", "stored values are proven", "runtime persistence is proven", "impacted"] {
+            assert(!report.lowercased().contains(forbidden))
+        }
+        let db = out.appendingPathComponent("index.sqlite").path
+        let sqlRows = try run("/usr/bin/sqlite3", [db, "select count(*) from facts where fact_type in ('SqlTextUsed','QueryPatternDetected','DatabaseColumnMapping');"]).trimmed()
+        assert((Int(sqlRows) ?? 0) >= 3)
+        let out2 = temp.url.appendingPathComponent("scan-storage-again")
+        let result2 = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: repo, outputPath: out2))
+        let ids1 = result.facts.filter { $0.ruleId.hasPrefix("swift.storage.") }.map(\.factId).sorted()
+        let ids2 = result2.facts.filter { $0.ruleId.hasPrefix("swift.storage.") }.map(\.factId).sorted()
         assert(ids1 == ids2)
     }
 

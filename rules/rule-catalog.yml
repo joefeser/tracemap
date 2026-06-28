@@ -4622,6 +4622,127 @@ rules:
       - Gap messages must use closed vocabulary and hashes only; raw UI labels, source snippets, storyboard/nib XML, local paths, URLs, secrets, hostnames, accessibility text, and private labels must not be rendered.
       - Conservative gaps may be replaced by future SourceKit/compiler, Interface Builder parser, Objective-C, or data-flow slices; runtime-only behavior remains out of scope.
 
+  - id: swift.storage.coredata.metadata.v1
+    status: active
+    name: Swift CoreData static metadata surface
+    description: Records checked-in CoreData model metadata such as model bundles, model files, entities, attributes, relationships, fetched properties, and fetch requests.
+    evidenceTier: Tier2Structural
+    emits:
+      - SwiftCoreDataModelDeclared
+      - SwiftCoreDataEntityDeclared
+      - SwiftCoreDataPropertyDeclared
+    requiredProperties:
+      - frameworkFamily
+      - modelDescriptorKind
+      - modelHash
+      - staticEvidenceOnly
+      - runtimeProof
+    limitations:
+      - Evidence is checked-in design-time metadata only and does not prove CoreData stack initialization, selected runtime model version, persistent store path, migration success, SQLite table existence, production data, or impact.
+      - Generated subclasses, model-to-source linkage, store mappings, fetch predicate behavior, and branch feasibility are not proven by this rule.
+      - Raw model XML, snippets, local paths, store URLs, predicates, config values, secrets, and unsafe descriptor values must be omitted or represented only by hashes/status fields.
+
+  - id: swift.storage.userdefaults.key.v1
+    status: active
+    name: Swift UserDefaults static key surface
+    description: Records statically visible UserDefaults key access patterns from checked-in Swift source.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftUserDefaultsKeyAccessed
+    requiredProperties:
+      - frameworkFamily
+      - operationDirection
+      - keyIdentityStatus
+      - staticEvidenceOnly
+      - runtimeProof
+    limitations:
+      - Evidence is syntax/textual only and does not prove a key exists at runtime, values are read or written, suite selection, synchronization behavior, production use, or impact.
+      - Dynamic, interpolated, localized, config-loaded, remote, reflection-based, or wrapper-hidden keys emit gaps or remain false negatives.
+      - UserDefaults values, raw plist/config values, source snippets, credentials, secret-looking keys, local paths, remotes, and unsafe strings must not be emitted.
+
+  - id: swift.storage.keychain.access.v1
+    status: active
+    name: Swift Keychain static access pattern
+    description: Records statically visible Security framework Keychain API access patterns and safe/hash-only query descriptors.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftKeychainAccessPattern
+    requiredProperties:
+      - frameworkFamily
+      - operationDirection
+      - apiName
+      - keychainClass
+      - staticEvidenceOnly
+      - runtimeProof
+    limitations:
+      - Evidence is syntax/textual only and does not prove Keychain item existence, access success, entitlements, prompts, biometric policy, device state, sync behavior, production use, or impact.
+      - Dynamically composed dictionaries, wrapper-only APIs, Objective-C bridging, config-derived values, and unsupported control flow emit gaps or remain false negatives.
+      - Credentials, passwords, tokens, item data, raw query dictionaries, entitlement/provisioning values, service/account/access-group secrets, snippets, local paths, URLs, and unsafe values must be omitted or role-hashed.
+
+  - id: swift.storage.sqlite.sql.v1
+    status: active
+    name: Swift static SQL text and shape surface
+    description: Records complete static SQL literals from Swift SQLite/GRDB/FMDatabase shapes and checked-in SQL resources using shared SQL hash and shape properties.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - SqlTextUsed
+      - QueryPatternDetected
+    requiredProperties:
+      - frameworkFamily
+      - sqlSourceKind
+      - textHash
+      - textLength
+      - staticEvidenceOnly
+      - runtimeProof
+    limitations:
+      - SQL evidence is static text/shape evidence only and does not prove query execution, database existence, schema existence, dialect validity, transactions, permissions, migrations, production data, branch feasibility, or impact.
+      - Dynamic SQL construction, interpolation, query builders, wrapper-generated SQL, runtime-loaded SQL, and schema composition emit gaps rather than complete SqlTextUsed facts.
+      - Raw SQL, predicate values, connection strings, database paths, URLs, hostnames, local paths, snippets, and unsafe identifiers must not be emitted.
+
+  - id: swift.storage.sqlite.table.v1
+    status: active
+    name: Swift static SQLite table surface
+    description: Reserved active rule for literal Swift table/schema descriptors when exact static mapping evidence is documented by the emitting code.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - DatabaseColumnMapping
+    limitations:
+      - Table descriptors are static metadata only and do not prove database schema existence, migrations, query execution, production data, or impact.
+      - The v0 implementation may emit no rows for this rule when evidence is not strong enough; absence of rows is not absence of table usage.
+      - Raw SQL, paths, connection strings, snippets, and unsafe table/column values must not be emitted.
+
+  - id: swift.storage.realm.model.v1
+    status: active
+    name: Swift Realm static model and property surface
+    description: Records statically visible Realm model declarations and persisted property mappings from checked-in Swift source.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SwiftRealmModelDeclared
+      - DatabaseColumnMapping
+    requiredProperties:
+      - frameworkFamily
+      - staticEvidenceOnly
+      - runtimeProof
+    limitations:
+      - Evidence is syntax/textual only and does not prove live Realm schema, migration success, object existence, query execution, sync state, thread confinement, file encryption, production use, or impact.
+      - Property-wrapper synthesis, dynamic object types, dynamic predicates, generated schema code, Objective-C bridging, migrations, and runtime configuration emit gaps or remain false negatives.
+      - Raw predicate strings, persisted values, Realm file paths, encryption keys, migration snippets, source snippets, local paths, and unsafe values must not be emitted.
+
+  - id: swift.storage.analysis-gap.v1
+    status: active
+    name: Swift storage/data static extraction analysis gap
+    description: Records dynamic, malformed, unsupported, unsafe, ambiguous, omitted, or runtime-only Swift storage/data extraction boundaries.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    requiredProperties:
+      - gapKind
+      - messageHash
+    limitations:
+      - Storage/data gaps describe static extraction limits only and do not prove storage behavior, key/schema/query absence, runtime safety, runtime risk, production use, or impact.
+      - Gap messages and properties must use closed vocabulary, counts, status fields, or hashes only; raw SQL, query dictionaries, values, snippets, paths, remotes, URLs, hosts, credentials, tokens, and private labels must not be rendered.
+      - Conservative gaps may be replaced by future SourceKit/compiler, data-flow, wrapper, or metadata-specific slices; runtime-only behavior remains out of scope.
+
   - id: swift.toolchain.diagnostic.v1
     name: Swift toolchain diagnostic
     description: Emits bounded non-mutating availability diagnostics for Swift, SourceKit/sourcekit-lsp, Xcode, CocoaPods, and Carthage tooling.
