@@ -18,6 +18,7 @@ struct TraceMapSwiftSmokeTests {
         try bundleFactsHonorUserFilters()
         try projectAndPackageMetadataFactsAreEmittedSafely()
         try dependencySurfaceFactsAreEmittedSafely()
+        try swiftHttpClientSurfaceFactsAreEmittedSafely()
         try swiftSyntaxDeclarationAndCallFactsAreStored()
         try swiftSyntaxSymbolRelationshipsAreStored()
         try parserDiagnosticsEmitHashedGapWithoutRawText()
@@ -437,6 +438,75 @@ struct TraceMapSwiftSmokeTests {
         assert(report.contains("swiftpm"))
         assert(report.contains("cocoapods"))
         assert(report.contains("carthage"))
+    }
+
+    static func swiftHttpClientSurfaceFactsAreEmittedSafely() throws {
+        let source = """
+        import Foundation
+
+        func requests(endpoint: String) {
+          var postRequest = URLRequest(url: URL(string: "https://api.example.invalid/v1/users/123/roles?token=super-secret")!)
+          postRequest.httpMethod = "POST"
+          URLSession.shared.dataTask(with: postRequest)
+
+          var deleteRequest = URLRequest(url: URL(string: "https://api.example.invalid/v1/sessions/abcdef123456")!)
+          deleteRequest.httpMethod = "DELETE"
+          URLSession.shared.dataTask(with: deleteRequest)
+
+          var unknownMethod = URLRequest(url: URL(string: "https://api.example.invalid/v1/unknown")!)
+          URLSession.shared.dataTask(with: unknownMethod)
+
+          AF.request("https://api.example.invalid/v1/orders/42", method: .get)
+          Alamofire.request("https://api.example.invalid/v1/orders/43?api_key=do-not-render", method: .post)
+          AF.request(endpoint, method: .put)
+        }
+
+        protocol TargetType {}
+        enum UserAPI: TargetType {
+          var baseURL: URL { URL(string: "https://api.example.invalid")! }
+          var path: String { "/v1/users/123/roles" }
+          var method: Moya.Method { .get }
+        }
+        enum MissingMethodAPI: TargetType {
+          var path: String { "/v1/missing-method" }
+        }
+        enum Moya { enum Method { case get } }
+        enum AF { static func request(_ value: String, method: Method) {}; enum Method { case get; case put } }
+        enum Alamofire { static func request(_ value: String, method: Method) {}; enum Method { case post } }
+        """
+        let fixture = try SwiftFixture(extraFiles: ["Sources/App/Http.swift": source])
+        let out = fixture.temp.url.appendingPathComponent("scan-http")
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: out))
+        let httpFacts = result.facts.filter { $0.factType == "HttpCallDetected" && $0.ruleId.hasPrefix("swift.http.") }
+        assert(httpFacts.count >= 4)
+        assert(httpFacts.allSatisfy { $0.evidenceTier == .tier3SyntaxOrTextual })
+        assert(httpFacts.allSatisfy { $0.properties["httpMethod"] != nil && $0.properties["normalizedPathKey"] != nil })
+        assert(httpFacts.contains { $0.ruleId == "swift.http.urlsession.v1" && $0.properties["httpMethod"] == "POST" && $0.properties["normalizedPathKey"] == "/v1/users/{}/roles" && $0.properties["queryStatus"] == "present-omitted" })
+        assert(httpFacts.contains { $0.properties["httpMethod"] == "DELETE" && $0.properties["normalizedPathKey"] == "/v1/sessions/{}" && $0.properties["queryStatus"] == "absent" })
+        assert(httpFacts.contains { $0.ruleId == "swift.http.client-library.v1" && $0.properties["framework"] == "alamofire" && $0.properties["httpMethod"] == "GET" })
+        assert(httpFacts.contains { $0.properties["framework"] == "moya" && $0.properties["swiftClientKind"] == "moya" && $0.properties["httpMethod"] == "GET" })
+        assert(httpFacts.allSatisfy { $0.properties["methodName"] == nil && $0.properties["surfaceKind"] == nil })
+        let gapKinds = Set(result.facts.filter { $0.factType == "AnalysisGap" }.compactMap { $0.properties["gapKind"] })
+        assert(gapKinds.contains("swift-http-method-unknown-projection-omitted"))
+        assert(gapKinds.contains("swift-http-url-dynamic"))
+        assert(gapKinds.contains("swift-http-moya-target-partial"))
+        assert(!httpFacts.contains { $0.properties["normalizedPathKey"] == "/v1/unknown" })
+        assert(!httpFacts.contains { $0.properties["normalizedPathKey"] == "/v1/missing-method" })
+        let factsText = try String(contentsOf: out.appendingPathComponent("facts.ndjson"), encoding: .utf8)
+        assert(!factsText.contains("https://api.example.invalid"))
+        assert(!factsText.contains("super-secret"))
+        assert(!factsText.contains("do-not-render"))
+        let report = try String(contentsOf: out.appendingPathComponent("report.md"), encoding: .utf8)
+        assert(report.contains("## Swift HTTP/API Client Surfaces"))
+        assert(report.contains("urlrequest"))
+        assert(report.contains("alamofire"))
+        assert(report.contains("moya"))
+
+        let out2 = fixture.temp.url.appendingPathComponent("scan-http-again")
+        let result2 = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: out2))
+        let ids1 = result.facts.filter { $0.factType == "HttpCallDetected" }.map(\.factId).sorted()
+        let ids2 = result2.facts.filter { $0.factType == "HttpCallDetected" }.map(\.factId).sorted()
+        assert(ids1 == ids2)
     }
 
     static func swiftSyntaxDeclarationAndCallFactsAreStored() throws {
