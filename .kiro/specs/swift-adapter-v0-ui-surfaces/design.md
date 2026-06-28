@@ -179,8 +179,10 @@ Recognize narrow syntax shapes:
 - `.popover(...) { DestinationView(...) }`
 - `.alert(...)` as presentation context only; do not treat alert labels as
   destinations.
-- `TabView { DestinationView().tabItem { ... } }` as container/child surface
-  evidence where child view syntax is visible.
+- `TabView { DestinationView().tabItem { ... } }`,
+  `NavigationStack { ... }`, `NavigationSplitView { ... }`, and `List { ... }`
+  as container/child surface evidence where child view syntax is visible, not
+  as destination-backed navigation edges.
 
 Destination identity status:
 
@@ -312,8 +314,12 @@ Add `samples/swift-ui-surfaces/` with:
 
 - SwiftUI view declarations with `body`.
 - `@main App` / `WindowGroup` root-view syntax.
-- `NavigationLink`, `.sheet`, `.navigationDestination`, and `TabView` examples
-  with static and dynamic destinations.
+- `NavigationLink`, `.sheet`, `.fullScreenCover`, `.popover`, and
+  `.navigationDestination` examples with static and dynamic destinations.
+- `.alert` examples proving alert presentation context does not become a
+  destination-backed navigation edge.
+- `TabView`, `NavigationStack`, `NavigationSplitView`, and `List` examples
+  proving container context is distinct from navigation destination evidence.
 - `Button`, `.onTapGesture`, `.onSubmit`, `.task`, and toolbar/swipe action
   examples.
 - UIKit controller subclasses.

@@ -8,11 +8,13 @@ GitHub issue [#384](https://github.com/joefeser/tracemap/issues/384), a child
 of the Swift v0 runway issue
 [#377](https://github.com/joefeser/tracemap/issues/377).
 
-This is deterministic static evidence only. The implementation must not execute
-app code, run Xcode builds, restore packages, launch simulators/devices, load
-storyboards/nibs at runtime, inspect UIKit responder chains, observe SwiftUI
-navigation state, or claim that a screen, control, action, or navigation path is
-reachable in a running app.
+This is deterministic static evidence only. The scanner must not execute app
+code, run Xcode builds, require restoring or building the scanned app's
+packages, launch simulators/devices, load storyboards/nibs at runtime, inspect
+UIKit responder chains, observe SwiftUI navigation state, or claim that a
+screen, control, action, or navigation path is reachable in a running app.
+Building the TraceMap Swift adapter package itself for validation remains in
+scope.
 
 ## Source Material
 
@@ -71,21 +73,25 @@ with clear limitations.
 
 1. WHEN source contains supported SwiftUI navigation or presentation syntax with
    a visible destination view expression, such as `NavigationLink`,
-   `.navigationDestination`, `.sheet`, `.fullScreenCover`, `.popover`, or
-   `.alert`, THEN the adapter SHALL emit static UI navigation/presentation
+   `.navigationDestination`, `.sheet`, `.fullScreenCover`, or `.popover`, THEN
+   the adapter SHALL emit static UI navigation/presentation
    evidence with supporting fact IDs where available.
-2. WHEN navigation or presentation destination syntax is dynamic, generic,
+2. WHEN source contains presentation syntax such as `.alert` that names content
+   without a destination view expression THEN the adapter MAY emit
+   presentation/action-ish surface evidence, but it SHALL NOT emit a
+   destination-backed navigation edge.
+3. WHEN navigation or presentation destination syntax is dynamic, generic,
    closure-built without a visible view expression, feature-flagged, or
    indirectly created through helper functions THEN the adapter SHALL emit an
    `AnalysisGap` and SHALL NOT invent a destination.
-3. WHEN `NavigationStack`, `NavigationSplitView`, `TabView`, or `List` syntax
+4. WHEN `NavigationStack`, `NavigationSplitView`, `TabView`, or `List` syntax
    is visible THEN the adapter MAY emit container surface evidence, but it SHALL
    NOT prove runtime path contents, selected tab, list row reachability, or
    navigation stack transitions.
-4. WHEN static navigation evidence is emitted THEN it SHALL be labeled as a
+5. WHEN static navigation evidence is emitted THEN it SHALL be labeled as a
    static edge or candidate between source and destination syntax, not proof of
    runtime route execution or user reachability.
-5. WHEN destination identity cannot be tied to a known source-local Swift
+6. WHEN destination identity cannot be tied to a known source-local Swift
    symbol from existing Swift declaration evidence THEN the adapter SHALL keep
    the finding syntax-only and record destination identity status as unresolved,
    ambiguous, or dynamic.
