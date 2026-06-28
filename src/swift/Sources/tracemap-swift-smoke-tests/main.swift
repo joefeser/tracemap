@@ -24,6 +24,7 @@ struct TraceMapSwiftSmokeTests {
         try parserDiagnosticsEmitHashedGapWithoutRawText()
         try conditionalAndOptionalCallGapsUseSwiftSyntaxAnalysisGapRule()
         try exportedImportsRemainSyntaxOnlyAndDoNotClaimRuntimeReexport()
+        try swiftReducedCoverageDiagnosticsAreStructuredAndSafe()
         try unsupportedMetadataEmitsGaps()
         try oversizedFilesBecomeGaps()
         try sqliteContainsSharedTablesAndFacts()
@@ -761,6 +762,97 @@ struct TraceMapSwiftSmokeTests {
         }
     }
 
+    static func swiftReducedCoverageDiagnosticsAreStructuredAndSafe() throws {
+        try withEnvironment("TRACEMAP_SWIFT_TOOL_STATUS_OVERRIDES", "swift=timeout,sourcekit-lsp=not-found,xcodebuild=error-redacted") {
+            let fixture = try SwiftFixture(extraFiles: [
+                "Sources/App/FeatureBoundaries.swift": """
+                import Foundation
+
+                // #Preview and @objc in comments should not create gaps.
+                #if canImport(UIKit)
+                @objcMembers class ObjCBridge: NSObject {
+                  @IBAction func tapped(_ sender: Any) {
+                    perform(#selector(runDynamic))
+                    _ = NSClassFromString("Hidden")
+                    _ = Mirror(reflecting: self)
+                  }
+
+                  @objc func runDynamic() {}
+                }
+                #endif
+
+                #Preview {
+                  Text("Preview")
+                }
+
+                protocol Serving {
+                  func run()
+                }
+                extension Serving {
+                  func run() {}
+                }
+                """,
+                "Sources/App/OffsetDrift.swift": """
+                /*
+                 Non-BMP in masked comment before later gap: 🧭
+                 */
+                #CustomTraceMacro
+                struct AfterMacro {}
+                """,
+                "Sources/App/Generated/Client.generated.swift": """
+                struct GeneratedClient {
+                  func run() {}
+                }
+                """,
+                "Base.lproj/Main.storyboard": "<document></document>",
+                "Views/Detail.xib": "<document></document>"
+            ])
+            let out = fixture.temp.url.appendingPathComponent("scan-diagnostics")
+            let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: out))
+            let toolFacts = result.facts.filter { $0.factType == "SwiftToolchainDiagnostic" }
+            assert(toolFacts.contains { $0.properties["toolName"] == "swift" && $0.properties["toolStatus"] == "timeout" })
+            assert(toolFacts.contains { $0.properties["toolName"] == "sourcekit-lsp" && $0.properties["toolStatus"] == "not-found" })
+            assert(toolFacts.contains { $0.properties["toolName"] == "xcodebuild" && $0.properties["toolStatus"] == "error-redacted" })
+            assert(toolFacts.allSatisfy { $0.ruleId == "swift.toolchain.diagnostic.v1" && $0.evidenceTier == .tier4Unknown })
+            let gapKinds = Set(result.facts.filter { $0.factType == "AnalysisGap" }.compactMap { $0.properties["gapKind"] })
+            for kind in [
+                "swift-toolchain-timeout",
+                "swift-sourcekit-unavailable",
+                "xcodebuild-toolchain-unavailable",
+                "swift-macro-expansion-unsupported",
+                "swift-conditional-compilation-reduced",
+                "swift-objective-c-bridging-reduced",
+                "swift-selector-dynamic",
+                "swift-reflection-dynamic",
+                "swift-protocol-dispatch-reduced",
+                "swift-generated-code-reduced",
+                "swift-storyboard-wiring-unresolved",
+                "swift-nib-wiring-unresolved"
+            ] {
+                assert(gapKinds.contains(kind), "missing diagnostic gap \(kind)")
+            }
+            assert(result.facts.contains {
+                $0.factType == "AnalysisGap" &&
+                $0.properties["gapKind"] == "swift-macro-expansion-unsupported" &&
+                $0.evidence.filePath == "Sources/App/OffsetDrift.swift" &&
+                $0.evidence.startLine == 4
+            })
+            let report = try String(contentsOf: out.appendingPathComponent("report.md"), encoding: .utf8)
+            assert(report.contains("## Swift Diagnostics And Coverage"))
+            assert(report.contains("### Toolchain Status"))
+            assert(report.contains("### Reduced-Coverage Gap Kinds"))
+            let factsText = try String(contentsOf: out.appendingPathComponent("facts.ndjson"), encoding: .utf8)
+            assert(!factsText.contains(fixture.repo.path))
+            assert(!factsText.contains("/usr/bin"))
+            assert(!factsText.contains("Hidden"))
+            let out2 = fixture.temp.url.appendingPathComponent("scan-diagnostics-again")
+            let result2 = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: out2))
+            let diagnosticIds1 = result.facts.filter { $0.factType == "SwiftToolchainDiagnostic" || ($0.properties["gapKind"]?.hasPrefix("swift-") == true) }.map(\.factId).sorted()
+            let diagnosticIds2 = result2.facts.filter { $0.factType == "SwiftToolchainDiagnostic" || ($0.properties["gapKind"]?.hasPrefix("swift-") == true) }.map(\.factId).sorted()
+            assert(diagnosticIds1 == diagnosticIds2)
+        }
+    }
+
     static func oversizedFilesBecomeGaps() throws {
         let fixture = try SwiftFixture(extraFiles: [
             "Sources/App/Large.swift": String(repeating: "x", count: 128)
@@ -808,6 +900,19 @@ struct TraceMapSwiftSmokeTests {
         }
         return fact
     }
+}
+
+private func withEnvironment(_ key: String, _ value: String, _ body: () throws -> Void) throws {
+    let previous = getenv(key).map { String(cString: $0) }
+    setenv(key, value, 1)
+    defer {
+        if let previous {
+            setenv(key, previous, 1)
+        } else {
+            unsetenv(key)
+        }
+    }
+    try body()
 }
 
 private struct SwiftFixture {

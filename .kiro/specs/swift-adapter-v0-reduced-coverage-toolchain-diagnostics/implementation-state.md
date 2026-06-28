@@ -1,12 +1,11 @@
 # Swift Adapter v0 Reduced Coverage And Toolchain Diagnostics Implementation State
 
-Status: `ready-for-implementation`
+Status: `implemented`
 
 ## Branches
 
 - Spec branch: `codex/spec-swift-toolchain-diagnostics`
-- Intended implementation branch:
-  `codex/implement-swift-toolchain-diagnostics`
+- Implementation branch: `codex/implement-swift-toolchain-diagnostics`
 - Base: `dev`
 
 ## Issue Links
@@ -20,6 +19,24 @@ This spec is for structured Swift reduced-coverage and toolchain diagnostics.
 It does not implement SourceKit semantic enrichment, Xcode builds, package
 restores, simulator/device execution, storyboard wiring, runtime proof, or
 production impact claims.
+
+Implemented behavior:
+
+- Emits `SwiftToolchainDiagnostic` facts with safe status categories for
+  relevant Swift, SourceKit/sourcekit-lsp, Xcode, CocoaPods, and Carthage
+  probes.
+- Emits companion `AnalysisGap` facts for unavailable or timed-out relevant
+  tool probes.
+- Adds host-independent `TRACEMAP_SWIFT_TOOL_STATUS_OVERRIDES` test support for
+  forced diagnostic statuses.
+- Emits `swift.reduced-coverage.gap.v1` gaps for macro expansion boundaries,
+  conditional compilation, Objective-C bridging markers, dynamic selectors,
+  storyboard/xib wiring, generated-code markers, reflection-style lookups, and
+  protocol dispatch uncertainty.
+- Adds a local Swift report section for diagnostics and reduced-coverage gap
+  counts.
+- Adds checked-in sample `samples/swift-diagnostics-reduced`.
+- Updates `docs/VALIDATION.md` with the diagnostics sample scan.
 
 ## Safe Claims
 
@@ -38,16 +55,17 @@ production impact claims.
 
 ## Expected Validation
 
-- `swift build --package-path src/swift`
-- `swift run --package-path src/swift tracemap-swift-smoke-tests`
-- Swift reduced-coverage fixture scan.
-- `dotnet run --project src/dotnet/TraceMap.Cli -- export ...`
-- `dotnet run --project src/dotnet/TraceMap.Cli -- combine ...`
-- `dotnet run --project src/dotnet/TraceMap.Cli -- report ...`
-- `dotnet build src/dotnet/TraceMap.sln`
-- `dotnet test src/dotnet/TraceMap.sln`
-- `./scripts/check-private-paths.sh`
-- `git diff --check`
+- `swift build --package-path src/swift` - passed.
+- `swift run --package-path src/swift tracemap-swift-smoke-tests` - passed.
+- `TRACEMAP_SWIFT_TOOL_STATUS_OVERRIDES='swift=timeout,sourcekit-lsp=not-found,xcodebuild=error-redacted' swift run --package-path src/swift tracemap-swift scan --repo samples/swift-diagnostics-reduced --out /tmp/tracemap-swift-diagnostics-reduced` - passed.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- export --index /tmp/tracemap-swift-diagnostics-reduced/index.sqlite --out /tmp/tracemap-swift-diagnostics-export --format json` - passed.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- combine --index /tmp/tracemap-swift-diagnostics-reduced/index.sqlite --label swift --out /tmp/tracemap-swift-diagnostics-combined.sqlite` - passed.
+- `dotnet run --project src/dotnet/TraceMap.Cli -- report --index /tmp/tracemap-swift-diagnostics-combined.sqlite --out /tmp/tracemap-swift-diagnostics-report` - passed.
+- Redaction grep over generated diagnostics scan/export/report outputs - passed.
+- `dotnet build src/dotnet/TraceMap.sln` - passed.
+- `dotnet test src/dotnet/TraceMap.sln` - passed, 696 tests.
+- `./scripts/check-private-paths.sh` - passed.
+- `git diff --check` - passed.
 
 ## Notes
 
