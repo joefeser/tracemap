@@ -156,6 +156,12 @@ public enum SwiftScanEngine {
         gaps += MetadataGapFactory.gaps(scanRoot: repo, inventory: inventory)
         gaps += UnsupportedSwiftFeatureGapFactory.gaps(scanRoot: repo, inventory: inventory)
         gaps += syntax.gaps
+        let dependencies = DependencyExtractor.extract(scanRoot: repo, inventory: inventory)
+        let http = SwiftHttpExtractor.extract(scanRoot: repo, inventory: inventory)
+        let ui = SwiftUiExtractor.extract(scanRoot: repo, inventory: inventory)
+        gaps += dependencies.gaps
+        gaps += http.gaps
+        gaps += ui.gaps
         if inventory.contains(where: { $0.kind == "swiftpm-manifest" }) {
             gaps.append(CoverageGap(kind: "swiftpm-load-deferred", ruleId: RuleIds.analysisGap, message: "SwiftPM semantic package loading is deferred; checked-in Package.swift metadata is inventory-only."))
         }
@@ -184,7 +190,7 @@ public enum SwiftScanEngine {
             extractorVersions: [TraceMapSwiftVersion.extractorId: TraceMapSwiftVersion.extractorVersion]
         )
 
-        let facts = FactFactory.facts(manifest: manifest, inventory: inventory, gaps: gaps, toolchainDiagnostics: toolchain.diagnostics, scanRoot: repo, syntax: syntax)
+        let facts = FactFactory.facts(manifest: manifest, inventory: inventory, gaps: gaps, toolchainDiagnostics: toolchain.diagnostics, scanRoot: repo, syntax: syntax, dependencies: dependencies, http: http, ui: ui)
         try OutputWriter.write(outputPath: options.outputPath, manifest: manifest, facts: facts, inventory: inventory)
         return SwiftScanResult(manifest: manifest, facts: facts, inventory: inventory)
     }
@@ -855,7 +861,9 @@ enum SwiftHttpExtractor {
         let startIndex = String.Index(utf16Offset: min(start, text.utf16.count), in: text)
         let endIndex = String.Index(utf16Offset: min(end, text.utf16.count), in: text)
         let originalSlice = String(originalText[startIndex..<endIndex])
-        return regexMatches(#"\b\#(variable)\.httpMethod\s*=\s*"([^"]+)""#, in: originalSlice).map { match in
+        let searchableSlice = maskSwiftCommentsAndStringLiterals(originalSlice)
+        return regexMatches(#"\b\#(variable)\.httpMethod\s*=\s*"([^"]+)""#, in: originalSlice).compactMap { match in
+            guard isCodeRange(match.range, in: searchableSlice) else { return nil }
             let range = NSRange(location: start + match.range.location, length: match.range.length)
             return (range, capture(match, 1, in: originalSlice) ?? "")
         }
@@ -1832,7 +1840,10 @@ enum FactFactory {
         gaps: [CoverageGap],
         toolchainDiagnostics: [ToolchainDiagnostic] = [],
         scanRoot: URL,
-        syntax: SwiftSyntaxExtraction = SwiftSyntaxExtraction(declarations: [], imports: [], calls: [], constructions: [], relationships: [], gaps: [])
+        syntax: SwiftSyntaxExtraction = SwiftSyntaxExtraction(declarations: [], imports: [], calls: [], constructions: [], relationships: [], gaps: []),
+        dependencies: DependencyExtraction? = nil,
+        http: SwiftHttpExtraction? = nil,
+        ui: SwiftUiExtraction? = nil
     ) -> [CodeFact] {
         var facts: [CodeFact] = []
         facts.append(makeFact(
@@ -1887,7 +1898,7 @@ enum FactFactory {
             }
             facts += metadata
         }
-        let dependencies = DependencyExtractor.extract(scanRoot: scanRoot, inventory: inventory)
+        let dependencies = dependencies ?? DependencyExtractor.extract(scanRoot: scanRoot, inventory: inventory)
         facts += dependencyFacts(manifest: manifest, dependencies: dependencies.records, aggregateFactIdsByPath: aggregateFactIdsByPath)
         for gap in dependencies.gaps {
             facts.append(makeFact(
@@ -1908,7 +1919,7 @@ enum FactFactory {
                 ]
             ))
         }
-        let http = SwiftHttpExtractor.extract(scanRoot: scanRoot, inventory: inventory)
+        let http = http ?? SwiftHttpExtractor.extract(scanRoot: scanRoot, inventory: inventory)
         facts += httpFacts(manifest: manifest, records: http.records)
         for (gapOrdinal, gap) in http.gaps.enumerated() {
             facts.append(makeFact(
@@ -1930,7 +1941,7 @@ enum FactFactory {
                 ]
             ))
         }
-        let ui = SwiftUiExtractor.extract(scanRoot: scanRoot, inventory: inventory)
+        let ui = ui ?? SwiftUiExtractor.extract(scanRoot: scanRoot, inventory: inventory)
         facts += uiFacts(manifest: manifest, records: ui.records)
         for gap in ui.gaps {
             facts.append(makeFact(
@@ -1952,7 +1963,7 @@ enum FactFactory {
             ))
         }
         facts += syntaxFacts(manifest: manifest, syntax: syntax)
-        for gap in gaps {
+        for gap in gaps where !isSpecializedExtractorGap(gap.kind) {
             facts.append(makeFact(
                 manifest: manifest,
                 factType: "AnalysisGap",
@@ -1972,6 +1983,12 @@ enum FactFactory {
             ))
         }
         return facts
+    }
+
+    private static func isSpecializedExtractorGap(_ kind: String) -> Bool {
+        kind.hasPrefix("swift-dependency-")
+            || kind.hasPrefix("swift-http-")
+            || kind.hasPrefix("swift-ui-")
     }
 
     private static func toolchainFacts(manifest: ScanManifest, diagnostics: [ToolchainDiagnostic]) -> [CodeFact] {
@@ -2336,7 +2353,12 @@ enum FactFactory {
             "xcodebuild-toolchain-unavailable",
             "xcodebuild-toolchain-timeout"
         ]
-        if gaps.contains(where: { degradingKinds.contains($0.kind) }) {
+        if gaps.contains(where: { gap in
+            degradingKinds.contains(gap.kind)
+                || gap.kind.hasPrefix("swift-dependency-")
+                || gap.kind.hasPrefix("swift-http-")
+                || gap.kind.hasPrefix("swift-ui-")
+        }) {
             return "SwiftInventoryReduced"
         }
         return "SwiftInventoryFileBasedSucceeded"
