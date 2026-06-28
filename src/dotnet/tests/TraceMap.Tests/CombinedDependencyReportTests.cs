@@ -669,20 +669,23 @@ public sealed class CombinedDependencyReportTests
     }
 
     [Fact]
-    public async Task Combine_infers_jvm_and_python_languages()
+    public async Task Combine_infers_jvm_python_and_swift_languages()
     {
         using var temp = new TempDirectory();
         var jvmIndex = Path.Combine(temp.Path, "jvm.sqlite");
         var pythonIndex = Path.Combine(temp.Path, "python.sqlite");
+        var swiftIndex = Path.Combine(temp.Path, "swift.sqlite");
         var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
         SqliteIndexWriter.Write(jvmIndex, Manifest("jvm", "tracemap-jvm-mvp"), []);
         SqliteIndexWriter.Write(pythonIndex, Manifest("python", "tracemap-python/0.1.0"), []);
+        SqliteIndexWriter.Write(swiftIndex, Manifest("swift", "tracemap-swift/0.1.0"), []);
 
-        await CombinedIndexBuilder.CombineAsync(new CombineOptions([jvmIndex, pythonIndex], combinedPath, ["jvm", "python"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([jvmIndex, pythonIndex, swiftIndex], combinedPath, ["jvm", "python", "swift"]));
 
         var labels = await ReadLabelLanguagesAsync(combinedPath);
         Assert.Equal("jvm", labels["jvm"]);
         Assert.Equal("python", labels["python"]);
+        Assert.Equal("swift", labels["swift"]);
     }
 
     private static ScanManifest Manifest(

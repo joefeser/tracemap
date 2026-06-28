@@ -214,6 +214,7 @@ For every successful `tracemap property-flow --index <combined.sqlite> --propert
 - selector misses emit `SelectorNoMatch`; reduced coverage emits `UnknownAnalysisGap` rather than proof of no lineage.
 - missing optional combined precision tables emit `MissingOptionalSchema` gaps; missing route-flow schema emits `RouteFlowUnavailable` while preserving any available combined path evidence.
 - lineage paths and edges include rule IDs, evidence tiers, source labels, file spans, supporting fact IDs, and supporting edge IDs where available.
+- Markdown renders a compact `Static terminal context:` cue only when structured path-node `terminalContextKind` metadata is present, keeps it path-scoped, and treats absence as unknown rather than proof that no terminal surface exists.
 - classifications are limited to `StrongStaticLineage`, `ProbableStaticLineage`, `NeedsReviewLineage`, `UnknownAnalysisGap`, `NoLineageEvidence`, `SelectorNoMatch`, and `TruncatedByLimit`, with confidence derived deterministically from classification.
 - Markdown sections appear in this order: Summary, Query, Sources and Coverage, Selected Roots, Lineage Paths, Gaps, Evidence Inventory, Optional Observed Evidence, Limitations.
 - JSON includes `reportType: property-flow`, `version: 1.0`, `reportCoverage`, `coverageWarnings`, `query`, `snapshot`, `summary`, `sources`, `selectedRoots`, `lineagePaths`, `gaps`, `inventory`, `observedEvidence`, and `limitations`.

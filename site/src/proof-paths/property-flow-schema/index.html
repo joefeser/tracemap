@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Concept-level proof-path page explaining how property-flow reports unsupported route-flow schema as an explicit evidence gap."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Property-Flow Schema Gap | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/proof-paths/property-flow-schema/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Property-Flow Schema Gap">
+    <meta
+      property="og:description"
+      content="A concept-level explanation of unsupported route-flow schema gaps in property-flow review."
+    >
+    <meta property="og:url" content="https://tracemap.tools/proof-paths/property-flow-schema/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Property-flow proof path</p>
+        <h1>Show the schema gap before route context gets promoted.</h1>
+        <p class="hero-subhead">
+          This concept page explains why property-flow review needs route-flow
+          schema compatibility checks. When route-flow evidence exists but its
+          schema is incompatible, reviewers should see a rule-backed stop
+          condition instead of implied endpoint context.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence.
+          This page explains a checked-in static evidence boundary; it is not a
+          runtime trace, production execution claim, impact proof, UI behavior
+          proof, complete coverage claim, release approval, or AI analysis.
+        </p>
+        <nav class="hero-actions" aria-label="Property-flow schema gap links">
+          <a class="button primary" href="#property-flow-schema-statuses">Read schema statuses</a>
+          <a class="button secondary" href="/proof-paths/">Proof paths</a>
+          <a class="button secondary" href="/proof-paths/route-flow/">Route-flow story</a>
+          <a class="button secondary" href="/evidence/gaps/">Evidence gaps</a>
+          <a class="button secondary" href="/review-claim-checklist/">Review checklist</a>
+        </nav>
+      </section>
+
+      <section class="section split-section" id="property-flow-schema-purpose">
+        <div>
+          <p class="section-kicker">Why it matters</p>
+          <h2>Route-flow context is useful only when the schema contract is readable.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Property-flow question</strong><span>Which static property trail can be shown for a selected field, control, binding, model, DTO, symbol, or fact?</span></div>
+          <div><strong>Route-flow contribution</strong><span>Route-flow rows may add endpoint context only when property-flow can read the route key contract and tie that context to the selected property trail.</span></div>
+          <div><strong>Compatibility stop</strong><span><code>UnsupportedRouteFlowSchema</code> records that a route-flow signal exists, but it does not expose a compatible normalized route key column for property-flow.</span></div>
+          <div><strong>Review value</strong><span>The explicit gap keeps the reviewer from mistaking adjacent endpoint evidence for selected property-flow context.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="property-flow-schema-statuses">
+        <div class="section-header">
+          <p class="section-kicker">Schema statuses</p>
+          <h2>Different route-flow states lead to different review language.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article data-property-schema-status="unavailable">
+            <h3>RouteFlowUnavailable</h3>
+            <p>
+              The route-flow edge object is absent from the combined index.
+              Property-flow reports a schema availability gap and does not
+              promote route-flow-specific downstream traversal.
+            </p>
+            <p><strong>Review wording:</strong> route-flow-specific context is unavailable for this property-flow review.</p>
+          </article>
+          <article data-property-schema-status="empty">
+            <h3>Empty route-flow rows</h3>
+            <p>
+              The route-flow schema signal is readable, but it has no rows.
+              Property-flow keeps the stop explicit instead of inventing
+              endpoint context from nearby evidence.
+            </p>
+            <p><strong>Review wording:</strong> the route-flow table is readable but contributes no selected route rows.</p>
+          </article>
+          <article data-property-schema-status="unsupported">
+            <h3>UnsupportedRouteFlowSchema</h3>
+            <p>
+              Route-flow evidence exists, but the schema does not expose a
+              compatible normalized route key contract such as
+              <code>normalized_path_key</code>, <code>route_key</code>, or
+              <code>path_key</code>.
+            </p>
+            <p><strong>Review wording:</strong> the trail stopped for a schema-contract reason, not because route-flow evidence was proved absent.</p>
+          </article>
+          <article data-property-schema-status="available">
+            <h3>Available schema</h3>
+            <p>
+              Property-flow can read the route key contract and may evaluate
+              route-flow-specific context, but route context still needs a
+              rule-backed property-specific bridge before it is attached.
+            </p>
+            <p><strong>Review wording:</strong> readable route-flow schema is a prerequisite, not runtime or impact proof.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section" id="property-flow-schema-gap-fields">
+        <div>
+          <p class="section-kicker">Gap fields</p>
+          <h2>The unsupported schema row carries evidence, not vibes.</h2>
+          <p>
+            Current checked-in source behavior emits
+            <code>UnsupportedRouteFlowSchema</code> as a
+            <code>property-flow.schema.v1</code> gap with
+            <code>Tier4Unknown</code> and <code>UnknownAnalysisGap</code>.
+            The report keeps supporting IDs and source context attached so a
+            reviewer can see why the trail stopped.
+          </p>
+        </div>
+        <div class="output-list">
+          <div><code>ruleId</code><span><code>property-flow.schema.v1</code>; rule catalog limitations explain that schema gaps describe evidence availability only.</span></div>
+          <div><code>evidenceTier</code><span><code>Tier4Unknown</code>; the gap is an analysis boundary, not stronger proof.</span></div>
+          <div><code>classification</code><span><code>UnknownAnalysisGap</code>; the schema contract cannot support a stronger property-flow route-context conclusion.</span></div>
+          <div><code>supporting IDs</code><span>Selected fact IDs and source IDs stay with the gap when available, so the row remains auditable without raw source snippets.</span></div>
+          <div><code>commit evidence</code><span>Commit SHA evidence travels with the supporting sources when available.</span></div>
+          <div><code>observed schema context</code><span>The gap message records observed route-flow column names in public-safe form, showing which contract was missing.</span></div>
+          <div><code>source context</code><span>File path and line span from the selected anchor may be attached without publishing raw source text.</span></div>
+          <div><code>extractor versions</code><span>Property-flow extractor identity and version stay attached to report rows for reproducible review.</span></div>
+          <div><code>limitations</code><span>The limitation says route-flow absence limits downstream route-specific conclusions while existing combined path evidence may still be shown.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="property-flow-schema-review-language">
+        <div class="section-header">
+          <p class="section-kicker">Review language</p>
+          <h2>Use the gap to stop cleanly and hand off the right owner follow-up question.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Safe summary</strong><span>Property-flow found a route-flow schema signal, but the route key contract was unsupported, so route-flow-specific endpoint context was not promoted for this property trail.</span></div>
+          <div><strong>Safe next question</strong><span>Ask the schema or reporting owner whether the route-flow edge shape should expose a normalized route key column that property-flow can consume.</span></div>
+          <div><strong>Safe preservation</strong><span>Keep existing combined path evidence visible when available, with its own rule IDs, evidence tiers, supporting IDs, commit evidence, and limitations.</span></div>
+          <div><strong>Do not conclude</strong><span>Do not say route-flow evidence is absent, runtime behavior is known, UI behavior is proved, a change is impacted, coverage is complete, or a release is safe.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="property-flow-schema-boundaries" data-tm-boundary="property-flow-schema-boundaries">
+        <div>
+          <p class="section-kicker">Boundaries</p>
+          <h2>The schema gap is not a runtime or impact finding.</h2>
+        </div>
+        <ul>
+          <li><code>UnsupportedRouteFlowSchema</code> does not prove route-flow evidence is absent.</li>
+          <li>It does not prove runtime request execution, runtime binding, production traffic, endpoint performance, UI behavior, outage cause, business impact, release safety, operational safety, release approval, or complete coverage.</li>
+          <li>It is not AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, autonomous approval, or a replacement for tests, code review, source review, runtime observability, service-owner judgment, or human review.</li>
+          <li>Public copy must not publish raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, raw facts, raw SQLite content, analyzer logs, raw command output, hidden validation details, private sample names, private route values, or credential-like values.</li>
+        </ul>
+      </section>
+
+      <section class="section split-section" id="property-flow-schema-source-evidence">
+        <div>
+          <p class="section-kicker">Checked-in evidence</p>
+          <h2>Public wording stays tied to source evidence.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Reporter behavior</strong><span><code>PropertyFlowReport.cs</code> distinguishes unavailable, empty, unsupported, and available route-flow schema signals before adding route-flow context.</span></div>
+          <div><strong>Focused tests</strong><span><code>PropertyFlowTests.cs</code> checks the unsupported schema signal, gap kind, rule ID, classification, message context, supporting facts, commit evidence, file path, line span, and no fallback unavailable gap.</span></div>
+          <div><strong>Rule catalog</strong><span><code>property-flow.schema.v1</code> documents the unsupported route-flow schema gap and its limitation that unsupported schema is not route-flow absence proof.</span></div>
+          <div><strong>Acceptance notes</strong><span>Property-flow report acceptance criteria require schema gaps to stay explicit while preserving available combined path evidence.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="property-flow-schema-next">
+        <div class="section-header">
+          <p class="section-kicker">Continue review</p>
+          <h2>Carry the gap to the adjacent proof surfaces.</h2>
+        </div>
+        <div class="cta-grid">
+          <a href="/proof-paths/">Proof path index</a>
+          <a href="/proof-paths/route-flow/">Route-flow evidence story</a>
+          <a href="/evidence/gaps/">Evidence gap register</a>
+          <a href="/evidence/">Evidence model</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/static-vs-runtime/">Static vs runtime</a>
+          <a href="/review-claim-checklist/">Review claim checklist</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>TraceMap keeps property-flow schema gaps attached to rule IDs, tiers, source context, and limitations.</span>
+      <nav aria-label="Footer navigation">
+        <a href="/proof-paths/">proof paths</a>
+        <a href="/evidence/gaps/">gaps</a>
+        <a href="/limitations/">limitations</a>
+        <a href="/docs/">docs</a>
+        <a href="https://github.com/joefeser/tracemap">github</a>
+      </nav>
+    </footer>
+  </body>
+</html>

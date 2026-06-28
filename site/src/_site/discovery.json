@@ -511,6 +511,23 @@
     ]
   },
   {
+    "path": "/proof-paths/property-flow-schema/",
+    "title": "Property-Flow Schema Gap",
+    "summary": "Concept-level proof-path page explaining unsupported route-flow schema as an explicit property-flow evidence gap with rule ID, evidence tier, supporting IDs, commit evidence, observed schema context, limitations, and owner follow-up.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The route explains a checked-in schema compatibility stop condition; it is not a generated finding, runtime trace, production execution claim, impact proof, UI behavior proof, or complete coverage claim.",
+      "Unsupported route-flow schema means property-flow could not read the normalized route key contract it needs for route-flow-specific context; it does not prove route-flow evidence is absent."
+    ],
+    "nonClaims": [
+      "No runtime behavior, runtime request execution, runtime binding, production traffic, endpoint performance, outage cause, business impact, release safety, operational safety, release approval, complete coverage, production execution, impact proof, UI behavior proof, autonomous approval, or replacement for tests, code review, source review, runtime observability, service-owner judgment, or human review.",
+      "No AI impact analysis, LLM analysis, embeddings, vector databases, prompt classification, raw facts, raw SQLite content, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, private route values, hidden validation details, raw command output, or credential-like values are public property-flow schema-gap material."
+    ]
+  },
+  {
     "path": "/proof-paths/faq/",
     "title": "Proof Path FAQ",
     "summary": "Concept-level FAQ for reading proof paths, evidence tiers, coverage labels, limitations, review-packet context, missing-evidence gaps, and static-evidence boundaries.",

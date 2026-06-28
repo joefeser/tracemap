@@ -1,0 +1,6 @@
+// !$*UTF8*$!
+{
+  productType = com.apple.product-type.application;
+  name = Debug;
+  name = Release;
+}

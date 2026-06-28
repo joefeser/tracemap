@@ -1,0 +1,9 @@
+platform :ios, '16.0'
+
+target 'App' do
+  pod 'Alamofire', '~> 5.0'
+  pod 'RxSwift',
+      '~> 6.0'
+  pod dynamic_pod_name
+  pod 'LocalOnly', :path => '../LocalOnly'
+end
