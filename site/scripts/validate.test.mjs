@@ -68,6 +68,7 @@ import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { siteClaimGuardrailsRoute } from "./site-claim-guardrails.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
+import { swiftAdapterStoryRoute } from "./swift-adapter-story.mjs";
 import { swiftEvidenceLaneRoute } from "./swift-evidence-lane.mjs";
 import {
   stakeholderObjectionGuideRoute,
@@ -246,6 +247,7 @@ async function createDistFixture({
       siteClaimGuardrailsRoute,
       staticTriageRoute,
       staticVsRuntimeRoute,
+      swiftAdapterStoryRoute,
       swiftEvidenceLaneRoute,
       stakeholderObjectionGuideRoute,
       stakeholderQuestionIndexRoute
@@ -315,6 +317,7 @@ async function createDistFixture({
     siteClaimGuardrailsRoute,
     staticTriageRoute,
     staticVsRuntimeRoute,
+    swiftAdapterStoryRoute,
     swiftEvidenceLaneRoute,
     stakeholderObjectionGuideRoute,
     stakeholderQuestionIndexRoute,
@@ -711,6 +714,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === swiftEvidenceLaneRoute) {
     return readFile(new URL("../src/swift/index.html", import.meta.url), "utf8");
+  }
+
+  if (route === swiftAdapterStoryRoute) {
+    return readFile(new URL("../src/swift/story/index.html", import.meta.url), "utf8");
   }
 
   if (route === stakeholderObjectionGuideRoute) {
@@ -1527,6 +1534,23 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: [
           "No rendered UI proof, complete navigation proof, runtime network reachability proof, stored-value proof, query execution proof, live schema proof, dependency vulnerability/license/freshness proof, or build compatibility proof.",
           "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector databases, raw source snippets, raw SQL, secrets, local absolute paths, raw remotes, credentials, stored values, analyzer logs, or hidden validation details are public Swift claims."
+        ]
+      },
+      {
+        path: swiftAdapterStoryRoute,
+        title: "Why Swift Evidence Matters",
+        summary: "Shipped story layer explaining why TraceMap Swift v0 matters and how to read its static evidence without upgrading it into runtime, build, production, release, or AI-analysis proof.",
+        publicClaimLevel: "shipped",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/swift/",
+        limitations: [
+          "The story orients readers to shipped Swift v0 evidence and links to the proof matrix; it is not itself raw scanner output.",
+          "Swift v0 evidence remains deterministic static evidence with documented reduced-coverage and unsupported-surface gaps."
+        ],
+        nonClaims: [
+          "No runtime behavior, app navigation, rendered UI, complete navigation, user action, production usage, endpoint performance, deployment state, release safety, stored-value proof, query execution proof, live schema proof, build success proof, or complete Swift understanding.",
+          "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector databases, raw source snippets, raw SQL, secrets, local absolute paths, raw remotes, credentials, stored values, private scan artifacts, analyzer logs, or hidden validation details are public Swift story claims."
         ]
       },
       {
