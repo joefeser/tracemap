@@ -17,6 +17,7 @@ struct TraceMapSwiftSmokeTests {
         try defaultExcludesUsePathSegments()
         try bundleFactsHonorUserFilters()
         try projectAndPackageMetadataFactsAreEmittedSafely()
+        try dependencySurfaceFactsAreEmittedSafely()
         try swiftSyntaxDeclarationAndCallFactsAreStored()
         try swiftSyntaxSymbolRelationshipsAreStored()
         try parserDiagnosticsEmitHashedGapWithoutRawText()
@@ -336,6 +337,93 @@ struct TraceMapSwiftSmokeTests {
         assert(gapKinds.contains("swiftpm-resolved-unknown-version"))
         assert(gapKinds.contains("plist-binary-unsupported"))
         assert(gapKinds.contains("xcode-workspace-external-reference"))
+    }
+
+    static func dependencySurfaceFactsAreEmittedSafely() throws {
+        let fixture = try SwiftFixture(extraFiles: [
+            "Package.swift": """
+            // swift-tools-version: 6.0
+            import PackageDescription
+            let package = Package(
+              name: "Deps",
+              dependencies: [
+                .package(url: "https://example.invalid/Alamofire.git", from: "5.0.0"),
+                .package(path: "../LocalOnly")
+              ],
+              targets: [.executableTarget(name: "App")]
+            )
+            """,
+            "Package.resolved": """
+            {"version":2,"pins":[
+              {"identity":"alamofire","location":"https://example.invalid/Alamofire.git","state":{"version":"5.0.0","revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},
+              {"identity":"alamofire","location":"https://example.invalid/Alamofire.git","state":{"version":"5.0.1","revision":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}},
+              {"identity":"swift-argument-parser","location":"https://example.invalid/swift-argument-parser.git","state":{"branch":"main","revision":"cccccccccccccccccccccccccccccccccccccccc"}}
+            ]}
+            """,
+            "Unsupported/Package.resolved": #"{"version":3,"pins":[]}"#,
+            "Podfile": """
+            target 'App' do
+              pod 'Alamofire', '~> 5.0'
+              pod 'RxSwift',
+                  '~> 6.0'
+              pod dynamic_pod_name
+              pod 'LocalOnly', :path => '../LocalOnly'
+            end
+            """,
+            "Podfile.lock": """
+            PODS:
+              - Alamofire (5.0.0)
+              - RxSwift (6.0.0)
+
+            DEPENDENCIES:
+              - Alamofire
+              - RxSwift
+
+            SPEC CHECKSUMS:
+              Alamofire: publicchecksum1
+              Alamofire: duplicatechecksum
+              RxSwift: publicchecksum2
+            """,
+            "Cartfile": """
+            github "AcmeSecret/PaymentsSDK" ~> 1.0
+            git "https://example.invalid/UtilityKit.git" "main"
+            binary "https://example.invalid/BinaryKit.json" ~> 2.0
+            """,
+            "Cartfile.resolved": """
+            github "ReactiveX/RxSwift" "6.0.0"
+            binary "https://example.invalid/BinaryKit.json" "2.0.0"
+            """
+        ])
+        let out = fixture.temp.url.appendingPathComponent("scan")
+        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: out))
+        let declarations = result.facts.filter { $0.factType == "SwiftDependencyDeclared" }
+        let lockfileEntries = result.facts.filter { $0.factType == "SwiftDependencyLockfileEntryDeclared" }
+        assert(!declarations.isEmpty)
+        assert(!lockfileEntries.isEmpty)
+        assert(declarations.allSatisfy { $0.ruleId == "swift.dependency.manifest.v1" })
+        assert(lockfileEntries.contains { $0.ruleId == "swift.dependency.lockfile.swiftpm.v1" && $0.evidenceTier == .tier2Structural })
+        assert(lockfileEntries.contains { $0.ruleId == "swift.dependency.lockfile.text.v1" && $0.evidenceTier == .tier3SyntaxOrTextual })
+        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.dependency.analysis-gap.v1" && $0.properties["gapKind"] == "swift-dependency-local-path-omitted" })
+        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.dependency.analysis-gap.v1" && $0.properties["gapKind"] == "swift-dependency-lockfile-unsupported-schema" && $0.evidence.filePath == "Unsupported/Package.resolved" })
+        assert(!result.facts.contains { $0.factType == "SwiftDependencyLockfileEntryDeclared" && $0.evidence.filePath == "Unsupported/Package.resolved" })
+        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.properties["gapKind"] == "swift-dependency-lockfile-malformed" })
+        assert(result.facts.contains { $0.factType == "SwiftEcosystemMetadataDeclared" && $0.properties["podChecksumSectionHash"]?.count == 64 })
+        assert(result.facts.allSatisfy { $0.properties["stableDependencySurfaceKey"] == nil })
+        assert(result.facts.filter { $0.properties["dependencyIdentityStatus"] == "hashed" || $0.properties["dependencyIdentityStatus"] == "unsafe-omitted" }.allSatisfy { $0.properties["normalizedDependencyIdentity"] == nil })
+        let factsText = try String(contentsOf: out.appendingPathComponent("facts.ndjson"), encoding: .utf8)
+        assert(!factsText.contains("https://example.invalid"))
+        assert(!factsText.contains("../LocalOnly"))
+        assert(!factsText.contains("AcmeSecret"))
+        assert(!factsText.contains("PaymentsSDK"))
+        assert(!factsText.contains("stableDependencySurfaceKey"))
+        let aggregateLine = factsText.components(separatedBy: "\n").firstIndex { $0.contains("SwiftPackageManifestDeclared") } ?? -1
+        let dependencyLine = factsText.components(separatedBy: "\n").firstIndex { $0.contains("SwiftDependencyDeclared") } ?? -1
+        assert(aggregateLine >= 0 && dependencyLine > aggregateLine)
+        let report = try String(contentsOf: out.appendingPathComponent("report.md"), encoding: .utf8)
+        assert(report.contains("## Swift Dependency Metadata"))
+        assert(report.contains("swiftpm"))
+        assert(report.contains("cocoapods"))
+        assert(report.contains("carthage"))
     }
 
     static func swiftSyntaxDeclarationAndCallFactsAreStored() throws {
