@@ -113,8 +113,11 @@ test -f /tmp/tracemap-swift-dependency-surfaces/facts.ndjson
 test -f /tmp/tracemap-swift-http-api-client-surfaces/facts.ndjson
 test -f /tmp/tracemap-swift-http-api-client-surfaces/index.sqlite
 test -f /tmp/tracemap-swift-http-api-client-surfaces/report.md
+test -f /tmp/tracemap-swift-diagnostics-reduced/scan-manifest.json
 test -f /tmp/tracemap-swift-diagnostics-reduced/facts.ndjson
+test -f /tmp/tracemap-swift-diagnostics-reduced/index.sqlite
 test -f /tmp/tracemap-swift-diagnostics-reduced/report.md
+test -f /tmp/tracemap-swift-diagnostics-reduced/logs/analyzer.log
 test -f /tmp/tracemap-swift-metadata-reduced/scan-manifest.json
 test -f /tmp/tracemap-swift-metadata-unsupported/scan-manifest.json
 test -f /tmp/tracemap-no-swift/scan-manifest.json
