@@ -68,6 +68,7 @@ import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { siteClaimGuardrailsRoute } from "./site-claim-guardrails.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
+import { swiftEvidenceLaneRoute } from "./swift-evidence-lane.mjs";
 import {
   stakeholderObjectionGuideRoute,
   validateStakeholderObjectionGuideDist
@@ -245,6 +246,7 @@ async function createDistFixture({
       siteClaimGuardrailsRoute,
       staticTriageRoute,
       staticVsRuntimeRoute,
+      swiftEvidenceLaneRoute,
       stakeholderObjectionGuideRoute,
       stakeholderQuestionIndexRoute
     ])
@@ -313,6 +315,7 @@ async function createDistFixture({
     siteClaimGuardrailsRoute,
     staticTriageRoute,
     staticVsRuntimeRoute,
+    swiftEvidenceLaneRoute,
     stakeholderObjectionGuideRoute,
     stakeholderQuestionIndexRoute,
     "/use-cases/",
@@ -704,6 +707,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === staticVsRuntimeRoute) {
     return staticVsRuntimePage();
+  }
+
+  if (route === swiftEvidenceLaneRoute) {
+    return readFile(new URL("../src/swift/index.html", import.meta.url), "utf8");
   }
 
   if (route === stakeholderObjectionGuideRoute) {
@@ -1503,6 +1510,23 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: [
           "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, complete product coverage, incident root cause, service ownership, production dependency understanding, or test sufficiency proof.",
           "No AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis."
+        ]
+      },
+      {
+        path: swiftEvidenceLaneRoute,
+        title: "Swift Evidence Lane",
+        summary: "Shipped Swift v0 public evidence lane for static inventory, symbols and calls, surface discovery, storage/data surfaces, and evidence safety, anchored to PR #425.",
+        publicClaimLevel: "shipped",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/validation/",
+        limitations: [
+          "Swift v0 evidence is deterministic static evidence and does not prove runtime behavior, app navigation, build success, production usage, deployment state, or release safety.",
+          "Surface discovery and storage/data rows remain bounded by syntax, structural, textual, and reduced-coverage evidence."
+        ],
+        nonClaims: [
+          "No rendered UI proof, complete navigation proof, runtime network reachability proof, stored-value proof, query execution proof, live schema proof, dependency vulnerability/license/freshness proof, or build compatibility proof.",
+          "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector databases, raw source snippets, raw SQL, secrets, local absolute paths, raw remotes, credentials, stored values, analyzer logs, or hidden validation details are public Swift claims."
         ]
       },
       {

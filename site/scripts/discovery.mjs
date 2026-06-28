@@ -7,7 +7,7 @@ export const discoverySharedPrinciple = "No public conclusion without evidence."
 const sourceTypes = new Set(["site-page", "repo-doc"]);
 const hintCategories = ["start", "evidence", "limitations", "demo", "repo-doc", "roadmap", "use-case"];
 const hintCategorySet = new Set(hintCategories);
-const publicClaimLevels = new Set(["main", "demo", "concept", "planned", "dev-only", "hidden", "future"]);
+const publicClaimLevels = new Set(["main", "shipped", "demo", "concept", "planned", "dev-only", "hidden", "future"]);
 const nonShippedClaimLevels = new Set(["concept", "planned", "dev-only", "hidden", "future"]);
 const routeSections = {
   start: "Start Here",
