@@ -215,6 +215,7 @@ public static class EvidenceDocsExporter
     private const string GapChunkRuleId = "docs-export.chunk.gap.v1";
     private const string LimitationChunkRuleId = "docs-export.chunk.limitation.v1";
     private const string TerminalContextKindMetadataKey = "terminalContextKind";
+    private const long MaxPropertyFlowReportBytes = 4L * 1024 * 1024;
     private const string GeneratedFileStaleRuleId = "docs-export.validation.generated-file-stale.v1";
     private const string UserFileCollisionRuleId = "docs-export.validation.user-file-collision.v1";
     private const string UnsafeRejectedRuleId = "docs-export.validation.unsafe-value-rejected.v1";
@@ -893,6 +894,13 @@ public static class EvidenceDocsExporter
         {
             try
             {
+                if (new FileInfo(path).Length > MaxPropertyFlowReportBytes)
+                {
+                    chunks.Add(CreateGapChunk($"property-flow-report-too-large-{Hash(path, 16)}", SchemaGapRuleId, "input-too-large", "property-flow", sources, ["property-flow-report"], "hidden"));
+                    diagnostics.Add(CreateDiagnostic("InputTooLarge", SchemaGapRuleId, "/inputs/property-flow-report", "input-too-large", "property-flow-report"));
+                    continue;
+                }
+
                 var json = await File.ReadAllTextAsync(path, cancellationToken);
                 using var document = JsonDocument.Parse(json);
                 var root = document.RootElement;

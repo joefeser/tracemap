@@ -4300,7 +4300,7 @@ rules:
   - id: swift.package.module-identity.v1
     name: Swift package and module identity
     description: Reserved Swift package/module identity rule documenting how Swift v0 handles module identity evidence and unknown-module gaps.
-    evidenceTier: Tier2Structural or Tier4Unknown
+    evidenceTier: Tier2Structural
     emits:
       - AnalysisGap
     limitations:
