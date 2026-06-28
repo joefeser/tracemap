@@ -45,8 +45,9 @@ touchpoints without runtime claims.
    method/path metadata when available, safe hashes, and extractor version.
 2. WHEN source sets `httpMethod` to a static string literal THEN the adapter
    SHALL record the normalized method.
-3. WHEN method evidence is absent THEN the adapter SHALL record
-   `methodStatus=unknown` and MUST NOT infer a default.
+3. WHEN method evidence is absent THEN the adapter SHALL emit a reduced-coverage
+   gap and MUST NOT emit a shared `HttpCallDetected` with `normalizedPathKey`.
+   The adapter MUST NOT infer `GET`, `ANY`, or any default method.
 4. WHEN URL evidence contains a scheme/host/query/token/path that is unsafe to
    render THEN raw values SHALL be omitted or hashed; only normalized safe path
    shape MAY be rendered.

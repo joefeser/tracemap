@@ -62,6 +62,9 @@ Forbidden claims:
 - Limit URLRequest method association to syntax-local same-function variable
   name identity, first static assignment before first URLSession use, and no
   semantic shadowing resolution.
+- Gate shared projection: do not emit `HttpCallDetected` with
+  `normalizedPathKey` unless a static `httpMethod` is present, because current
+  shared readers can treat missing methods as broad `ANY` evidence.
 - Do not chase URL literals through intermediate variables in the first cut;
   emit unknown/dynamic path evidence and gaps instead.
 - For Moya targets, emit safe static path evidence when available but always

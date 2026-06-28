@@ -30,6 +30,8 @@
   compiled by that executable.
 - [ ] Add smoke assertions for dynamic/interpolated URL gaps.
 - [ ] Add smoke assertions for no default method inference.
+- [ ] Add smoke assertions that static path plus unknown/dynamic method emits a
+  gap and no shared path-projected `HttpCallDetected`.
 - [ ] Add smoke assertions for Moya partial target evidence.
 - [ ] Add smoke assertions for Alamofire method normalization and unsupported
   argument gaps.

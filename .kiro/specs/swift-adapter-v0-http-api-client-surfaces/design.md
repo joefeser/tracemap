@@ -126,6 +126,13 @@ a URLSession call, shadowed, assigned multiple method values, or has no static
 method literal before the first request use, record `methodStatus=unknown` or
 emit a method gap rather than inferring `GET`.
 
+Shared projection gate: Swift v0 MUST NOT emit a shared `HttpCallDetected` with
+`normalizedPathKey` unless a static `httpMethod` is also present. Existing
+combined readers treat missing methods as broad `ANY`-style evidence, which can
+overmatch server routes. If the path is static but the method is unknown,
+interpolated, or ambiguous, emit an `AnalysisGap` and optional role-prefixed
+hash evidence only; do not emit a projected path surface.
+
 The first implementation does not chase URL literals through intermediate
 variables. A pattern such as `let url = URL(string: "...")!` followed by
 `var request = URLRequest(url: url)` may still emit request/method evidence, but
@@ -160,13 +167,15 @@ Moya target output cases:
 
 | baseURL evidence | path evidence | Output |
 |---|---|---|
-| static | static | Emit `HttpCallDetected` with `normalizedPathKey` from the path, method if static, `pathStatus=present`, role-prefixed `hostHash`/`urlHash` when available, and a companion `AnalysisGap` with `gapKind=swift-http-moya-target-partial` because full route reachability/join is not proven. |
-| dynamic/missing | static | Emit `HttpCallDetected` with `normalizedPathKey`, `pathStatus=present`, and a companion `AnalysisGap` with `gapKind=swift-http-moya-target-partial`. |
+| static | static, method static | Emit `HttpCallDetected` with `normalizedPathKey` from the path, static `httpMethod`, `pathStatus=present`, role-prefixed `hostHash`/`urlHash` when available, and a companion `AnalysisGap` with `gapKind=swift-http-moya-target-partial` because full route reachability/join is not proven. |
+| dynamic/missing | static, method static | Emit `HttpCallDetected` with `normalizedPathKey`, static `httpMethod`, `pathStatus=present`, and a companion `AnalysisGap` with `gapKind=swift-http-moya-target-partial`. |
+| any | static, method dynamic/missing | Emit a gap only; do not emit a shared `HttpCallDetected` with `normalizedPathKey` because the shared reader would overmatch unknown methods. |
 | static | dynamic/missing | Emit a gap only; do not emit a definitive path surface. |
 | dynamic/missing | dynamic/missing | Emit one `swift-http-moya-target-partial` gap for the declaration boundary; do not emit a definitive path surface. |
 
-Missing or dynamic method evidence sets `methodStatus=unknown` or emits a
-method-specific gap when the method expression itself is visible but unsupported.
+Missing or dynamic method evidence emits a method-specific gap when the method
+expression itself is visible but unsupported. It must not create shared
+path-projected HTTP evidence.
 
 ## URL Normalization
 
@@ -214,6 +223,7 @@ Recommended gap kinds:
 
 - `swift-http-url-dynamic`
 - `swift-http-method-dynamic`
+- `swift-http-method-unknown-projection-omitted`
 - `swift-http-path-unsafe-omitted`
 - `swift-http-client-shape-unsupported`
 - `swift-http-moya-target-partial`
@@ -265,8 +275,10 @@ Add `samples/swift-http-api-client-surfaces/` with:
   `combine`, and `report`.
 - Combined projection: the combined report contains at least one `http-client`
   dependency surface with the expected `normalizedPathKey`.
-- Method safety: `methodStatus=unknown` when `URLRequest` has no unambiguous
-  static `httpMethod`; no default `GET` is inferred.
+- Method safety: `URLRequest` or Moya evidence without an unambiguous static
+  `httpMethod` emits `swift-http-method-unknown-projection-omitted` or
+  `swift-http-method-dynamic` and does not emit `HttpCallDetected` with
+  `normalizedPathKey`; no default `GET` or `ANY` is inferred.
 - Tier safety: every Swift v0 `HttpCallDetected` fact is
   `Tier3SyntaxOrTextual`; no Swift HTTP fact is promoted above syntax tier.
 - Force unwrap: `URL(string: "literal")!` produces the same kind of evidence as
@@ -279,8 +291,10 @@ Add `samples/swift-http-api-client-surfaces/` with:
   `AnalysisGap` with a closed `gapKind`, not a definitive endpoint.
 - Alamofire dynamic URL: an Alamofire request whose URL argument is a variable
   emits a gap and no definitive `HttpCallDetected`.
-- Moya partial: static path with dynamic base URL emits a path fact plus
-  `swift-http-moya-target-partial`.
+- Moya partial: static path with dynamic base URL and static method emits a path
+  fact plus `swift-http-moya-target-partial`.
+- Moya unknown method: static path with missing/dynamic method emits a gap only
+  and no shared path-projected `HttpCallDetected`.
 - Moya static target: static baseURL, path, and method emits a path fact plus
   `swift-http-moya-target-partial` and remains Tier3.
 - Alamofire verbs: static enum verbs normalize to standard uppercase methods;
