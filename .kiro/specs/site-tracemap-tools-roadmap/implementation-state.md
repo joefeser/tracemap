@@ -28,3 +28,31 @@ This phase adds a site-facing roadmap page at `/roadmap/`. The page frames site 
 ## Follow-Up
 
 Upgrade roadmap rows only when the relevant proof lands on `main` or exists as a reproducible public demo artifact.
+
+## Swift V0 Site Backlog
+
+Swift v0 was promoted to `main` in PR #425 at merge commit
+`e8813daaf763e277e7c5d88a2c0b2ad0b570f25a`. The following `not-started`
+backlog specs capture queued public-site story slices for shipped Swift v0
+capabilities:
+
+- `site-tracemap-tools-swift-v0-evidence-lane` - queued site story describing
+  the shipped Swift v0 static evidence lane.
+- `site-tracemap-tools-swift-static-inventory-story` - queued site story
+  describing shipped static inventory capability for packages/projects, source
+  files, module-ish metadata, and reduced coverage.
+- `site-tracemap-tools-swift-symbol-call-evidence-story` - queued site story
+  describing shipped syntax-backed declarations, call candidates, construction
+  candidates, and relationship evidence.
+- `site-tracemap-tools-swift-surface-discovery-story` - queued site story for
+  shipped/demo HTTP/API, UI, package, and dependency surface capability.
+- `site-tracemap-tools-swift-storage-data-surfaces-story` - queued site story
+  for shipped/demo CoreData, UserDefaults, Keychain, SQLite, and Realm surface
+  capability.
+- `site-tracemap-tools-swift-evidence-safety-story` - queued site story
+  describing shipped evidence safety, rule ID, tier, coverage-label, and
+  non-claim behavior.
+
+Keep these bounded to static evidence. Do not say Swift v0 proves runtime
+behavior, app navigation, production usage, build success, deployment state,
+release safety, stored values, or AI impact analysis.
