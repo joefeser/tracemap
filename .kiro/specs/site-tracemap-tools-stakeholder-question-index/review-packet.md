@@ -5,14 +5,13 @@ Readiness: implemented
 
 Public claim level: concept
 
-Review the `site-tracemap-tools-stakeholder-question-index` spec for
-implementation readiness.
+Review the `site-tracemap-tools-stakeholder-question-index` spec packet for
+implemented-state consistency.
 
-This is a spec-only public site phase. It should define a future public-safe
-stakeholder question index page or section that starts with reader questions
-and routes managers, engineers, reviewers, architects, incident participants,
-modernization planners, and agents or bots to the right TraceMap evidence
-surface.
+This implemented public site phase defines the public-safe stakeholder question
+index at `/questions/`. It starts with reader questions and routes managers,
+engineers, reviewers, architects, incident participants, modernization planners,
+and agents or bots to the right TraceMap evidence surface.
 
 Please inspect:
 
@@ -23,12 +22,12 @@ Please inspect:
 
 Review focus:
 
-- Does the spec stay implementation-free and leave future implementation tasks
-  unchecked?
-- Does the spec clearly frame the future page as an orientation/index surface,
+- Does the spec packet stay aligned with the implemented `/questions/` route and
+  completed implementation tasks?
+- Does the spec clearly frame the route as an orientation/index surface,
   not a new proof claim?
 - Does the route/placement guidance require a selected route and rejected
-  alternatives before future implementation?
+  alternatives in implementation state?
 - Does the question matrix require rows for manager planning, engineer
   endpoint/change review, incident-adjacent handoff, modernization planning,
   reviewer claim checking, demo evaluation, proof-source inspection, and
