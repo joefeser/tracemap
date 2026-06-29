@@ -1,7 +1,7 @@
 # Site TraceMap Tools Incident Evidence Handoff Design
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Overview

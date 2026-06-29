@@ -1,5 +1,9 @@
 # site-tracemap-tools-public-demo-result
 
+Status: implemented
+Readiness: implemented
+Public claim level: demo
+
 ## Status
 
 Implemented.

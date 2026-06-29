@@ -1,7 +1,7 @@
 # Site TraceMap Tools Review Room Demo Path Design
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Overview

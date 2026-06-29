@@ -1,5 +1,9 @@
 # Design
 
+Status: implemented
+Readiness: implemented
+Public claim level: concept
+
 ## Route
 
 `/legacy-modernization/review-handoff/` is a concept-level static page under `site/src/legacy-modernization/review-handoff/index.html`.

@@ -1,5 +1,9 @@
 # Implementation State
 
+Status: implemented
+Readiness: implemented
+Public claim level: concept
+
 ## Branch
 
 `codex/site-review-handoff`

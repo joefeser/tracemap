@@ -1,5 +1,9 @@
 # site-tracemap-tools-evidence-packets
 
+Status: implemented
+Readiness: implemented
+Public claim level: demo
+
 ## Status
 
 Implemented.

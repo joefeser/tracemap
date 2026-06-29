@@ -1,5 +1,9 @@
 # Tasks
 
+Status: implemented
+Readiness: implemented
+Public claim level: concept
+
 - [x] Create spec files for the bounded site slice.
 - [x] Record local-only spec sanity scope decision.
 - [x] Implement `/legacy-modernization/review-handoff/` static page.

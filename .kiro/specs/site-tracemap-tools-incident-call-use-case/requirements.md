@@ -1,7 +1,7 @@
 # Site TraceMap Tools Incident Call Use Case Requirements
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Public claim level: concept
 
 ## Summary

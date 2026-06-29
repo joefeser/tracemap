@@ -1,7 +1,7 @@
 # Site TraceMap Tools Static Vs Runtime Field Guide Requirements
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Summary
