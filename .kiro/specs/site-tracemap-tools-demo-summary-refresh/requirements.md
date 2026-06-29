@@ -1,5 +1,8 @@
 # Site TraceMap Tools Demo Summary Refresh Requirements
 
+Status: implemented
+Readiness: implemented
+
 Public claim level: hidden
 
 ## Objective

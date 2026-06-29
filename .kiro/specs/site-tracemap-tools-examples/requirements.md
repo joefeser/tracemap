@@ -1,5 +1,9 @@
 # Requirements
 
+Status: implemented
+Readiness: implemented
+Public claim level: demo
+
 ## Introduction
 
 The discovery pages explain TraceMap concepts, but visitors still need concrete

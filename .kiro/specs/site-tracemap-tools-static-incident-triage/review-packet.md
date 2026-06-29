@@ -1,5 +1,8 @@
 # TraceMap Kiro Review Packet
 
+Status: implemented
+Readiness: implemented
+
 Public claim level: concept
 
 Review the `site-tracemap-tools-static-incident-triage` implementation for

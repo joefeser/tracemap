@@ -1,7 +1,7 @@
 # Site TraceMap Tools LLM Discovery Pack Requirements
 
 Public claim level: demo
-Status: completed
+Status: implemented
 Readiness: implemented
 
 ## Objective

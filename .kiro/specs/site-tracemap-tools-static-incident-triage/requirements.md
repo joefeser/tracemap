@@ -1,7 +1,7 @@
 # Site TraceMap Tools Static Incident Triage Requirements
 
-Status: planned
-Readiness: draft
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Summary

@@ -1,5 +1,8 @@
 # Requirements
 
+Status: implemented
+Readiness: implemented
+
 ## Introduction
 
 The public site needs a guided first-run path that turns the existing demo,

@@ -1,5 +1,8 @@
 # Requirements
 
+Status: implemented
+Readiness: implemented
+
 ## Introduction
 
 The static site repeats top navigation across hand-authored pages and generated

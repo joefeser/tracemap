@@ -1,22 +1,21 @@
 # Site TraceMap Tools Stakeholder Question Index Requirements
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Summary
 
-Define a future public-safe question index page or section for
-`tracemap.tools`. The surface should start with the question a reader is
-asking, then route that reader to the right TraceMap evidence surface and proof
-path without upgrading the claim beyond what public-safe evidence supports.
+Define the implemented public-safe question index for `tracemap.tools`. The
+surface starts with the question a reader is asking, then routes that reader to
+the right TraceMap evidence surface and proof path without upgrading the claim
+beyond what public-safe evidence supports.
 
-This is a site-spec-only packet. It does not implement site code, scanner
-behavior, reducer behavior, generated artifacts, validation scripts, public
-copy changes, AI/LLM behavior, runtime telemetry collection, or agent
-automation.
+This implemented site packet does not change scanner behavior, reducer
+behavior, generated artifacts, AI/LLM behavior, runtime telemetry collection, or
+agent automation.
 
-The future surface is an orientation index, not a new proof claim. It should
+The surface is an orientation index, not a new proof claim. It should
 help managers, engineers, reviewers, architects, incident participants,
 modernization planners, and agents or bots find the right public-safe evidence
 surface while preserving TraceMap's deterministic static evidence boundaries.
@@ -27,12 +26,10 @@ No public conclusion without evidence.
 
 ## Claim Level Rationale
 
-Use `Public claim level: concept` for the page or section unless a future
-implementation phase identifies current public-safe evidence that clearly
-supports `demo` for the exact question-index content. The expected initial
-surface is navigational and explanatory: it points readers toward existing
-proof paths, limitation pages, demo result pages, and concept pages. It does
-not itself prove a new capability or publish new demo evidence.
+Use `Public claim level: concept` for the implemented route. The surface is
+navigational and explanatory: it points readers toward existing proof paths,
+limitation pages, demo result pages, and concept pages. It does not itself prove
+a new capability or publish new demo evidence.
 
 Do not upgrade the page to `demo` merely because some target routes are
 demo-backed. A row may link to a demo-backed evidence surface, but the

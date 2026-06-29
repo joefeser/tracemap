@@ -1,5 +1,8 @@
 # Site TraceMap Tools Incident Review Use Case Requirements
 
+Status: implemented
+Readiness: implemented
+
 Public claim level: concept
 
 ## Objective

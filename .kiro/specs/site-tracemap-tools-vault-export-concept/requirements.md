@@ -1,5 +1,9 @@
 # Requirements
 
+Status: implemented
+Readiness: implemented
+Public claim level: concept
+
 ## Introduction
 
 TraceMap needs a site-facing concept page for a future optional

@@ -1,7 +1,7 @@
 # Site TraceMap Tools Review Room Demo Path Tasks
 
 Status: implemented
-Readiness: ready-for-pr
+Readiness: implemented
 Public claim level: concept
 
 Keep task status current as implementation, validation, commit, PR, and ACK

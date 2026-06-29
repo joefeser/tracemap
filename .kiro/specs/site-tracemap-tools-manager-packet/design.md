@@ -1,5 +1,8 @@
 # Site TraceMap Tools Manager Packet Design
 
+Status: implemented
+Readiness: implemented
+
 Public claim level: demo
 
 ## Surface

@@ -1,5 +1,9 @@
 # site-tracemap-tools-legacy-validation-concept
 
+Status: implemented
+Readiness: implemented
+Public claim level: concept
+
 ## Status
 
 Implemented.
