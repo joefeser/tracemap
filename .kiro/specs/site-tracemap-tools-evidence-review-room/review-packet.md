@@ -1,7 +1,7 @@
 # TraceMap Kiro Review Packet
 
 Status: implemented
-Readiness: ready-for-review
+Readiness: implemented
 Public claim level: concept
 
 Review the `site-tracemap-tools-evidence-review-room` spec and future

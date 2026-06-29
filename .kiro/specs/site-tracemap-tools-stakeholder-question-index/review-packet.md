@@ -1,5 +1,8 @@
 # TraceMap Kiro Review Packet
 
+Status: implemented
+Readiness: implemented
+
 Public claim level: concept
 
 Review the `site-tracemap-tools-stakeholder-question-index` spec for

@@ -1,5 +1,9 @@
 # Review Packet
 
+Status: implemented
+Readiness: implemented
+Public claim level: concept
+
 ## Route
 
 `/legacy-modernization/review-handoff/`

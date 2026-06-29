@@ -1,5 +1,9 @@
 # Site Demo Summary Refresh Design
 
+Status: implemented
+Readiness: implemented
+Public claim level: hidden
+
 ## Overview
 
 The future implementation should add an explicit refresh workflow that converts

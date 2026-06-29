@@ -1,7 +1,7 @@
 # Evidence Handoff Template Review Packet
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 Review the `site-tracemap-tools-evidence-handoff-template` spec for future
