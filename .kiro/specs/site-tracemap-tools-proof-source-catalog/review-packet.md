@@ -1,5 +1,8 @@
 # TraceMap Kiro Review Packet
 
+Status: implemented
+Readiness: implemented
+
 Public claim level: demo
 
 Review the `site-tracemap-tools-proof-source-catalog` spec for implementation

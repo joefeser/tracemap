@@ -1,5 +1,8 @@
 # Site TraceMap Tools Public Visual Proof Assets Design
 
+Status: implemented
+Readiness: implemented
+
 Public claim level: demo
 
 ## Route

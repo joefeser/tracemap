@@ -1,7 +1,7 @@
 # Evidence Packet Examples Review Packet
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 ## Purpose

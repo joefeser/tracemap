@@ -1,7 +1,7 @@
 # TraceMap Kiro Review Packet
 
-Status: not-started
-Readiness: ready-for-implementation
+Status: implemented
+Readiness: implemented
 Public claim level: concept
 
 Review the `site-tracemap-tools-change-review-brief` spec packet for

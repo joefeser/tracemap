@@ -1,7 +1,7 @@
 # Site TraceMap Tools Review Room Demo Path Implementation State
 
 Status: implemented
-Readiness: ready-for-pr
+Readiness: implemented
 Public claim level: concept
 
 ## Branch
