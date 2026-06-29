@@ -2,17 +2,13 @@
 
 Status: implemented
 Readiness: implemented
-<!-- Site-code implementation is deferred to a future phase. This spec is
-ready for a future implementer to pick up, not a signal to implement on this
-spec branch. -->
 Public claim level: concept
 
 ## Design Purpose
 
-This design is separated from requirements because the future page needs a
-clear information architecture: readers start with a question, then follow a
-bounded proof path to an existing evidence surface. The design does not
-implement site code.
+This design is separated from requirements because the implemented `/questions/`
+page needs a clear information architecture: readers start with a question, then
+follow a bounded proof path to an existing evidence surface.
 
 ## Placement Options
 
