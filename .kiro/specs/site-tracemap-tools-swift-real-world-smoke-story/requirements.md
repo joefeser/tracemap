@@ -21,4 +21,3 @@ Publish the now-landed Swift v0 real-world API-client smoke validation as a publ
 
 - https://github.com/joefeser/tracemap/issues/439
 - https://github.com/joefeser/tracemap/issues/440
-
