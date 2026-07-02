@@ -2863,7 +2863,7 @@ enum FactFactory {
             ))
         }
         let http = http ?? SwiftHttpExtractor.extract(scanRoot: scanRoot, inventory: inventory)
-        facts += httpFacts(manifest: manifest, records: http.records)
+        facts += httpFacts(manifest: manifest, records: http.records, syntax: syntax)
         for (gapOrdinal, gap) in http.gaps.enumerated() {
             facts.append(makeFact(
                 manifest: manifest,
@@ -3016,9 +3016,19 @@ enum FactFactory {
         }
     }
 
-    private static func httpFacts(manifest: ScanManifest, records: [SwiftHttpRecord]) -> [CodeFact] {
+    private static func httpFacts(manifest: ScanManifest, records: [SwiftHttpRecord], syntax: SwiftSyntaxExtraction) -> [CodeFact] {
         records.map { record in
-            makeFact(
+            let context = httpSourceContext(for: record, declarations: syntax.declarations)
+            var properties = record.properties
+            if let context {
+                properties["containingDeclarationDisplayName"] = context.displayName
+                properties["containingDeclarationKind"] = context.kind
+                properties["containingDeclarationSymbolId"] = context.symbolId
+                properties["sourceContextStatus"] = "containing-declaration"
+            } else {
+                properties["sourceContextStatus"] = "unresolved"
+            }
+            return makeFact(
                 manifest: manifest,
                 factType: "HttpCallDetected",
                 ruleId: record.ruleId,
@@ -3026,12 +3036,43 @@ enum FactFactory {
                 filePath: record.filePath,
                 startLine: record.startLine,
                 endLine: record.endLine,
+                sourceSymbol: context?.symbolId,
                 targetSymbol: "\(record.method) \(record.normalizedPathKey)",
                 contractElement: record.normalizedPathKey,
                 identityDiscriminator: record.identityDiscriminator,
-                properties: record.properties
+                properties: properties
             )
         }
+    }
+
+    private struct SwiftHttpSourceContext {
+        let symbolId: String
+        let displayName: String
+        let kind: String
+    }
+
+    private static func httpSourceContext(for record: SwiftHttpRecord, declarations: [SwiftDeclarationEvidence]) -> SwiftHttpSourceContext? {
+        declarations
+            .filter { declaration in
+                declaration.filePath == record.filePath
+                    && declaration.startLine <= record.startLine
+                    && declaration.endLine >= record.endLine
+            }
+            .sorted { lhs, rhs in
+                let lhsSpan = lhs.endLine - lhs.startLine
+                let rhsSpan = rhs.endLine - rhs.startLine
+                if lhsSpan != rhsSpan { return lhsSpan < rhsSpan }
+                if lhs.startLine != rhs.startLine { return lhs.startLine > rhs.startLine }
+                return lhs.symbolId < rhs.symbolId
+            }
+            .first
+            .map { declaration in
+                SwiftHttpSourceContext(
+                    symbolId: declaration.symbolId,
+                    displayName: declaration.displaySignature,
+                    kind: declaration.kind
+                )
+            }
     }
 
     private static func uiFacts(manifest: ScanManifest, records: [SwiftUiRecord]) -> [CodeFact] {
