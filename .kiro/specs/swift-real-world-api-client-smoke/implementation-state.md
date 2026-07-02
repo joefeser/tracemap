@@ -19,16 +19,24 @@ publication.
 - The script scans selected repos with `tracemap-swift`, verifies required
   artifacts, and writes sanitized per-sample `summary.json` files plus
   `swift-real-world-smoke-summary.md`.
+- Required artifacts are validated for basic structure, not only file
+  existence: manifest JSON, facts NDJSON, SQLite quick check/fact count, and
+  non-empty report output.
 - Focused runs reject unknown labels and build Markdown summaries only from
   samples scanned in the current invocation, not stale summaries left in the
   output root.
+- Focused labels are whitespace-trimmed so comma-space lists work as expected.
+- `TRACEMAP_SKIP_BUILD=1` uses the previously built `tracemap-swift` binary
+  instead of invoking `swift run`.
 - `TRACEMAP_SWIFT_REAL_WORLD_OFFLINE=1` supports cache-only reruns when pinned
   commits are already present; missing commits fail explicitly instead of
   silently requiring network access.
 - Cached repositories verify their `origin` URL before reuse.
 - Cached repositories reset hard to the pinned commit before scanning so tracked
   local edits in a reused cache cannot affect results.
-- SQLite summary queries fail loudly if the generated index cannot be read.
+- SQLite summary queries fail loudly if the generated index cannot be read, and
+  coverage label extraction reads the indexed repo-level fact instead of
+  reparsing every NDJSON row.
 - Swift fact-id collision gaps are folded into final scan metadata and coverage
   labeling before artifacts are written.
 - The generated summaries use public repo slugs, pinned SHAs, artifact labels,
@@ -68,6 +76,8 @@ publication.
 - Focused summary isolation passed against a reused output root containing stale
   full-run artifacts; the generated Markdown included only `icecubesapp`.
 - `TRACEMAP_SWIFT_REAL_WORLD_REPOS=icecubesapp TRACEMAP_SWIFT_REAL_WORLD_OFFLINE=1 TRACEMAP_SKIP_BUILD=1 scripts/smoke-swift-real-world.sh /tmp/tracemap-swift-real-world-cache /tmp/tracemap-swift-real-world-smoke-review-2` passed after adding hard cache reset and final collision-gap metadata propagation.
+- `TRACEMAP_SWIFT_REAL_WORLD_REPOS='icecubesapp, does-not-exist' TRACEMAP_SKIP_BUILD=1 scripts/smoke-swift-real-world.sh ...` failed before scanning and printed the trimmed unknown label.
+- `TRACEMAP_SWIFT_REAL_WORLD_REPOS=' icecubesapp ' TRACEMAP_SWIFT_REAL_WORLD_OFFLINE=1 TRACEMAP_SKIP_BUILD=1 scripts/smoke-swift-real-world.sh /tmp/tracemap-swift-real-world-cache /tmp/tracemap-swift-real-world-smoke-434` passed using the built binary path, strict artifact validation, and indexed coverage-label lookup.
 - `TRACEMAP_SKIP_BUILD=1 scripts/smoke-swift-real-world.sh /tmp/tracemap-swift-real-world-cache /tmp/tracemap-swift-real-world-smoke-full` passed.
   - `icecubesapp`: 29,686 facts, 2,411 gaps, 4 HTTP/API, 601 UI,
     20 storage/data, 74 package/dependency.
