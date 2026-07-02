@@ -102,6 +102,35 @@ test("validateSwiftApiClientWalkthroughDist requires rule IDs in evidence rows",
   assert.match(errors.join("\n"), /missing rule ID swift\.http\.client-library\.v1/);
 });
 
+test("validateSwiftApiClientWalkthroughDist accepts spaced and reordered HTML attributes", async (t) => {
+  const source = await sourcePage();
+  const root = await createManagedSwiftApiClientDistFixture(t, {
+    pageHtml: source
+      .replace('<meta property="og:type" content="article">', '<meta content = "article" data-test="ok" property = "og:type">')
+      .replace(
+        '<tr data-swift-api-client-shape="urlsession-literal">',
+        '<tr class="shape-row" data-swift-api-client-shape = "urlsession-literal">'
+      )
+  });
+  const errors = [];
+
+  await validateSwiftApiClientWalkthroughDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
+test("validateSwiftApiClientWalkthroughDist requires coverage labels in evidence rows", async (t) => {
+  const source = await sourcePage();
+  const root = await createManagedSwiftApiClientDistFixture(t, {
+    pageHtml: source.replace("<td><code>CoverageRelative</code> or <code>ReducedCoverage</code></td>", "<td>Coverage pending</td>")
+  });
+  const errors = [];
+
+  await validateSwiftApiClientWalkthroughDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /missing coverage labels/);
+});
+
 test("validateSwiftApiClientWalkthroughDist rejects private material, raw artifacts, and unsupported claims", async (t) => {
   const source = await sourcePage();
   const localPathLeak = `${String.fromCharCode(47)}Users/example/private.swift`;

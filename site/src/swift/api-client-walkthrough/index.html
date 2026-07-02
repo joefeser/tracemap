@@ -97,6 +97,7 @@
                 <th scope="col">Evidence shape</th>
                 <th scope="col">Rule ID</th>
                 <th scope="col">Evidence tier</th>
+                <th scope="col">Coverage label</th>
                 <th scope="col">What reviewers may say</th>
                 <th scope="col">Required limitation</th>
               </tr>
@@ -106,6 +107,7 @@
                 <td><strong>URLSession literal request</strong></td>
                 <td><code>swift.http.urlsession.v1</code></td>
                 <td><code>Tier3SyntaxOrTextual</code></td>
+                <td><code>CoverageRelative</code> or <code>ReducedCoverage</code></td>
                 <td>A Swift source location contains static URLSession-adjacent HTTP evidence with a normalized method/path candidate.</td>
                 <td>Does not prove request execution, endpoint reachability, response handling, auth flow, backend compatibility, production traffic, or runtime behavior.</td>
               </tr>
@@ -113,6 +115,7 @@
                 <td><strong>URLRequest method and URL literal</strong></td>
                 <td><code>swift.http.urlsession.v1</code></td>
                 <td><code>Tier3SyntaxOrTextual</code></td>
+                <td><code>CoverageRelative</code> or <code>ReducedCoverage</code></td>
                 <td>A URLRequest literal, method assignment, and recognized URLSession use form a static HTTP candidate.</td>
                 <td>Does not prove method mutation at runtime, request success, credentials, retry behavior, backend compatibility, or live network traffic.</td>
               </tr>
@@ -120,6 +123,7 @@
                 <td><strong>Alamofire request literal</strong></td>
                 <td><code>swift.http.client-library.v1</code></td>
                 <td><code>Tier3SyntaxOrTextual</code></td>
+                <td><code>CoverageRelative</code> or <code>ReducedCoverage</code></td>
                 <td>A supported Alamofire call shape exposes a static client-library surface with method/path metadata where literals are present.</td>
                 <td>Does not prove Alamofire runtime configuration, interceptors, auth headers, request success, network reachability, or production use.</td>
               </tr>
@@ -127,6 +131,7 @@
                 <td><strong>Moya TargetType-style path</strong></td>
                 <td><code>swift.http.client-library.v1</code></td>
                 <td><code>Tier3SyntaxOrTextual</code></td>
+                <td><code>CoverageRelative</code> or <code>ReducedCoverage</code></td>
                 <td>A supported TargetType-style path/method shape can become static client-library surface evidence.</td>
                 <td>Does not prove baseURL composition, runtime target selection, plugin behavior, auth flow, backend compatibility, or request execution.</td>
               </tr>
