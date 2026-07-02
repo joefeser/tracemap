@@ -284,7 +284,7 @@ function normalizeBaseUrl(value, errors) {
     if (url.protocol !== "https:" && url.protocol !== "http:") {
       throw new Error("expected http or https URL");
     }
-    return url.href.replace(/\/+$/, "");
+    return url.origin;
   } catch {
     errors.push(withEvidence(`Swift claim-language checklist baseUrl must be a valid absolute URL: ${String(value)}`, sitemapArtifact));
     return null;
