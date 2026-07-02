@@ -20,6 +20,9 @@ Public claim level: demo after generated outputs are reviewed for publication.
 - The report remains static, coverage-relative evidence. It does not prove
   runtime network traffic, endpoint reachability, auth, deployment, branch
   feasibility, or user action.
+- Review-loop hardening added an output cleanup guard: the smoke refuses root-like
+  paths, paths outside the Swift route-flow smoke namespace, and existing
+  unmarked directories before running `rm -rf`.
 
 ## Validation
 
@@ -34,6 +37,7 @@ Public claim level: demo after generated outputs are reviewed for publication.
     source-local bridge evidence, touched files/symbols, limitations, and no raw
     fixture URL/secret leakage.
 - `bash -n scripts/smoke-swift-route-flow.sh` passed.
+- Unsafe output refusal checks for `/tmp` and a home-directory path passed.
 - `dotnet build src/dotnet/TraceMap.sln` passed.
 - `dotnet test src/dotnet/TraceMap.sln` passed: 697 tests.
 - `git diff --check` passed.

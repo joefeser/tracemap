@@ -22,12 +22,22 @@ case "$OUT_ROOT" in
     ;;
 esac
 
+case "$OUT_ROOT" in
+  "/tmp/tracemap-swift-route-flow-smoke"*|"/private/tmp/tracemap-swift-route-flow-smoke"*|"$ROOT_DIR/.tmp/tracemap-swift-route-flow-smoke"*)
+    ;;
+  *)
+    printf 'Refusing output directory outside the Swift route-flow smoke namespace: %s\n' "$OUT_ROOT" >&2
+    exit 2
+    ;;
+esac
+
 if [[ -e "$OUT_ROOT" && ! -f "$SAFETY_MARKER" ]]; then
   printf 'Refusing to delete unmarked smoke output directory: %s\n' "$OUT_ROOT" >&2
   printf 'Choose a new output path or remove it manually after inspection.\n' >&2
   exit 2
 fi
 
+printf 'Swift route-flow smoke output: %s\n' "$OUT_ROOT"
 rm -rf "$OUT_ROOT"
 mkdir -p "$OUT_ROOT"
 touch "$SAFETY_MARKER"
