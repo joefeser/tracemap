@@ -192,7 +192,8 @@ public enum SwiftScanEngine {
             extractorVersions: [TraceMapSwiftVersion.extractorId: TraceMapSwiftVersion.extractorVersion]
         )
 
-        let facts = FactFactory.facts(manifest: manifest, inventory: inventory, gaps: gaps, toolchainDiagnostics: toolchain.diagnostics, scanRoot: repo, syntax: syntax, dependencies: dependencies, http: http, ui: ui, storage: storage)
+        let rawFacts = FactFactory.facts(manifest: manifest, inventory: inventory, gaps: gaps, toolchainDiagnostics: toolchain.diagnostics, scanRoot: repo, syntax: syntax, dependencies: dependencies, http: http, ui: ui, storage: storage)
+        let facts = FactFactory.normalizeFacts(manifest: manifest, facts: rawFacts)
         try OutputWriter.write(outputPath: options.outputPath, manifest: manifest, facts: facts, inventory: inventory)
         return SwiftScanResult(manifest: manifest, facts: facts, inventory: inventory)
     }
@@ -2627,6 +2628,75 @@ enum DependencyExtractor {
 }
 
 enum FactFactory {
+    static func normalizeFacts(manifest: ScanManifest, facts: [CodeFact]) -> [CodeFact] {
+        var firstById: [String: CodeFact] = [:]
+        var collisionKeysById: [String: Set<String>] = [:]
+        var normalized: [CodeFact] = []
+
+        for fact in facts {
+            if let existing = firstById[fact.factId] {
+                if existing == fact {
+                    continue
+                }
+                collisionKeysById[fact.factId, default: [factCollisionKey(existing)]].insert(factCollisionKey(fact))
+                continue
+            }
+
+            firstById[fact.factId] = fact
+            normalized.append(fact)
+        }
+
+        var collisionGaps: [CodeFact] = []
+        for factId in collisionKeysById.keys.sorted() {
+            guard let representative = firstById[factId],
+                  let collisionKeys = collisionKeysById[factId],
+                  collisionKeys.count > 1 else {
+                continue
+            }
+            collisionGaps.append(makeFact(
+                manifest: manifest,
+                factType: "AnalysisGap",
+                ruleId: RuleIds.reducedCoverageGap,
+                evidenceTier: .tier4Unknown,
+                filePath: representative.evidence.filePath,
+                startLine: representative.evidence.startLine,
+                endLine: representative.evidence.endLine,
+                targetSymbol: "swift-fact-id-collision",
+                contractElement: "swift-fact-id-collision",
+                identityDiscriminator: sha256Hex(collisionKeys.sorted().joined(separator: "\n")),
+                properties: [
+                    "collisionFactIdHash": sha256Hex(factId),
+                    "discardedCollisionCount": String(collisionKeys.count - 1),
+                    "gapKind": "swift-fact-id-collision",
+                    "language": "swift",
+                    "staticEvidenceOnly": "true"
+                ]
+            ))
+        }
+
+        return normalized + collisionGaps.sorted(by: factCollisionKey)
+    }
+
+    private static func factCollisionKey(_ lhs: CodeFact, _ rhs: CodeFact) -> Bool {
+        factCollisionKey(lhs) < factCollisionKey(rhs)
+    }
+
+    private static func factCollisionKey(_ fact: CodeFact) -> String {
+        [
+            fact.factId,
+            fact.factType,
+            fact.ruleId,
+            fact.evidenceTier.rawValue,
+            fact.sourceSymbol ?? "",
+            fact.targetSymbol ?? "",
+            fact.contractElement ?? "",
+            fact.evidence.filePath,
+            String(fact.evidence.startLine),
+            String(fact.evidence.endLine),
+            fact.properties.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "\u{1f}")
+        ].joined(separator: "\u{1e}")
+    }
+
     static func facts(
         manifest: ScanManifest,
         inventory: [InventoryItem],

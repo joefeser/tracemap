@@ -61,6 +61,13 @@ Run the pinned public open-source smoke set when changing adapter behavior:
 scripts/smoke-open-source-repos.sh /tmp/tracemap-oss-cache /tmp/tracemap-oss-smoke
 ```
 
+Run the pinned real-world Swift API-client smoke when changing Swift adapter
+behavior or Swift public demo evidence:
+
+```bash
+scripts/smoke-swift-real-world.sh /tmp/tracemap-swift-real-world-cache /tmp/tracemap-swift-real-world-smoke
+```
+
 Run the public combined-path smoke when changing `combine`, `report`, `paths`, endpoint extraction, or dependency-surface extraction:
 
 ```bash
