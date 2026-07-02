@@ -41,7 +41,7 @@ test("validateSwiftApiClientArticleDist rejects unsupported claims outside bound
 
   await validateSwiftApiClientArticleDist({ dist: join(root, "dist"), errors });
 
-  assert.match(errors.join("\n"), /unsupported public claim outside a boundary section/);
+  assert.match(errors.join("\n"), /unsupported public claim/);
 });
 
 test("validateSwiftApiClientArticleDist permits non-claim wording inside boundary sections", async (t) => {
@@ -51,6 +51,52 @@ test("validateSwiftApiClientArticleDist permits non-claim wording inside boundar
       "</main>",
       '<section data-tm-boundary="claim-boundary"><p>TraceMap does not prove endpoint reachability, backend compatibility, request success, auth flow correctness, production traffic, API correctness, or runtime behavior.</p></section></main>'
     )
+  });
+  const errors = [];
+
+  await validateSwiftApiClientArticleDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
+test("validateSwiftApiClientArticleDist rejects affirmative claims inside boundary sections", async (t) => {
+  const source = await sourcePage();
+  const root = await createManagedSwiftApiClientArticleFixture(t, {
+    pageHtml: source.replace(
+      "</main>",
+      '<section data-tm-boundary="claim-boundary"><p>TraceMap proves endpoint reachability.</p></section></main>'
+    )
+  });
+  const errors = [];
+
+  await validateSwiftApiClientArticleDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /unsupported public claim/);
+});
+
+test("validateSwiftApiClientArticleDist strips nested boundary sections for raw-material checks", async (t) => {
+  const source = await sourcePage();
+  const root = await createManagedSwiftApiClientArticleFixture(t, {
+    pageHtml: source.replace(
+      "</main>",
+      '<section data-tm-boundary="claim-boundary"><section><p>facts.ndjson</p></section></section></main>'
+    )
+  });
+  const errors = [];
+
+  await validateSwiftApiClientArticleDist({ dist: join(root, "dist"), errors });
+
+  assert.deepEqual(errors, []);
+});
+
+test("validateSwiftApiClientArticleDist accepts flexible metadata and block attributes", async (t) => {
+  const source = await sourcePage();
+  const flexibleHtml = source
+    .replace('<meta property="og:type" content="article">', '<meta content = "article" data-test="ok" property = "og:type">')
+    .replace(`<link rel="canonical" href="https://tracemap.tools${swiftApiClientArticleRoute}">`, `<link href = "https://tracemap.tools${swiftApiClientArticleRoute}" data-test="ok" rel = "canonical">`)
+    .replaceAll("data-swift-api-blog-block=", "data-swift-api-blog-block = ");
+  const root = await createManagedSwiftApiClientArticleFixture(t, {
+    pageHtml: flexibleHtml
   });
   const errors = [];
 
