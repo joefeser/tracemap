@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Swift claim-language checklist for TraceMap reviewers: repeat Swift v0 claims only with public claim level, proof path, evidence tier, coverage label, limitation, and non-claim boundaries attached.">
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Swift Claim Language Checklist | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/swift/claim-language/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Swift Claim Language Checklist | TraceMap">
+    <meta property="og:description" content="A shipped Swift v0 reviewer checklist for safe public wording around static evidence discovery, proof paths, limitations, and non-claims.">
+    <meta property="og:url" content="https://tracemap.tools/swift/claim-language/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main data-swift-claim-language>
+      <section class="page-hero">
+        <p class="eyebrow">Swift reviewer checklist</p>
+        <h1>Repeat Swift claims only when the evidence label travels with them.</h1>
+        <p class="hero-subhead">
+          Swift v0 is shipped as static evidence discovery. This checklist keeps
+          public copy tied to proof paths, rule-backed evidence, coverage labels,
+          limitations, and non-claims before a reviewer repeats it.
+        </p>
+        <p class="hero-note">
+          Public claim level: shipped. Proof: PR
+          <a href="https://github.com/joefeser/tracemap/pull/425">#425</a>.
+          The checklist supports public wording review; it does not upgrade
+          static evidence into runtime API correctness or complete Swift semantic analysis.
+        </p>
+        <nav class="hero-actions" aria-label="Swift claim-language proof links">
+          <a class="button primary" href="/swift/">Swift evidence lane</a>
+          <a class="button secondary" href="/swift/real-world-smoke/">Real-world smoke proof</a>
+          <a class="button secondary" href="/swift/evidence-safety/">Evidence safety</a>
+          <a class="button secondary" href="/site-claim-guardrails/">Claim guardrails</a>
+        </nav>
+      </section>
+
+      <section class="section" aria-labelledby="swift-claim-checks-heading">
+        <div class="section-header">
+          <p class="section-kicker">Checklist</p>
+          <h2 id="swift-claim-checks-heading">A Swift claim is repeatable only after these checks pass.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-swift-claim-checklist>
+            <caption>
+              Reviewer checks for public Swift wording. Each row is a gate before
+              stronger wording appears on the site, in a post, or in a handoff.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Check</th>
+                <th scope="col">Required evidence</th>
+                <th scope="col">Allowed wording</th>
+                <th scope="col">Block or downgrade when</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-swift-claim-check="claim-level">
+                <td><strong>Public claim level</strong></td>
+                <td><code>shipped</code>, <code>demo</code>, <code>concept</code>, or <code>hidden</code> is attached.</td>
+                <td>Use shipped only for Swift v0 behavior landed on <code>main</code>; use demo for checked-in public-safe generated summaries.</td>
+                <td>The capability is dev-only, private-only, future-facing, or lacks a public proof path.</td>
+              </tr>
+              <tr data-swift-claim-check="proof-path">
+                <td><strong>Proof path</strong></td>
+                <td>A public route or repository document backs the sentence before publication.</td>
+                <td>Link to the <a href="/swift/">Swift evidence lane</a>, <a href="/swift/real-world-smoke/">real-world smoke proof</a>, or <a href="/validation/">validation</a>.</td>
+                <td>The only support is private local output, raw generated artifacts, unpublished branch state, or memory from a review.</td>
+              </tr>
+              <tr data-swift-claim-check="evidence-tier">
+                <td><strong>Evidence tier</strong></td>
+                <td>Rule ID, evidence tier, line span or supporting ID, and commit SHA are available in the source evidence packet.</td>
+                <td>Say static, syntax, structural, textual, reduced coverage, or unknown when those labels match the packet.</td>
+                <td>The sentence implies compiler semantics, runtime dispatch, endpoint reachability, live storage, or release safety without reducer-backed proof.</td>
+              </tr>
+              <tr data-swift-claim-check="coverage-label">
+                <td><strong>Coverage label</strong></td>
+                <td>Coverage label and limitation are repeated next to the claim.</td>
+                <td>Use reduced coverage for macro, generated-code, unavailable-module, Objective-C bridge, storyboard/nib, conditional-compilation, protocol-dispatch, or unsupported-surface gaps.</td>
+                <td>The wording hides uncertainty or turns a candidate into a guarantee.</td>
+              </tr>
+              <tr data-swift-claim-check="non-claim">
+                <td><strong>Non-claim boundary</strong></td>
+                <td>Runtime, API correctness, build, simulator/device, production, storage, and AI-analysis boundaries stay explicit.</td>
+                <td>Say TraceMap inventories and reports static Swift evidence where rules support it.</td>
+                <td>The sentence says or implies runtime behavior, API correctness, production usage, stored values, query execution, live schema, complete Swift semantic analysis, or AI impact analysis.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">Approved shape</p>
+          <h2>Use claim language that names the boundary in the same breath.</h2>
+        </div>
+        <div class="detail-list">
+          <div data-swift-claim-example="safe-shipped"><strong>Safe shipped</strong><span>Swift v0 is available for deterministic static evidence discovery over supported Swift repository surfaces.</span></div>
+          <div data-swift-claim-example="safe-demo"><strong>Safe demo</strong><span>The real-world smoke page shows pinned public Swift API-client samples and public-safe generated summaries for static artifact generation.</span></div>
+          <div data-swift-claim-example="safe-gap"><strong>Safe gap</strong><span>Reduced coverage is expected when SwiftSyntax, project context, generated code, macros, bridges, or unavailable modules limit what TraceMap can prove.</span></div>
+          <div data-swift-claim-example="safe-future"><strong>Future semantic depth</strong><span>Future Swift semantic-depth work stays concept-level until the implementation lands, public-safe proof exists, and the claim level is upgraded.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" aria-labelledby="swift-blocked-wording-heading">
+        <div>
+          <p class="section-kicker">Blocked wording</p>
+          <h2 id="swift-blocked-wording-heading">Do not let stronger product language sneak in through Swift copy.</h2>
+        </div>
+        <ul>
+          <li>Do not claim runtime behavior, runtime API correctness, endpoint reachability, backend compatibility, app navigation, rendered UI, user action, production usage, deployment state, release safety, stored values, query execution, live schema, or complete Swift semantic analysis.</li>
+          <li>Do not claim Xcode build proof, SwiftPM restore proof, simulator/device execution proof, package compatibility, dependency freshness, dependency license status, vulnerability status, or operational safety.</li>
+          <li>Do not describe TraceMap scanner or reducer work as AI impact analysis, LLM analysis, prompt-based classification, embedding-backed search, or vector database analysis.</li>
+          <li>Do not publish raw generated artifacts, raw source snippets, raw SQL, secrets, credentials, local absolute paths, raw remotes, stored values, private scan artifacts, analyzer logs, or hidden validation details.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Proof path</p>
+          <h2>Use these before publishing Swift wording.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/swift/">Swift evidence lane</a>
+          <a href="/swift/story/">Why Swift evidence matters</a>
+          <a href="/swift/real-world-smoke/">Swift real-world smoke proof</a>
+          <a href="/swift/static-inventory/">Swift static inventory</a>
+          <a href="/swift/symbols-calls/">Swift symbols and calls</a>
+          <a href="/swift/surface-discovery/">Swift surface discovery</a>
+          <a href="/swift/storage-data/">Swift storage and data surfaces</a>
+          <a href="/swift/evidence-safety/">Swift evidence safety</a>
+          <a href="/site-claim-guardrails/">Site claim guardrails</a>
+          <a href="/review-claim-checklist/">Review claim checklist</a>
+          <a href="/proof-source-catalog/">Proof source catalog</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/limitations/reduced-coverage/">Reduced coverage</a>
+          <a href="/validation/">Validation</a>
+          <a href="https://github.com/joefeser/tracemap/pull/425">Swift v0 PR #425</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Next, compare this checklist with the
+        <a href="/site-claim-guardrails/">site claim guardrails</a>
+        before repeating a Swift v0 claim.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
