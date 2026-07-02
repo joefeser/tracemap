@@ -15,4 +15,3 @@ Claim boundary:
 
 - Safe: Swift v0 is available for static evidence discovery; the smoke harness uses pinned public samples and generated sanitized summaries.
 - Not safe: runtime/API correctness, simulator/device behavior, build success, SwiftPM restore, app execution, network calls, auth flows, production telemetry, endpoint reachability, backend compatibility, complete navigation, package compatibility, production use, impact, or complete Swift semantic analysis.
-

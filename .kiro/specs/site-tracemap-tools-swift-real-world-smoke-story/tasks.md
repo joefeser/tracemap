@@ -10,4 +10,3 @@ Public claim level: shipped
 - [x] Add focused site validator and tests for the new route.
 - [x] Run focused tests and site validation.
 - [x] Commit, push, and create a pull request.
-

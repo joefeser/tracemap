@@ -25,4 +25,3 @@ and terminal HTTP surface.
    from the Swift fixture appear in generated route-flow outputs.
 7. Documentation SHALL explain the command and frame the result as
    coverage-relative static evidence, not runtime reachability.
-

@@ -20,4 +20,3 @@ Public claim level: shipped
 ## Non-Claims
 
 No runtime/API correctness, simulator/device behavior, Xcode build proof, SwiftPM restore proof, app execution proof, network-call proof, auth-flow proof, production telemetry, endpoint reachability, backend compatibility, complete app navigation, package compatibility, production use, impact, complete Swift semantic analysis, or AI impact analysis.
-
