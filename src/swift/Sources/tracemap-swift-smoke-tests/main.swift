@@ -500,6 +500,7 @@ struct TraceMapSwiftSmokeTests {
         enum MissingMethodAPI: TargetType {
           var path: String { "/v1/missing-method" }
         }
+        struct CompactClient { func run() { AF.request("https://api.example.invalid/v1/compact", method: .get) } }
         enum Moya { enum Method { case get } }
         enum AF { static func request(_ value: String, method: Method) {}; enum Method { case get; case put } }
         enum Alamofire { static func request(_ value: String, method: Method) {}; enum Method { case post } }
@@ -511,10 +512,12 @@ struct TraceMapSwiftSmokeTests {
         assert(httpFacts.count >= 4)
         assert(httpFacts.allSatisfy { $0.evidenceTier == .tier3SyntaxOrTextual })
         assert(httpFacts.allSatisfy { $0.properties["httpMethod"] != nil && $0.properties["normalizedPathKey"] != nil })
+        assert(httpFacts.allSatisfy { $0.sourceSymbol != nil && $0.properties["sourceContextStatus"] == "containing-declaration" })
         assert(httpFacts.contains { $0.ruleId == "swift.http.urlsession.v1" && $0.properties["httpMethod"] == "POST" && $0.properties["normalizedPathKey"] == "/v1/users/{}/roles" && $0.properties["queryStatus"] == "present-omitted" })
         assert(httpFacts.contains { $0.properties["httpMethod"] == "DELETE" && $0.properties["normalizedPathKey"] == "/v1/sessions/{}" && $0.properties["queryStatus"] == "absent" })
-        assert(httpFacts.contains { $0.ruleId == "swift.http.client-library.v1" && $0.properties["framework"] == "alamofire" && $0.properties["httpMethod"] == "GET" })
-        assert(httpFacts.contains { $0.properties["framework"] == "moya" && $0.properties["swiftClientKind"] == "moya" && $0.properties["httpMethod"] == "GET" })
+        assert(httpFacts.contains { $0.ruleId == "swift.http.client-library.v1" && $0.properties["framework"] == "alamofire" && $0.properties["httpMethod"] == "GET" && $0.properties["sourceContextStatus"] == "containing-declaration" })
+        assert(httpFacts.contains { $0.properties["framework"] == "moya" && $0.properties["swiftClientKind"] == "moya" && $0.properties["httpMethod"] == "GET" && $0.properties["containingDeclarationKind"] == "property" && $0.properties["containingDeclarationDisplayName"] == "property path" })
+        assert(httpFacts.contains { $0.properties["framework"] == "alamofire" && $0.properties["normalizedPathKey"] == "/v1/compact" && $0.properties["containingDeclarationKind"] == "function" && ($0.properties["containingDeclarationDisplayName"] ?? "").contains("run") })
         assert(httpFacts.allSatisfy { $0.properties["methodName"] == nil && $0.properties["surfaceKind"] == nil })
         let gapKinds = Set(result.facts.filter { $0.factType == "AnalysisGap" }.compactMap { $0.properties["gapKind"] })
         assert(gapKinds.contains("swift-http-method-unknown-projection-omitted"))

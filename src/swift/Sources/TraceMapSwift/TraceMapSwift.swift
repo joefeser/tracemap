@@ -2863,7 +2863,7 @@ enum FactFactory {
             ))
         }
         let http = http ?? SwiftHttpExtractor.extract(scanRoot: scanRoot, inventory: inventory)
-        facts += httpFacts(manifest: manifest, records: http.records)
+        facts += httpFacts(manifest: manifest, records: http.records, syntax: syntax)
         for (gapOrdinal, gap) in http.gaps.enumerated() {
             facts.append(makeFact(
                 manifest: manifest,
@@ -3016,9 +3016,27 @@ enum FactFactory {
         }
     }
 
-    private static func httpFacts(manifest: ScanManifest, records: [SwiftHttpRecord]) -> [CodeFact] {
-        records.map { record in
-            makeFact(
+    private static func httpFacts(manifest: ScanManifest, records: [SwiftHttpRecord], syntax: SwiftSyntaxExtraction) -> [CodeFact] {
+        let declarationsByFile = Dictionary(grouping: syntax.declarations, by: \.filePath)
+        var declarationsById: [String: SwiftDeclarationEvidence] = [:]
+        for declaration in syntax.declarations {
+            declarationsById[declaration.symbolId] = declaration
+        }
+        return records.map { record in
+            let context = httpSourceContext(
+                for: record,
+                declarations: declarationsByFile[record.filePath] ?? [],
+                declarationsById: declarationsById)
+            var properties = record.properties
+            if let context {
+                properties["containingDeclarationDisplayName"] = context.displayName
+                properties["containingDeclarationKind"] = context.kind
+                properties["containingDeclarationSymbolId"] = context.symbolId
+                properties["sourceContextStatus"] = "containing-declaration"
+            } else {
+                properties["sourceContextStatus"] = "unresolved"
+            }
+            return makeFact(
                 manifest: manifest,
                 factType: "HttpCallDetected",
                 ruleId: record.ruleId,
@@ -3026,12 +3044,65 @@ enum FactFactory {
                 filePath: record.filePath,
                 startLine: record.startLine,
                 endLine: record.endLine,
+                sourceSymbol: context?.symbolId,
                 targetSymbol: "\(record.method) \(record.normalizedPathKey)",
                 contractElement: record.normalizedPathKey,
                 identityDiscriminator: record.identityDiscriminator,
-                properties: record.properties
+                properties: properties
             )
         }
+    }
+
+    private struct SwiftHttpSourceContext {
+        let symbolId: String
+        let displayName: String
+        let kind: String
+    }
+
+    private static func httpSourceContext(
+        for record: SwiftHttpRecord,
+        declarations: [SwiftDeclarationEvidence],
+        declarationsById: [String: SwiftDeclarationEvidence]
+    ) -> SwiftHttpSourceContext? {
+        var best: SwiftDeclarationEvidence?
+        for declaration in declarations where declaration.startLine <= record.startLine && declaration.endLine >= record.endLine {
+            if best.map({ httpSourceContextIsBetter(declaration, than: $0, declarationsById: declarationsById) }) ?? true {
+                best = declaration
+            }
+        }
+        return best.map { declaration in
+            SwiftHttpSourceContext(
+                symbolId: declaration.symbolId,
+                displayName: declaration.displaySignature,
+                kind: declaration.kind
+            )
+        }
+    }
+
+    private static func httpSourceContextIsBetter(
+        _ candidate: SwiftDeclarationEvidence,
+        than current: SwiftDeclarationEvidence,
+        declarationsById: [String: SwiftDeclarationEvidence]
+    ) -> Bool {
+        let candidateSpan = candidate.endLine - candidate.startLine
+        let currentSpan = current.endLine - current.startLine
+        if candidateSpan != currentSpan { return candidateSpan < currentSpan }
+        if candidate.startLine != current.startLine { return candidate.startLine > current.startLine }
+        let candidateDepth = declarationDepth(candidate, declarationsById: declarationsById)
+        let currentDepth = declarationDepth(current, declarationsById: declarationsById)
+        if candidateDepth != currentDepth { return candidateDepth > currentDepth }
+        return candidate.symbolId < current.symbolId
+    }
+
+    private static func declarationDepth(_ declaration: SwiftDeclarationEvidence, declarationsById: [String: SwiftDeclarationEvidence]) -> Int {
+        var depth = 0
+        var next = declaration.containingSymbolId
+        var seen: Set<String> = []
+        while let symbolId = next, seen.insert(symbolId).inserted {
+            depth += 1
+            next = declarationsById[symbolId]?.containingSymbolId
+        }
+        return depth
     }
 
     private static func uiFacts(manifest: ScanManifest, records: [SwiftUiRecord]) -> [CodeFact] {
