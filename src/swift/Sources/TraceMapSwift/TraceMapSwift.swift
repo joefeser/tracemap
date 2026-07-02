@@ -3052,7 +3052,8 @@ enum FactFactory {
     }
 
     private static func httpSourceContext(for record: SwiftHttpRecord, declarations: [SwiftDeclarationEvidence]) -> SwiftHttpSourceContext? {
-        declarations
+        let declarationsById = Dictionary(uniqueKeysWithValues: declarations.map { ($0.symbolId, $0) })
+        return declarations
             .filter { declaration in
                 declaration.filePath == record.filePath
                     && declaration.startLine <= record.startLine
@@ -3063,6 +3064,9 @@ enum FactFactory {
                 let rhsSpan = rhs.endLine - rhs.startLine
                 if lhsSpan != rhsSpan { return lhsSpan < rhsSpan }
                 if lhs.startLine != rhs.startLine { return lhs.startLine > rhs.startLine }
+                let lhsDepth = declarationDepth(lhs, declarationsById: declarationsById)
+                let rhsDepth = declarationDepth(rhs, declarationsById: declarationsById)
+                if lhsDepth != rhsDepth { return lhsDepth > rhsDepth }
                 return lhs.symbolId < rhs.symbolId
             }
             .first
@@ -3073,6 +3077,17 @@ enum FactFactory {
                     kind: declaration.kind
                 )
             }
+    }
+
+    private static func declarationDepth(_ declaration: SwiftDeclarationEvidence, declarationsById: [String: SwiftDeclarationEvidence]) -> Int {
+        var depth = 0
+        var next = declaration.containingSymbolId
+        var seen: Set<String> = []
+        while let symbolId = next, seen.insert(symbolId).inserted {
+            depth += 1
+            next = declarationsById[symbolId]?.containingSymbolId
+        }
+        return depth
     }
 
     private static func uiFacts(manifest: ScanManifest, records: [SwiftUiRecord]) -> [CodeFact] {
