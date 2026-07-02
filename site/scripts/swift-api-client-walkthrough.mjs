@@ -198,7 +198,7 @@ async function validatePage({ pagePath, errors }) {
     errors.push(withEvidence("Swift API-client walkthrough page is missing expected title.", pageArtifact));
   }
 
-  if (!/\bog:type["']\s+content=["']article["']/i.test(html) && !/\bog:type["']\s+content\s*=\s*["']article["']/i.test(html)) {
+  if (!hasTagWithAttributes(html, "meta", { property: "og:type", content: "article" })) {
     errors.push(withEvidence("Swift API-client walkthrough page must use article metadata.", pageArtifact));
   }
 
@@ -227,7 +227,7 @@ async function validatePage({ pagePath, errors }) {
   }
 
   for (const [shape, ruleId] of evidenceShapes) {
-    const rowMatch = html.match(new RegExp(`<tr\\b[^>]*data-swift-api-client-shape=["']${escapeRegExp(shape)}["'][^>]*>`, "i"));
+    const rowMatch = findTagWithAttribute(html, "tr", "data-swift-api-client-shape", shape);
     if (!rowMatch) {
       errors.push(withEvidence(`Swift API-client walkthrough page is missing evidence shape row: ${shape}`, pageArtifact));
       continue;
@@ -237,8 +237,8 @@ async function validatePage({ pagePath, errors }) {
     const rowText = normalizeRenderedText(rowHtml);
     const cellCount = (rowHtml.match(/<td\b/gi) ?? []).length;
 
-    if (cellCount !== 5) {
-      errors.push(withEvidence(`Swift API-client walkthrough evidence shape row ${shape} has ${cellCount} data cells; expected 5.`, pageArtifact));
+    if (cellCount !== 6) {
+      errors.push(withEvidence(`Swift API-client walkthrough evidence shape row ${shape} has ${cellCount} data cells; expected 6.`, pageArtifact));
     }
 
     if (!rowText.includes(ruleId)) {
@@ -247,6 +247,10 @@ async function validatePage({ pagePath, errors }) {
 
     if (!rowText.includes("Tier3SyntaxOrTextual")) {
       errors.push(withEvidence(`Swift API-client walkthrough evidence shape row ${shape} is missing Tier3SyntaxOrTextual.`, pageArtifact));
+    }
+
+    if (!rowText.includes("CoverageRelative") || !rowText.includes("ReducedCoverage")) {
+      errors.push(withEvidence(`Swift API-client walkthrough evidence shape row ${shape} is missing coverage labels.`, pageArtifact));
     }
   }
 
@@ -297,6 +301,32 @@ function sliceRowHtml(html, start) {
 
 function hasHref(html, href) {
   return new RegExp(`<a\\b(?=[^>]*\\bhref\\s*=\\s*["']${escapeRegExp(href)}["'])[^>]*>`, "i").test(html);
+}
+
+function hasTagWithAttributes(html, tagName, attributes) {
+  return Boolean(findTagWithAttributes(html, tagName, attributes));
+}
+
+function findTagWithAttribute(html, tagName, attributeName, attributeValue) {
+  return findTagWithAttributes(html, tagName, { [attributeName]: attributeValue });
+}
+
+function findTagWithAttributes(html, tagName, attributes) {
+  const tagPattern = new RegExp(`<${escapeRegExp(tagName)}\\b[^>]*>`, "gi");
+  let match;
+  while ((match = tagPattern.exec(html)) !== null) {
+    const tagHtml = match[0];
+    const hasAllAttributes = Object.entries(attributes).every(([name, value]) => hasAttribute(tagHtml, name, value));
+    if (hasAllAttributes) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
+function hasAttribute(tagHtml, attributeName, attributeValue) {
+  return new RegExp(`\\b${escapeRegExp(attributeName)}\\s*=\\s*["']${escapeRegExp(attributeValue)}["']`, "i").test(tagHtml);
 }
 
 function redactPattern(pattern) {
