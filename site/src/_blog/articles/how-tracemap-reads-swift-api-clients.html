@@ -1,0 +1,135 @@
+<p>
+  <strong>Public claim level: demo.</strong>
+  Mobile apps often hide backend dependency questions in ordinary client code.
+  A reviewer may see a Swift view model, service object, generated wrapper, or
+  target enum and know that it probably points somewhere important, but still
+  need a practical way to ask: which API-client surfaces are visible in static
+  evidence, how strong is that evidence, and where does the evidence stop?
+</p>
+
+<p>
+  TraceMap's Swift API-client evidence walkthrough exists for that middle
+  ground. It does not say the app ran. It does not say a backend accepted a
+  request. It gives reviewers a static map of supported API-client candidates
+  so review, migration planning, endpoint inventory, and change-risk
+  conversations can start from something inspectable.
+</p>
+
+<section data-swift-api-blog-block="mobile-dependencies">
+  <h2>The problem: mobile apps hide backend dependencies in client code.</h2>
+
+  <p>
+    In a Swift app, a backend dependency is not always a tidy route list. It
+    might be a <code>URLSession</code> call, a <code>URLRequest</code> method
+    assignment, an Alamofire request, or a Moya-style target. Those are useful
+    signals during review, but they are easy to overstate. A literal path in
+    source code is a lead. It is not proof that a user reached that endpoint,
+    that authentication succeeded, or that production traffic exists.
+  </p>
+
+  <p>
+    Static evidence is still valuable because it gives the team a reviewable
+    starting point. If a migration changes an endpoint family, or a backend
+    team asks which mobile surfaces might mention a path, reviewers can use the
+    static candidates to decide where to inspect next.
+  </p>
+</section>
+
+<section data-swift-api-blog-block="static-candidates">
+  <h2>What TraceMap can show: static API-client candidates.</h2>
+
+  <p>
+    TraceMap surfaces supported Swift API-client candidates with rule-backed
+    evidence. The public walkthrough focuses on the evidence shape, not on
+    runtime behavior. A row is useful when it carries the rule ID, evidence
+    tier, coverage label, source location, supporting IDs, limitation, and
+    non-claim together.
+  </p>
+
+  <p>
+    The safe sentence is intentionally narrow: "TraceMap found a static Swift
+    API-client candidate where the supported rule could identify the shape." The
+    next question belongs to review: is this still reachable, configured,
+    authenticated, tested, deployed, or relevant to the change? Static evidence
+    gets the question to the right place; it does not answer the runtime half.
+  </p>
+</section>
+
+<section data-swift-api-blog-block="four-shapes">
+  <h2>The four evidence shapes: URLSession, URLRequest, Alamofire, and Moya.</h2>
+
+  <p>
+    The walkthrough names four supported evidence shapes so reviewers know what
+    kind of static signal they are reading. <code>URLSession</code> and
+    <code>URLRequest</code> rows use <code>swift.http.urlsession.v1</code>.
+    Alamofire and Moya-style rows use
+    <code>swift.http.client-library.v1</code>. In each case, the row should be
+    read as <code>Tier3SyntaxOrTextual</code> or a documented static candidate
+    unless stronger evidence is explicitly attached.
+  </p>
+
+  <p>
+    This helps a reviewer separate "we found a supported client-code pattern"
+    from "the app successfully called this service." That distinction is the
+    whole point. The candidate can feed endpoint inventory, migration planning,
+    and change-risk conversations, while runtime questions stay with telemetry,
+    logs, traces, tests, source review, and owners.
+  </p>
+</section>
+
+<section data-swift-api-blog-block="read-a-row">
+  <h2>How to read a row.</h2>
+
+  <p>
+    Start with the rule ID. It tells you which extractor rule produced the
+    candidate. Then read the evidence tier and coverage label. A syntax-backed
+    row with reduced coverage should never be repeated with the same confidence
+    as compiler-resolved or runtime evidence. Next, keep the limitation beside
+    the claim. If the row says the evidence is a static URLSession candidate,
+    repeat that boundary in the review packet.
+  </p>
+
+  <p>
+    A safe handoff might say: "This Swift file contains a static API-client
+    candidate from <code>swift.http.client-library.v1</code> with
+    <code>Tier3SyntaxOrTextual</code> evidence and reduced coverage. Reviewers
+    should inspect owner context before making runtime or backend conclusions."
+    That sentence gives the next person enough context without turning the row
+    into endpoint reachability proof.
+  </p>
+</section>
+
+<section data-swift-api-blog-block="non-claims" data-tm-boundary="claim-boundary">
+  <h2>What this does not prove.</h2>
+
+  <p>
+    The Swift API-client walkthrough is not runtime tracing. It does not prove
+    endpoint reachability, backend compatibility, request success, auth flow
+    correctness, production traffic, API correctness, app navigation, rendered
+    UI, release safety, deployment state, package compatibility, stored values,
+    query execution, live schema, or complete Swift semantic analysis.
+  </p>
+
+  <p>
+    It also does not turn TraceMap into AI impact analysis. TraceMap core
+    scanning and reduction do not use LLM analysis, prompt-based
+    classification, embeddings, or vector databases. The public story stays
+    useful because it stays bounded to deterministic static evidence.
+  </p>
+</section>
+
+<section data-swift-api-blog-block="where-next">
+  <h2>Where to go next.</h2>
+
+  <p>
+    Start with the <a href="/swift/api-client-walkthrough/">Swift API-client
+    walkthrough</a> for the row-level reading guide. Use
+    <a href="/swift/surface-discovery/">Swift surface discovery</a> for the
+    broader surface story, then check the
+    <a href="/swift/real-world-smoke/">real-world smoke proof</a> for pinned
+    public samples and sanitized generated summaries. Before repeating a claim,
+    use the <a href="/swift/claim-language/">Swift claim-language checklist</a>
+    so rule ID, evidence tier, coverage label, limitation, and non-claim travel
+    with the sentence.
+  </p>
+</section>

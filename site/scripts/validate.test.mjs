@@ -16,6 +16,10 @@ import {
   blogProofPathRequiredLinks,
   blogProofPathSeriesRoute
 } from "./blog-proof-path-series.mjs";
+import {
+  swiftApiClientArticleRequiredLinks,
+  swiftApiClientArticleRoute
+} from "./swift-api-client-article.mjs";
 import { changeRiskLanguageGuideRoute } from "./change-risk-language-guide.mjs";
 import { claimReviewDrillRoute } from "./claim-review-drill.mjs";
 import { createDiscoveryOutputs } from "./discovery.mjs";
@@ -203,6 +207,7 @@ async function createDistFixture({
         adoptionPlaybookRoute,
         buildReviewWorkflowStoryRoute,
         blogProofPathSeriesRoute,
+        swiftApiClientArticleRoute,
       demoEvidenceTrailRoute,
       demoRunbookRoute,
       demoTroubleshootingRoute,
@@ -272,6 +277,7 @@ async function createDistFixture({
     "/blog/building-tracemap-with-codex-kiro-qodo/",
     buildReviewWorkflowStoryRoute,
     blogProofPathSeriesRoute,
+    swiftApiClientArticleRoute,
     "/capabilities/",
     "/demo/start-here/",
     "/demo/proof-upgrades/",
@@ -545,7 +551,7 @@ async function fixturePageHtml(route, path) {
   }
 
   if (route === "/blog/") {
-    return page(`<a href="${buildReviewWorkflowStoryRoute}"><span>Workflow governance</span>Building TraceMap Under Review Pressure</a><a href="${blogProofPathSeriesRoute}">What a Proof Path Is</a>`);
+    return page(`<a href="${buildReviewWorkflowStoryRoute}"><span>Workflow governance</span>Building TraceMap Under Review Pressure</a><a href="${blogProofPathSeriesRoute}">What a Proof Path Is</a><a href="${swiftApiClientArticleRoute}">How TraceMap Reads Swift API Clients Without Pretending They Ran</a>`);
   }
 
   if (route === buildReviewWorkflowStoryRoute) {
@@ -558,6 +564,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === blogProofPathSeriesRoute) {
     return blogProofPathSeriesPage();
+  }
+
+  if (route === swiftApiClientArticleRoute) {
+    return swiftApiClientArticlePage();
   }
 
   if (route === demoEvidenceTrailRoute) {
@@ -810,6 +820,52 @@ function blogProofPathSeriesPage() {
       <section data-proof-blog-block="closing-handoff-action">
         <h2>Close the loop with a handoff, not a bigger claim.</h2>
         <p>Repeat the sentence with the same limits or take the static evidence to the owner, telemetry, logs, traces, tests, or release review.</p>
+      </section>
+    </article>`
+  );
+}
+
+function swiftApiClientArticlePage() {
+  const links = swiftApiClientArticleRequiredLinks.map((link) => `<a href="${link}">${link}</a>`).join(" ");
+  const filler = Array.from(
+    { length: 45 },
+    () =>
+      "Reviewers use the static Swift API-client candidate, rule ID, evidence tier, coverage label, limitation, and non-claim to plan endpoint inventory and change-risk conversations."
+  ).join(" ");
+
+  return page(
+    `<article>
+      <title>How TraceMap Reads Swift API Clients Without Pretending They Ran | TraceMap</title>
+      <meta property="og:type" content="article">
+      <link rel="canonical" href="https://tracemap.tools${swiftApiClientArticleRoute}">
+      <header>
+        <h1>How TraceMap reads Swift API clients without pretending they ran</h1>
+        <p>Public claim level: demo</p>
+      </header>
+      <section data-swift-api-blog-block="mobile-dependencies">
+        <h2>The problem: mobile apps hide backend dependencies in client code.</h2>
+        <p>${filler}</p>
+      </section>
+      <section data-swift-api-blog-block="static-candidates">
+        <h2>What TraceMap can show: static API-client candidates.</h2>
+        <p>TraceMap surfaces static Swift API-client candidates for review, migration planning, endpoint inventory, and change-risk conversations.</p>
+      </section>
+      <section data-swift-api-blog-block="four-shapes">
+        <h2>The four evidence shapes: URLSession, URLRequest, Alamofire, and Moya.</h2>
+        <p>URLSession, URLRequest, Alamofire, and Moya rows keep rule ID, evidence tier, coverage label, limitation, and non-claim attached.</p>
+      </section>
+      <section data-swift-api-blog-block="read-a-row">
+        <h2>How to read a row.</h2>
+        <p>${links}</p>
+      </section>
+      <section data-swift-api-blog-block="non-claims" data-tm-boundary="claim-boundary">
+        <h2>What this does not prove.</h2>
+        <p>The article is not runtime tracing and does not prove endpoint reachability, backend compatibility, request success, auth flow, production traffic, API correctness, or runtime behavior.</p>
+        <p>TraceMap core scanning and reduction do not use LLM analysis, prompt-based classification, embeddings, or vector databases.</p>
+      </section>
+      <section data-swift-api-blog-block="where-next">
+        <h2>Where to go next.</h2>
+        <p>${links}</p>
       </section>
     </article>`
   );
