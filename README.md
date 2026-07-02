@@ -275,9 +275,12 @@ swift run --package-path src/swift tracemap-swift-smoke-tests
 swift run --package-path src/swift tracemap-swift scan --repo samples/swift-package-basic --out .tracemap-swift
 dotnet run --project src/dotnet/TraceMap.Cli -- combine --index .tracemap-swift/index.sqlite --label swift-sample --out .tracemap-swift-combined.sqlite
 dotnet run --project src/dotnet/TraceMap.Cli -- report --index .tracemap-swift-combined.sqlite --out .tracemap-swift-report
+scripts/smoke-swift-route-flow.sh /tmp/tracemap-swift-route-flow-smoke
 ```
 
 The Swift scanner does not run Xcode builds, SwiftPM package resolution, simulators, devices, app code, macros, storyboard/nib runtime wiring, Objective-C bridge dispatch, or SourceKit/compiler semantic analysis during scan. V0 coverage is static SwiftSyntax/file/project metadata evidence with explicit reduced-coverage diagnostics, so declarations, calls, UI surfaces, storage/data surfaces, and HTTP/API client rows are evidence-backed candidates rather than runtime proof.
+
+The Swift route-flow smoke demonstrates a static client-call path from a checked-in Swift HTTP/API client sample through source-local symbol context to a terminal HTTP surface. It writes `route-flow-report.md` and `route-flow-report.json`; those rows are coverage-relative static evidence, not runtime endpoint reachability or app execution proof.
 
 Endpoint alignment compares two existing indexes instead of scanning multiple apps in one command. This keeps language scanners independent and preserves per-index coverage/provenance:
 
