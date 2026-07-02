@@ -43,6 +43,7 @@ test("validateSwiftClaimLanguageDist reports missing route metadata", async (t) 
   await validateSwiftClaimLanguageDist({ dist: join(root, "dist"), errors });
 
   assert.match(errors.join("\n"), /routes-index\.json is missing required route: \/swift\/claim-language\//);
+  assert.match(errors.join("\n"), /sitemap is missing required route: https:\/\/tracemap\.tools\/swift\/claim-language\//);
 });
 
 test("validateSwiftClaimLanguageDist reports route metadata regressions", async (t) => {
@@ -99,7 +100,30 @@ test("validateSwiftClaimLanguageDist rejects private material, raw artifact name
     ["<p>TraceMap proves Swift runtime API correctness.</p>", /unsupported Swift claim wording/],
     ["<p>Swift validates package compatibility.</p>", /unsupported Swift claim wording/],
     ["<p>TraceMap performs AI impact analysis.</p>", /unsupported Swift claim wording/],
-    ["<p>TraceMap uses vector database analysis.</p>", /unsupported Swift claim wording/]
+    ["<p>TraceMap uses vector database analysis.</p>", /unsupported Swift claim wording/],
+    ["<p>TraceMap provides embedding-backed search.</p>", /unsupported Swift claim wording/],
+    ["<p>TraceMap uses vector databases.</p>", /unsupported Swift claim wording/]
+  ];
+
+  for (const [body, expected] of cases) {
+    const root = await createManagedSwiftClaimDistFixture(t, {
+      pageHtml: source.replace("</main>", `${body}</main>`)
+    });
+    const errors = [];
+
+    await validateSwiftClaimLanguageDist({ dist: join(root, "dist"), errors });
+
+    assert.match(errors.join("\n"), expected);
+  }
+});
+
+test("validateSwiftClaimLanguageDist rejects tag-split private material, artifacts, and unsupported claims", async (t) => {
+  const source = await sourcePage();
+  const cases = [
+    ["<p>/Us<span>ers/example/private.swift</span></p>", /forbidden private material/],
+    ["<p>facts.<span>ndjson</span></p>", /forbidden raw artifact name/],
+    ["<p>Trace<span>Map uses vector databases.</span></p>", /unsupported Swift claim wording/],
+    ["<p>TraceMap provides embedding<span>-backed search.</span></p>", /unsupported Swift claim wording/]
   ];
 
   for (const [body, expected] of cases) {
@@ -148,7 +172,10 @@ async function createSwiftClaimDistFixture({
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-swift-claim-test-"));
   const dist = join(root, "dist");
-  const routes = new Set([swiftClaimLanguageRoute, ...swiftClaimLanguageRequiredLinks, ...sitemapRoutes]);
+  const routes = new Set([
+    ...swiftClaimLanguageRequiredLinks.filter((route) => route.startsWith("/")),
+    ...sitemapRoutes
+  ]);
 
   await mkdir(join(dist, "swift", "claim-language"), { recursive: true });
   await writeFile(join(dist, "swift", "claim-language", "index.html"), pageHtml ?? (await sourcePage()), "utf8");
