@@ -794,7 +794,7 @@ enum SwiftHttpExtractor {
                 gaps.append(gap(assignments.isEmpty ? "swift-http-method-unknown-projection-omitted" : "swift-http-method-dynamic", item, start, end, "URLRequest method is missing, ambiguous, or unsupported; shared HTTP projection omitted."))
                 continue
             }
-            if let record = record(rawUrl: rawUrl, method: method, item: item, start: start, end: end, startOffset: match.range.location, endOffset: match.range.location + match.range.length, ruleId: RuleIds.swiftHttpURLSession, framework: "foundation", clientKind: "urlrequest", apiName: "URLSession.\(use.apiName)", ordinal: ordinal) {
+            if let record = record(rawUrl: rawUrl, method: method, item: item, start: start, end: end, startOffset: utf8Offset(atUTF16Offset: match.range.location, in: text), endOffset: utf8Offset(atUTF16Offset: match.range.location + match.range.length, in: text), ruleId: RuleIds.swiftHttpURLSession, framework: "foundation", clientKind: "urlrequest", apiName: "URLSession.\(use.apiName)", ordinal: ordinal) {
                 records.append(record)
             } else {
                 gaps.append(gap("swift-http-path-unsafe-omitted", item, start, end, "URLRequest path could not be safely normalized; shared HTTP projection omitted."))
@@ -814,7 +814,7 @@ enum SwiftHttpExtractor {
                   let method = standardMethod(capture(match, 3, in: text) ?? "") else { continue }
             let start = lineNumber(atUTF16Offset: match.range.location, in: text)
             let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: text)
-            if let record = record(rawUrl: rawUrl, method: method, item: item, start: start, end: end, startOffset: match.range.location, endOffset: match.range.location + match.range.length, ruleId: RuleIds.swiftHttpClientLibrary, framework: "alamofire", clientKind: "alamofire", apiName: "request", ordinal: ordinal) {
+            if let record = record(rawUrl: rawUrl, method: method, item: item, start: start, end: end, startOffset: utf8Offset(atUTF16Offset: match.range.location, in: text), endOffset: utf8Offset(atUTF16Offset: match.range.location + match.range.length, in: text), ruleId: RuleIds.swiftHttpClientLibrary, framework: "alamofire", clientKind: "alamofire", apiName: "request", ordinal: ordinal) {
                 records.append(record)
             } else {
                 gaps.append(gap("swift-http-path-unsafe-omitted", item, start, end, "Alamofire request path could not be safely normalized; shared HTTP projection omitted."))
@@ -837,7 +837,7 @@ enum SwiftHttpExtractor {
                 let start = lineNumber(atUTF16Offset: target.startOffset + pathMatch.range.location, in: text)
                 let end = lineNumber(atUTF16Offset: target.startOffset + pathMatch.range.location + pathMatch.range.length, in: text)
                 let pathLiteralRange = pathMatch.range(at: 1)
-                if let record = record(rawUrl: rawPath, method: method, item: item, start: start, end: end, startOffset: target.startOffset + pathLiteralRange.location, endOffset: target.startOffset + pathLiteralRange.location + pathLiteralRange.length, ruleId: RuleIds.swiftHttpClientLibrary, framework: "moya", clientKind: "moya", apiName: "TargetType.path", ordinal: records.count) {
+                if let record = record(rawUrl: rawPath, method: method, item: item, start: start, end: end, startOffset: utf8Offset(atUTF16Offset: target.startOffset + pathLiteralRange.location, in: text), endOffset: utf8Offset(atUTF16Offset: target.startOffset + pathLiteralRange.location + pathLiteralRange.length, in: text), ruleId: RuleIds.swiftHttpClientLibrary, framework: "moya", clientKind: "moya", apiName: "TargetType.path", ordinal: records.count) {
                     records.append(record)
                 }
                 gaps.append(gap("swift-http-moya-target-partial", item, boundaryLine, boundaryLine, baseMatch == nil ? "Moya target baseURL is missing or dynamic; full route join is not proven." : "Moya target baseURL/path join is static metadata only; runtime route reachability is not proven."))
@@ -882,6 +882,15 @@ enum SwiftHttpExtractor {
             identityDiscriminator: ["swift-http/v1", item.relativePath, String(start), String(end), method, parsed.normalizedPathKey, String(ordinal + 1), roleHash("url", rawUrl)].joined(separator: "\u{1f}"),
             properties: properties
         )
+    }
+
+    private static func utf8Offset(atUTF16Offset offset: Int, in text: String) -> Int {
+        let bounded = max(0, min(offset, text.utf16.count))
+        let stringIndex = String.Index(utf16Offset: bounded, in: text)
+        guard let utf8Index = stringIndex.samePosition(in: text.utf8) else {
+            return text.utf8.count
+        }
+        return text.utf8.distance(from: text.utf8.startIndex, to: utf8Index)
     }
 
     private static func firstURLSessionUse(of variable: String, after offset: Int, in text: String) -> (range: NSRange, apiName: String)? {

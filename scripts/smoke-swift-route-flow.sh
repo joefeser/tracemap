@@ -93,8 +93,34 @@ if not any("swift.http.client-library.v1" in row.get("evidence", {}).get("suppor
 flow_rows = report.get("flowRows") or []
 if not any(row.get("edgeKind") == "route-bound-to-symbol" for row in flow_rows):
     raise SystemExit("Swift route-flow method-symbol bridge missing")
-if not any(row.get("rowKind") == "terminal-surface" and row.get("targetSymbol") == "/v1/orders/{}" for row in flow_rows):
+terminal_rows = [
+    row for row in flow_rows
+    if row.get("rowKind") == "terminal-surface"
+    and row.get("edgeKind") == "terminal-surface"
+    and row.get("targetSymbol") == "/v1/orders/{}"
+]
+if not terminal_rows:
     raise SystemExit("Swift route-flow terminal HTTP surface missing")
+dependency_surfaces = report.get("dependencySurfaces") or []
+http_client_surfaces = [
+    row for row in dependency_surfaces
+    if row.get("surfaceKind") == "http-client"
+    and row.get("displayName") == "/v1/orders/{}"
+]
+if not http_client_surfaces:
+    raise SystemExit("Swift route-flow HTTP client dependency surface missing")
+terminal_fact_ids = {
+    fact_id
+    for row in terminal_rows
+    for fact_id in row.get("evidence", {}).get("supportingFactIds", [])
+}
+http_client_fact_ids = {
+    fact_id
+    for row in http_client_surfaces
+    for fact_id in row.get("evidence", {}).get("supportingFactIds", [])
+}
+if terminal_fact_ids.isdisjoint(http_client_fact_ids):
+    raise SystemExit("Swift route-flow terminal row is not backed by the selected HTTP client surface")
 
 limitations = report.get("limitations") or []
 if not any("runtime execution" in item for item in limitations):
