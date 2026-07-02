@@ -4456,9 +4456,11 @@ rules:
       - swiftClientKind
       - swiftApiName
       - framework
+      - sourceContextStatus
     limitations:
       - Evidence is syntax/textual only and does not prove runtime network traffic, server existence, endpoint reachability, authentication, authorization, production use, or impact.
       - Shared HttpCallDetected projection is emitted only when a static HTTP method and safe normalized path are both visible; unknown-method paths emit gaps to avoid broad ANY-style matching.
+      - Containing declaration context is source-local syntax span evidence only; it does not prove semantic call target resolution, execution, dependency-injection selection, async scheduling, branch feasibility, or user reachability.
       - URL literals stored in intermediate variables, URLComponents builders, request adapters, dependency injection, Combine/async scheduling, feature flags, and branch feasibility are not resolved by this rule.
       - Raw URLs, hosts, queries, headers, bodies, credentials, tokens, snippets, and unsafe path values are omitted or represented only by role-prefixed hashes.
       - False positives may occur for user-defined APIs that mimic Foundation request shapes; false negatives are expected for wrappers, generated clients, and dynamic builders.
@@ -4479,9 +4481,11 @@ rules:
       - swiftClientKind
       - swiftApiName
       - framework
+      - sourceContextStatus
     limitations:
       - Evidence is syntax/textual only and does not prove package presence, restore, runtime request execution, server existence, endpoint reachability, authentication, production use, or impact.
       - Shared HttpCallDetected projection is emitted only when a static HTTP method and safe normalized path are both visible.
+      - Containing declaration context is source-local syntax span evidence only; it does not prove semantic call target resolution, execution, dependency-injection selection, async scheduling, branch feasibility, or user reachability.
       - Moya baseURL/path joins remain partial static metadata and emit companion gaps; full route reachability is not proven.
       - Custom clients, wrappers, interceptors, plugins, request adapters, generated clients, nonstandard method builders, and dynamic arguments emit gaps or are missed.
       - Raw URLs, hosts, queries, headers, bodies, credentials, tokens, snippets, private labels, and unsafe path values are omitted or represented only by role-prefixed hashes.
