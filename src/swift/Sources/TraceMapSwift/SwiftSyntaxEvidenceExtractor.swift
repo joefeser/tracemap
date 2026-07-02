@@ -21,6 +21,8 @@ struct SwiftDeclarationEvidence {
     let filePath: String
     let startLine: Int
     let endLine: Int
+    let startOffset: Int
+    let endOffset: Int
     let containingSymbolId: String?
     let parameterLabels: [String]
     let parameterTypeSyntaxes: [String]
@@ -41,6 +43,8 @@ struct SwiftDeclarationEvidence {
             filePath: filePath,
             startLine: startLine,
             endLine: endLine,
+            startOffset: startOffset,
+            endOffset: endOffset,
             containingSymbolId: containingSymbolId,
             parameterLabels: parameterLabels,
             parameterTypeSyntaxes: parameterTypeSyntaxes,
@@ -674,7 +678,8 @@ final class EvidenceVisitor: SyntaxVisitor {
         }
         for binding in node.bindings {
             guard let pattern = binding.pattern.as(IdentifierPatternSyntax.self) else { continue }
-            addDeclaration(kind: "property", name: pattern.identifier.text, node: Syntax(binding), parameterLabels: [], parameterTypeSyntaxes: [], genericParameters: [], isAsync: false, isThrows: false, isOverride: hasOverrideModifier(node.modifiers))
+            let declarationNode = node.bindings.count == 1 ? Syntax(node) : Syntax(binding)
+            addDeclaration(kind: "property", name: pattern.identifier.text, node: declarationNode, parameterLabels: [], parameterTypeSyntaxes: [], genericParameters: [], isAsync: false, isThrows: false, isOverride: hasOverrideModifier(node.modifiers))
         }
         return .visitChildren
     }
@@ -762,6 +767,8 @@ final class EvidenceVisitor: SyntaxVisitor {
 
     private func makeDeclaration(kind: String, name: String, node: Syntax, parameterLabels: [String], parameterTypeSyntaxes: [String], genericParameters: [String], isAsync: Bool, isThrows: Bool, isOverride: Bool) -> SwiftDeclarationEvidence {
         let span = lineSpan(node)
+        let startOffset = node.positionAfterSkippingLeadingTrivia.utf8Offset
+        let endOffset = node.endPositionBeforeTrailingTrivia.utf8Offset
         let rawModule = moduleName(for: filePath)
         let module = rawModule.isEmpty ? "unknown-module" : safeLabel(rawModule)
         let moduleDiscriminator = rawModule.isEmpty ? filePath : ""
@@ -790,6 +797,8 @@ final class EvidenceVisitor: SyntaxVisitor {
             filePath: filePath,
             startLine: span.start,
             endLine: span.end,
+            startOffset: startOffset,
+            endOffset: endOffset,
             containingSymbolId: containing?.symbolId,
             parameterLabels: safeLabels,
             parameterTypeSyntaxes: safeParameterTypes,

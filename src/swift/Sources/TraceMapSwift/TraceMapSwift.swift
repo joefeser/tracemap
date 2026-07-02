@@ -747,6 +747,8 @@ struct SwiftHttpRecord {
     let filePath: String
     let startLine: Int
     let endLine: Int
+    let startOffset: Int
+    let endOffset: Int
     let method: String
     let normalizedPathKey: String
     let identityDiscriminator: String
@@ -792,7 +794,7 @@ enum SwiftHttpExtractor {
                 gaps.append(gap(assignments.isEmpty ? "swift-http-method-unknown-projection-omitted" : "swift-http-method-dynamic", item, start, end, "URLRequest method is missing, ambiguous, or unsupported; shared HTTP projection omitted."))
                 continue
             }
-            if let record = record(rawUrl: rawUrl, method: method, item: item, start: start, end: end, ruleId: RuleIds.swiftHttpURLSession, framework: "foundation", clientKind: "urlrequest", apiName: "URLSession.\(use.apiName)", ordinal: ordinal) {
+            if let record = record(rawUrl: rawUrl, method: method, item: item, start: start, end: end, startOffset: match.range.location, endOffset: match.range.location + match.range.length, ruleId: RuleIds.swiftHttpURLSession, framework: "foundation", clientKind: "urlrequest", apiName: "URLSession.\(use.apiName)", ordinal: ordinal) {
                 records.append(record)
             } else {
                 gaps.append(gap("swift-http-path-unsafe-omitted", item, start, end, "URLRequest path could not be safely normalized; shared HTTP projection omitted."))
@@ -812,7 +814,7 @@ enum SwiftHttpExtractor {
                   let method = standardMethod(capture(match, 3, in: text) ?? "") else { continue }
             let start = lineNumber(atUTF16Offset: match.range.location, in: text)
             let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: text)
-            if let record = record(rawUrl: rawUrl, method: method, item: item, start: start, end: end, ruleId: RuleIds.swiftHttpClientLibrary, framework: "alamofire", clientKind: "alamofire", apiName: "request", ordinal: ordinal) {
+            if let record = record(rawUrl: rawUrl, method: method, item: item, start: start, end: end, startOffset: match.range.location, endOffset: match.range.location + match.range.length, ruleId: RuleIds.swiftHttpClientLibrary, framework: "alamofire", clientKind: "alamofire", apiName: "request", ordinal: ordinal) {
                 records.append(record)
             } else {
                 gaps.append(gap("swift-http-path-unsafe-omitted", item, start, end, "Alamofire request path could not be safely normalized; shared HTTP projection omitted."))
@@ -834,7 +836,8 @@ enum SwiftHttpExtractor {
             if let pathMatch, let rawPath = capture(pathMatch, 1, in: body), let methodMatch, let method = standardMethod(capture(methodMatch, 1, in: body) ?? "") {
                 let start = lineNumber(atUTF16Offset: target.startOffset + pathMatch.range.location, in: text)
                 let end = lineNumber(atUTF16Offset: target.startOffset + pathMatch.range.location + pathMatch.range.length, in: text)
-                if let record = record(rawUrl: rawPath, method: method, item: item, start: start, end: end, ruleId: RuleIds.swiftHttpClientLibrary, framework: "moya", clientKind: "moya", apiName: "TargetType.path", ordinal: records.count) {
+                let pathLiteralRange = pathMatch.range(at: 1)
+                if let record = record(rawUrl: rawPath, method: method, item: item, start: start, end: end, startOffset: target.startOffset + pathLiteralRange.location, endOffset: target.startOffset + pathLiteralRange.location + pathLiteralRange.length, ruleId: RuleIds.swiftHttpClientLibrary, framework: "moya", clientKind: "moya", apiName: "TargetType.path", ordinal: records.count) {
                     records.append(record)
                 }
                 gaps.append(gap("swift-http-moya-target-partial", item, boundaryLine, boundaryLine, baseMatch == nil ? "Moya target baseURL is missing or dynamic; full route join is not proven." : "Moya target baseURL/path join is static metadata only; runtime route reachability is not proven."))
@@ -847,7 +850,7 @@ enum SwiftHttpExtractor {
         return SwiftHttpExtraction(records: records, gaps: gaps)
     }
 
-    private static func record(rawUrl: String, method: String, item: InventoryItem, start: Int, end: Int, ruleId: String, framework: String, clientKind: String, apiName: String, ordinal: Int) -> SwiftHttpRecord? {
+    private static func record(rawUrl: String, method: String, item: InventoryItem, start: Int, end: Int, startOffset: Int, endOffset: Int, ruleId: String, framework: String, clientKind: String, apiName: String, ordinal: Int) -> SwiftHttpRecord? {
         guard let parsed = parseURLSurface(rawUrl) else { return nil }
         var properties: [String: String] = [
             "coverageCeiling": "syntax-only",
@@ -872,6 +875,8 @@ enum SwiftHttpExtractor {
             filePath: item.relativePath,
             startLine: start,
             endLine: end,
+            startOffset: startOffset,
+            endOffset: endOffset,
             method: method,
             normalizedPathKey: parsed.normalizedPathKey,
             identityDiscriminator: ["swift-http/v1", item.relativePath, String(start), String(end), method, parsed.normalizedPathKey, String(ordinal + 1), roleHash("url", rawUrl)].joined(separator: "\u{1f}"),
@@ -3065,7 +3070,7 @@ enum FactFactory {
         declarationsById: [String: SwiftDeclarationEvidence]
     ) -> SwiftHttpSourceContext? {
         var best: SwiftDeclarationEvidence?
-        for declaration in declarations where declaration.startLine <= record.startLine && declaration.endLine >= record.endLine {
+        for declaration in declarations where httpSourceContextContains(record, in: declaration) {
             if best.map({ httpSourceContextIsBetter(declaration, than: $0, declarationsById: declarationsById) }) ?? true {
                 best = declaration
             }
@@ -3077,6 +3082,14 @@ enum FactFactory {
                 kind: declaration.kind
             )
         }
+    }
+
+    private static func httpSourceContextContains(_ record: SwiftHttpRecord, in declaration: SwiftDeclarationEvidence) -> Bool {
+        declaration.filePath == record.filePath
+            && declaration.startLine <= record.startLine
+            && declaration.endLine >= record.endLine
+            && declaration.startOffset <= record.startOffset
+            && declaration.endOffset >= record.endOffset
     }
 
     private static func httpSourceContextIsBetter(
