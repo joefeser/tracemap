@@ -87,6 +87,7 @@ export const swiftStoryPageRoutes = swiftStoryPages.map((page) => page.route);
 export const swiftStoryPageRequiredLinks = [
   "/swift/",
   "/swift/story/",
+  "/swift/real-world-smoke/",
   "/validation/",
   "/limitations/",
   "/limitations/reduced-coverage/",

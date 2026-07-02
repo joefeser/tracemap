@@ -13,6 +13,7 @@ import {
 export const swiftAdapterStoryRoute = "/swift/story/";
 export const swiftAdapterStoryRequiredLinks = [
   "/swift/",
+  "/swift/real-world-smoke/",
   "/capabilities/",
   "/validation/",
   "/limitations/",
