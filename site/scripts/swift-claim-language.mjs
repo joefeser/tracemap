@@ -57,7 +57,7 @@ const requiredChecks = new Map([
   ["non-claim", "Non-claim boundary"]
 ]);
 
-const requiredExamples = new Set(["safe-shipped", "safe-demo", "safe-gap"]);
+const requiredExamples = new Set(["safe-shipped", "safe-demo", "safe-gap", "safe-future"]);
 
 const hardPrivatePatterns = [
   /\/Users\//i,
@@ -94,7 +94,7 @@ const forbiddenPositiveClaims = [
   /\bTraceMap\b[^.]{0,140}\b(?:proves|guarantees|certifies|approves|validates)\b[^.]{0,140}\b(?:runtime|API correctness|build|navigation|production|release|stored values?|query execution|live schema|network reachability|backend compatibility|package compatibility|complete Swift semantic analysis)\b/i,
   /\bSwift\b[^.]{0,140}\b(?:proves|guarantees|certifies|approves|validates)\b[^.]{0,140}\b(?:runtime|API correctness|build|navigation|production|release|stored values?|query execution|live schema|network reachability|backend compatibility|package compatibility|complete Swift semantic analysis)\b/i,
   /\b(?:safe to release|ready to release|approved to merge|complete Swift analysis)\b/i,
-  /\bTraceMap\b[^.]{0,140}\b(?:uses|performs|provides|runs|adds)\b[^.]{0,140}\b(?:AI impact analysis|LLM analysis|prompt-based classification|embedding search|vector database analysis)\b/i
+  /\bTraceMap\b[^.]{0,140}\b(?:uses|performs|provides|runs|adds)\b[^.]{0,140}\b(?:AI impact analysis|LLM analysis|prompt-based classification|embeddings?|embedding search|embedding-backed search|vector databases?|vector database analysis)\b/i
 ];
 
 export async function validateSwiftClaimLanguageDist({ baseUrl = "https://tracemap.tools", dist, errors }) {
@@ -190,7 +190,8 @@ async function validatePage({ pagePath, errors }) {
   const html = await readFile(pagePath, "utf8");
   const decodedHtml = decodeHtmlEntities(html);
   const pageText = normalizeRenderedText(html);
-  const policyText = `${decodedHtml} ${pageText}`;
+  const collapsedText = collapseTagSplitText(html);
+  const policyText = `${decodedHtml} ${pageText} ${collapsedText}`;
 
   if (!/<title>Swift Claim Language Checklist \| TraceMap<\/title>/i.test(html)) {
     errors.push(withEvidence("Swift claim-language checklist page is missing expected title.", pageArtifact));
@@ -267,6 +268,10 @@ function scanPolicyText({ errors, label, text, artifact }) {
       errors.push(withEvidence(`Swift claim-language checklist ${label} contains unsupported Swift claim wording: ${pattern}`, artifact));
     }
   }
+}
+
+function collapseTagSplitText(html) {
+  return decodeHtmlEntities(String(html).replace(/<[^>]*>/g, ""));
 }
 
 function hasHref(html, href) {
