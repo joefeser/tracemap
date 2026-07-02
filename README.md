@@ -8,6 +8,7 @@ The current language scanners are:
 - `TypeScript` under `src/typescript`, including compiler-backed facts, syntax fallback, integration facts, and reducer-compatible SQLite output.
 - `JVM/Java/Kotlin` under `src/jvm`, including Java compiler-backed facts, Java/Kotlin syntax fallback, Maven/Gradle metadata, integration facts, and reducer-compatible SQLite output.
 - `Python` under `src/python`, including AST/package/config/SQL extraction, FastAPI/Flask/Pydantic/SQLAlchemy/httpx/requests integration facts, reduced coverage labeling, and reducer-compatible SQLite output.
+- `Swift` under [`src/swift`](src/swift/README.md), including SwiftPM/Xcode project inventory, SwiftSyntax-backed declaration/call candidates, package/dependency metadata, HTTP/API client surfaces, SwiftUI/UIKit surface candidates, storage/data surfaces, reduced coverage diagnostics, and reducer-compatible SQLite output.
 
 TraceMap can also combine multiple indexes into one provenance-preserving SQLite database, generate a combined dependency report, query static dependency paths through the combined graph, produce route-centered static flow reports, diff combined snapshots, compare API/DTO contract evidence, compare single or combined snapshots by source/coverage/extractor metadata, and align client/server endpoint evidence across two existing indexes, such as an Angular client index and an ASP.NET API index.
 
@@ -50,12 +51,21 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle 
 python3 -m venv /tmp/tracemap-python-venv
 /tmp/tracemap-python-venv/bin/python -m pip install -e "src/python[dev]"
 /tmp/tracemap-python-venv/bin/python -m pytest src/python/tests
+swift build --package-path src/swift
+swift run --package-path src/swift tracemap-swift-smoke-tests
 ```
 
 Run the pinned public open-source smoke set when changing adapter behavior:
 
 ```bash
 scripts/smoke-open-source-repos.sh /tmp/tracemap-oss-cache /tmp/tracemap-oss-smoke
+```
+
+Run the pinned real-world Swift API-client smoke when changing Swift adapter
+behavior or Swift public demo evidence:
+
+```bash
+scripts/smoke-swift-real-world.sh /tmp/tracemap-swift-real-world-cache /tmp/tracemap-swift-real-world-smoke
 ```
 
 Run the public combined-path smoke when changing `combine`, `report`, `paths`, endpoint extraction, or dependency-surface extraction:
@@ -256,6 +266,18 @@ dotnet run --project src/dotnet/TraceMap.Cli -- combine --index .tracemap-py/ind
 ```
 
 The Python scanner does not import user code, execute setup.py, run a type checker, or install project dependencies during scan. MVP coverage is reduced AST/package/config/SQL evidence, so no-match reducer outcomes are coverage-relative.
+
+Swift scanner:
+
+```bash
+swift build --package-path src/swift
+swift run --package-path src/swift tracemap-swift-smoke-tests
+swift run --package-path src/swift tracemap-swift scan --repo samples/swift-package-basic --out .tracemap-swift
+dotnet run --project src/dotnet/TraceMap.Cli -- combine --index .tracemap-swift/index.sqlite --label swift-sample --out .tracemap-swift-combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- report --index .tracemap-swift-combined.sqlite --out .tracemap-swift-report
+```
+
+The Swift scanner does not run Xcode builds, SwiftPM package resolution, simulators, devices, app code, macros, storyboard/nib runtime wiring, Objective-C bridge dispatch, or SourceKit/compiler semantic analysis during scan. V0 coverage is static SwiftSyntax/file/project metadata evidence with explicit reduced-coverage diagnostics, so declarations, calls, UI surfaces, storage/data surfaces, and HTTP/API client rows are evidence-backed candidates rather than runtime proof.
 
 Endpoint alignment compares two existing indexes instead of scanning multiple apps in one command. This keeps language scanners independent and preserves per-index coverage/provenance:
 
