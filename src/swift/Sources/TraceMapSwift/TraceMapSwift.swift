@@ -2668,14 +2668,18 @@ enum FactFactory {
 
     static func normalizeFacts(manifest: ScanManifest, facts: [CodeFact]) -> [CodeFact] {
         let collisionGroups = collisionGroups(facts: facts)
+        let representativeByCollisionId = Dictionary(uniqueKeysWithValues: collisionGroups.map { ($0.factId, $0.representative) })
         var firstById: [String: CodeFact] = [:]
         var normalized: [CodeFact] = []
 
         for fact in facts {
-            if let existing = firstById[fact.factId] {
-                if existing == fact {
-                    continue
-                }
+            if firstById[fact.factId] != nil {
+                continue
+            }
+
+            if let representative = representativeByCollisionId[fact.factId] {
+                firstById[fact.factId] = representative
+                normalized.append(representative)
                 continue
             }
 
@@ -2735,8 +2739,11 @@ enum FactFactory {
         }
 
         return collisionKeysById.keys.sorted().compactMap { factId in
-            guard let representative = firstById[factId],
-                  let collisionKeys = collisionKeysById[factId],
+            guard let collisionKeys = collisionKeysById[factId],
+                  let representative = facts
+                      .filter({ $0.factId == factId })
+                      .sorted(by: factCollisionKey)
+                      .first,
                   collisionKeys.count > 1 else {
                 return nil
             }

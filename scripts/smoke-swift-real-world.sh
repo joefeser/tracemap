@@ -5,12 +5,18 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CACHE_ROOT="${1:-"/tmp/tracemap-swift-real-world-cache"}"
 OUT_ROOT="${2:-"/tmp/tracemap-swift-real-world-smoke"}"
 SWIFT_CLI_ARGS=(--package-path "$ROOT_DIR/src/swift")
+SWIFT_CLI="$ROOT_DIR/src/swift/.build/debug/tracemap-swift"
 DOTNET_CLI="${ROOT_DIR}/src/dotnet/TraceMap.Cli"
 
 mkdir -p "$CACHE_ROOT" "$OUT_ROOT"
 
 if [[ "${TRACEMAP_SKIP_BUILD:-0}" != "1" ]]; then
   swift build "${SWIFT_CLI_ARGS[@]}"
+fi
+
+if [[ ! -x "$SWIFT_CLI" ]]; then
+  printf 'Swift CLI is not built at %s. Run swift build --package-path src/swift or unset TRACEMAP_SKIP_BUILD.\n' "$SWIFT_CLI" >&2
+  exit 1
 fi
 
 # label|owner/repo|sha|why
@@ -23,6 +29,13 @@ SAMPLES=(
 selected_labels="${TRACEMAP_SWIFT_REAL_WORLD_REPOS:-}"
 offline_mode="${TRACEMAP_SWIFT_REAL_WORLD_OFFLINE:-0}"
 
+trim_label() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
 is_selected() {
   local label="$1"
   if [[ -z "$selected_labels" ]]; then
@@ -30,6 +43,7 @@ is_selected() {
   fi
   IFS=',' read -r -a requested <<<"$selected_labels"
   for requested_label in "${requested[@]}"; do
+    requested_label="$(trim_label "$requested_label")"
     if [[ "$requested_label" == "$label" ]]; then
       return 0
     fi
@@ -51,6 +65,10 @@ validate_selection() {
   local selected_count=0
   IFS=',' read -r -a requested <<<"$selected_labels"
   for requested_label in "${requested[@]}"; do
+    requested_label="$(trim_label "$requested_label")"
+    if [[ -z "$requested_label" ]]; then
+      continue
+    fi
     local matched=0
     for label in "${labels[@]}"; do
       if [[ "$requested_label" == "$label" ]]; then
@@ -113,11 +131,36 @@ clone_checkout() {
 
 require_artifacts() {
   local out="$1"
-  test -f "$out/scan-manifest.json"
-  test -f "$out/facts.ndjson"
-  test -f "$out/index.sqlite"
-  test -f "$out/report.md"
+  test -s "$out/scan-manifest.json"
+  test -s "$out/facts.ndjson"
+  test -s "$out/index.sqlite"
+  test -s "$out/report.md"
   test -f "$out/logs/analyzer.log"
+  python3 - "$out" <<'PY'
+import json
+import sqlite3
+import sys
+from pathlib import Path
+
+out = Path(sys.argv[1])
+with (out / "scan-manifest.json").open(encoding="utf-8") as handle:
+    manifest = json.load(handle)
+if not manifest.get("commitSha"):
+    raise SystemExit("scan-manifest.json missing commitSha")
+
+with (out / "facts.ndjson").open(encoding="utf-8") as handle:
+    first_fact = json.loads(next(line for line in handle if line.strip()))
+if not first_fact.get("factId"):
+    raise SystemExit("facts.ndjson first fact missing factId")
+
+with sqlite3.connect(out / "index.sqlite") as connection:
+    quick_check = connection.execute("pragma quick_check").fetchone()[0]
+    if quick_check != "ok":
+        raise SystemExit(f"index.sqlite quick_check failed: {quick_check}")
+    fact_count = connection.execute("select count(*) from facts").fetchone()[0]
+    if fact_count <= 0:
+        raise SystemExit("index.sqlite contains no facts")
+PY
 }
 
 summarize_sample() {
@@ -168,17 +211,14 @@ def count_like(column, patterns):
     return query_scalar(f"select count(*) from facts where {clauses}", tuple(patterns))
 
 def coverage_label():
-    with (out_path / "facts.ndjson").open(encoding="utf-8") as handle:
-        labels = []
-        for line in handle:
-            if not line.strip():
-                continue
-            fact = json.loads(line)
-            value = fact.get("properties", {}).get("coverageLabel")
-            if value:
-                labels.append(value)
-    if labels:
-        return sorted(set(labels))[0]
+    with sqlite3.connect(index_path) as connection:
+        row = connection.execute(
+            "select properties_json from facts where properties_json like '%\"coverageLabel\"%' order by fact_id limit 1"
+        ).fetchone()
+    if row:
+        value = json.loads(row[0]).get("coverageLabel")
+        if value:
+            return value
     return manifest.get("analysisLevel", "")
 
 summary = {
@@ -314,7 +354,7 @@ for sample in "${SAMPLES[@]}"; do
   repo="$(clone_checkout "$label" "$slug" "$sha")"
   out="$OUT_ROOT/$label"
   rm -rf "$out"
-  swift run "${SWIFT_CLI_ARGS[@]}" tracemap-swift scan --repo "$repo" --out "$out"
+  "$SWIFT_CLI" scan --repo "$repo" --out "$out"
   require_artifacts "$out"
   summarize_sample "$label" "$slug" "$sha" "$why" "$out" "$out/summary.json"
   run_summary_paths+=("$out/summary.json")
