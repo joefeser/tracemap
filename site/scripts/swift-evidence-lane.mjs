@@ -11,6 +11,7 @@ import {
 
 export const swiftEvidenceLaneRoute = "/swift/";
 export const swiftEvidenceLaneRequiredLinks = [
+  "/swift/real-world-smoke/",
   "/capabilities/",
   "/roadmap/",
   "/site-claim-guardrails/",

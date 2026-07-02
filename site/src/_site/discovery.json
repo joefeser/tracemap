@@ -68,6 +68,23 @@
     ]
   },
   {
+    "path": "/swift/real-world-smoke/",
+    "title": "Swift Real-World Smoke Proof",
+    "summary": "Shipped Swift v0 validation story for the pinned real-world API-client smoke harness, public samples, sanitized generated summaries, and static evidence boundaries.",
+    "publicClaimLevel": "shipped",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/validation/",
+    "limitations": [
+      "The smoke validates static artifact generation and sanitized summary metadata over pinned public Swift app samples; it is not raw scanner output and raw generated artifacts stay local.",
+      "Swift real-world smoke evidence remains deterministic static evidence and does not prove runtime behavior, API correctness, app navigation, build success, production usage, deployment state, package compatibility, or release safety."
+    ],
+    "nonClaims": [
+      "No Xcode build proof, SwiftPM restore proof, simulator or device execution proof, network-call proof, credential proof, auth-flow proof, production telemetry proof, endpoint reachability proof, backend compatibility proof, complete app navigation proof, package compatibility proof, production-use proof, impact proof, complete Swift semantic analysis, stored-value proof, query execution proof, or live schema proof.",
+      "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector databases, raw generated artifacts, raw source snippets, raw SQL, secrets, local absolute paths, clone URLs, raw remotes, credentials, hostnames, config values, private labels, runtime observations, analyzer logs, or hidden validation details are public Swift smoke claims."
+    ]
+  },
+  {
     "path": "/swift/static-inventory/",
     "title": "Swift Static Inventory",
     "summary": "Shipped Swift v0 story page for package/project inventory, source file selection, module-ish metadata, and reduced-coverage labels.",
