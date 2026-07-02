@@ -157,6 +157,44 @@ artifacts must not contain raw source snippets, manifest snippets, plist
 values, raw URLs, hostnames, local absolute paths, raw remotes, credentials,
 secrets, or private labels.
 
+### Swift Real-World API-Client Smoke
+
+For Swift adapter changes that affect project inventory, dependency metadata,
+HTTP/API client surfaces, UI surfaces, storage/data surfaces, reduced coverage,
+or public Swift demo evidence, run the opt-in real-world Swift smoke:
+
+```bash
+scripts/smoke-swift-real-world.sh /tmp/tracemap-swift-real-world-cache /tmp/tracemap-swift-real-world-smoke
+```
+
+The smoke clones pinned public repositories into the cache directory, scans
+them with `tracemap-swift`, verifies required artifacts, and writes sanitized
+local summaries under the output directory. Generated summaries use public
+repository slugs, pinned commit SHAs, artifact labels, counts, rule IDs,
+coverage labels, and limitations. They must not include local absolute paths,
+clone URLs, raw remotes, raw source snippets, raw SQL, credentials, config
+values, hostnames, private labels, or runtime observations.
+
+Pinned Swift real-world samples:
+
+| Label | Repository | Pinned SHA | Why included |
+| --- | --- | --- | --- |
+| `icecubesapp` | `Dimillian/IceCubesApp` | `9c05a720597b3ff13de2e241bf58d3fba0863c09` | SwiftUI Mastodon client with real federated API client and UI surface evidence |
+| `mastodon-ios` | `mastodon/mastodon-ios` | `95ac4a6d726ebf9fa867036dbf9d72f0a4b5f534` | Official Mastodon iOS app with real backend/API client and mobile app structure evidence |
+| `kickstarter-ios` | `kickstarter/ios-oss` | `203971bdf40f3a3a5071ce0c1fbc4eb3cad5b094` | Product iOS app with real backend/API client, view model, dependency, and persistence-adjacent evidence |
+
+Use `TRACEMAP_SWIFT_REAL_WORLD_REPOS=icecubesapp` or a comma-separated label
+list for a focused smoke while developing the harness. Use
+`TRACEMAP_SKIP_BUILD=1` only after `swift build --package-path src/swift` has
+already succeeded for the current checkout.
+
+Expected Swift real-world behavior: scans complete without Xcode builds,
+SwiftPM dependency resolution, simulators, devices, app execution, network
+calls, credentials, auth flows, or production telemetry. The smoke proves
+artifact generation and static evidence extraction over messy public apps. It
+does not prove runtime endpoint reachability, backend compatibility, complete
+app navigation, package compatibility, production use, or impact.
+
 For query-pattern report rendering changes, inspect generated scan reports from the affected adapters:
 
 ```bash
