@@ -8,7 +8,7 @@ The current language scanners are:
 - `TypeScript` under `src/typescript`, including compiler-backed facts, syntax fallback, integration facts, and reducer-compatible SQLite output.
 - `JVM/Java/Kotlin` under `src/jvm`, including Java compiler-backed facts, Java/Kotlin syntax fallback, Maven/Gradle metadata, integration facts, and reducer-compatible SQLite output.
 - `Python` under `src/python`, including AST/package/config/SQL extraction, FastAPI/Flask/Pydantic/SQLAlchemy/httpx/requests integration facts, reduced coverage labeling, and reducer-compatible SQLite output.
-- `Swift` under `src/swift`, including SwiftPM/Xcode project inventory, SwiftSyntax-backed declaration/call candidates, package/dependency metadata, HTTP/API client surfaces, SwiftUI/UIKit surface candidates, storage/data surfaces, reduced coverage diagnostics, and reducer-compatible SQLite output.
+- `Swift` under [`src/swift`](src/swift/README.md), including SwiftPM/Xcode project inventory, SwiftSyntax-backed declaration/call candidates, package/dependency metadata, HTTP/API client surfaces, SwiftUI/UIKit surface candidates, storage/data surfaces, reduced coverage diagnostics, and reducer-compatible SQLite output.
 
 TraceMap can also combine multiple indexes into one provenance-preserving SQLite database, generate a combined dependency report, query static dependency paths through the combined graph, produce route-centered static flow reports, diff combined snapshots, compare API/DTO contract evidence, compare single or combined snapshots by source/coverage/extractor metadata, and align client/server endpoint evidence across two existing indexes, such as an Angular client index and an ASP.NET API index.
 
