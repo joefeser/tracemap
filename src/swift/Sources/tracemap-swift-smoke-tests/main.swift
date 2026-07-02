@@ -11,6 +11,7 @@ struct TraceMapSwiftSmokeTests {
         try symbolIdsIgnoreDeclarationBodyEdits()
         try duplicateSymbolIdentitiesEmitGapsAndDistinctIds()
         try duplicateSymbolRelationshipsUseRewrittenIds()
+        try TraceMapSwiftSelfTests.run()
         try malformedMultipleSuperclassCandidatesDoNotCrash()
         try remoteUrlsAreHashedInManifest()
         try dangerousOutputPathsAreRejected()
