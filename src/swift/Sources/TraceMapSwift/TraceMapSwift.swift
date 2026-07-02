@@ -3017,8 +3017,16 @@ enum FactFactory {
     }
 
     private static func httpFacts(manifest: ScanManifest, records: [SwiftHttpRecord], syntax: SwiftSyntaxExtraction) -> [CodeFact] {
-        records.map { record in
-            let context = httpSourceContext(for: record, declarations: syntax.declarations)
+        let declarationsByFile = Dictionary(grouping: syntax.declarations, by: \.filePath)
+        var declarationsById: [String: SwiftDeclarationEvidence] = [:]
+        for declaration in syntax.declarations {
+            declarationsById[declaration.symbolId] = declaration
+        }
+        return records.map { record in
+            let context = httpSourceContext(
+                for: record,
+                declarations: declarationsByFile[record.filePath] ?? [],
+                declarationsById: declarationsById)
             var properties = record.properties
             if let context {
                 properties["containingDeclarationDisplayName"] = context.displayName
@@ -3051,32 +3059,39 @@ enum FactFactory {
         let kind: String
     }
 
-    private static func httpSourceContext(for record: SwiftHttpRecord, declarations: [SwiftDeclarationEvidence]) -> SwiftHttpSourceContext? {
-        let declarationsById = Dictionary(uniqueKeysWithValues: declarations.map { ($0.symbolId, $0) })
-        return declarations
-            .filter { declaration in
-                declaration.filePath == record.filePath
-                    && declaration.startLine <= record.startLine
-                    && declaration.endLine >= record.endLine
+    private static func httpSourceContext(
+        for record: SwiftHttpRecord,
+        declarations: [SwiftDeclarationEvidence],
+        declarationsById: [String: SwiftDeclarationEvidence]
+    ) -> SwiftHttpSourceContext? {
+        var best: SwiftDeclarationEvidence?
+        for declaration in declarations where declaration.startLine <= record.startLine && declaration.endLine >= record.endLine {
+            if best.map({ httpSourceContextIsBetter(declaration, than: $0, declarationsById: declarationsById) }) ?? true {
+                best = declaration
             }
-            .sorted { lhs, rhs in
-                let lhsSpan = lhs.endLine - lhs.startLine
-                let rhsSpan = rhs.endLine - rhs.startLine
-                if lhsSpan != rhsSpan { return lhsSpan < rhsSpan }
-                if lhs.startLine != rhs.startLine { return lhs.startLine > rhs.startLine }
-                let lhsDepth = declarationDepth(lhs, declarationsById: declarationsById)
-                let rhsDepth = declarationDepth(rhs, declarationsById: declarationsById)
-                if lhsDepth != rhsDepth { return lhsDepth > rhsDepth }
-                return lhs.symbolId < rhs.symbolId
-            }
-            .first
-            .map { declaration in
-                SwiftHttpSourceContext(
-                    symbolId: declaration.symbolId,
-                    displayName: declaration.displaySignature,
-                    kind: declaration.kind
-                )
-            }
+        }
+        return best.map { declaration in
+            SwiftHttpSourceContext(
+                symbolId: declaration.symbolId,
+                displayName: declaration.displaySignature,
+                kind: declaration.kind
+            )
+        }
+    }
+
+    private static func httpSourceContextIsBetter(
+        _ candidate: SwiftDeclarationEvidence,
+        than current: SwiftDeclarationEvidence,
+        declarationsById: [String: SwiftDeclarationEvidence]
+    ) -> Bool {
+        let candidateSpan = candidate.endLine - candidate.startLine
+        let currentSpan = current.endLine - current.startLine
+        if candidateSpan != currentSpan { return candidateSpan < currentSpan }
+        if candidate.startLine != current.startLine { return candidate.startLine > current.startLine }
+        let candidateDepth = declarationDepth(candidate, declarationsById: declarationsById)
+        let currentDepth = declarationDepth(current, declarationsById: declarationsById)
+        if candidateDepth != currentDepth { return candidateDepth > currentDepth }
+        return candidate.symbolId < current.symbolId
     }
 
     private static func declarationDepth(_ declaration: SwiftDeclarationEvidence, declarationsById: [String: SwiftDeclarationEvidence]) -> Int {
