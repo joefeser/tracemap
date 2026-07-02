@@ -5,7 +5,6 @@ import {
   decodeHtmlEntities,
   escapeRegExp,
   fileExists,
-  normalizeBaseUrl,
   normalizeRenderedText,
   readSitemapLocSet
 } from "./validate-utils.mjs";
@@ -53,6 +52,8 @@ const hardPrivatePatterns = [
   /\/Users\//i,
   /\/private\//i,
   /\/home\//i,
+  /\/tmp\//i,
+  /\/var\/folders\//i,
   /~\//,
   /\bC:\\/i,
   /\bfile:\/\//i,
@@ -67,6 +68,15 @@ const hardPrivatePatterns = [
   /\bapi[_-]?key\b/i,
   /\bsecret\s*=/i,
   /\bsk-[A-Za-z0-9_-]{12,}\b/i
+];
+
+const rawArtifactPatterns = [
+  /\bscan-manifest\.json\b/i,
+  /\bfacts\.ndjson\b/i,
+  /\bindex\.sqlite\b/i,
+  /\breport\.md\b/i,
+  /\blogs\/analyzer\.log\b/i,
+  /\banalyzer\.log\b/i
 ];
 
 const forbiddenPositiveClaims = [
@@ -233,11 +243,34 @@ function scanPolicyText({ errors, label, text, artifact }) {
     }
   }
 
+  for (const pattern of rawArtifactPatterns) {
+    if (pattern.test(text)) {
+      errors.push(withEvidence(`Swift real-world smoke ${label} contains forbidden raw artifact name: ${redactPattern(pattern)}`, artifact));
+    }
+  }
+
   for (const pattern of forbiddenPositiveClaims) {
     if (pattern.test(text)) {
       errors.push(withEvidence(`Swift real-world smoke ${label} contains unsupported Swift claim wording: ${pattern}`, artifact));
     }
   }
+}
+
+function normalizeBaseUrl(value, errors) {
+  let url;
+  try {
+    url = new URL(String(value));
+  } catch {
+    errors.push(withEvidence(`Swift real-world smoke baseUrl must be a valid absolute URL: ${String(value)}`, "baseUrl input"));
+    return null;
+  }
+
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    errors.push(withEvidence(`Swift real-world smoke baseUrl must use http or https: ${String(value)}`, "baseUrl input"));
+    return null;
+  }
+
+  return url.origin;
 }
 
 function sliceRowHtml(html, start) {
@@ -256,4 +289,3 @@ function redactPattern(pattern) {
 function withEvidence(message, artifact) {
   return `${message} Evidence: ${artifact}.`;
 }
-

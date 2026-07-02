@@ -63,6 +63,15 @@ test("validateSwiftRealWorldSmokeDist reports route metadata regressions", async
   assert.match(errors.join("\n"), /expected preferredProofPath \/validation\//);
 });
 
+test("validateSwiftRealWorldSmokeDist reports invalid baseUrl values", async (t) => {
+  const root = await createManagedSwiftSmokeDistFixture(t);
+  const errors = [];
+
+  await validateSwiftRealWorldSmokeDist({ baseUrl: "not a url", dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /baseUrl must be a valid absolute URL/);
+});
+
 test("validateSwiftRealWorldSmokeDist requires pinned sample rows", async (t) => {
   const source = await sourcePage();
   const root = await createManagedSwiftSmokeDistFixture(t, {
@@ -80,6 +89,10 @@ test("validateSwiftRealWorldSmokeDist rejects private material and unsupported c
   const localPathLeak = `${String.fromCharCode(47)}Users/example/private.swift`;
   const cases = [
     [`<p>${localPathLeak}</p>`, /forbidden private material/],
+    ["<p>/tmp/tracemap-swift-real-world-smoke</p>", /forbidden private material/],
+    ["<p>facts.ndjson</p>", /forbidden raw artifact name/],
+    ["<p>index.sqlite</p>", /forbidden raw artifact name/],
+    ["<p>logs/analyzer.log</p>", /forbidden raw artifact name/],
     ["<p>TraceMap proves Swift runtime API correctness.</p>", /unsupported Swift claim wording/],
     ["<p>Swift validates package compatibility.</p>", /unsupported Swift claim wording/],
     ["<p>TraceMap performs AI impact analysis.</p>", /unsupported Swift claim wording/],
@@ -106,7 +119,8 @@ test("validateSwiftRealWorldSmokeDist rejects private material and unsupported c
   routesIndex.entries[0].summary = `Swift smoke proof from ${localPathLeak}.`;
   routesIndex.entries[0].nonClaims = [
     "No runtime behavior, API correctness, complete Swift semantic analysis, AI impact analysis, or raw generated artifacts.",
-    "TraceMap performs AI impact analysis."
+    "TraceMap performs AI impact analysis.",
+    "facts.ndjson"
   ];
   await writeFile(routesIndexPath, `${JSON.stringify(routesIndex, null, 2)}\n`, "utf8");
   const errors = [];
@@ -114,6 +128,7 @@ test("validateSwiftRealWorldSmokeDist rejects private material and unsupported c
   await validateSwiftRealWorldSmokeDist({ dist: join(root, "dist"), errors });
 
   assert.match(errors.join("\n"), /route metadata contains forbidden private material/);
+  assert.match(errors.join("\n"), /route metadata contains forbidden raw artifact name/);
   assert.match(errors.join("\n"), /route metadata contains unsupported Swift claim wording/);
 });
 
