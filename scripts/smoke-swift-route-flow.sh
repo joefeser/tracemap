@@ -3,12 +3,34 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_ROOT="${1:-"/tmp/tracemap-swift-route-flow-smoke"}"
+OUT_ROOT="$(python3 - "$OUT_ROOT" <<'PY'
+import os
+import sys
+
+print(os.path.abspath(sys.argv[1]))
+PY
+)"
 SCAN_OUT="$OUT_ROOT/scan"
 COMBINED_INDEX="$OUT_ROOT/combined.sqlite"
 REPORT_OUT="$OUT_ROOT/route-flow"
+SAFETY_MARKER="$OUT_ROOT/.tracemap-swift-route-flow-smoke"
+
+case "$OUT_ROOT" in
+  "/"|"/tmp"|"/var/tmp"|"$ROOT_DIR"|"$HOME")
+    printf 'Refusing unsafe smoke output directory: %s\n' "$OUT_ROOT" >&2
+    exit 2
+    ;;
+esac
+
+if [[ -e "$OUT_ROOT" && ! -f "$SAFETY_MARKER" ]]; then
+  printf 'Refusing to delete unmarked smoke output directory: %s\n' "$OUT_ROOT" >&2
+  printf 'Choose a new output path or remove it manually after inspection.\n' >&2
+  exit 2
+fi
 
 rm -rf "$OUT_ROOT"
 mkdir -p "$OUT_ROOT"
+touch "$SAFETY_MARKER"
 
 swift run --package-path "$ROOT_DIR/src/swift" tracemap-swift scan \
   --repo "$ROOT_DIR/samples/swift-http-api-client-surfaces" \
