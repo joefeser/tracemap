@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 
 import {
   decodeHtmlEntities,
+  escapeRegExp,
   fileExists,
   normalizeBaseUrl,
   normalizeRenderedText,
@@ -52,9 +53,6 @@ const requiredText = [
   "API correctness",
   "TraceMap core scanning and reduction do not use LLM analysis, prompt-based classification, embeddings, or vector databases"
 ];
-
-const boundarySectionPattern =
-  /<section\b(?=[^>]*\bdata-tm-boundary\s*=\s*["'][^"']+["'])[^>]*>[\s\S]*?<\/section>/gi;
 
 const forbiddenPositiveClaims = [
   /\bTraceMap\b[^.]{0,140}\b(?:proves|guarantees|certifies|approves|validates)\b[^.]{0,140}\b(?:runtime|endpoint reachability|backend compatibility|request success|auth flow|production traffic|API correctness|release safety|complete Swift semantic analysis)\b/i,
@@ -152,7 +150,7 @@ async function validateArticlePage({ pagePath, errors }) {
   const decodedHtml = decodeHtmlEntities(html);
   const renderedText = normalizeRenderedText(html);
   const lowerText = renderedText.toLowerCase();
-  const unsanctionedHtml = decodedHtml.replace(boundarySectionPattern, " ");
+  const unsanctionedHtml = stripBoundarySections(decodedHtml);
   const unsanctionedText = normalizeRenderedText(unsanctionedHtml);
   const wordCount = countWords(renderedText);
 
@@ -160,16 +158,16 @@ async function validateArticlePage({ pagePath, errors }) {
     errors.push(withEvidence("Swift API-client article is missing expected title.", pageArtifact));
   }
 
-  if (!html.includes('<meta property="og:type" content="article">')) {
+  if (!hasTagWithAttributes(html, "meta", { property: "og:type", content: "article" })) {
     errors.push(withEvidence("Swift API-client article must use article metadata.", pageArtifact));
   }
 
-  if (!html.includes(`href="https://tracemap.tools${swiftApiClientArticleRoute}"`)) {
+  if (!hasTagWithAttributes(html, "link", { rel: "canonical", href: `https://tracemap.tools${swiftApiClientArticleRoute}` })) {
     errors.push(withEvidence(`Swift API-client article canonical URL must target ${swiftApiClientArticleRoute}`, pageArtifact));
   }
 
   for (const block of requiredBlocks) {
-    if (!new RegExp(`\\bdata-swift-api-blog-block=["']${block}["']`, "i").test(html)) {
+    if (!findTagWithAttribute(html, "section", "data-swift-api-blog-block", block)) {
       errors.push(withEvidence(`Swift API-client article is missing required block: ${block}`, pageArtifact));
     }
   }
@@ -190,17 +188,20 @@ async function validateArticlePage({ pagePath, errors }) {
     errors.push(withEvidence(`Swift API-client article word count must be between 700 and 1700 words, got ${wordCount}`, pageArtifact));
   }
 
-  scanPolicyText({ errors, label: "article", text: unsanctionedText, artifact: pageArtifact });
+  scanPositiveClaimText({ errors, label: "article", text: renderedText, artifact: pageArtifact });
+  scanRawMaterialText({ errors, label: "article", text: unsanctionedText, artifact: pageArtifact });
   scanHardPrivateText({ errors, label: "article", text: decodedHtml, artifact: pageArtifact });
 }
 
-function scanPolicyText({ errors, label, text, artifact }) {
+function scanPositiveClaimText({ errors, label, text, artifact }) {
   for (const pattern of forbiddenPositiveClaims) {
     if (pattern.test(text)) {
-      errors.push(withEvidence(`Swift API-client ${label} contains unsupported public claim outside a boundary section: ${pattern}`, artifact));
+      errors.push(withEvidence(`Swift API-client ${label} contains unsupported public claim: ${pattern}`, artifact));
     }
   }
+}
 
+function scanRawMaterialText({ errors, label, text, artifact }) {
   for (const pattern of rawMaterialPatterns) {
     if (pattern.test(text)) {
       errors.push(withEvidence(`Swift API-client ${label} contains raw/private material outside a boundary section: ${pattern}`, artifact));
@@ -220,12 +221,87 @@ function hasHref(html, href) {
   return new RegExp(`<a\\b[^>]*href\\s*=\\s*["']${escapeRegExp(href)}["'][^>]*>`, "i").test(html);
 }
 
-function countWords(text) {
-  return text.split(/\s+/).filter(Boolean).length;
+function hasTagWithAttributes(html, tagName, attributes) {
+  return Boolean(findTagWithAttributes(html, tagName, attributes));
 }
 
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function findTagWithAttribute(html, tagName, attributeName, attributeValue) {
+  return findTagWithAttributes(html, tagName, { [attributeName]: attributeValue });
+}
+
+function findTagWithAttributes(html, tagName, attributes) {
+  const tagPattern = new RegExp(`<${escapeRegExp(tagName)}\\b[^>]*>`, "gi");
+  let match;
+  while ((match = tagPattern.exec(html)) !== null) {
+    const tagHtml = match[0];
+    const hasAllAttributes = Object.entries(attributes).every(([name, value]) => hasAttribute(tagHtml, name, value));
+    if (hasAllAttributes) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
+function hasAttribute(tagHtml, attributeName, attributeValue) {
+  return new RegExp(`\\b${escapeRegExp(attributeName)}\\s*=\\s*["']${escapeRegExp(attributeValue)}["']`, "i").test(tagHtml);
+}
+
+function stripBoundarySections(html) {
+  let output = "";
+  let cursor = 0;
+
+  while (cursor < html.length) {
+    const boundaryMatch = findBoundarySection(html, cursor);
+    if (!boundaryMatch) {
+      output += html.slice(cursor);
+      break;
+    }
+
+    output += html.slice(cursor, boundaryMatch.index);
+    cursor = findSectionEnd(html, boundaryMatch.index + boundaryMatch.tagHtml.length);
+  }
+
+  return output;
+}
+
+function findBoundarySection(html, startIndex) {
+  const sectionPattern = /<section\b[^>]*>/gi;
+  sectionPattern.lastIndex = startIndex;
+
+  let match;
+  while ((match = sectionPattern.exec(html)) !== null) {
+    const tagHtml = match[0];
+    if (/\bdata-tm-boundary\s*=\s*["'][^"']+["']/i.test(tagHtml)) {
+      return { index: match.index, tagHtml };
+    }
+  }
+
+  return null;
+}
+
+function findSectionEnd(html, contentStart) {
+  const tagPattern = /<\/?section\b[^>]*>/gi;
+  tagPattern.lastIndex = contentStart;
+  let depth = 1;
+
+  let match;
+  while ((match = tagPattern.exec(html)) !== null) {
+    if (match[0].startsWith("</")) {
+      depth -= 1;
+      if (depth === 0) {
+        return tagPattern.lastIndex;
+      }
+    } else {
+      depth += 1;
+    }
+  }
+
+  return html.length;
+}
+
+function countWords(text) {
+  return text.split(/\s+/).filter(Boolean).length;
 }
 
 function withEvidence(message, artifact) {
