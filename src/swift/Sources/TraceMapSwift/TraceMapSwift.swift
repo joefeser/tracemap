@@ -3600,6 +3600,119 @@ enum FactFactory {
     }
 }
 
+public enum TraceMapSwiftSelfTests {
+    public static func run() throws {
+        try collisionNormalizationIsDeterministicAndEvidenceBacked()
+    }
+
+    private static func collisionNormalizationIsDeterministicAndEvidenceBacked() throws {
+        let manifest = ScanManifest(
+            scanId: "swift-self-test",
+            repoName: "swift-self-test",
+            remoteUrl: nil,
+            branch: "main",
+            commitSha: "0000000000000000000000000000000000000000",
+            scannerVersion: TraceMapSwiftVersion.scanner,
+            scannedAt: "1970-01-01T00:00:00Z",
+            analysisLevel: "Level3SyntaxAnalysis",
+            buildStatus: "NotRun",
+            solutions: [],
+            projects: [],
+            targetFrameworks: [],
+            knownGaps: [],
+            scanRootRelativePath: ".",
+            scanRootPathHash: "self-test",
+            gitRootHash: "self-test",
+            extractorVersions: [TraceMapSwiftVersion.extractorId: TraceMapSwiftVersion.extractorVersion]
+        )
+
+        let alpha = collisionFact(
+            targetSymbol: "swift.symbol.alpha",
+            filePath: "Sources/App/Alpha.swift",
+            marker: "alpha"
+        )
+        let beta = collisionFact(
+            targetSymbol: "swift.symbol.beta",
+            filePath: "Sources/App/Beta.swift",
+            marker: "beta"
+        )
+
+        let first = FactFactory.normalizeFacts(manifest: manifest, facts: [beta, alpha])
+        let second = FactFactory.normalizeFacts(manifest: manifest, facts: [alpha, beta])
+        let firstRepresentative = representativeFact(in: first)
+        let secondRepresentative = representativeFact(in: second)
+
+        try require(firstRepresentative?.targetSymbol == "swift.symbol.alpha", "fact collision representative should be content-stable")
+        try require(firstRepresentative == secondRepresentative, "fact collision representative should not depend on input order")
+
+        let firstGap = collisionGapFact(in: first)
+        let secondGap = collisionGapFact(in: second)
+        try require(firstGap == secondGap, "fact collision gap should not depend on input order")
+        try require(firstGap?.properties["discardedCollisionCount"] == "1", "fact collision gap should count discarded facts")
+        try require(firstGap?.properties["distinctCollisionShapeCount"] == "2", "fact collision gap should count distinct shapes")
+        try require(firstGap?.properties["collisionFactIdHash"]?.isEmpty == false, "fact collision gap should hash the colliding fact ID")
+
+        let coverageGaps = FactFactory.collisionCoverageGaps(facts: [beta, alpha])
+        try require(coverageGaps.count == 1, "fact collision coverage gap should be emitted once")
+        try require(coverageGaps.first?.kind == "swift-fact-id-collision", "fact collision coverage gap kind should be stable")
+        try require(coverageGaps.first?.filePath == "Sources/App/Alpha.swift", "fact collision coverage gap should use the deterministic representative")
+    }
+
+    private static func representativeFact(in facts: [CodeFact]) -> CodeFact? {
+        facts.first { $0.factType == "SwiftDeclarationDeclared" && $0.factId == collisionFactId }
+    }
+
+    private static func collisionGapFact(in facts: [CodeFact]) -> CodeFact? {
+        facts.first { $0.factType == "AnalysisGap" && $0.properties["gapKind"] == "swift-fact-id-collision" }
+    }
+
+    private static func collisionFact(targetSymbol: String, filePath: String, marker: String) -> CodeFact {
+        CodeFact(
+            factId: collisionFactId,
+            scanId: "swift-self-test",
+            repo: "swift-self-test",
+            commitSha: "0000000000000000000000000000000000000000",
+            projectPath: nil,
+            factType: "SwiftDeclarationDeclared",
+            ruleId: RuleIds.swiftSyntaxDeclaration,
+            evidenceTier: .tier3SyntaxOrTextual,
+            sourceSymbol: nil,
+            targetSymbol: targetSymbol,
+            contractElement: targetSymbol,
+            evidence: EvidenceSpan(
+                filePath: filePath,
+                startLine: 1,
+                endLine: 1,
+                ruleId: RuleIds.swiftSyntaxDeclaration,
+                snippetHash: nil,
+                extractorId: TraceMapSwiftVersion.extractorId,
+                extractorVersion: TraceMapSwiftVersion.extractorVersion
+            ),
+            properties: [
+                "language": "swift",
+                "marker": marker,
+                "staticEvidenceOnly": "true"
+            ]
+        )
+    }
+
+    private static func require(_ condition: Bool, _ message: String) throws {
+        if !condition {
+            throw SelfTestFailure(message)
+        }
+    }
+
+    private static let collisionFactId = "swift-fact-self-test-collision"
+
+    private struct SelfTestFailure: Error, CustomStringConvertible {
+        let description: String
+
+        init(_ description: String) {
+            self.description = description
+        }
+    }
+}
+
 struct PackageResolvedMetadata {
     let schemaVersion: String
     let stateCount: Int
