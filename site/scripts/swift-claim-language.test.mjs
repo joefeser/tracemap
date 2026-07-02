@@ -73,6 +73,19 @@ test("validateSwiftClaimLanguageDist reports invalid baseUrl values", async (t) 
   assert.match(errors.join("\n"), /baseUrl must be a valid absolute URL/);
 });
 
+test("validateSwiftClaimLanguageDist normalizes baseUrl to the origin", async (t) => {
+  const root = await createManagedSwiftClaimDistFixture(t);
+  const errors = [];
+
+  await validateSwiftClaimLanguageDist({
+    baseUrl: "https://tracemap.tools/docs/?preview=true",
+    dist: join(root, "dist"),
+    errors
+  });
+
+  assert.deepEqual(errors, []);
+});
+
 test("validateSwiftClaimLanguageDist requires checklist rows and safe examples", async (t) => {
   const source = await sourcePage();
   const root = await createManagedSwiftClaimDistFixture(t, {
