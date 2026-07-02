@@ -1,5 +1,20 @@
 [
   {
+    "slug": "how-tracemap-reads-swift-api-clients",
+    "category": "Swift evidence",
+    "title": "How TraceMap Reads Swift API Clients Without Pretending They Ran",
+    "h1": "How TraceMap reads Swift API clients without pretending they ran",
+    "description": "A demo-level Swift API-client evidence story for reading URLSession, URLRequest, Alamofire, and Moya static candidates without runtime claims.",
+    "ogDescription": "How TraceMap surfaces Swift API-client static candidates for review without claiming endpoint reachability, request success, or runtime behavior.",
+    "cardDescription": "A Swift API-client evidence story for reviewers who need app-to-backend context without runtime overclaims.",
+    "hero": "Swift API-client evidence is useful when it helps reviewers ask better backend-dependency questions without pretending static evidence is runtime tracing.",
+    "published": "2026-07-02",
+    "publishedDisplay": "July 2, 2026",
+    "body": "articles/how-tracemap-reads-swift-api-clients.html",
+    "calloutHeading": "Want the row-level walkthrough?",
+    "calloutHtml": "Open the <a href=\"/swift/api-client-walkthrough/\">Swift API-client walkthrough</a>, then check the <a href=\"/swift/claim-language/\">Swift claim-language checklist</a>."
+  },
+  {
     "slug": "building-tracemap-under-review-pressure",
     "category": "Workflow governance",
     "title": "Building TraceMap Under Review Pressure",
