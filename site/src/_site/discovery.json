@@ -85,6 +85,23 @@
     ]
   },
   {
+    "path": "/swift/api-client-walkthrough/",
+    "title": "Swift API-Client Evidence Walkthrough",
+    "summary": "Demo-level walkthrough for reading Swift URLSession, URLRequest, Alamofire, and Moya-style API-client evidence as static rule-backed candidates.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/swift/real-world-smoke/",
+    "limitations": [
+      "Swift API-client evidence is deterministic static evidence and does not prove runtime behavior, endpoint reachability, backend compatibility, request success, auth flow, production traffic, API correctness, build success, package compatibility, deployment state, or release safety.",
+      "The walkthrough explains how to read public-safe evidence fields and is not raw scanner output; raw generated artifacts stay local."
+    ],
+    "nonClaims": [
+      "No endpoint reachability proof, backend compatibility proof, request success proof, auth-flow proof, production traffic proof, runtime behavior proof, API correctness proof, Xcode build proof, SwiftPM restore proof, simulator/device execution proof, package compatibility proof, deployment proof, release safety proof, stored-value proof, query execution proof, live schema proof, or complete Swift semantic analysis.",
+      "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector databases, raw generated artifacts, raw source snippets, raw SQL, secrets, local absolute paths, clone URLs, raw remotes, credentials, hostnames, config values, private labels, runtime observations, analyzer logs, or hidden validation details are public Swift API-client claims."
+    ]
+  },
+  {
     "path": "/swift/static-inventory/",
     "title": "Swift Static Inventory",
     "summary": "Shipped Swift v0 story page for package/project inventory, source file selection, module-ish metadata, and reduced-coverage labels.",

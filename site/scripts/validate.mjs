@@ -57,6 +57,7 @@ import { validateStaticVsRuntimeDist } from "./static-vs-runtime.mjs";
 import { validateStakeholderObjectionGuideDist } from "./stakeholder-objection-guide.mjs";
 import { validateStakeholderQuestionIndexDist } from "./stakeholder-question-index.mjs";
 import { validateSwiftAdapterStoryDist } from "./swift-adapter-story.mjs";
+import { validateSwiftApiClientWalkthroughDist } from "./swift-api-client-walkthrough.mjs";
 import { validateSwiftClaimLanguageDist } from "./swift-claim-language.mjs";
 import { validateSwiftEvidenceLaneDist } from "./swift-evidence-lane.mjs";
 import { validateSwiftRealWorldSmokeDist } from "./swift-real-world-smoke.mjs";
@@ -165,6 +166,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateStakeholderObjectionGuideDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStakeholderQuestionIndexDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateSwiftAdapterStoryDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateSwiftApiClientWalkthroughDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateSwiftClaimLanguageDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateSwiftRealWorldSmokeDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateSwiftStoryPagesDist({ baseUrl: normalizedBaseUrl, dist, errors });

@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Swift API-client evidence walkthrough for TraceMap: URLSession, URLRequest, Alamofire, and Moya-style static candidates with rule IDs, tiers, coverage labels, limitations, and non-claims."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Swift API-Client Evidence Walkthrough | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/swift/api-client-walkthrough/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Swift API-Client Evidence Walkthrough | TraceMap">
+    <meta
+      property="og:description"
+      content="A demo-level walkthrough for reading Swift API-client static evidence without claiming endpoint reachability, request success, auth flow, backend compatibility, production traffic, or runtime behavior."
+    >
+    <meta property="og:url" content="https://tracemap.tools/swift/api-client-walkthrough/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main data-swift-api-client-walkthrough>
+      <section class="page-hero">
+        <p class="eyebrow">Swift API-client walkthrough</p>
+        <h1>Read Swift API-client evidence as static candidates, not live calls.</h1>
+        <p class="hero-subhead">
+          TraceMap can surface supported Swift URLSession, URLRequest, Alamofire,
+          and Moya-style API-client evidence as rule-backed static candidates.
+          The useful part is the attached proof boundary: rule ID, evidence tier,
+          coverage label, source location, limitation, and non-claim.
+        </p>
+        <p class="hero-note">
+          Public claim level: demo. Proof path:
+          <a href="/swift/surface-discovery/">Swift surface discovery</a>,
+          <a href="/swift/real-world-smoke/">real-world smoke proof</a>, and
+          <a href="https://github.com/joefeser/tracemap/blob/main/docs/VALIDATION.md#swift-real-world-api-client-smoke">validation guide</a>.
+          This walkthrough explains how to read the evidence; it is not raw scanner output.
+        </p>
+        <nav class="hero-actions" aria-label="Swift API-client walkthrough links">
+          <a class="button primary" href="#api-client-evidence-shapes">Evidence shapes</a>
+          <a class="button secondary" href="/swift/surface-discovery/">Surface discovery</a>
+          <a class="button secondary" href="/swift/real-world-smoke/">Real-world smoke proof</a>
+          <a class="button secondary" href="/swift/claim-language/">Claim checklist</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">How to use it</p>
+          <h2>The walkthrough gives reviewers a reading order.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Start with the selector</strong><span>Find the normalized static path key and HTTP method attached to the client evidence.</span></div>
+          <div><strong>Check the rule ID</strong><span>Use <code>swift.http.urlsession.v1</code> or <code>swift.http.client-library.v1</code> to know which extractor rule produced the row.</span></div>
+          <div><strong>Read the tier</strong><span>Swift API-client rows are syntax/textual or structural candidates, not compiler semantic proof.</span></div>
+          <div><strong>Keep the limit attached</strong><span>Every row needs coverage and non-claim wording before it appears in a public story or review packet.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="api-client-evidence-shapes" aria-labelledby="api-client-evidence-shapes-heading">
+        <div class="section-header">
+          <p class="section-kicker">Evidence shapes</p>
+          <h2 id="api-client-evidence-shapes-heading">Supported Swift API-client rows share the same proof contract.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-swift-api-client-shapes>
+            <caption>
+              Demo-level reading guide for Swift API-client static evidence. These rows
+              describe evidence shape, not runtime network behavior.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Evidence shape</th>
+                <th scope="col">Rule ID</th>
+                <th scope="col">Evidence tier</th>
+                <th scope="col">Coverage label</th>
+                <th scope="col">What reviewers may say</th>
+                <th scope="col">Required limitation</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-swift-api-client-shape="urlsession-literal">
+                <td><strong>URLSession literal request</strong></td>
+                <td><code>swift.http.urlsession.v1</code></td>
+                <td><code>Tier3SyntaxOrTextual</code></td>
+                <td><code>CoverageRelative</code> or <code>ReducedCoverage</code></td>
+                <td>A Swift source location contains static URLSession-adjacent HTTP evidence with a normalized method/path candidate.</td>
+                <td>Does not prove request execution, endpoint reachability, response handling, auth flow, backend compatibility, production traffic, or runtime behavior.</td>
+              </tr>
+              <tr data-swift-api-client-shape="urlrequest-method">
+                <td><strong>URLRequest method and URL literal</strong></td>
+                <td><code>swift.http.urlsession.v1</code></td>
+                <td><code>Tier3SyntaxOrTextual</code></td>
+                <td><code>CoverageRelative</code> or <code>ReducedCoverage</code></td>
+                <td>A URLRequest literal, method assignment, and recognized URLSession use form a static HTTP candidate.</td>
+                <td>Does not prove method mutation at runtime, request success, credentials, retry behavior, backend compatibility, or live network traffic.</td>
+              </tr>
+              <tr data-swift-api-client-shape="alamofire-request">
+                <td><strong>Alamofire request literal</strong></td>
+                <td><code>swift.http.client-library.v1</code></td>
+                <td><code>Tier3SyntaxOrTextual</code></td>
+                <td><code>CoverageRelative</code> or <code>ReducedCoverage</code></td>
+                <td>A supported Alamofire call shape exposes a static client-library surface with method/path metadata where literals are present.</td>
+                <td>Does not prove Alamofire runtime configuration, interceptors, auth headers, request success, network reachability, or production use.</td>
+              </tr>
+              <tr data-swift-api-client-shape="moya-target">
+                <td><strong>Moya TargetType-style path</strong></td>
+                <td><code>swift.http.client-library.v1</code></td>
+                <td><code>Tier3SyntaxOrTextual</code></td>
+                <td><code>CoverageRelative</code> or <code>ReducedCoverage</code></td>
+                <td>A supported TargetType-style path/method shape can become static client-library surface evidence.</td>
+                <td>Does not prove baseURL composition, runtime target selection, plugin behavior, auth flow, backend compatibility, or request execution.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section command-section">
+        <div>
+          <p class="section-kicker">Report reading</p>
+          <h2>A safe review packet repeats the evidence fields, not the source text.</h2>
+          <p>
+            The public walkthrough should point to sanitized summaries and checked-in
+            validation docs. Raw generated artifacts stay local; public copy should
+            use labels, rule IDs, evidence tiers, coverage labels, normalized path
+            keys, line spans, commit SHA, and limitations.
+          </p>
+        </div>
+        <pre class="command-block"><code>Rule: swift.http.client-library.v1
+Tier: Tier3SyntaxOrTextual
+Coverage: ReducedCoverage or CoverageRelative
+Claim: static Swift API-client candidate
+Non-claim: not runtime endpoint reachability</code></pre>
+      </section>
+
+      <section class="section boundary-section" aria-labelledby="api-client-nonclaims-heading">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2 id="api-client-nonclaims-heading">Do not turn API-client evidence into backend proof.</h2>
+        </div>
+        <ul>
+          <li>Do not claim endpoint reachability, backend compatibility, request success, auth flow, production traffic, runtime behavior, deployment state, release safety, or API correctness.</li>
+          <li>Do not claim SwiftPM restore proof, Xcode build proof, simulator/device execution, package compatibility, app navigation, rendered UI, stored values, query execution, live schema, or complete Swift semantic analysis.</li>
+          <li>Do not publish raw generated artifacts, raw source snippets, raw SQL, secrets, credentials, local absolute paths, raw remotes, hostnames, config values, runtime observations, private scan artifacts, or hidden validation details.</li>
+          <li>TraceMap core scanning and reduction do not use AI impact analysis, LLM analysis, prompt-based classification, embeddings, or vector database analysis.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Proof path</p>
+          <h2>Use these pages before repeating a Swift API-client claim.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/swift/">Swift evidence lane</a>
+          <a href="/swift/story/">Why Swift evidence matters</a>
+          <a href="/swift/surface-discovery/">Swift surface discovery</a>
+          <a href="/swift/real-world-smoke/">Swift real-world smoke proof</a>
+          <a href="/swift/evidence-safety/">Swift evidence safety</a>
+          <a href="/swift/claim-language/">Swift claim language checklist</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/limitations/reduced-coverage/">Reduced coverage</a>
+          <a href="/site-claim-guardrails/">Site claim guardrails</a>
+          <a href="https://github.com/joefeser/tracemap/blob/main/docs/VALIDATION.md#swift-real-world-api-client-smoke">Validation guide section</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Next, compare this walkthrough with the
+        <a href="/swift/claim-language/">Swift claim-language checklist</a>
+        before repeating API-client evidence in public copy.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>

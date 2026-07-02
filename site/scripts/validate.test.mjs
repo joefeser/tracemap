@@ -69,6 +69,7 @@ import { siteClaimGuardrailsRoute } from "./site-claim-guardrails.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
 import { swiftAdapterStoryRoute } from "./swift-adapter-story.mjs";
+import { swiftApiClientWalkthroughRoute } from "./swift-api-client-walkthrough.mjs";
 import { swiftClaimLanguageRoute } from "./swift-claim-language.mjs";
 import { swiftEvidenceLaneRoute } from "./swift-evidence-lane.mjs";
 import { swiftRealWorldSmokeRoute } from "./swift-real-world-smoke.mjs";
@@ -251,6 +252,7 @@ async function createDistFixture({
       staticTriageRoute,
       staticVsRuntimeRoute,
       swiftAdapterStoryRoute,
+      swiftApiClientWalkthroughRoute,
       swiftClaimLanguageRoute,
       swiftEvidenceLaneRoute,
       swiftRealWorldSmokeRoute,
@@ -324,6 +326,7 @@ async function createDistFixture({
     staticTriageRoute,
     staticVsRuntimeRoute,
     swiftAdapterStoryRoute,
+    swiftApiClientWalkthroughRoute,
     swiftClaimLanguageRoute,
     swiftEvidenceLaneRoute,
     swiftRealWorldSmokeRoute,
@@ -727,6 +730,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === swiftAdapterStoryRoute) {
     return readFile(new URL("../src/swift/story/index.html", import.meta.url), "utf8");
+  }
+
+  if (route === swiftApiClientWalkthroughRoute) {
+    return readFile(new URL("../src/swift/api-client-walkthrough/index.html", import.meta.url), "utf8");
   }
 
   if (route === swiftRealWorldSmokeRoute) {
@@ -1590,6 +1597,24 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: [
           "No Xcode build proof, SwiftPM restore proof, simulator or device execution proof, network-call proof, credential proof, auth-flow proof, production telemetry proof, endpoint reachability proof, backend compatibility proof, complete app navigation proof, package compatibility proof, production-use proof, impact proof, complete Swift semantic analysis, stored-value proof, query execution proof, or live schema proof.",
           "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector databases, raw generated artifacts, raw source snippets, raw SQL, secrets, local absolute paths, clone URLs, raw remotes, credentials, hostnames, config values, private labels, runtime observations, analyzer logs, or hidden validation details are public Swift smoke claims."
+        ]
+      },
+      {
+        path: swiftApiClientWalkthroughRoute,
+        title: "Swift API-Client Evidence Walkthrough",
+        summary:
+          "Demo-level Swift API-client walkthrough for reading URLSession, URLRequest, Alamofire, and Moya-style static candidates with rule IDs, evidence tiers, coverage labels, limitations, and non-claims attached.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/swift/real-world-smoke/",
+        limitations: [
+          "The walkthrough explains how public Swift API-client evidence is represented; it is not raw scanner output and raw generated artifacts stay local.",
+          "API-client evidence is static syntax/textual evidence and does not prove endpoint reachability, backend compatibility, request success, auth flow, production traffic, runtime behavior, API correctness, or complete Swift semantic analysis."
+        ],
+        nonClaims: [
+          "No runtime behavior proof, endpoint reachability proof, backend compatibility proof, request success proof, auth-flow proof, production traffic proof, API correctness proof, complete Swift semantic analysis, package compatibility proof, deployment proof, release safety proof, or production-use proof.",
+          "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector database analysis, raw generated artifacts, raw source snippets, raw SQL, secrets, local absolute paths, raw remotes, credentials, hostnames, private labels, analyzer logs, or hidden validation details are public API-client walkthrough claims."
         ]
       },
       {
