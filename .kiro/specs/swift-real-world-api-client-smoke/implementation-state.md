@@ -26,7 +26,11 @@ publication.
   commits are already present; missing commits fail explicitly instead of
   silently requiring network access.
 - Cached repositories verify their `origin` URL before reuse.
+- Cached repositories reset hard to the pinned commit before scanning so tracked
+  local edits in a reused cache cannot affect results.
 - SQLite summary queries fail loudly if the generated index cannot be read.
+- Swift fact-id collision gaps are folded into final scan metadata and coverage
+  labeling before artifacts are written.
 - The generated summaries use public repo slugs, pinned SHAs, artifact labels,
   counts, rule IDs, coverage labels, and limitations. They intentionally omit
   local absolute paths, clone URLs, raw remotes, source snippets, raw SQL,
@@ -63,6 +67,7 @@ publication.
   - The offline rerun reused only a verified local cache with the pinned commit.
 - Focused summary isolation passed against a reused output root containing stale
   full-run artifacts; the generated Markdown included only `icecubesapp`.
+- `TRACEMAP_SWIFT_REAL_WORLD_REPOS=icecubesapp TRACEMAP_SWIFT_REAL_WORLD_OFFLINE=1 TRACEMAP_SKIP_BUILD=1 scripts/smoke-swift-real-world.sh /tmp/tracemap-swift-real-world-cache /tmp/tracemap-swift-real-world-smoke-review-2` passed after adding hard cache reset and final collision-gap metadata propagation.
 - `TRACEMAP_SKIP_BUILD=1 scripts/smoke-swift-real-world.sh /tmp/tracemap-swift-real-world-cache /tmp/tracemap-swift-real-world-smoke-full` passed.
   - `icecubesapp`: 29,686 facts, 2,411 gaps, 4 HTTP/API, 601 UI,
     20 storage/data, 74 package/dependency.

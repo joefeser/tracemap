@@ -106,6 +106,7 @@ clone_checkout() {
     git -C "$dest" fetch --quiet --depth 1 origin "$sha"
   fi
   git -C "$dest" checkout --quiet --detach "$sha"
+  git -C "$dest" reset --hard --quiet "$sha"
   git -C "$dest" clean -fdx --quiet
   printf '%s\n' "$dest"
 }
