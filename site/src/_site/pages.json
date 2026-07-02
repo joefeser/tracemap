@@ -190,6 +190,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/swift/api-client-walkthrough/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/swift/static-inventory/",
     "changefreq": "monthly",
     "priority": "0.7"
