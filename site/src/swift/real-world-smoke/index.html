@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="TraceMap Swift real-world API-client smoke proof: pinned public Swift app samples, sanitized generated summaries, and static evidence boundaries."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Swift Real-World Smoke Proof | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/swift/real-world-smoke/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Swift Real-World Smoke Proof | TraceMap">
+    <meta
+      property="og:description"
+      content="Pinned public Swift API-client smoke samples show TraceMap Swift v0 static evidence extraction over messy apps without runtime or simulator claims."
+    >
+    <meta property="og:url" content="https://tracemap.tools/swift/real-world-smoke/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main data-swift-real-world-smoke>
+      <section class="page-hero">
+        <p class="eyebrow">Swift validation</p>
+        <h1>Swift v0 has a pinned real-world smoke path.</h1>
+        <p class="hero-subhead">
+          The Swift real-world API-client smoke scans pinned public Swift app
+          samples and verifies static artifact generation plus sanitized evidence
+          summaries. It gives reviewers a public proof path for Swift v0 without
+          turning static evidence into runtime claims.
+        </p>
+        <p class="hero-note">
+          Public claim level: shipped. Proof:
+          <a href="https://github.com/joefeser/tracemap/blob/main/docs/VALIDATION.md#swift-real-world-api-client-smoke">validation guide</a>
+          and <code>scripts/smoke-swift-real-world.sh</code>. Generated summaries
+          are sanitized validation artifacts; raw scan outputs remain local.
+        </p>
+        <nav class="hero-actions" aria-label="Swift real-world smoke links">
+          <a class="button primary" href="/swift/">Swift evidence lane</a>
+          <a class="button secondary" href="/swift/surface-discovery/">Surface discovery</a>
+          <a class="button secondary" href="/validation/">Validation</a>
+          <a class="button secondary" href="#smoke-boundaries">Boundaries</a>
+        </nav>
+      </section>
+
+      <section class="section split-section">
+        <div>
+          <p class="section-kicker">What the smoke checks</p>
+          <h2>The harness exercises Swift v0 against messy public app shapes.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>Pinned inputs</strong><span>The smoke uses fixed public repository commits so reviewers can repeat the same source snapshot.</span></div>
+          <div><strong>Static artifacts</strong><span>Each scan is expected to produce the standard TraceMap artifact family and sanitized summary metadata.</span></div>
+          <div><strong>Static evidence extraction</strong><span>The smoke demonstrates static evidence extraction over public app shapes without claiming runtime correctness.</span></div>
+          <div><strong>Public-safe summaries</strong><span>Summaries use labels, public repository names, pinned commit SHAs, artifact labels, counts, rule IDs, coverage labels, and limitations.</span></div>
+          <div><strong>Bounded evidence</strong><span>The smoke is useful because it carries the limitation text alongside the static evidence claim.</span></div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="swift-smoke-samples-heading">
+        <div class="section-header">
+          <p class="section-kicker">Pinned samples</p>
+          <h2 id="swift-smoke-samples-heading">The sample list is public, pinned, and intentionally not tiny.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table" data-swift-real-world-samples>
+            <caption>
+              Public Swift smoke samples from the validation guide. The table is metadata only,
+              not raw scan output.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Label</th>
+                <th scope="col">Repository</th>
+                <th scope="col">Pinned SHA</th>
+                <th scope="col">Why included</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-swift-smoke-sample="icecubesapp">
+                <td><code>icecubesapp</code></td>
+                <td><code>Dimillian/IceCubesApp</code></td>
+                <td><code>9c05a720597b3ff13de2e241bf58d3fba0863c09</code></td>
+                <td>SwiftUI Mastodon client with real federated API client and UI surface evidence.</td>
+              </tr>
+              <tr data-swift-smoke-sample="mastodon-ios">
+                <td><code>mastodon-ios</code></td>
+                <td><code>mastodon/mastodon-ios</code></td>
+                <td><code>95ac4a6d726ebf9fa867036dbf9d72f0a4b5f534</code></td>
+                <td>Official Mastodon iOS app with real backend/API client and mobile app structure evidence.</td>
+              </tr>
+              <tr data-swift-smoke-sample="kickstarter-ios">
+                <td><code>kickstarter-ios</code></td>
+                <td><code>kickstarter/ios-oss</code></td>
+                <td><code>203971bdf40f3a3a5071ce0c1fbc4eb3cad5b094</code></td>
+                <td>Product iOS app with real backend/API client, view model, dependency, and persistence-adjacent evidence.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section command-section">
+        <div>
+          <p class="section-kicker">Repeatable command</p>
+          <h2>The validation guide keeps the smoke opt-in and explicit.</h2>
+          <p>
+            The command belongs in a developer validation run, not in public page
+            execution. It writes generated outputs under caller-provided temporary
+            directories.
+          </p>
+        </div>
+        <pre class="command-block"><code>scripts/smoke-swift-real-world.sh /tmp/tracemap-swift-real-world-cache /tmp/tracemap-swift-real-world-smoke</code></pre>
+      </section>
+
+      <section class="section boundary-section" id="smoke-boundaries" aria-labelledby="smoke-boundaries-heading">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2 id="smoke-boundaries-heading">The smoke is static validation, not app execution.</h2>
+        </div>
+        <ul>
+          <li>The smoke does not run Swift apps, Xcode builds, SwiftPM dependency resolution, simulators, devices, network calls, credentials, auth flows, production telemetry, or runtime persistence.</li>
+          <li>The smoke does not prove runtime API correctness, endpoint reachability, backend compatibility, complete app navigation, package compatibility, production use, release safety, stored values, query execution, live schema, impact, or complete Swift semantic analysis.</li>
+          <li>Generated summaries must not include local absolute paths, clone URLs, raw remotes, raw source snippets, raw SQL, credentials, config values, hostnames, private labels, or runtime observations.</li>
+          <li>TraceMap core scanning and reduction do not use AI impact analysis, LLM analysis, prompt-based classification, embeddings, or vector database analysis.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div>
+          <p class="section-kicker">Follow the proof</p>
+          <h2>Use the smoke proof with the Swift evidence lane and limitations.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/swift/">Swift evidence lane</a>
+          <a href="/swift/story/">Why Swift evidence matters</a>
+          <a href="/swift/surface-discovery/">Swift surface discovery</a>
+          <a href="/swift/evidence-safety/">Swift evidence safety</a>
+          <a href="/validation/">Validation</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/limitations/reduced-coverage/">Reduced coverage</a>
+          <a href="/site-claim-guardrails/">Site claim guardrails</a>
+          <a href="https://github.com/joefeser/tracemap/blob/main/docs/VALIDATION.md#swift-real-world-api-client-smoke">Validation guide section</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Next, open the
+        <a href="/swift/">Swift evidence lane</a>,
+        then compare the
+        <a href="/capabilities/">capability matrix</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
