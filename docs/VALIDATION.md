@@ -136,6 +136,7 @@ dotnet run --project src/dotnet/TraceMap.Cli -- combine --index /tmp/tracemap-sw
 dotnet run --project src/dotnet/TraceMap.Cli -- report --index /tmp/tracemap-swift-combined.sqlite --out /tmp/tracemap-swift-report
 dotnet run --project src/dotnet/TraceMap.Cli -- combine --index /tmp/tracemap-swift-storage-data-surfaces/index.sqlite --label swift --out /tmp/tracemap-swift-storage-combined.sqlite
 dotnet run --project src/dotnet/TraceMap.Cli -- report --index /tmp/tracemap-swift-storage-combined.sqlite --out /tmp/tracemap-swift-storage-report
+scripts/smoke-swift-route-flow.sh /tmp/tracemap-swift-route-flow-smoke
 ./scripts/check-private-paths.sh
 git diff --check
 ```
@@ -155,7 +156,10 @@ behavior, runtime behavior, protocol witness selection, Objective-C dispatch,
 dependency vulnerability/license/freshness, or impact. Generated Swift
 artifacts must not contain raw source snippets, manifest snippets, plist
 values, raw URLs, hostnames, local absolute paths, raw remotes, credentials,
-secrets, or private labels.
+secrets, or private labels. Swift route-flow smoke outputs remain
+coverage-relative static evidence and must not claim runtime endpoint
+reachability, app execution, auth behavior, deployment, traffic, or user
+actions.
 
 ### Swift Real-World API-Client Smoke
 
