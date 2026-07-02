@@ -96,7 +96,11 @@ test("validateSwiftRealWorldSmokeDist rejects private material and unsupported c
     ["<p>TraceMap proves Swift runtime API correctness.</p>", /unsupported Swift claim wording/],
     ["<p>Swift validates package compatibility.</p>", /unsupported Swift claim wording/],
     ["<p>TraceMap performs AI impact analysis.</p>", /unsupported Swift claim wording/],
-    ["<p>TraceMap uses vector database analysis.</p>", /unsupported Swift claim wording/]
+    ["<p>TraceMap uses embeddings.</p>", /unsupported Swift claim wording/],
+    ["<p>TraceMap uses vector databases.</p>", /unsupported Swift claim wording/],
+    ["<p>TraceMap uses vector database analysis.</p>", /unsupported Swift claim wording/],
+    ["<p>Trace<span>Map</span> uses embeddings.</p>", /unsupported Swift claim wording/],
+    ["<p>Trace<span>Map uses vector database analysis.</span></p>", /unsupported Swift claim wording/]
   ];
 
   for (const [body, expected] of cases) {

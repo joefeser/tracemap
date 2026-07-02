@@ -83,7 +83,7 @@ const forbiddenPositiveClaims = [
   /\bTraceMap\b[^.]{0,140}\b(?:proves|guarantees|certifies|approves|validates)\b[^.]{0,140}\b(?:runtime|API correctness|build|navigation|production|release|stored values?|query execution|live schema|network reachability|backend compatibility|package compatibility|complete Swift semantic analysis)\b/i,
   /\bSwift\b[^.]{0,140}\b(?:proves|guarantees|certifies|approves|validates)\b[^.]{0,140}\b(?:runtime|API correctness|build|navigation|production|release|stored values?|query execution|live schema|network reachability|backend compatibility|package compatibility|complete Swift semantic analysis)\b/i,
   /\b(?:safe to release|ready to release|approved to merge|complete Swift analysis)\b/i,
-  /\bTraceMap\b[^.]{0,140}\b(?:uses|performs|provides|runs|adds)\b[^.]{0,140}\b(?:AI impact analysis|LLM analysis|prompt-based classification|embedding search|vector database analysis)\b/i
+  /\bTraceMap\b[^.]{0,140}\b(?:uses|performs|provides|runs|adds)\b[^.]{0,140}\b(?:AI impact analysis|LLM analysis|prompt-based classification|embeddings?|embedding-backed search|embedding search|vector databases?|vector database analysis)\b/i
 ];
 
 export async function validateSwiftRealWorldSmokeDist({ baseUrl = "https://tracemap.tools", dist, errors }) {
@@ -179,7 +179,8 @@ async function validatePage({ pagePath, errors }) {
   const html = await readFile(pagePath, "utf8");
   const decodedHtml = decodeHtmlEntities(html);
   const pageText = normalizeRenderedText(html);
-  const policyText = `${decodedHtml} ${pageText}`;
+  const tightPageText = normalizeTightHtmlText(html);
+  const policyText = `${decodedHtml} ${pageText} ${tightPageText}`;
 
   if (!/<title>Swift Real-World Smoke Proof \| TraceMap<\/title>/i.test(html)) {
     errors.push(withEvidence("Swift real-world smoke page is missing expected title.", pageArtifact));
@@ -284,6 +285,12 @@ function hasHref(html, href) {
 
 function redactPattern(pattern) {
   return `redacted ${pattern.source.slice(0, 24)}...`;
+}
+
+function normalizeTightHtmlText(html) {
+  return decodeHtmlEntities(String(html).replace(/<[^>]+>/g, ""))
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function withEvidence(message, artifact) {
