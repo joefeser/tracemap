@@ -501,6 +501,7 @@ struct TraceMapSwiftSmokeTests {
           var path: String { "/v1/missing-method" }
         }
         struct CompactClient { func run() { AF.request("https://api.example.invalid/v1/compact", method: .get) } }
+        struct SameLineClients { func first() { AF.request("https://api.example.invalid/v1/inline-first", method: .get) } func second() { AF.request("https://api.example.invalid/v1/inline-second", method: .get) } }
         enum Moya { enum Method { case get } }
         enum AF { static func request(_ value: String, method: Method) {}; enum Method { case get; case put } }
         enum Alamofire { static func request(_ value: String, method: Method) {}; enum Method { case post } }
@@ -518,6 +519,10 @@ struct TraceMapSwiftSmokeTests {
         assert(httpFacts.contains { $0.ruleId == "swift.http.client-library.v1" && $0.properties["framework"] == "alamofire" && $0.properties["httpMethod"] == "GET" && $0.properties["sourceContextStatus"] == "containing-declaration" })
         assert(httpFacts.contains { $0.properties["framework"] == "moya" && $0.properties["swiftClientKind"] == "moya" && $0.properties["httpMethod"] == "GET" && $0.properties["containingDeclarationKind"] == "property" && $0.properties["containingDeclarationDisplayName"] == "property path" })
         assert(httpFacts.contains { $0.properties["framework"] == "alamofire" && $0.properties["normalizedPathKey"] == "/v1/compact" && $0.properties["containingDeclarationKind"] == "function" && ($0.properties["containingDeclarationDisplayName"] ?? "").contains("run") })
+        assert(httpFacts.contains { $0.properties["framework"] == "alamofire" && $0.properties["normalizedPathKey"] == "/v1/inline-first" && $0.properties["containingDeclarationKind"] == "function" && ($0.properties["containingDeclarationDisplayName"] ?? "").contains("first") })
+        assert(httpFacts.contains { $0.properties["framework"] == "alamofire" && $0.properties["normalizedPathKey"] == "/v1/inline-second" && $0.properties["containingDeclarationKind"] == "function" && ($0.properties["containingDeclarationDisplayName"] ?? "").contains("second") })
+        assert(!httpFacts.contains { $0.properties["normalizedPathKey"] == "/v1/inline-first" && (($0.properties["containingDeclarationDisplayName"] ?? "").contains("second")) })
+        assert(!httpFacts.contains { $0.properties["normalizedPathKey"] == "/v1/inline-second" && (($0.properties["containingDeclarationDisplayName"] ?? "").contains("first")) })
         assert(httpFacts.allSatisfy { $0.properties["methodName"] == nil && $0.properties["surfaceKind"] == nil })
         let gapKinds = Set(result.facts.filter { $0.factType == "AnalysisGap" }.compactMap { $0.properties["gapKind"] })
         assert(gapKinds.contains("swift-http-method-unknown-projection-omitted"))
