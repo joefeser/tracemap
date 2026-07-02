@@ -9,4 +9,3 @@ Status: implemented
 - [x] Document the smoke command and pinned sample table in validation docs.
 - [x] Add the root README pointer.
 - [x] Run focused validation for the harness and docs.
-

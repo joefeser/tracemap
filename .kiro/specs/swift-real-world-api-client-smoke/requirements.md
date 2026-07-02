@@ -27,4 +27,3 @@ backend systems, so Swift v0 validation can move beyond checked-in fixtures.
    databases, or prompt-based classification.
 7. Documentation SHALL list the pinned repositories, SHAs, reason for inclusion,
    command, focus labels, and limitations.
-
