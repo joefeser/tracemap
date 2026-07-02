@@ -747,6 +747,8 @@ struct SwiftHttpRecord {
     let filePath: String
     let startLine: Int
     let endLine: Int
+    let startOffset: Int
+    let endOffset: Int
     let method: String
     let normalizedPathKey: String
     let identityDiscriminator: String
@@ -792,7 +794,7 @@ enum SwiftHttpExtractor {
                 gaps.append(gap(assignments.isEmpty ? "swift-http-method-unknown-projection-omitted" : "swift-http-method-dynamic", item, start, end, "URLRequest method is missing, ambiguous, or unsupported; shared HTTP projection omitted."))
                 continue
             }
-            if let record = record(rawUrl: rawUrl, method: method, item: item, start: start, end: end, ruleId: RuleIds.swiftHttpURLSession, framework: "foundation", clientKind: "urlrequest", apiName: "URLSession.\(use.apiName)", ordinal: ordinal) {
+            if let record = record(rawUrl: rawUrl, method: method, item: item, start: start, end: end, startOffset: utf8Offset(atUTF16Offset: match.range.location, in: text), endOffset: utf8Offset(atUTF16Offset: match.range.location + match.range.length, in: text), ruleId: RuleIds.swiftHttpURLSession, framework: "foundation", clientKind: "urlrequest", apiName: "URLSession.\(use.apiName)", ordinal: ordinal) {
                 records.append(record)
             } else {
                 gaps.append(gap("swift-http-path-unsafe-omitted", item, start, end, "URLRequest path could not be safely normalized; shared HTTP projection omitted."))
@@ -812,7 +814,7 @@ enum SwiftHttpExtractor {
                   let method = standardMethod(capture(match, 3, in: text) ?? "") else { continue }
             let start = lineNumber(atUTF16Offset: match.range.location, in: text)
             let end = lineNumber(atUTF16Offset: match.range.location + match.range.length, in: text)
-            if let record = record(rawUrl: rawUrl, method: method, item: item, start: start, end: end, ruleId: RuleIds.swiftHttpClientLibrary, framework: "alamofire", clientKind: "alamofire", apiName: "request", ordinal: ordinal) {
+            if let record = record(rawUrl: rawUrl, method: method, item: item, start: start, end: end, startOffset: utf8Offset(atUTF16Offset: match.range.location, in: text), endOffset: utf8Offset(atUTF16Offset: match.range.location + match.range.length, in: text), ruleId: RuleIds.swiftHttpClientLibrary, framework: "alamofire", clientKind: "alamofire", apiName: "request", ordinal: ordinal) {
                 records.append(record)
             } else {
                 gaps.append(gap("swift-http-path-unsafe-omitted", item, start, end, "Alamofire request path could not be safely normalized; shared HTTP projection omitted."))
@@ -834,7 +836,8 @@ enum SwiftHttpExtractor {
             if let pathMatch, let rawPath = capture(pathMatch, 1, in: body), let methodMatch, let method = standardMethod(capture(methodMatch, 1, in: body) ?? "") {
                 let start = lineNumber(atUTF16Offset: target.startOffset + pathMatch.range.location, in: text)
                 let end = lineNumber(atUTF16Offset: target.startOffset + pathMatch.range.location + pathMatch.range.length, in: text)
-                if let record = record(rawUrl: rawPath, method: method, item: item, start: start, end: end, ruleId: RuleIds.swiftHttpClientLibrary, framework: "moya", clientKind: "moya", apiName: "TargetType.path", ordinal: records.count) {
+                let pathLiteralRange = pathMatch.range(at: 1)
+                if let record = record(rawUrl: rawPath, method: method, item: item, start: start, end: end, startOffset: utf8Offset(atUTF16Offset: target.startOffset + pathLiteralRange.location, in: text), endOffset: utf8Offset(atUTF16Offset: target.startOffset + pathLiteralRange.location + pathLiteralRange.length, in: text), ruleId: RuleIds.swiftHttpClientLibrary, framework: "moya", clientKind: "moya", apiName: "TargetType.path", ordinal: records.count) {
                     records.append(record)
                 }
                 gaps.append(gap("swift-http-moya-target-partial", item, boundaryLine, boundaryLine, baseMatch == nil ? "Moya target baseURL is missing or dynamic; full route join is not proven." : "Moya target baseURL/path join is static metadata only; runtime route reachability is not proven."))
@@ -847,7 +850,7 @@ enum SwiftHttpExtractor {
         return SwiftHttpExtraction(records: records, gaps: gaps)
     }
 
-    private static func record(rawUrl: String, method: String, item: InventoryItem, start: Int, end: Int, ruleId: String, framework: String, clientKind: String, apiName: String, ordinal: Int) -> SwiftHttpRecord? {
+    private static func record(rawUrl: String, method: String, item: InventoryItem, start: Int, end: Int, startOffset: Int, endOffset: Int, ruleId: String, framework: String, clientKind: String, apiName: String, ordinal: Int) -> SwiftHttpRecord? {
         guard let parsed = parseURLSurface(rawUrl) else { return nil }
         var properties: [String: String] = [
             "coverageCeiling": "syntax-only",
@@ -872,11 +875,22 @@ enum SwiftHttpExtractor {
             filePath: item.relativePath,
             startLine: start,
             endLine: end,
+            startOffset: startOffset,
+            endOffset: endOffset,
             method: method,
             normalizedPathKey: parsed.normalizedPathKey,
             identityDiscriminator: ["swift-http/v1", item.relativePath, String(start), String(end), method, parsed.normalizedPathKey, String(ordinal + 1), roleHash("url", rawUrl)].joined(separator: "\u{1f}"),
             properties: properties
         )
+    }
+
+    private static func utf8Offset(atUTF16Offset offset: Int, in text: String) -> Int {
+        let bounded = max(0, min(offset, text.utf16.count))
+        let stringIndex = String.Index(utf16Offset: bounded, in: text)
+        guard let utf8Index = stringIndex.samePosition(in: text.utf8) else {
+            return text.utf8.count
+        }
+        return text.utf8.distance(from: text.utf8.startIndex, to: utf8Index)
     }
 
     private static func firstURLSessionUse(of variable: String, after offset: Int, in text: String) -> (range: NSRange, apiName: String)? {
@@ -2863,7 +2877,7 @@ enum FactFactory {
             ))
         }
         let http = http ?? SwiftHttpExtractor.extract(scanRoot: scanRoot, inventory: inventory)
-        facts += httpFacts(manifest: manifest, records: http.records)
+        facts += httpFacts(manifest: manifest, records: http.records, syntax: syntax)
         for (gapOrdinal, gap) in http.gaps.enumerated() {
             facts.append(makeFact(
                 manifest: manifest,
@@ -3016,9 +3030,27 @@ enum FactFactory {
         }
     }
 
-    private static func httpFacts(manifest: ScanManifest, records: [SwiftHttpRecord]) -> [CodeFact] {
-        records.map { record in
-            makeFact(
+    private static func httpFacts(manifest: ScanManifest, records: [SwiftHttpRecord], syntax: SwiftSyntaxExtraction) -> [CodeFact] {
+        let declarationsByFile = Dictionary(grouping: syntax.declarations, by: \.filePath)
+        var declarationsById: [String: SwiftDeclarationEvidence] = [:]
+        for declaration in syntax.declarations {
+            declarationsById[declaration.symbolId] = declaration
+        }
+        return records.map { record in
+            let context = httpSourceContext(
+                for: record,
+                declarations: declarationsByFile[record.filePath] ?? [],
+                declarationsById: declarationsById)
+            var properties = record.properties
+            if let context {
+                properties["containingDeclarationDisplayName"] = context.displayName
+                properties["containingDeclarationKind"] = context.kind
+                properties["containingDeclarationSymbolId"] = context.symbolId
+                properties["sourceContextStatus"] = "containing-declaration"
+            } else {
+                properties["sourceContextStatus"] = "unresolved"
+            }
+            return makeFact(
                 manifest: manifest,
                 factType: "HttpCallDetected",
                 ruleId: record.ruleId,
@@ -3026,12 +3058,73 @@ enum FactFactory {
                 filePath: record.filePath,
                 startLine: record.startLine,
                 endLine: record.endLine,
+                sourceSymbol: context?.symbolId,
                 targetSymbol: "\(record.method) \(record.normalizedPathKey)",
                 contractElement: record.normalizedPathKey,
                 identityDiscriminator: record.identityDiscriminator,
-                properties: record.properties
+                properties: properties
             )
         }
+    }
+
+    private struct SwiftHttpSourceContext {
+        let symbolId: String
+        let displayName: String
+        let kind: String
+    }
+
+    private static func httpSourceContext(
+        for record: SwiftHttpRecord,
+        declarations: [SwiftDeclarationEvidence],
+        declarationsById: [String: SwiftDeclarationEvidence]
+    ) -> SwiftHttpSourceContext? {
+        var best: SwiftDeclarationEvidence?
+        for declaration in declarations where httpSourceContextContains(record, in: declaration) {
+            if best.map({ httpSourceContextIsBetter(declaration, than: $0, declarationsById: declarationsById) }) ?? true {
+                best = declaration
+            }
+        }
+        return best.map { declaration in
+            SwiftHttpSourceContext(
+                symbolId: declaration.symbolId,
+                displayName: declaration.displaySignature,
+                kind: declaration.kind
+            )
+        }
+    }
+
+    private static func httpSourceContextContains(_ record: SwiftHttpRecord, in declaration: SwiftDeclarationEvidence) -> Bool {
+        declaration.filePath == record.filePath
+            && declaration.startLine <= record.startLine
+            && declaration.endLine >= record.endLine
+            && declaration.startOffset <= record.startOffset
+            && declaration.endOffset >= record.endOffset
+    }
+
+    private static func httpSourceContextIsBetter(
+        _ candidate: SwiftDeclarationEvidence,
+        than current: SwiftDeclarationEvidence,
+        declarationsById: [String: SwiftDeclarationEvidence]
+    ) -> Bool {
+        let candidateSpan = candidate.endLine - candidate.startLine
+        let currentSpan = current.endLine - current.startLine
+        if candidateSpan != currentSpan { return candidateSpan < currentSpan }
+        if candidate.startLine != current.startLine { return candidate.startLine > current.startLine }
+        let candidateDepth = declarationDepth(candidate, declarationsById: declarationsById)
+        let currentDepth = declarationDepth(current, declarationsById: declarationsById)
+        if candidateDepth != currentDepth { return candidateDepth > currentDepth }
+        return candidate.symbolId < current.symbolId
+    }
+
+    private static func declarationDepth(_ declaration: SwiftDeclarationEvidence, declarationsById: [String: SwiftDeclarationEvidence]) -> Int {
+        var depth = 0
+        var next = declaration.containingSymbolId
+        var seen: Set<String> = []
+        while let symbolId = next, seen.insert(symbolId).inserted {
+            depth += 1
+            next = declarationsById[symbolId]?.containingSymbolId
+        }
+        return depth
     }
 
     private static func uiFacts(manifest: ScanManifest, records: [SwiftUiRecord]) -> [CodeFact] {
@@ -3597,6 +3690,119 @@ enum FactFactory {
             contractElement: item.relativePath,
             properties: properties
         )
+    }
+}
+
+public enum TraceMapSwiftSelfTests {
+    public static func run() throws {
+        try collisionNormalizationIsDeterministicAndEvidenceBacked()
+    }
+
+    private static func collisionNormalizationIsDeterministicAndEvidenceBacked() throws {
+        let manifest = ScanManifest(
+            scanId: "swift-self-test",
+            repoName: "swift-self-test",
+            remoteUrl: nil,
+            branch: "main",
+            commitSha: "0000000000000000000000000000000000000000",
+            scannerVersion: TraceMapSwiftVersion.scanner,
+            scannedAt: "1970-01-01T00:00:00Z",
+            analysisLevel: "Level3SyntaxAnalysis",
+            buildStatus: "NotRun",
+            solutions: [],
+            projects: [],
+            targetFrameworks: [],
+            knownGaps: [],
+            scanRootRelativePath: ".",
+            scanRootPathHash: "self-test",
+            gitRootHash: "self-test",
+            extractorVersions: [TraceMapSwiftVersion.extractorId: TraceMapSwiftVersion.extractorVersion]
+        )
+
+        let alpha = collisionFact(
+            targetSymbol: "swift.symbol.alpha",
+            filePath: "Sources/App/Alpha.swift",
+            marker: "alpha"
+        )
+        let beta = collisionFact(
+            targetSymbol: "swift.symbol.beta",
+            filePath: "Sources/App/Beta.swift",
+            marker: "beta"
+        )
+
+        let first = FactFactory.normalizeFacts(manifest: manifest, facts: [beta, alpha])
+        let second = FactFactory.normalizeFacts(manifest: manifest, facts: [alpha, beta])
+        let firstRepresentative = representativeFact(in: first)
+        let secondRepresentative = representativeFact(in: second)
+
+        try require(firstRepresentative?.targetSymbol == "swift.symbol.alpha", "fact collision representative should be content-stable")
+        try require(firstRepresentative == secondRepresentative, "fact collision representative should not depend on input order")
+
+        let firstGap = collisionGapFact(in: first)
+        let secondGap = collisionGapFact(in: second)
+        try require(firstGap == secondGap, "fact collision gap should not depend on input order")
+        try require(firstGap?.properties["discardedCollisionCount"] == "1", "fact collision gap should count discarded facts")
+        try require(firstGap?.properties["distinctCollisionShapeCount"] == "2", "fact collision gap should count distinct shapes")
+        try require(firstGap?.properties["collisionFactIdHash"]?.isEmpty == false, "fact collision gap should hash the colliding fact ID")
+
+        let coverageGaps = FactFactory.collisionCoverageGaps(facts: [beta, alpha])
+        try require(coverageGaps.count == 1, "fact collision coverage gap should be emitted once")
+        try require(coverageGaps.first?.kind == "swift-fact-id-collision", "fact collision coverage gap kind should be stable")
+        try require(coverageGaps.first?.filePath == "Sources/App/Alpha.swift", "fact collision coverage gap should use the deterministic representative")
+    }
+
+    private static func representativeFact(in facts: [CodeFact]) -> CodeFact? {
+        facts.first { $0.factType == "SwiftDeclarationDeclared" && $0.factId == collisionFactId }
+    }
+
+    private static func collisionGapFact(in facts: [CodeFact]) -> CodeFact? {
+        facts.first { $0.factType == "AnalysisGap" && $0.properties["gapKind"] == "swift-fact-id-collision" }
+    }
+
+    private static func collisionFact(targetSymbol: String, filePath: String, marker: String) -> CodeFact {
+        CodeFact(
+            factId: collisionFactId,
+            scanId: "swift-self-test",
+            repo: "swift-self-test",
+            commitSha: "0000000000000000000000000000000000000000",
+            projectPath: nil,
+            factType: "SwiftDeclarationDeclared",
+            ruleId: RuleIds.swiftSyntaxDeclaration,
+            evidenceTier: .tier3SyntaxOrTextual,
+            sourceSymbol: nil,
+            targetSymbol: targetSymbol,
+            contractElement: targetSymbol,
+            evidence: EvidenceSpan(
+                filePath: filePath,
+                startLine: 1,
+                endLine: 1,
+                ruleId: RuleIds.swiftSyntaxDeclaration,
+                snippetHash: nil,
+                extractorId: TraceMapSwiftVersion.extractorId,
+                extractorVersion: TraceMapSwiftVersion.extractorVersion
+            ),
+            properties: [
+                "language": "swift",
+                "marker": marker,
+                "staticEvidenceOnly": "true"
+            ]
+        )
+    }
+
+    private static func require(_ condition: Bool, _ message: String) throws {
+        if !condition {
+            throw SelfTestFailure(message)
+        }
+    }
+
+    private static let collisionFactId = "swift-fact-self-test-collision"
+
+    private struct SelfTestFailure: Error, CustomStringConvertible {
+        let description: String
+
+        init(_ description: String) {
+            self.description = description
+        }
     }
 }
 

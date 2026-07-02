@@ -185,6 +185,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/swift/real-world-smoke/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/swift/static-inventory/",
     "changefreq": "monthly",
     "priority": "0.7"
@@ -206,6 +211,11 @@
   },
   {
     "path": "/swift/evidence-safety/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
+    "path": "/swift/claim-language/",
     "changefreq": "monthly",
     "priority": "0.7"
   },
