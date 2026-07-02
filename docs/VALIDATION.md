@@ -186,7 +186,11 @@ Pinned Swift real-world samples:
 Use `TRACEMAP_SWIFT_REAL_WORLD_REPOS=icecubesapp` or a comma-separated label
 list for a focused smoke while developing the harness. Use
 `TRACEMAP_SKIP_BUILD=1` only after `swift build --package-path src/swift` has
-already succeeded for the current checkout.
+already succeeded for the current checkout. Use
+`TRACEMAP_SWIFT_REAL_WORLD_OFFLINE=1` only when the cache already contains the
+pinned commits; offline mode rejects missing commits instead of fetching from
+GitHub. Unknown focused labels fail the smoke before scanning, and generated
+Markdown summaries include only samples scanned in the current invocation.
 
 Expected Swift real-world behavior: scans complete without Xcode builds,
 SwiftPM dependency resolution, simulators, devices, app execution, network

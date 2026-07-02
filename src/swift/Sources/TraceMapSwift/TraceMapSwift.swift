@@ -2631,6 +2631,7 @@ enum FactFactory {
     static func normalizeFacts(manifest: ScanManifest, facts: [CodeFact]) -> [CodeFact] {
         var firstById: [String: CodeFact] = [:]
         var collisionKeysById: [String: Set<String>] = [:]
+        var collisionDiscardedCountById: [String: Int] = [:]
         var normalized: [CodeFact] = []
 
         for fact in facts {
@@ -2639,6 +2640,7 @@ enum FactFactory {
                     continue
                 }
                 collisionKeysById[fact.factId, default: [factCollisionKey(existing)]].insert(factCollisionKey(fact))
+                collisionDiscardedCountById[fact.factId, default: 0] += 1
                 continue
             }
 
@@ -2666,7 +2668,8 @@ enum FactFactory {
                 identityDiscriminator: sha256Hex(collisionKeys.sorted().joined(separator: "\n")),
                 properties: [
                     "collisionFactIdHash": sha256Hex(factId),
-                    "discardedCollisionCount": String(collisionKeys.count - 1),
+                    "discardedCollisionCount": String(collisionDiscardedCountById[factId] ?? (collisionKeys.count - 1)),
+                    "distinctCollisionShapeCount": String(collisionKeys.count),
                     "gapKind": "swift-fact-id-collision",
                     "language": "swift",
                     "staticEvidenceOnly": "true"

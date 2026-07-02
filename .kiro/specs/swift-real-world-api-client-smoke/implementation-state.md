@@ -19,6 +19,14 @@ publication.
 - The script scans selected repos with `tracemap-swift`, verifies required
   artifacts, and writes sanitized per-sample `summary.json` files plus
   `swift-real-world-smoke-summary.md`.
+- Focused runs reject unknown labels and build Markdown summaries only from
+  samples scanned in the current invocation, not stale summaries left in the
+  output root.
+- `TRACEMAP_SWIFT_REAL_WORLD_OFFLINE=1` supports cache-only reruns when pinned
+  commits are already present; missing commits fail explicitly instead of
+  silently requiring network access.
+- Cached repositories verify their `origin` URL before reuse.
+- SQLite summary queries fail loudly if the generated index cannot be read.
 - The generated summaries use public repo slugs, pinned SHAs, artifact labels,
   counts, rule IDs, coverage labels, and limitations. They intentionally omit
   local absolute paths, clone URLs, raw remotes, source snippets, raw SQL,
@@ -43,11 +51,18 @@ publication.
 - `bash -n scripts/smoke-swift-real-world.sh` passed.
 - `swift build --package-path src/swift` passed.
 - `swift run --package-path src/swift tracemap-swift-smoke-tests` passed.
+- Unknown focused selection validation passed:
+  `TRACEMAP_SWIFT_REAL_WORLD_REPOS=does-not-exist TRACEMAP_SKIP_BUILD=1 scripts/smoke-swift-real-world.sh ...`
+  failed before scanning and printed the known labels.
 - `TRACEMAP_SWIFT_REAL_WORLD_REPOS=icecubesapp TRACEMAP_SKIP_BUILD=1 scripts/smoke-swift-real-world.sh /tmp/tracemap-swift-real-world-cache /tmp/tracemap-swift-real-world-smoke` passed.
   - `icecubesapp` scan produced 29,686 facts.
   - Summary reported 4 HTTP/API facts, 601 UI surface facts, 20 storage/data
     facts, 74 package/dependency facts, and 2,411 analysis gaps.
   - The generated summary stayed path-safe and limitation-forward.
+- `TRACEMAP_SWIFT_REAL_WORLD_REPOS=icecubesapp TRACEMAP_SWIFT_REAL_WORLD_OFFLINE=1 TRACEMAP_SKIP_BUILD=1 scripts/smoke-swift-real-world.sh /tmp/tracemap-swift-real-world-cache /tmp/tracemap-swift-real-world-smoke-review` passed.
+  - The offline rerun reused only a verified local cache with the pinned commit.
+- Focused summary isolation passed against a reused output root containing stale
+  full-run artifacts; the generated Markdown included only `icecubesapp`.
 - `TRACEMAP_SKIP_BUILD=1 scripts/smoke-swift-real-world.sh /tmp/tracemap-swift-real-world-cache /tmp/tracemap-swift-real-world-smoke-full` passed.
   - `icecubesapp`: 29,686 facts, 2,411 gaps, 4 HTTP/API, 601 UI,
     20 storage/data, 74 package/dependency.
@@ -70,6 +85,8 @@ could be written. This slice now normalizes Swift facts before artifact writes:
 - exact duplicate facts are removed while preserving original fact order;
 - non-identical fact-id collisions keep a deterministic representative and emit
   a `swift-fact-id-collision` reduced-coverage `AnalysisGap`;
+- collision gaps record both discarded occurrence count and distinct collision
+  shape count;
 - NDJSON, SQLite, reports, analyzer logs, and returned scan results all consume
   the same normalized fact list.
 

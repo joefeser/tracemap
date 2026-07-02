@@ -21,6 +21,7 @@ SAMPLES=(
 )
 
 selected_labels="${TRACEMAP_SWIFT_REAL_WORLD_REPOS:-}"
+offline_mode="${TRACEMAP_SWIFT_REAL_WORLD_OFFLINE:-0}"
 
 is_selected() {
   local label="$1"
@@ -36,20 +37,74 @@ is_selected() {
   return 1
 }
 
+validate_selection() {
+  local labels=()
+  for sample in "${SAMPLES[@]}"; do
+    IFS='|' read -r label _ <<<"$sample"
+    labels+=("$label")
+  done
+
+  if [[ -z "$selected_labels" ]]; then
+    return 0
+  fi
+
+  local selected_count=0
+  IFS=',' read -r -a requested <<<"$selected_labels"
+  for requested_label in "${requested[@]}"; do
+    local matched=0
+    for label in "${labels[@]}"; do
+      if [[ "$requested_label" == "$label" ]]; then
+        matched=1
+        selected_count=$((selected_count + 1))
+        break
+      fi
+    done
+    if [[ "$matched" -eq 0 ]]; then
+      printf 'Unknown TRACEMAP_SWIFT_REAL_WORLD_REPOS label: %s\n' "$requested_label" >&2
+      printf 'Known labels: %s\n' "${labels[*]}" >&2
+      exit 1
+    fi
+  done
+
+  if [[ "$selected_count" -eq 0 ]]; then
+    printf 'No Swift real-world smoke samples selected.\n' >&2
+    exit 1
+  fi
+}
+
 clone_checkout() {
   local label="$1"
   local slug="$2"
   local sha="$3"
   local dest="$CACHE_ROOT/$label"
+  local expected_origin="https://github.com/${slug}.git"
 
   if [[ ! -d "$dest/.git" ]]; then
+    if [[ "$offline_mode" == "1" ]]; then
+      printf 'Offline mode requested but cache is missing for %s at %s\n' "$label" "$dest" >&2
+      exit 1
+    fi
     rm -rf "$dest"
     mkdir -p "$dest"
     git -C "$dest" init --quiet
-    git -C "$dest" remote add origin "https://github.com/${slug}.git"
+    git -C "$dest" remote add origin "$expected_origin"
+  else
+    local actual_origin
+    actual_origin="$(git -C "$dest" remote get-url origin 2>/dev/null || true)"
+    if [[ "$actual_origin" != "$expected_origin" ]]; then
+      printf 'Cached repo origin mismatch for %s. Expected %s but found %s\n' "$label" "$expected_origin" "${actual_origin:-<missing>}" >&2
+      exit 1
+    fi
   fi
 
-  git -C "$dest" fetch --quiet --depth 1 origin "$sha"
+  if [[ "$offline_mode" == "1" ]]; then
+    if ! git -C "$dest" cat-file -e "${sha}^{commit}" 2>/dev/null; then
+      printf 'Offline mode requested but pinned commit is not present for %s: %s\n' "$label" "$sha" >&2
+      exit 1
+    fi
+  else
+    git -C "$dest" fetch --quiet --depth 1 origin "$sha"
+  fi
   git -C "$dest" checkout --quiet --detach "$sha"
   git -C "$dest" clean -fdx --quiet
   printf '%s\n' "$dest"
@@ -87,22 +142,16 @@ with manifest_path.open(encoding="utf-8") as handle:
     manifest = json.load(handle)
 
 def query_scalar(sql, params=()):
-    try:
-        with sqlite3.connect(index_path) as connection:
-            row = connection.execute(sql, params).fetchone()
-            return row[0] if row else 0
-    except sqlite3.Error:
-        return "n/a"
+    with sqlite3.connect(index_path) as connection:
+        row = connection.execute(sql, params).fetchone()
+        return row[0] if row else 0
 
 def query_pairs(sql, params=()):
-    try:
-        with sqlite3.connect(index_path) as connection:
-            return [
-                {"key": str(row[0]), "count": int(row[1])}
-                for row in connection.execute(sql, params).fetchall()
-            ]
-    except sqlite3.Error:
-        return []
+    with sqlite3.connect(index_path) as connection:
+        return [
+            {"key": str(row[0]), "count": int(row[1])}
+            for row in connection.execute(sql, params).fetchall()
+        ]
 
 fact_total = query_scalar("select count(*) from facts")
 analysis_gaps = query_scalar("select count(*) from facts where fact_type = 'AnalysisGap'")
@@ -117,6 +166,20 @@ def count_like(column, patterns):
     clauses = " or ".join([f"{column} like ?" for _ in patterns])
     return query_scalar(f"select count(*) from facts where {clauses}", tuple(patterns))
 
+def coverage_label():
+    with (out_path / "facts.ndjson").open(encoding="utf-8") as handle:
+        labels = []
+        for line in handle:
+            if not line.strip():
+                continue
+            fact = json.loads(line)
+            value = fact.get("properties", {}).get("coverageLabel")
+            if value:
+                labels.append(value)
+    if labels:
+        return sorted(set(labels))[0]
+    return manifest.get("analysisLevel", "")
+
 summary = {
     "label": label,
     "repo": slug,
@@ -126,7 +189,7 @@ summary = {
     "manifestCommitSha": manifest.get("commitSha", ""),
     "analysisLevel": manifest.get("analysisLevel", ""),
     "buildStatus": manifest.get("buildStatus", ""),
-    "coverageLabel": manifest.get("coverageLabel", manifest.get("analysisLevel", "")),
+    "coverageLabel": coverage_label(),
     "factCount": fact_total,
     "analysisGapCount": analysis_gaps,
     "evidenceFamilies": {
@@ -159,17 +222,21 @@ PY
 
 write_markdown_summary() {
   local output="$OUT_ROOT/swift-real-world-smoke-summary.md"
-  python3 - "$OUT_ROOT" "$output" <<'PY'
+  python3 - "$OUT_ROOT" "$output" "$@" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 out_root = Path(sys.argv[1])
 output = Path(sys.argv[2])
+summary_paths = [Path(path) for path in sys.argv[3:]]
 summaries = []
-for path in sorted(out_root.glob("*/summary.json")):
+for path in summary_paths:
     with path.open(encoding="utf-8") as handle:
         summaries.append(json.load(handle))
+
+if not summaries:
+    raise SystemExit("No current-run summaries were generated")
 
 lines = [
     "# Swift Real-World Smoke Summary",
@@ -230,7 +297,12 @@ PY
 
 printf 'TraceMap Swift real-world smoke cache: %s\n' "$CACHE_ROOT"
 printf 'TraceMap Swift real-world smoke output: %s\n' "$OUT_ROOT"
+if [[ "$offline_mode" == "1" ]]; then
+  printf 'TraceMap Swift real-world smoke mode: offline cache only\n'
+fi
 
+validate_selection
+run_summary_paths=()
 for sample in "${SAMPLES[@]}"; do
   IFS='|' read -r label slug sha why <<<"$sample"
   if ! is_selected "$label"; then
@@ -244,8 +316,9 @@ for sample in "${SAMPLES[@]}"; do
   swift run "${SWIFT_CLI_ARGS[@]}" tracemap-swift scan --repo "$repo" --out "$out"
   require_artifacts "$out"
   summarize_sample "$label" "$slug" "$sha" "$why" "$out" "$out/summary.json"
+  run_summary_paths+=("$out/summary.json")
 done
 
-write_markdown_summary
+write_markdown_summary "${run_summary_paths[@]}"
 printf '\nSwift real-world smoke complete: %s\n' "$OUT_ROOT"
 printf 'Summary: %s\n' "$OUT_ROOT/swift-real-world-smoke-summary.md"
