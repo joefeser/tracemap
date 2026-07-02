@@ -69,6 +69,7 @@ import { siteClaimGuardrailsRoute } from "./site-claim-guardrails.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
 import { swiftAdapterStoryRoute } from "./swift-adapter-story.mjs";
+import { swiftClaimLanguageRoute } from "./swift-claim-language.mjs";
 import { swiftEvidenceLaneRoute } from "./swift-evidence-lane.mjs";
 import { swiftRealWorldSmokeRoute } from "./swift-real-world-smoke.mjs";
 import { swiftStoryPageRoutes, swiftStoryPages } from "./swift-story-pages.mjs";
@@ -250,6 +251,7 @@ async function createDistFixture({
       staticTriageRoute,
       staticVsRuntimeRoute,
       swiftAdapterStoryRoute,
+      swiftClaimLanguageRoute,
       swiftEvidenceLaneRoute,
       swiftRealWorldSmokeRoute,
       ...swiftStoryPageRoutes,
@@ -322,6 +324,7 @@ async function createDistFixture({
     staticTriageRoute,
     staticVsRuntimeRoute,
     swiftAdapterStoryRoute,
+    swiftClaimLanguageRoute,
     swiftEvidenceLaneRoute,
     swiftRealWorldSmokeRoute,
     ...swiftStoryPageRoutes,
@@ -728,6 +731,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === swiftRealWorldSmokeRoute) {
     return readFile(new URL("../src/swift/real-world-smoke/index.html", import.meta.url), "utf8");
+  }
+
+  if (route === swiftClaimLanguageRoute) {
+    return readFile(new URL("../src/swift/claim-language/index.html", import.meta.url), "utf8");
   }
 
   if (swiftStoryPageRoutes.includes(route)) {
@@ -1583,6 +1590,24 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: [
           "No Xcode build proof, SwiftPM restore proof, simulator or device execution proof, network-call proof, credential proof, auth-flow proof, production telemetry proof, endpoint reachability proof, backend compatibility proof, complete app navigation proof, package compatibility proof, production-use proof, impact proof, complete Swift semantic analysis, stored-value proof, query execution proof, or live schema proof.",
           "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector databases, raw generated artifacts, raw source snippets, raw SQL, secrets, local absolute paths, clone URLs, raw remotes, credentials, hostnames, config values, private labels, runtime observations, analyzer logs, or hidden validation details are public Swift smoke claims."
+        ]
+      },
+      {
+        path: swiftClaimLanguageRoute,
+        title: "Swift Claim Language Checklist",
+        summary:
+          "Shipped Swift v0 reviewer checklist for repeating public Swift claims with proof paths, claim levels, evidence tiers, coverage labels, limitations, and non-claim boundaries attached.",
+        publicClaimLevel: "shipped",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: "/swift/",
+        limitations: [
+          "The checklist is a public copy review aid for shipped Swift v0 evidence; it is not raw scanner output, a complete Swift semantic analysis, or runtime validation.",
+          "Every repeated Swift claim still needs a proof path, claim level, evidence tier, coverage label, and limitation before publication."
+        ],
+        nonClaims: [
+          "No runtime behavior proof, API correctness proof, app navigation proof, rendered UI proof, Xcode build proof, SwiftPM restore proof, simulator/device execution proof, production usage proof, deployment proof, package compatibility proof, release safety proof, stored-value proof, query execution proof, live schema proof, or complete Swift semantic analysis.",
+          "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector databases, raw generated artifacts, raw source snippets, raw SQL, secrets, local absolute paths, raw remotes, credentials, stored values, private scan artifacts, analyzer logs, or hidden validation details are public Swift checklist claims."
         ]
       },
       ...swiftStoryPages.map((page) => ({
