@@ -22,6 +22,9 @@ Public claim level: shipped on dev after PR merge.
   behavior, or user reachability.
 - If no containing declaration is available, the fact is labeled
   `sourceContextStatus=unresolved` and no source symbol is invented.
+- When nested declarations share the same physical line and therefore the same
+  line-only span, context selection prefers deeper containing-declaration
+  ancestry before falling back to symbol ID ordering.
 
 ## Validation
 
