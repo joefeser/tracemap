@@ -1,0 +1,179 @@
+<p>
+  <strong>Public claim level: concept.</strong>
+  Code-review retrieval is not one thing. A team can build a broad codebase RAG
+  system that chunks a repository into a vector index, or it can build a
+  review-oriented retrieval loop that starts from the actual diff and follows
+  only the evidence needed to evaluate that change. TraceMap belongs closer to
+  the second pattern.
+</p>
+
+<p>
+  This is not a benchmark claim and not a claim that TraceMap replaces Qodo,
+  PR-Agent, or any reviewer. It is a research/demo framing for how deterministic
+  static evidence can make code-review retrieval narrower, more auditable, and
+  less dependent on blind source dumping.
+</p>
+
+<section data-rag-retrieval-block="classic-rag">
+  <h2>Classic codebase RAG starts by indexing broadly.</h2>
+
+  <p>
+    The usual RAG shape is familiar: split source files into chunks, embed
+    those chunks, store them in a vector database, search the index before
+    reasoning, and feed the retrieved text to a model. That can be useful for
+    question answering across unfamiliar code, especially when the user does not
+    know where to start.
+  </p>
+
+  <p>
+    The cost is operational. The index can go stale after refactors, branch
+    changes, generated-code updates, dependency upgrades, or large file moves.
+    Chunk boundaries may cut across symbols or tests. Vector search can return
+    plausible but review-irrelevant context. Maintenance becomes its own system:
+    scheduling re-indexes, tracking commit SHAs, deciding what to exclude, and
+    explaining why one retrieved chunk was trusted over another.
+  </p>
+
+  <p>
+    For code review, broad RAG also has a precision problem. A reviewer usually
+    does not need the whole codebase. They need the files, symbols, tests,
+    routes, configs, and data surfaces that are plausibly related to the diff.
+    Retrieval before understanding the change can create noise exactly when the
+    reviewer needs a narrow path.
+  </p>
+</section>
+
+<section data-rag-retrieval-block="agentic-retrieval">
+  <h2>Agentic retrieval starts from the diff.</h2>
+
+  <p>
+    In a review-oriented loop, the first artifact is the git diff. The agent or
+    reviewer identifies changed files, symbols, routes, configs, schemas, tests,
+    and package surfaces. Then it uses ordinary deterministic tools:
+    <code>rg</code>, <code>git grep</code>, <code>git show</code>, language
+    indexes, call-site searches, route-flow reports, test discovery, and config
+    references.
+  </p>
+
+  <p>
+    The retrieval path follows evidence instead of searching the entire
+    repository by semantic similarity. If a controller action changed, inspect
+    its route, service calls, DTO attachments, tests, authorization/config
+    surfaces, and data references. If a Swift API-client surface changed,
+    inspect the static client evidence, nearby owner code, generated summaries,
+    and backend alignment where available. If the evidence stops, record the gap
+    instead of inventing a path.
+  </p>
+
+  <p>
+    This approach is not anti-RAG. It says the review path should decide what to
+    retrieve. Broad vector search can still help when names are unknown or when
+    repo-local terminology is fuzzy. But for a specific PR, the diff and the
+    evidence graph should narrow the search before any model writes a finding.
+  </p>
+</section>
+
+<section data-rag-retrieval-block="tracemap-fit">
+  <h2>Where TraceMap fits.</h2>
+
+  <p>
+    TraceMap's value is not that it dumps source into a chat prompt. Its value
+    is that it builds deterministic static evidence: symbols, routes,
+    dependency surfaces, call candidates, client/server surfaces, storage and
+    data surfaces, rule IDs, evidence tiers, file spans, commit SHA, coverage
+    labels, and explicit gaps.
+  </p>
+
+  <p>
+    That evidence graph can make review retrieval more precise. Instead of
+    asking a model to guess which files matter, a review workflow can ask:
+    which route changed, which symbols are attached, which surfaces are nearby,
+    which tests mention the same path or type, which data/config surfaces are
+    visible, and which parts of the conclusion are unavailable because analysis
+    coverage is reduced?
+  </p>
+
+  <p>
+    TraceMap can also produce evidence chunks for docs or RAG export. Those
+    chunks should remain public-safe and review-oriented: summaries, rule IDs,
+    tiers, spans, coverage labels, limitations, supporting IDs, and gap
+    descriptions. They should not become raw source dumps, raw SQL dumps,
+    config leaks, or claims that static analysis observed runtime behavior.
+  </p>
+</section>
+
+<section data-rag-retrieval-block="long-term-memory">
+  <h2>Long-term memory should be review memory, not a frozen code index.</h2>
+
+  <p>
+    Some information is worth remembering because it is not obvious from the
+    current repository snapshot. Review history is one example: repeated
+    findings, recurring fragile areas, accepted and rejected reviewer feedback,
+    owner decisions, residual risks, team conventions, and explanations for why
+    a previous finding was deferred.
+  </p>
+
+  <p>
+    That memory is different from embedding every source file forever. Source
+    truth belongs to the repository at a commit SHA. Review memory belongs to
+    the team process: what reviewers cared about before, what owners accepted,
+    what automation learned to flag, and what risks were consciously carried
+    forward. That is the kind of memory an agentic review loop can use without
+    pretending stale indexed code is current evidence.
+  </p>
+</section>
+
+<section data-rag-retrieval-block="workflow">
+  <h2>A practical review workflow.</h2>
+
+  <ol>
+    <li><strong>Inspect the diff.</strong> Identify changed files, symbols, routes, configs, package surfaces, tests, and generated artifacts.</li>
+    <li><strong>Identify changed surfaces.</strong> Map the diff to symbols, route handlers, client calls, DTOs, data surfaces, and config keys where deterministic evidence exists.</li>
+    <li><strong>Use TraceMap evidence.</strong> Follow route-flow, call-site, symbol, dependency, and data-surface facts to find impacted static surfaces and explicit gaps.</li>
+    <li><strong>Fetch exact context.</strong> Use <code>rg</code>, <code>git</code>, and focused file reads to inspect the exact files, tests, and configs needed for the review path.</li>
+    <li><strong>Compare against review memory.</strong> Check repeated findings, accepted/rejected feedback, owner decisions, residual risk, and team conventions.</li>
+    <li><strong>Produce a finding, patch, or disposition.</strong> Every conclusion should cite evidence, and every unsupported conclusion should become a gap or owner question.</li>
+  </ol>
+</section>
+
+<section data-rag-retrieval-block="qodo-summary">
+  <h2>What I would tell Qodo.</h2>
+
+  <p>
+    I would not describe TraceMap as a Qodo replacement. I would describe it as
+    an evidence layer that can improve review retrieval. Qodo-style review
+    agents are valuable when they reason over a diff, spot risks, and explain
+    findings. TraceMap can help by providing deterministic context around that
+    diff: route evidence, symbol evidence, dependency surfaces, data surfaces,
+    coverage labels, and gaps.
+  </p>
+
+  <p>
+    The interview-ready version is: "I have used Qodo-style review workflows and
+    built adjacent automation around PR review loops. My view is that code
+    review retrieval should be diff-first and evidence-first. Broad RAG can help
+    discovery, but review systems need current commit evidence, exact files,
+    rule-backed context, prior review memory, and explicit limitations. TraceMap
+    is the deterministic evidence side of that workflow; Qodo remains the
+    reviewer-facing reasoning product."
+  </p>
+</section>
+
+<section data-rag-retrieval-block="boundaries" data-tm-boundary="claim-boundary">
+  <h2>Boundaries for this article.</h2>
+
+  <p>
+    This article does not claim TraceMap beats Qodo, PR-Agent, or broad RAG. It
+    does not introduce a vector database, embeddings service, production RAG
+    implementation, or benchmark. It does not claim runtime behavior, endpoint
+    reachability, production traffic, complete code understanding, release
+    safety, or replacement of human review.
+  </p>
+
+  <p>
+    The safer product claim is narrower: deterministic static evidence can help
+    an agent or reviewer retrieve better context for a code review, as long as
+    rule IDs, evidence tiers, coverage labels, file spans, commit SHA,
+    limitations, and gaps stay attached to the conclusion.
+  </p>
+</section>
