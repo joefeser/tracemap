@@ -1,5 +1,20 @@
 [
   {
+    "slug": "rag-vs-agentic-retrieval-for-code-review",
+    "category": "Review retrieval",
+    "title": "RAG vs Agentic Retrieval for Code Review: A TraceMap Perspective",
+    "h1": "RAG vs agentic retrieval for code review",
+    "description": "A concept-level TraceMap perspective on broad codebase RAG, diff-first agentic retrieval, static evidence graphs, and review memory.",
+    "ogDescription": "How TraceMap-style static evidence can support code-review retrieval without becoming broad codebase RAG or replacing Qodo.",
+    "cardDescription": "A practical research note on using static evidence, diffs, exact searches, and review memory for code-review retrieval.",
+    "hero": "Code-review retrieval should start from the diff, follow evidence, and keep limitations attached before a model writes a finding.",
+    "published": "2026-07-08",
+    "publishedDisplay": "July 8, 2026",
+    "body": "articles/rag-vs-agentic-retrieval-for-code-review.html",
+    "calloutHeading": "Want the evidence-export side?",
+    "calloutHtml": "Read the <a href=\"/vault-export/\">vault export concept</a>, the <a href=\"/review-room/\">review room</a>, or the <a href=\"/blog/building-tracemap-with-codex-kiro-qodo/\">TraceMap review-loop story</a>."
+  },
+  {
     "slug": "how-tracemap-reads-swift-api-clients",
     "category": "Swift evidence",
     "title": "How TraceMap Reads Swift API Clients Without Pretending They Ran",
