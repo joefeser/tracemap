@@ -8,8 +8,8 @@
 </p>
 
 <p>
-  This is not a benchmark claim and not a claim that TraceMap replaces Qodo,
-  PR-Agent, or any reviewer. It is a research/demo framing for how deterministic
+  This is not a benchmark claim and not a comparison against Qodo, PR-Agent, or
+  any reviewer. It is a research/demo framing for how deterministic
   static evidence can make code-review retrieval narrower, more auditable, and
   less dependent on blind source dumping.
 </p>
@@ -97,8 +97,8 @@
     TraceMap can also produce evidence chunks for docs or RAG export. Those
     chunks should remain public-safe and review-oriented: summaries, rule IDs,
     tiers, spans, coverage labels, limitations, supporting IDs, and gap
-    descriptions. They should not become raw source dumps, raw SQL dumps,
-    config leaks, or claims that static analysis observed runtime behavior.
+    descriptions. They should not become private implementation dumps, config
+    leaks, or claims that static analysis observed runtime behavior.
   </p>
 </section>
 
@@ -129,7 +129,7 @@
   <ol>
     <li><strong>Inspect the diff.</strong> Identify changed files, symbols, routes, configs, package surfaces, tests, and generated artifacts.</li>
     <li><strong>Identify changed surfaces.</strong> Map the diff to symbols, route handlers, client calls, DTOs, data surfaces, and config keys where deterministic evidence exists.</li>
-    <li><strong>Use TraceMap evidence.</strong> Follow route-flow, call-site, symbol, dependency, and data-surface facts to find impacted static surfaces and explicit gaps.</li>
+    <li><strong>Use TraceMap evidence.</strong> Follow route-flow, call-site, symbol, dependency, and data-surface facts to find related static surfaces and explicit gaps.</li>
     <li><strong>Fetch exact context.</strong> Use <code>rg</code>, <code>git</code>, and focused file reads to inspect the exact files, tests, and configs needed for the review path.</li>
     <li><strong>Compare against review memory.</strong> Check repeated findings, accepted/rejected feedback, owner decisions, residual risk, and team conventions.</li>
     <li><strong>Produce a finding, patch, or disposition.</strong> Every conclusion should cite evidence, and every unsupported conclusion should become a gap or owner question.</li>
@@ -163,11 +163,11 @@
   <h2>Boundaries for this article.</h2>
 
   <p>
-    This article does not claim TraceMap beats Qodo, PR-Agent, or broad RAG. It
-    does not introduce a vector database, embeddings service, production RAG
-    implementation, or benchmark. It does not claim runtime behavior, endpoint
-    reachability, production traffic, complete code understanding, release
-    safety, or replacement of human review.
+    This article does not make a benchmark comparison against Qodo, PR-Agent, or
+    broad RAG. It does not introduce a vector database, embeddings service,
+    production RAG implementation, or benchmark. It does not claim runtime
+    behavior, endpoint reachability, production traffic, full repository
+    understanding, release safety, or replacement of human review.
   </p>
 
   <p>
