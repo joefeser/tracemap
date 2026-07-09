@@ -92,6 +92,59 @@ blocker to the adapter-family proof:
 - cross-repo mobile-client to backend route alignment;
 - public-site copy that must wait for dev-to-main promotion.
 
+## Next Direction: Deepen Before Broadening
+
+The next major product direction is to make the current evidence lanes sharper
+before adding another language family. TraceMap should feel boringly credible
+for the ecosystems it already supports: C#/.NET including legacy .NET, Swift,
+TypeScript, Python, and JVM. That means better proof packets, sample validation,
+route-flow examples, public-safe reports, and "how to read this evidence"
+documentation before chasing a wider adapter matrix.
+
+SQL and data-surface evidence should be treated as part of this deepening work,
+not as a separate product detour. It connects existing route, service, client,
+config, package, and dependency evidence to the data-risk conversations people
+actually have during incidents, migrations, audits, rewrites, and ownership
+reviews.
+
+The near-term priority order is:
+
+1. Strengthen current evidence lanes.
+   - keep .NET/legacy .NET, Swift, TypeScript, Python, and JVM evidence
+     consistent with rule IDs, evidence tiers, coverage labels, limitations,
+     and explicit gaps;
+   - improve proof packets, validation harnesses, representative sample scans,
+     and public-safe "how to read the evidence" pages;
+   - make route-flow, property-flow, dependency, release-review, vault/RAG, and
+     site stories easier to demo without raw source, raw SQL, local paths, or
+     runtime claims.
+2. Build SQL/data-surface depth across existing adapters.
+   - detect static SQL/query candidates, ORM/query-builder surfaces, schema or
+     migration files, table/procedure/view/function references, and connection
+     or config surfaces where deterministic evidence supports them;
+   - preserve safe identifiers, hashes, rule IDs, evidence tiers, coverage
+     labels, spans, and limitations;
+   - report data-surface gaps when dynamic SQL, runtime mapping, provider
+     behavior, hidden schema, generated code, or unsupported ORM metadata
+     prevents a credible conclusion.
+3. Compose endpoint-to-service-to-data reports.
+   - show route or client entry evidence, selected service/method symbols,
+     dependency edges, SQL/data/config/package surfaces, source files, line
+     spans, supporting fact IDs, gaps, and limitations in one review packet;
+   - keep the output explicitly static: no SQL execution, database existence,
+     endpoint reachability, production traffic, dependency-injection runtime
+     resolution, branch feasibility, auth behavior, or release-safety claims.
+4. Add another language family only after the code-to-data story is solid.
+   - prefer a language because it unlocks a real buyer workflow or validation
+     sample, not because broad language count looks better;
+   - keep any new adapter narrow, deterministic, and contract-compatible before
+     adding language-specific depth.
+
+This sequencing keeps TraceMap's product story coherent: it is not merely a
+code indexer and not a chatbot over source files. It is an evidence map that can
+show how static code, route, dependency, and data-surface facts connect, while
+making the unknowns visible.
+
 ## Product Framing
 
 TraceMap is the risk and evidence discovery engine. Its value is showing what a
