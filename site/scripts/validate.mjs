@@ -42,6 +42,7 @@ import { validateRouteFlowEvidenceStoryDist } from "./route-flow-evidence-story.
 import { validateProofPathStoriesDist } from "./proof-path-stories.mjs";
 import { validateProofPathTourDist } from "./proof-path-tour.mjs";
 import { validateProofSourceCatalogDist } from "./proof-source-catalog.mjs";
+import { validateRagVsAgenticRetrievalArticleDist } from "./rag-vs-agentic-retrieval-article.mjs";
 import { validateReducedCoveragePlaybookDist } from "./reduced-coverage-playbook.mjs";
 import { validateReviewMeetingAgendaDist } from "./review-meeting-agenda.mjs";
 import { validateReviewRoomDemoPathDist } from "./review-room-demo-path.mjs";
@@ -152,6 +153,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateProofPathStoriesDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofPathTourDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofSourceCatalogDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateRagVsAgenticRetrievalArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReducedCoveragePlaybookDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewMeetingAgendaDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewRoomDemoPathDist({ baseUrl: normalizedBaseUrl, dist, errors });

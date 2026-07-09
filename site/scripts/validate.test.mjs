@@ -58,6 +58,10 @@ import { proofPathsForManagersRoute } from "./proof-paths-for-managers.mjs";
 import { proofPathStoriesRoute } from "./proof-path-stories.mjs";
 import { proofPathTourRoute } from "./proof-path-tour.mjs";
 import { propertyFlowSchemaGapRoute } from "./property-flow-schema-gap.mjs";
+import {
+  ragVsAgenticRetrievalArticleRequiredLinks,
+  ragVsAgenticRetrievalArticleRoute
+} from "./rag-vs-agentic-retrieval-article.mjs";
 import { routeFlowEvidenceStoryRoute } from "./route-flow-evidence-story.mjs";
 import { proofSourceCatalogRoute } from "./proof-source-catalog.mjs";
 import { reducedCoveragePlaybookRoute } from "./reduced-coverage-playbook.mjs";
@@ -242,6 +246,7 @@ async function createDistFixture({
       proofPathStoriesRoute,
       proofPathTourRoute,
       proofSourceCatalogRoute,
+      ragVsAgenticRetrievalArticleRoute,
       reducedCoveragePlaybookRoute,
       reviewerQuickstartRoute,
       evidencePacketExamplesRoute,
@@ -315,6 +320,7 @@ async function createDistFixture({
     proofPathStoriesRoute,
     proofPathTourRoute,
     proofSourceCatalogRoute,
+    ragVsAgenticRetrievalArticleRoute,
     reducedCoveragePlaybookRoute,
     reviewerQuickstartRoute,
     "/manager-packet/",
@@ -551,7 +557,7 @@ async function fixturePageHtml(route, path) {
   }
 
   if (route === "/blog/") {
-    return page(`<a href="${buildReviewWorkflowStoryRoute}"><span>Workflow governance</span>Building TraceMap Under Review Pressure</a><a href="${blogProofPathSeriesRoute}">What a Proof Path Is</a><a href="${swiftApiClientArticleRoute}">How TraceMap Reads Swift API Clients Without Pretending They Ran</a>`);
+    return page(`<a href="${buildReviewWorkflowStoryRoute}"><span>Workflow governance</span>Building TraceMap Under Review Pressure</a><a href="${blogProofPathSeriesRoute}">What a Proof Path Is</a><a href="${swiftApiClientArticleRoute}">How TraceMap Reads Swift API Clients Without Pretending They Ran</a><a href="${ragVsAgenticRetrievalArticleRoute}">RAG vs Agentic Retrieval for Code Review</a>`);
   }
 
   if (route === buildReviewWorkflowStoryRoute) {
@@ -568,6 +574,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === swiftApiClientArticleRoute) {
     return swiftApiClientArticlePage();
+  }
+
+  if (route === ragVsAgenticRetrievalArticleRoute) {
+    return ragVsAgenticRetrievalArticlePage();
   }
 
   if (route === demoEvidenceTrailRoute) {
@@ -867,6 +877,24 @@ function swiftApiClientArticlePage() {
         <h2>Where to go next.</h2>
         <p>${links}</p>
       </section>
+    </article>`
+  );
+}
+
+async function ragVsAgenticRetrievalArticlePage() {
+  const article = await readFile(
+    new URL("../src/_blog/articles/rag-vs-agentic-retrieval-for-code-review.html", import.meta.url),
+    "utf8"
+  );
+  const links = ragVsAgenticRetrievalArticleRequiredLinks.map((link) => `<a href="${link}">${link}</a>`).join(" ");
+
+  return page(
+    `<article>
+      <title>RAG vs Agentic Retrieval for Code Review: A TraceMap Perspective | TraceMap</title>
+      <meta property="og:type" content="article">
+      <link rel="canonical" href="https://tracemap.tools${ragVsAgenticRetrievalArticleRoute}">
+      ${article}
+      <footer>${links}</footer>
     </article>`
   );
 }
