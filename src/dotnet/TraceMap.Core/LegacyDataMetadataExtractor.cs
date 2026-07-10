@@ -984,6 +984,33 @@ public static class LegacyDataMetadataExtractor
             return;
         }
 
+        var protectedFact = SqlSecretSafetyExtractor.CreateEmbeddedFact(
+            manifest,
+            relativePath,
+            GetLine(command),
+            GetLine(command),
+            commandText);
+        if (protectedFact is not null)
+        {
+            properties["coverageLabel"] = "reduced";
+            properties["redactionReason"] = "protected-sql-material";
+            properties.Remove("metadataHash");
+            properties["evidenceScope"] = "static-design-time-metadata";
+            properties["runtimeProof"] = "False";
+            var target = TargetFrom(properties, "commandName", "commandHash");
+            facts.Add(FactFactory.Create(
+                manifest,
+                FactTypes.LegacyDataMappingDeclared,
+                RuleIds.LegacyDataTypedDataSet,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan(relativePath, GetLine(command), GetLine(command), null, ExtractorId, ScannerVersions.LegacyDataExtractor),
+                targetSymbol: target,
+                contractElement: target,
+                properties: properties));
+            facts.Add(protectedFact);
+            return;
+        }
+
         properties["textHash"] = FactFactory.Hash(commandText, 32);
         properties["textLength"] = commandText.Length.ToString();
         facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataTypedDataSet, relativePath, command, TargetFrom(properties, "commandName", "commandHash"), properties));

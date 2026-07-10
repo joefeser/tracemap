@@ -18,6 +18,11 @@ public static class SqlFileExtractor
                     continue;
                 }
 
+                if (SqlSecretSafetyExtractor.HasProtectedMaterial(text))
+                {
+                    continue;
+                }
+
                 var lineCount = CountLines(text);
                 var textHash = FactFactory.Hash(text, 32);
                 var operationName = SqlShapeExtractor.OperationName(text);
