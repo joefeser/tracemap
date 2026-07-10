@@ -1,15 +1,24 @@
 # SQL Secret-Bearing Step Safety Implementation State
 
-Status: ready-for-implementation
-Spec branch: `codex/sql-evidence-runway-specs`
+Status: implemented-pending-pr-review
+Implementation branch: `codex/sql-secret-bearing-step-safety-impl`
 Target base: `dev`
-Public claim level: hidden
+Public claim level: category-only-static-evidence
 
-## Scope State
+## Implemented Scope
 
-This folder is specification-only. It defines a category-only SQL safety
-boundary and leak-test expectations. No secret detector or production output
-change is implemented by this branch.
+- Added deterministic PostgreSQL-first classification for user mappings, FDW
+  server options, dblink inputs, subscription connections, credential-like
+  scheduled commands, and active credential-assignment comments.
+- Added `secret-bearing`, `secret-reference`, `possible-secret`, and
+  `not-established` classifications with closed category codes.
+- Added fail-closed Tier 4 gaps for dynamic and malformed high-risk boundaries.
+- Enforced a category-only fact boundary with span-only identity, no raw SQL,
+  no values, and no protected-material hashes.
+- Suppressed SQL text, shape, and context hashes at protected-material
+  boundaries in SQL files, C# literals, and typed-dataset commands.
+- Added a human-safe report section with owner-review stops and explicit
+  limitations/non-claims.
 
 ## Related Issues
 
@@ -18,40 +27,27 @@ change is implemented by this branch.
 - [#454 PostgreSQL RDS archive-link evidence](https://github.com/joefeser/tracemap/issues/454)
 - [#438 Database surface and operation evidence reports](https://github.com/joefeser/tracemap/issues/438)
 
-## Ordering Recommendation
-
-Implement third, after the shared context/span contract and initial archive-link
-construct inventory. The classifier can be prototyped alongside archive-link
-work, but downstream reporting should not ship archive-link value projection
-until this safety boundary is enforced.
-
-Recommended runway:
-
-1. `sql-execution-context-contracts`
-2. `postgres-archive-link-evidence`
-3. `sql-secret-bearing-step-safety`
-4. `sql-permission-prerequisite-evidence`
-5. `sql-operator-runbook-packet`
-
 ## Decisions
 
-- Findings are category-only and constructed from an allowlist.
-- Raw secret values are omitted, never hashed.
-- Absence of a finding is not proof that SQL is secret-free.
-- Unresolved high-risk parsing fails closed for rendering and emits a gap.
-- No secret management or runnable SQL belongs in this lane.
+- Raw values are omitted rather than hashed; protected statement identity is a
+  repo-relative span plus deterministic statement ordinal.
+- Generic serializers remain safe because classifier output is constructed
+  from a closed allowlist before it becomes a `CodeFact`.
+- External references are categorized without retaining placeholder names.
+- Detection does not claim that a script is safe or that no other secrets exist.
 
-## Validation Expected During Implementation
+## Validation
 
-- Synthetic unique sentinels and false-positive controls.
-- Leak assertions across every artifact, log, error, export, and combined path.
-- Rule-catalog, parser, determinism, and full .NET tests.
-- A CLI sentinel-fixture scan plus `./scripts/check-private-paths.sh` and
-  `git diff --check`.
+- Focused SQL context and secret-safety tests: passed (17 tests).
+- Full .NET suite: passed (714 tests).
+- Synthetic CLI leak scan and combined-index assertions: covered by tests.
+- Checked-in placeholder-only smoke fixture: added.
+- Final build, CLI smoke, private-path guard, and diff check are required before
+  publication.
 
-## Open Design Questions
+## Follow-Up Boundaries
 
-- Decide whether safe statement-shape hashes add enough correlation value to
-  justify their narrow, value-excluding normalization contract.
-- Confirm the existing shared safe-output helpers can enforce omission before
-  generic properties are materialized; otherwise add a dedicated DTO boundary.
+- Live database, environment, vault, and secret-store access remain out of scope.
+- No runnable remediation or credential-handling templates are generated.
+- Future dialect adapters must add their own rules and false-negative limits;
+  PostgreSQL-first behavior is not generalized by inference.

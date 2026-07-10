@@ -264,6 +264,10 @@ public static partial class SqlExecutionContextExtractor
         string classification,
         int? declarationLine = null)
     {
+        var protectedMaterial = SqlSecretSafetyExtractor.Analyze(
+            statement.RawText,
+            statement.StructuralText,
+            statement.LexicallyComplete) is not null;
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["contextClassification"] = classification,
@@ -281,9 +285,17 @@ public static partial class SqlExecutionContextExtractor
             ["schemaRole"] = context.SchemaRole,
             ["serverRole"] = context.ServerRole,
             ["statementOrdinal"] = statement.Ordinal.ToString(),
-            ["statementShapeHash"] = FactFactory.Hash(statement.StructuralText, 32),
             ["stepKind"] = context.StepKind
         };
+        if (protectedMaterial)
+        {
+            properties["identityPrecision"] = "span-only";
+            properties["redactionReason"] = "protected-sql-material";
+        }
+        else
+        {
+            properties["statementShapeHash"] = FactFactory.Hash(statement.StructuralText, 32);
+        }
         AddJoined(properties, "requiredCapabilities", context.RequiredCapabilities);
         AddJoined(properties, "stopConditions", context.StopConditions);
 
@@ -297,7 +309,7 @@ public static partial class SqlExecutionContextExtractor
                 relativePath,
                 declarationLine ?? statement.StartLine,
                 declarationLine ?? statement.EndLine,
-                FactFactory.Hash(statement.StructuralText, 32),
+                protectedMaterial ? null : FactFactory.Hash(statement.StructuralText, 32),
                 nameof(SqlExecutionContextExtractor),
                 ScannerVersions.SqlExecutionContextExtractor),
             targetSymbol: stepId,
@@ -594,7 +606,7 @@ public static partial class SqlExecutionContextExtractor
             AllContextFields());
     }
 
-    private static IReadOnlyList<SqlStatement> SplitStatements(string text)
+    internal static IReadOnlyList<SqlStatement> SplitStatements(string text)
     {
         var result = new List<SqlStatement>();
         var startIndex = 0;
@@ -688,20 +700,20 @@ public static partial class SqlExecutionContextExtractor
                 continue;
             }
 
-            AddStatement(result, text[startIndex..(index + 1)], startLine, line);
+            AddStatement(result, text[startIndex..(index + 1)], startLine, line, lexicallyComplete: true);
             startIndex = index + 1;
             startLine = line;
         }
 
         if (startIndex < text.Length)
         {
-            AddStatement(result, text[startIndex..], startLine, line);
+            AddStatement(result, text[startIndex..], startLine, line, lexicallyComplete: state == LexState.Normal);
         }
 
         return result;
     }
 
-    private static void AddStatement(ICollection<SqlStatement> statements, string raw, int segmentStartLine, int segmentEndLine)
+    private static void AddStatement(ICollection<SqlStatement> statements, string raw, int segmentStartLine, int segmentEndLine, bool lexicallyComplete)
     {
         var structural = StructuralText(raw);
         if (string.IsNullOrWhiteSpace(structural))
@@ -714,7 +726,9 @@ public static partial class SqlExecutionContextExtractor
             statements.Count + 1,
             tokenStartLine,
             Math.Max(tokenStartLine, segmentEndLine),
-            CollapseWhitespace(structural)));
+            CollapseWhitespace(structural),
+            raw,
+            lexicallyComplete));
     }
 
     private static int FindFirstSqlTokenLine(string text, int segmentStartLine)
@@ -984,7 +998,7 @@ public static partial class SqlExecutionContextExtractor
         };
     }
 
-    private static IReadOnlyList<(int Line, string Comment)> EnumerateActiveLineComments(string text)
+    internal static IReadOnlyList<(int Line, string Comment)> EnumerateActiveLineComments(string text)
     {
         var comments = new List<(int Line, string Comment)>();
         var state = LexState.Normal;
@@ -1157,7 +1171,13 @@ public static partial class SqlExecutionContextExtractor
     [GeneratedRegex(@"\s+", RegexOptions.CultureInvariant)]
     private static partial Regex WhitespaceRegex();
 
-    private sealed record SqlStatement(int Ordinal, int StartLine, int EndLine, string StructuralText);
+    internal sealed record SqlStatement(
+        int Ordinal,
+        int StartLine,
+        int EndLine,
+        string StructuralText,
+        string RawText,
+        bool LexicallyComplete);
     private sealed record ContextDirective(int Line, ContextDeclaration Declaration);
     private sealed record ContextDeclaration(
         string EngineFamily,

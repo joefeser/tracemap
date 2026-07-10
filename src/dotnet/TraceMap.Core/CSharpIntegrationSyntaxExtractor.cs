@@ -557,6 +557,19 @@ public static class CSharpIntegrationSyntaxExtractor
                 continue;
             }
 
+            var sourceLineSpan = token.GetLocation().GetLineSpan();
+            var protectedFact = SqlSecretSafetyExtractor.CreateEmbeddedFact(
+                manifest,
+                filePath,
+                sourceLineSpan.StartLinePosition.Line + 1,
+                sourceLineSpan.EndLinePosition.Line + 1,
+                value);
+            if (protectedFact is not null)
+            {
+                facts.Add(protectedFact);
+                continue;
+            }
+
             var containingType = GetContainingType(token.Parent);
             var containingMethod = GetContainingMemberName(token.Parent);
             var containingSymbol = ContainingSymbol(filePath, containingType, containingMethod);
