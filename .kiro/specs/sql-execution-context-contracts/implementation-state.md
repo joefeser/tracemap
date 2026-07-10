@@ -50,9 +50,10 @@ Public claim level: hidden
 Passed on this branch:
 
 - `dotnet build src/dotnet/TraceMap.sln` — zero warnings/errors.
-- `dotnet test src/dotnet/TraceMap.sln` — 706 passed.
-- Focused `SqlExecutionContextExtractorTests` — 9 passed, including partial
-  declaration merging and inactive directive-lookalike regression cases.
+- `dotnet test src/dotnet/TraceMap.sln` — 707 passed.
+- Focused `SqlExecutionContextExtractorTests` — 10 passed, including partial
+  declaration merging, inactive directive-lookalike, first-token span, and
+  block-comment token-boundary regression cases.
 - Two CLI scans of `samples/sql-execution-context` produced byte-identical
   `facts.ndjson` and `report.md`.
 - SQLite inspection confirmed context declaration, candidate, and gap rows with
