@@ -128,6 +128,7 @@ public static partial class SqlExecutionContextExtractor
                 continue;
             }
 
+            var fileFactStart = facts.Count;
             var (sidecarDeclarations, sidecarGaps) = LoadSidecar(repoPath, file.RelativePath, manifest);
             facts.AddRange(sidecarGaps);
             var directives = ParseDirectives(text, file.RelativePath, manifest, facts);
@@ -257,7 +258,15 @@ public static partial class SqlExecutionContextExtractor
                         "reduced"));
                 }
             }
+
+            facts.AddRange(PostgresArchiveLinkExtractor.ExtractFileSurfaces(
+                manifest,
+                file.RelativePath,
+                statements,
+                facts.Skip(fileFactStart).ToArray()));
         }
+
+        facts.AddRange(PostgresArchiveLinkExtractor.Reduce(manifest, facts));
 
         return facts
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
