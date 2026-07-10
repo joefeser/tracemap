@@ -118,6 +118,8 @@ public static class FactTypes
     public const string TargetFrameworkDeclared = nameof(TargetFrameworkDeclared);
     public const string ConfigFileDeclared = nameof(ConfigFileDeclared);
     public const string SqlFileDeclared = nameof(SqlFileDeclared);
+    public const string SqlExecutionContextDeclared = nameof(SqlExecutionContextDeclared);
+    public const string SqlExecutionContextCandidate = nameof(SqlExecutionContextCandidate);
     public const string TypeDeclared = nameof(TypeDeclared);
     public const string MethodDeclared = nameof(MethodDeclared);
     public const string PropertyDeclared = nameof(PropertyDeclared);
@@ -291,6 +293,9 @@ public static class RuleIds
     public const string DatabaseDapperInvocation = "database.dapper.invocation.v1";
     public const string DatabaseSqlText = "database.sql.text.v1";
     public const string DatabaseSqlShape = "database.sql.shape.v1";
+    public const string DatabaseSqlContextDeclaration = "database.sql.context.declaration.v1";
+    public const string DatabaseSqlContextSyntax = "database.sql.context.syntax.v1";
+    public const string DatabaseSqlContextGap = "database.sql.context.gap.v1";
     public const string ConfigKey = "config.key.v1";
     public const string LegacyWcfConfig = "legacy.wcf.config.v1";
     public const string LegacyWcfContract = "legacy.wcf.contract.v1";
@@ -387,6 +392,7 @@ public static class ScannerVersions
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
     public const string SqlShapeExtractor = "sql-shape/0.1.0";
+    public const string SqlExecutionContextExtractor = "sql-execution-context/0.1.0";
     public const string LegacyWcfExtractor = "legacy-wcf/0.2.0";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.1.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
