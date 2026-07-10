@@ -157,8 +157,7 @@ public static partial class SqlExecutionContextExtractor
                 }
 
                 sidecarDeclarations.TryGetValue(statement.Ordinal, out var sidecar);
-                var declaration = sidecar ?? directive;
-                if (sidecar is not null && directive is not null && Conflicts(sidecar, directive))
+                if (sidecar is not null && directive is not null && DeclarationLayersConflict(sidecar, directive))
                 {
                     facts.Add(CreateGap(
                         manifest,
@@ -181,6 +180,12 @@ public static partial class SqlExecutionContextExtractor
                     "syntax",
                     inferred.IsRecognized ? "inferred" : "unknown"));
 
+                var explicitDeclaration = sidecar ?? directive;
+                var declaration = explicitDeclaration is null
+                    ? null
+                    : MergeDeclarations(MergeDeclarations(inferred, directive), sidecar);
+                var declarationConflictsSyntax = (directive is not null && ExplicitFieldsConflict(directive, inferred))
+                    || (sidecar is not null && ExplicitFieldsConflict(sidecar, inferred));
                 if (declaration is not null)
                 {
                     facts.Add(CreateContextFact(
@@ -192,9 +197,9 @@ public static partial class SqlExecutionContextExtractor
                         statement,
                         declaration,
                         sidecar is not null ? "sidecar" : "directive",
-                        Conflicts(declaration, inferred) ? "conflicting" : "declared"));
+                        declarationConflictsSyntax ? "conflicting" : "declared"));
 
-                    if (Conflicts(declaration, inferred))
+                    if (declarationConflictsSyntax)
                     {
                         facts.Add(CreateGap(
                             manifest,
@@ -344,7 +349,8 @@ public static partial class SqlExecutionContextExtractor
         var gaps = new List<CodeFact>();
         try
         {
-            using var document = JsonDocument.Parse(File.ReadAllText(fullPath));
+            var content = File.ReadAllText(fullPath);
+            using var document = JsonDocument.Parse(content);
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object
                 || HasUnknownProperties(root, SidecarRootKeys)
@@ -354,7 +360,7 @@ public static partial class SqlExecutionContextExtractor
                 || !root.TryGetProperty("steps", out var steps)
                 || steps.ValueKind != JsonValueKind.Array)
             {
-                gaps.Add(CreateGap(manifest, relativePath, 1, CountLines(File.ReadAllText(fullPath)), 0, "invalid-context-sidecar", "reduced"));
+                gaps.Add(CreateGap(manifest, relativePath, 1, CountLines(content), 0, "invalid-context-sidecar", "reduced"));
                 return (declarations, gaps);
             }
 
@@ -403,7 +409,11 @@ public static partial class SqlExecutionContextExtractor
             return false;
         }
 
-        declaration = new ContextDeclaration(engine, server, database, schema, mode, stepKind, capabilities, stops, true);
+        var declaredFields = step.EnumerateObject()
+            .Select(property => property.Name)
+            .Where(name => name != "statementOrdinal")
+            .ToHashSet(StringComparer.Ordinal);
+        declaration = new ContextDeclaration(engine, server, database, schema, mode, stepKind, capabilities, stops, true, declaredFields);
         return true;
     }
 
@@ -414,10 +424,9 @@ public static partial class SqlExecutionContextExtractor
         ICollection<CodeFact> facts)
     {
         var result = new List<ContextDirective>();
-        var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
-        for (var index = 0; index < lines.Length; index++)
+        foreach (var (line, comment) in EnumerateActiveLineComments(text))
         {
-            var match = DirectiveRegex().Match(lines[index]);
+            var match = DirectiveRegex().Match(comment);
             if (!match.Success)
             {
                 continue;
@@ -425,11 +434,11 @@ public static partial class SqlExecutionContextExtractor
 
             if (TryParseDirective(match.Groups["body"].Value, out var declaration))
             {
-                result.Add(new ContextDirective(index + 1, declaration!));
+                result.Add(new ContextDirective(line, declaration!));
             }
             else
             {
-                facts.Add(CreateGap(manifest, relativePath, index + 1, index + 1, 0, "invalid-context-directive", "reduced"));
+                facts.Add(CreateGap(manifest, relativePath, line, line, 0, "invalid-context-directive", "reduced"));
             }
         }
 
@@ -469,13 +478,16 @@ public static partial class SqlExecutionContextExtractor
             return false;
         }
 
-        declaration = new ContextDeclaration(engine, server, database, schema, mode, stepKind, capabilities, stops, true);
+        var declaredFields = values.Keys
+            .Select(CanonicalDirectiveField)
+            .ToHashSet(StringComparer.Ordinal);
+        declaration = new ContextDeclaration(engine, server, database, schema, mode, stepKind, capabilities, stops, true, declaredFields);
         return true;
     }
 
     private static ContextDeclaration Classify(string structuralText)
     {
-        var normalized = CollapseWhitespace(structuralText).ToUpperInvariant();
+        var normalized = structuralText.ToUpperInvariant();
         if (normalized.StartsWith("CREATE EXTENSION ", StringComparison.Ordinal))
         {
             return Context("admin", "admin", "extension", "manual", "extension-setup", ["create-extension"]);
@@ -540,7 +552,7 @@ public static partial class SqlExecutionContextExtractor
             return Context("unknown", "unknown", "unspecified", "manual", "destructive-operation", ["destructive-operation-review"], ["owner-review"]);
         }
 
-        return new ContextDeclaration("unknown", "unknown", "unknown", "unspecified", "unknown", "unknown-sql-step", [], ["owner-review"], false);
+        return new ContextDeclaration("unknown", "unknown", "unknown", "unspecified", "unknown", "unknown-sql-step", [], ["owner-review"], false, AllContextFields());
     }
 
     private static ContextDeclaration Context(
@@ -574,7 +586,8 @@ public static partial class SqlExecutionContextExtractor
             stepKind,
             capabilities,
             stopConditions.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            true);
+            true,
+            AllContextFields());
     }
 
     private static IReadOnlyList<SqlStatement> SplitStatements(string text)
@@ -795,35 +808,209 @@ public static partial class SqlExecutionContextExtractor
             return false;
         }
 
-        var inner = text[(index + 1)..end];
+        var inner = text.AsSpan(index + 1, end - index - 1);
         if (inner.Length > 0 && (!char.IsLetter(inner[0]) && inner[0] != '_'))
         {
             return false;
         }
-        if (inner.Any(ch => !char.IsLetterOrDigit(ch) && ch != '_'))
+        foreach (var ch in inner)
         {
-            return false;
+            if (!char.IsLetterOrDigit(ch) && ch != '_')
+            {
+                return false;
+            }
         }
 
         tag = text[index..(end + 1)];
         return true;
     }
 
-    private static bool Conflicts(ContextDeclaration left, ContextDeclaration right)
+    private static bool ExplicitFieldsConflict(ContextDeclaration declaration, ContextDeclaration other)
     {
-        return Conflicts(left.EngineFamily, right.EngineFamily)
-            || Conflicts(left.ServerRole, right.ServerRole)
-            || Conflicts(left.DatabaseRole, right.DatabaseRole)
-            || Conflicts(left.SchemaRole, right.SchemaRole)
-            || Conflicts(left.ExecutionMode, right.ExecutionMode)
-            || (left.StepKind != "unknown-sql-step" && right.StepKind != "unknown-sql-step" && left.StepKind != right.StepKind);
+        return FieldConflicts(declaration, other, "engineFamily", declaration.EngineFamily, other.EngineFamily)
+            || FieldConflicts(declaration, other, "serverRole", declaration.ServerRole, other.ServerRole)
+            || FieldConflicts(declaration, other, "databaseRole", declaration.DatabaseRole, other.DatabaseRole)
+            || FieldConflicts(declaration, other, "schemaRole", declaration.SchemaRole, other.SchemaRole)
+            || FieldConflicts(declaration, other, "executionMode", declaration.ExecutionMode, other.ExecutionMode)
+            || FieldConflicts(declaration, other, "stepKind", declaration.StepKind, other.StepKind);
     }
 
-    private static bool Conflicts(string left, string right)
+    private static bool DeclarationLayersConflict(ContextDeclaration declaration, ContextDeclaration other)
     {
-        return left is not "unknown" and not "unspecified"
+        return ExplicitFieldsConflict(declaration, other)
+            || CollectionFieldConflicts(declaration, other, "requiredCapabilities", declaration.RequiredCapabilities, other.RequiredCapabilities)
+            || CollectionFieldConflicts(declaration, other, "stopConditions", declaration.StopConditions, other.StopConditions);
+    }
+
+    private static bool FieldConflicts(
+        ContextDeclaration declaration,
+        ContextDeclaration other,
+        string field,
+        string left,
+        string right)
+    {
+        return declaration.DeclaredFields.Contains(field)
+            && other.DeclaredFields.Contains(field)
+            && left is not "unknown" and not "unspecified" and not "unknown-sql-step"
             && right is not "unknown" and not "unspecified"
+            && right is not "unknown-sql-step"
             && !string.Equals(left, right, StringComparison.Ordinal);
+    }
+
+    private static bool CollectionFieldConflicts(
+        ContextDeclaration declaration,
+        ContextDeclaration other,
+        string field,
+        IReadOnlyList<string> left,
+        IReadOnlyList<string> right)
+    {
+        return declaration.DeclaredFields.Contains(field)
+            && other.DeclaredFields.Contains(field)
+            && !left.OrderBy(value => value, StringComparer.Ordinal)
+                .SequenceEqual(right.OrderBy(value => value, StringComparer.Ordinal), StringComparer.Ordinal);
+    }
+
+    private static ContextDeclaration MergeDeclarations(ContextDeclaration source, ContextDeclaration? overlay)
+    {
+        if (overlay is null)
+        {
+            return source;
+        }
+
+        return new ContextDeclaration(
+            Overlay("engineFamily", source.EngineFamily, overlay),
+            Overlay("serverRole", source.ServerRole, overlay),
+            Overlay("databaseRole", source.DatabaseRole, overlay),
+            Overlay("schemaRole", source.SchemaRole, overlay),
+            Overlay("executionMode", source.ExecutionMode, overlay),
+            Overlay("stepKind", source.StepKind, overlay),
+            overlay.DeclaredFields.Contains("requiredCapabilities") ? overlay.RequiredCapabilities : source.RequiredCapabilities,
+            overlay.DeclaredFields.Contains("stopConditions") ? overlay.StopConditions : source.StopConditions,
+            source.IsRecognized || overlay.IsRecognized,
+            source.DeclaredFields.Concat(overlay.DeclaredFields).ToHashSet(StringComparer.Ordinal));
+    }
+
+    private static string Overlay(string field, string source, ContextDeclaration overlay)
+    {
+        if (!overlay.DeclaredFields.Contains(field))
+        {
+            return source;
+        }
+
+        return field switch
+        {
+            "engineFamily" => overlay.EngineFamily,
+            "serverRole" => overlay.ServerRole,
+            "databaseRole" => overlay.DatabaseRole,
+            "schemaRole" => overlay.SchemaRole,
+            "executionMode" => overlay.ExecutionMode,
+            "stepKind" => overlay.StepKind,
+            _ => source
+        };
+    }
+
+    private static IReadOnlySet<string> AllContextFields()
+    {
+        return new HashSet<string>(
+            ["engineFamily", "serverRole", "databaseRole", "schemaRole", "executionMode", "stepKind", "requiredCapabilities", "stopConditions"],
+            StringComparer.Ordinal);
+    }
+
+    private static string CanonicalDirectiveField(string field)
+    {
+        return field switch
+        {
+            "engine" => "engineFamily",
+            "server" => "serverRole",
+            "database" => "databaseRole",
+            "schema" => "schemaRole",
+            "mode" => "executionMode",
+            "step" => "stepKind",
+            "capabilities" => "requiredCapabilities",
+            "stops" => "stopConditions",
+            _ => field
+        };
+    }
+
+    private static IReadOnlyList<(int Line, string Comment)> EnumerateActiveLineComments(string text)
+    {
+        var comments = new List<(int Line, string Comment)>();
+        var state = LexState.Normal;
+        string? dollarTag = null;
+        var line = 1;
+        for (var index = 0; index < text.Length; index++)
+        {
+            var current = text[index];
+            var next = index + 1 < text.Length ? text[index + 1] : '\0';
+            if (current == '\n')
+            {
+                line++;
+            }
+
+            if (state == LexState.BlockComment)
+            {
+                if (current == '*' && next == '/')
+                {
+                    state = LexState.Normal;
+                    index++;
+                }
+                continue;
+            }
+            if (state == LexState.SingleQuote)
+            {
+                if (current == '\'' && next == '\'') index++;
+                else if (current == '\'') state = LexState.Normal;
+                continue;
+            }
+            if (state == LexState.DoubleQuote)
+            {
+                if (current == '"' && next == '"') index++;
+                else if (current == '"') state = LexState.Normal;
+                continue;
+            }
+            if (state == LexState.DollarQuote)
+            {
+                if (dollarTag is not null && text.AsSpan(index).StartsWith(dollarTag, StringComparison.Ordinal))
+                {
+                    index += dollarTag.Length - 1;
+                    state = LexState.Normal;
+                    dollarTag = null;
+                }
+                continue;
+            }
+
+            if (current == '/' && next == '*')
+            {
+                state = LexState.BlockComment;
+                index++;
+            }
+            else if (current == '\'')
+            {
+                state = LexState.SingleQuote;
+            }
+            else if (current == '"')
+            {
+                state = LexState.DoubleQuote;
+            }
+            else if (current == '$' && TryReadDollarTag(text, index, out var tag))
+            {
+                state = LexState.DollarQuote;
+                dollarTag = tag;
+                index += tag.Length - 1;
+            }
+            else if (current == '-' && next == '-')
+            {
+                var end = text.IndexOf('\n', index + 2);
+                if (end < 0)
+                {
+                    end = text.Length;
+                }
+                comments.Add((line, text[index..end].TrimEnd('\r')));
+                index = end - 1;
+            }
+        }
+
+        return comments;
     }
 
     private static bool RequiresConcreteContext(string stepKind)
@@ -929,7 +1116,8 @@ public static partial class SqlExecutionContextExtractor
         string StepKind,
         IReadOnlyList<string> RequiredCapabilities,
         IReadOnlyList<string> StopConditions,
-        bool IsRecognized);
+        bool IsRecognized,
+        IReadOnlySet<string> DeclaredFields);
 
     private enum LexState
     {

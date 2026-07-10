@@ -80,7 +80,7 @@ public sealed class SqlExecutionContextExtractorTests
 
         Assert.Equal("sidecar", declared.Properties["declarationSource"]);
         Assert.Equal("admin", declared.Properties["serverRole"]);
-        Assert.Equal("declared", declared.Properties["contextClassification"]);
+        Assert.Equal("conflicting", declared.Properties["contextClassification"]);
         Assert.Contains(facts, fact => IsGap(fact, "conflicting-declarations"));
         Assert.DoesNotContain(facts.SelectMany(fact => fact.Properties.Values), value => value.Contains("source-data", StringComparison.Ordinal) && value.Contains("admin", StringComparison.Ordinal));
     }
@@ -104,6 +104,45 @@ public sealed class SqlExecutionContextExtractorTests
         Assert.Contains(facts, fact => IsGap(fact, "invalid-context-sidecar"));
         Assert.DoesNotContain("must-not-render", json, StringComparison.Ordinal);
         Assert.DoesNotContain("connectionString", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Extract_merges_partial_declaration_with_destructive_syntax_candidate()
+    {
+        using var temp = new TempDirectory();
+        WriteSql(temp.Path, "setup.sql", """
+            -- tracemap-sql-context: engine=postgresql
+            DROP TABLE archive.old_records;
+            """);
+
+        var facts = Extract(temp.Path);
+        var declared = Assert.Single(facts, fact => fact.FactType == FactTypes.SqlExecutionContextDeclared);
+
+        Assert.Equal("destructive-operation", declared.Properties["stepKind"]);
+        Assert.Equal("manual", declared.Properties["executionMode"]);
+        Assert.Equal("unknown", declared.Properties["serverRole"]);
+        Assert.Equal("reduced", declared.Properties["coverage"]);
+        Assert.Contains(facts, fact => IsGap(fact, "missing-context-evidence"));
+    }
+
+    [Fact]
+    public void Extract_ignores_directive_like_text_inside_block_comments_strings_and_dollar_bodies()
+    {
+        using var temp = new TempDirectory();
+        WriteSql(temp.Path, "setup.sql", """
+            /*
+            -- tracemap-sql-context: engine=postgresql server=admin database=admin schema=extension mode=manual step=extension-setup
+            */
+            SELECT '-- tracemap-sql-context: engine=postgresql server=admin';
+            SELECT $$-- tracemap-sql-context: engine=postgresql server=admin$$;
+            DROP TABLE archive.old_records;
+            """);
+
+        var facts = Extract(temp.Path);
+
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.SqlExecutionContextDeclared);
+        Assert.Contains(facts, fact => fact.FactType == FactTypes.SqlExecutionContextCandidate
+            && fact.Properties.GetValueOrDefault("stepKind") == "destructive-operation");
     }
 
     [Fact]
