@@ -757,3 +757,23 @@ tiers, relative spans, coverage, and `secret-owner-review`. Raw SQL, placeholder
 names, connection material, values, and secret-derived hashes must be absent.
 The report must say that absence of a finding does not prove absence of secrets
 and must not certify execution safety or replace operator approval.
+
+## PostgreSQL Archive-Link Evidence Smoke
+
+Archive-link changes should run the focused tests and scan the checked-in
+placeholder-only fixture:
+
+```bash
+dotnet test src/dotnet/TraceMap.sln --filter FullyQualifiedName~PostgresArchiveLinkExtractorTests
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/postgres-archive-link --out /tmp/tracemap-postgres-archive-smoke
+```
+
+Expected output includes `DatabaseLinkSurfaceDeclared`,
+`DatabasePrerequisiteCandidate`, `DatabaseLinkEdgeCandidate`, and cataloged
+archive-link gaps. Inspect NDJSON, SQLite, Markdown, and logs for rule IDs,
+tiers, commit SHA, extractor version, coverage, limitations, supporting fact
+IDs, and category-only context/direction. Connection inputs, user-mapping
+values, subscription data, scheduled bodies, infrastructure identifiers, and
+local paths must not appear. The report must not claim connectivity, applied
+state, permissions, replication health, scheduling success, or archive
+correctness.

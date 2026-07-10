@@ -100,6 +100,7 @@ public static class MarkdownReportWriter
 
         AddSqlExecutionContext(lines, result);
         AddSqlProtectedMaterial(lines, result);
+        AddPostgresArchiveLinks(lines, result);
 
         AddFactSection(
             lines,
@@ -506,6 +507,91 @@ public static class MarkdownReportWriter
 
         lines.Add("");
         lines.Add("SQL protected-material limitations: detection is conservative and static-first; it does not access a database, environment, vault, or secret store, and it does not validate credentials or runtime state.");
+    }
+
+    private static void AddPostgresArchiveLinks(List<string> lines, ScanResult result)
+    {
+        var surfaces = result.Facts
+            .Where(fact => fact.FactType == FactTypes.DatabaseLinkSurfaceDeclared)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        if (surfaces.Length == 0)
+        {
+            return;
+        }
+
+        var prerequisites = result.Facts
+            .Where(fact => fact.FactType == FactTypes.DatabasePrerequisiteCandidate)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.Properties.GetValueOrDefault("prerequisiteCode"), StringComparer.Ordinal)
+            .ToArray();
+        var edges = result.Facts
+            .Where(fact => fact.FactType == FactTypes.DatabaseLinkEdgeCandidate)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        var gaps = result.Facts
+            .Where(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.DatabasePostgresArchiveLinkGap)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.Properties.GetValueOrDefault("gapKind"), StringComparer.Ordinal)
+            .ToArray();
+
+        lines.Add("");
+        lines.Add("## PostgreSQL Archive-Link Evidence");
+        lines.Add("");
+        lines.Add("Static, PostgreSQL-first evidence only. These rows do not prove connectivity, applied database state, permissions, replication health, scheduled execution, or archive correctness. Values and runnable SQL are omitted.");
+        lines.Add("");
+        lines.Add("| Step | Mechanism | Surface | Context | Coverage | Rule / tier | Evidence |");
+        lines.Add("| --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var fact in surfaces)
+        {
+            var evidence = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+            lines.Add($"| `{DisplayCodeValue(fact.Properties.GetValueOrDefault("statementOrdinal") ?? "0")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("mechanism") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("surfaceKind") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("contextRole") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("coverage") ?? "reduced")}` | `{fact.RuleId}` / `{fact.EvidenceTier}` | `{evidence}` |");
+        }
+
+        lines.Add("");
+        lines.Add("### Archive-Link Edges");
+        lines.Add("");
+        if (edges.Length == 0)
+        {
+            lines.Add("- None established from checked-in prerequisite/context evidence.");
+        }
+        else
+        {
+            lines.Add("| Mechanism | Link | Direction | Coverage | Supporting facts | Rule / tier | Evidence |");
+            lines.Add("| --- | --- | --- | --- | --- | --- | --- |");
+            foreach (var fact in edges)
+            {
+                var evidence = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+                lines.Add($"| `{DisplayCodeValue(fact.Properties.GetValueOrDefault("mechanism") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("linkKind") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("direction") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("coverage") ?? "reduced")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("supportingFactIds") ?? "none")}` | `{fact.RuleId}` / `{fact.EvidenceTier}` | `{evidence}` |");
+            }
+        }
+
+        lines.Add("");
+        lines.Add("### Archive-Link Prerequisites");
+        lines.Add("");
+        foreach (var fact in prerequisites)
+        {
+            var evidence = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+            lines.Add($"- `{DisplayCodeValue(fact.Properties.GetValueOrDefault("mechanism") ?? "unknown")}` requires `{DisplayCodeValue(fact.Properties.GetValueOrDefault("prerequisiteCode") ?? "unknown")}`: `{DisplayCodeValue(fact.Properties.GetValueOrDefault("satisfaction") ?? "missing-evidence")}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{evidence}`.");
+        }
+
+        if (gaps.Length > 0)
+        {
+            lines.Add("");
+            lines.Add("### Archive-Link Gaps");
+            lines.Add("");
+            foreach (var fact in gaps.Take(100))
+            {
+                var evidence = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+                lines.Add($"- `{DisplayCodeValue(fact.Properties.GetValueOrDefault("gapKind") ?? "unknown-gap")}` for `{DisplayCodeValue(fact.Properties.GetValueOrDefault("mechanism") ?? "unknown")}` is partial static evidence ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{evidence}`.");
+            }
+        }
     }
 
     private static bool IsContextTransition(CodeFact left, CodeFact right)
