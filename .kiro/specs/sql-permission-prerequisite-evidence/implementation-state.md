@@ -1,14 +1,23 @@
 # SQL Permission Prerequisite Evidence Implementation State
 
-Status: ready-for-implementation
-Spec branch: `codex/sql-evidence-runway-specs`
+Status: implemented-pending-pr-review
+Implementation branch: `codex/sql-permission-prerequisite-evidence-impl`
 Target base: `dev`
-Public claim level: hidden
+Public claim level: deterministic-static-evidence
 
-## Scope State
+## Implemented Scope
 
-This folder is specification-only. It defines PostgreSQL permission statement
-evidence and a prerequisite candidate reducer; no implementation is complete.
+- Extracts supported PostgreSQL grants, revokes, ownership changes, default
+  privileges, and role memberships into category-only evidence.
+- Supports database, schema, table, sequence, routine, foreign-server,
+  foreign-wrapper, role, and extension-capability categories.
+- Adds the versioned `postgres-permission-prerequisites/v1` operation registry.
+- Reduces candidates into `present-in-scripts`, `missing-evidence`,
+  `conflicting-evidence`, `unknown`, or `needs-owner-review` with deterministic
+  reason codes and supporting/contradicting fact IDs.
+- Caps administrative capabilities, cross-file order, permission-after-operation,
+  and reduced inputs at owner review or unknown instead of simulating state.
+- Adds safe Markdown permission/prerequisite tables and explicit non-claims.
 
 ## Related Issues
 
@@ -19,38 +28,28 @@ evidence and a prerequisite candidate reducer; no implementation is complete.
 - [#435 PostgreSQL schema and migration surfaces](https://github.com/joefeser/tracemap/issues/435)
 - [#438 Database surface and operation evidence reports](https://github.com/joefeser/tracemap/issues/438)
 
-## Ordering Recommendation
-
-Implement fourth. It depends on the shared context contract, archive-link
-operation/object inventory, and secret-safe property boundary. Its normalized
-prerequisite rows are a direct input to the final runbook packet.
-
-Recommended runway:
-
-1. `sql-execution-context-contracts`
-2. `postgres-archive-link-evidence`
-3. `sql-secret-bearing-step-safety`
-4. `sql-permission-prerequisite-evidence`
-5. `sql-operator-runbook-packet`
-
 ## Decisions
 
-- `present-in-scripts` never means effective runtime privilege.
-- `missing-evidence` never means a live grant is absent.
-- The reducer does not simulate PostgreSQL privilege inheritance or state.
-- Unknown order/context/identity reduces coverage and produces owner review.
-- No grant SQL is generated or executed.
+- Permission statement facts and prerequisite coverage facts remain distinct.
+- Raw identities are omitted; exact foreign-server linking uses a one-way key
+  from a non-secret SQL identifier.
+- `present-in-scripts` is never described as effective runtime access.
+- Generic RDS/provider privileges are not inferred; administrative candidates
+  always require owner validation.
 
-## Validation Expected During Implementation
+## Validation
 
-- Synthetic ordered and unordered permission/archive fixtures.
-- Rule registry, extraction, reducer, safety, storage, report, and determinism tests.
-- Full .NET tests and one CLI fixture scan.
-- `./scripts/check-private-paths.sh` and `git diff --check`.
+- Focused SQL context/safety/archive/permission suite passed (32 tests).
+- Full .NET suite passed (729 tests).
+- CLI smoke passed with five permission statements, six prerequisite coverage
+  rows, `present-in-scripts` non-claims, and no planted values.
+- Build passed with zero warnings/errors; private-path guard and diff check
+  passed.
 
-## Open Design Questions
+## Follow-Up Boundaries
 
-- Choose the smallest initial PostgreSQL capability-code registry that is useful
-  without implying authoritative privilege semantics.
-- Decide how opaque role/object identities preserve cross-file linking without
-  exposing low-entropy private identifiers.
+- No live privilege lookup, inheritance expansion, RLS/policy evaluation,
+  transaction/branch simulation, cloud IAM access, grant generation, or SQL
+  execution is implemented.
+- The final runbook story may consume these rows but cannot upgrade their static
+  evidence status.

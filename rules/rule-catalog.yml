@@ -3081,6 +3081,48 @@ rules:
       - Archive-link gaps label partial static analysis and never establish runtime failure or absence of a live link.
       - Gap properties contain closed codes, mechanism, ordinal, and safe spans only; raw SQL, connection data, infrastructure identities, scheduled commands, and parser exception text are omitted.
 
+  - id: database.postgres.permission.statement.v1
+    name: PostgreSQL permission statement evidence
+    description: Classifies supported grants, revokes, ownership changes, default privileges, and role membership into safe categorical evidence.
+    evidenceTier: Tier2Structural
+    emits:
+      - DatabasePermissionDeclared
+    limitations:
+      - Static statement evidence does not prove effective privilege, role inheritance, object existence, execution order, transaction outcome, or runtime authorization.
+      - Raw role, server, database, schema, table, routine, wrapper, and infrastructure names are omitted; only one-way non-secret identity keys may be retained for exact linking.
+      - Unsupported clauses, quoted/dynamic identity, and malformed syntax produce reduced-coverage gaps rather than inferred permission state.
+
+  - id: database.postgres.permission.prerequisite.v1
+    name: PostgreSQL permission prerequisite candidate registry
+    description: Maps supported SQL operation kinds to versioned capability candidates for static owner review.
+    evidenceTier: Tier2Structural
+    emits:
+      - DatabasePrerequisiteCandidate
+    limitations:
+      - Registry mappings are deterministic review guidance, not authoritative PostgreSQL, provider, or version-specific authorization rules.
+      - RDS-specific roles or capabilities are never inferred from generic SQL and require explicit owner validation.
+
+  - id: database.postgres.permission.coverage.v1
+    name: PostgreSQL permission prerequisite coverage
+    description: Links operation candidates to compatible checked-in permission statements and records present, missing, conflicting, unknown, or owner-review status.
+    evidenceTier: Tier2Structural
+    emits:
+      - DatabasePrerequisiteEvidence
+    limitations:
+      - Present-in-scripts means compatible static evidence exists; it does not mean a permission is active, effective, sufficient, or granted to the runtime role.
+      - Cross-file order, permission-after-operation, reduced inputs, and administrative capabilities cap results at unknown or needs-owner-review.
+      - The reducer does not simulate transactions, conditional/procedural execution, default privilege expansion, role inheritance, RLS/policies, catalog state, or cloud IAM.
+
+  - id: database.postgres.permission.gap.v1
+    name: PostgreSQL permission evidence gap
+    description: Records missing, conflicting, dynamic, malformed, unsupported, order-unknown, and owner-review permission evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Gaps describe partial checked-in evidence and never establish a live denial, missing grant, or failed operation.
+      - Gap output contains closed reason codes and safe relative spans only; SQL, names, credentials, connection data, parser exceptions, and local paths are omitted.
+
   - id: config.key.v1
     name: Configuration key extraction
     description: Parses appsettings*.json, Web.config, App.config, packages.config, and connection string entries.
