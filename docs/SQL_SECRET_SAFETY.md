@@ -18,9 +18,10 @@ option values, connection strings, server/database/user names, secret values,
 and secret-derived hashes are omitted. Existing SQL context and shape extractors
 also suppress hashes at protected-material boundaries.
 
-Supported PostgreSQL-first surfaces include `CREATE USER MAPPING`, credential
-options on `CREATE SERVER`, dblink connection inputs, subscription connection
-inputs, credential-like content in `pg_cron` scheduled commands, and active
+Supported PostgreSQL-first surfaces include `CREATE`/`ALTER USER MAPPING`,
+credential options on `CREATE`/`ALTER SERVER`, dblink connection inputs,
+`CREATE`/`ALTER SUBSCRIPTION` connection inputs, credential-like content in
+`pg_cron` scheduled commands, and active
 credential-assignment comments. Dynamic concatenation and malformed high-risk
 statements produce explicit reduced-coverage gaps.
 

@@ -558,15 +558,15 @@ public static class CSharpIntegrationSyntaxExtractor
             }
 
             var sourceLineSpan = token.GetLocation().GetLineSpan();
-            var protectedFact = SqlSecretSafetyExtractor.CreateEmbeddedFact(
+            var protectedFacts = SqlSecretSafetyExtractor.CreateEmbeddedFacts(
                 manifest,
                 filePath,
                 sourceLineSpan.StartLinePosition.Line + 1,
                 sourceLineSpan.EndLinePosition.Line + 1,
                 value);
-            if (protectedFact is not null)
+            if (protectedFacts.Count > 0)
             {
-                facts.Add(protectedFact);
+                facts.AddRange(protectedFacts);
                 continue;
             }
 

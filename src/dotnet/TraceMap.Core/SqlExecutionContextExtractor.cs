@@ -135,6 +135,19 @@ public static partial class SqlExecutionContextExtractor
             var previousEndLine = 0;
             foreach (var statement in statements)
             {
+                var rawStatement = statement.Slice(text);
+                var secretAssessment = SqlSecretSafetyExtractor.Analyze(
+                    rawStatement,
+                    statement.StructuralText,
+                    statement.LexicallyComplete);
+                if (secretAssessment is not null)
+                {
+                    facts.Add(SqlSecretSafetyExtractor.CreateStatementFact(
+                        manifest,
+                        file.RelativePath,
+                        statement,
+                        secretAssessment));
+                }
                 var inferred = Classify(statement.StructuralText);
                 var matchingDirectives = directives
                     .Where(item => item.Line > previousEndLine && item.Line == statement.StartLine - 1)
@@ -180,7 +193,8 @@ public static partial class SqlExecutionContextExtractor
                     statement,
                     inferred,
                     "syntax",
-                    inferred.IsRecognized ? "inferred" : "unknown"));
+                    inferred.IsRecognized ? "inferred" : "unknown",
+                    protectedMaterial: secretAssessment is not null));
 
                 var explicitDeclaration = sidecar ?? directive;
                 var declaration = explicitDeclaration is null
@@ -200,7 +214,8 @@ public static partial class SqlExecutionContextExtractor
                         declaration,
                         sidecar is not null ? "sidecar" : "directive",
                         declarationConflictsSyntax ? "conflicting" : "declared",
-                        matchingDirective is not null && sidecar is null ? matchingDirective.Line : null));
+                        matchingDirective is not null && sidecar is null ? matchingDirective.Line : null,
+                        protectedMaterial: secretAssessment is not null));
 
                     if (declarationConflictsSyntax)
                     {
@@ -262,12 +277,9 @@ public static partial class SqlExecutionContextExtractor
         ContextDeclaration context,
         string declarationSource,
         string classification,
-        int? declarationLine = null)
+        int? declarationLine = null,
+        bool protectedMaterial = false)
     {
-        var protectedMaterial = SqlSecretSafetyExtractor.Analyze(
-            statement.RawText,
-            statement.StructuralText,
-            statement.LexicallyComplete) is not null;
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["contextClassification"] = classification,
@@ -700,21 +712,29 @@ public static partial class SqlExecutionContextExtractor
                 continue;
             }
 
-            AddStatement(result, text[startIndex..(index + 1)], startLine, line, lexicallyComplete: true);
+            AddStatement(result, text, startIndex, index + 1 - startIndex, startLine, line, lexicallyComplete: true);
             startIndex = index + 1;
             startLine = line;
         }
 
         if (startIndex < text.Length)
         {
-            AddStatement(result, text[startIndex..], startLine, line, lexicallyComplete: state == LexState.Normal);
+            AddStatement(result, text, startIndex, text.Length - startIndex, startLine, line, lexicallyComplete: state == LexState.Normal);
         }
 
         return result;
     }
 
-    private static void AddStatement(ICollection<SqlStatement> statements, string raw, int segmentStartLine, int segmentEndLine, bool lexicallyComplete)
+    private static void AddStatement(
+        ICollection<SqlStatement> statements,
+        string text,
+        int rawStart,
+        int rawLength,
+        int segmentStartLine,
+        int segmentEndLine,
+        bool lexicallyComplete)
     {
+        var raw = text.Substring(rawStart, rawLength);
         var structural = StructuralText(raw);
         if (string.IsNullOrWhiteSpace(structural))
         {
@@ -727,7 +747,8 @@ public static partial class SqlExecutionContextExtractor
             tokenStartLine,
             Math.Max(tokenStartLine, segmentEndLine),
             CollapseWhitespace(structural),
-            raw,
+            rawStart,
+            rawLength,
             lexicallyComplete));
     }
 
@@ -1176,8 +1197,12 @@ public static partial class SqlExecutionContextExtractor
         int StartLine,
         int EndLine,
         string StructuralText,
-        string RawText,
-        bool LexicallyComplete);
+        int RawStart,
+        int RawLength,
+        bool LexicallyComplete)
+    {
+        internal string Slice(string text) => text.Substring(RawStart, RawLength);
+    }
     private sealed record ContextDirective(int Line, ContextDeclaration Declaration);
     private sealed record ContextDeclaration(
         string EngineFamily,

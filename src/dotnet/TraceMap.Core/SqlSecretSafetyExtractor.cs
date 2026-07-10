@@ -36,7 +36,7 @@ public static partial class SqlSecretSafetyExtractor
 
             foreach (var statement in SqlExecutionContextExtractor.SplitStatements(text))
             {
-                var assessment = Analyze(statement.RawText, statement.StructuralText, statement.LexicallyComplete);
+                var assessment = Analyze(statement.Slice(text), statement.StructuralText, statement.LexicallyComplete);
                 if (assessment is null)
                 {
                     continue;
@@ -62,27 +62,35 @@ public static partial class SqlSecretSafetyExtractor
     internal static bool HasProtectedMaterial(string sql)
     {
         return SqlExecutionContextExtractor.SplitStatements(sql)
-            .Any(statement => Analyze(statement.RawText, statement.StructuralText, statement.LexicallyComplete) is not null);
+            .Any(statement => Analyze(statement.Slice(sql), statement.StructuralText, statement.LexicallyComplete) is not null);
     }
 
-    internal static CodeFact? CreateEmbeddedFact(
+    internal static IReadOnlyList<CodeFact> CreateEmbeddedFacts(
         ScanManifest manifest,
         string relativePath,
         int startLine,
         int endLine,
         string sql)
     {
+        var facts = new List<CodeFact>();
         foreach (var statement in SqlExecutionContextExtractor.SplitStatements(sql))
         {
-            var assessment = Analyze(statement.RawText, statement.StructuralText, statement.LexicallyComplete);
+            var assessment = Analyze(statement.Slice(sql), statement.StructuralText, statement.LexicallyComplete);
             if (assessment is not null)
             {
-                return CreateFact(manifest, relativePath, startLine, endLine, statement.Ordinal, assessment);
+                facts.Add(CreateFact(manifest, relativePath, startLine, endLine, statement.Ordinal, assessment));
             }
         }
 
-        return null;
+        return facts;
     }
+
+    internal static CodeFact CreateStatementFact(
+        ScanManifest manifest,
+        string relativePath,
+        SqlExecutionContextExtractor.SqlStatement statement,
+        SqlSecretAssessment assessment) =>
+        CreateFact(manifest, relativePath, statement.StartLine, statement.EndLine, statement.Ordinal, assessment);
 
     internal static SqlSecretAssessment? Analyze(string raw, string structural, bool lexicallyComplete)
     {
@@ -189,16 +197,16 @@ public static partial class SqlSecretSafetyExtractor
             });
     }
 
-    [GeneratedRegex(@"\bCREATE\s+USER\s+MAPPING\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\b(?:CREATE|ALTER)\s+USER\s+MAPPING\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex UserMappingPattern();
 
-    [GeneratedRegex(@"\bCREATE\s+SUBSCRIPTION\b[\s\S]*?\bCONNECTION\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\b(?:CREATE|ALTER)\s+SUBSCRIPTION\b[\s\S]*?\bCONNECTION\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SubscriptionPattern();
 
     [GeneratedRegex(@"\b(?:dblink|dblink_exec|dblink_connect|dblink_connect_u)\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DblinkPattern();
 
-    [GeneratedRegex(@"\bCREATE\s+SERVER\b[\s\S]*?\bOPTIONS\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\b(?:CREATE|ALTER)\s+SERVER\b[\s\S]*?\bOPTIONS\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ServerOptionsPattern();
 
     [GeneratedRegex(@"\b(?:password|passwd|user|username|host|hostaddr|dbname|database|token|secret|sslkey|sslcert)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
@@ -216,7 +224,7 @@ public static partial class SqlSecretSafetyExtractor
     [GeneratedRegex(@"(?:\|\||\bformat\s*\(|\bconcat\s*\()", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DynamicPattern();
 
-    [GeneratedRegex(@"(?:'(?:[^']|'')*'|\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$[\s\S]*?\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$)", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"(?:'(?:[^']|'')*'|\$\$[\s\S]*?\$\$|\$([A-Za-z_][A-Za-z0-9_]*)\$[\s\S]*?\$\1\$)", RegexOptions.CultureInvariant)]
     private static partial Regex QuotedValuePattern();
 }
 

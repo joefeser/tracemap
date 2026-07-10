@@ -38,8 +38,8 @@ Public claim level: category-only-static-evidence
 
 ## Validation
 
-- Focused SQL context and secret-safety tests: passed (17 tests).
-- Full .NET suite: passed (714 tests).
+- Focused SQL context and secret-safety tests: passed (19 tests).
+- Full .NET suite: passed (716 tests).
 - Synthetic CLI leak scan and combined-index assertions: covered by tests.
 - Checked-in placeholder-only smoke fixture: added.
 - Final build, CLI smoke, private-path guard, and diff check are required before

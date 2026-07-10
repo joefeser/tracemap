@@ -984,13 +984,13 @@ public static class LegacyDataMetadataExtractor
             return;
         }
 
-        var protectedFact = SqlSecretSafetyExtractor.CreateEmbeddedFact(
+        var protectedFacts = SqlSecretSafetyExtractor.CreateEmbeddedFacts(
             manifest,
             relativePath,
             GetLine(command),
             GetLine(command),
             commandText);
-        if (protectedFact is not null)
+        if (protectedFacts.Count > 0)
         {
             properties["coverageLabel"] = "reduced";
             properties["redactionReason"] = "protected-sql-material";
@@ -1007,7 +1007,7 @@ public static class LegacyDataMetadataExtractor
                 targetSymbol: target,
                 contractElement: target,
                 properties: properties));
-            facts.Add(protectedFact);
+            facts.AddRange(protectedFacts);
             return;
         }
 
@@ -1603,7 +1603,9 @@ public static class LegacyDataMetadataExtractor
     private static EvidenceSpan Evidence(string relativePath, XElement element)
     {
         var line = GetLine(element);
-        return Evidence(relativePath, line, element.ToString(SaveOptions.DisableFormatting));
+        return IsProtectedMetadataDocument(element.Document)
+            ? new EvidenceSpan(relativePath, line, line, null, ExtractorId, ScannerVersions.LegacyDataExtractor)
+            : Evidence(relativePath, line, element.ToString(SaveOptions.DisableFormatting));
     }
 
     private static EvidenceSpan Evidence(string relativePath, int line, string hashSeed)
@@ -1619,7 +1621,33 @@ public static class LegacyDataMetadataExtractor
             throw new SafeXmlException(SafeXmlFailureKind.TooLarge, "XML metadata exceeds configured size bounds.");
         }
 
-        return FactFactory.Hash(File.ReadAllText(fullPath), 32);
+        var document = SafeXml.LoadDocument(fullPath);
+        if (!IsProtectedMetadataDocument(document))
+        {
+            return FactFactory.Hash(File.ReadAllText(fullPath), 32);
+        }
+
+        var structuralIdentity = string.Join(
+            "\n",
+            document.Descendants().Select(element =>
+                $"{element.Name.NamespaceName}|{element.Name.LocalName}|{string.Join(',', element.Attributes().Select(attribute => $"{attribute.Name.NamespaceName}|{attribute.Name.LocalName}").Order(StringComparer.Ordinal))}"));
+        return FactFactory.Hash(structuralIdentity, 32);
+    }
+
+    private static bool IsProtectedMetadataDocument(XDocument? document)
+    {
+        if (document?.Root is null)
+        {
+            return false;
+        }
+
+        return document.Descendants()
+            .Where(IsTableAdapterCommand)
+            .Select(command => AttributeValue(command, "CommandText")
+                ?? AttributeValue(command, "commandText")
+                ?? command.Elements().FirstOrDefault(element => element.Name.LocalName.Contains("CommandText", StringComparison.OrdinalIgnoreCase))?.Value.Trim())
+            .Any(commandText => !string.IsNullOrWhiteSpace(commandText)
+                && SqlSecretSafetyExtractor.HasProtectedMaterial(commandText));
     }
 
     private static SortedDictionary<string, string> MetadataProperties(string metadataKind, string metadataHash, string descriptorKind)
