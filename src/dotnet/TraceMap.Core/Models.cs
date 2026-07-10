@@ -121,6 +121,9 @@ public static class FactTypes
     public const string SqlExecutionContextDeclared = nameof(SqlExecutionContextDeclared);
     public const string SqlExecutionContextCandidate = nameof(SqlExecutionContextCandidate);
     public const string SecretBearingSqlStep = nameof(SecretBearingSqlStep);
+    public const string DatabaseLinkSurfaceDeclared = nameof(DatabaseLinkSurfaceDeclared);
+    public const string DatabaseLinkEdgeCandidate = nameof(DatabaseLinkEdgeCandidate);
+    public const string DatabasePrerequisiteCandidate = nameof(DatabasePrerequisiteCandidate);
     public const string TypeDeclared = nameof(TypeDeclared);
     public const string MethodDeclared = nameof(MethodDeclared);
     public const string PropertyDeclared = nameof(PropertyDeclared);
@@ -300,6 +303,9 @@ public static class RuleIds
     public const string DatabaseSqlSecretBearingStep = "database.sql.secret-bearing-step.v1";
     public const string DatabaseSqlSecretTextCandidate = "database.sql.secret-text-candidate.v1";
     public const string DatabaseSqlSecretSafetyGap = "database.sql.secret-safety-gap.v1";
+    public const string DatabasePostgresArchiveLink = "database.postgres.archive-link.v1";
+    public const string DatabasePostgresArchiveLinkPrerequisite = "database.postgres.archive-link.prerequisite.v1";
+    public const string DatabasePostgresArchiveLinkGap = "database.postgres.archive-link.gap.v1";
     public const string ConfigKey = "config.key.v1";
     public const string LegacyWcfConfig = "legacy.wcf.config.v1";
     public const string LegacyWcfContract = "legacy.wcf.contract.v1";
@@ -398,6 +404,7 @@ public static class ScannerVersions
     public const string SqlShapeExtractor = "sql-shape/0.1.0";
     public const string SqlExecutionContextExtractor = "sql-execution-context/0.1.0";
     public const string SqlSecretSafetyExtractor = "sql-secret-safety/0.1.0";
+    public const string PostgresArchiveLinkExtractor = "postgres-archive-link/0.1.0";
     public const string LegacyWcfExtractor = "legacy-wcf/0.2.0";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.1.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
