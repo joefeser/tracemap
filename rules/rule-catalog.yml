@@ -3022,7 +3022,7 @@ rules:
     limitations:
       - Raw secret values are neither stored nor hashed; findings retain only closed classification/category codes, safe relative spans, statement ordinals, coverage, and owner-review stops.
       - Secret-bearing and secret-reference classifications identify a protected handling boundary; they do not validate credentials, prove runtime use, certify a script as safe, or replace DBA/operator approval.
-      - Detection is limited to supported static PostgreSQL shapes such as user mappings, FDW options, dblink inputs, subscription connections, and credential-like pg_cron command bodies.
+      - Detection is limited to supported static PostgreSQL shapes such as create/alter user mappings, FDW options, dblink inputs, create/alter subscription connections, and credential-like pg_cron command bodies.
       - Absence of a finding does not prove absence of secrets.
 
   - id: database.sql.secret-text-candidate.v1

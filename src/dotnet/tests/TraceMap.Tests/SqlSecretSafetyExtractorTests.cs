@@ -65,6 +65,25 @@ public sealed class SqlSecretSafetyExtractorTests
     }
 
     [Fact]
+    public void Extract_covers_alter_forms_and_requires_matching_dollar_quote_tags()
+    {
+        using var temp = new TempDirectory();
+        WriteSql(temp.Path, "alter.sql", """
+            ALTER USER MAPPING FOR operator_role SERVER remote_source OPTIONS (SET password 'fixture_password');
+            ALTER SUBSCRIPTION fixture_subscription CONNECTION 'host=fixture.invalid password=fixture_password';
+            ALTER SERVER fixture_server OPTIONS (SET password 'fixture_password');
+            SELECT dblink($first$host=fixture.invalid$second$, 'select 1');
+            """);
+
+        var facts = Extract(temp.Path).Where(IsSafetyFact).ToArray();
+
+        Assert.Equal(4, facts.Length);
+        Assert.Equal(3, facts.Count(fact => fact.Properties["classification"] == "secret-bearing"));
+        Assert.Contains(facts, fact => fact.Properties["classification"] == "not-established"
+            && fact.Properties["categoryCodes"].Contains("dynamic-secret-boundary", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Extract_ignores_disabled_and_non_credential_text_and_is_deterministic()
     {
         using var temp = new TempDirectory();
@@ -166,17 +185,49 @@ public sealed class SqlSecretSafetyExtractorTests
         File.WriteAllText(Path.Combine(temp.Path, "Embedded.cs"), $$"""
             public static class Embedded
             {
-                public const string Setup = "CREATE USER MAPPING FOR fixture_role SERVER fixture_server OPTIONS (password '{{sentinel}}');";
+                public const string Setup = "CREATE USER MAPPING FOR fixture_role SERVER fixture_server OPTIONS (password '{{sentinel}}'); CREATE SUBSCRIPTION fixture_subscription CONNECTION '${SUBSCRIPTION_CONNECTION}' PUBLICATION fixture_publication;";
             }
             """);
         var facts = CSharpIntegrationSyntaxExtractor.Extract(temp.Path, CreateManifest(), FileInventory.Collect(temp.Path));
-        var secretFact = Assert.Single(facts, fact => fact.FactType == FactTypes.SecretBearingSqlStep);
+        var secretFacts = facts.Where(fact => fact.FactType == FactTypes.SecretBearingSqlStep).ToArray();
         var serialized = JsonSerializer.Serialize(facts);
 
-        Assert.Equal("secret-bearing", secretFact.Properties["classification"]);
+        Assert.Equal(2, secretFacts.Length);
+        Assert.Equal(["1", "2"], secretFacts.Select(fact => fact.Properties["statementOrdinal"]).ToArray());
+        Assert.Contains(secretFacts, fact => fact.Properties["classification"] == "secret-bearing");
+        Assert.Contains(secretFacts, fact => fact.Properties["classification"] == "secret-reference");
         Assert.DoesNotContain(facts, fact => fact.FactType is FactTypes.SqlTextUsed or FactTypes.QueryPatternDetected);
         Assert.DoesNotContain(sentinel, serialized, StringComparison.Ordinal);
         Assert.DoesNotContain(FactFactory.Hash(sentinel, 32), serialized, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Typed_dataset_with_protected_command_omits_document_and_element_hashes()
+    {
+        const string sentinel = "public-safe-tableadapter-password-sentinel";
+        using var temp = new TempDirectory();
+        var document = $$"""
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                       xmlns:msdata="urn:schemas-microsoft-com:xml-msdata"
+                       xmlns:msprop="urn:schemas-microsoft-com:xml-msprop">
+              <xs:element name="FixtureDataSet" msdata:IsDataSet="true" msprop:Generator_DataSetName="FixtureDataSet" />
+              <xs:annotation><xs:appinfo>
+                <TableAdapterCommand Name="Setup" CommandText="CREATE USER MAPPING FOR fixture_role SERVER fixture_server OPTIONS (password '{{sentinel}}');" />
+              </xs:appinfo></xs:annotation>
+            </xs:schema>
+            """;
+        File.WriteAllText(Path.Combine(temp.Path, "Fixture.xsd"), document);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var serialized = JsonSerializer.Serialize(result.Facts);
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.SecretBearingSqlStep);
+        Assert.DoesNotContain(sentinel, serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain(FactFactory.Hash(sentinel, 32), serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain(FactFactory.Hash(document, 32), serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            result.Facts.Where(fact => fact.Evidence.FilePath == "Fixture.xsd"),
+            fact => fact.Evidence.SnippetHash is not null);
     }
 
     [Fact]
