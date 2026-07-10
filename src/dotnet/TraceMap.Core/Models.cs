@@ -124,6 +124,8 @@ public static class FactTypes
     public const string DatabaseLinkSurfaceDeclared = nameof(DatabaseLinkSurfaceDeclared);
     public const string DatabaseLinkEdgeCandidate = nameof(DatabaseLinkEdgeCandidate);
     public const string DatabasePrerequisiteCandidate = nameof(DatabasePrerequisiteCandidate);
+    public const string DatabasePermissionDeclared = nameof(DatabasePermissionDeclared);
+    public const string DatabasePrerequisiteEvidence = nameof(DatabasePrerequisiteEvidence);
     public const string TypeDeclared = nameof(TypeDeclared);
     public const string MethodDeclared = nameof(MethodDeclared);
     public const string PropertyDeclared = nameof(PropertyDeclared);
@@ -306,6 +308,10 @@ public static class RuleIds
     public const string DatabasePostgresArchiveLink = "database.postgres.archive-link.v1";
     public const string DatabasePostgresArchiveLinkPrerequisite = "database.postgres.archive-link.prerequisite.v1";
     public const string DatabasePostgresArchiveLinkGap = "database.postgres.archive-link.gap.v1";
+    public const string DatabasePostgresPermissionStatement = "database.postgres.permission.statement.v1";
+    public const string DatabasePostgresPermissionPrerequisite = "database.postgres.permission.prerequisite.v1";
+    public const string DatabasePostgresPermissionCoverage = "database.postgres.permission.coverage.v1";
+    public const string DatabasePostgresPermissionGap = "database.postgres.permission.gap.v1";
     public const string ConfigKey = "config.key.v1";
     public const string LegacyWcfConfig = "legacy.wcf.config.v1";
     public const string LegacyWcfContract = "legacy.wcf.contract.v1";
@@ -405,6 +411,7 @@ public static class ScannerVersions
     public const string SqlExecutionContextExtractor = "sql-execution-context/0.1.0";
     public const string SqlSecretSafetyExtractor = "sql-secret-safety/0.1.0";
     public const string PostgresArchiveLinkExtractor = "postgres-archive-link/0.1.0";
+    public const string PostgresPermissionEvidenceExtractor = "postgres-permission-evidence/0.1.0";
     public const string LegacyWcfExtractor = "legacy-wcf/0.2.0";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.1.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";

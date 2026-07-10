@@ -264,9 +264,15 @@ public static partial class SqlExecutionContextExtractor
                 file.RelativePath,
                 statements,
                 facts.Skip(fileFactStart).ToArray()));
+            facts.AddRange(PostgresPermissionEvidenceExtractor.ExtractFilePermissions(
+                manifest,
+                file.RelativePath,
+                statements,
+                facts.Skip(fileFactStart).ToArray()));
         }
 
         facts.AddRange(PostgresArchiveLinkExtractor.Reduce(manifest, facts));
+        facts.AddRange(PostgresPermissionEvidenceExtractor.Reduce(manifest, facts));
 
         return facts
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)

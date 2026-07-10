@@ -101,6 +101,7 @@ public static class MarkdownReportWriter
         AddSqlExecutionContext(lines, result);
         AddSqlProtectedMaterial(lines, result);
         AddPostgresArchiveLinks(lines, result);
+        AddPostgresPermissionPrerequisites(lines, result);
 
         AddFactSection(
             lines,
@@ -523,7 +524,8 @@ public static class MarkdownReportWriter
         }
 
         var prerequisites = result.Facts
-            .Where(fact => fact.FactType == FactTypes.DatabasePrerequisiteCandidate)
+            .Where(fact => fact.FactType == FactTypes.DatabasePrerequisiteCandidate
+                && fact.RuleId == RuleIds.DatabasePostgresArchiveLinkPrerequisite)
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
             .ThenBy(fact => fact.Evidence.StartLine)
             .ThenBy(fact => fact.Properties.GetValueOrDefault("prerequisiteCode"), StringComparer.Ordinal)
@@ -592,6 +594,56 @@ public static class MarkdownReportWriter
                 lines.Add($"- `{DisplayCodeValue(fact.Properties.GetValueOrDefault("gapKind") ?? "unknown-gap")}` for `{DisplayCodeValue(fact.Properties.GetValueOrDefault("mechanism") ?? "unknown")}` is partial static evidence ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{evidence}`.");
             }
         }
+    }
+
+    private static void AddPostgresPermissionPrerequisites(List<string> lines, ScanResult result)
+    {
+        var permissions = result.Facts
+            .Where(fact => fact.FactType == FactTypes.DatabasePermissionDeclared)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        var evidence = result.Facts
+            .Where(fact => fact.FactType == FactTypes.DatabasePrerequisiteEvidence)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => ParseOrdinal(fact.Properties.GetValueOrDefault("statementOrdinal")))
+            .ThenBy(fact => fact.Properties.GetValueOrDefault("candidateCapability"), StringComparer.Ordinal)
+            .ToArray();
+        if (permissions.Length == 0 && evidence.Length == 0)
+        {
+            return;
+        }
+
+        lines.Add("");
+        lines.Add("## PostgreSQL Permission Prerequisite Evidence");
+        lines.Add("");
+        lines.Add("Static script-set evidence only. `present-in-scripts` does not mean a permission is active or sufficient. Effective access, role inheritance, object state, provider/version behavior, and execution authorization require DBA/operator validation. TraceMap does not generate or execute grants.");
+
+        lines.Add("");
+        lines.Add("### Explicit Permission Statements");
+        lines.Add("");
+        lines.Add("| Action | Object | Capability | Context | Coverage | Rule / tier | Evidence |");
+        lines.Add("| --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var fact in permissions)
+        {
+            var span = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+            lines.Add($"| `{DisplayCodeValue(fact.Properties.GetValueOrDefault("actionKind") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("objectKind") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("capabilityCode") ?? "unknown-permission")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("contextRole") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("coverage") ?? "reduced")}` | `{fact.RuleId}` / `{fact.EvidenceTier}` | `{span}` |");
+        }
+
+        lines.Add("");
+        lines.Add("### Operation Prerequisite Coverage");
+        lines.Add("");
+        lines.Add("| Operation | Capability | Context | Status | Coverage | Owner question | Rule / tier | Evidence |");
+        lines.Add("| --- | --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var fact in evidence)
+        {
+            var span = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+            lines.Add($"| `{DisplayCodeValue(fact.Properties.GetValueOrDefault("operationKind") ?? "unknown-sql-step")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("candidateCapability") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("contextRole") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("evidenceStatus") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("coverage") ?? "reduced")}` | {DisplayTableValue(fact.Properties.GetValueOrDefault("ownerQuestion") ?? "Owner validation required.")} | `{fact.RuleId}` / `{fact.EvidenceTier}` | `{span}` |");
+        }
+
+        lines.Add("");
+        lines.Add("Permission limitations: order is not a PostgreSQL state simulation; cross-file order, transactions, conditional/procedural execution, role inheritance, RLS/policies, live catalog state, and cloud IAM remain unknown unless separately validated with provenance.");
     }
 
     private static bool IsContextTransition(CodeFact left, CodeFact right)
