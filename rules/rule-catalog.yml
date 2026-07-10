@@ -3047,6 +3047,38 @@ rules:
       - Gap facts contain closed codes and spans only; raw SQL, parser exceptions, local paths, infrastructure identities, secret values, and secret-derived hashes are omitted.
       - Owner review is required because static coverage is reduced or failed.
 
+  - id: database.postgres.archive-link.v1
+    name: PostgreSQL archive-link surface and edge evidence
+    description: Classifies supported postgres_fdw, dblink, logical replication, and pg_cron statement surfaces and deterministic static prerequisite edges.
+    evidenceTier: Tier2Structural
+    emits:
+      - DatabaseLinkSurfaceDeclared
+      - DatabaseLinkEdgeCandidate
+    limitations:
+      - Static statement and declared-context evidence does not prove connectivity, remote object existence, applied state, permissions, replication health, scheduling, execution, or archive correctness.
+      - Object identity is span-derived and omits server, database, role, host, connection, subscription, job, and remote-query values.
+      - Direction is emitted only when compatible explicit context declarations establish source and archive-target roles; otherwise it remains unknown with a gap.
+
+  - id: database.postgres.archive-link.prerequisite.v1
+    name: PostgreSQL archive-link prerequisite candidate
+    description: Reduces checked-in archive-link surfaces into categorical prerequisite evidence and missing-evidence states.
+    evidenceTier: Tier2Structural
+    emits:
+      - DatabasePrerequisiteCandidate
+    limitations:
+      - A prerequisite row describes evidence in the analyzed script set, not a live PostgreSQL or RDS capability check.
+      - Missing-evidence does not mean an extension, server, mapping, grant, publication, subscription, or scheduler capability is absent at runtime.
+
+  - id: database.postgres.archive-link.gap.v1
+    name: PostgreSQL archive-link analysis gap
+    description: Records unknown context/direction, missing checked-in prerequisites, and malformed supported archive-link statements.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Archive-link gaps label partial static analysis and never establish runtime failure or absence of a live link.
+      - Gap properties contain closed codes, mechanism, ordinal, and safe spans only; raw SQL, connection data, infrastructure identities, scheduled commands, and parser exception text are omitted.
+
   - id: config.key.v1
     name: Configuration key extraction
     description: Parses appsettings*.json, Web.config, App.config, packages.config, and connection string entries.

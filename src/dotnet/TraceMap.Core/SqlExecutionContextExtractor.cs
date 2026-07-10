@@ -257,7 +257,15 @@ public static partial class SqlExecutionContextExtractor
                         "reduced"));
                 }
             }
+
+            facts.AddRange(PostgresArchiveLinkExtractor.ExtractFileSurfaces(
+                manifest,
+                file.RelativePath,
+                statements,
+                facts.Where(fact => fact.Evidence.FilePath == file.RelativePath).ToArray()));
         }
+
+        facts.AddRange(PostgresArchiveLinkExtractor.Reduce(manifest, facts));
 
         return facts
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
