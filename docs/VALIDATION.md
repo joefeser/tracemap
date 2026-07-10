@@ -740,3 +740,20 @@ directive/sidecar bodies, connection data, credentials, infrastructure names,
 scheduled command bodies, and local absolute paths. The report must describe
 static intended context and manual verification needs without claiming runtime
 state or that a step is safe to run.
+
+## SQL Protected-Material Safety Smoke
+
+Protected-material changes should run the focused leak tests and scan the
+checked-in placeholder-only fixture without connecting to a database:
+
+```bash
+dotnet test src/dotnet/TraceMap.sln --filter FullyQualifiedName~SqlSecretSafetyExtractorTests
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/sql-secret-safety --out /tmp/tracemap-sql-secret-safety-smoke
+```
+
+Inspect every generated artifact and the combined/export paths. Expected output
+is category-only `SecretBearingSqlStep` and `AnalysisGap` evidence with rule IDs,
+tiers, relative spans, coverage, and `secret-owner-review`. Raw SQL, placeholder
+names, connection material, values, and secret-derived hashes must be absent.
+The report must say that absence of a finding does not prove absence of secrets
+and must not certify execution safety or replace operator approval.
