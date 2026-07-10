@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "sql-execution-context/v1",
+  "steps": [
+    {
+      "statementOrdinal": 1,
+      "engineFamily": "postgresql",
+      "serverRole": "admin",
+      "databaseRole": "admin",
+      "schemaRole": "extension",
+      "executionMode": "manual",
+      "stepKind": "extension-setup",
+      "requiredCapabilities": ["create-extension"],
+      "stopConditions": ["verify-active-connection"]
+    },
+    {
+      "statementOrdinal": 2,
+      "engineFamily": "postgresql",
+      "serverRole": "archive-target",
+      "databaseRole": "archive-data",
+      "schemaRole": "archive",
+      "executionMode": "manual",
+      "stepKind": "fdw-server-setup",
+      "requiredCapabilities": ["create-server"],
+      "stopConditions": ["verify-active-connection", "verify-database-context"]
+    }
+  ]
+}
