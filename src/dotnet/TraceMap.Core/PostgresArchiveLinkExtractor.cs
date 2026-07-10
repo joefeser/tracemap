@@ -20,6 +20,10 @@ public static partial class PostgresArchiveLinkExtractor
             .ToDictionary(
                 group => group.Key,
                 group => group.OrderBy(fact => fact.FactType == FactTypes.SqlExecutionContextDeclared ? 0 : 1).ThenBy(fact => fact.FactId, StringComparer.Ordinal).First());
+        var safetyGapOrdinals = fileFacts
+            .Where(fact => fact.RuleId == RuleIds.DatabaseSqlSecretSafetyGap)
+            .Select(fact => ParseOrdinal(fact.Properties.GetValueOrDefault("statementOrdinal")))
+            .ToHashSet();
         var facts = new List<CodeFact>();
         foreach (var statement in statements)
         {
@@ -41,6 +45,22 @@ public static partial class PostgresArchiveLinkExtractor
                 ? "complete"
                 : "reduced";
             var identity = FactFactory.Hash($"{relativePath}|{statement.Ordinal}|{classification.Mechanism}|{classification.SurfaceKind}", 24);
+            var surfaceProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["contextEvidence"] = contextEvidence,
+                ["contextRole"] = contextRole,
+                ["coverage"] = coverage,
+                ["identityPrecision"] = "span-only",
+                ["limitation"] = SurfaceLimitation,
+                ["mechanism"] = classification.Mechanism,
+                ["objectIdentity"] = identity,
+                ["statementOrdinal"] = statement.Ordinal.ToString(),
+                ["surfaceKind"] = classification.SurfaceKind
+            };
+            if (classification.LinkIdentity is not null)
+            {
+                surfaceProperties["linkIdentity"] = classification.LinkIdentity;
+            }
             facts.Add(FactFactory.Create(
                 manifest,
                 FactTypes.DatabaseLinkSurfaceDeclared,
@@ -55,18 +75,7 @@ public static partial class PostgresArchiveLinkExtractor
                     ScannerVersions.PostgresArchiveLinkExtractor),
                 targetSymbol: $"archive-link-{identity}",
                 contractElement: classification.SurfaceKind,
-                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["contextEvidence"] = contextEvidence,
-                    ["contextRole"] = contextRole,
-                    ["coverage"] = coverage,
-                    ["identityPrecision"] = "span-only",
-                    ["limitation"] = SurfaceLimitation,
-                    ["mechanism"] = classification.Mechanism,
-                    ["objectIdentity"] = identity,
-                    ["statementOrdinal"] = statement.Ordinal.ToString(),
-                    ["surfaceKind"] = classification.SurfaceKind
-                }));
+                properties: surfaceProperties));
 
             if (!statement.LexicallyComplete)
             {
@@ -79,8 +88,7 @@ public static partial class PostgresArchiveLinkExtractor
                     classification.Mechanism,
                     "malformed-statement"));
             }
-            else if (fileFacts.Any(fact => fact.RuleId == RuleIds.DatabaseSqlSecretSafetyGap
-                && ParseOrdinal(fact.Properties.GetValueOrDefault("statementOrdinal")) == statement.Ordinal))
+            else if (safetyGapOrdinals.Contains(statement.Ordinal))
             {
                 facts.Add(CreateGap(
                     manifest,
@@ -124,13 +132,10 @@ public static partial class PostgresArchiveLinkExtractor
 
             foreach (var prerequisiteCode in Prerequisites(mechanism, surfaceKind))
             {
-                var supporting = surfaces
-                    .Where(candidate => MechanismMatchesPrerequisite(prerequisiteCode, mechanism, candidate.Properties.GetValueOrDefault("mechanism"))
-                        && Satisfies(prerequisiteCode, candidate.Properties.GetValueOrDefault("surfaceKind")))
-                    .OrderBy(candidate => candidate.Evidence.FilePath, StringComparer.Ordinal)
-                    .ThenBy(candidate => candidate.Evidence.StartLine)
-                    .ThenBy(candidate => candidate.FactId, StringComparer.Ordinal)
-                    .FirstOrDefault();
+                var supporting = surfaces.FirstOrDefault(candidate =>
+                    MechanismMatchesPrerequisite(prerequisiteCode, mechanism, candidate.Properties.GetValueOrDefault("mechanism"))
+                    && Satisfies(prerequisiteCode, candidate.Properties.GetValueOrDefault("surfaceKind"))
+                    && LinkIdentityMatches(prerequisiteCode, candidate, surface));
                 var satisfaction = supporting is null ? "missing-evidence" : "established-static-evidence";
                 var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
@@ -220,18 +225,18 @@ public static partial class PostgresArchiveLinkExtractor
 
     private static ArchiveSurface? Classify(string structural)
     {
-        if (PostgresFdwExtensionPattern().IsMatch(structural)) return new("postgres-fdw", "extension");
-        if (ForeignServerPattern().IsMatch(structural)) return new("postgres-fdw", "foreign-server");
-        if (UserMappingPattern().IsMatch(structural)) return new("postgres-fdw", "user-mapping");
-        if (ImportForeignSchemaPattern().IsMatch(structural)) return new("postgres-fdw", "schema-import");
-        if (ForeignTablePattern().IsMatch(structural)) return new("postgres-fdw", "foreign-table");
-        if (ForeignServerGrantPattern().IsMatch(structural)) return new("postgres-fdw", "server-grant");
-        if (DblinkExtensionPattern().IsMatch(structural)) return new("dblink", "extension");
-        if (DblinkPattern().IsMatch(structural)) return new("dblink", "call");
-        if (PublicationPattern().IsMatch(structural)) return new("logical-publication", "publication");
-        if (SubscriptionPattern().IsMatch(structural)) return new("logical-subscription", "subscription");
-        if (PgCronExtensionPattern().IsMatch(structural)) return new("pg-cron-scheduled-operation", "extension");
-        if (CronPattern().IsMatch(structural)) return new("pg-cron-scheduled-operation", "scheduled-operation");
+        if (PostgresFdwExtensionPattern().IsMatch(structural)) return new("postgres-fdw", "extension", null);
+        if (ForeignServerPattern().IsMatch(structural)) return new("postgres-fdw", "foreign-server", LinkIdentity(ForeignServerIdentityPattern(), structural, "postgres-fdw-server"));
+        if (UserMappingPattern().IsMatch(structural)) return new("postgres-fdw", "user-mapping", LinkIdentity(UserMappingIdentityPattern(), structural, "postgres-fdw-server"));
+        if (ImportForeignSchemaPattern().IsMatch(structural)) return new("postgres-fdw", "schema-import", LinkIdentity(ImportForeignSchemaIdentityPattern(), structural, "postgres-fdw-server"));
+        if (ForeignTablePattern().IsMatch(structural)) return new("postgres-fdw", "foreign-table", LinkIdentity(ForeignTableIdentityPattern(), structural, "postgres-fdw-server"));
+        if (ForeignServerGrantPattern().IsMatch(structural)) return new("postgres-fdw", "server-grant", LinkIdentity(ForeignServerGrantIdentityPattern(), structural, "postgres-fdw-server"));
+        if (DblinkExtensionPattern().IsMatch(structural)) return new("dblink", "extension", null);
+        if (DblinkPattern().IsMatch(structural)) return new("dblink", "call", null);
+        if (PublicationPattern().IsMatch(structural)) return new("logical-publication", "publication", LinkIdentity(PublicationIdentityPattern(), structural, "logical-publication"));
+        if (SubscriptionPattern().IsMatch(structural)) return new("logical-subscription", "subscription", LinkIdentity(SubscriptionPublicationIdentityPattern(), structural, "logical-publication"));
+        if (PgCronExtensionPattern().IsMatch(structural)) return new("pg-cron-scheduled-operation", "extension", null);
+        if (CronPattern().IsMatch(structural)) return new("pg-cron-scheduled-operation", "scheduled-operation", null);
         return null;
     }
 
@@ -260,6 +265,28 @@ public static partial class PostgresArchiveLinkExtractor
         prerequisiteCode == "publication-declaration"
             ? candidateMechanism == "logical-publication"
             : candidateMechanism == targetMechanism;
+
+    private static bool LinkIdentityMatches(string prerequisiteCode, CodeFact candidate, CodeFact target)
+    {
+        if (prerequisiteCode == "extension-declaration")
+        {
+            return true;
+        }
+
+        var candidateIdentity = candidate.Properties.GetValueOrDefault("linkIdentity");
+        var targetIdentity = target.Properties.GetValueOrDefault("linkIdentity");
+        return !string.IsNullOrWhiteSpace(candidateIdentity)
+            && candidateIdentity == targetIdentity;
+    }
+
+    private static string? LinkIdentity(Regex pattern, string structural, string family)
+    {
+        var match = pattern.Match(structural);
+        var identifier = match.Success ? match.Groups["id"].Value : string.Empty;
+        return string.IsNullOrWhiteSpace(identifier)
+            ? null
+            : FactFactory.Hash($"{family}|{identifier.ToUpperInvariant()}", 24);
+    }
 
     private static string Direction(CodeFact source, CodeFact target)
     {
@@ -313,28 +340,42 @@ public static partial class PostgresArchiveLinkExtractor
 
     [GeneratedRegex(@"\b(?:CREATE|ALTER)\s+SERVER\b[\s\S]*?\bFOREIGN\s+DATA\s+WRAPPER\s+postgres_fdw\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ForeignServerPattern();
+    [GeneratedRegex(@"\b(?:CREATE|ALTER)\s+SERVER\s+(?<id>[A-Za-z_][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ForeignServerIdentityPattern();
     [GeneratedRegex(@"\bCREATE\s+EXTENSION\b[\s\S]*?\bpostgres_fdw\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex PostgresFdwExtensionPattern();
     [GeneratedRegex(@"\b(?:CREATE|ALTER)\s+USER\s+MAPPING\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex UserMappingPattern();
+    [GeneratedRegex(@"\bSERVER\s+(?<id>[A-Za-z_][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex UserMappingIdentityPattern();
     [GeneratedRegex(@"\bIMPORT\s+FOREIGN\s+SCHEMA\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ImportForeignSchemaPattern();
+    [GeneratedRegex(@"\bFROM\s+SERVER\s+(?<id>[A-Za-z_][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ImportForeignSchemaIdentityPattern();
     [GeneratedRegex(@"\bCREATE\s+FOREIGN\s+TABLE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ForeignTablePattern();
+    [GeneratedRegex(@"\bSERVER\s+(?<id>[A-Za-z_][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ForeignTableIdentityPattern();
     [GeneratedRegex(@"\bGRANT\b[\s\S]*?\bON\s+FOREIGN\s+SERVER\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ForeignServerGrantPattern();
+    [GeneratedRegex(@"\bON\s+FOREIGN\s+SERVER\s+(?<id>[A-Za-z_][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ForeignServerGrantIdentityPattern();
     [GeneratedRegex(@"\b(?:dblink|dblink_exec|dblink_connect|dblink_connect_u)\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DblinkPattern();
     [GeneratedRegex(@"\bCREATE\s+EXTENSION\b[\s\S]*?\bdblink\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DblinkExtensionPattern();
     [GeneratedRegex(@"\b(?:CREATE|ALTER)\s+PUBLICATION\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex PublicationPattern();
+    [GeneratedRegex(@"\b(?:CREATE|ALTER)\s+PUBLICATION\s+(?<id>[A-Za-z_][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex PublicationIdentityPattern();
     [GeneratedRegex(@"\b(?:CREATE|ALTER)\s+SUBSCRIPTION\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SubscriptionPattern();
+    [GeneratedRegex(@"\bPUBLICATION\s+(?<id>[A-Za-z_][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex SubscriptionPublicationIdentityPattern();
     [GeneratedRegex(@"\bcron\s*\.\s*(?:schedule|schedule_in_database|unschedule)\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex CronPattern();
     [GeneratedRegex(@"\bCREATE\s+EXTENSION\b[\s\S]*?\bpg_cron\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex PgCronExtensionPattern();
 
-    private sealed record ArchiveSurface(string Mechanism, string SurfaceKind);
+    private sealed record ArchiveSurface(string Mechanism, string SurfaceKind, string? LinkIdentity);
 }

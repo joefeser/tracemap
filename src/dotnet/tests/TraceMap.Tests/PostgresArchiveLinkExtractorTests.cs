@@ -94,6 +94,29 @@ public sealed class PostgresArchiveLinkExtractorTests
     }
 
     [Fact]
+    public void Extract_does_not_use_an_unrelated_link_as_prerequisite_evidence()
+    {
+        using var temp = new TempDirectory();
+        WriteSql(temp.Path, "multiple.sql", """
+            CREATE EXTENSION postgres_fdw;
+            CREATE SERVER fixture_server_a FOREIGN DATA WRAPPER postgres_fdw;
+            CREATE USER MAPPING FOR fixture_role SERVER fixture_server_b OPTIONS (password '${FIXTURE_PASSWORD}');
+            IMPORT FOREIGN SCHEMA public FROM SERVER fixture_server_a INTO archive;
+            CREATE PUBLICATION fixture_publication_a FOR TABLE fixture_events;
+            CREATE SUBSCRIPTION fixture_subscription_b CONNECTION '${FIXTURE_CONNECTION}' PUBLICATION fixture_publication_b;
+            """);
+
+        var facts = Extract(temp.Path);
+
+        Assert.Contains(facts, fact => fact.FactType == FactTypes.DatabasePrerequisiteCandidate
+            && fact.Properties.GetValueOrDefault("prerequisiteCode") == "user-mapping-declaration"
+            && fact.Properties.GetValueOrDefault("satisfaction") == "missing-evidence");
+        Assert.Contains(facts, fact => fact.FactType == FactTypes.DatabasePrerequisiteCandidate
+            && fact.Properties.GetValueOrDefault("prerequisiteCode") == "publication-declaration"
+            && fact.Properties.GetValueOrDefault("satisfaction") == "missing-evidence");
+    }
+
+    [Fact]
     public void Extract_is_deterministic_and_report_states_non_claims()
     {
         using var temp = new TempDirectory();
@@ -107,6 +130,8 @@ public sealed class PostgresArchiveLinkExtractorTests
         Assert.Equal(first.Select(fact => fact.FactId), second.Select(fact => fact.FactId));
         Assert.Equal(JsonSerializer.Serialize(first), JsonSerializer.Serialize(second));
         Assert.Contains("## PostgreSQL Archive-Link Evidence", report);
+        Assert.Contains("### Archive-Link Edges", report);
+        Assert.Contains("Supporting facts", report);
         Assert.Contains("do not prove connectivity", report);
         Assert.Contains("replication health", report);
         Assert.Contains("established-static-evidence", report);

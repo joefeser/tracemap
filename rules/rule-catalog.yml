@@ -3056,7 +3056,7 @@ rules:
       - DatabaseLinkEdgeCandidate
     limitations:
       - Static statement and declared-context evidence does not prove connectivity, remote object existence, applied state, permissions, replication health, scheduling, execution, or archive correctness.
-      - Object identity is span-derived and omits server, database, role, host, connection, subscription, job, and remote-query values.
+      - Surface identity is span-derived; exact prerequisite matching may use a one-way key from a non-secret SQL object identifier while raw server/publication, database, role, host, connection, subscription, job, and remote-query values remain omitted.
       - Direction is emitted only when compatible explicit context declarations establish source and archive-target roles; otherwise it remains unknown with a gap.
 
   - id: database.postgres.archive-link.prerequisite.v1
