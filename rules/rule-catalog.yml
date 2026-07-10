@@ -3057,6 +3057,7 @@ rules:
     limitations:
       - Static statement and declared-context evidence does not prove connectivity, remote object existence, applied state, permissions, replication health, scheduling, execution, or archive correctness.
       - Surface identity is span-derived; exact prerequisite matching may use a one-way key from a non-secret SQL object identifier while raw server/publication, database, role, host, connection, subscription, job, and remote-query values remain omitted.
+      - Non-protected statements retain a structural snippet hash after comments and quoted/dollar-quoted contents are removed; protected-material statements deliberately remain span-only and hash-free.
       - Direction is emitted only when compatible explicit context declarations establish source and archive-target roles; otherwise it remains unknown with a gap.
 
   - id: database.postgres.archive-link.prerequisite.v1
@@ -3068,6 +3069,7 @@ rules:
     limitations:
       - A prerequisite row describes evidence in the analyzed script set, not a live PostgreSQL or RDS capability check.
       - Missing-evidence does not mean an extension, server, mapping, grant, publication, subscription, or scheduler capability is absent at runtime.
+      - Reduced supporting surfaces produce reduced-static-evidence and no dependency edge; they are not promoted to complete prerequisite satisfaction.
 
   - id: database.postgres.archive-link.gap.v1
     name: PostgreSQL archive-link analysis gap

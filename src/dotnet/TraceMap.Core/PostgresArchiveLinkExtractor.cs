@@ -24,6 +24,10 @@ public static partial class PostgresArchiveLinkExtractor
             .Where(fact => fact.RuleId == RuleIds.DatabaseSqlSecretSafetyGap)
             .Select(fact => ParseOrdinal(fact.Properties.GetValueOrDefault("statementOrdinal")))
             .ToHashSet();
+        var protectedOrdinals = fileFacts
+            .Where(fact => fact.FactType == FactTypes.SecretBearingSqlStep || fact.RuleId == RuleIds.DatabaseSqlSecretSafetyGap)
+            .Select(fact => ParseOrdinal(fact.Properties.GetValueOrDefault("statementOrdinal")))
+            .ToHashSet();
         var facts = new List<CodeFact>();
         foreach (var statement in statements)
         {
@@ -70,7 +74,7 @@ public static partial class PostgresArchiveLinkExtractor
                     relativePath,
                     statement.StartLine,
                     statement.EndLine,
-                    null,
+                    protectedOrdinals.Contains(statement.Ordinal) ? null : FactFactory.Hash(statement.StructuralText, 32),
                     nameof(PostgresArchiveLinkExtractor),
                     ScannerVersions.PostgresArchiveLinkExtractor),
                 targetSymbol: $"archive-link-{identity}",
@@ -113,6 +117,13 @@ public static partial class PostgresArchiveLinkExtractor
             .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
         var facts = new List<CodeFact>();
+        var prerequisiteIndex = surfaces
+            .GroupBy(
+                fact => (
+                    Mechanism: fact.Properties.GetValueOrDefault("mechanism") ?? string.Empty,
+                    SurfaceKind: fact.Properties.GetValueOrDefault("surfaceKind") ?? string.Empty,
+                    LinkIdentity: fact.Properties.GetValueOrDefault("linkIdentity") ?? string.Empty))
+            .ToDictionary(group => group.Key, group => group.First());
 
         foreach (var surface in surfaces)
         {
@@ -132,14 +143,16 @@ public static partial class PostgresArchiveLinkExtractor
 
             foreach (var prerequisiteCode in Prerequisites(mechanism, surfaceKind))
             {
-                var supporting = surfaces.FirstOrDefault(candidate =>
-                    MechanismMatchesPrerequisite(prerequisiteCode, mechanism, candidate.Properties.GetValueOrDefault("mechanism"))
-                    && Satisfies(prerequisiteCode, candidate.Properties.GetValueOrDefault("surfaceKind"))
-                    && LinkIdentityMatches(prerequisiteCode, candidate, surface));
-                var satisfaction = supporting is null ? "missing-evidence" : "established-static-evidence";
+                prerequisiteIndex.TryGetValue(PrerequisiteLookupKey(prerequisiteCode, surface), out var supporting);
+                var supportingComplete = supporting?.Properties.GetValueOrDefault("coverage") == "complete";
+                var satisfaction = supporting is null
+                    ? "missing-evidence"
+                    : supportingComplete
+                        ? "established-static-evidence"
+                        : "reduced-static-evidence";
                 var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
-                    ["coverage"] = supporting is null ? "reduced" : "complete",
+                    ["coverage"] = supportingComplete ? "complete" : "reduced",
                     ["limitation"] = PrerequisiteLimitation,
                     ["mechanism"] = mechanism,
                     ["prerequisiteCode"] = prerequisiteCode,
@@ -160,14 +173,14 @@ public static partial class PostgresArchiveLinkExtractor
                         surface.Evidence.FilePath,
                         surface.Evidence.StartLine,
                         surface.Evidence.EndLine,
-                        null,
+                        surface.Evidence.SnippetHash,
                         nameof(PostgresArchiveLinkExtractor),
                         ScannerVersions.PostgresArchiveLinkExtractor),
                     targetSymbol: surface.TargetSymbol,
                     contractElement: prerequisiteCode,
                     properties: properties));
 
-                if (supporting is null)
+                if (supporting is null || !supportingComplete)
                 {
                     facts.Add(CreateGap(
                         manifest,
@@ -176,7 +189,9 @@ public static partial class PostgresArchiveLinkExtractor
                         surface.Evidence.EndLine,
                         ParseOrdinal(surface.Properties.GetValueOrDefault("statementOrdinal")),
                         mechanism,
-                        $"missing-evidence:{prerequisiteCode}"));
+                        supporting is null
+                            ? $"missing-evidence:{prerequisiteCode}"
+                            : $"reduced-evidence:{prerequisiteCode}"));
                     continue;
                 }
 
@@ -190,7 +205,7 @@ public static partial class PostgresArchiveLinkExtractor
                         surface.Evidence.FilePath,
                         surface.Evidence.StartLine,
                         surface.Evidence.EndLine,
-                        null,
+                        surface.Evidence.SnippetHash,
                         nameof(PostgresArchiveLinkExtractor),
                         ScannerVersions.PostgresArchiveLinkExtractor),
                     sourceSymbol: supporting.TargetSymbol,
@@ -252,31 +267,18 @@ public static partial class PostgresArchiveLinkExtractor
             yield return "publication-declaration";
     }
 
-    private static bool Satisfies(string prerequisiteCode, string? surfaceKind) => prerequisiteCode switch
+    private static (string Mechanism, string SurfaceKind, string LinkIdentity) PrerequisiteLookupKey(string prerequisiteCode, CodeFact target)
     {
-        "extension-declaration" => surfaceKind == "extension",
-        "foreign-server-declaration" => surfaceKind == "foreign-server",
-        "user-mapping-declaration" => surfaceKind == "user-mapping",
-        "publication-declaration" => surfaceKind == "publication",
-        _ => false
-    };
-
-    private static bool MechanismMatchesPrerequisite(string prerequisiteCode, string targetMechanism, string? candidateMechanism) =>
-        prerequisiteCode == "publication-declaration"
-            ? candidateMechanism == "logical-publication"
-            : candidateMechanism == targetMechanism;
-
-    private static bool LinkIdentityMatches(string prerequisiteCode, CodeFact candidate, CodeFact target)
-    {
-        if (prerequisiteCode == "extension-declaration")
+        var targetMechanism = target.Properties.GetValueOrDefault("mechanism") ?? string.Empty;
+        var linkIdentity = target.Properties.GetValueOrDefault("linkIdentity") ?? "__missing-link-identity__";
+        return prerequisiteCode switch
         {
-            return true;
-        }
-
-        var candidateIdentity = candidate.Properties.GetValueOrDefault("linkIdentity");
-        var targetIdentity = target.Properties.GetValueOrDefault("linkIdentity");
-        return !string.IsNullOrWhiteSpace(candidateIdentity)
-            && candidateIdentity == targetIdentity;
+            "extension-declaration" => (targetMechanism, "extension", string.Empty),
+            "foreign-server-declaration" => (targetMechanism, "foreign-server", linkIdentity),
+            "user-mapping-declaration" => (targetMechanism, "user-mapping", linkIdentity),
+            "publication-declaration" => ("logical-publication", "publication", linkIdentity),
+            _ => (targetMechanism, "__unsupported__", linkIdentity)
+        };
     }
 
     private static string? LinkIdentity(Regex pattern, string structural, string family)

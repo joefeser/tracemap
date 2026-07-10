@@ -45,14 +45,21 @@ public sealed class PostgresArchiveLinkExtractorTests
         Assert.Contains(facts, fact => fact.FactType == FactTypes.DatabasePrerequisiteCandidate
             && fact.Properties.GetValueOrDefault("prerequisiteCode") == "publication-declaration"
             && fact.Properties.GetValueOrDefault("satisfaction") == "established-static-evidence");
+        var report = MarkdownReportWriter.Build(new ScanResult(CreateManifest(), facts, FileInventory.Collect(temp.Path)));
+        Assert.Contains("### Archive-Link Edges", report);
+        Assert.Contains("Supporting facts", report);
+        Assert.Contains("source-to-archive", report);
         Assert.All(surfaces, fact =>
         {
-            Assert.Null(fact.Evidence.SnippetHash);
             Assert.Equal("span-only", fact.Properties["identityPrecision"]);
             Assert.DoesNotContain(fact.Properties.Keys, key => key.Contains("server", StringComparison.OrdinalIgnoreCase)
                 || key.Contains("host", StringComparison.OrdinalIgnoreCase)
                 || key.Contains("connection", StringComparison.OrdinalIgnoreCase));
         });
+        Assert.All(
+            surfaces.Where(fact => fact.Properties["surfaceKind"] is "user-mapping" or "subscription" or "call"),
+            fact => Assert.Null(fact.Evidence.SnippetHash));
+        Assert.Contains(surfaces, fact => fact.Properties["surfaceKind"] == "extension" && fact.Evidence.SnippetHash is not null);
     }
 
     [Fact]
@@ -90,7 +97,7 @@ public sealed class PostgresArchiveLinkExtractorTests
         Assert.Contains(facts, fact => fact.RuleId == RuleIds.DatabasePostgresArchiveLinkGap
             && fact.Properties.GetValueOrDefault("gapKind") == "dynamic-or-unsupported-boundary");
         Assert.Contains(facts, fact => fact.RuleId == RuleIds.DatabasePostgresArchiveLinkGap
-            && fact.Properties.GetValueOrDefault("gapKind") == "unknown-direction");
+            && fact.Properties.GetValueOrDefault("gapKind") == "reduced-evidence:publication-declaration");
     }
 
     [Fact]
@@ -131,10 +138,10 @@ public sealed class PostgresArchiveLinkExtractorTests
         Assert.Equal(JsonSerializer.Serialize(first), JsonSerializer.Serialize(second));
         Assert.Contains("## PostgreSQL Archive-Link Evidence", report);
         Assert.Contains("### Archive-Link Edges", report);
-        Assert.Contains("Supporting facts", report);
+        Assert.Contains("None established", report);
         Assert.Contains("do not prove connectivity", report);
         Assert.Contains("replication health", report);
-        Assert.Contains("established-static-evidence", report);
+        Assert.Contains("reduced-static-evidence", report);
         Assert.DoesNotContain("FIXTURE_CONNECTION", report, StringComparison.Ordinal);
         Assert.DoesNotContain("cron.schedule", report, StringComparison.Ordinal);
     }
