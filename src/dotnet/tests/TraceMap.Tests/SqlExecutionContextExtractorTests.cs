@@ -263,6 +263,9 @@ public sealed class SqlExecutionContextExtractorTests
         Assert.Contains("active connection", catalog, StringComparison.Ordinal);
         Assert.Contains("does not prove", catalog, StringComparison.Ordinal);
         Assert.Contains("AnalysisGap", catalog, StringComparison.Ordinal);
+        var syntaxBlock = RuleBlock(catalog, RuleIds.DatabaseSqlContextSyntax);
+        Assert.Contains("evidenceTier: Tier2Structural", syntaxBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("evidenceTier: Tier2Structural or", syntaxBlock, StringComparison.Ordinal);
     }
 
     private static IReadOnlyList<CodeFact> Extract(string repoPath)
@@ -315,5 +318,13 @@ public sealed class SqlExecutionContextExtractorTests
         }
 
         throw new DirectoryNotFoundException("Unable to find TraceMap repo root.");
+    }
+
+    private static string RuleBlock(string catalog, string ruleId)
+    {
+        var start = catalog.IndexOf($"  - id: {ruleId}", StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Missing rule block for {ruleId}.");
+        var end = catalog.IndexOf("\n  - id: ", start + 1, StringComparison.Ordinal);
+        return end < 0 ? catalog[start..] : catalog[start..end];
     }
 }
