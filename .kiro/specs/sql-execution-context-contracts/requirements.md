@@ -55,7 +55,7 @@ Acceptance Criteria:
    optional fields for `engineFamily`, `serverRole`, `databaseRole`,
    `schemaRole`, `requiredCapabilities`, `stepKind`, `executionMode`, and
    `stopConditions`.
-2. Closed v1 values SHALL include PostgreSQL, `source`, `archive-target`,
+2. Closed v1 values SHALL include `postgresql`, `source`, `archive-target`,
    `admin`, `validation-only`, and `unknown` where applicable; literal
    infrastructure identities SHALL not be required.
 3. A contract value SHALL record whether it came from an explicit sidecar,

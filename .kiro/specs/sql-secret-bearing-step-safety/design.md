@@ -27,7 +27,10 @@ Implementation must reconcile names with the live catalog.
 
 Recommended category codes include `credential-option`, `connection-material`,
 `user-mapping`, `remote-query-input`, `subscription-connection`,
-`scheduled-command`, `secret-reference`, and `dynamic-secret-boundary`.
+`scheduled-command`, `external-secret-provider`, and
+`dynamic-secret-boundary`. `secret-reference` is a primary classification, not
+a category code; category codes describe the kind of protected material or
+boundary supporting that classification.
 
 ## Detection Architecture
 

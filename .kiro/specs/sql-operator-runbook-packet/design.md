@@ -26,6 +26,7 @@ Recommended top-level fields:
 | Field | Purpose |
 | --- | --- |
 | `schemaVersion` | Stable packet contract version |
+| `purpose` | Safe categorical purpose and bounded scope summary |
 | `source` | Safe repo/commit/scan provenance without local paths or raw remotes |
 | `coverage` | Complete/reduced/failed components and reasons |
 | `stepGroups` | Ordered context groups and transitions |
@@ -35,6 +36,7 @@ Recommended top-level fields:
 | `validationExpectations` | Validation step candidates and absent-observation state |
 | `cleanupEvidence` | Static rollback/cleanup candidates with limitations |
 | `stopConditions` | Cataloged reasons preventing an unqualified handoff |
+| `gaps` | Safe cataloged missing, conflicting, unsupported, or reduced-coverage evidence |
 | `ownerQuestions` | Deterministic category-level questions |
 | `limitations` | Non-claims and coverage boundaries |
 

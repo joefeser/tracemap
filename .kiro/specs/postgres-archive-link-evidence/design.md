@@ -30,12 +30,12 @@ fit rather than add parallel types. New properties require catalog ownership.
 
 ## Extractor Families
 
-### postgres_fdw
+### `postgres-fdw`
 
-Recognize bounded statement shapes for extension, foreign server, user mapping,
-foreign schema import, foreign table, and relevant grants. Link by normalized
-safe/opaque object identity and context. Server `OPTIONS` values are unsafe;
-option keys may be category-only when useful.
+Recognize bounded `postgres_fdw` statement shapes for extension, foreign
+server, user mapping, foreign schema import, foreign table, and relevant
+grants. Link by normalized safe/opaque object identity and context. Server
+`OPTIONS` values are unsafe; option keys may be category-only when useful.
 
 ### dblink
 
@@ -50,12 +50,13 @@ Subscription connection values are always secret-bearing input. Direction
 requires context evidence; a publication name paired with a subscription name
 is insufficient by itself.
 
-### pg_cron
+### `pg-cron-scheduled-operation`
 
-Recognize extension/config declarations and known schedule/unschedule call
-forms. Retain statement span, safe job category, and an allowed deterministic
-hash only; omit schedule command, connection data, and free-form job names when
-unsafe. Scheduling evidence does not prove registration or execution.
+Recognize `pg_cron` extension/config declarations and known schedule/unschedule
+call forms. Retain statement span, safe job category, and an allowed
+deterministic hash only; omit schedule command, connection data, and free-form
+job names when unsafe. Scheduling evidence does not prove registration or
+execution.
 
 ## Identity and Linking
 

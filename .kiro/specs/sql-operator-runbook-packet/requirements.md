@@ -53,11 +53,12 @@ that makes the intended procedure and its evidence limitations explicit.
 
 Acceptance Criteria:
 
-1. The packet SHALL contain purpose/scope, scan provenance, coverage summary,
-   ordered step groups, expected categorical context, prerequisites,
-   secret-handling flags, intended object/surface changes, validation
-   expectations, cleanup/rollback evidence, stop conditions, gaps, owner
-   questions, and limitations.
+1. The packet SHALL contain `purpose`, `source`, `coverage`, `stepGroups`,
+   `milestones`, `prerequisites`, `protectedSteps`,
+   `validationExpectations`, `cleanupEvidence`, `stopConditions`, `gaps`,
+   `ownerQuestions`, and `limitations` as defined by the packet schema.
+   `stepGroups` carries ordered steps and expected categorical context;
+   `milestones` carries intended object/surface changes and validation state.
 2. Every step or conclusion SHALL reference supporting rule IDs, evidence tiers,
    repo-relative file spans, commit SHA, extractor versions, and coverage.
 3. The machine-readable summary SHALL use a versioned stable schema and SHALL
