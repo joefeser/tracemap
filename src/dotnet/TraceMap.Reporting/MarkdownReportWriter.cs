@@ -98,6 +98,8 @@ public static class MarkdownReportWriter
                 or FactTypes.SqlTextUsed),
             fact => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
 
+        AddSqlExecutionContext(lines, result);
+
         AddFactSection(
             lines,
             "Config Keys",
@@ -393,6 +395,122 @@ public static class MarkdownReportWriter
             .ToArray();
 
         lines.AddRange(selectedFacts.Length == 0 ? ["- None found."] : selectedFacts.Select(format));
+    }
+
+    private static void AddSqlExecutionContext(List<string> lines, ScanResult result)
+    {
+        var contextFacts = result.Facts
+            .Where(fact => fact.FactType is FactTypes.SqlExecutionContextDeclared or FactTypes.SqlExecutionContextCandidate)
+            .GroupBy(
+                fact => (fact.Evidence.FilePath, Ordinal: fact.Properties.GetValueOrDefault("statementOrdinal") ?? "0"),
+                new SqlContextGroupComparer())
+            .Select(group => group
+                .OrderBy(fact => fact.FactType == FactTypes.SqlExecutionContextDeclared ? 0 : 1)
+                .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+                .First())
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => ParseOrdinal(fact.Properties.GetValueOrDefault("statementOrdinal")))
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        var gaps = result.Facts
+            .Where(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.DatabaseSqlContextGap)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => ParseOrdinal(fact.Properties.GetValueOrDefault("statementOrdinal")))
+            .ThenBy(fact => fact.Properties.GetValueOrDefault("gapKind"), StringComparer.Ordinal)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        if (contextFacts.Length == 0 && gaps.Length == 0)
+        {
+            return;
+        }
+
+        lines.Add("");
+        lines.Add("## SQL Execution Context");
+        lines.Add("");
+        lines.Add("Static intended-context evidence only. Before manual execution, independently verify the active client connection, server, database, schema, and role. TraceMap does not certify that a step is safe to run.");
+        lines.Add("");
+        lines.Add("| Step | Kind | Context | Mode | Classification | Capabilities | Stop / review | Rule / tier | Evidence |");
+        lines.Add("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+
+        CodeFact? previous = null;
+        foreach (var fact in contextFacts)
+        {
+            if (previous is not null && IsContextTransition(previous, fact))
+            {
+                lines.Add($"| transition | context-change | `{TransitionDisplay(previous)}` -> `{TransitionDisplay(fact)}` | review | needs-review | none | verify active connection and database | `{RuleIds.DatabaseSqlContextGap}` / `{EvidenceTiers.Tier4Unknown}` | between ordered steps |");
+            }
+
+            var ordinal = DisplayCodeValue(fact.Properties.GetValueOrDefault("statementOrdinal") ?? "0");
+            var kind = DisplayCodeValue(fact.Properties.GetValueOrDefault("stepKind") ?? "unknown-sql-step");
+            var context = DisplayCodeValue(ContextDisplay(fact));
+            var mode = DisplayCodeValue(fact.Properties.GetValueOrDefault("executionMode") ?? "unknown");
+            var classification = DisplayCodeValue(fact.Properties.GetValueOrDefault("contextClassification") ?? "unknown");
+            var capabilities = DisplayCodeValue(fact.Properties.GetValueOrDefault("requiredCapabilities") ?? "none");
+            var stops = DisplayCodeValue(fact.Properties.GetValueOrDefault("stopConditions") ?? "verify-active-connection");
+            var evidence = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+            lines.Add($"| `{ordinal}` | `{kind}` | `{context}` | `{mode}` | `{classification}` | `{capabilities}` | `{stops}` | `{fact.RuleId}` / `{fact.EvidenceTier}` | `{evidence}` |");
+            previous = fact;
+        }
+
+        if (gaps.Length > 0)
+        {
+            lines.Add("");
+            lines.Add("### SQL Context Gaps");
+            lines.Add("");
+            foreach (var gap in gaps.Take(100))
+            {
+                var kind = DisplayCodeValue(gap.Properties.GetValueOrDefault("gapKind") ?? "unknown-context-gap");
+                var ordinal = DisplayCodeValue(gap.Properties.GetValueOrDefault("statementOrdinal") ?? "0");
+                var evidence = CombinedReportHelpers.SafePath(gap.Evidence.FilePath) + $":{gap.Evidence.StartLine}-{gap.Evidence.EndLine}";
+                lines.Add($"- Step `{ordinal}` needs review for `{kind}` ({gap.EvidenceTier}, rule `{gap.RuleId}`, coverage `{DisplayCodeValue(gap.Properties.GetValueOrDefault("coverage") ?? "reduced")}`) at `{evidence}`.");
+            }
+        }
+
+        lines.Add("");
+        lines.Add("SQL context limitations: declarations describe intent, inferred rows are conservative static candidates, and gaps identify missing checked-in evidence. None of these rows prove the selected client tab, runtime database state, authorization, execution success, or operator approval.");
+    }
+
+    private static bool IsContextTransition(CodeFact left, CodeFact right)
+    {
+        return left.Evidence.FilePath == right.Evidence.FilePath
+            && (left.Properties.GetValueOrDefault("serverRole") != right.Properties.GetValueOrDefault("serverRole")
+                || left.Properties.GetValueOrDefault("databaseRole") != right.Properties.GetValueOrDefault("databaseRole")
+                || left.Properties.GetValueOrDefault("executionMode") != right.Properties.GetValueOrDefault("executionMode"));
+    }
+
+    private static string ContextDisplay(CodeFact fact)
+    {
+        return string.Join('/',
+            fact.Properties.GetValueOrDefault("engineFamily") ?? "unknown",
+            fact.Properties.GetValueOrDefault("serverRole") ?? "unknown",
+            fact.Properties.GetValueOrDefault("databaseRole") ?? "unknown",
+            fact.Properties.GetValueOrDefault("schemaRole") ?? "unspecified");
+    }
+
+    private static string TransitionDisplay(CodeFact fact)
+    {
+        return ContextDisplay(fact) + "/" + (fact.Properties.GetValueOrDefault("executionMode") ?? "unknown");
+    }
+
+    private static int ParseOrdinal(string? value)
+    {
+        return int.TryParse(value, out var ordinal) ? ordinal : int.MaxValue;
+    }
+
+    private sealed class SqlContextGroupComparer : IEqualityComparer<(string FilePath, string Ordinal)>
+    {
+        public bool Equals((string FilePath, string Ordinal) x, (string FilePath, string Ordinal) y)
+        {
+            return string.Equals(x.FilePath, y.FilePath, StringComparison.Ordinal)
+                && string.Equals(x.Ordinal, y.Ordinal, StringComparison.Ordinal);
+        }
+
+        public int GetHashCode((string FilePath, string Ordinal) obj)
+        {
+            return HashCode.Combine(
+                StringComparer.Ordinal.GetHashCode(obj.FilePath),
+                StringComparer.Ordinal.GetHashCode(obj.Ordinal));
+        }
     }
 
     private static void AddBuildEnvironmentDiagnostics(List<string> lines, ScanResult result)

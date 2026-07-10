@@ -721,3 +721,22 @@ grep -E "HashOnlyEvidence|VolatileIdentity" <tmp>/sql-diff/diff-report.json
 ```
 
 When checking mapping-only persistence evidence, use `--to-surface sql-persistence`, `--surface sql-persistence`, or `--scope surfaces --surface sql-persistence`; these surfaces do not claim that a SQL query executes.
+# SQL Execution Context Smoke
+
+SQL execution-context changes should run the focused .NET tests and scan the
+checked-in public-safe fixture without any database connection:
+
+```bash
+dotnet test src/dotnet/TraceMap.sln --filter FullyQualifiedName~SqlExecutionContextExtractorTests
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/sql-execution-context --out /tmp/tracemap-sql-context-smoke
+```
+
+Inspect `facts.ndjson`, `index.sqlite`, `report.md`, and
+`logs/analyzer.log`. Expected facts include
+`SqlExecutionContextDeclared`, `SqlExecutionContextCandidate`, and cataloged
+`AnalysisGap` rows. Output must retain rule IDs, tiers, repo-relative spans,
+commit SHA, extractor version, coverage, and limitations while omitting raw SQL,
+directive/sidecar bodies, connection data, credentials, infrastructure names,
+scheduled command bodies, and local absolute paths. The report must describe
+static intended context and manual verification needs without claiming runtime
+state or that a step is safe to run.

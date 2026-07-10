@@ -2980,6 +2980,39 @@ rules:
       - Static SQL shape evidence does not prove runtime execution, schema existence, dialect validity, generated SQL equivalence, permissions, transaction behavior, or branch feasibility.
       - Raw SQL text, predicate literal values, source snippets, connection strings, raw URLs, and unsafe identifiers are not rendered.
 
+  - id: database.sql.context.declaration.v1
+    name: SQL execution-context declaration
+    description: Parses the versioned SQL context sidecar or bounded in-file directive into categorical intended execution-context evidence.
+    evidenceTier: Tier2Structural
+    emits:
+      - SqlExecutionContextDeclared
+    limitations:
+      - Declarations describe checked-in operator intent only; they do not prove the active connection, selected database, role, authorization, execution, or safety.
+      - Only closed categorical context, capability, step, stop-condition, source-kind, span, and hash fields are retained; directive bodies, SQL text, infrastructure identities, and credential material are omitted.
+      - Sidecar declarations take precedence over bounded directives; disagreements produce database.sql.context.gap.v1 evidence instead of silently selecting a context.
+
+  - id: database.sql.context.syntax.v1
+    name: SQL execution-context syntax candidate
+    description: Classifies recognized PostgreSQL setup, scheduling, validation, permission, and destructive statement shapes into categorical context candidates.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    emits:
+      - SqlExecutionContextCandidate
+    limitations:
+      - Syntax candidates are conservative static evidence and do not prove operator intent, the active client tab, runtime state, execution, authorization, or safety.
+      - String, quoted-identifier, dollar-quoted, and comment contents are removed before classification and hashing; raw statement text is not stored on context facts.
+      - Unknown and context-sensitive statements retain unknown categorical roles and emit explicit database.sql.context.gap.v1 evidence.
+
+  - id: database.sql.context.gap.v1
+    name: SQL execution-context gap
+    description: Records missing, conflicting, malformed, unsupported, unreadable, or unknown SQL execution-context evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - A gap means the analyzed checked-in evidence did not establish context; it does not prove a live database context is absent or incorrect.
+      - Gap properties use closed reason codes and safe spans only; parser exception text, sidecar values, directive bodies, SQL text, local paths, infrastructure names, and credential material are not rendered.
+      - Partial context analysis remains useful but is labeled reduced or failed and must not be interpreted as a clean script.
+
   - id: config.key.v1
     name: Configuration key extraction
     description: Parses appsettings*.json, Web.config, App.config, packages.config, and connection string entries.
