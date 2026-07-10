@@ -1902,7 +1902,7 @@ rules:
   - id: combined.diff.endpoint.v1
     name: Combined dependency diff endpoint comparison
     description: Compares combined endpoint alignment evidence between two snapshots using static method/path keys and side-specific endpoint provenance.
-    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    evidenceTier: Tier2Structural
     emits:
       - endpoint diff row
     limitations:

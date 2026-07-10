@@ -437,7 +437,8 @@ public static class MarkdownReportWriter
         {
             if (previous is not null && IsContextTransition(previous, fact))
             {
-                lines.Add($"| transition | context-change | `{TransitionDisplay(previous)}` -> `{TransitionDisplay(fact)}` | review | needs-review | none | verify active connection and database | `{RuleIds.DatabaseSqlContextGap}` / `{EvidenceTiers.Tier4Unknown}` | between ordered steps |");
+                var transitionEvidence = $"{CombinedReportHelpers.SafePath(previous.Evidence.FilePath)}:{previous.Evidence.StartLine}-{previous.Evidence.EndLine} -> {CombinedReportHelpers.SafePath(fact.Evidence.FilePath)}:{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+                lines.Add($"| transition | context-change | `{TransitionDisplay(previous)}` -> `{TransitionDisplay(fact)}` | review | needs-review | none | verify active connection and database | `{RuleIds.DatabaseSqlContextGap}` / `{EvidenceTiers.Tier4Unknown}` | `{transitionEvidence}` |");
             }
 
             var ordinal = DisplayCodeValue(fact.Properties.GetValueOrDefault("statementOrdinal") ?? "0");

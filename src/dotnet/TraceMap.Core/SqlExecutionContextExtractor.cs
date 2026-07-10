@@ -137,12 +137,13 @@ public static partial class SqlExecutionContextExtractor
             {
                 var inferred = Classify(statement.StructuralText);
                 var matchingDirectives = directives
-                    .Where(item => item.Line > previousEndLine && item.Line <= statement.StartLine)
+                    .Where(item => item.Line > previousEndLine && item.Line == statement.StartLine - 1)
                     .OrderBy(item => item.Line)
                     .ToArray();
                 previousEndLine = statement.EndLine;
 
-                ContextDeclaration? directive = matchingDirectives.LastOrDefault()?.Declaration;
+                ContextDirective? matchingDirective = matchingDirectives.LastOrDefault();
+                ContextDeclaration? directive = matchingDirective?.Declaration;
                 if (matchingDirectives.Length > 1)
                 {
                     facts.Add(CreateGap(
@@ -153,6 +154,7 @@ public static partial class SqlExecutionContextExtractor
                         statement.Ordinal,
                         "multiple-context-directives",
                         "reduced"));
+                    matchingDirective = null;
                     directive = null;
                 }
 
@@ -197,7 +199,8 @@ public static partial class SqlExecutionContextExtractor
                         statement,
                         declaration,
                         sidecar is not null ? "sidecar" : "directive",
-                        declarationConflictsSyntax ? "conflicting" : "declared"));
+                        declarationConflictsSyntax ? "conflicting" : "declared",
+                        matchingDirective is not null && sidecar is null ? matchingDirective.Line : null));
 
                     if (declarationConflictsSyntax)
                     {
@@ -258,7 +261,8 @@ public static partial class SqlExecutionContextExtractor
         SqlStatement statement,
         ContextDeclaration context,
         string declarationSource,
-        string classification)
+        string classification,
+        int? declarationLine = null)
     {
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
@@ -291,8 +295,8 @@ public static partial class SqlExecutionContextExtractor
             tier,
             new EvidenceSpan(
                 relativePath,
-                statement.StartLine,
-                statement.EndLine,
+                declarationLine ?? statement.StartLine,
+                declarationLine ?? statement.EndLine,
                 FactFactory.Hash(statement.StructuralText, 32),
                 nameof(SqlExecutionContextExtractor),
                 ScannerVersions.SqlExecutionContextExtractor),
@@ -705,12 +709,54 @@ public static partial class SqlExecutionContextExtractor
             return;
         }
 
-        var leadingLines = raw.TakeWhile(char.IsWhiteSpace).Count(ch => ch == '\n');
+        var tokenStartLine = FindFirstSqlTokenLine(raw, segmentStartLine);
         statements.Add(new SqlStatement(
             statements.Count + 1,
-            Math.Max(1, segmentStartLine + leadingLines),
-            Math.Max(segmentStartLine + leadingLines, segmentEndLine),
+            tokenStartLine,
+            Math.Max(tokenStartLine, segmentEndLine),
             CollapseWhitespace(structural)));
+    }
+
+    private static int FindFirstSqlTokenLine(string text, int segmentStartLine)
+    {
+        var line = Math.Max(1, segmentStartLine);
+        var index = 0;
+        while (index < text.Length)
+        {
+            if (char.IsWhiteSpace(text[index]))
+            {
+                if (text[index] == '\n') line++;
+                index++;
+                continue;
+            }
+
+            if (index + 1 < text.Length && text[index] == '-' && text[index + 1] == '-')
+            {
+                index += 2;
+                while (index < text.Length && text[index] != '\n') index++;
+                continue;
+            }
+
+            if (index + 1 < text.Length && text[index] == '/' && text[index + 1] == '*')
+            {
+                index += 2;
+                while (index < text.Length)
+                {
+                    if (text[index] == '\n') line++;
+                    if (index + 1 < text.Length && text[index] == '*' && text[index + 1] == '/')
+                    {
+                        index += 2;
+                        break;
+                    }
+                    index++;
+                }
+                continue;
+            }
+
+            return line;
+        }
+
+        return line;
     }
 
     private static string StructuralText(string text)
@@ -733,9 +779,14 @@ public static partial class SqlExecutionContextExtractor
             }
             if (state == LexState.BlockComment)
             {
+                if (current == '\n')
+                {
+                    builder.Append('\n');
+                }
                 if (current == '*' && next == '/')
                 {
                     state = LexState.Normal;
+                    builder.Append(' ');
                     index++;
                 }
                 continue;
@@ -771,6 +822,7 @@ public static partial class SqlExecutionContextExtractor
             else if (current == '/' && next == '*')
             {
                 state = LexState.BlockComment;
+                builder.Append(' ');
                 index++;
             }
             else if (current == '\'')

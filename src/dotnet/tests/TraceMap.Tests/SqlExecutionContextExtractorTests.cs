@@ -111,6 +111,7 @@ public sealed class SqlExecutionContextExtractorTests
     {
         using var temp = new TempDirectory();
         WriteSql(temp.Path, "setup.sql", """
+            -- ordinary banner comment
             -- tracemap-sql-context: engine=postgresql
             DROP TABLE archive.old_records;
             """);
@@ -123,6 +124,8 @@ public sealed class SqlExecutionContextExtractorTests
         Assert.Equal("unknown", declared.Properties["serverRole"]);
         Assert.Equal("reduced", declared.Properties["coverage"]);
         Assert.Contains(facts, fact => IsGap(fact, "missing-context-evidence"));
+        Assert.Equal(2, declared.Evidence.StartLine);
+        Assert.Equal(2, declared.Evidence.EndLine);
     }
 
     [Fact]
@@ -143,6 +146,19 @@ public sealed class SqlExecutionContextExtractorTests
         Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.SqlExecutionContextDeclared);
         Assert.Contains(facts, fact => fact.FactType == FactTypes.SqlExecutionContextCandidate
             && fact.Properties.GetValueOrDefault("stepKind") == "destructive-operation");
+    }
+
+    [Fact]
+    public void Extract_preserves_token_boundaries_across_block_comments()
+    {
+        using var temp = new TempDirectory();
+        WriteSql(temp.Path, "setup.sql", "CREATE/* disabled note */EXTENSION postgres_fdw;");
+
+        var facts = Extract(temp.Path);
+        var candidate = Assert.Single(facts, fact => fact.FactType == FactTypes.SqlExecutionContextCandidate);
+
+        Assert.Equal("extension-setup", candidate.Properties["stepKind"]);
+        Assert.Equal("admin", candidate.Properties["databaseRole"]);
     }
 
     [Fact]
@@ -180,6 +196,7 @@ public sealed class SqlExecutionContextExtractorTests
 
         Assert.Contains("## SQL Execution Context", report);
         Assert.Contains("context-change", report);
+        Assert.Contains("setup.sql:1-1 -> setup.sql:2-2", report);
         Assert.Contains("independently verify the active client connection", report);
         Assert.Contains("does not certify that a step is safe to run", report);
         Assert.Contains("missing-context-evidence", report);
