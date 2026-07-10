@@ -6,10 +6,12 @@ connecting to a database or executing SQL. The PostgreSQL-first mechanisms are
 `pg-cron-scheduled-operation`.
 
 Surface facts retain only mechanism, categorical surface/context, statement
-ordinal, repo-relative span, coverage, limitation, and a span-derived opaque
-identity. Server, database, role, host, connection, subscription, job, remote
-query, and scheduled-command values are omitted. User mappings, dblink inputs,
-and subscription connections continue to use the protected-material boundary.
+ordinal, repo-relative span, coverage, limitation, a span-derived opaque
+identity, and (where required for exact linking) a one-way key derived from a
+non-secret SQL object identifier. Raw server, publication, database, role,
+host, connection, subscription, job, remote-query, and scheduled-command values
+are omitted. User mappings, dblink inputs, and subscription connections
+continue to use the protected-material boundary.
 
 Prerequisite reduction checks only the analyzed script set. It can establish
 static evidence for extension declarations, foreign servers, user mappings,

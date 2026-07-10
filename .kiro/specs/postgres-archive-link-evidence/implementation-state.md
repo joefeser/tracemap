@@ -31,16 +31,18 @@ Public claim level: deterministic-static-evidence
 
 - Archive extraction reuses already-loaded SQL statements and context facts; it
   does not add another SQL-file read.
-- Opaque identity is derived from repo-relative span, ordinal, mechanism, and
-  surface kind, never from a connection or object value.
+- Surface identity is derived from repo-relative span, ordinal, mechanism, and
+  surface kind. Exact prerequisite matching uses a separate one-way key from a
+  non-secret SQL object identifier; raw names and all connection values remain
+  omitted.
 - Publication/subscription prerequisite evidence can link across their distinct
   mechanism categories, but cannot infer remote identity or connectivity.
 - `missing-evidence` is intentionally distinct from runtime absence/failure.
 
 ## Validation
 
-- Focused SQL context, secret-safety, and archive-link tests: passed (25 tests).
-- Full .NET suite: passed (722 tests).
+- Focused SQL context, secret-safety, and archive-link tests: passed (26 tests).
+- Full .NET suite: passed (723 tests).
 - Checked-in FDW, dblink, logical replication, and cron fixtures added.
 - CLI fixture scan passed with 10 archive-link surfaces and no planted values.
 - Build passed with zero warnings/errors; private-path guard and diff check

@@ -528,6 +528,12 @@ public static class MarkdownReportWriter
             .ThenBy(fact => fact.Evidence.StartLine)
             .ThenBy(fact => fact.Properties.GetValueOrDefault("prerequisiteCode"), StringComparer.Ordinal)
             .ToArray();
+        var edges = result.Facts
+            .Where(fact => fact.FactType == FactTypes.DatabaseLinkEdgeCandidate)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
         var gaps = result.Facts
             .Where(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.DatabasePostgresArchiveLinkGap)
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
@@ -546,6 +552,24 @@ public static class MarkdownReportWriter
         {
             var evidence = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
             lines.Add($"| `{DisplayCodeValue(fact.Properties.GetValueOrDefault("statementOrdinal") ?? "0")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("mechanism") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("surfaceKind") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("contextRole") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("coverage") ?? "reduced")}` | `{fact.RuleId}` / `{fact.EvidenceTier}` | `{evidence}` |");
+        }
+
+        lines.Add("");
+        lines.Add("### Archive-Link Edges");
+        lines.Add("");
+        if (edges.Length == 0)
+        {
+            lines.Add("- None established from checked-in prerequisite/context evidence.");
+        }
+        else
+        {
+            lines.Add("| Mechanism | Link | Direction | Coverage | Supporting facts | Rule / tier | Evidence |");
+            lines.Add("| --- | --- | --- | --- | --- | --- | --- |");
+            foreach (var fact in edges)
+            {
+                var evidence = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+                lines.Add($"| `{DisplayCodeValue(fact.Properties.GetValueOrDefault("mechanism") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("linkKind") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("direction") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("coverage") ?? "reduced")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("supportingFactIds") ?? "none")}` | `{fact.RuleId}` / `{fact.EvidenceTier}` | `{evidence}` |");
+            }
         }
 
         lines.Add("");
