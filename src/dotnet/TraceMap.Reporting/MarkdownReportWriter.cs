@@ -99,6 +99,7 @@ public static class MarkdownReportWriter
             fact => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
 
         AddSqlExecutionContext(lines, result);
+        AddSqlProtectedMaterial(lines, result);
 
         AddFactSection(
             lines,
@@ -469,6 +470,42 @@ public static class MarkdownReportWriter
 
         lines.Add("");
         lines.Add("SQL context limitations: declarations describe intent, inferred rows are conservative static candidates, and gaps identify missing checked-in evidence. None of these rows prove the selected client tab, runtime database state, authorization, execution success, or operator approval.");
+    }
+
+    private static void AddSqlProtectedMaterial(List<string> lines, ScanResult result)
+    {
+        var findings = result.Facts
+            .Where(fact => fact.FactType == FactTypes.SecretBearingSqlStep
+                || fact.RuleId == RuleIds.DatabaseSqlSecretSafetyGap)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => ParseOrdinal(fact.Properties.GetValueOrDefault("statementOrdinal")))
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        if (findings.Length == 0)
+        {
+            return;
+        }
+
+        lines.Add("");
+        lines.Add("## SQL Protected-Material Steps");
+        lines.Add("");
+        lines.Add("Category-only static evidence. Values and runnable SQL are intentionally omitted. Absence of a finding does not prove absence of secrets, and no row establishes that a script is safe to run. DBA/operator approval remains required.");
+        lines.Add("");
+        lines.Add("| Step | Classification | Categories | Stop / review | Rule / tier | Coverage | Evidence |");
+        lines.Add("| --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var fact in findings)
+        {
+            var ordinal = DisplayCodeValue(fact.Properties.GetValueOrDefault("statementOrdinal") ?? "0");
+            var classification = DisplayCodeValue(fact.Properties.GetValueOrDefault("classification") ?? "not-established");
+            var categories = DisplayCodeValue(fact.Properties.GetValueOrDefault("categoryCodes") ?? "dynamic-secret-boundary");
+            var stop = DisplayCodeValue(fact.Properties.GetValueOrDefault("stopCondition") ?? "secret-owner-review");
+            var coverage = DisplayCodeValue(fact.Properties.GetValueOrDefault("coverage") ?? "reduced");
+            var evidence = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+            lines.Add($"| `{ordinal}` | `{classification}` | `{categories}` | `{stop}` | `{fact.RuleId}` / `{fact.EvidenceTier}` | `{coverage}` | `{evidence}` |");
+        }
+
+        lines.Add("");
+        lines.Add("SQL protected-material limitations: detection is conservative and static-first; it does not access a database, environment, vault, or secret store, and it does not validate credentials or runtime state.");
     }
 
     private static bool IsContextTransition(CodeFact left, CodeFact right)
