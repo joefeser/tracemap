@@ -42,6 +42,7 @@ import { validateRouteFlowEvidenceStoryDist } from "./route-flow-evidence-story.
 import { validateProofPathStoriesDist } from "./proof-path-stories.mjs";
 import { validateProofPathTourDist } from "./proof-path-tour.mjs";
 import { validateProofSourceCatalogDist } from "./proof-source-catalog.mjs";
+import { validateRagVsAgenticRetrievalArticleDist } from "./rag-vs-agentic-retrieval-article.mjs";
 import { validateReducedCoveragePlaybookDist } from "./reduced-coverage-playbook.mjs";
 import { validateReviewMeetingAgendaDist } from "./review-meeting-agenda.mjs";
 import { validateReviewRoomDemoPathDist } from "./review-room-demo-path.mjs";
@@ -54,6 +55,7 @@ import { validateRoadmapClaimLedgerDist } from "./roadmap-claim-ledger.mjs";
 import { validateSiteClaimGuardrailsDist } from "./site-claim-guardrails.mjs";
 import { validateStaticTriageDist } from "./static-triage.mjs";
 import { validateStaticVsRuntimeDist } from "./static-vs-runtime.mjs";
+import { validateSqlOperatorHandoffDist } from "./sql-operator-handoff.mjs";
 import { validateStakeholderObjectionGuideDist } from "./stakeholder-objection-guide.mjs";
 import { validateStakeholderQuestionIndexDist } from "./stakeholder-question-index.mjs";
 import { validateSwiftAdapterStoryDist } from "./swift-adapter-story.mjs";
@@ -152,6 +154,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateProofPathStoriesDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofPathTourDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateProofSourceCatalogDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateRagVsAgenticRetrievalArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReducedCoveragePlaybookDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewMeetingAgendaDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateReviewRoomDemoPathDist({ baseUrl: normalizedBaseUrl, dist, errors });
@@ -164,6 +167,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateSiteClaimGuardrailsDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticTriageDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticVsRuntimeDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateSqlOperatorHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStakeholderObjectionGuideDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStakeholderQuestionIndexDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateSwiftAdapterStoryDist({ baseUrl: normalizedBaseUrl, dist, errors });

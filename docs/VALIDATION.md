@@ -721,3 +721,97 @@ grep -E "HashOnlyEvidence|VolatileIdentity" <tmp>/sql-diff/diff-report.json
 ```
 
 When checking mapping-only persistence evidence, use `--to-surface sql-persistence`, `--surface sql-persistence`, or `--scope surfaces --surface sql-persistence`; these surfaces do not claim that a SQL query executes.
+# SQL Execution Context Smoke
+
+SQL execution-context changes should run the focused .NET tests and scan the
+checked-in public-safe fixture without any database connection:
+
+```bash
+dotnet test src/dotnet/TraceMap.sln --filter FullyQualifiedName~SqlExecutionContextExtractorTests
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/sql-execution-context --out /tmp/tracemap-sql-context-smoke
+```
+
+Inspect `facts.ndjson`, `index.sqlite`, `report.md`, and
+`logs/analyzer.log`. Expected facts include
+`SqlExecutionContextDeclared`, `SqlExecutionContextCandidate`, and cataloged
+`AnalysisGap` rows. Output must retain rule IDs, tiers, repo-relative spans,
+commit SHA, extractor version, coverage, and limitations while omitting raw SQL,
+directive/sidecar bodies, connection data, credentials, infrastructure names,
+scheduled command bodies, and local absolute paths. The report must describe
+static intended context and manual verification needs without claiming runtime
+state or that a step is safe to run.
+
+## SQL Protected-Material Safety Smoke
+
+Protected-material changes should run the focused leak tests and scan the
+checked-in placeholder-only fixture without connecting to a database:
+
+```bash
+dotnet test src/dotnet/TraceMap.sln --filter FullyQualifiedName~SqlSecretSafetyExtractorTests
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/sql-secret-safety --out /tmp/tracemap-sql-secret-safety-smoke
+```
+
+Inspect every generated artifact and the combined/export paths. Expected output
+is category-only `SecretBearingSqlStep` and `AnalysisGap` evidence with rule IDs,
+tiers, relative spans, coverage, and `secret-owner-review`. Raw SQL, placeholder
+names, connection material, values, and secret-derived hashes must be absent.
+The report must say that absence of a finding does not prove absence of secrets
+and must not certify execution safety or replace operator approval.
+
+## PostgreSQL Archive-Link Evidence Smoke
+
+Archive-link changes should run the focused tests and scan the checked-in
+placeholder-only fixture:
+
+```bash
+dotnet test src/dotnet/TraceMap.sln --filter FullyQualifiedName~PostgresArchiveLinkExtractorTests
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/postgres-archive-link --out /tmp/tracemap-postgres-archive-smoke
+```
+
+Expected output includes `DatabaseLinkSurfaceDeclared`,
+`DatabasePrerequisiteCandidate`, `DatabaseLinkEdgeCandidate`, and cataloged
+archive-link gaps. Inspect NDJSON, SQLite, Markdown, and logs for rule IDs,
+tiers, commit SHA, extractor version, coverage, limitations, supporting fact
+IDs, and category-only context/direction. Connection inputs, user-mapping
+values, subscription data, scheduled bodies, infrastructure identifiers, and
+local paths must not appear. The report must not claim connectivity, applied
+state, permissions, replication health, scheduling success, or archive
+correctness.
+
+## PostgreSQL Permission Prerequisite Evidence Smoke
+
+Permission-evidence changes should run the focused tests and scan the checked-in
+public-safe fixture:
+
+```bash
+dotnet test src/dotnet/TraceMap.sln --filter FullyQualifiedName~PostgresPermissionEvidenceExtractorTests
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/postgres-permission-evidence --out /tmp/tracemap-postgres-permission-smoke
+```
+
+Expected output includes `DatabasePermissionDeclared`, permission-owned
+`DatabasePrerequisiteCandidate`, `DatabasePrerequisiteEvidence`, and cataloged
+permission gaps. Inspect NDJSON, SQLite, Markdown, and logs for the registry
+version, closed capability/status/reason codes, supporting or contradicting fact
+IDs, safe spans, rule/tier, coverage, and limitations. Raw SQL, role/object/
+infrastructure names, credentials, connection data, and local paths must be
+absent. `present-in-scripts` must be described as checked-in evidence only and
+must never claim effective or sufficient runtime access.
+# SQL operator runbook packet smoke
+
+Run the deterministic public-safe fixture and verify standard scan artifacts plus
+the standalone packet outputs:
+
+```bash
+rm -rf /tmp/tracemap-sql-runbook-smoke
+dotnet run --project src/dotnet/TraceMap.Cli -- scan \
+  --repo samples/sql-operator-runbook \
+  --out /tmp/tracemap-sql-runbook-smoke
+test -f /tmp/tracemap-sql-runbook-smoke/sql-runbook.md
+test -f /tmp/tracemap-sql-runbook-smoke/sql-runbook.json
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~SqlRunbookPacketTests
+```
+
+The focused tests cover deterministic ordering, schema fields, context
+transitions, scheduled and validation groups, permission/protected projections,
+partial gaps, planted-value leakage, forbidden runnable SQL, and CLI artifacts.

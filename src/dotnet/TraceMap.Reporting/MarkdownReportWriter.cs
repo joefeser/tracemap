@@ -10,7 +10,15 @@ public static class MarkdownReportWriter
         await File.WriteAllTextAsync(path, Build(result), cancellationToken);
     }
 
-    public static string Build(ScanResult result)
+    public static async Task WriteAsync(string path, ScanResult result, SqlRunbookPacket? sqlRunbookPacket, CancellationToken cancellationToken = default)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        await File.WriteAllTextAsync(path, Build(result, sqlRunbookPacket), cancellationToken);
+    }
+
+    public static string Build(ScanResult result) => Build(result, null);
+
+    public static string Build(ScanResult result, SqlRunbookPacket? sqlRunbookPacket)
     {
         var manifest = result.Manifest;
         var factsByType = result.Facts
@@ -97,6 +105,12 @@ public static class MarkdownReportWriter
                 or FactTypes.SqlCommandDetected
                 or FactTypes.SqlTextUsed),
             fact => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddSqlExecutionContext(lines, result);
+        AddSqlProtectedMaterial(lines, result);
+        AddPostgresArchiveLinks(lines, result);
+        AddPostgresPermissionPrerequisites(lines, result);
+        AddSqlRunbookPacketSummary(lines, result, sqlRunbookPacket);
 
         AddFactSection(
             lines,
@@ -393,6 +407,317 @@ public static class MarkdownReportWriter
             .ToArray();
 
         lines.AddRange(selectedFacts.Length == 0 ? ["- None found."] : selectedFacts.Select(format));
+    }
+
+    private static void AddSqlExecutionContext(List<string> lines, ScanResult result)
+    {
+        var contextFacts = result.Facts
+            .Where(fact => fact.FactType is FactTypes.SqlExecutionContextDeclared or FactTypes.SqlExecutionContextCandidate)
+            .GroupBy(
+                fact => (fact.Evidence.FilePath, Ordinal: fact.Properties.GetValueOrDefault("statementOrdinal") ?? "0"),
+                new SqlContextGroupComparer())
+            .Select(group => group
+                .OrderBy(fact => fact.FactType == FactTypes.SqlExecutionContextDeclared ? 0 : 1)
+                .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+                .First())
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => ParseOrdinal(fact.Properties.GetValueOrDefault("statementOrdinal")))
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        var gaps = result.Facts
+            .Where(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.DatabaseSqlContextGap)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => ParseOrdinal(fact.Properties.GetValueOrDefault("statementOrdinal")))
+            .ThenBy(fact => fact.Properties.GetValueOrDefault("gapKind"), StringComparer.Ordinal)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        if (contextFacts.Length == 0 && gaps.Length == 0)
+        {
+            return;
+        }
+
+        lines.Add("");
+        lines.Add("## SQL Execution Context");
+        lines.Add("");
+        lines.Add("Static intended-context evidence only. Before manual execution, independently verify the active client connection, server, database, schema, and role. TraceMap does not certify that a step is safe to run.");
+        lines.Add("");
+        lines.Add("| Step | Kind | Context | Mode | Classification | Capabilities | Stop / review | Rule / tier | Evidence |");
+        lines.Add("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+
+        CodeFact? previous = null;
+        foreach (var fact in contextFacts)
+        {
+            if (previous is not null && IsContextTransition(previous, fact))
+            {
+                var transitionEvidence = $"{CombinedReportHelpers.SafePath(previous.Evidence.FilePath)}:{previous.Evidence.StartLine}-{previous.Evidence.EndLine} -> {CombinedReportHelpers.SafePath(fact.Evidence.FilePath)}:{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+                lines.Add($"| transition | context-change | `{TransitionDisplay(previous)}` -> `{TransitionDisplay(fact)}` | review | needs-review | none | verify active connection and database | `{RuleIds.DatabaseSqlContextGap}` / `{EvidenceTiers.Tier4Unknown}` | `{transitionEvidence}` |");
+            }
+
+            var ordinal = DisplayCodeValue(fact.Properties.GetValueOrDefault("statementOrdinal") ?? "0");
+            var kind = DisplayCodeValue(fact.Properties.GetValueOrDefault("stepKind") ?? "unknown-sql-step");
+            var context = DisplayCodeValue(ContextDisplay(fact));
+            var mode = DisplayCodeValue(fact.Properties.GetValueOrDefault("executionMode") ?? "unknown");
+            var classification = DisplayCodeValue(fact.Properties.GetValueOrDefault("contextClassification") ?? "unknown");
+            var capabilities = DisplayCodeValue(fact.Properties.GetValueOrDefault("requiredCapabilities") ?? "none");
+            var stops = DisplayCodeValue(fact.Properties.GetValueOrDefault("stopConditions") ?? "verify-active-connection");
+            var evidence = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+            lines.Add($"| `{ordinal}` | `{kind}` | `{context}` | `{mode}` | `{classification}` | `{capabilities}` | `{stops}` | `{fact.RuleId}` / `{fact.EvidenceTier}` | `{evidence}` |");
+            previous = fact;
+        }
+
+        if (gaps.Length > 0)
+        {
+            lines.Add("");
+            lines.Add("### SQL Context Gaps");
+            lines.Add("");
+            foreach (var gap in gaps.Take(100))
+            {
+                var kind = DisplayCodeValue(gap.Properties.GetValueOrDefault("gapKind") ?? "unknown-context-gap");
+                var ordinal = DisplayCodeValue(gap.Properties.GetValueOrDefault("statementOrdinal") ?? "0");
+                var evidence = CombinedReportHelpers.SafePath(gap.Evidence.FilePath) + $":{gap.Evidence.StartLine}-{gap.Evidence.EndLine}";
+                lines.Add($"- Step `{ordinal}` needs review for `{kind}` ({gap.EvidenceTier}, rule `{gap.RuleId}`, coverage `{DisplayCodeValue(gap.Properties.GetValueOrDefault("coverage") ?? "reduced")}`) at `{evidence}`.");
+            }
+        }
+
+        lines.Add("");
+        lines.Add("SQL context limitations: declarations describe intent, inferred rows are conservative static candidates, and gaps identify missing checked-in evidence. None of these rows prove the selected client tab, runtime database state, authorization, execution success, or operator approval.");
+    }
+
+    private static void AddSqlProtectedMaterial(List<string> lines, ScanResult result)
+    {
+        var findings = result.Facts
+            .Where(fact => fact.FactType == FactTypes.SecretBearingSqlStep
+                || fact.RuleId == RuleIds.DatabaseSqlSecretSafetyGap)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => ParseOrdinal(fact.Properties.GetValueOrDefault("statementOrdinal")))
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        if (findings.Length == 0)
+        {
+            return;
+        }
+
+        lines.Add("");
+        lines.Add("## SQL Protected-Material Steps");
+        lines.Add("");
+        lines.Add("Category-only static evidence. Values and runnable SQL are intentionally omitted. Absence of a finding does not prove absence of secrets, and no row establishes that a script is safe to run. DBA/operator approval remains required.");
+        lines.Add("");
+        lines.Add("| Step | Classification | Categories | Stop / review | Rule / tier | Coverage | Evidence |");
+        lines.Add("| --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var fact in findings)
+        {
+            var ordinal = DisplayCodeValue(fact.Properties.GetValueOrDefault("statementOrdinal") ?? "0");
+            var classification = DisplayCodeValue(fact.Properties.GetValueOrDefault("classification") ?? "not-established");
+            var categories = DisplayCodeValue(fact.Properties.GetValueOrDefault("categoryCodes") ?? "dynamic-secret-boundary");
+            var stop = DisplayCodeValue(fact.Properties.GetValueOrDefault("stopCondition") ?? "secret-owner-review");
+            var coverage = DisplayCodeValue(fact.Properties.GetValueOrDefault("coverage") ?? "reduced");
+            var evidence = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+            lines.Add($"| `{ordinal}` | `{classification}` | `{categories}` | `{stop}` | `{fact.RuleId}` / `{fact.EvidenceTier}` | `{coverage}` | `{evidence}` |");
+        }
+
+        lines.Add("");
+        lines.Add("SQL protected-material limitations: detection is conservative and static-first; it does not access a database, environment, vault, or secret store, and it does not validate credentials or runtime state.");
+    }
+
+    private static void AddPostgresArchiveLinks(List<string> lines, ScanResult result)
+    {
+        var surfaces = result.Facts
+            .Where(fact => fact.FactType == FactTypes.DatabaseLinkSurfaceDeclared)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        if (surfaces.Length == 0)
+        {
+            return;
+        }
+
+        var prerequisites = result.Facts
+            .Where(fact => fact.FactType == FactTypes.DatabasePrerequisiteCandidate
+                && fact.RuleId == RuleIds.DatabasePostgresArchiveLinkPrerequisite)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.Properties.GetValueOrDefault("prerequisiteCode"), StringComparer.Ordinal)
+            .ToArray();
+        var edges = result.Facts
+            .Where(fact => fact.FactType == FactTypes.DatabaseLinkEdgeCandidate)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        var gaps = result.Facts
+            .Where(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.DatabasePostgresArchiveLinkGap)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.Properties.GetValueOrDefault("gapKind"), StringComparer.Ordinal)
+            .ToArray();
+
+        lines.Add("");
+        lines.Add("## PostgreSQL Archive-Link Evidence");
+        lines.Add("");
+        lines.Add("Static, PostgreSQL-first evidence only. These rows do not prove connectivity, applied database state, permissions, replication health, scheduled execution, or archive correctness. Values and runnable SQL are omitted.");
+        lines.Add("");
+        lines.Add("| Step | Mechanism | Surface | Context | Coverage | Rule / tier | Evidence |");
+        lines.Add("| --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var fact in surfaces)
+        {
+            var evidence = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+            lines.Add($"| `{DisplayCodeValue(fact.Properties.GetValueOrDefault("statementOrdinal") ?? "0")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("mechanism") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("surfaceKind") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("contextRole") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("coverage") ?? "reduced")}` | `{fact.RuleId}` / `{fact.EvidenceTier}` | `{evidence}` |");
+        }
+
+        lines.Add("");
+        lines.Add("### Archive-Link Edges");
+        lines.Add("");
+        if (edges.Length == 0)
+        {
+            lines.Add("- None established from checked-in prerequisite/context evidence.");
+        }
+        else
+        {
+            lines.Add("| Mechanism | Link | Direction | Coverage | Supporting facts | Rule / tier | Evidence |");
+            lines.Add("| --- | --- | --- | --- | --- | --- | --- |");
+            foreach (var fact in edges)
+            {
+                var evidence = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+                lines.Add($"| `{DisplayCodeValue(fact.Properties.GetValueOrDefault("mechanism") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("linkKind") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("direction") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("coverage") ?? "reduced")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("supportingFactIds") ?? "none")}` | `{fact.RuleId}` / `{fact.EvidenceTier}` | `{evidence}` |");
+            }
+        }
+
+        lines.Add("");
+        lines.Add("### Archive-Link Prerequisites");
+        lines.Add("");
+        foreach (var fact in prerequisites)
+        {
+            var evidence = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+            lines.Add($"- `{DisplayCodeValue(fact.Properties.GetValueOrDefault("mechanism") ?? "unknown")}` requires `{DisplayCodeValue(fact.Properties.GetValueOrDefault("prerequisiteCode") ?? "unknown")}`: `{DisplayCodeValue(fact.Properties.GetValueOrDefault("satisfaction") ?? "missing-evidence")}` ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{evidence}`.");
+        }
+
+        if (gaps.Length > 0)
+        {
+            lines.Add("");
+            lines.Add("### Archive-Link Gaps");
+            lines.Add("");
+            foreach (var fact in gaps.Take(100))
+            {
+                var evidence = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+                lines.Add($"- `{DisplayCodeValue(fact.Properties.GetValueOrDefault("gapKind") ?? "unknown-gap")}` for `{DisplayCodeValue(fact.Properties.GetValueOrDefault("mechanism") ?? "unknown")}` is partial static evidence ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{evidence}`.");
+            }
+        }
+    }
+
+    private static void AddPostgresPermissionPrerequisites(List<string> lines, ScanResult result)
+    {
+        var permissions = result.Facts
+            .Where(fact => fact.FactType == FactTypes.DatabasePermissionDeclared)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        var evidence = result.Facts
+            .Where(fact => fact.FactType == FactTypes.DatabasePrerequisiteEvidence)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => ParseOrdinal(fact.Properties.GetValueOrDefault("statementOrdinal")))
+            .ThenBy(fact => fact.Properties.GetValueOrDefault("candidateCapability"), StringComparer.Ordinal)
+            .ToArray();
+        if (permissions.Length == 0 && evidence.Length == 0)
+        {
+            return;
+        }
+
+        lines.Add("");
+        lines.Add("## PostgreSQL Permission Prerequisite Evidence");
+        lines.Add("");
+        lines.Add("Static script-set evidence only. `present-in-scripts` does not mean a permission is active or sufficient. Effective access, role inheritance, object state, provider/version behavior, and execution authorization require DBA/operator validation. TraceMap does not generate or execute grants.");
+
+        lines.Add("");
+        lines.Add("### Explicit Permission Statements");
+        lines.Add("");
+        lines.Add("| Action | Object | Capability | Context | Coverage | Rule / tier | Evidence |");
+        lines.Add("| --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var fact in permissions)
+        {
+            var span = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+            lines.Add($"| `{DisplayCodeValue(fact.Properties.GetValueOrDefault("actionKind") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("objectKind") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("capabilityCode") ?? "unknown-permission")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("contextRole") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("coverage") ?? "reduced")}` | `{fact.RuleId}` / `{fact.EvidenceTier}` | `{span}` |");
+        }
+
+        lines.Add("");
+        lines.Add("### Operation Prerequisite Coverage");
+        lines.Add("");
+        lines.Add("| Operation | Capability | Context | Status | Coverage | Owner question | Rule / tier | Evidence |");
+        lines.Add("| --- | --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var fact in evidence)
+        {
+            var span = CombinedReportHelpers.SafePath(fact.Evidence.FilePath) + $":{fact.Evidence.StartLine}-{fact.Evidence.EndLine}";
+            lines.Add($"| `{DisplayCodeValue(fact.Properties.GetValueOrDefault("operationKind") ?? "unknown-sql-step")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("candidateCapability") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("contextRole") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("evidenceStatus") ?? "unknown")}` | `{DisplayCodeValue(fact.Properties.GetValueOrDefault("coverage") ?? "reduced")}` | {DisplayTableValue(fact.Properties.GetValueOrDefault("ownerQuestion") ?? "Owner validation required.")} | `{fact.RuleId}` / `{fact.EvidenceTier}` | `{span}` |");
+        }
+
+        lines.Add("");
+        lines.Add("Permission limitations: order is not a PostgreSQL state simulation; cross-file order, transactions, conditional/procedural execution, role inheritance, RLS/policies, live catalog state, and cloud IAM remain unknown unless separately validated with provenance.");
+    }
+
+    private static bool IsContextTransition(CodeFact left, CodeFact right)
+    {
+        return left.Evidence.FilePath == right.Evidence.FilePath
+            && (left.Properties.GetValueOrDefault("serverRole") != right.Properties.GetValueOrDefault("serverRole")
+                || left.Properties.GetValueOrDefault("databaseRole") != right.Properties.GetValueOrDefault("databaseRole")
+                || left.Properties.GetValueOrDefault("executionMode") != right.Properties.GetValueOrDefault("executionMode"));
+    }
+
+    private static void AddSqlRunbookPacketSummary(List<string> lines, ScanResult result, SqlRunbookPacket? suppliedPacket)
+    {
+        var packet = suppliedPacket ?? SqlRunbookPacketBuilder.Build(result);
+        if (packet.StepGroups.Count == 0 && packet.Milestones.Count == 0 && packet.Gaps.Count == 0)
+        {
+            return;
+        }
+
+        lines.Add("");
+        lines.Add("## SQL Operator Runbook Packet");
+        lines.Add("");
+        lines.Add("Standalone safe artifacts: `sql-runbook.md` and `sql-runbook.json`. They are static handoff evidence, not executable SQL, runtime proof, safety certification, approval, or a substitute for DBA/operator judgment.");
+        lines.Add("");
+        lines.Add($"- Coverage: `{packet.Coverage.Status}`");
+        lines.Add($"- Ordered context groups: `{packet.StepGroups.Count}`");
+        lines.Add($"- Intended/validation milestones: `{packet.Milestones.Count}`");
+        lines.Add($"- Prerequisite rows: `{packet.Prerequisites.Count}`");
+        lines.Add($"- Protected steps: `{packet.ProtectedSteps.Count}`");
+        lines.Add($"- Static gaps: `{packet.Gaps.Count}`");
+        lines.Add($"- Packet rule: `{RuleIds.DatabaseSqlOperatorRunbookPacket}`");
+    }
+
+    private static string ContextDisplay(CodeFact fact)
+    {
+        return string.Join('/',
+            fact.Properties.GetValueOrDefault("engineFamily") ?? "unknown",
+            fact.Properties.GetValueOrDefault("serverRole") ?? "unknown",
+            fact.Properties.GetValueOrDefault("databaseRole") ?? "unknown",
+            fact.Properties.GetValueOrDefault("schemaRole") ?? "unspecified");
+    }
+
+    private static string TransitionDisplay(CodeFact fact)
+    {
+        return ContextDisplay(fact) + "/" + (fact.Properties.GetValueOrDefault("executionMode") ?? "unknown");
+    }
+
+    private static int ParseOrdinal(string? value)
+    {
+        return int.TryParse(value, out var ordinal) ? ordinal : int.MaxValue;
+    }
+
+    private sealed class SqlContextGroupComparer : IEqualityComparer<(string FilePath, string Ordinal)>
+    {
+        public bool Equals((string FilePath, string Ordinal) x, (string FilePath, string Ordinal) y)
+        {
+            return string.Equals(x.FilePath, y.FilePath, StringComparison.Ordinal)
+                && string.Equals(x.Ordinal, y.Ordinal, StringComparison.Ordinal);
+        }
+
+        public int GetHashCode((string FilePath, string Ordinal) obj)
+        {
+            return HashCode.Combine(
+                StringComparer.Ordinal.GetHashCode(obj.FilePath),
+                StringComparer.Ordinal.GetHashCode(obj.Ordinal));
+        }
     }
 
     private static void AddBuildEnvironmentDiagnostics(List<string> lines, ScanResult result)

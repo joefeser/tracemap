@@ -204,7 +204,10 @@ public static class TraceMapCommand
         await ManifestWriter.WriteAsync(Path.Combine(fullOutputPath, "scan-manifest.json"), result.Manifest, cancellationToken);
         await JsonlFactWriter.WriteAsync(Path.Combine(fullOutputPath, "facts.ndjson"), result.Facts, cancellationToken);
         SqliteIndexWriter.Write(Path.Combine(fullOutputPath, "index.sqlite"), result.Manifest, result.Facts);
-        await MarkdownReportWriter.WriteAsync(Path.Combine(fullOutputPath, "report.md"), result, cancellationToken);
+        var packetCandidate = SqlRunbookPacketBuilder.Build(result);
+        await MarkdownReportWriter.WriteAsync(Path.Combine(fullOutputPath, "report.md"), result, packetCandidate, cancellationToken);
+        if (SqlRunbookPacketBuilder.HasMeaningfulContent(packetCandidate))
+            await SqlRunbookPacketWriter.WriteAsync(fullOutputPath, packetCandidate, cancellationToken);
         await WriteAnalyzerLogAsync(Path.Combine(logsPath, "analyzer.log"), result, cancellationToken);
 
         await output.WriteLineAsync($"TraceMap scan completed: {fullOutputPath}");

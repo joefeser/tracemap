@@ -2980,6 +2980,164 @@ rules:
       - Static SQL shape evidence does not prove runtime execution, schema existence, dialect validity, generated SQL equivalence, permissions, transaction behavior, or branch feasibility.
       - Raw SQL text, predicate literal values, source snippets, connection strings, raw URLs, and unsafe identifiers are not rendered.
 
+  - id: database.sql.context.declaration.v1
+    name: SQL execution-context declaration
+    description: Parses the versioned SQL context sidecar or bounded in-file directive into categorical intended execution-context evidence.
+    evidenceTier: Tier2Structural
+    emits:
+      - SqlExecutionContextDeclared
+    limitations:
+      - Declarations describe checked-in operator intent only; they do not prove the active connection, selected database, role, authorization, execution, or safety.
+      - Only closed categorical context, capability, step, stop-condition, source-kind, span, and hash fields are retained; directive bodies, SQL text, infrastructure identities, and credential material are omitted.
+      - Sidecar declarations take precedence over bounded directives; disagreements produce database.sql.context.gap.v1 evidence instead of silently selecting a context.
+
+  - id: database.sql.context.syntax.v1
+    name: SQL execution-context syntax candidate
+    description: Classifies recognized PostgreSQL setup, scheduling, validation, permission, and destructive statement shapes into categorical context candidates.
+    evidenceTier: Tier2Structural
+    emits:
+      - SqlExecutionContextCandidate
+    limitations:
+      - Syntax candidates are conservative static evidence and do not prove operator intent, the active client tab, runtime state, execution, authorization, or safety.
+      - String, quoted-identifier, dollar-quoted, and comment contents are removed before classification and hashing; raw statement text is not stored on context facts.
+      - Unknown and context-sensitive statements retain unknown categorical roles and emit explicit database.sql.context.gap.v1 evidence.
+
+  - id: database.sql.context.gap.v1
+    name: SQL execution-context gap
+    description: Records missing, conflicting, malformed, unsupported, unreadable, or unknown SQL execution-context evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - A gap means the analyzed checked-in evidence did not establish context; it does not prove a live database context is absent or incorrect.
+      - Gap properties use closed reason codes and safe spans only; parser exception text, sidecar values, directive bodies, SQL text, local paths, infrastructure names, and credential material are not rendered.
+      - Partial context analysis remains useful but is labeled reduced or failed and must not be interpreted as a clean script.
+
+  - id: database.sql.secret-bearing-step.v1
+    name: SQL protected-material structural evidence
+    description: Classifies supported PostgreSQL credential and connection-material positions into category-only protected-material evidence.
+    evidenceTier: Tier2Structural
+    emits:
+      - SecretBearingSqlStep
+    limitations:
+      - Raw secret values are neither stored nor hashed; findings retain only closed classification/category codes, safe relative spans, statement ordinals, coverage, and owner-review stops.
+      - Secret-bearing and secret-reference classifications identify a protected handling boundary; they do not validate credentials, prove runtime use, certify a script as safe, or replace DBA/operator approval.
+      - Detection is limited to supported static PostgreSQL shapes such as create/alter user mappings, FDW options, dblink inputs, create/alter subscription connections, and credential-like pg_cron command bodies.
+      - Absence of a finding does not prove absence of secrets.
+
+  - id: database.sql.secret-text-candidate.v1
+    name: SQL possible-secret textual candidate
+    description: Conservatively identifies credential-like active SQL comments or supported positions that lack enough structure for a stronger classification.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SecretBearingSqlStep
+    limitations:
+      - Text candidates may be false positives and require owner review; comments disabled by block comments and ordinary string contents are excluded where the bounded lexer can establish them.
+      - Raw secret values are neither stored nor hashed, and no raw SQL snippet is rendered.
+      - Absence of a finding does not prove absence of secrets, especially for generated SQL, unsupported dialects, or values assembled outside the scanned file.
+
+  - id: database.sql.secret-safety-gap.v1
+    name: SQL protected-material analysis gap
+    description: Fails closed with category-only evidence when a high-risk SQL boundary is dynamic, malformed, unreadable, or unsupported.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - A gap means classification was not established; it is not evidence that protected material is absent or that execution is safe.
+      - Gap facts contain closed codes and spans only; raw SQL, parser exceptions, local paths, infrastructure identities, secret values, and secret-derived hashes are omitted.
+      - Owner review is required because static coverage is reduced or failed.
+
+  - id: database.postgres.archive-link.v1
+    name: PostgreSQL archive-link surface and edge evidence
+    description: Classifies supported postgres_fdw, dblink, logical replication, and pg_cron statement surfaces and deterministic static prerequisite edges.
+    evidenceTier: Tier2Structural
+    emits:
+      - DatabaseLinkSurfaceDeclared
+      - DatabaseLinkEdgeCandidate
+    limitations:
+      - Static statement and declared-context evidence does not prove connectivity, remote object existence, applied state, permissions, replication health, scheduling, execution, or archive correctness.
+      - Surface identity is span-derived; exact prerequisite matching may use a one-way key from a non-secret SQL object identifier while raw server/publication, database, role, host, connection, subscription, job, and remote-query values remain omitted.
+      - Non-protected statements retain a structural snippet hash after comments and quoted/dollar-quoted contents are removed; protected-material statements deliberately remain span-only and hash-free.
+      - Direction is emitted only when compatible explicit context declarations establish source and archive-target roles; otherwise it remains unknown with a gap.
+
+  - id: database.postgres.archive-link.prerequisite.v1
+    name: PostgreSQL archive-link prerequisite candidate
+    description: Reduces checked-in archive-link surfaces into categorical prerequisite evidence and missing-evidence states.
+    evidenceTier: Tier2Structural
+    emits:
+      - DatabasePrerequisiteCandidate
+    limitations:
+      - A prerequisite row describes evidence in the analyzed script set, not a live PostgreSQL or RDS capability check.
+      - Missing-evidence does not mean an extension, server, mapping, grant, publication, subscription, or scheduler capability is absent at runtime.
+      - Reduced supporting surfaces produce reduced-static-evidence and no dependency edge; they are not promoted to complete prerequisite satisfaction.
+
+  - id: database.postgres.archive-link.gap.v1
+    name: PostgreSQL archive-link analysis gap
+    description: Records unknown context/direction, missing checked-in prerequisites, and malformed supported archive-link statements.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Archive-link gaps label partial static analysis and never establish runtime failure or absence of a live link.
+      - Gap properties contain closed codes, mechanism, ordinal, and safe spans only; raw SQL, connection data, infrastructure identities, scheduled commands, and parser exception text are omitted.
+
+  - id: database.postgres.permission.statement.v1
+    name: PostgreSQL permission statement evidence
+    description: Classifies supported grants, revokes, ownership changes, default privileges, and role membership into safe categorical evidence.
+    evidenceTier: Tier2Structural
+    emits:
+      - DatabasePermissionDeclared
+    limitations:
+      - Static statement evidence does not prove effective privilege, role inheritance, object existence, execution order, transaction outcome, or runtime authorization.
+      - Raw role, server, database, schema, table, routine, wrapper, and infrastructure names are omitted; only one-way non-secret identity keys may be retained for exact linking.
+      - Unsupported clauses, quoted/dynamic identity, and malformed syntax produce reduced-coverage gaps rather than inferred permission state.
+
+  - id: database.postgres.permission.prerequisite.v1
+    name: PostgreSQL permission prerequisite candidate registry
+    description: Maps supported SQL operation kinds to versioned capability candidates for static owner review.
+    evidenceTier: Tier2Structural
+    emits:
+      - DatabasePrerequisiteCandidate
+    limitations:
+      - Registry mappings are deterministic review guidance, not authoritative PostgreSQL, provider, or version-specific authorization rules.
+      - RDS-specific roles or capabilities are never inferred from generic SQL and require explicit owner validation.
+
+  - id: database.postgres.permission.coverage.v1
+    name: PostgreSQL permission prerequisite coverage
+    description: Links operation candidates to compatible checked-in permission statements and records present, missing, conflicting, unknown, or owner-review status.
+    evidenceTier: Tier2Structural
+    emits:
+      - DatabasePrerequisiteEvidence
+    limitations:
+      - Present-in-scripts means compatible static evidence exists; it does not mean a permission is active, effective, sufficient, or granted to the runtime role.
+      - Complete support requires compatible opaque object and principal identities when the operation exposes them; missing or reduced operation identity produces unknown rather than arbitrary support.
+      - Cross-file order, permission-after-operation, reduced inputs, and administrative capabilities cap results at unknown or needs-owner-review.
+      - The reducer does not simulate transactions, conditional/procedural execution, default privilege expansion, role inheritance, RLS/policies, catalog state, or cloud IAM.
+
+  - id: database.postgres.permission.gap.v1
+    name: PostgreSQL permission evidence gap
+    description: Records missing, conflicting, dynamic, malformed, unsupported, order-unknown, and owner-review permission evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Gaps describe partial checked-in evidence and never establish a live denial, missing grant, or failed operation.
+      - Gap output contains closed reason codes and safe relative spans only; SQL, names, credentials, connection data, parser exceptions, and local paths are omitted.
+
+  - id: database.sql.operator-runbook-packet.v1
+    name: SQL operator runbook evidence packet projection
+    description: Projects cataloged SQL context, archive-link, protected-material, permission, validation-step, cleanup, and gap evidence into deterministic safe Markdown and versioned JSON handoff artifacts.
+    evidenceTier: Inherits each projected source fact tier; packet-only gaps remain Tier4Unknown
+    emits:
+      - sql-runbook.md
+      - sql-runbook.json
+      - report.md summary
+    limitations:
+      - The packet does not execute SQL, connect to a database, observe the selected client tab or runtime state, certify safety, approve changes, or replace DBA/operator judgment.
+      - Intended milestones and validation-step candidates do not prove that objects exist, permissions are effective, jobs ran, replication is healthy, validation passed, or cleanup succeeded.
+      - The allowlisted projection omits raw SQL, snippets, credentials, connection data, scheduled command bodies, private infrastructure identities, raw validation output, and local absolute paths.
+      - Cross-file order and all missing, conflicting, unsupported, or reduced upstream evidence remain explicit gaps or stop conditions.
+
   - id: config.key.v1
     name: Configuration key extraction
     description: Parses appsettings*.json, Web.config, App.config, packages.config, and connection string entries.
