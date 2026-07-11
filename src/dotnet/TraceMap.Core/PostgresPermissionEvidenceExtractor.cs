@@ -164,88 +164,88 @@ public static partial class PostgresPermissionEvidenceExtractor
                 : permissionIndex.GetValueOrDefault(capability, [])
                     .Where(permission => PermissionMatches(permission, linkIdentity, objectIdentity, roleIdentity))
                     .ToArray();
-                var grants = compatible.Where(permission => permission.Properties.GetValueOrDefault("actionKind") is "grant" or "owner-change" or "role-membership" or "default-privilege").ToArray();
-                var revokes = compatible.Where(permission => permission.Properties.GetValueOrDefault("actionKind") == "revoke").ToArray();
-                var crossFile = compatible.Any(permission => permission.Evidence.FilePath != operation.Evidence.FilePath);
-                var permissionAfterOperation = grants.Any(permission => permission.Evidence.FilePath == operation.Evidence.FilePath
-                    && permission.Evidence.StartLine > operation.Evidence.EndLine);
-                var permissionBeforeObjectDeclaration = grants.Any(permission => objectDeclarations.Any(declaration =>
-                    declaration.Properties.GetValueOrDefault("linkIdentity") == linkIdentity
-                    && declaration.Evidence!.FilePath == operation.Evidence.FilePath
-                    && permission.Evidence.EndLine < declaration.Evidence.StartLine
-                    && declaration.Evidence.EndLine < operation.Evidence.StartLine));
-                var operationContext = operation.Properties.GetValueOrDefault("contextRole") ?? "unknown";
-                var permissionContextUnknown = grants.Any(permission => permission.Properties.GetValueOrDefault("contextRole") == "unknown");
-                var incompatibleContext = grants.Any(permission => operationContext != "unknown"
-                    && permission.Properties.GetValueOrDefault("contextRole") is { } permissionContext
-                    && permissionContext != "unknown"
-                    && permissionContext != operationContext);
-                var operationReduced = operation.Properties.GetValueOrDefault("coverage") == "reduced";
+            var grants = compatible.Where(permission => permission.Properties.GetValueOrDefault("actionKind") is "grant" or "owner-change" or "role-membership" or "default-privilege").ToArray();
+            var revokes = compatible.Where(permission => permission.Properties.GetValueOrDefault("actionKind") == "revoke").ToArray();
+            var crossFile = compatible.Any(permission => permission.Evidence.FilePath != operation.Evidence.FilePath);
+            var permissionAfterOperation = grants.Any(permission => permission.Evidence.FilePath == operation.Evidence.FilePath
+                && permission.Evidence.StartLine > operation.Evidence.EndLine);
+            var permissionBeforeObjectDeclaration = grants.Any(permission => objectDeclarations.Any(declaration =>
+                declaration.Properties.GetValueOrDefault("linkIdentity") == linkIdentity
+                && declaration.Evidence!.FilePath == operation.Evidence.FilePath
+                && permission.Evidence.EndLine < declaration.Evidence.StartLine
+                && declaration.Evidence.EndLine < operation.Evidence.StartLine));
+            var operationContext = operation.Properties.GetValueOrDefault("contextRole") ?? "unknown";
+            var permissionContextUnknown = grants.Any(permission => permission.Properties.GetValueOrDefault("contextRole") == "unknown");
+            var incompatibleContext = grants.Any(permission => operationContext != "unknown"
+                && permission.Properties.GetValueOrDefault("contextRole") is { } permissionContext
+                && permissionContext != "unknown"
+                && permissionContext != operationContext);
+            var operationReduced = operation.Properties.GetValueOrDefault("coverage") == "reduced";
 
-                var (status, reason) = OwnerReviewCapabilities.Contains(capability)
-                    ? ("needs-owner-review", "capability-requires-owner-validation")
-                    : identityMissing
-                        ? ("unknown", "operation-identity-unknown")
-                    : revokes.Length > 0
-                        ? ("conflicting-evidence", grants.Length > 0 ? "grant-and-revoke-in-scripts" : "revoke-in-scripts")
-                        : operationReduced
-                            ? ("unknown", "reduced-operation-evidence")
-                        : grants.Length == 0
-                            ? ("missing-evidence", "no-compatible-permission-statement")
-                            : incompatibleContext
-                                ? ("conflicting-evidence", "incompatible-permission-context")
-                            : crossFile
-                                ? ("needs-owner-review", "cross-file-order-unknown")
-                                : permissionBeforeObjectDeclaration
-                                    ? ("needs-owner-review", "permission-before-object-declaration")
-                                : permissionAfterOperation
-                                    ? ("needs-owner-review", "permission-after-operation")
-                                    : permissionContextUnknown || operationContext == "unknown"
-                                        ? ("needs-owner-review", "permission-context-unknown")
-                                : operationReduced || grants.Any(grant => grant.Properties.GetValueOrDefault("coverage") != "complete")
-                                    ? ("unknown", "reduced-input-evidence")
-                                    : ("present-in-scripts", "compatible-grant-in-scripts");
-                var coverage = status == "present-in-scripts" ? "complete" : "reduced";
-                var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["candidateCapability"] = capability,
-                    ["contextRole"] = operationContext,
-                    ["coverage"] = coverage,
-                    ["evidenceStatus"] = status,
-                    ["limitation"] = PrerequisiteLimitation,
-                    ["operationKind"] = operation.Properties.GetValueOrDefault("operationKind") ?? "unknown-sql-step",
-                    ["ownerQuestion"] = OwnerQuestion(capability, status),
-                    ["reasonCode"] = reason,
-                    ["registryVersion"] = RegistryVersion,
-                    ["statementOrdinal"] = ordinal.ToString()
-                };
-                properties["operationFactId"] = operation.FactId;
-                if (linkIdentity is not null) properties["linkIdentity"] = linkIdentity;
-                if (objectIdentity is not null) properties["objectIdentity"] = objectIdentity;
-                if (roleIdentity is not null) properties["roleIdentity"] = roleIdentity;
-                if (grants.Length > 0) properties["supportingFactIds"] = JoinFactIds(grants);
-                if (revokes.Length > 0) properties["contradictingFactIds"] = JoinFactIds(revokes);
+            var (status, reason) = OwnerReviewCapabilities.Contains(capability)
+                ? ("needs-owner-review", "capability-requires-owner-validation")
+                : identityMissing
+                    ? ("unknown", "operation-identity-unknown")
+                : revokes.Length > 0
+                    ? ("conflicting-evidence", grants.Length > 0 ? "grant-and-revoke-in-scripts" : "revoke-in-scripts")
+                    : operationReduced
+                        ? ("unknown", "reduced-operation-evidence")
+                    : grants.Length == 0
+                        ? ("missing-evidence", "no-compatible-permission-statement")
+                        : incompatibleContext
+                            ? ("conflicting-evidence", "incompatible-permission-context")
+                        : crossFile
+                            ? ("needs-owner-review", "cross-file-order-unknown")
+                            : permissionBeforeObjectDeclaration
+                                ? ("needs-owner-review", "permission-before-object-declaration")
+                            : permissionAfterOperation
+                                ? ("needs-owner-review", "permission-after-operation")
+                                : permissionContextUnknown || operationContext == "unknown"
+                                    ? ("needs-owner-review", "permission-context-unknown")
+                            : operationReduced || grants.Any(grant => grant.Properties.GetValueOrDefault("coverage") != "complete")
+                                ? ("unknown", "reduced-input-evidence")
+                                : ("present-in-scripts", "compatible-grant-in-scripts");
+            var coverage = status == "present-in-scripts" ? "complete" : "reduced";
+            var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["candidateCapability"] = capability,
+                ["contextRole"] = operationContext,
+                ["coverage"] = coverage,
+                ["evidenceStatus"] = status,
+                ["limitation"] = PrerequisiteLimitation,
+                ["operationKind"] = operation.Properties.GetValueOrDefault("operationKind") ?? "unknown-sql-step",
+                ["ownerQuestion"] = OwnerQuestion(capability, status),
+                ["reasonCode"] = reason,
+                ["registryVersion"] = RegistryVersion,
+                ["statementOrdinal"] = ordinal.ToString()
+            };
+            properties["operationFactId"] = operation.FactId;
+            if (linkIdentity is not null) properties["linkIdentity"] = linkIdentity;
+            if (objectIdentity is not null) properties["objectIdentity"] = objectIdentity;
+            if (roleIdentity is not null) properties["roleIdentity"] = roleIdentity;
+            if (grants.Length > 0) properties["supportingFactIds"] = JoinFactIds(grants);
+            if (revokes.Length > 0) properties["contradictingFactIds"] = JoinFactIds(revokes);
 
-                results.Add(FactFactory.Create(
-                    manifest,
-                    FactTypes.DatabasePrerequisiteEvidence,
-                    RuleIds.DatabasePostgresPermissionCoverage,
-                    EvidenceTiers.Tier2Structural,
-                    new EvidenceSpan(
-                        operation.Evidence.FilePath,
-                        operation.Evidence.StartLine,
-                        operation.Evidence.EndLine,
-                        operation.Evidence.SnippetHash,
-                        nameof(PostgresPermissionEvidenceExtractor),
-                        ScannerVersions.PostgresPermissionEvidenceExtractor),
-                    targetSymbol: operation.TargetSymbol,
-                    contractElement: capability,
-                    properties: properties));
+            results.Add(FactFactory.Create(
+                manifest,
+                FactTypes.DatabasePrerequisiteEvidence,
+                RuleIds.DatabasePostgresPermissionCoverage,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan(
+                    operation.Evidence.FilePath,
+                    operation.Evidence.StartLine,
+                    operation.Evidence.EndLine,
+                    operation.Evidence.SnippetHash,
+                    nameof(PostgresPermissionEvidenceExtractor),
+                    ScannerVersions.PostgresPermissionEvidenceExtractor),
+                targetSymbol: operation.TargetSymbol,
+                contractElement: capability,
+                properties: properties));
 
-                if (status is not "present-in-scripts")
-                {
-                    results.Add(CreateGap(manifest, operation.Evidence.FilePath, operation.Evidence.StartLine, operation.Evidence.EndLine, ordinal, $"{status}:{capability}"));
-                }
+            if (status is not "present-in-scripts")
+            {
+                results.Add(CreateGap(manifest, operation.Evidence.FilePath, operation.Evidence.StartLine, operation.Evidence.EndLine, ordinal, $"{status}:{capability}"));
+            }
         }
 
         return results;

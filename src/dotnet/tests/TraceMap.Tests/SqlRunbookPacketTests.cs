@@ -52,7 +52,13 @@ public sealed class SqlRunbookPacketTests
         Assert.Contains(packet.StopConditions, stop => stop.Code == "validation-step-not-established"
             && stop.Evidence.RuleId == RuleIds.DatabaseSqlOperatorRunbookPacket);
         Assert.Contains(packet.Gaps, gap => gap.Category is "context" or "permission" or "archive-link");
-        Assert.Contains(packet.OwnerQuestions, question => question.Contains("validation", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(packet.OwnerQuestions, question => question.Question.Contains("validation", StringComparison.OrdinalIgnoreCase));
+        Assert.All(packet.OwnerQuestions, question =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(question.Evidence.RuleId));
+            Assert.False(string.IsNullOrWhiteSpace(question.Evidence.FilePath));
+            Assert.True(question.Evidence.LineSpan.StartLine > 0);
+        });
         Assert.DoesNotContain(packet.Milestones, milestone => milestone.State is "applied" or "healthy" or "succeeded");
     }
 
