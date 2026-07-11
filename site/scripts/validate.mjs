@@ -55,6 +55,7 @@ import { validateRoadmapClaimLedgerDist } from "./roadmap-claim-ledger.mjs";
 import { validateSiteClaimGuardrailsDist } from "./site-claim-guardrails.mjs";
 import { validateStaticTriageDist } from "./static-triage.mjs";
 import { validateStaticVsRuntimeDist } from "./static-vs-runtime.mjs";
+import { validateSqlOperatorHandoffDist } from "./sql-operator-handoff.mjs";
 import { validateStakeholderObjectionGuideDist } from "./stakeholder-objection-guide.mjs";
 import { validateStakeholderQuestionIndexDist } from "./stakeholder-question-index.mjs";
 import { validateSwiftAdapterStoryDist } from "./swift-adapter-story.mjs";
@@ -166,6 +167,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateSiteClaimGuardrailsDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticTriageDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticVsRuntimeDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateSqlOperatorHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStakeholderObjectionGuideDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStakeholderQuestionIndexDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateSwiftAdapterStoryDist({ baseUrl: normalizedBaseUrl, dist, errors });
