@@ -796,3 +796,22 @@ IDs, safe spans, rule/tier, coverage, and limitations. Raw SQL, role/object/
 infrastructure names, credentials, connection data, and local paths must be
 absent. `present-in-scripts` must be described as checked-in evidence only and
 must never claim effective or sufficient runtime access.
+# SQL operator runbook packet smoke
+
+Run the deterministic public-safe fixture and verify standard scan artifacts plus
+the standalone packet outputs:
+
+```bash
+rm -rf /tmp/tracemap-sql-runbook-smoke
+dotnet run --project src/dotnet/TraceMap.Cli -- scan \
+  --repo samples/sql-operator-runbook \
+  --out /tmp/tracemap-sql-runbook-smoke
+test -f /tmp/tracemap-sql-runbook-smoke/sql-runbook.md
+test -f /tmp/tracemap-sql-runbook-smoke/sql-runbook.json
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~SqlRunbookPacketTests
+```
+
+The focused tests cover deterministic ordering, schema fields, context
+transitions, scheduled and validation groups, permission/protected projections,
+partial gaps, planted-value leakage, forbidden runnable SQL, and CLI artifacts.

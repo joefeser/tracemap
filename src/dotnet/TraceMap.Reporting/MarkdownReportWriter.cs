@@ -102,6 +102,7 @@ public static class MarkdownReportWriter
         AddSqlProtectedMaterial(lines, result);
         AddPostgresArchiveLinks(lines, result);
         AddPostgresPermissionPrerequisites(lines, result);
+        AddSqlRunbookPacketSummary(lines, result);
 
         AddFactSection(
             lines,
@@ -652,6 +653,28 @@ public static class MarkdownReportWriter
             && (left.Properties.GetValueOrDefault("serverRole") != right.Properties.GetValueOrDefault("serverRole")
                 || left.Properties.GetValueOrDefault("databaseRole") != right.Properties.GetValueOrDefault("databaseRole")
                 || left.Properties.GetValueOrDefault("executionMode") != right.Properties.GetValueOrDefault("executionMode"));
+    }
+
+    private static void AddSqlRunbookPacketSummary(List<string> lines, ScanResult result)
+    {
+        var packet = SqlRunbookPacketBuilder.Build(result);
+        if (packet.StepGroups.Count == 0 && packet.Milestones.Count == 0 && packet.Gaps.Count == 0)
+        {
+            return;
+        }
+
+        lines.Add("");
+        lines.Add("## SQL Operator Runbook Packet");
+        lines.Add("");
+        lines.Add("Standalone safe artifacts: `sql-runbook.md` and `sql-runbook.json`. They are static handoff evidence, not executable SQL, runtime proof, safety certification, approval, or a substitute for DBA/operator judgment.");
+        lines.Add("");
+        lines.Add($"- Coverage: `{packet.Coverage.Status}`");
+        lines.Add($"- Ordered context groups: `{packet.StepGroups.Count}`");
+        lines.Add($"- Intended/validation milestones: `{packet.Milestones.Count}`");
+        lines.Add($"- Prerequisite rows: `{packet.Prerequisites.Count}`");
+        lines.Add($"- Protected steps: `{packet.ProtectedSteps.Count}`");
+        lines.Add($"- Static gaps: `{packet.Gaps.Count}`");
+        lines.Add($"- Packet rule: `{RuleIds.DatabaseSqlOperatorRunbookPacket}`");
     }
 
     private static string ContextDisplay(CodeFact fact)
