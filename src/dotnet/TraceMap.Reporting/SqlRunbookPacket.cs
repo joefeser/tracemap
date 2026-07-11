@@ -104,7 +104,7 @@ public static class SqlRunbookPacketBuilder
             .OrderBy(FactOrder).Select(f => new SqlRunbookGap(
                 Value(f, "gapKind", "unknown-static-gap"), GapCategory(f.RuleId), Evidence(f, commitSha))).ToArray();
 
-        var multipleSqlFiles = contexts.Select(ContextSourcePath).Distinct(StringComparer.Ordinal).Skip(1).Any();
+        var multipleSqlFiles = contexts.Select(ContextSourcePath).Where(path => path is not null).Distinct(StringComparer.Ordinal).Skip(1).Any();
         var commitKnown = IsKnownCommit(result.Manifest.CommitSha);
         var derivedSource = contexts.Concat(surfaces).Concat(sqlFacts.Where(f => f.Evidence is not null)).OrderBy(FactOrder).FirstOrDefault();
         var stops = contexts.SelectMany(f => Codes(Value(f, "stopConditions", "verify-active-connection"))
@@ -167,10 +167,10 @@ public static class SqlRunbookPacketBuilder
     private static bool IsSqlFact(CodeFact f) => f.RuleId.StartsWith("database.sql.", StringComparison.Ordinal)
         || f.RuleId.StartsWith("database.postgres.", StringComparison.Ordinal);
     private static string ContextKey(CodeFact f) => string.Join('|', Value(f, "engineFamily", "unknown"), Value(f, "serverRole", "unknown"), Value(f, "databaseRole", "unknown"), Value(f, "schemaRole", "unspecified"), Value(f, "executionMode", "unknown"));
-    private static string ContextSourcePath(CodeFact fact)
+    private static string? ContextSourcePath(CodeFact fact)
     {
-        var path = fact.Evidence.FilePath ?? string.Empty;
-        return path.EndsWith(SqlExecutionContextExtractor.SidecarSuffix, StringComparison.Ordinal)
+        var path = fact.Evidence?.FilePath;
+        return path?.EndsWith(SqlExecutionContextExtractor.SidecarSuffix, StringComparison.Ordinal) == true
             ? path[..^SqlExecutionContextExtractor.SidecarSuffix.Length]
             : path;
     }

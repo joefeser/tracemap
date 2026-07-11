@@ -181,6 +181,8 @@ public sealed class SqlRunbookPacketTests
         Assert.Contains("commit-identity", packet.Coverage.ReducedComponents);
         Assert.Contains(packet.StopConditions, stop => stop.Code == "commit-identity-not-established"
             && stop.Evidence.RuleId == RuleIds.DatabaseSqlOperatorRunbookPacket);
+        Assert.DoesNotContain(packet.StopConditions, stop => stop.Code == "cross-file-order-not-established");
+        Assert.DoesNotContain("cross-file-order", packet.Coverage.ReducedComponents);
     }
 
     [Fact]
