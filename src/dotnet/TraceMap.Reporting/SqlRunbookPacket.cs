@@ -22,7 +22,8 @@ public sealed record SqlRunbookPacket(
 
 public sealed record SqlRunbookSource(string Repository, string CommitSha, string ScanId);
 public sealed record SqlRunbookCoverage(string Status, string BuildStatus, IReadOnlyList<string> ReducedComponents);
-public sealed record SqlRunbookEvidence(string RuleId, string EvidenceTier, string FilePath, int StartLine, int EndLine, string ExtractorId, string ExtractorVersion, string Coverage);
+public sealed record SqlRunbookLineSpan(int StartLine, int EndLine);
+public sealed record SqlRunbookEvidence(string RuleId, string EvidenceTier, string CommitSha, string FilePath, SqlRunbookLineSpan LineSpan, string ExtractorId, string ExtractorVersion, string Coverage);
 public sealed record SqlRunbookStepGroup(string GroupId, string Engine, string ServerRole, string DatabaseRole, string SchemaRole, string ExecutionMode, bool ContextTransition, string Checkpoint, IReadOnlyList<SqlRunbookStep> Steps);
 public sealed record SqlRunbookStep(int StatementOrdinal, string StepKind, string ContextClassification, IReadOnlyList<string> StopConditions, SqlRunbookEvidence Evidence);
 public sealed record SqlRunbookMilestone(string Kind, string State, string ValidationState, SqlRunbookEvidence Evidence);
@@ -39,6 +40,7 @@ public static class SqlRunbookPacketBuilder
 
     public static SqlRunbookPacket Build(ScanResult result)
     {
+        var commitSha = result.Manifest.CommitSha ?? "unknown";
         var sqlFacts = result.Facts.Where(IsSqlFact).ToArray();
         var contexts = sqlFacts
             .Where(f => f.FactType is FactTypes.SqlExecutionContextDeclared or FactTypes.SqlExecutionContextCandidate)
@@ -66,7 +68,7 @@ public static class SqlRunbookPacketBuilder
             var transition = groups.Count > 0;
             var steps = run.Select(context => new SqlRunbookStep(
                 Ordinal(context), Value(context, "stepKind", "unknown-sql-step"), Value(context, "contextClassification", "unknown"),
-                Codes(Value(context, "stopConditions", "verify-active-connection")), Evidence(context))).ToArray();
+                Codes(Value(context, "stopConditions", "verify-active-connection")), Evidence(context, commitSha))).ToArray();
             groups.Add(new SqlRunbookStepGroup(
                 $"group-{groups.Count + 1:D3}", Value(first, "engineFamily", "unknown"), Value(first, "serverRole", "unknown"),
                 Value(first, "databaseRole", "unknown"), Value(first, "schemaRole", "unspecified"), Value(first, "executionMode", "unknown"),
@@ -77,44 +79,44 @@ public static class SqlRunbookPacketBuilder
             .OrderBy(FactOrder).ToArray();
         var validationFacts = contexts.Where(f => Value(f, "stepKind", "") == "validation-query").ToArray();
         var milestones = surfaces.Select(f => new SqlRunbookMilestone(
-                MilestoneKind(Value(f, "surfaceKind", "unknown")), "intended-by-script", "validation-evidence-not-provided", Evidence(f)))
+                MilestoneKind(Value(f, "surfaceKind", "unknown")), "intended-by-script", "validation-evidence-not-provided", Evidence(f, commitSha)))
             .Concat(sqlFacts.Where(f => f.FactType == FactTypes.DatabasePermissionDeclared && f.Evidence is not null)
-                .Select(f => new SqlRunbookMilestone("permission", "intended-by-script", "validation-evidence-not-provided", Evidence(f))))
-            .Concat(validationFacts.Select(f => new SqlRunbookMilestone("validation", "validation-step-present", "validation-evidence-not-provided", Evidence(f))))
+                .Select(f => new SqlRunbookMilestone("permission", "intended-by-script", "validation-evidence-not-provided", Evidence(f, commitSha))))
+            .Concat(validationFacts.Select(f => new SqlRunbookMilestone("validation", "validation-step-present", "validation-evidence-not-provided", Evidence(f, commitSha))))
             .Concat(contexts.Where(f => Value(f, "stepKind", "") == "destructive-operation")
-                .Select(f => new SqlRunbookMilestone("cleanup-or-rollback-candidate", "intended-by-script", "validation-evidence-not-provided", Evidence(f))))
-            .OrderBy(m => m.Evidence.FilePath, StringComparer.Ordinal).ThenBy(m => m.Evidence.StartLine).ThenBy(m => m.Kind, StringComparer.Ordinal).ToArray();
+                .Select(f => new SqlRunbookMilestone("cleanup-or-rollback-candidate", "intended-by-script", "validation-evidence-not-provided", Evidence(f, commitSha))))
+            .OrderBy(m => m.Evidence.FilePath, StringComparer.Ordinal).ThenBy(m => m.Evidence.LineSpan.StartLine).ThenBy(m => m.Kind, StringComparer.Ordinal).ToArray();
 
         var prerequisites = sqlFacts.Where(f => f.FactType == FactTypes.DatabasePrerequisiteEvidence && f.Evidence is not null)
             .OrderBy(FactOrder).Select(f => new SqlRunbookPrerequisite(
                 Value(f, "operationKind", "unknown-sql-step"), Value(f, "candidateCapability", "unknown"),
-                Value(f, "evidenceStatus", "unknown"), Value(f, "contextRole", "unknown"), Evidence(f))).ToArray();
+                Value(f, "evidenceStatus", "unknown"), Value(f, "contextRole", "unknown"), Evidence(f, commitSha))).ToArray();
         var protectedSteps = sqlFacts.Where(f => f.FactType == FactTypes.SecretBearingSqlStep && f.Evidence is not null)
             .OrderBy(FactOrder).Select(f => new SqlRunbookProtectedStep(
                 Ordinal(f), Value(f, "classification", "not-established"), Codes(Value(f, "categoryCodes", "dynamic-secret-boundary")),
-                "route-protected-material-through-owner-approved-process", Evidence(f))).ToArray();
+                "route-protected-material-through-owner-approved-process", Evidence(f, commitSha))).ToArray();
         var validations = validationFacts.Select(f => new SqlRunbookValidation(
-            Ordinal(f), "validation-step-present", "validation-evidence-not-provided", Evidence(f))).ToArray();
+            Ordinal(f), "validation-step-present", "validation-evidence-not-provided", Evidence(f, commitSha))).ToArray();
         var cleanup = contexts.Where(f => Value(f, "stepKind", "") == "destructive-operation")
-            .Select(f => new SqlRunbookCleanup(Ordinal(f), "intended-by-script", Evidence(f))).ToArray();
+            .Select(f => new SqlRunbookCleanup(Ordinal(f), "intended-by-script", Evidence(f, commitSha))).ToArray();
         var gaps = sqlFacts.Where(f => f.FactType == FactTypes.AnalysisGap && f.Evidence is not null)
             .OrderBy(FactOrder).Select(f => new SqlRunbookGap(
-                Value(f, "gapKind", "unknown-static-gap"), GapCategory(f.RuleId), Evidence(f))).ToArray();
+                Value(f, "gapKind", "unknown-static-gap"), GapCategory(f.RuleId), Evidence(f, commitSha))).ToArray();
 
         var multipleSqlFiles = contexts.Select(f => f.Evidence.FilePath).Where(path => path is not null).Distinct(StringComparer.Ordinal).Skip(1).Any();
         var commitKnown = IsKnownCommit(result.Manifest.CommitSha);
         var derivedSource = contexts.Concat(surfaces).Concat(sqlFacts.Where(f => f.Evidence is not null)).OrderBy(FactOrder).FirstOrDefault();
         var stops = contexts.SelectMany(f => Codes(Value(f, "stopConditions", "verify-active-connection"))
-                .Select(code => new SqlRunbookStopCondition(code, Evidence(f))))
+                .Select(code => new SqlRunbookStopCondition(code, Evidence(f, commitSha))))
             .Concat(protectedSteps.Select(step => new SqlRunbookStopCondition("secret-owner-review", step.Evidence)))
             .Concat(gaps.Select(gap => new SqlRunbookStopCondition($"resolve-{gap.Category}-gap", gap.Evidence)))
-            .Concat(validationFacts.Length == 0 && surfaces.Length > 0 ? [new SqlRunbookStopCondition("validation-step-not-established", DerivedEvidence(surfaces[0]))] : [])
-            .Concat(multipleSqlFiles && contexts.Length > 0 ? [new SqlRunbookStopCondition("cross-file-order-not-established", DerivedEvidence(contexts[0]))] : [])
+            .Concat(validationFacts.Length == 0 && surfaces.Length > 0 ? [new SqlRunbookStopCondition("validation-step-not-established", DerivedEvidence(surfaces[0], commitSha))] : [])
+            .Concat(multipleSqlFiles && contexts.Length > 0 ? [new SqlRunbookStopCondition("cross-file-order-not-established", DerivedEvidence(contexts[0], commitSha))] : [])
             .Concat(contexts.FirstOrDefault(f => Value(f, "coverage", "reduced") != "complete") is { } reducedContext
-                ? [new SqlRunbookStopCondition("partial-context-coverage-review", DerivedEvidence(reducedContext))] : [])
-            .Concat(!commitKnown && derivedSource is not null ? [new SqlRunbookStopCondition("commit-identity-not-established", DerivedEvidence(derivedSource))] : [])
+                ? [new SqlRunbookStopCondition("partial-context-coverage-review", DerivedEvidence(reducedContext, commitSha))] : [])
+            .Concat(!commitKnown && derivedSource is not null ? [new SqlRunbookStopCondition("commit-identity-not-established", DerivedEvidence(derivedSource, commitSha))] : [])
             .GroupBy(stop => stop.Code, StringComparer.Ordinal)
-            .Select(group => group.OrderBy(stop => stop.Evidence.FilePath, StringComparer.Ordinal).ThenBy(stop => stop.Evidence.StartLine).First())
+            .Select(group => group.OrderBy(stop => stop.Evidence.FilePath, StringComparer.Ordinal).ThenBy(stop => stop.Evidence.LineSpan.StartLine).First())
             .OrderBy(stop => stop.Code, StringComparer.Ordinal).ToArray();
         var questions = gaps.Select(g => Question(g.Category))
             .Concat(prerequisites.Where(p => p.Status != "present-in-scripts").Select(_ => "Who owns validation of unresolved permission prerequisite candidates?"))
@@ -132,7 +134,7 @@ public static class SqlRunbookPacketBuilder
 
         return new SqlRunbookPacket(
             SchemaVersion, "Static SQL operator handoff evidence; not an execution plan or safety approval.",
-            new SqlRunbookSource(result.Manifest.RepoName, result.Manifest.CommitSha, result.Manifest.ScanId),
+            new SqlRunbookSource(result.Manifest.RepoName, commitSha, result.Manifest.ScanId),
             new SqlRunbookCoverage(reduced.Count == 0 ? "complete-static-evidence" : "reduced", result.Manifest.BuildStatus ?? "unknown", reduced),
             groups, milestones, prerequisites, protectedSteps, validations, cleanup, stops, gaps, questions,
             [
@@ -145,6 +147,14 @@ public static class SqlRunbookPacketBuilder
             ]);
     }
 
+    public static bool HasMeaningfulContent(SqlRunbookPacket packet) => packet.StepGroups.Count > 0
+        || packet.Milestones.Count > 0
+        || packet.Prerequisites.Count > 0
+        || packet.ProtectedSteps.Count > 0
+        || packet.ValidationExpectations.Count > 0
+        || packet.CleanupEvidence.Count > 0
+        || packet.Gaps.Count > 0;
+
     private static bool IsSqlFact(CodeFact f) => f.RuleId.StartsWith("database.sql.", StringComparison.Ordinal)
         || f.RuleId.StartsWith("database.postgres.", StringComparison.Ordinal);
     private static string ContextKey(CodeFact f) => string.Join('|', Value(f, "engineFamily", "unknown"), Value(f, "serverRole", "unknown"), Value(f, "databaseRole", "unknown"), Value(f, "schemaRole", "unspecified"), Value(f, "executionMode", "unknown"));
@@ -152,8 +162,8 @@ public static class SqlRunbookPacketBuilder
     private static int Ordinal(CodeFact f) => int.TryParse(Value(f, "statementOrdinal", "0"), out var value) ? value : int.MaxValue;
     private static string FactOrder(CodeFact f) => $"{f.Evidence.FilePath}\u001f{f.Evidence.StartLine:D10}\u001f{f.FactId}";
     private static IReadOnlyList<string> Codes(string value) => value.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Order(StringComparer.Ordinal).ToArray();
-    private static SqlRunbookEvidence Evidence(CodeFact f) => new(f.RuleId, f.EvidenceTier, CombinedReportHelpers.SafePath(f.Evidence.FilePath), f.Evidence.StartLine, f.Evidence.EndLine, f.Evidence.ExtractorId, f.Evidence.ExtractorVersion, Value(f, "coverage", "reduced"));
-    private static SqlRunbookEvidence DerivedEvidence(CodeFact source) => new(RuleIds.DatabaseSqlOperatorRunbookPacket, EvidenceTiers.Tier4Unknown, CombinedReportHelpers.SafePath(source.Evidence.FilePath), source.Evidence.StartLine, source.Evidence.EndLine, nameof(SqlRunbookPacketBuilder), "sql-runbook-packet/0.1.0", "reduced");
+    private static SqlRunbookEvidence Evidence(CodeFact f, string commitSha) => new(f.RuleId, f.EvidenceTier, commitSha, CombinedReportHelpers.SafePath(f.Evidence.FilePath), new SqlRunbookLineSpan(f.Evidence.StartLine, f.Evidence.EndLine), f.Evidence.ExtractorId, f.Evidence.ExtractorVersion, Value(f, "coverage", "reduced"));
+    private static SqlRunbookEvidence DerivedEvidence(CodeFact source, string commitSha) => new(RuleIds.DatabaseSqlOperatorRunbookPacket, EvidenceTiers.Tier4Unknown, commitSha, CombinedReportHelpers.SafePath(source.Evidence.FilePath), new SqlRunbookLineSpan(source.Evidence.StartLine, source.Evidence.EndLine), nameof(SqlRunbookPacketBuilder), "sql-runbook-packet/0.1.0", "reduced");
     private static bool IsKnownCommit(string? value) => !string.IsNullOrWhiteSpace(value)
         && !value.Equals("unknown", StringComparison.OrdinalIgnoreCase)
         && value.Trim('0').Length > 0;
@@ -167,9 +177,8 @@ public static class SqlRunbookPacketWriter
     private const string Empty = "no static evidence found";
     public static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.Never };
 
-    public static async Task WriteAsync(string outputDirectory, ScanResult result, CancellationToken cancellationToken = default)
+    public static async Task WriteAsync(string outputDirectory, SqlRunbookPacket packet, CancellationToken cancellationToken = default)
     {
-        var packet = SqlRunbookPacketBuilder.Build(result);
         await File.WriteAllTextAsync(Path.Combine(outputDirectory, "sql-runbook.json"), JsonSerializer.Serialize(packet, JsonOptions) + Environment.NewLine, cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(outputDirectory, "sql-runbook.md"), RenderMarkdown(packet), cancellationToken);
     }
@@ -206,5 +215,5 @@ public static class SqlRunbookPacketWriter
         lines.AddRange(rows.Length == 0 ? [$"- {Empty}"] : rows.Select(value => $"- {value}"));
         lines.Add("");
     }
-    private static string EvidenceText(SqlRunbookEvidence e) => $"rule `{e.RuleId}`, tier `{e.EvidenceTier}`, coverage `{e.Coverage}`, `{e.FilePath}:{e.StartLine}-{e.EndLine}`, extractor `{e.ExtractorId}@{e.ExtractorVersion}`";
+    private static string EvidenceText(SqlRunbookEvidence e) => $"rule `{e.RuleId}`, tier `{e.EvidenceTier}`, commit `{e.CommitSha}`, coverage `{e.Coverage}`, `{e.FilePath}:{e.LineSpan.StartLine}-{e.LineSpan.EndLine}`, extractor `{e.ExtractorId}@{e.ExtractorVersion}`";
 }

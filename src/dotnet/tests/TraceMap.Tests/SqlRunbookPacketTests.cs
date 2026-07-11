@@ -113,6 +113,9 @@ public sealed class SqlRunbookPacketTests
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(outputPath, "sql-runbook.json")));
         foreach (var field in new[] { "purpose", "source", "coverage", "stepGroups", "milestones", "prerequisites", "protectedSteps", "validationExpectations", "cleanupEvidence", "stopConditions", "gaps", "ownerQuestions", "limitations" })
             Assert.True(document.RootElement.TryGetProperty(field, out _), field);
+        var evidence = document.RootElement.GetProperty("stepGroups")[0].GetProperty("steps")[0].GetProperty("evidence");
+        Assert.Equal(document.RootElement.GetProperty("source").GetProperty("commitSha").GetString(), evidence.GetProperty("commitSha").GetString());
+        Assert.True(evidence.GetProperty("lineSpan").TryGetProperty("startLine", out _));
         var allText = string.Join('\n', Directory.EnumerateFiles(outputPath, "*", SearchOption.AllDirectories)
             .Where(path => !path.EndsWith(".sqlite", StringComparison.Ordinal)).Select(File.ReadAllText));
         Assert.Contains("## SQL Operator Runbook Packet", allText);
@@ -138,6 +141,25 @@ public sealed class SqlRunbookPacketTests
         Assert.Contains("commit-identity", packet.Coverage.ReducedComponents);
         Assert.Contains(packet.StopConditions, stop => stop.Code == "commit-identity-not-established"
             && stop.Evidence.RuleId == RuleIds.DatabaseSqlOperatorRunbookPacket);
+    }
+
+    [Fact]
+    public async Task Cli_does_not_emit_runbook_artifacts_without_supported_sql_evidence()
+    {
+        using var temp = new TempDirectory();
+        var repoPath = Path.Combine(temp.Path, "repo");
+        var outputPath = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(repoPath);
+        File.WriteAllText(Path.Combine(repoPath, "README.md"), "public-safe fixture");
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync(["scan", "--repo", repoPath, "--out", outputPath], output, error);
+
+        Assert.Equal(0, exitCode);
+        Assert.False(File.Exists(Path.Combine(outputPath, "sql-runbook.md")));
+        Assert.False(File.Exists(Path.Combine(outputPath, "sql-runbook.json")));
+        Assert.DoesNotContain("## SQL Operator Runbook Packet", await File.ReadAllTextAsync(Path.Combine(outputPath, "report.md")));
     }
 
     private static void AssertSafe(string value)

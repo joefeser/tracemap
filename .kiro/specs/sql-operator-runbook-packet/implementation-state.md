@@ -61,10 +61,10 @@ Recommended runway:
 
 ## Validation
 
-- Focused `SqlRunbookPacketTests`: 5 passed.
+- Focused `SqlRunbookPacketTests`: 6 passed.
 - Synthetic CLI smoke produced all standard scan artifacts plus
   `sql-runbook.md` and `sql-runbook.json`; planted values were absent.
-- Full solution build succeeded with zero warnings/errors; 741 full-suite tests
+- Full solution build succeeded with zero warnings/errors; 742 full-suite tests
   passed; the private-path guard and `git diff --check` passed.
 
 ## Scope Decisions
