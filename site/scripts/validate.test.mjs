@@ -76,6 +76,7 @@ import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { siteClaimGuardrailsRoute } from "./site-claim-guardrails.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
+import { sqlOperatorHandoffRoute } from "./sql-operator-handoff.mjs";
 import { swiftAdapterStoryRoute } from "./swift-adapter-story.mjs";
 import { swiftApiClientWalkthroughRoute } from "./swift-api-client-walkthrough.mjs";
 import { swiftClaimLanguageRoute } from "./swift-claim-language.mjs";
@@ -261,6 +262,7 @@ async function createDistFixture({
       siteClaimGuardrailsRoute,
       staticTriageRoute,
       staticVsRuntimeRoute,
+      sqlOperatorHandoffRoute,
       swiftAdapterStoryRoute,
       swiftApiClientWalkthroughRoute,
       swiftClaimLanguageRoute,
@@ -337,6 +339,7 @@ async function createDistFixture({
     siteClaimGuardrailsRoute,
     staticTriageRoute,
     staticVsRuntimeRoute,
+    sqlOperatorHandoffRoute,
     swiftAdapterStoryRoute,
     swiftApiClientWalkthroughRoute,
     swiftClaimLanguageRoute,
