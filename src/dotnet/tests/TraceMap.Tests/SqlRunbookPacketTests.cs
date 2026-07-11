@@ -49,7 +49,8 @@ public sealed class SqlRunbookPacketTests
         var packet = SqlRunbookPacketBuilder.Build(Result(temp.Path));
 
         Assert.Equal("reduced", packet.Coverage.Status);
-        Assert.Contains(packet.StopConditions, stop => stop == "validation-step-not-established");
+        Assert.Contains(packet.StopConditions, stop => stop.Code == "validation-step-not-established"
+            && stop.Evidence.RuleId == RuleIds.DatabaseSqlOperatorRunbookPacket);
         Assert.Contains(packet.Gaps, gap => gap.Category is "context" or "permission" or "archive-link");
         Assert.Contains(packet.OwnerQuestions, question => question.Contains("validation", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(packet.Milestones, milestone => milestone.State is "applied" or "healthy" or "succeeded");
@@ -91,7 +92,7 @@ public sealed class SqlRunbookPacketTests
         Assert.Contains(first.Prerequisites, row => row.Status == "missing-evidence");
         Assert.Contains(first.Prerequisites, row => row.Status == "needs-owner-review");
         Assert.Contains(first.Gaps, gap => gap.Category == "permission");
-        Assert.Contains(first.StopConditions, stop => stop == "resolve-permission-gap");
+        Assert.Contains(first.StopConditions, stop => stop.Code == "resolve-permission-gap");
         Assert.Equal(JsonSerializer.Serialize(first, SqlRunbookPacketWriter.JsonOptions), JsonSerializer.Serialize(second, SqlRunbookPacketWriter.JsonOptions));
     }
 
@@ -118,6 +119,25 @@ public sealed class SqlRunbookPacketTests
         AssertNoLeaks(allText);
         AssertSafe(await File.ReadAllTextAsync(Path.Combine(outputPath, "sql-runbook.md"))
             + await File.ReadAllTextAsync(Path.Combine(outputPath, "sql-runbook.json")));
+    }
+
+    [Fact]
+    public void Build_is_null_safe_and_reduces_unknown_commit_identity()
+    {
+        var fixture = Path.Combine(FindRepoRoot(), "samples", "sql-operator-runbook");
+        var original = Result(fixture);
+        var facts = original.Facts.Select((fact, index) => index == 0 && fact.Evidence is not null
+            ? fact with { Evidence = fact.Evidence with { FilePath = null! } }
+            : fact).ToArray();
+        var manifest = original.Manifest with { BuildStatus = null!, CommitSha = "unknown" };
+
+        var packet = SqlRunbookPacketBuilder.Build(new ScanResult(manifest, facts, original.Inventory));
+
+        Assert.Equal("reduced", packet.Coverage.Status);
+        Assert.Contains("build", packet.Coverage.ReducedComponents);
+        Assert.Contains("commit-identity", packet.Coverage.ReducedComponents);
+        Assert.Contains(packet.StopConditions, stop => stop.Code == "commit-identity-not-established"
+            && stop.Evidence.RuleId == RuleIds.DatabaseSqlOperatorRunbookPacket);
     }
 
     private static void AssertSafe(string value)
