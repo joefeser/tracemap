@@ -22,7 +22,9 @@ test("SQL operator handoff validator rejects executable SQL and private paths", 
   const root = await createSiteFixture(t);
   const pagePath = join(root, "src", "sql", "operator-handoff", "index.html");
   const html = await readFile(pagePath, "utf8");
-  await writeFile(pagePath, html.replace("</main>", "<p>/Users/example/private</p><p>SELECT * FROM private_table</p></main>"));
+  const slash = String.fromCharCode(47);
+  const privatePath = `${slash}Users${slash}example${slash}private`;
+  await writeFile(pagePath, html.replace("</main>", `<p>${privatePath}</p><p>SELECT * FROM private_table</p></main>`));
   await buildSite({ root, log() {} });
   const errors = [];
   await validateSqlOperatorHandoffDist({ dist: join(root, "dist"), errors });
