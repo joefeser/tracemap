@@ -10,7 +10,15 @@ public static class MarkdownReportWriter
         await File.WriteAllTextAsync(path, Build(result), cancellationToken);
     }
 
-    public static string Build(ScanResult result)
+    public static async Task WriteAsync(string path, ScanResult result, SqlRunbookPacket? sqlRunbookPacket, CancellationToken cancellationToken = default)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        await File.WriteAllTextAsync(path, Build(result, sqlRunbookPacket), cancellationToken);
+    }
+
+    public static string Build(ScanResult result) => Build(result, null);
+
+    public static string Build(ScanResult result, SqlRunbookPacket? sqlRunbookPacket)
     {
         var manifest = result.Manifest;
         var factsByType = result.Facts
@@ -102,7 +110,7 @@ public static class MarkdownReportWriter
         AddSqlProtectedMaterial(lines, result);
         AddPostgresArchiveLinks(lines, result);
         AddPostgresPermissionPrerequisites(lines, result);
-        AddSqlRunbookPacketSummary(lines, result);
+        AddSqlRunbookPacketSummary(lines, result, sqlRunbookPacket);
 
         AddFactSection(
             lines,
@@ -655,9 +663,9 @@ public static class MarkdownReportWriter
                 || left.Properties.GetValueOrDefault("executionMode") != right.Properties.GetValueOrDefault("executionMode"));
     }
 
-    private static void AddSqlRunbookPacketSummary(List<string> lines, ScanResult result)
+    private static void AddSqlRunbookPacketSummary(List<string> lines, ScanResult result, SqlRunbookPacket? suppliedPacket)
     {
-        var packet = SqlRunbookPacketBuilder.Build(result);
+        var packet = suppliedPacket ?? SqlRunbookPacketBuilder.Build(result);
         if (packet.StepGroups.Count == 0 && packet.Milestones.Count == 0 && packet.Gaps.Count == 0)
         {
             return;
