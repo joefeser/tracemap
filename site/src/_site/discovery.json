@@ -1109,6 +1109,23 @@
     ]
   },
   {
+    "path": "/sql/operator-handoff/",
+    "title": "SQL Operator Handoff",
+    "summary": "Demo-level manager story for reviewing categorical SQL context, prerequisite candidates, protected steps, validation expectations, stop conditions, gaps, and owner questions before operator action.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/manager-packet/",
+    "limitations": [
+      "The route is a public-safe synthetic illustration of deterministic static evidence, not raw scan output or executable SQL.",
+      "Expected context, checked-in permission evidence, scheduled surfaces, validation steps, and cleanup candidates do not establish live database state or authorization."
+    ],
+    "nonClaims": [
+      "No SQL execution, live database connection, selected-client-tab observation, effective permission proof, object-existence proof, replication-health proof, scheduled-execution proof, validation-result proof, rollback proof, safety certification, or DBA approval.",
+      "No raw SQL, credentials, connection strings, scheduled command bodies, local paths, private infrastructure names, raw validation output, internal ticket details, LLM analysis, embeddings, vector databases, or prompt-based classification."
+    ]
+  },
+  {
     "path": "/manager-brief/",
     "title": "Manager Problem Brief",
     "summary": "Concept-level manager brief for the coordination problem TraceMap reduces with deterministic static evidence packets and visible limitations.",
