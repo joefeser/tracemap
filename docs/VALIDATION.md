@@ -777,3 +777,22 @@ values, subscription data, scheduled bodies, infrastructure identifiers, and
 local paths must not appear. The report must not claim connectivity, applied
 state, permissions, replication health, scheduling success, or archive
 correctness.
+
+## PostgreSQL Permission Prerequisite Evidence Smoke
+
+Permission-evidence changes should run the focused tests and scan the checked-in
+public-safe fixture:
+
+```bash
+dotnet test src/dotnet/TraceMap.sln --filter FullyQualifiedName~PostgresPermissionEvidenceExtractorTests
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/postgres-permission-evidence --out /tmp/tracemap-postgres-permission-smoke
+```
+
+Expected output includes `DatabasePermissionDeclared`, permission-owned
+`DatabasePrerequisiteCandidate`, `DatabasePrerequisiteEvidence`, and cataloged
+permission gaps. Inspect NDJSON, SQLite, Markdown, and logs for the registry
+version, closed capability/status/reason codes, supporting or contradicting fact
+IDs, safe spans, rule/tier, coverage, and limitations. Raw SQL, role/object/
+infrastructure names, credentials, connection data, and local paths must be
+absent. `present-in-scripts` must be described as checked-in evidence only and
+must never claim effective or sufficient runtime access.
