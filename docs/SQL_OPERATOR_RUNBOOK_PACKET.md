@@ -3,7 +3,7 @@
 TraceMap scans that contain supported SQL evidence emit two additional artifacts:
 
 - `sql-runbook.md` — a human-safe operator handoff packet.
-- `sql-runbook.json` — the allowlisted `sql-operator-runbook-packet/v1` summary.
+- `sql-runbook.json` — the allowlisted `sql-operator-runbook-packet/v2` summary.
 
 The packet projects cataloged execution-context, archive-link, protected-material,
 permission-prerequisite, validation-step, cleanup-candidate, and gap evidence. It
