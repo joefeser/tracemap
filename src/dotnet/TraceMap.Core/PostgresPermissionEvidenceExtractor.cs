@@ -143,6 +143,11 @@ public static partial class PostgresPermissionEvidenceExtractor
         var permissionIndex = permissions
             .GroupBy(permission => permission.Properties.GetValueOrDefault("capabilityCode") ?? string.Empty)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        var objectDeclarations = facts
+            .Where(fact => fact.FactType == FactTypes.DatabaseLinkSurfaceDeclared
+                && fact.Properties.GetValueOrDefault("surfaceKind") == "foreign-server"
+                && fact.Evidence is not null)
+            .ToArray();
         var results = new List<CodeFact>();
 
         foreach (var operation in candidates)
@@ -164,6 +169,11 @@ public static partial class PostgresPermissionEvidenceExtractor
                 var crossFile = compatible.Any(permission => permission.Evidence.FilePath != operation.Evidence.FilePath);
                 var permissionAfterOperation = grants.Any(permission => permission.Evidence.FilePath == operation.Evidence.FilePath
                     && permission.Evidence.StartLine > operation.Evidence.EndLine);
+                var permissionBeforeObjectDeclaration = grants.Any(permission => objectDeclarations.Any(declaration =>
+                    declaration.Properties.GetValueOrDefault("linkIdentity") == linkIdentity
+                    && declaration.Evidence!.FilePath == operation.Evidence.FilePath
+                    && permission.Evidence.EndLine < declaration.Evidence.StartLine
+                    && declaration.Evidence.EndLine < operation.Evidence.StartLine));
                 var operationContext = operation.Properties.GetValueOrDefault("contextRole") ?? "unknown";
                 var permissionContextUnknown = grants.Any(permission => permission.Properties.GetValueOrDefault("contextRole") == "unknown");
                 var incompatibleContext = grants.Any(permission => operationContext != "unknown"
@@ -186,6 +196,8 @@ public static partial class PostgresPermissionEvidenceExtractor
                                 ? ("conflicting-evidence", "incompatible-permission-context")
                             : crossFile
                                 ? ("needs-owner-review", "cross-file-order-unknown")
+                                : permissionBeforeObjectDeclaration
+                                    ? ("needs-owner-review", "permission-before-object-declaration")
                                 : permissionAfterOperation
                                     ? ("needs-owner-review", "permission-after-operation")
                                     : permissionContextUnknown || operationContext == "unknown"
@@ -374,7 +386,7 @@ public static partial class PostgresPermissionEvidenceExtractor
             ["coverage"] = "reduced", ["gapKind"] = kind, ["limitation"] = GapLimitation, ["statementOrdinal"] = ordinal.ToString()
         });
 
-    [GeneratedRegex(@"^\s*(?<action>GRANT|REVOKE)\s+(?!GRANT\s+OPTION\s+FOR\b)(?<privileges>[A-Za-z_,\s]+?)\s+ON\s+(?<kind>DATABASE|SCHEMA|TABLE|SEQUENCE|FUNCTION|PROCEDURE|FOREIGN\s+SERVER|FOREIGN\s+DATA\s+WRAPPER)\s+(?<object>[A-Za-z_][A-Za-z0-9_$.]*)\s+(?:TO|FROM)\s+(?<role>[A-Za-z_][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^\s*(?<action>GRANT|REVOKE)\s+(?!GRANT\s+OPTION\s+FOR\b)(?<privileges>[A-Za-z_,\s]+?)\s+ON\s+(?<kind>DATABASE|SCHEMA|TABLE|SEQUENCE|FUNCTION|PROCEDURE|FOREIGN\s+SERVER|FOREIGN\s+DATA\s+WRAPPER)\s+(?<object>[A-Za-z_][A-Za-z0-9_$.]*)\s+(?:TO|FROM)\s+(?<role>[A-Za-z_][A-Za-z0-9_$]*)\s*;?\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex GrantObjectPattern();
     [GeneratedRegex(@"\bALTER\s+(?<kind>DATABASE|SCHEMA|TABLE|SEQUENCE|FUNCTION|PROCEDURE|FOREIGN\s+SERVER)\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?<object>[A-Za-z_][A-Za-z0-9_$.]*)[\s\S]*?\bOWNER\s+TO\s+(?<role>[A-Za-z_][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex OwnerPattern();
