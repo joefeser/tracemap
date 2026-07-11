@@ -67,7 +67,8 @@ public sealed class PostgresPermissionEvidenceExtractorTests
             && fact.Properties.ContainsKey("supportingFactIds")
             && fact.Properties.ContainsKey("contradictingFactIds"));
         Assert.Contains(evidence, fact => fact.Properties["candidateCapability"] == "create-schema-object"
-            && fact.Properties["evidenceStatus"] == "missing-evidence");
+            && fact.Properties["evidenceStatus"] == "unknown"
+            && fact.Properties["reasonCode"] == "operation-identity-unknown");
         Assert.DoesNotContain(evidence, fact => fact.Properties["evidenceStatus"].Contains("effective", StringComparison.Ordinal));
     }
 
@@ -102,6 +103,56 @@ public sealed class PostgresPermissionEvidenceExtractorTests
             && fact.Properties.GetValueOrDefault("gapKind") == "unsupported-or-dynamic-permission-statement");
         Assert.Equal(first.Select(fact => fact.FactId), second.Select(fact => fact.FactId));
         Assert.Equal(JsonSerializer.Serialize(first), JsonSerializer.Serialize(second));
+    }
+
+    [Fact]
+    public void Extract_handles_owner_clauses_and_ignores_non_owner_alter_ddl()
+    {
+        using var temp = new TempDirectory();
+        WriteSql(temp.Path, "alter.sql", """
+            ALTER TABLE IF EXISTS ONLY fixture_table OWNER TO fixture_owner;
+            ALTER TABLE fixture_table ADD COLUMN fixture_value integer;
+            """);
+
+        var facts = Extract(temp.Path);
+        var owner = Assert.Single(facts, fact => fact.FactType == FactTypes.DatabasePermissionDeclared);
+
+        Assert.Equal(FactFactory.Hash("permission-object:table|FIXTURE_TABLE", 24), owner.Properties["objectIdentity"]);
+        Assert.DoesNotContain(facts, fact => fact.RuleId == RuleIds.DatabasePostgresPermissionGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "unsupported-or-dynamic-permission-statement");
+    }
+
+    [Fact]
+    public void Reduce_requires_matching_object_and_role_identities()
+    {
+        using var temp = new TempDirectory();
+        WriteSql(temp.Path, "identity.sql", """
+            -- tracemap-sql-context: engine=postgresql server=archive-target database=archive-data schema=archive mode=manual step=grant-permission capabilities=grant-permission stops=verify-active-connection
+            GRANT USAGE ON FOREIGN SERVER fixture_server TO unrelated_role;
+            -- tracemap-sql-context: engine=postgresql server=archive-target database=archive-data schema=archive mode=manual step=user-mapping capabilities=create-user-mapping stops=verify-active-connection
+            CREATE USER MAPPING FOR intended_role SERVER fixture_server OPTIONS (password '${FIXTURE_PASSWORD}');
+            """);
+
+        var facts = Extract(temp.Path);
+        var row = Assert.Single(facts, fact => fact.FactType == FactTypes.DatabasePrerequisiteEvidence
+            && fact.Properties.GetValueOrDefault("candidateCapability") == "usage-foreign-server");
+
+        Assert.Equal("missing-evidence", row.Properties["evidenceStatus"]);
+        Assert.Equal("no-compatible-permission-statement", row.Properties["reasonCode"]);
+    }
+
+    [Fact]
+    public void Reduce_labels_reduced_operation_unknown_instead_of_missing()
+    {
+        using var temp = new TempDirectory();
+        WriteSql(temp.Path, "reduced.sql", "CREATE USER MAPPING FOR fixture_role SERVER fixture_server OPTIONS (password '${FIXTURE_PASSWORD}');");
+
+        var facts = Extract(temp.Path);
+        var row = Assert.Single(facts, fact => fact.FactType == FactTypes.DatabasePrerequisiteEvidence
+            && fact.Properties.GetValueOrDefault("candidateCapability") == "usage-foreign-server");
+
+        Assert.Equal("unknown", row.Properties["evidenceStatus"]);
+        Assert.Equal("reduced-operation-evidence", row.Properties["reasonCode"]);
     }
 
     [Fact]

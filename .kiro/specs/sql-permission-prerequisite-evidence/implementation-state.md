@@ -32,15 +32,16 @@ Public claim level: deterministic-static-evidence
 
 - Permission statement facts and prerequisite coverage facts remain distinct.
 - Raw identities are omitted; exact foreign-server linking uses a one-way key
-  from a non-secret SQL identifier.
+  from a non-secret SQL identifier, and coverage requires compatible opaque
+  object and principal identities where the operation exposes them.
 - `present-in-scripts` is never described as effective runtime access.
 - Generic RDS/provider privileges are not inferred; administrative candidates
   always require owner validation.
 
 ## Validation
 
-- Focused SQL context/safety/archive/permission suite passed (32 tests).
-- Full .NET suite passed (729 tests).
+- Focused SQL context/safety/archive/permission suite passed (35 tests).
+- Full .NET suite passed (732 tests).
 - CLI smoke passed with five permission statements, six prerequisite coverage
   rows, `present-in-scripts` non-claims, and no planted values.
 - Build passed with zero warnings/errors; private-path guard and diff check
