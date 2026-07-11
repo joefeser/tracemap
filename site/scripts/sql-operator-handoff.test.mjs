@@ -64,6 +64,15 @@ test("SQL operator handoff validator rejects tag-split unsafe content", async (t
   assert.match(errors.join("\n"), /forbidden private, executable, or overclaim text/);
 });
 
+test("SQL operator handoff validator reports malformed discovery output", async (t) => {
+  const root = await createSiteFixture(t);
+  await buildSite({ root, log() {} });
+  await writeFile(join(root, "dist", "routes-index.json"), "{not-json");
+  const errors = [];
+  await validateSqlOperatorHandoffDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /could not parse routes-index\.json/);
+});
+
 async function createSiteFixture(t) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-sql-handoff-"));
   t.after(() => rm(root, { recursive: true, force: true }));

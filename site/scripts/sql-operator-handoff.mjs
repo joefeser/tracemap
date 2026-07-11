@@ -74,10 +74,23 @@ export async function validateSqlOperatorHandoffDist({ baseUrl = "https://tracem
     }
   }
 
-  const sitemap = await readSitemapLocSet(resolve(dist, "sitemap.xml"), errors);
-  if (!sitemap.has(`${new URL(baseUrl).origin}/sql/operator-handoff/`)) errors.push("Sitemap is missing /sql/operator-handoff/.");
+  const sitemapPath = resolve(dist, "sitemap.xml");
+  if (!(await fileExists(sitemapPath))) errors.push("SQL operator handoff validation requires sitemap.xml.");
+  else {
+    const sitemap = await readSitemapLocSet(sitemapPath);
+    if (!sitemap.has(`${new URL(baseUrl).origin}/sql/operator-handoff/`)) errors.push("Sitemap is missing /sql/operator-handoff/.");
+  }
 
-  const routes = JSON.parse(await readFile(resolve(dist, "routes-index.json"), "utf8"));
+  const routesPath = resolve(dist, "routes-index.json");
+  let routes = {};
+  if (!(await fileExists(routesPath))) errors.push("SQL operator handoff validation requires routes-index.json.");
+  else {
+    try {
+      routes = JSON.parse(await readFile(routesPath, "utf8"));
+    } catch (error) {
+      errors.push(`SQL operator handoff could not parse routes-index.json: ${error.message}`);
+    }
+  }
   const entry = routes.entries?.find((item) => item.path === sqlOperatorHandoffRoute);
   if (!entry) errors.push("routes-index.json is missing /sql/operator-handoff/.");
   else {

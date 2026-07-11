@@ -21,8 +21,8 @@ validation output, runtime conclusions, safety certification, or DBA approval.
 
 ## Validation
 
-- Focused SQL operator handoff tests: 4 passed.
-- Full site tests: 678 passed.
+- Focused SQL operator handoff tests: 5 passed.
+- Full site tests: 679 passed.
 - `npm run build` and `npm run validate`: passed; 91 HTML pages, 3,158
   internal references, and 90 sitemap URLs validated.
 - Desktop 1440×1000 and mobile 390×844 browser checks: passed with no console
