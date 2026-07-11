@@ -14,6 +14,7 @@ export const sqlOperatorHandoffInboundRoutes = [
 
 const requiredText = [
   "Public claim level: demo",
+  "sql-operator-runbook-packet/v2",
   "Before anyone runs the scripts",
   "wrong-tab and wrong-database review checkpoint",
   "postgres_fdw",
