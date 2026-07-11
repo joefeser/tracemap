@@ -44,8 +44,8 @@ Public claim level: category-only-static-evidence
 - Full .NET suite: passed (716 tests).
 - Synthetic CLI leak scan and combined-index assertions: covered by tests.
 - Checked-in placeholder-only smoke fixture: added.
-- Final build, CLI smoke, private-path guard, and diff check are required before
-  publication.
+- Final build, CLI smoke, private-path guard, and diff check passed before PR
+  #461 merged.
 
 ## Follow-Up Boundaries
 
