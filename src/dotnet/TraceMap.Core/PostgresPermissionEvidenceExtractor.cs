@@ -27,6 +27,10 @@ public static partial class PostgresPermissionEvidenceExtractor
             .Where(fact => fact.FactType == FactTypes.SecretBearingSqlStep || fact.RuleId == RuleIds.DatabaseSqlSecretSafetyGap)
             .Select(fact => ParseOrdinal(fact.Properties.GetValueOrDefault("statementOrdinal")))
             .ToHashSet();
+        var archiveByOrdinal = fileFacts
+            .Where(fact => fact.FactType == FactTypes.DatabaseLinkSurfaceDeclared)
+            .GroupBy(fact => ParseOrdinal(fact.Properties.GetValueOrDefault("statementOrdinal")))
+            .ToDictionary(group => group.Key, group => group.First());
         var facts = new List<CodeFact>();
         foreach (var statement in statements)
         {
@@ -81,6 +85,41 @@ public static partial class PostgresPermissionEvidenceExtractor
             }
         }
 
+        foreach (var statement in statements)
+        {
+            contexts.TryGetValue(statement.Ordinal, out var contextFact);
+            var stepKind = contextFact?.Properties.GetValueOrDefault("stepKind");
+            archiveByOrdinal.TryGetValue(statement.Ordinal, out var archiveSurface);
+            foreach (var capability in CandidateCapabilities(stepKind))
+            {
+                var identity = OperationIdentity(statement.StructuralText, stepKind, capability, archiveSurface);
+                var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["candidateCapability"] = capability,
+                    ["contextRole"] = ContextRole(contextFact),
+                    ["coverage"] = contextFact?.Properties.GetValueOrDefault("coverage") == "complete" && statement.LexicallyComplete ? "complete" : "reduced",
+                    ["limitation"] = PrerequisiteLimitation,
+                    ["operationKind"] = stepKind ?? "unknown-sql-step",
+                    ["registryVersion"] = RegistryVersion,
+                    ["statementOrdinal"] = statement.Ordinal.ToString()
+                };
+                if (identity.ObjectIdentity is not null) properties["objectIdentity"] = identity.ObjectIdentity;
+                if (identity.RoleIdentity is not null) properties["roleIdentity"] = identity.RoleIdentity;
+                if (identity.LinkIdentity is not null) properties["linkIdentity"] = identity.LinkIdentity;
+                facts.Add(FactFactory.Create(
+                    manifest,
+                    FactTypes.DatabasePrerequisiteCandidate,
+                    RuleIds.DatabasePostgresPermissionPrerequisite,
+                    EvidenceTiers.Tier2Structural,
+                    new EvidenceSpan(relativePath, statement.StartLine, statement.EndLine,
+                        protectedOrdinals.Contains(statement.Ordinal) ? null : FactFactory.Hash(statement.StructuralText, 32),
+                        nameof(PostgresPermissionEvidenceExtractor), ScannerVersions.PostgresPermissionEvidenceExtractor),
+                    targetSymbol: contextFact?.TargetSymbol,
+                    contractElement: capability,
+                    properties: properties));
+            }
+        }
+
         return facts;
     }
 
@@ -88,41 +127,44 @@ public static partial class PostgresPermissionEvidenceExtractor
     {
         var facts = allFacts.ToArray();
         var permissions = facts
-            .Where(fact => fact.FactType == FactTypes.DatabasePermissionDeclared)
+            .Where(fact => fact.FactType == FactTypes.DatabasePermissionDeclared && fact.Evidence is not null)
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
             .ThenBy(fact => fact.Evidence.StartLine)
             .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
-        var archiveByLocation = facts
-            .Where(fact => fact.FactType == FactTypes.DatabaseLinkSurfaceDeclared)
-            .GroupBy(fact => (fact.Evidence.FilePath, Ordinal: ParseOrdinal(fact.Properties.GetValueOrDefault("statementOrdinal"))))
-            .ToDictionary(group => group.Key, group => group.First());
-        var contextOperations = facts
-            .Where(fact => fact.FactType is FactTypes.SqlExecutionContextDeclared or FactTypes.SqlExecutionContextCandidate)
-            .GroupBy(fact => (fact.Evidence.FilePath, Ordinal: ParseOrdinal(fact.Properties.GetValueOrDefault("statementOrdinal"))))
-            .Select(group => group.OrderBy(fact => fact.FactType == FactTypes.SqlExecutionContextDeclared ? 0 : 1).ThenBy(fact => fact.FactId, StringComparer.Ordinal).First())
-            .Where(fact => fact.Properties.GetValueOrDefault("stepKind") != "grant-permission")
+        var candidates = facts
+            .Where(fact => fact.FactType == FactTypes.DatabasePrerequisiteCandidate
+                && fact.RuleId == RuleIds.DatabasePostgresPermissionPrerequisite
+                && fact.Evidence is not null)
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
             .ThenBy(fact => ParseOrdinal(fact.Properties.GetValueOrDefault("statementOrdinal")))
+            .ThenBy(fact => fact.Properties.GetValueOrDefault("candidateCapability"), StringComparer.Ordinal)
             .ToArray();
+        var permissionIndex = permissions
+            .GroupBy(permission => permission.Properties.GetValueOrDefault("capabilityCode") ?? string.Empty)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         var results = new List<CodeFact>();
 
-        foreach (var operation in contextOperations)
+        foreach (var operation in candidates)
         {
             var ordinal = ParseOrdinal(operation.Properties.GetValueOrDefault("statementOrdinal"));
-            archiveByLocation.TryGetValue((operation.Evidence.FilePath, ordinal), out var archiveSurface);
-            foreach (var capability in CandidateCapabilities(operation.Properties.GetValueOrDefault("stepKind")))
-            {
-                var linkIdentity = archiveSurface?.Properties.GetValueOrDefault("linkIdentity");
-                var compatible = permissions
-                    .Where(permission => PermissionMatches(permission, capability, linkIdentity))
+            var capability = operation.Properties.GetValueOrDefault("candidateCapability") ?? "unknown";
+            var linkIdentity = operation.Properties.GetValueOrDefault("linkIdentity");
+            var objectIdentity = operation.Properties.GetValueOrDefault("objectIdentity");
+            var roleIdentity = operation.Properties.GetValueOrDefault("roleIdentity");
+            var identityMissing = RequiresObjectIdentity(capability) && string.IsNullOrWhiteSpace(objectIdentity) && string.IsNullOrWhiteSpace(linkIdentity)
+                || RequiresRoleIdentity(capability) && string.IsNullOrWhiteSpace(roleIdentity);
+            var compatible = identityMissing
+                ? []
+                : permissionIndex.GetValueOrDefault(capability, [])
+                    .Where(permission => PermissionMatches(permission, linkIdentity, objectIdentity, roleIdentity))
                     .ToArray();
                 var grants = compatible.Where(permission => permission.Properties.GetValueOrDefault("actionKind") is "grant" or "owner-change" or "role-membership" or "default-privilege").ToArray();
                 var revokes = compatible.Where(permission => permission.Properties.GetValueOrDefault("actionKind") == "revoke").ToArray();
                 var crossFile = compatible.Any(permission => permission.Evidence.FilePath != operation.Evidence.FilePath);
                 var permissionAfterOperation = grants.Any(permission => permission.Evidence.FilePath == operation.Evidence.FilePath
                     && permission.Evidence.StartLine > operation.Evidence.EndLine);
-                var operationContext = ContextRole(operation);
+                var operationContext = operation.Properties.GetValueOrDefault("contextRole") ?? "unknown";
                 var permissionContextUnknown = grants.Any(permission => permission.Properties.GetValueOrDefault("contextRole") == "unknown");
                 var incompatibleContext = grants.Any(permission => operationContext != "unknown"
                     && permission.Properties.GetValueOrDefault("contextRole") is { } permissionContext
@@ -132,8 +174,12 @@ public static partial class PostgresPermissionEvidenceExtractor
 
                 var (status, reason) = OwnerReviewCapabilities.Contains(capability)
                     ? ("needs-owner-review", "capability-requires-owner-validation")
+                    : identityMissing
+                        ? ("unknown", "operation-identity-unknown")
                     : revokes.Length > 0
                         ? ("conflicting-evidence", grants.Length > 0 ? "grant-and-revoke-in-scripts" : "revoke-in-scripts")
+                        : operationReduced
+                            ? ("unknown", "reduced-operation-evidence")
                         : grants.Length == 0
                             ? ("missing-evidence", "no-compatible-permission-statement")
                             : incompatibleContext
@@ -151,45 +197,22 @@ public static partial class PostgresPermissionEvidenceExtractor
                 var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["candidateCapability"] = capability,
-                    ["contextRole"] = ContextRole(operation),
+                    ["contextRole"] = operationContext,
                     ["coverage"] = coverage,
                     ["evidenceStatus"] = status,
                     ["limitation"] = PrerequisiteLimitation,
-                    ["operationKind"] = operation.Properties.GetValueOrDefault("stepKind") ?? "unknown-sql-step",
+                    ["operationKind"] = operation.Properties.GetValueOrDefault("operationKind") ?? "unknown-sql-step",
                     ["ownerQuestion"] = OwnerQuestion(capability, status),
                     ["reasonCode"] = reason,
                     ["registryVersion"] = RegistryVersion,
                     ["statementOrdinal"] = ordinal.ToString()
                 };
-                if (archiveSurface is not null) properties["operationFactId"] = archiveSurface.FactId;
+                properties["operationFactId"] = operation.FactId;
                 if (linkIdentity is not null) properties["linkIdentity"] = linkIdentity;
+                if (objectIdentity is not null) properties["objectIdentity"] = objectIdentity;
+                if (roleIdentity is not null) properties["roleIdentity"] = roleIdentity;
                 if (grants.Length > 0) properties["supportingFactIds"] = JoinFactIds(grants);
                 if (revokes.Length > 0) properties["contradictingFactIds"] = JoinFactIds(revokes);
-
-                results.Add(FactFactory.Create(
-                    manifest,
-                    FactTypes.DatabasePrerequisiteCandidate,
-                    RuleIds.DatabasePostgresPermissionPrerequisite,
-                    EvidenceTiers.Tier2Structural,
-                    new EvidenceSpan(
-                        operation.Evidence.FilePath,
-                        operation.Evidence.StartLine,
-                        operation.Evidence.EndLine,
-                        operation.Evidence.SnippetHash,
-                        nameof(PostgresPermissionEvidenceExtractor),
-                        ScannerVersions.PostgresPermissionEvidenceExtractor),
-                    targetSymbol: operation.TargetSymbol,
-                    contractElement: capability,
-                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["candidateCapability"] = capability,
-                        ["contextRole"] = ContextRole(operation),
-                        ["coverage"] = operationReduced ? "reduced" : "complete",
-                        ["limitation"] = PrerequisiteLimitation,
-                        ["operationKind"] = operation.Properties.GetValueOrDefault("stepKind") ?? "unknown-sql-step",
-                        ["registryVersion"] = RegistryVersion,
-                        ["statementOrdinal"] = ordinal.ToString()
-                    }));
 
                 results.Add(FactFactory.Create(
                     manifest,
@@ -211,7 +234,6 @@ public static partial class PostgresPermissionEvidenceExtractor
                 {
                     results.Add(CreateGap(manifest, operation.Evidence.FilePath, operation.Evidence.StartLine, operation.Evidence.EndLine, ordinal, $"{status}:{capability}"));
                 }
-            }
         }
 
         return results;
@@ -260,13 +282,34 @@ public static partial class PostgresPermissionEvidenceExtractor
         _ => []
     };
 
-    private static bool PermissionMatches(CodeFact permission, string capability, string? linkIdentity)
+    private static OperationIdentityValues OperationIdentity(string structural, string? stepKind, string capability, CodeFact? archiveSurface)
     {
-        if (permission.Properties.GetValueOrDefault("capabilityCode") != capability) return false;
-        if (capability == "usage-foreign-server")
-            return !string.IsNullOrWhiteSpace(linkIdentity) && permission.Properties.GetValueOrDefault("linkIdentity") == linkIdentity;
+        var linkIdentity = archiveSurface?.Properties.GetValueOrDefault("linkIdentity");
+        string? roleIdentity = null;
+        string? objectIdentity = null;
+        if (stepKind == "user-mapping")
+        {
+            var roleMatch = UserMappingRolePattern().Match(structural);
+            if (roleMatch.Success) roleIdentity = Identity("permission-role", roleMatch.Groups["role"].Value);
+        }
+        if (capability == "create-schema-object")
+        {
+            var schemaMatch = SchemaTargetPattern().Match(structural);
+            if (schemaMatch.Success) objectIdentity = Identity("permission-object:schema", schemaMatch.Groups["schema"].Value);
+        }
+        return new OperationIdentityValues(objectIdentity, roleIdentity, linkIdentity);
+    }
+
+    private static bool PermissionMatches(CodeFact permission, string? linkIdentity, string? objectIdentity, string? roleIdentity)
+    {
+        if (linkIdentity is not null && permission.Properties.GetValueOrDefault("linkIdentity") != linkIdentity) return false;
+        if (objectIdentity is not null && permission.Properties.GetValueOrDefault("objectIdentity") != objectIdentity) return false;
+        if (roleIdentity is not null && permission.Properties.GetValueOrDefault("roleIdentity") != roleIdentity) return false;
         return true;
     }
+
+    private static bool RequiresObjectIdentity(string capability) => capability is "usage-foreign-server" or "create-schema-object";
+    private static bool RequiresRoleIdentity(string capability) => capability is "usage-foreign-server" or "create-schema-object";
 
     private static string Capability(string privileges, string objectKind)
     {
@@ -279,11 +322,11 @@ public static partial class PostgresPermissionEvidenceExtractor
         if (objectKind == "database" && value.Contains("CONNECT", StringComparison.Ordinal)) return "connect-database";
         if (objectKind == "sequence" && value.Contains("USAGE", StringComparison.Ordinal)) return "sequence-usage";
         if (objectKind == "routine" && value.Contains("EXECUTE", StringComparison.Ordinal)) return "execute-routine";
-        if (objectKind == "table" && Regex.IsMatch(value, @"\b(?:SELECT|INSERT|UPDATE|DELETE|TRUNCATE|REFERENCES|TRIGGER)\b", RegexOptions.CultureInvariant)) return "table-access";
+        if (objectKind == "table" && TablePrivilegesPattern().IsMatch(value)) return "table-access";
         return "unknown-permission";
     }
 
-    private static string ObjectKind(string value) => Regex.Replace(value.Trim().ToLowerInvariant(), @"\s+", "-") switch
+    private static string ObjectKind(string value) => WhitespacePattern().Replace(value.Trim().ToLowerInvariant(), "-") switch
     {
         "function" or "procedure" or "functions" => "routine",
         "tables" => "table",
@@ -323,14 +366,23 @@ public static partial class PostgresPermissionEvidenceExtractor
 
     [GeneratedRegex(@"\b(?<action>GRANT|REVOKE)\s+(?<privileges>[A-Za-z_,\s]+?)\s+ON\s+(?<kind>DATABASE|SCHEMA|TABLE|SEQUENCE|FUNCTION|PROCEDURE|FOREIGN\s+SERVER|FOREIGN\s+DATA\s+WRAPPER)\s+(?<object>[A-Za-z_][A-Za-z0-9_$.]*)\s+(?:TO|FROM)\s+(?<role>[A-Za-z_][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex GrantObjectPattern();
-    [GeneratedRegex(@"\bALTER\s+(?<kind>DATABASE|SCHEMA|TABLE|SEQUENCE|FUNCTION|PROCEDURE|FOREIGN\s+SERVER)\s+(?<object>[A-Za-z_][A-Za-z0-9_$.]*)[\s\S]*?\bOWNER\s+TO\s+(?<role>[A-Za-z_][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\bALTER\s+(?<kind>DATABASE|SCHEMA|TABLE|SEQUENCE|FUNCTION|PROCEDURE|FOREIGN\s+SERVER)\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?<object>[A-Za-z_][A-Za-z0-9_$.]*)[\s\S]*?\bOWNER\s+TO\s+(?<role>[A-Za-z_][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex OwnerPattern();
     [GeneratedRegex(@"\bALTER\s+DEFAULT\s+PRIVILEGES\b[\s\S]*?\bGRANT\s+[A-Za-z_,\s]+?\s+ON\s+(?<kind>TABLES|SEQUENCES|FUNCTIONS)\s+TO\s+(?<role>[A-Za-z_][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DefaultPrivilegesPattern();
     [GeneratedRegex(@"\b(?<action>GRANT|REVOKE)\s+(?<member>[A-Za-z_][A-Za-z0-9_$]*)\s+(?:TO|FROM)\s+(?<role>[A-Za-z_][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex RoleMembershipPattern();
-    [GeneratedRegex(@"^\s*(?:GRANT|REVOKE|ALTER\s+DEFAULT\s+PRIVILEGES|ALTER\s+(?:DATABASE|SCHEMA|TABLE|SEQUENCE|FUNCTION|PROCEDURE|FOREIGN\s+SERVER)\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^\s*(?:GRANT|REVOKE|ALTER\s+DEFAULT\s+PRIVILEGES|ALTER\s+(?:DATABASE|SCHEMA|TABLE|SEQUENCE|FUNCTION|PROCEDURE|FOREIGN\s+SERVER)\b[\s\S]*?\bOWNER\s+TO\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex PermissionPrefixPattern();
+    [GeneratedRegex(@"\b(?:SELECT|INSERT|UPDATE|DELETE|TRUNCATE|REFERENCES|TRIGGER)\b", RegexOptions.CultureInvariant)]
+    private static partial Regex TablePrivilegesPattern();
+    [GeneratedRegex(@"\s+", RegexOptions.CultureInvariant)]
+    private static partial Regex WhitespacePattern();
+    [GeneratedRegex(@"\b(?:CREATE|ALTER)\s+USER\s+MAPPING\s+FOR\s+(?<role>[A-Za-z_][A-Za-z0-9_$]*|PUBLIC)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex UserMappingRolePattern();
+    [GeneratedRegex(@"\b(?:INTO|CREATE\s+FOREIGN\s+TABLE)\s+(?<schema>[A-Za-z_][A-Za-z0-9_$]*)(?:\.|\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex SchemaTargetPattern();
 
     private sealed record PermissionStatement(string ActionKind, string ObjectKind, string CapabilityCode, string? ObjectIdentity, string? RoleIdentity, string? LinkIdentity, bool IdentityEstablished);
+    private sealed record OperationIdentityValues(string? ObjectIdentity, string? RoleIdentity, string? LinkIdentity);
 }

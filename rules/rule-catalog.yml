@@ -3110,6 +3110,7 @@ rules:
       - DatabasePrerequisiteEvidence
     limitations:
       - Present-in-scripts means compatible static evidence exists; it does not mean a permission is active, effective, sufficient, or granted to the runtime role.
+      - Complete support requires compatible opaque object and principal identities when the operation exposes them; missing or reduced operation identity produces unknown rather than arbitrary support.
       - Cross-file order, permission-after-operation, reduced inputs, and administrative capabilities cap results at unknown or needs-owner-review.
       - The reducer does not simulate transactions, conditional/procedural execution, default privilege expansion, role inheritance, RLS/policies, catalog state, or cloud IAM.
 

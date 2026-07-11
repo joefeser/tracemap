@@ -16,6 +16,9 @@ Supported statement evidence includes `GRANT`, `REVOKE`, `ALTER ... OWNER TO`,
 sequence, routine, foreign-server, and foreign-wrapper categories. Raw object,
 role, server, database, and infrastructure names are omitted. One-way keys from
 non-secret SQL identifiers are used only where exact object linking is needed.
+`present-in-scripts` requires compatible opaque object and principal identities;
+when an operation does not expose enough identity or has reduced context,
+coverage remains `unknown` instead of being mislabeled missing or present.
 
 Coverage statuses are:
 
