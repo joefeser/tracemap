@@ -142,6 +142,43 @@ public sealed class PostgresPermissionEvidenceExtractorTests
     }
 
     [Fact]
+    public void Reduce_treats_grant_all_as_evidence_for_a_specific_prerequisite()
+    {
+        using var temp = new TempDirectory();
+        WriteSql(temp.Path, "all.sql", """
+            -- tracemap-sql-context: engine=postgresql server=archive-target database=archive-data schema=archive mode=manual step=grant-permission capabilities=grant-permission stops=verify-active-connection
+            GRANT ALL PRIVILEGES ON FOREIGN SERVER fixture_server TO fixture_operator;
+            -- tracemap-sql-context: engine=postgresql server=archive-target database=archive-data schema=archive mode=manual step=user-mapping capabilities=create-user-mapping stops=secret-owner-review,verify-active-connection
+            CREATE USER MAPPING FOR fixture_operator SERVER fixture_server OPTIONS (password '${FIXTURE_PASSWORD}');
+            """);
+
+        var facts = Extract(temp.Path);
+        var row = Assert.Single(facts, fact => fact.FactType == FactTypes.DatabasePrerequisiteEvidence
+            && fact.Properties.GetValueOrDefault("candidateCapability") == "usage-foreign-server");
+
+        Assert.Equal("present-in-scripts", row.Properties["evidenceStatus"]);
+        Assert.Equal("compatible-grant-in-scripts", row.Properties["reasonCode"]);
+    }
+
+    [Fact]
+    public void Extract_does_not_treat_grant_option_only_revoke_as_a_base_privilege_revoke()
+    {
+        using var temp = new TempDirectory();
+        WriteSql(temp.Path, "grant-option.sql", """
+            GRANT USAGE ON FOREIGN SERVER fixture_server TO fixture_operator;
+            REVOKE GRANT OPTION FOR USAGE ON FOREIGN SERVER fixture_server FROM fixture_operator;
+            """);
+
+        var facts = Extract(temp.Path);
+        var permissions = facts.Where(fact => fact.FactType == FactTypes.DatabasePermissionDeclared).ToArray();
+
+        Assert.Single(permissions);
+        Assert.Equal("grant", permissions[0].Properties["actionKind"]);
+        Assert.Contains(facts, fact => fact.RuleId == RuleIds.DatabasePostgresPermissionGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "unsupported-or-dynamic-permission-statement");
+    }
+
+    [Fact]
     public void Reduce_labels_reduced_operation_unknown_instead_of_missing()
     {
         using var temp = new TempDirectory();

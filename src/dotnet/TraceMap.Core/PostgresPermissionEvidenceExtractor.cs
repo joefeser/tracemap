@@ -314,7 +314,17 @@ public static partial class PostgresPermissionEvidenceExtractor
     private static string Capability(string privileges, string objectKind)
     {
         var value = privileges.ToUpperInvariant();
-        if (value.Contains("ALL", StringComparison.Ordinal)) return "all-privileges-review";
+        if (value.Contains("ALL", StringComparison.Ordinal)) return objectKind switch
+        {
+            "foreign-server" => "usage-foreign-server",
+            "foreign-wrapper" => "usage-foreign-wrapper",
+            "schema" => "create-schema-object",
+            "database" => "connect-database",
+            "sequence" => "sequence-usage",
+            "routine" => "execute-routine",
+            "table" => "table-access",
+            _ => "all-privileges-review"
+        };
         if (objectKind == "foreign-server" && value.Contains("USAGE", StringComparison.Ordinal)) return "usage-foreign-server";
         if (objectKind == "foreign-wrapper" && value.Contains("USAGE", StringComparison.Ordinal)) return "usage-foreign-wrapper";
         if (objectKind == "schema" && value.Contains("CREATE", StringComparison.Ordinal)) return "create-schema-object";
@@ -364,7 +374,7 @@ public static partial class PostgresPermissionEvidenceExtractor
             ["coverage"] = "reduced", ["gapKind"] = kind, ["limitation"] = GapLimitation, ["statementOrdinal"] = ordinal.ToString()
         });
 
-    [GeneratedRegex(@"\b(?<action>GRANT|REVOKE)\s+(?<privileges>[A-Za-z_,\s]+?)\s+ON\s+(?<kind>DATABASE|SCHEMA|TABLE|SEQUENCE|FUNCTION|PROCEDURE|FOREIGN\s+SERVER|FOREIGN\s+DATA\s+WRAPPER)\s+(?<object>[A-Za-z_][A-Za-z0-9_$.]*)\s+(?:TO|FROM)\s+(?<role>[A-Za-z_][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^\s*(?<action>GRANT|REVOKE)\s+(?!GRANT\s+OPTION\s+FOR\b)(?<privileges>[A-Za-z_,\s]+?)\s+ON\s+(?<kind>DATABASE|SCHEMA|TABLE|SEQUENCE|FUNCTION|PROCEDURE|FOREIGN\s+SERVER|FOREIGN\s+DATA\s+WRAPPER)\s+(?<object>[A-Za-z_][A-Za-z0-9_$.]*)\s+(?:TO|FROM)\s+(?<role>[A-Za-z_][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex GrantObjectPattern();
     [GeneratedRegex(@"\bALTER\s+(?<kind>DATABASE|SCHEMA|TABLE|SEQUENCE|FUNCTION|PROCEDURE|FOREIGN\s+SERVER)\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?<object>[A-Za-z_][A-Za-z0-9_$.]*)[\s\S]*?\bOWNER\s+TO\s+(?<role>[A-Za-z_][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex OwnerPattern();
