@@ -1,8 +1,10 @@
 # SQL Secret-Bearing Step Safety Implementation State
 
-Status: implemented-pending-pr-review
+Status: implemented-and-merged
 Implementation branch: `codex/sql-secret-bearing-step-safety-impl`
 Target base: `dev`
+Merged PR: [#461](https://github.com/joefeser/tracemap/pull/461)
+Merge commit: `097dfc098d485847ed85f2b21aec2b963f222f1b`
 Public claim level: category-only-static-evidence
 
 ## Implemented Scope
@@ -42,8 +44,8 @@ Public claim level: category-only-static-evidence
 - Full .NET suite: passed (716 tests).
 - Synthetic CLI leak scan and combined-index assertions: covered by tests.
 - Checked-in placeholder-only smoke fixture: added.
-- Final build, CLI smoke, private-path guard, and diff check are required before
-  publication.
+- Final build, CLI smoke, private-path guard, and diff check passed before PR
+  #461 merged.
 
 ## Follow-Up Boundaries
 

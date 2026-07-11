@@ -1,8 +1,10 @@
 # PostgreSQL Archive-Link Evidence Implementation State
 
-Status: implemented-pending-pr-review
+Status: implemented-and-merged
 Implementation branch: `codex/postgres-archive-link-evidence-impl`
 Target base: `dev`
+Merged PR: [#462](https://github.com/joefeser/tracemap/pull/462)
+Merge commit: `e7b494a1ae1c9d4fa62491d1a3cce8170e047e40`
 Public claim level: deterministic-static-evidence
 
 ## Implemented Scope
