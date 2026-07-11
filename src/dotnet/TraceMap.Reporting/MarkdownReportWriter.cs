@@ -10,7 +10,15 @@ public static class MarkdownReportWriter
         await File.WriteAllTextAsync(path, Build(result), cancellationToken);
     }
 
-    public static string Build(ScanResult result)
+    public static async Task WriteAsync(string path, ScanResult result, SqlRunbookPacket? sqlRunbookPacket, CancellationToken cancellationToken = default)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        await File.WriteAllTextAsync(path, Build(result, sqlRunbookPacket), cancellationToken);
+    }
+
+    public static string Build(ScanResult result) => Build(result, null);
+
+    public static string Build(ScanResult result, SqlRunbookPacket? sqlRunbookPacket)
     {
         var manifest = result.Manifest;
         var factsByType = result.Facts
@@ -102,6 +110,7 @@ public static class MarkdownReportWriter
         AddSqlProtectedMaterial(lines, result);
         AddPostgresArchiveLinks(lines, result);
         AddPostgresPermissionPrerequisites(lines, result);
+        AddSqlRunbookPacketSummary(lines, result, sqlRunbookPacket);
 
         AddFactSection(
             lines,
@@ -652,6 +661,28 @@ public static class MarkdownReportWriter
             && (left.Properties.GetValueOrDefault("serverRole") != right.Properties.GetValueOrDefault("serverRole")
                 || left.Properties.GetValueOrDefault("databaseRole") != right.Properties.GetValueOrDefault("databaseRole")
                 || left.Properties.GetValueOrDefault("executionMode") != right.Properties.GetValueOrDefault("executionMode"));
+    }
+
+    private static void AddSqlRunbookPacketSummary(List<string> lines, ScanResult result, SqlRunbookPacket? suppliedPacket)
+    {
+        var packet = suppliedPacket ?? SqlRunbookPacketBuilder.Build(result);
+        if (packet.StepGroups.Count == 0 && packet.Milestones.Count == 0 && packet.Gaps.Count == 0)
+        {
+            return;
+        }
+
+        lines.Add("");
+        lines.Add("## SQL Operator Runbook Packet");
+        lines.Add("");
+        lines.Add("Standalone safe artifacts: `sql-runbook.md` and `sql-runbook.json`. They are static handoff evidence, not executable SQL, runtime proof, safety certification, approval, or a substitute for DBA/operator judgment.");
+        lines.Add("");
+        lines.Add($"- Coverage: `{packet.Coverage.Status}`");
+        lines.Add($"- Ordered context groups: `{packet.StepGroups.Count}`");
+        lines.Add($"- Intended/validation milestones: `{packet.Milestones.Count}`");
+        lines.Add($"- Prerequisite rows: `{packet.Prerequisites.Count}`");
+        lines.Add($"- Protected steps: `{packet.ProtectedSteps.Count}`");
+        lines.Add($"- Static gaps: `{packet.Gaps.Count}`");
+        lines.Add($"- Packet rule: `{RuleIds.DatabaseSqlOperatorRunbookPacket}`");
     }
 
     private static string ContextDisplay(CodeFact fact)
