@@ -91,7 +91,9 @@ export async function validateSqlOperatorHandoffDist({ baseUrl = "https://tracem
       errors.push(`SQL operator handoff could not parse routes-index.json: ${error.message}`);
     }
   }
-  const entry = routes.entries?.find((item) => item.path === sqlOperatorHandoffRoute);
+  const entry = Array.isArray(routes.entries)
+    ? routes.entries.find((item) => item.path === sqlOperatorHandoffRoute)
+    : undefined;
   if (!entry) errors.push("routes-index.json is missing /sql/operator-handoff/.");
   else {
     if (entry.publicClaimLevel !== "demo") errors.push(`SQL operator handoff publicClaimLevel must be demo, got ${entry.publicClaimLevel}.`);
