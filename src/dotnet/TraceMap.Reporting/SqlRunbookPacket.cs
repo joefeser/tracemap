@@ -17,7 +17,7 @@ public sealed record SqlRunbookPacket(
     IReadOnlyList<SqlRunbookCleanup> CleanupEvidence,
     IReadOnlyList<SqlRunbookStopCondition> StopConditions,
     IReadOnlyList<SqlRunbookGap> Gaps,
-    IReadOnlyList<string> OwnerQuestions,
+    IReadOnlyList<SqlRunbookOwnerQuestion> OwnerQuestions,
     IReadOnlyList<string> Limitations);
 
 public sealed record SqlRunbookSource(string Repository, string CommitSha, string ScanId);
@@ -33,6 +33,7 @@ public sealed record SqlRunbookValidation(int StatementOrdinal, string State, st
 public sealed record SqlRunbookCleanup(int StatementOrdinal, string State, SqlRunbookEvidence Evidence);
 public sealed record SqlRunbookStopCondition(string Code, SqlRunbookEvidence Evidence);
 public sealed record SqlRunbookGap(string Code, string Category, SqlRunbookEvidence Evidence);
+public sealed record SqlRunbookOwnerQuestion(string Question, SqlRunbookEvidence Evidence);
 
 public static class SqlRunbookPacketBuilder
 {
@@ -118,12 +119,20 @@ public static class SqlRunbookPacketBuilder
             .GroupBy(stop => stop.Code, StringComparer.Ordinal)
             .Select(group => group.OrderBy(stop => stop.Evidence.FilePath, StringComparer.Ordinal).ThenBy(stop => stop.Evidence.LineSpan.StartLine).First())
             .OrderBy(stop => stop.Code, StringComparer.Ordinal).ToArray();
-        var questions = gaps.Select(g => Question(g.Category))
-            .Concat(prerequisites.Where(p => p.Status != "present-in-scripts").Select(_ => "Who owns validation of unresolved permission prerequisite candidates?"))
-            .Concat(protectedSteps.Length > 0 ? ["Who owns the approved handling process for protected material?" ] : [])
-            .Concat(validationFacts.Length == 0 && surfaces.Length > 0 ? ["Who owns independent validation of the intended database changes?" ] : [])
-            .Concat(multipleSqlFiles ? ["Who owns confirmation of execution order across SQL files?" ] : [])
-            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var questions = gaps.Select(g => new SqlRunbookOwnerQuestion(Question(g.Category), g.Evidence))
+            .Concat(prerequisites.Where(p => p.Status != "present-in-scripts")
+                .Select(p => new SqlRunbookOwnerQuestion("Who owns validation of unresolved permission prerequisite candidates?", p.Evidence)))
+            .Concat(protectedSteps.Select(p => new SqlRunbookOwnerQuestion("Who owns the approved handling process for protected material?", p.Evidence)))
+            .Concat(validationFacts.Length == 0 && surfaces.Length > 0
+                ? [new SqlRunbookOwnerQuestion("Who owns independent validation of the intended database changes?", DerivedEvidence(surfaces[0], commitSha))]
+                : [])
+            .Concat(multipleSqlFiles && contexts.Length > 0
+                ? [new SqlRunbookOwnerQuestion("Who owns confirmation of execution order across SQL files?", DerivedEvidence(contexts[0], commitSha))]
+                : [])
+            .GroupBy(question => question.Question, StringComparer.Ordinal)
+            .Select(group => group.OrderBy(question => question.Evidence.FilePath, StringComparer.Ordinal)
+                .ThenBy(question => question.Evidence.LineSpan.StartLine).First())
+            .OrderBy(question => question.Question, StringComparer.Ordinal).ToArray();
         var reduced = new List<string>();
         if (!string.Equals(result.Manifest.BuildStatus, "Succeeded", StringComparison.OrdinalIgnoreCase)) reduced.Add("build");
         if (!commitKnown) reduced.Add("commit-identity");
@@ -203,7 +212,7 @@ public static class SqlRunbookPacketWriter
         Section(lines, "Cleanup / Rollback Evidence", packet.CleanupEvidence.Select(c => $"Step `{c.StatementOrdinal}`: `{c.State}` candidate only; {EvidenceText(c.Evidence)}"));
         Section(lines, "Stop Conditions", packet.StopConditions.Select(stop => $"`{stop.Code}`; {EvidenceText(stop.Evidence)}"));
         Section(lines, "Gaps", packet.Gaps.Select(g => $"`{g.Category}` / `{g.Code}`; {EvidenceText(g.Evidence)}"));
-        Section(lines, "Owner Questions", packet.OwnerQuestions);
+        Section(lines, "Owner Questions", packet.OwnerQuestions.Select(question => $"{question.Question} {EvidenceText(question.Evidence)}"));
         Section(lines, "Limitations", packet.Limitations);
         return string.Join(Environment.NewLine, lines) + Environment.NewLine;
     }

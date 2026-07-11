@@ -78,7 +78,9 @@ public static partial class SqlSecretSafetyExtractor
             var assessment = Analyze(statement.Slice(sql), statement.StructuralText, statement.LexicallyComplete);
             if (assessment is not null)
             {
-                facts.Add(CreateFact(manifest, relativePath, startLine, endLine, statement.Ordinal, assessment));
+                var statementStart = Math.Clamp(startLine + statement.StartLine - 1, startLine, Math.Max(startLine, endLine));
+                var statementEnd = Math.Clamp(startLine + statement.EndLine - 1, statementStart, Math.Max(statementStart, endLine));
+                facts.Add(CreateFact(manifest, relativePath, statementStart, statementEnd, statement.Ordinal, assessment));
             }
         }
 

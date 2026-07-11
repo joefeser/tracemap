@@ -79,6 +79,9 @@ public sealed class SqlExecutionContextExtractorTests
         var declared = Assert.Single(facts, fact => fact.FactType == FactTypes.SqlExecutionContextDeclared);
 
         Assert.Equal("sidecar", declared.Properties["declarationSource"]);
+        Assert.Equal("setup.sql" + SqlExecutionContextExtractor.SidecarSuffix, declared.Evidence.FilePath);
+        Assert.Equal(1, declared.Evidence.StartLine);
+        Assert.True(declared.Evidence.EndLine > declared.Evidence.StartLine);
         Assert.Equal("admin", declared.Properties["serverRole"]);
         Assert.Equal("conflicting", declared.Properties["contextClassification"]);
         Assert.Contains(facts, fact => IsGap(fact, "conflicting-declarations"));

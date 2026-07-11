@@ -202,6 +202,30 @@ public sealed class SqlSecretSafetyExtractorTests
     }
 
     [Fact]
+    public void Embedded_multiline_sql_translates_statement_spans_to_source_lines()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Embedded.cs"), """"
+            public static class Embedded
+            {
+                public const string Setup = """
+                    CREATE USER MAPPING FOR fixture_role SERVER fixture_server OPTIONS (password '${FIXTURE_SECRET}');
+                    CREATE SUBSCRIPTION fixture_subscription
+                      CONNECTION '${SUBSCRIPTION_CONNECTION}' PUBLICATION fixture_publication;
+                    """;
+            }
+            """");
+
+        var facts = CSharpIntegrationSyntaxExtractor.Extract(temp.Path, CreateManifest(), FileInventory.Collect(temp.Path));
+        var secretFacts = facts.Where(fact => fact.FactType == FactTypes.SecretBearingSqlStep)
+            .OrderBy(fact => fact.Properties["statementOrdinal"], StringComparer.Ordinal).ToArray();
+
+        Assert.Equal(2, secretFacts.Length);
+        Assert.True(secretFacts[0].Evidence.StartLine < secretFacts[1].Evidence.StartLine);
+        Assert.True(secretFacts[0].Evidence.EndLine <= secretFacts[1].Evidence.StartLine);
+    }
+
+    [Fact]
     public void Typed_dataset_with_protected_command_omits_document_and_element_hashes()
     {
         const string sentinel = "public-safe-tableadapter-password-sentinel";

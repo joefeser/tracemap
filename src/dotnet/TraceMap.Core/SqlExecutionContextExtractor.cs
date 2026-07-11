@@ -216,6 +216,9 @@ public static partial class SqlExecutionContextExtractor
                         sidecar is not null ? "sidecar" : "directive",
                         declarationConflictsSyntax ? "conflicting" : "declared",
                         matchingDirective is not null && sidecar is null ? matchingDirective.Line : null,
+                        sidecar?.EvidencePath,
+                        sidecar?.EvidenceStartLine,
+                        sidecar?.EvidenceEndLine,
                         protectedMaterial: secretAssessment is not null));
 
                     if (declarationConflictsSyntax)
@@ -293,6 +296,9 @@ public static partial class SqlExecutionContextExtractor
         string declarationSource,
         string classification,
         int? declarationLine = null,
+        string? declarationPath = null,
+        int? declarationStartLine = null,
+        int? declarationEndLine = null,
         bool protectedMaterial = false)
     {
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
@@ -333,10 +339,10 @@ public static partial class SqlExecutionContextExtractor
             ruleId,
             tier,
             new EvidenceSpan(
-                relativePath,
-                declarationLine ?? statement.StartLine,
-                declarationLine ?? statement.EndLine,
-                protectedMaterial ? null : FactFactory.Hash(statement.StructuralText, 32),
+                declarationPath ?? relativePath,
+                declarationStartLine ?? declarationLine ?? statement.StartLine,
+                declarationEndLine ?? declarationLine ?? statement.EndLine,
+                protectedMaterial || declarationPath is not null ? null : FactFactory.Hash(statement.StructuralText, 32),
                 nameof(SqlExecutionContextExtractor),
                 ScannerVersions.SqlExecutionContextExtractor),
             targetSymbol: stepId,
@@ -410,7 +416,12 @@ public static partial class SqlExecutionContextExtractor
             foreach (var step in steps.EnumerateArray())
             {
                 if (!TryParseSidecarDeclaration(step, out var ordinal, out var declaration)
-                    || !declarations.TryAdd(ordinal, declaration!))
+                    || !declarations.TryAdd(ordinal, declaration! with
+                    {
+                        EvidencePath = relativePath,
+                        EvidenceStartLine = 1,
+                        EvidenceEndLine = CountLines(content)
+                    }))
                 {
                     gaps.Add(CreateGap(manifest, relativePath, 1, 1, Math.Max(0, ordinal), "invalid-context-sidecar-step", "reduced"));
                 }
@@ -989,7 +1000,10 @@ public static partial class SqlExecutionContextExtractor
             overlay.DeclaredFields.Contains("requiredCapabilities") ? overlay.RequiredCapabilities : source.RequiredCapabilities,
             overlay.DeclaredFields.Contains("stopConditions") ? overlay.StopConditions : source.StopConditions,
             source.IsRecognized || overlay.IsRecognized,
-            source.DeclaredFields.Concat(overlay.DeclaredFields).ToHashSet(StringComparer.Ordinal));
+            source.DeclaredFields.Concat(overlay.DeclaredFields).ToHashSet(StringComparer.Ordinal),
+            overlay.EvidencePath ?? source.EvidencePath,
+            overlay.EvidenceStartLine ?? source.EvidenceStartLine,
+            overlay.EvidenceEndLine ?? source.EvidenceEndLine);
     }
 
     private static string Overlay(string field, string source, ContextDeclaration overlay)
@@ -1229,7 +1243,10 @@ public static partial class SqlExecutionContextExtractor
         IReadOnlyList<string> RequiredCapabilities,
         IReadOnlyList<string> StopConditions,
         bool IsRecognized,
-        IReadOnlySet<string> DeclaredFields);
+        IReadOnlySet<string> DeclaredFields,
+        string? EvidencePath = null,
+        int? EvidenceStartLine = null,
+        int? EvidenceEndLine = null);
 
     private enum LexState
     {

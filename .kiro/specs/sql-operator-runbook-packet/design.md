@@ -37,7 +37,7 @@ Recommended top-level fields:
 | `cleanupEvidence` | Static rollback/cleanup candidates with limitations |
 | `stopConditions` | Cataloged reasons preventing an unqualified handoff |
 | `gaps` | Safe cataloged missing, conflicting, unsupported, or reduced-coverage evidence |
-| `ownerQuestions` | Deterministic category-level questions |
+| `ownerQuestions` | Deterministic category-level questions with rule, tier, file-span, extractor, commit, and coverage evidence |
 | `limitations` | Non-claims and coverage boundaries |
 
 The JSON DTO is allowlisted and compact; it does not embed fact property bags.
