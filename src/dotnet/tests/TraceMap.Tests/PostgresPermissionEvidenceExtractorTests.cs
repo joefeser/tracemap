@@ -179,6 +179,43 @@ public sealed class PostgresPermissionEvidenceExtractorTests
     }
 
     [Fact]
+    public void Reduce_caps_permission_before_object_declaration_at_owner_review()
+    {
+        using var temp = new TempDirectory();
+        WriteSql(temp.Path, "wrong-order.sql", """
+            -- tracemap-sql-context: engine=postgresql server=archive-target database=archive-data schema=archive mode=manual step=grant-permission capabilities=grant-permission stops=verify-active-connection
+            GRANT USAGE ON FOREIGN SERVER fixture_server TO fixture_operator;
+            -- tracemap-sql-context: engine=postgresql server=archive-target database=archive-data schema=archive mode=manual step=fdw-server-setup capabilities=create-foreign-server stops=verify-active-connection
+            CREATE SERVER fixture_server FOREIGN DATA WRAPPER postgres_fdw;
+            -- tracemap-sql-context: engine=postgresql server=archive-target database=archive-data schema=archive mode=manual step=user-mapping capabilities=create-user-mapping stops=secret-owner-review,verify-active-connection
+            CREATE USER MAPPING FOR fixture_operator SERVER fixture_server OPTIONS (password '${FIXTURE_PASSWORD}');
+            """);
+
+        var facts = Extract(temp.Path);
+        var row = Assert.Single(facts, fact => fact.FactType == FactTypes.DatabasePrerequisiteEvidence
+            && fact.Properties.GetValueOrDefault("candidateCapability") == "usage-foreign-server");
+
+        Assert.Equal("needs-owner-review", row.Properties["evidenceStatus"]);
+        Assert.Equal("permission-before-object-declaration", row.Properties["reasonCode"]);
+    }
+
+    [Fact]
+    public void Extract_rejects_comma_separated_permission_targets_instead_of_accepting_a_prefix()
+    {
+        using var temp = new TempDirectory();
+        WriteSql(temp.Path, "lists.sql", """
+            GRANT USAGE ON FOREIGN SERVER fixture_server TO fixture_role_a, fixture_role_b;
+            GRANT USAGE ON FOREIGN SERVER fixture_server_a, fixture_server_b TO fixture_role;
+            """);
+
+        var facts = Extract(temp.Path);
+
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.DatabasePermissionDeclared);
+        Assert.Equal(2, facts.Count(fact => fact.RuleId == RuleIds.DatabasePostgresPermissionGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "unsupported-or-dynamic-permission-statement"));
+    }
+
+    [Fact]
     public void Reduce_labels_reduced_operation_unknown_instead_of_missing()
     {
         using var temp = new TempDirectory();
