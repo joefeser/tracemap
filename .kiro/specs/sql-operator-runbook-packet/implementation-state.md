@@ -1,16 +1,18 @@
 # SQL Operator Runbook Packet Implementation State
 
-Status: implemented
+Status: implemented-and-merged
 Implementation branch: `codex/sql-operator-runbook-packet-impl`
 Target base: `dev`
+Merged PR: [#464](https://github.com/joefeser/tracemap/pull/464)
+Merge commit: `b5be0c0b37a4f67b599e960e9b8a1363b0356660`
 Public claim level: static evidence packet
 
 ## Scope State
 
 The v0 packet is implemented as a deterministic allowlisted projection over the
-four upstream SQL evidence contracts. Every scan now writes `sql-runbook.md` and
-`sql-runbook.json`; `report.md` includes a bounded packet summary. The packet
-contains no executable SQL or generic fact-property bags.
+four upstream SQL evidence contracts. Scans with supported SQL evidence write
+`sql-runbook.md` and `sql-runbook.json`; `report.md` includes a bounded packet
+summary. The packet contains no executable SQL or generic fact-property bags.
 
 Implemented scope:
 

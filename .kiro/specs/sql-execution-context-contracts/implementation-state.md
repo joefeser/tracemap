@@ -1,8 +1,10 @@
 # SQL Execution Context Contracts Implementation State
 
-Status: implemented-pending-pr-review
+Status: implemented-and-merged
 Implementation branch: `codex/sql-execution-context-contracts-impl`
 Target base: `dev`
+Merged PR: [#460](https://github.com/joefeser/tracemap/pull/460)
+Merge commit: `f18466efda80e87b758af32a1e8147a07a1ad46d`
 Base SHA: `ed6a83cca428c0b4397b3292880487ca97938b66`
 Public claim level: hidden
 
