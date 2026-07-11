@@ -1,6 +1,6 @@
 # Site SQL Operator Handoff Story Implementation State
 
-Status: implemented-pending-pr-review
+Status: implemented
 Readiness: implemented
 Implementation branch: `codex/site-sql-evidence-manager-story`
 Target base: `dev`
@@ -21,8 +21,8 @@ validation output, runtime conclusions, safety certification, or DBA approval.
 
 ## Validation
 
-- Focused SQL operator handoff tests: 2 passed.
-- Full site tests: 676 passed.
+- Focused SQL operator handoff tests: 4 passed.
+- Full site tests: 678 passed.
 - `npm run build` and `npm run validate`: passed; 91 HTML pages, 3,158
   internal references, and 90 sitemap URLs validated.
 - Desktop 1440×1000 and mobile 390×844 browser checks: passed with no console

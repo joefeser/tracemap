@@ -9,4 +9,4 @@
 - [x] Run the site build and focused/full site tests.
 - [x] Complete desktop and mobile browser checks.
 - [x] Run the private-path guard and diff check.
-- [ ] Commit, push, open a ready PR to `dev`, and run ACK.
+- [x] Commit, push, open a ready PR to `dev`, and run ACK.

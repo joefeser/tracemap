@@ -76,7 +76,7 @@ import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { siteClaimGuardrailsRoute } from "./site-claim-guardrails.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
-import { sqlOperatorHandoffRoute } from "./sql-operator-handoff.mjs";
+import { sqlOperatorHandoffInboundRoutes, sqlOperatorHandoffRoute } from "./sql-operator-handoff.mjs";
 import { swiftAdapterStoryRoute } from "./swift-adapter-story.mjs";
 import { swiftApiClientWalkthroughRoute } from "./swift-api-client-walkthrough.mjs";
 import { swiftClaimLanguageRoute } from "./swift-claim-language.mjs";
@@ -362,7 +362,11 @@ async function createDistFixture({
 
     const path = route.replace(/^\/|\/$/g, "");
     await mkdir(join(dist, path), { recursive: true });
-    await writeFile(join(dist, path, "index.html"), await fixturePageHtml(route, path), "utf8");
+    let html = await fixturePageHtml(route, path);
+    if (sqlOperatorHandoffInboundRoutes.includes(route) && !html.includes(sqlOperatorHandoffRoute)) {
+      html = html.replace("</main>", `<a href="${sqlOperatorHandoffRoute}">SQL operator handoff</a></main>`);
+    }
+    await writeFile(join(dist, path, "index.html"), html, "utf8");
   }
 
   await writeFile(join(dist, "index.html"), indexHtml, "utf8");
@@ -551,6 +555,10 @@ Browser sanity: fixture-only state record for aggregate validation.
 }
 
 async function fixturePageHtml(route, path) {
+  if (route === sqlOperatorHandoffRoute) {
+    return readFile(new URL("../src/sql/operator-handoff/index.html", import.meta.url), "utf8");
+  }
+
   if (route === "/deploy-audit/") {
     return deployAuditPage();
   }
@@ -963,6 +971,17 @@ function buildReviewWorkflowStoryPage() {
 async function writeDiscoveryFiles(dist) {
   const outputs = await createDiscoveryOutputs(
     [
+      {
+        path: sqlOperatorHandoffRoute,
+        title: "SQL operator handoff",
+        summary: "Public-safe manager story for reviewing static SQL execution-context evidence and explicit gaps.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/manager-packet/",
+        limitations: ["Static script evidence does not prove runtime database state or operational safety."],
+        nonClaims: ["No live database access, SQL execution, secrets, raw SQL, or DBA approval."]
+      },
       ...deployAuditRequiredRoutes.map((route) => ({
         path: route,
         title: "Fixture Home",
