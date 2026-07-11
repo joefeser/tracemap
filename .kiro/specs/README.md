@@ -12,6 +12,11 @@ Recommended status values:
 - `implemented-mvp`: the first useful slice shipped; any unshipped work must be explicitly labeled follow-up/backlog scope.
 - `implemented-partial`: a product slice shipped, but the original spec matrix still has open follow-up implementation tasks that are not blockers for the landed slice.
 - `spec-ready`: spec authoring/review is complete enough for a future implementation branch; product work has not started.
+- `ready-for-implementation`: the requested runway status for a spec whose
+  requirements, design, unchecked implementation tasks, and implementation
+  state are complete enough to begin product work; equivalent in lifecycle
+  position to `spec-ready`, but preserved when a spec request or coordinating
+  workflow requires this exact status token.
 - `not-started`: ready or proposed, but not implemented.
 - `needs-human-review`: status cannot be determined safely from repo evidence alone.
 - `superseded`: replaced by another spec or implementation.

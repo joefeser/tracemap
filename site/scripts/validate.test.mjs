@@ -58,6 +58,10 @@ import { proofPathsForManagersRoute } from "./proof-paths-for-managers.mjs";
 import { proofPathStoriesRoute } from "./proof-path-stories.mjs";
 import { proofPathTourRoute } from "./proof-path-tour.mjs";
 import { propertyFlowSchemaGapRoute } from "./property-flow-schema-gap.mjs";
+import {
+  ragVsAgenticRetrievalArticleRequiredLinks,
+  ragVsAgenticRetrievalArticleRoute
+} from "./rag-vs-agentic-retrieval-article.mjs";
 import { routeFlowEvidenceStoryRoute } from "./route-flow-evidence-story.mjs";
 import { proofSourceCatalogRoute } from "./proof-source-catalog.mjs";
 import { reducedCoveragePlaybookRoute } from "./reduced-coverage-playbook.mjs";
@@ -72,6 +76,7 @@ import { roadmapClaimLedgerRoute } from "./roadmap-claim-ledger.mjs";
 import { siteClaimGuardrailsRoute } from "./site-claim-guardrails.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
+import { sqlOperatorHandoffInboundRoutes, sqlOperatorHandoffRoute } from "./sql-operator-handoff.mjs";
 import { swiftAdapterStoryRoute } from "./swift-adapter-story.mjs";
 import { swiftApiClientWalkthroughRoute } from "./swift-api-client-walkthrough.mjs";
 import { swiftClaimLanguageRoute } from "./swift-claim-language.mjs";
@@ -242,6 +247,7 @@ async function createDistFixture({
       proofPathStoriesRoute,
       proofPathTourRoute,
       proofSourceCatalogRoute,
+      ragVsAgenticRetrievalArticleRoute,
       reducedCoveragePlaybookRoute,
       reviewerQuickstartRoute,
       evidencePacketExamplesRoute,
@@ -256,6 +262,7 @@ async function createDistFixture({
       siteClaimGuardrailsRoute,
       staticTriageRoute,
       staticVsRuntimeRoute,
+      sqlOperatorHandoffRoute,
       swiftAdapterStoryRoute,
       swiftApiClientWalkthroughRoute,
       swiftClaimLanguageRoute,
@@ -315,6 +322,7 @@ async function createDistFixture({
     proofPathStoriesRoute,
     proofPathTourRoute,
     proofSourceCatalogRoute,
+    ragVsAgenticRetrievalArticleRoute,
     reducedCoveragePlaybookRoute,
     reviewerQuickstartRoute,
     "/manager-packet/",
@@ -331,6 +339,7 @@ async function createDistFixture({
     siteClaimGuardrailsRoute,
     staticTriageRoute,
     staticVsRuntimeRoute,
+    sqlOperatorHandoffRoute,
     swiftAdapterStoryRoute,
     swiftApiClientWalkthroughRoute,
     swiftClaimLanguageRoute,
@@ -353,7 +362,11 @@ async function createDistFixture({
 
     const path = route.replace(/^\/|\/$/g, "");
     await mkdir(join(dist, path), { recursive: true });
-    await writeFile(join(dist, path, "index.html"), await fixturePageHtml(route, path), "utf8");
+    let html = await fixturePageHtml(route, path);
+    if (sqlOperatorHandoffInboundRoutes.includes(route) && !html.includes(sqlOperatorHandoffRoute)) {
+      html = html.replace("</main>", `<a href="${sqlOperatorHandoffRoute}">SQL operator handoff</a></main>`);
+    }
+    await writeFile(join(dist, path, "index.html"), html, "utf8");
   }
 
   await writeFile(join(dist, "index.html"), indexHtml, "utf8");
@@ -542,6 +555,10 @@ Browser sanity: fixture-only state record for aggregate validation.
 }
 
 async function fixturePageHtml(route, path) {
+  if (route === sqlOperatorHandoffRoute) {
+    return readFile(new URL("../src/sql/operator-handoff/index.html", import.meta.url), "utf8");
+  }
+
   if (route === "/deploy-audit/") {
     return deployAuditPage();
   }
@@ -551,7 +568,7 @@ async function fixturePageHtml(route, path) {
   }
 
   if (route === "/blog/") {
-    return page(`<a href="${buildReviewWorkflowStoryRoute}"><span>Workflow governance</span>Building TraceMap Under Review Pressure</a><a href="${blogProofPathSeriesRoute}">What a Proof Path Is</a><a href="${swiftApiClientArticleRoute}">How TraceMap Reads Swift API Clients Without Pretending They Ran</a>`);
+    return page(`<a href="${buildReviewWorkflowStoryRoute}"><span>Workflow governance</span>Building TraceMap Under Review Pressure</a><a href="${blogProofPathSeriesRoute}">What a Proof Path Is</a><a href="${swiftApiClientArticleRoute}">How TraceMap Reads Swift API Clients Without Pretending They Ran</a><a href="${ragVsAgenticRetrievalArticleRoute}">RAG vs Agentic Retrieval for Code Review</a>`);
   }
 
   if (route === buildReviewWorkflowStoryRoute) {
@@ -568,6 +585,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === swiftApiClientArticleRoute) {
     return swiftApiClientArticlePage();
+  }
+
+  if (route === ragVsAgenticRetrievalArticleRoute) {
+    return ragVsAgenticRetrievalArticlePage();
   }
 
   if (route === demoEvidenceTrailRoute) {
@@ -871,6 +892,24 @@ function swiftApiClientArticlePage() {
   );
 }
 
+async function ragVsAgenticRetrievalArticlePage() {
+  const article = await readFile(
+    new URL("../src/_blog/articles/rag-vs-agentic-retrieval-for-code-review.html", import.meta.url),
+    "utf8"
+  );
+  const links = ragVsAgenticRetrievalArticleRequiredLinks.map((link) => `<a href="${link}">${link}</a>`).join(" ");
+
+  return page(
+    `<article>
+      <title>RAG vs Agentic Retrieval for Code Review: A TraceMap Perspective | TraceMap</title>
+      <meta property="og:type" content="article">
+      <link rel="canonical" href="https://tracemap.tools${ragVsAgenticRetrievalArticleRoute}">
+      ${article}
+      <footer>${links}</footer>
+    </article>`
+  );
+}
+
 function buildReviewWorkflowStoryPage() {
   const links = buildReviewWorkflowRequiredLinks.map((link) => `<a href="${link}">${link}</a>`).join(" ");
   const filler = Array.from(
@@ -932,6 +971,17 @@ function buildReviewWorkflowStoryPage() {
 async function writeDiscoveryFiles(dist) {
   const outputs = await createDiscoveryOutputs(
     [
+      {
+        path: sqlOperatorHandoffRoute,
+        title: "SQL operator handoff",
+        summary: "Public-safe manager story for reviewing static SQL execution-context evidence and explicit gaps.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/manager-packet/",
+        limitations: ["Static script evidence does not prove runtime database state or operational safety."],
+        nonClaims: ["No live database access, SQL execution, secrets, raw SQL, or DBA approval."]
+      },
       ...deployAuditRequiredRoutes.map((route) => ({
         path: route,
         title: "Fixture Home",

@@ -93,3 +93,4 @@ nunit-*.xml
 scripts/smoke-typescript-endpoints.sh
 .tmp
 .agent-control/tmp
+.agent-control/pr-loop-handoffs

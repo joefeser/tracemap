@@ -268,6 +268,7 @@ public static class ScanEngine
         facts.AddRange(LegacyAsmxExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(LegacyRemotingExtractor.Extract(repoPath, manifest, inventory, semanticResult.Facts, semanticResult.Attempted));
         facts.AddRange(SqlFileExtractor.Extract(repoPath, manifest, inventory));
+        facts.AddRange(SqlExecutionContextExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(ConfigExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.GapFacts));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.Facts));

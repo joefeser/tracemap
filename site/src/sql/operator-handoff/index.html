@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A public-safe manager story for reviewing static SQL context, prerequisites, protected steps, validation expectations, and gaps before operator action.">
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>SQL Operator Handoff | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/sql/operator-handoff/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap SQL Operator Handoff">
+    <meta property="og:description" content="What checked-in SQL evidence can show before DBA or operator action—and where static proof stops.">
+    <meta property="og:url" content="https://tracemap.tools/sql/operator-handoff/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home"><span class="brand-mark" aria-hidden="true">T</span><span>TraceMap</span></a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a><a href="/outputs/">Outputs</a><a href="/workflows/">Workflows</a><a href="/examples/">Examples</a><a href="/blog/">Blog</a><a href="/capabilities/">Capabilities</a><a href="/docs/">Docs</a><a href="/validation/">Validation</a><a href="/limitations/">Limitations</a><a href="/demo/">Demo</a><a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero" data-sql-handoff-section="hero">
+        <p class="eyebrow">SQL operator handoff</p>
+        <h1>Before anyone runs the scripts, make the evidence boundary visible.</h1>
+        <p class="hero-subhead">A manager or database owner can review intended context, prerequisite candidates, protected handling steps, validation expectations, stop conditions, and gaps without turning static evidence into permission to execute.</p>
+        <p class="hero-note">Public claim level: demo. This is a synthetic, public-safe illustration of the merged <code>sql-operator-runbook-packet/v1</code> contract. It is not raw scan output, executable SQL, runtime validation, or DBA approval.</p>
+        <nav class="hero-actions" aria-label="SQL handoff links"><a class="button primary" href="#handoff-packet">Open the packet shape</a><a class="button secondary" href="/manager-packet/">Manager packet</a><a class="button secondary" href="/outputs/">Output artifacts</a><a class="button secondary" href="/limitations/">Limitations</a></nav>
+      </section>
+
+      <section class="section split-section" data-sql-handoff-section="question">
+        <div><p class="section-kicker">Manager question</p><h2>What can the repository establish before operator action?</h2></div>
+        <div class="detail-list">
+          <div><strong>Expected context</strong><span>Categorical engine, server role, database role, schema role, and manual, scheduled, or validation-only mode.</span></div>
+          <div><strong>Prerequisite candidates</strong><span>Checked-in grant and ownership evidence labeled without claiming effective runtime authorization.</span></div>
+          <div><strong>Protected steps</strong><span>Category-only handling flags for user mappings, connection material, remote query input, and scheduled command boundaries.</span></div>
+          <div><strong>Validation expectations</strong><span>A checked-in validation step is visible as intent; no query result or live database state is observed.</span></div>
+          <div><strong>Stops and owners</strong><span>Missing, conflicting, unknown, or reduced evidence becomes a stop condition and a named owner question.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="handoff-packet" data-sql-handoff-section="packet">
+        <div class="section-header"><p class="section-kicker">Public-safe packet illustration</p><h2>A compact handoff keeps proof and limitation together.</h2><p>The rows below use synthetic categorical values. They show the fields a manager can discuss while omitting statement text, identities, credentials, connection data, scheduled bodies, and observed validation output.</p></div>
+        <div class="output-list">
+          <div><code>context checkpoint 01</code><span><strong>admin / admin / extension / manual</strong> · independently verify the active pgAdmin tab, connection, server, and database · rule <code>database.sql.context.declaration.v1</code> · <code>Tier2Structural</code> · complete · <code>setup.sql:1-1</code> · <code>sql-execution-context/0.1.0</code></span></div>
+          <div><code>context transition 02</code><span><strong>archive-target / archive-data / archive / manual</strong> · wrong-tab and wrong-database review checkpoint · rule <code>database.sql.context.declaration.v1</code> · <code>Tier2Structural</code> · complete · <code>setup.sql:3-3</code> · <code>sql-execution-context/0.1.0</code></span></div>
+          <div><code>protected step</code><span><strong>user-mapping / credential-option</strong> · route material through an owner-approved process · rule <code>database.sql.secret-bearing-step.v1</code> · <code>Tier2Structural</code> · complete · <code>setup.sql:7-7</code> · <code>sql-secret-safety/0.1.0</code></span></div>
+          <div><code>permission candidate</code><span><strong>usage-foreign-server: present-in-scripts</strong> · checked-in compatible evidence only, not effective permission · rule <code>database.postgres.permission.coverage.v1</code> · <code>Tier2Structural</code> · complete · <code>setup.sql:7-7</code> · <code>postgres-permission-evidence/0.1.0</code></span></div>
+          <div><code>scheduled surface</code><span><strong>pg_cron / scheduled</strong> · declaration only; no job execution is observed · rule <code>database.postgres.archive-link.v1</code> · <code>Tier2Structural</code> · complete · <code>setup.sql:15-15</code> · <code>postgres-archive-link/0.1.0</code></span></div>
+          <div><code>validation expectation</code><span><strong>validation-step-present / validation-evidence-not-provided</strong> · rule <code>database.sql.context.declaration.v1</code> · <code>Tier2Structural</code> · complete · <code>setup.sql:17-17</code> · <code>sql-execution-context/0.1.0</code></span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" data-sql-handoff-section="surfaces">
+        <div><p class="section-kicker">PostgreSQL-first surfaces</p><h2>The packet names mechanisms without claiming they work.</h2></div>
+        <div class="detail-list">
+          <div><strong>postgres_fdw</strong><span>Extension, foreign-server, user-mapping, schema-import, foreign-table, and server-grant surfaces can be classified.</span></div>
+          <div><strong>dblink</strong><span>Extension and call boundaries are visible; connection material and remote query input remain protected.</span></div>
+          <div><strong>Logical replication</strong><span>Publication and subscription declarations can be paired as static candidates, never as proof of replication health.</span></div>
+          <div><strong>pg_cron</strong><span>Extension and scheduled-operation surfaces create a scheduled context, not evidence that a job ran.</span></div>
+        </div>
+      </section>
+
+      <section class="section" data-sql-handoff-section="statuses">
+        <div class="section-header"><p class="section-kicker">Permission language</p><h2>Five statuses prevent a checked-in statement from becoming a runtime claim.</h2></div>
+        <div class="workflow-grid">
+          <article><h3><code>present-in-scripts</code></h3><p>Compatible static evidence exists in the analyzed script set. A database owner still validates effective access.</p></article>
+          <article><h3><code>missing-evidence</code></h3><p>No compatible checked-in evidence was found within current coverage. Runtime absence is not established.</p></article>
+          <article><h3><code>conflicting-evidence</code></h3><p>Static grant, revoke, context, or ordering evidence disagrees and needs review.</p></article>
+          <article><h3><code>unknown</code></h3><p>Identity, parsing, or coverage is insufficient for a stronger static status.</p></article>
+          <article><h3><code>needs-owner-review</code></h3><p>Administrative capability, cross-file order, protected handling, or context requires a human owner.</p></article>
+        </div>
+      </section>
+
+      <section class="section split-section" data-sql-handoff-section="milestones">
+        <div><p class="section-kicker">Milestones and validation</p><h2>Intent and observation stay in different columns.</h2></div>
+        <div class="detail-list">
+          <div><strong><code>intended-by-script</code></strong><span>A supported extension, link, permission, publication, subscription, scheduled job, or cleanup candidate appears in checked-in evidence.</span></div>
+          <div><strong><code>validation-step-present</code></strong><span>A validation-shaped step is checked in. TraceMap does not inspect its result.</span></div>
+          <div><strong><code>validation-evidence-not-provided</code></strong><span>V0 has no live connection and accepts no raw database output.</span></div>
+          <div><strong>Cleanup candidate</strong><span>A destructive or rollback-shaped step is intent only; reversibility and completion remain unknown.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" data-sql-handoff-section="stops">
+        <div><p class="section-kicker">Stop conditions and owner questions</p><h2>A partial packet is useful only when it says where to stop.</h2></div>
+        <ul>
+          <li>Stop when expected context is missing or conflicting; ask who verifies the active client connection and database.</li>
+          <li>Stop at protected-material boundaries; ask who owns the approved credential and connection handling process.</li>
+          <li>Stop when permission evidence is missing, conflicting, unknown, or administrative; ask a database owner to validate the prerequisite candidate.</li>
+          <li>Stop when cross-file order is not established or parsing is reduced; ask who owns execution order and coverage review.</li>
+          <li>Stop when a validation step or observation is not established; ask who performs independent validation outside TraceMap.</li>
+        </ul>
+      </section>
+
+      <section class="section boundary-section" data-sql-handoff-section="non-claims">
+        <div><p class="section-kicker">Non-claims</p><h2>The handoff informs human review; it does not authorize action.</h2></div>
+        <ul>
+          <li>TraceMap does not execute SQL, connect to a live database, or observe the selected pgAdmin tab.</li>
+          <li>TraceMap does not certify a script for execution or establish that setup completed.</li>
+          <li>TraceMap does not establish effective permissions, object existence, replication health, scheduled execution, validation results, or successful rollback.</li>
+          <li>TraceMap does not replace database owners, operators, security review, change controls, tests, telemetry, logs, or human approval.</li>
+          <li>The core scanner and reducer do not use LLM calls, embeddings, vector databases, or prompt-based classification.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section" data-sql-handoff-section="links">
+        <div><p class="section-kicker">Continue the proof path</p><h2>Keep the manager summary attached to its boundaries.</h2></div>
+        <div class="link-grid"><a href="/manager-packet/">Manager packet</a><a href="/proof-paths/for-managers/">Proof paths for managers</a><a href="/packets/">Evidence packet guide</a><a href="/outputs/">Output artifacts</a><a href="/evidence/">Evidence tiers</a><a href="/limitations/">Limitations</a><a href="/validation/">Validation guide</a><a href="https://github.com/joefeser/tracemap/blob/dev/docs/SQL_OPERATOR_RUNBOOK_PACKET.md">SQL packet documentation</a></div>
+      </section>
+    </main>
+
+    <footer class="site-footer"><p>This manager story stays bounded to deterministic static evidence and public-safe synthetic context.</p><p class="copyright">© 2026 Joe Feser.</p></footer>
+  </body>
+</html>
