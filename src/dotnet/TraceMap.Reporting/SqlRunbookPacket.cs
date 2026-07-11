@@ -37,7 +37,7 @@ public sealed record SqlRunbookOwnerQuestion(string Question, SqlRunbookEvidence
 
 public static class SqlRunbookPacketBuilder
 {
-    public const string SchemaVersion = "sql-operator-runbook-packet/v1";
+    public const string SchemaVersion = "sql-operator-runbook-packet/v2";
 
     public static SqlRunbookPacket Build(ScanResult result)
     {
@@ -46,9 +46,9 @@ public static class SqlRunbookPacketBuilder
         var contexts = sqlFacts
             .Where(f => f.FactType is FactTypes.SqlExecutionContextDeclared or FactTypes.SqlExecutionContextCandidate)
             .Where(f => f.Evidence is not null)
-            .GroupBy(f => (f.Evidence.FilePath, Ordinal: Value(f, "statementOrdinal", "0")))
+            .GroupBy(f => (SourcePath: ContextSourcePath(f), Ordinal: Value(f, "statementOrdinal", "0")))
             .Select(g => g.OrderBy(f => f.FactType == FactTypes.SqlExecutionContextDeclared ? 0 : 1).ThenBy(f => f.FactId, StringComparer.Ordinal).First())
-            .OrderBy(f => f.Evidence.FilePath, StringComparer.Ordinal)
+            .OrderBy(ContextSourcePath, StringComparer.Ordinal)
             .ThenBy(f => Ordinal(f))
             .ThenBy(f => f.FactId, StringComparer.Ordinal)
             .ToArray();
@@ -58,7 +58,7 @@ public static class SqlRunbookPacketBuilder
         foreach (var context in contexts)
         {
             if (contextRuns.Count == 0
-                || contextRuns[^1][^1].Evidence.FilePath != context.Evidence.FilePath
+                || ContextSourcePath(contextRuns[^1][^1]) != ContextSourcePath(context)
                 || ContextKey(contextRuns[^1][^1]) != ContextKey(context))
                 contextRuns.Add([]);
             contextRuns[^1].Add(context);
@@ -104,7 +104,7 @@ public static class SqlRunbookPacketBuilder
             .OrderBy(FactOrder).Select(f => new SqlRunbookGap(
                 Value(f, "gapKind", "unknown-static-gap"), GapCategory(f.RuleId), Evidence(f, commitSha))).ToArray();
 
-        var multipleSqlFiles = contexts.Select(f => f.Evidence.FilePath).Where(path => path is not null).Distinct(StringComparer.Ordinal).Skip(1).Any();
+        var multipleSqlFiles = contexts.Select(ContextSourcePath).Distinct(StringComparer.Ordinal).Skip(1).Any();
         var commitKnown = IsKnownCommit(result.Manifest.CommitSha);
         var derivedSource = contexts.Concat(surfaces).Concat(sqlFacts.Where(f => f.Evidence is not null)).OrderBy(FactOrder).FirstOrDefault();
         var stops = contexts.SelectMany(f => Codes(Value(f, "stopConditions", "verify-active-connection"))
@@ -167,6 +167,13 @@ public static class SqlRunbookPacketBuilder
     private static bool IsSqlFact(CodeFact f) => f.RuleId.StartsWith("database.sql.", StringComparison.Ordinal)
         || f.RuleId.StartsWith("database.postgres.", StringComparison.Ordinal);
     private static string ContextKey(CodeFact f) => string.Join('|', Value(f, "engineFamily", "unknown"), Value(f, "serverRole", "unknown"), Value(f, "databaseRole", "unknown"), Value(f, "schemaRole", "unspecified"), Value(f, "executionMode", "unknown"));
+    private static string ContextSourcePath(CodeFact fact)
+    {
+        var path = fact.Evidence.FilePath ?? string.Empty;
+        return path.EndsWith(SqlExecutionContextExtractor.SidecarSuffix, StringComparison.Ordinal)
+            ? path[..^SqlExecutionContextExtractor.SidecarSuffix.Length]
+            : path;
+    }
     private static string Value(CodeFact f, string key, string fallback) => f.Properties.GetValueOrDefault(key) ?? fallback;
     private static int Ordinal(CodeFact f) => int.TryParse(Value(f, "statementOrdinal", "0"), out var value) ? value : int.MaxValue;
     private static string FactOrder(CodeFact f) => $"{f.Evidence.FilePath}\u001f{f.Evidence.StartLine:D10}\u001f{f.FactId}";

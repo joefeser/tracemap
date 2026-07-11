@@ -19,6 +19,7 @@ public sealed class SqlRunbookPacketTests
         var markdown = SqlRunbookPacketWriter.RenderMarkdown(first);
 
         Assert.Equal(SqlRunbookPacketBuilder.SchemaVersion, first.SchemaVersion);
+        Assert.Equal("sql-operator-runbook-packet/v2", first.SchemaVersion);
         Assert.Equal(json, JsonSerializer.Serialize(second, SqlRunbookPacketWriter.JsonOptions));
         Assert.NotEmpty(first.StepGroups);
         Assert.Contains(first.StepGroups, group => group.ExecutionMode == "scheduled");
@@ -60,6 +61,39 @@ public sealed class SqlRunbookPacketTests
             Assert.True(question.Evidence.LineSpan.StartLine > 0);
         });
         Assert.DoesNotContain(packet.Milestones, milestone => milestone.State is "applied" or "healthy" or "succeeded");
+    }
+
+    [Fact]
+    public void Build_coalesces_sidecar_declaration_with_its_sql_candidate()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "setup.sql"), "CREATE EXTENSION postgres_fdw;");
+        File.WriteAllText(Path.Combine(temp.Path, "setup.sql" + SqlExecutionContextExtractor.SidecarSuffix), """
+            {
+              "schemaVersion": "sql-execution-context/v1",
+              "steps": [
+                {
+                  "statementOrdinal": 1,
+                  "engineFamily": "postgresql",
+                  "serverRole": "admin",
+                  "databaseRole": "admin",
+                  "schemaRole": "extension",
+                  "executionMode": "manual",
+                  "stepKind": "extension-setup",
+                  "requiredCapabilities": ["create-extension"],
+                  "stopConditions": ["verify-active-connection"]
+                }
+              ]
+            }
+            """);
+
+        var packet = SqlRunbookPacketBuilder.Build(Result(temp.Path));
+        var step = Assert.Single(packet.StepGroups.SelectMany(group => group.Steps));
+
+        Assert.Equal(1, step.StatementOrdinal);
+        Assert.EndsWith(SqlExecutionContextExtractor.SidecarSuffix, step.Evidence.FilePath, StringComparison.Ordinal);
+        Assert.DoesNotContain(packet.StopConditions, stop => stop.Code == "cross-file-order-not-established");
+        Assert.DoesNotContain("cross-file-order", packet.Coverage.ReducedComponents);
     }
 
     [Fact]

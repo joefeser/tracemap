@@ -16,7 +16,8 @@ summary. The packet contains no executable SQL or generic fact-property bags.
 
 Implemented scope:
 
-- `sql-operator-runbook-packet/v1` JSON DTO and deterministic Markdown renderer.
+- `sql-operator-runbook-packet/v2` JSON DTO and deterministic Markdown renderer. Version 2
+  adds evidence metadata to owner questions; version 1 used bare question strings.
 - Ordered categorical context groups, explicit transition checkpoints, and
   manual-client active-connection verification reminders.
 - Static milestones for extensions, archive-link surfaces, permissions,
