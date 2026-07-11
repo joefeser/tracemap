@@ -73,6 +73,15 @@ test("SQL operator handoff validator reports malformed discovery output", async 
   assert.match(errors.join("\n"), /could not parse routes-index\.json/);
 });
 
+test("SQL operator handoff validator reports non-array route entries without throwing", async (t) => {
+  const root = await createSiteFixture(t);
+  await buildSite({ root, log() {} });
+  await writeFile(join(root, "dist", "routes-index.json"), JSON.stringify({ entries: {} }));
+  const errors = [];
+  await validateSqlOperatorHandoffDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /routes-index\.json is missing \/sql\/operator-handoff\//);
+});
+
 async function createSiteFixture(t) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-sql-handoff-"));
   t.after(() => rm(root, { recursive: true, force: true }));
