@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { decodeHtmlEntities, fileExists, normalizeRenderedText, readSitemapLocSet } from "./validate-utils.mjs";
+import { decodeHtmlEntities, escapeRegExp, fileExists, normalizeRenderedText, readSitemapLocSet } from "./validate-utils.mjs";
 
 export const sqlOperatorHandoffRoute = "/sql/operator-handoff/";
 export const sqlOperatorHandoffInboundRoutes = [
@@ -53,18 +53,23 @@ export async function validateSqlOperatorHandoffDist({ baseUrl = "https://tracem
   const html = await readFile(pagePath, "utf8");
   const text = normalizeRenderedText(html);
   const decoded = decodeHtmlEntities(html);
+  const tagCollapsedText = decoded.replace(/<[^>]*>/g, "");
   for (const phrase of requiredText) {
     if (!text.includes(phrase) && !decoded.includes(phrase)) errors.push(`SQL operator handoff page is missing required text: ${phrase}`);
   }
   for (const pattern of forbiddenPatterns) {
-    if (pattern.test(`${decoded} ${text}`)) errors.push(`SQL operator handoff page contains forbidden private, executable, or overclaim text: ${pattern}`);
+    if (pattern.test(`${decoded} ${text} ${tagCollapsedText}`)) errors.push(`SQL operator handoff page contains forbidden private, executable, or overclaim text: ${pattern}`);
   }
-  if (!html.includes('<meta property="og:type" content="article">')) errors.push("SQL operator handoff page must use article social metadata.");
-  if (!html.includes('rel="canonical" href="https://tracemap.tools/sql/operator-handoff/"')) errors.push("SQL operator handoff canonical URL is missing or incorrect.");
+  if (!/<meta\b(?=[^>]*\bproperty\s*=\s*["']og:type["'])(?=[^>]*\bcontent\s*=\s*["']article["'])[^>]*>/i.test(html)) {
+    errors.push("SQL operator handoff page must use article social metadata.");
+  }
+  if (!/<link\b(?=[^>]*\brel\s*=\s*["']canonical["'])(?=[^>]*\bhref\s*=\s*["']https:\/\/tracemap\.tools\/sql\/operator-handoff\/["'])[^>]*>/i.test(html)) {
+    errors.push("SQL operator handoff canonical URL is missing or incorrect.");
+  }
 
   for (const route of sqlOperatorHandoffInboundRoutes) {
     const inboundPath = resolve(dist, route.slice(1), "index.html");
-    if (!(await fileExists(inboundPath)) || !(await readFile(inboundPath, "utf8")).includes('href="/sql/operator-handoff/"')) {
+    if (!(await fileExists(inboundPath)) || !hasHref(await readFile(inboundPath, "utf8"), sqlOperatorHandoffRoute)) {
       errors.push(`Required inbound route ${route} does not link to /sql/operator-handoff/.`);
     }
   }
@@ -80,4 +85,8 @@ export async function validateSqlOperatorHandoffDist({ baseUrl = "https://tracem
     if (entry.sourceType !== "site-page") errors.push(`SQL operator handoff sourceType must be site-page, got ${entry.sourceType}.`);
     if (entry.preferredProofPath !== "/manager-packet/") errors.push(`SQL operator handoff preferredProofPath must be /manager-packet/, got ${entry.preferredProofPath}.`);
   }
+}
+
+function hasHref(html, route) {
+  return new RegExp(`\\bhref\\s*=\\s*(["'])${escapeRegExp(route)}\\1`, "i").test(html);
 }
