@@ -413,6 +413,7 @@ public static partial class SqlExecutionContextExtractor
                 return (declarations, gaps);
             }
 
+            var lineCount = CountLines(content);
             foreach (var step in steps.EnumerateArray())
             {
                 if (!TryParseSidecarDeclaration(step, out var ordinal, out var declaration)
@@ -420,7 +421,7 @@ public static partial class SqlExecutionContextExtractor
                     {
                         EvidencePath = relativePath,
                         EvidenceStartLine = 1,
-                        EvidenceEndLine = CountLines(content)
+                        EvidenceEndLine = lineCount
                     }))
                 {
                     gaps.Add(CreateGap(manifest, relativePath, 1, 1, Math.Max(0, ordinal), "invalid-context-sidecar-step", "reduced"));
