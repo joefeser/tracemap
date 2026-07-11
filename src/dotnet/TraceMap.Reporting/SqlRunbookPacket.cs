@@ -15,7 +15,7 @@ public sealed record SqlRunbookPacket(
     IReadOnlyList<SqlRunbookProtectedStep> ProtectedSteps,
     IReadOnlyList<SqlRunbookValidation> ValidationExpectations,
     IReadOnlyList<SqlRunbookCleanup> CleanupEvidence,
-    IReadOnlyList<string> StopConditions,
+    IReadOnlyList<SqlRunbookStopCondition> StopConditions,
     IReadOnlyList<SqlRunbookGap> Gaps,
     IReadOnlyList<string> OwnerQuestions,
     IReadOnlyList<string> Limitations);
@@ -30,6 +30,7 @@ public sealed record SqlRunbookPrerequisite(string OperationKind, string Capabil
 public sealed record SqlRunbookProtectedStep(int StatementOrdinal, string Classification, IReadOnlyList<string> Categories, string OwnerHandling, SqlRunbookEvidence Evidence);
 public sealed record SqlRunbookValidation(int StatementOrdinal, string State, string ObservationState, SqlRunbookEvidence Evidence);
 public sealed record SqlRunbookCleanup(int StatementOrdinal, string State, SqlRunbookEvidence Evidence);
+public sealed record SqlRunbookStopCondition(string Code, SqlRunbookEvidence Evidence);
 public sealed record SqlRunbookGap(string Code, string Category, SqlRunbookEvidence Evidence);
 
 public static class SqlRunbookPacketBuilder
@@ -100,14 +101,21 @@ public static class SqlRunbookPacketBuilder
             .OrderBy(FactOrder).Select(f => new SqlRunbookGap(
                 Value(f, "gapKind", "unknown-static-gap"), GapCategory(f.RuleId), Evidence(f))).ToArray();
 
-        var multipleSqlFiles = contexts.Select(f => f.Evidence.FilePath).Distinct(StringComparer.Ordinal).Skip(1).Any();
-        var stops = contexts.SelectMany(f => Codes(Value(f, "stopConditions", "verify-active-connection")))
-            .Concat(protectedSteps.Select(_ => "secret-owner-review"))
-            .Concat(gaps.Select(g => $"resolve-{g.Category}-gap"))
-            .Concat(validationFacts.Length == 0 && surfaces.Length > 0 ? ["validation-step-not-established"] : [])
-            .Concat(multipleSqlFiles ? ["cross-file-order-not-established"] : [])
-            .Concat(contexts.Any(f => Value(f, "coverage", "reduced") != "complete") ? ["partial-context-coverage-review"] : [])
-            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var multipleSqlFiles = contexts.Select(f => f.Evidence.FilePath).Where(path => path is not null).Distinct(StringComparer.Ordinal).Skip(1).Any();
+        var commitKnown = IsKnownCommit(result.Manifest.CommitSha);
+        var derivedSource = contexts.Concat(surfaces).Concat(sqlFacts.Where(f => f.Evidence is not null)).OrderBy(FactOrder).FirstOrDefault();
+        var stops = contexts.SelectMany(f => Codes(Value(f, "stopConditions", "verify-active-connection"))
+                .Select(code => new SqlRunbookStopCondition(code, Evidence(f))))
+            .Concat(protectedSteps.Select(step => new SqlRunbookStopCondition("secret-owner-review", step.Evidence)))
+            .Concat(gaps.Select(gap => new SqlRunbookStopCondition($"resolve-{gap.Category}-gap", gap.Evidence)))
+            .Concat(validationFacts.Length == 0 && surfaces.Length > 0 ? [new SqlRunbookStopCondition("validation-step-not-established", DerivedEvidence(surfaces[0]))] : [])
+            .Concat(multipleSqlFiles && contexts.Length > 0 ? [new SqlRunbookStopCondition("cross-file-order-not-established", DerivedEvidence(contexts[0]))] : [])
+            .Concat(contexts.FirstOrDefault(f => Value(f, "coverage", "reduced") != "complete") is { } reducedContext
+                ? [new SqlRunbookStopCondition("partial-context-coverage-review", DerivedEvidence(reducedContext))] : [])
+            .Concat(!commitKnown && derivedSource is not null ? [new SqlRunbookStopCondition("commit-identity-not-established", DerivedEvidence(derivedSource))] : [])
+            .GroupBy(stop => stop.Code, StringComparer.Ordinal)
+            .Select(group => group.OrderBy(stop => stop.Evidence.FilePath, StringComparer.Ordinal).ThenBy(stop => stop.Evidence.StartLine).First())
+            .OrderBy(stop => stop.Code, StringComparer.Ordinal).ToArray();
         var questions = gaps.Select(g => Question(g.Category))
             .Concat(prerequisites.Where(p => p.Status != "present-in-scripts").Select(_ => "Who owns validation of unresolved permission prerequisite candidates?"))
             .Concat(protectedSteps.Length > 0 ? ["Who owns the approved handling process for protected material?" ] : [])
@@ -115,7 +123,8 @@ public static class SqlRunbookPacketBuilder
             .Concat(multipleSqlFiles ? ["Who owns confirmation of execution order across SQL files?" ] : [])
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         var reduced = new List<string>();
-        if (!result.Manifest.BuildStatus.Equals("Succeeded", StringComparison.OrdinalIgnoreCase)) reduced.Add("build");
+        if (!string.Equals(result.Manifest.BuildStatus, "Succeeded", StringComparison.OrdinalIgnoreCase)) reduced.Add("build");
+        if (!commitKnown) reduced.Add("commit-identity");
         if (gaps.Length > 0) reduced.Add("sql-static-analysis");
         if (contexts.Any(f => Value(f, "coverage", "reduced") != "complete")) reduced.Add("execution-context");
         if (validationFacts.Length == 0 && surfaces.Length > 0) reduced.Add("validation-step-evidence");
@@ -124,7 +133,7 @@ public static class SqlRunbookPacketBuilder
         return new SqlRunbookPacket(
             SchemaVersion, "Static SQL operator handoff evidence; not an execution plan or safety approval.",
             new SqlRunbookSource(result.Manifest.RepoName, result.Manifest.CommitSha, result.Manifest.ScanId),
-            new SqlRunbookCoverage(reduced.Count == 0 ? "complete-static-evidence" : "reduced", result.Manifest.BuildStatus, reduced),
+            new SqlRunbookCoverage(reduced.Count == 0 ? "complete-static-evidence" : "reduced", result.Manifest.BuildStatus ?? "unknown", reduced),
             groups, milestones, prerequisites, protectedSteps, validations, cleanup, stops, gaps, questions,
             [
                 "TraceMap does not execute SQL or connect to a live database.",
@@ -144,6 +153,10 @@ public static class SqlRunbookPacketBuilder
     private static string FactOrder(CodeFact f) => $"{f.Evidence.FilePath}\u001f{f.Evidence.StartLine:D10}\u001f{f.FactId}";
     private static IReadOnlyList<string> Codes(string value) => value.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Order(StringComparer.Ordinal).ToArray();
     private static SqlRunbookEvidence Evidence(CodeFact f) => new(f.RuleId, f.EvidenceTier, CombinedReportHelpers.SafePath(f.Evidence.FilePath), f.Evidence.StartLine, f.Evidence.EndLine, f.Evidence.ExtractorId, f.Evidence.ExtractorVersion, Value(f, "coverage", "reduced"));
+    private static SqlRunbookEvidence DerivedEvidence(CodeFact source) => new(RuleIds.DatabaseSqlOperatorRunbookPacket, EvidenceTiers.Tier4Unknown, CombinedReportHelpers.SafePath(source.Evidence.FilePath), source.Evidence.StartLine, source.Evidence.EndLine, nameof(SqlRunbookPacketBuilder), "sql-runbook-packet/0.1.0", "reduced");
+    private static bool IsKnownCommit(string? value) => !string.IsNullOrWhiteSpace(value)
+        && !value.Equals("unknown", StringComparison.OrdinalIgnoreCase)
+        && value.Trim('0').Length > 0;
     private static string MilestoneKind(string kind) => kind switch { "extension" => "extension", "foreign-server" => "foreign-server", "server-grant" => "permission", "user-mapping" => "user-mapping", "schema-import" or "foreign-table" => "schema-import-or-foreign-table", "publication" => "publication", "subscription" => "subscription", "scheduled-operation" => "scheduled-job", _ => "unknown" };
     private static string GapCategory(string rule) => rule switch { RuleIds.DatabaseSqlContextGap => "context", RuleIds.DatabaseSqlSecretSafetyGap => "protected-material", RuleIds.DatabasePostgresPermissionGap => "permission", RuleIds.DatabasePostgresArchiveLinkGap => "archive-link", _ => "coverage" };
     private static string Question(string category) => category switch { "context" => "Who will verify the active categorical context before manual execution?", "protected-material" => "Who owns the approved handling process for protected material?", "permission" => "Who owns validation of unresolved permission prerequisite candidates?", "archive-link" => "Who owns review of incomplete archive-link evidence?", _ => "Who owns resolution of reduced static-analysis coverage?" };
@@ -179,7 +192,7 @@ public static class SqlRunbookPacketWriter
         Section(lines, "Protected Steps", packet.ProtectedSteps.Select(p => $"Step `{p.StatementOrdinal}`: `{p.Classification}` / `{string.Join(',', p.Categories)}`; `{p.OwnerHandling}`; {EvidenceText(p.Evidence)}"));
         Section(lines, "Validation Expectations", packet.ValidationExpectations.Select(v => $"Step `{v.StatementOrdinal}`: `{v.State}`; observation `{v.ObservationState}`; {EvidenceText(v.Evidence)}"));
         Section(lines, "Cleanup / Rollback Evidence", packet.CleanupEvidence.Select(c => $"Step `{c.StatementOrdinal}`: `{c.State}` candidate only; {EvidenceText(c.Evidence)}"));
-        Section(lines, "Stop Conditions", packet.StopConditions);
+        Section(lines, "Stop Conditions", packet.StopConditions.Select(stop => $"`{stop.Code}`; {EvidenceText(stop.Evidence)}"));
         Section(lines, "Gaps", packet.Gaps.Select(g => $"`{g.Category}` / `{g.Code}`; {EvidenceText(g.Evidence)}"));
         Section(lines, "Owner Questions", packet.OwnerQuestions);
         Section(lines, "Limitations", packet.Limitations);
