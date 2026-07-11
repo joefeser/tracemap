@@ -17,7 +17,7 @@ PR.
 ### Phase 2: Release-review SQL evidence section (Target B — recommended first)
 
 - [ ] 2.1 Add a `SqlEvidence` `ReleaseReviewSection` parallel to `SqlSchemaImpact`, wired into the section list, JSON DTO, and Markdown writer.
-- [ ] 2.2 Set section status from `ReleaseReviewSectionStatus` (`available` / `not_requested` / `unavailable` / `deferred` / `truncated`) based on presence of SQL runway evidence in the selected inputs.
+- [ ] 2.2 Set section status from `ReleaseReviewStatuses` (`available` / `not_requested` / `unavailable` / `deferred` / `truncated`) based on presence of SQL runway evidence in the selected inputs; keep context/permission/archive/secret-safety gaps as `ReleaseReviewGap` entries, never as a status value.
 - [ ] 2.3 Reuse `SqlRunbookPacketBuilder` output; classify findings only with the existing attention levels; append section gaps to the packet-level `gaps`.
 - [ ] 2.4 Add the non-claim footer and route output through the safe-output allowlist / forbidden-phrase checks.
 
@@ -26,7 +26,7 @@ PR.
 - [ ] 3.1 Add a SQL-context `RouteFlowContextGroup` candidate in `BuildContextGroups`, additive only, keyed off data-facing routes.
 - [ ] 3.2 Summarize ordered categorical context and transition checkpoints; list permission prerequisites and stop conditions by upstream closed status.
 - [ ] 3.3 Emit a gap row when a data-facing route lacks SQL context; preserve provenance via `ContextGroupRuleIds` / `ContextGroupLocation`.
-- [ ] 3.4 Assign a deterministic rank in `ContextGroupKindRank`; confirm ordering stability.
+- [ ] 3.4 Assign the `sql-context` kind a deterministic rank in `ContextGroupKindRank` between `query` and `data-surface`; confirm ordering stability.
 
 ### Phase 4: Fixtures and tests (ship with the increment)
 
@@ -49,8 +49,9 @@ PR.
 
 ## Definition of done (composition PR)
 
-- Chosen target(s) render `available` / `deferred` / `gap` states with full
-  upstream provenance and zero new runtime claims.
+- Chosen target(s) render release-review status values from
+  `ReleaseReviewStatuses` and structured gap entries with full upstream
+  provenance and zero new runtime claims.
 - All existing tests plus new variant tests pass; VALIDATION.md smoke updated.
 - No extraction, rule-catalog, or extractor-version changes.
 - PR stays PR-sized; anything larger is split per the phase boundaries above.

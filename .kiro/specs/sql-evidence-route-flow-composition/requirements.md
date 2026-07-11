@@ -25,12 +25,12 @@ In scope:
 
 - Project already-cataloged SQL runway evidence into the combined route-flow
   report and/or the release-review packet as additive, labeled sections.
-- Represent SQL evidence as one of three explicit states per section:
-  `available` (evidence present), `deferred`/`unavailable` (no compatible SQL
-  evidence in the selected inputs), or `gap` (upstream context/permission/
-  archive gaps carried forward). Reuse the existing
-  `ReleaseReviewSectionStatus` vocabulary (`available`, `not_requested`,
-  `unavailable`, `deferred`, `truncated`) rather than inventing new states.
+- Set release-review section status only with the existing
+  `ReleaseReviewStatuses` vocabulary (`available`, `not_requested`,
+  `unavailable`, `deferred`, `truncated`). Carry upstream context/permission/
+  archive/secret-safety gaps as structured `ReleaseReviewGap` entries on the
+  SQL section and in the packet-level `gaps` collection rather than inventing a
+  `gap` status.
 - Preserve full provenance on every projected row: rule ID, evidence tier,
   coverage label, file span, commit SHA, extractor version, and supporting fact
   IDs — sourced from the upstream facts, never recomputed.
@@ -69,8 +69,10 @@ Acceptance criteria:
    without re-parsing SQL and without altering their tier or coverage.
 2. WHEN permission (`database.postgres.permission.*.v1`), archive-link
    (`database.postgres.archive-link*.v1`), or secret-bearing
-   (`database.sql.secret-bearing-step.v1`) evidence is present, THEN it SHALL be
-   projected with its upstream rule ID and status verbatim.
+   (`database.sql.secret-bearing-step.v1`,
+   `database.sql.secret-text-candidate.v1`,
+   `database.sql.secret-safety-gap.v1`) evidence is present, THEN it SHALL be
+   projected with its upstream rule ID and status/gap verbatim.
 3. WHEN no compatible SQL evidence exists in the selected inputs, THEN the
    section SHALL render as `deferred`/`unavailable` — never as "no SQL risk".
 
@@ -109,8 +111,8 @@ Acceptance criteria:
    vocabulary (`ActionableStaticEvidence`, `ReviewRecommended`,
    `NoActionableEvidence`, `PartialAnalysis`, `SelectorNoMatch`) — no numeric
    scores, no new severity vocabulary.
-3. Section gaps SHALL flow into the packet-level `gaps` collection exactly as
-   other sections do.
+3. Section gaps SHALL be emitted as `ReleaseReviewGap` entries and SHALL flow
+   into the packet-level `gaps` collection exactly as other sections do.
 
 ### Requirement 4 — Non-claims preserved end to end
 

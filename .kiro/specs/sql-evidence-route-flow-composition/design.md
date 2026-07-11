@@ -8,7 +8,7 @@ This is a projection over already-shipped facts. Nothing new is extracted:
 scan (already ships)          composition (this spec)
   SqlExecutionContextExtractor   ->  read cataloged SQL facts from the index
   Postgres{Permission,ArchiveLink} ->  route-flow context group (additive)
-  SqlSecretSafetyExtractor       ->  release-review SQL section (available/deferred/gap)
+  SqlSecretSafetyExtractor       ->  release-review SQL section (status plus gaps)
   SqlRunbookPacketBuilder        ->  (reuse packet DTO where convenient)
 ```
 
@@ -22,6 +22,8 @@ and fact ID. The composition layer classifies and orders; it never re-derives.
   `SqlExecutionContextCandidate` (`src/dotnet/TraceMap.Core/Models.cs`).
 - Rule IDs: `database.sql.context.declaration.v1`, `database.sql.context.syntax.v1`,
   `database.sql.context.gap.v1`, `database.sql.secret-bearing-step.v1`,
+  `database.sql.secret-text-candidate.v1`,
+  `database.sql.secret-safety-gap.v1`,
   `database.postgres.permission.statement.v1`,
   `database.postgres.permission.prerequisite.v1`,
   `database.postgres.permission.coverage.v1`,
@@ -48,13 +50,14 @@ dependency, value-origin, gap). Add a SQL-context group candidate that:
 - emits a gap row when a data-facing route lacks SQL context.
 
 Constraints: reuse `ContextGroupRuleIds` / `ContextGroupLocation`; obey the
-existing deterministic `ContextGroupKindRank` ordering by adding one new kind at
-a defined rank; never introduce a new runtime conclusion.
+existing deterministic `ContextGroupKindRank` ordering by adding the new
+`sql-context` kind at a defined rank between `query` and `data-surface`; never
+introduce a new runtime conclusion.
 
 ## Target B: Release-review SQL evidence section
 
 `ReleaseReviewReport` composes sections as `ReleaseReviewSection` records with a
-status from `ReleaseReviewSectionStatus` (`available`, `not_requested`,
+status string from `ReleaseReviewStatuses` (`available`, `not_requested`,
 `unavailable`, `deferred`, `truncated`). Add a `SqlEvidence` section parallel to
 the existing `SqlSchemaImpact` section:
 
@@ -65,6 +68,11 @@ the existing `SqlSchemaImpact` section:
   (`ActionableStaticEvidence`, `ReviewRecommended`, `NoActionableEvidence`,
   `PartialAnalysis`, `SelectorNoMatch`);
 - section gaps appended to the packet-level `gaps`.
+
+Gaps are never status values. Secret text candidates, secret-safety gaps,
+permission gaps, archive-link gaps, and runbook protected-material owner
+questions must remain `ReleaseReviewGap` entries on the section and must be
+propagated into the packet-level `gaps` collection.
 
 Prefer reusing `SqlRunbookPacketBuilder` output to avoid duplicating the safe
 projection logic. Wire the section into the section list, the JSON DTO, and the
@@ -102,4 +110,4 @@ attempt both plus the adjacent cleanup in one PR.
 
 No changes to extraction, engines beyond PostgreSQL, rule catalog semantics, or
 the four upstream extractor versions. If a change beyond a read-side hook is
-needed, stop and open a follow-up spec (see requirements Requirement 6).
+needed, stop and open a follow-up spec (see Requirement 6 in requirements.md).
