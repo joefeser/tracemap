@@ -1,8 +1,10 @@
 # SQL Permission Prerequisite Evidence Implementation State
 
-Status: implemented-pending-pr-review
+Status: implemented-and-merged
 Implementation branch: `codex/sql-permission-prerequisite-evidence-impl`
 Target base: `dev`
+Merged PR: [#463](https://github.com/joefeser/tracemap/pull/463)
+Merge commit: `fac7bd43890f4b1805fb541638bf8b409acc5ad5`
 Public claim level: deterministic-static-evidence
 
 ## Implemented Scope
