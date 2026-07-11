@@ -1,15 +1,30 @@
 # SQL Operator Runbook Packet Implementation State
 
-Status: ready-for-implementation
-Spec branch: `codex/sql-evidence-runway-specs`
+Status: implemented
+Implementation branch: `codex/sql-operator-runbook-packet-impl`
 Target base: `dev`
-Public claim level: hidden
+Public claim level: static evidence packet
 
 ## Scope State
 
-This folder is specification-only. It combines the operator packet and static
-postmortem/partial-state stories into one downstream consumer. No renderer,
-schema, or reducer is implemented by this branch.
+The v0 packet is implemented as a deterministic allowlisted projection over the
+four upstream SQL evidence contracts. Every scan now writes `sql-runbook.md` and
+`sql-runbook.json`; `report.md` includes a bounded packet summary. The packet
+contains no executable SQL or generic fact-property bags.
+
+Implemented scope:
+
+- `sql-operator-runbook-packet/v1` JSON DTO and deterministic Markdown renderer.
+- Ordered categorical context groups, explicit transition checkpoints, and
+  manual-client active-connection verification reminders.
+- Static milestones for extensions, archive-link surfaces, permissions,
+  scheduled jobs, validation steps, and cleanup/rollback candidates.
+- Safe permission, protected-step, stop-condition, gap, and owner-question
+  projections with rule/tier/span/commit/extractor/coverage provenance.
+- Synthetic complete and failure-variant tests, CLI artifact smoke, deterministic
+  serialization, forbidden-phrase checks, and planted-value leak checks.
+- Documentation of semantics, non-claims, validation workflow, and the reserved
+  future `sql-validation-summary/v1` boundary.
 
 ## Related Issues
 
@@ -44,16 +59,24 @@ Recommended runway:
 - Manual-client context transitions are first-class stop/checkpoint surfaces.
 - The packet never emits executable SQL or claims safety, success, or approval.
 
-## Validation Expected During Implementation
+## Validation
 
-- One complete synthetic public-safe archive story and focused failure variants.
-- Golden Markdown/JSON, schema, reducer, phrase, leak, and determinism tests.
-- Full .NET tests and a CLI packet smoke producing all standard artifacts.
-- `./scripts/check-private-paths.sh` and `git diff --check`.
+- Focused `SqlRunbookPacketTests`: 4 passed.
+- Synthetic CLI smoke produced all standard scan artifacts plus
+  `sql-runbook.md` and `sql-runbook.json`; planted values were absent.
+- Full solution build succeeded with zero warnings/errors; 740 full-suite tests
+  passed; the private-path guard and `git diff --check` passed.
 
-## Open Design Questions
+## Scope Decisions
 
-- Decide whether the packet is initially a section in `report.md`, a separate
-  `sql-runbook.md`, or both while preserving the required scan output contract.
-- Define exact negated/qualified phrase-test rules so limitations can say what
-  TraceMap does not prove without allowing unqualified runtime claims.
+- Emit both standalone Markdown/JSON artifacts and a bounded `report.md` summary.
+- Keep phrase checks on packet conclusions while allowing clearly negated
+  limitation language elsewhere in the general scan report.
+- Do not ingest validation artifacts in v0; reserve the schema boundary only.
+
+## Remaining Follow-Ups
+
+- Future validation-summary ingestion requires a separate spec and provenance
+  contract.
+- Additional SQL engines may populate the shared packet only after their own
+  cataloged evidence contracts exist.

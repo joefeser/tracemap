@@ -3124,6 +3124,20 @@ rules:
       - Gaps describe partial checked-in evidence and never establish a live denial, missing grant, or failed operation.
       - Gap output contains closed reason codes and safe relative spans only; SQL, names, credentials, connection data, parser exceptions, and local paths are omitted.
 
+  - id: database.sql.operator-runbook-packet.v1
+    name: SQL operator runbook evidence packet projection
+    description: Projects cataloged SQL context, archive-link, protected-material, permission, validation-step, cleanup, and gap evidence into deterministic safe Markdown and versioned JSON handoff artifacts.
+    evidenceTier: Inherits each projected source fact tier; packet-only gaps remain Tier4Unknown
+    emits:
+      - sql-runbook.md
+      - sql-runbook.json
+      - report.md summary
+    limitations:
+      - The packet does not execute SQL, connect to a database, observe the selected client tab or runtime state, certify safety, approve changes, or replace DBA/operator judgment.
+      - Intended milestones and validation-step candidates do not prove that objects exist, permissions are effective, jobs ran, replication is healthy, validation passed, or cleanup succeeded.
+      - The allowlisted projection omits raw SQL, snippets, credentials, connection data, scheduled command bodies, private infrastructure identities, raw validation output, and local absolute paths.
+      - Cross-file order and all missing, conflicting, unsupported, or reduced upstream evidence remain explicit gaps or stop conditions.
+
   - id: config.key.v1
     name: Configuration key extraction
     description: Parses appsettings*.json, Web.config, App.config, packages.config, and connection string entries.
