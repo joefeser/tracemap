@@ -14,6 +14,7 @@ export const proofPathsForManagersRequiredLinks = [
   "/manager-brief/",
   "/manager-faq/",
   "/manager-packet/",
+  "/sql/operator-handoff/",
   "/packets/",
   "/packets/assembly/",
   "/proof-paths/",
