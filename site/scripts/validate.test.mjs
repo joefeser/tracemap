@@ -34,6 +34,7 @@ import { endpointReviewRoute } from "./endpoint-review.mjs";
 import { evidencePacketExamplesRoute } from "./evidence-packet-examples.mjs";
 import { changeReviewRoute } from "./change-review.mjs";
 import { glossaryRoute } from "./glossary.mjs";
+import { groundingRoute } from "./grounding.mjs";
 import { incidentCallRoute } from "./incident-call.mjs";
 import {
   incidentEvidenceHandoffRequiredLinks,
@@ -227,6 +228,7 @@ async function createDistFixture({
       "/evidence/",
       "/examples/scan-packet/",
       glossaryRoute,
+      groundingRoute,
       incidentCallRoute,
       incidentEvidenceHandoffRoute,
       ...incidentEvidenceHandoffRequiredLinks,
@@ -311,6 +313,7 @@ async function createDistFixture({
     "/legacy-modernization/evidence-map/",
     "/legacy-validation/",
     glossaryRoute,
+    groundingRoute,
     managerBriefRoute,
     managerFaqRoute,
     ownerFollowupMapRoute,
@@ -637,6 +640,10 @@ async function fixturePageHtml(route, path) {
 
   if (route === glossaryRoute) {
     return glossaryPage();
+  }
+
+  if (route === groundingRoute) {
+    return readFile(new URL("../src/grounding/index.html", import.meta.url), "utf8");
   }
 
   if (route === incidentCallRoute) {
@@ -1204,6 +1211,23 @@ async function writeDiscoveryFiles(dist) {
         nonClaims: [
           "No runtime behavior, production traffic, endpoint performance, outage cause, release safety, operational safety, AI impact analysis, LLM analysis, or complete product coverage proof.",
           "No raw artifact publication, raw facts, raw SQLite indexes, analyzer logs, raw source snippets, raw SQL, config values, secrets, local paths, raw remotes, generated scan directories, private sample names, or hidden validation details."
+        ]
+      },
+      {
+        path: groundingRoute,
+        title: "Deterministic Grounding for AI Review",
+        summary: "Concept-level explanation of how deterministic static facts can ground an external reviewer with evidence it must cite.",
+        publicClaimLevel: "concept",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: "/evidence/",
+        limitations: [
+          "This fixture describes an external model consuming existing deterministic artifacts, not an in-scanner AI feature.",
+          "Grounded output remains a draft for human review and is not a correctness guarantee."
+        ],
+        nonClaims: [
+          "No runtime behavior, production traffic, endpoint reachability, release safety, operational safety, or complete product coverage proof.",
+          "No AI impact analysis, LLM analysis, prompt-based classification, embeddings, vector databases, validation, scoring, or approval of model output."
         ]
       },
       {
