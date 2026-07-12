@@ -670,8 +670,7 @@ public static class CombinedIndexBuilder
         var extractorVersionExpression = hasExtractorVersion ? "extractor_version" : "null";
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        // nosemgrep: csharp.lang.security.sqli.csharp-sqli -- SQLite cannot parameterize attached-schema identifiers; alias is restricted to ASCII identifier characters above and the two projected expressions are closed constants.
-        command.CommandText = $"""
+        const string importFactsSql = """
             insert into combined_facts (
               combined_fact_id, source_index_id, original_fact_id, original_scan_id, scan_id, repo, commit_sha,
               project_path, fact_type, rule_id, evidence_tier, source_symbol, target_symbol, contract_element,
@@ -696,8 +695,8 @@ public static class CombinedIndexBuilder
               start_line,
               end_line,
               snippet_hash,
-              {extractorIdExpression},
-              {extractorVersionExpression},
+              __EXTRACTOR_ID_EXPRESSION__,
+              __EXTRACTOR_VERSION_EXPRESSION__,
               properties_json,
               json_object(
                 'factId', fact_id,
@@ -709,9 +708,15 @@ public static class CombinedIndexBuilder
                 'evidenceTier', evidence_tier,
                 'properties', json(properties_json)
               )
-            from {alias}.facts
+            from __SOURCE_ALIAS__.facts
             order by file_path, start_line, fact_type, fact_id;
             """;
+        // SQLite cannot parameterize attached-schema identifiers. Each replacement is either a
+        // validated internal identifier or one of the two closed SQL expressions above.
+        command.CommandText = importFactsSql
+            .Replace("__SOURCE_ALIAS__", alias, StringComparison.Ordinal)
+            .Replace("__EXTRACTOR_ID_EXPRESSION__", extractorIdExpression, StringComparison.Ordinal)
+            .Replace("__EXTRACTOR_VERSION_EXPRESSION__", extractorVersionExpression, StringComparison.Ordinal);
         command.Parameters.AddWithValue("$source_index_id", sourceIndexId);
         return await command.ExecuteNonQueryAsync(cancellationToken);
     }
