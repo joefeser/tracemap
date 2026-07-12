@@ -198,6 +198,8 @@ public static class CombinedIndexBuilder
               start_line integer not null,
               end_line integer not null,
               snippet_hash text,
+              extractor_id text,
+              extractor_version text,
               properties_json text not null,
               payload_json text not null
             );
@@ -661,13 +663,18 @@ public static class CombinedIndexBuilder
 
     private static async Task<int> ImportFactsAsync(SqliteConnection connection, SqliteTransaction transaction, string alias, string sourceIndexId, CancellationToken cancellationToken)
     {
+        ValidateInternalIdentifier(alias, nameof(alias));
+        var hasExtractorId = await ColumnExistsAsync(connection, alias, "facts", "extractor_id", cancellationToken);
+        var hasExtractorVersion = await ColumnExistsAsync(connection, alias, "facts", "extractor_version", cancellationToken);
+        var extractorIdExpression = hasExtractorId ? "extractor_id" : "null";
+        var extractorVersionExpression = hasExtractorVersion ? "extractor_version" : "null";
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = $"""
+        const string importFactsSql = """
             insert into combined_facts (
               combined_fact_id, source_index_id, original_fact_id, original_scan_id, scan_id, repo, commit_sha,
               project_path, fact_type, rule_id, evidence_tier, source_symbol, target_symbol, contract_element,
-              file_path, start_line, end_line, snippet_hash, properties_json, payload_json
+              file_path, start_line, end_line, snippet_hash, extractor_id, extractor_version, properties_json, payload_json
             )
             select
               $source_index_id || ':' || fact_id,
@@ -688,6 +695,8 @@ public static class CombinedIndexBuilder
               start_line,
               end_line,
               snippet_hash,
+              __EXTRACTOR_ID_EXPRESSION__,
+              __EXTRACTOR_VERSION_EXPRESSION__,
               properties_json,
               json_object(
                 'factId', fact_id,
@@ -699,9 +708,15 @@ public static class CombinedIndexBuilder
                 'evidenceTier', evidence_tier,
                 'properties', json(properties_json)
               )
-            from {alias}.facts
+            from __SOURCE_ALIAS__.facts
             order by file_path, start_line, fact_type, fact_id;
             """;
+        // SQLite cannot parameterize attached-schema identifiers. Each replacement is either a
+        // validated internal identifier or one of the two closed SQL expressions above.
+        command.CommandText = importFactsSql
+            .Replace("__SOURCE_ALIAS__", alias, StringComparison.Ordinal)
+            .Replace("__EXTRACTOR_ID_EXPRESSION__", extractorIdExpression, StringComparison.Ordinal)
+            .Replace("__EXTRACTOR_VERSION_EXPRESSION__", extractorVersionExpression, StringComparison.Ordinal); // nosemgrep: csharp.lang.security.sqli.csharp-sqli -- alias is validated; expressions are closed literals.
         command.Parameters.AddWithValue("$source_index_id", sourceIndexId);
         return await command.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -932,10 +947,29 @@ public static class CombinedIndexBuilder
     private static async Task<bool> TableExistsAsync(SqliteConnection connection, string alias, string tableName, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = $"select 1 from {alias}.sqlite_master where type = 'table' and name = $table_name limit 1;";
+        command.CommandText = "select 1 from pragma_table_list where schema = $schema_name and name = $table_name limit 1;";
+        command.Parameters.AddWithValue("$schema_name", alias);
         command.Parameters.AddWithValue("$table_name", tableName);
         var value = await command.ExecuteScalarAsync(cancellationToken);
         return value is not null;
+    }
+
+    private static async Task<bool> ColumnExistsAsync(SqliteConnection connection, string alias, string tableName, string columnName, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select 1 from pragma_table_info($table_name, $schema_name) where name = $column_name limit 1;";
+        command.Parameters.AddWithValue("$table_name", tableName);
+        command.Parameters.AddWithValue("$schema_name", alias);
+        command.Parameters.AddWithValue("$column_name", columnName);
+        return await command.ExecuteScalarAsync(cancellationToken) is not null;
+    }
+
+    private static void ValidateInternalIdentifier(string value, string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Any(character => !char.IsAsciiLetterOrDigit(character) && character != '_'))
+        {
+            throw new ArgumentException("SQLite internal identifiers may contain only ASCII letters, digits, and underscores.", parameterName);
+        }
     }
 
     private static object ToDb(string? value)

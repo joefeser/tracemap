@@ -1,8 +1,8 @@
 # SQL Evidence Route-Flow Composition Implementation State
 
-Status: ready-for-implementation
-Implementation branch: _unassigned_
-Target base: `main` (`dev` and `main` are the same hash at spec creation)
+Status: implementation-complete-awaiting-pr-review
+Implementation branch: `codex/implement-sql-evidence-release-review-composition`
+Target base: `dev`
 Public claim level: static evidence packet
 
 ## Scope State
@@ -30,10 +30,32 @@ Confirmed composition gap (the reason this spec exists):
 
 ## Implementation Choices To Record When Started
 
-- Which target(s) this PR delivers: Target B (release-review) recommended first;
-  Target A (route-flow) optional / second PR.
-- Whether a read-side hook was needed (Requirement 6) and its exact surface.
-- Any sample/fixture added beyond the existing SQL samples.
+- This PR delivers Target B (release-review) only. Target A (route-flow) is
+  deferred to a separate PR so this slice stays focused.
+- A tiny read-side persistence hook is required: `facts` and `combined_facts`
+  preserve the already-emitted `EvidenceSpan.ExtractorId` and
+  `EvidenceSpan.ExtractorVersion` in additive columns, and release-review reads
+  those columns. Existing indexes without the columns remain readable but
+  cannot be treated as compatible SQL runway inputs because full upstream
+  provenance is unavailable. No extraction, fact shape, rule ID, tier,
+  coverage, or extractor-version behavior changes.
+- No new sample fixture is planned; Target B tests reuse the existing SQL
+  extractors and synthetic release-review indexes.
+
+### Read Gate Inventory
+
+Release-review can read the following already-shipped SQL runway facts from
+single or combined indexes: `SqlExecutionContextDeclared`,
+`SqlExecutionContextCandidate`, `DatabaseLinkSurfaceDeclared`,
+`DatabaseLinkEdgeCandidate`, `DatabasePrerequisiteCandidate`,
+`DatabasePermissionDeclared`, `DatabasePrerequisiteEvidence`,
+`SecretBearingSqlStep`, and SQL/PostgreSQL `AnalysisGap` rows. Reachable rule
+families are `database.sql.context.*.v1`,
+`database.sql.secret-bearing-step.v1`,
+`database.sql.secret-text-candidate.v1`,
+`database.sql.secret-safety-gap.v1`,
+`database.postgres.permission.*.v1`, and
+`database.postgres.archive-link*.v1`.
 
 ## Boundaries (do not cross in this spec)
 
@@ -53,6 +75,49 @@ Confirmed composition gap (the reason this spec exists):
 - Phase 6: audit status-drift cleanup (`NEXT_EXECUTION_REPORT.md` refresh,
   headerless implementation-state files, stale in-flight statuses, README SQL
   mention).
+
+## Implemented Target B
+
+- Added a separate `SqlEvidence` release-review section for single and combined
+  indexes, including JSON/Markdown rendering, summary counts, release-review
+  statuses, existing attention classifications, and packet-level gap flow.
+- Reused `SqlRunbookPacketBuilder` for context steps, milestones,
+  prerequisites, protected-material outcomes, SQL gaps, and owner questions.
+- Preserved rule ID, tier, coverage, safe relative span, commit SHA, extractor
+  ID/version, supporting fact IDs, and upstream limitations. Protected material
+  remains span-only; raw SQL, snippets, hashes, connection material, private
+  identities, and scheduled command bodies are not projected.
+- Added additive `extractor_id` / `extractor_version` persistence columns to
+  single and combined indexes. Combining older indexes remains supported via
+  null projection; release-review labels their SQL evidence unavailable rather
+  than silently inventing missing provenance.
+
+## Validation
+
+- Focused release-review/runbook/combine tests: 35 passed after review fixes.
+- `dotnet build src/dotnet/TraceMap.sln`: passed, 0 warnings.
+- `dotnet test src/dotnet/TraceMap.sln`: 748 passed, 0 failed.
+- Checked-in `samples/sql-operator-runbook` scan plus release-review smoke:
+  `SqlEvidence=available`, rollup `ReviewRecommended`, no truncation, 32 SQL
+  findings, 18 structured gaps, and no planted sentinel or forbidden phrase.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+Review fixes preserve source-selector isolation, include SQL evidence in review
+priority scoring, tolerate malformed fact-property JSON, expose extractor
+provenance as first-class finding fields, preserve both shipped limitation keys,
+and disambiguate finding/gap IDs with end spans and supporting fact IDs. SQLite
+schema inspection now uses parameterized table-valued pragmas; the remaining
+combined import interpolation is restricted to validated internal identifiers
+because SQLite does not parameterize attached-schema identifiers.
+The SQL runway reader uses an exact shipped-rule allowlist so ordinary SQL text
+and shape usage facts cannot falsely mark the runway section available.
+
+## Deferred From This PR
+
+- Target A route-flow SQL context groups (Phase 3).
+- Acceptance/site guardrail cleanup (Phase 5).
+- Status-drift and README cleanup (Phase 6).
 
 ## Related Specs
 
