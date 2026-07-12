@@ -35,12 +35,9 @@ export async function validateGroundingDist({ baseUrl = "https://tracemap.tools"
   const localErrors = [];
   const cleanBaseUrl = normalizeBaseUrl(baseUrl, localErrors);
   const pagePath = resolve(dist, "grounding", "index.html");
-  const routeConfigured = await hasConfiguredRoute(dist);
 
   if (!(await fileExists(pagePath))) {
-    if (routeConfigured) {
-      localErrors.push(withEvidence(`Grounding page is missing required public route: ${groundingRoute}`, pageArtifact));
-    }
+    localErrors.push(withEvidence(`Grounding page is missing required public route: ${groundingRoute}`, pageArtifact));
     errors.push(...localErrors);
     return;
   }
@@ -58,18 +55,6 @@ export async function validateGroundingDist({ baseUrl = "https://tracemap.tools"
   await validateRoutesIndex({ dist, errors: localErrors });
   await validatePage({ pagePath, errors: localErrors });
   errors.push(...localErrors);
-}
-
-async function hasConfiguredRoute(dist) {
-  const path = resolve(dist, "routes-index.json");
-  if (!(await fileExists(path))) return false;
-
-  try {
-    const parsed = JSON.parse(await readFile(path, "utf8"));
-    return Array.isArray(parsed?.entries) && parsed.entries.some((entry) => entry?.path === groundingRoute);
-  } catch {
-    return false;
-  }
 }
 
 async function validateRoutesIndex({ dist, errors }) {
