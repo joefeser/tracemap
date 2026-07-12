@@ -120,6 +120,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/grounding/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/legacy-validation/",
     "changefreq": "monthly",
     "priority": "0.7"
