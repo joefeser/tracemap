@@ -63,16 +63,19 @@
     <main>
       <section class="hero" id="top">
         <div class="hero-copy">
-          <p class="eyebrow">Deterministic repository analysis</p>
-          <h1>TraceMap turns code into evidence-backed maps.</h1>
+          <p class="eyebrow">Find the bodies.</p>
+          <h1>See what the code shows a change reaches &mdash; before review.</h1>
           <p class="hero-subhead">
-            Scan repositories, compare snapshots, reduce contract deltas, and assemble
-            release review packets from rule-backed facts. Every finding keeps its
-            rule ID, evidence tier, file span, commit SHA, and extractor version.
+            When someone asks &ldquo;what static evidence does this change reach?&rdquo;, TraceMap
+            answers from the repository instead of memory. It scans code into rule-backed facts
+            and assembles a bounded review packet for contracts, endpoints, dependencies, and SQL
+            surfaces &mdash; with a rule ID, evidence tier, coverage label, and file span on every
+            row, and honest gaps where the analysis stops. Runs locally. Reproducible.
           </p>
           <p class="hero-note">
-            TraceMap is static analysis. It does not use LLM calls, embeddings, vector
-            databases, or prompt-based classification in the scanner or reducer.
+            It is static evidence, not runtime proof: it shows what the code shows and marks
+            where it cannot be sure. No LLM calls, embeddings, vector databases, or
+            prompt-based classification in the scanner or reducer.
           </p>
           <div class="hero-actions" aria-label="Primary links">
             <a class="button primary" href="/examples/">Show me the outputs</a>
