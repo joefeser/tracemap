@@ -140,6 +140,59 @@ public sealed class ReleaseReviewTests
     }
 
     [Fact]
+    public async Task Release_review_single_sql_context_uses_single_label_and_stays_no_actionable()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var before = Manifest("database-repo", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("database-repo", ScannerVersions.TraceMap, commitSha: "2222222");
+        var context = FactFactory.Create(after, FactTypes.SqlExecutionContextDeclared, RuleIds.DatabaseSqlContextDeclaration,
+            EvidenceTiers.Tier2Structural, new EvidenceSpan("sql/setup.sql", 2, 2, null, "sql-execution-context", "sql-execution-context/0.1.0"),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["statementOrdinal"] = "1", ["engineFamily"] = "postgresql", ["serverRole"] = "archive-target",
+                ["databaseRole"] = "archive-data", ["schemaRole"] = "archive", ["executionMode"] = "manual",
+                ["stepKind"] = "validation-query", ["contextClassification"] = "declared", ["coverage"] = "complete"
+            });
+        SqliteIndexWriter.Write(beforeIndex, before, []);
+        SqliteIndexWriter.Write(afterIndex, after, [context]);
+
+        var report = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            beforeIndex,
+            afterIndex,
+            Path.Combine(temp.Path, "release"),
+            Scope: "sql-evidence",
+            Source: "single"));
+
+        Assert.Equal(ReleaseReviewStatuses.Available, report.SqlEvidence.Status);
+        Assert.NotEmpty(report.SqlEvidence.Findings);
+        Assert.All(report.SqlEvidence.Findings, finding =>
+        {
+            Assert.Equal("single", finding.SourceLabel);
+            Assert.Equal(ReleaseReviewClassifications.NoActionableEvidence, finding.Classification);
+        });
+        Assert.Equal(ReleaseReviewClassifications.NoActionableEvidence, report.Summary.RollupClassification);
+        Assert.Equal(0, report.Summary.ReviewFindingCount);
+        Assert.All(report.ReviewerChecklist.Where(item => item.FindingIds.Count > 0), item => Assert.Equal("informational", item.Severity));
+    }
+
+    [Fact]
+    public void Release_review_findings_default_missing_provenance_to_explicit_non_null_values()
+    {
+        var section = new ReleaseReviewSection(ReleaseReviewStatuses.Available,
+        [
+            new ReleaseReviewFinding("finding:test", "test", null, ReleaseReviewClassifications.ReviewRecommended,
+                "test.rule.v1", EvidenceTiers.Tier4Unknown, null, null, null, null, null, [], [], [], [])
+        ], [], []);
+        var finding = Assert.Single(section.Findings);
+
+        Assert.Equal("not-recorded", finding.ExtractorId);
+        Assert.Equal("not-recorded", finding.ExtractorVersion);
+        Assert.Equal("not-recorded", finding.CoverageLabel);
+    }
+
+    [Fact]
     public async Task Release_review_treats_malformed_sql_fact_properties_as_reduced_input_instead_of_crashing()
     {
         using var temp = new TempDirectory();

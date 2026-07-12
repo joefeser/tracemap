@@ -167,9 +167,9 @@ public sealed record ReleaseReviewFinding(
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> SupportingEdgeIds,
     IReadOnlyList<string> Limitations,
-    string? ExtractorId = null,
-    string? ExtractorVersion = null,
-    string? CoverageLabel = null);
+    string ExtractorId = "not-recorded",
+    string ExtractorVersion = "not-recorded",
+    string CoverageLabel = "not-recorded");
 
 public sealed record ReleaseReviewGap(
     string GapId,
@@ -1030,8 +1030,12 @@ public static class ReleaseReviewReporter
             .SelectMany(section => section.Findings)
             .ToArray();
         var actionableCount = allFindings.Count(IsActionableFinding);
-        var reviewCount = allFindings.Length - actionableCount;
-        var rollup = SelectRollup(gaps, allFindings, truncated);
+        var reviewCount = allFindings.Count(finding => !IsActionableFinding(finding)
+            && finding.Classification != ReleaseReviewClassifications.NoActionableEvidence);
+        var rollupFindings = allFindings
+            .Where(finding => finding.Classification != ReleaseReviewClassifications.NoActionableEvidence)
+            .ToArray();
+        var rollup = SelectRollup(gaps, rollupFindings, truncated);
         var message = rollup switch
         {
             ReleaseReviewClassifications.ActionableStaticEvidence => "Actionable static evidence is present; review the cited findings and limitations.",
@@ -1099,7 +1103,11 @@ public static class ReleaseReviewReporter
 
         foreach (var finding in findings)
         {
-            var severity = IsActionableFinding(finding) ? "must_review" : "should_review";
+            var severity = IsActionableFinding(finding)
+                ? "must_review"
+                : finding.Classification == ReleaseReviewClassifications.NoActionableEvidence
+                    ? "informational"
+                    : "should_review";
             items.Add(new ReleaseReviewChecklistItem(
                 StableId("checklist", finding.Section, finding.FindingId),
                 finding.Section,
@@ -1412,7 +1420,8 @@ public static class ReleaseReviewReporter
             {
                 continue;
             }
-            rows.Add(new SqlEvidenceFactRow(StringOrDefault(reader, 0, manifest.RepoName), manifest, fact,
+            var sourceLabel = indexKind == "single" ? "single" : StringOrDefault(reader, 0, manifest.RepoName);
+            rows.Add(new SqlEvidenceFactRow(sourceLabel, manifest, fact,
                 !string.IsNullOrWhiteSpace(extractorId) && !string.IsNullOrWhiteSpace(extractorVersion)));
         }
 
