@@ -1092,6 +1092,24 @@
     ]
   },
   {
+    "path": "/grounding/",
+    "title": "Deterministic Grounding for AI Review",
+    "summary": "Concept-level explanation of how TraceMap deterministic static facts can ground an external AI reviewer with rule-backed evidence it must cite.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/evidence/",
+    "limitations": [
+      "This route explains how existing deterministic artifacts can ground an external model; it does not describe a TraceMap-hosted model, an in-scanner AI feature, or any judgement of a model's output.",
+      "Supplying facts to a model reduces invented impact but does not guarantee the model's answer is correct; grounded output stays a draft for human review."
+    ],
+    "nonClaims": [
+      "No AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis in the scanner or reducer.",
+      "No runtime behavior, production traffic, endpoint reachability, release safety, operational safety, or complete product coverage proof.",
+      "No validation, scoring, or approval of any model's output, and no replacement for code review, tests, service-owner judgment, release approval, or governance."
+    ]
+  },
+  {
     "path": "/manager-packet/",
     "title": "Manager Packet",
     "summary": "Demo-level manager-facing packet explaining deterministic static evidence, rule IDs, coverage labels, generated summaries, gaps, and limitations.",

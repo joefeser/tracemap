@@ -24,6 +24,7 @@ import { validateEvidencePacketExamplesDist } from "./evidence-packet-examples.m
 import { validateChangeReviewDist } from "./change-review.mjs";
 import { validateClaimReviewDrillDist } from "./claim-review-drill.mjs";
 import { validateGlossaryDist } from "./glossary.mjs";
+import { validateGroundingDist } from "./grounding.mjs";
 import { validateIncidentCallDist } from "./incident-call.mjs";
 import { validateIncidentEvidenceHandoffDist } from "./incident-evidence-handoff.mjs";
 import { validateLegacyDataSurface } from "./legacy-data-surface.mjs";
@@ -132,6 +133,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateChangeReviewDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateClaimReviewDrillDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateGlossaryDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateGroundingDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateAdoptionPlaybookDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateBuildReviewWorkflowStoryDist({
       baseUrl: normalizedBaseUrl,
