@@ -35,7 +35,7 @@ review.* Not search. Not refactor. Not SAST. Not a PR bot.
 | **Sourcegraph** (search, Cody, Batch Changes) | Code search & navigation at scale | Cross-repo find-usages | Fast universal search, mass edits, huge-scale indexing | A provenance-tagged impact packet with evidence tiers + coverage labels | "Search finds the string. TraceMap tells you the blast radius, with confidence per row." |
 | **OpenRewrite / Moderne** | Recipe-based automated refactoring across repos | Understanding what a change reaches | Actually applies the change, mass-scale | Assesses impact/risk before anyone changes anything; honest gaps | "They swing the hammer. You tell people where the walls are first." |
 | **CodeQL** (+ Semgrep) | Semantic/pattern queries, mostly security & dataflow | Deterministic, semantic, provenance | Deep taint/dataflow, large security rule ecosystem, CI-native | Contract-delta review packets with tiers + reduced-coverage labeling, legacy-.NET honesty | "Same rigor, different question: they hunt vulnerabilities, you answer 'what does this change break.'" |
-| **Snyk / Dependabot** | Dependency vuln/upgrade alerts | Package-upgrade impact surface | CVE feeds, auto-PRs | Static evidence of what your code actually touches per package, with gaps | "They tell you a CVE exists; you tell you if your code reaches it." |
+| **Snyk / Dependabot** | Dependency vuln/upgrade alerts | Package-upgrade impact surface | CVE feeds, auto-PRs | Static evidence of what your code actually touches per package, with gaps | "They tell you a CVE exists; TraceMap tells you if your code reaches it." |
 
 ## Where TraceMap is genuinely differentiated (moat, not just difference)
 
