@@ -94,9 +94,9 @@ families are `database.sql.context.*.v1`,
 
 ## Validation
 
-- Focused release-review/runbook/combine tests: 35 passed after review fixes.
+- Focused release-review/runbook/combine tests: 37 passed after promotion-review fixes.
 - `dotnet build src/dotnet/TraceMap.sln`: passed, 0 warnings.
-- `dotnet test src/dotnet/TraceMap.sln`: 748 passed, 0 failed.
+- `dotnet test src/dotnet/TraceMap.sln`: 750 passed, 0 failed.
 - Checked-in `samples/sql-operator-runbook` scan plus release-review smoke:
   `SqlEvidence=available`, rollup `ReviewRecommended`, no truncation, 32 SQL
   findings, 18 structured gaps, and no planted sentinel or forbidden phrase.
@@ -112,6 +112,10 @@ combined import interpolation is restricted to validated internal identifiers
 because SQLite does not parameterize attached-schema identifiers.
 The SQL runway reader uses an exact shipped-rule allowlist so ordinary SQL text
 and shape usage facts cannot falsely mark the runway section available.
+Promotion review also aligned single-index SQL findings to the canonical
+`single` source label, kept informational SQL rows out of review rollups and
+review counts, and made missing generic finding provenance explicit with
+non-null `not-recorded` values.
 
 ## Deferred From This PR
 
