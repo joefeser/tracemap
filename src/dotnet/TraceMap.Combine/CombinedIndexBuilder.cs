@@ -713,6 +713,7 @@ public static class CombinedIndexBuilder
             """;
         // SQLite cannot parameterize attached-schema identifiers. Each replacement is either a
         // validated internal identifier or one of the two closed SQL expressions above.
+        // nosemgrep: csharp.lang.security.sqli.csharp-sqli -- alias passes ValidateInternalIdentifier; extractor expressions are closed literals.
         command.CommandText = importFactsSql
             .Replace("__SOURCE_ALIAS__", alias, StringComparison.Ordinal)
             .Replace("__EXTRACTOR_ID_EXPRESSION__", extractorIdExpression, StringComparison.Ordinal)
