@@ -281,6 +281,19 @@ test -f <tmp>/release-review/release-review.md
 test -f <tmp>/release-review/release-review.json
 ```
 
+For release-review SQL runway composition changes, scan the checked-in operator
+runbook sample and use its index as the selected after snapshot. Verify the
+separate `SQL Runway Evidence` section is `available`, preserves rule/tier/
+coverage/span/commit/extractor/supporting-fact provenance, and does not expose
+the planted host, password, or scheduled-command sentinels:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/sql-operator-runbook --out <tmp>/sql-after
+dotnet run --project src/dotnet/TraceMap.Cli -- release-review --before <tmp>/sql-after/index.sqlite --after <tmp>/sql-after/index.sqlite --out <tmp>/sql-release-review
+rg -n "SQL Runway Evidence|Status: `available`|database.sql.secret-bearing-step.v1" <tmp>/sql-release-review/release-review.md
+! rg -i "private-host-leak-sentinel|private-password-leak-sentinel|raw-scheduled-command-leak-sentinel|safe to run" <tmp>/sql-release-review/release-review.md <tmp>/sql-release-review/release-review.json
+```
+
 For docs-export changes, run the focused tests plus the normal .NET and safety
 gates:
 

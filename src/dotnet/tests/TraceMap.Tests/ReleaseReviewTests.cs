@@ -14,6 +14,159 @@ namespace TraceMap.Tests;
 public sealed class ReleaseReviewTests
 {
     [Fact]
+    public async Task Release_review_projects_sql_runway_evidence_with_provenance_gaps_and_safe_output()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        var beforeAuxIndex = Path.Combine(temp.Path, "before-aux.sqlite");
+        var afterAuxIndex = Path.Combine(temp.Path, "after-aux.sqlite");
+        var output = Path.Combine(temp.Path, "release");
+        var before = Manifest("database", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("database", ScannerVersions.TraceMap, commitSha: "2222222");
+        var context = FactFactory.Create(after, FactTypes.SqlExecutionContextDeclared, RuleIds.DatabaseSqlContextDeclaration,
+            EvidenceTiers.Tier2Structural, new EvidenceSpan("sql/setup.sql", 2, 2, null, "sql-execution-context", "sql-execution-context/0.1.0"),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["statementOrdinal"] = "1", ["engineFamily"] = "postgresql", ["serverRole"] = "archive-target",
+                ["databaseRole"] = "archive-data", ["schemaRole"] = "archive", ["executionMode"] = "manual",
+                ["stepKind"] = "user-mapping", ["contextClassification"] = "declared", ["coverage"] = "complete",
+                ["stopConditions"] = "secret-owner-review,verify-active-connection",
+                ["limitation"] = "Static context evidence does not prove active database state."
+            });
+        var secondContext = FactFactory.Create(after, FactTypes.SqlExecutionContextDeclared, RuleIds.DatabaseSqlContextDeclaration,
+            EvidenceTiers.Tier2Structural, new EvidenceSpan("sql/setup.sql", 2, 2, null, "sql-execution-context", "sql-execution-context/0.1.0"),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["statementOrdinal"] = "2", ["engineFamily"] = "postgresql", ["serverRole"] = "archive-target",
+                ["databaseRole"] = "archive-data", ["schemaRole"] = "archive", ["executionMode"] = "manual",
+                ["stepKind"] = "user-mapping", ["contextClassification"] = "declared", ["coverage"] = "complete"
+            });
+        var secretBearing = FactFactory.Create(after, FactTypes.SecretBearingSqlStep, RuleIds.DatabaseSqlSecretBearingStep,
+            EvidenceTiers.Tier2Structural, new EvidenceSpan("sql/setup.sql", 3, 3, null, "sql-secret-safety", "sql-secret-safety/0.1.0"),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["statementOrdinal"] = "2", ["classification"] = "secret-bearing", ["categoryCodes"] = "credential-literal",
+                ["coverage"] = "complete", ["rawSql"] = "private-password-leak-sentinel"
+            });
+        var secretCandidate = FactFactory.Create(after, FactTypes.SecretBearingSqlStep, RuleIds.DatabaseSqlSecretTextCandidate,
+            EvidenceTiers.Tier3SyntaxOrTextual, new EvidenceSpan("sql/setup.sql", 4, 4, null, "sql-secret-safety", "sql-secret-safety/0.1.0"),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["statementOrdinal"] = "3", ["classification"] = "possible-secret", ["categoryCodes"] = "secret-text-candidate", ["coverage"] = "reduced"
+            });
+        var secretGap = FactFactory.Create(after, FactTypes.AnalysisGap, RuleIds.DatabaseSqlSecretSafetyGap,
+            EvidenceTiers.Tier4Unknown, new EvidenceSpan("sql/setup.sql", 5, 5, null, "sql-secret-safety", "sql-secret-safety/0.1.0"),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["gapKind"] = "dynamic-secret-boundary", ["coverage"] = "reduced"
+            });
+        SqliteIndexWriter.Write(beforeIndex, before, []);
+        SqliteIndexWriter.Write(afterIndex, after, [context, secondContext, secretBearing, secretCandidate, secretGap]);
+        SqliteIndexWriter.Write(beforeAuxIndex, before with { RepoName = "auxiliary" }, []);
+        SqliteIndexWriter.Write(afterAuxIndex, after with { RepoName = "auxiliary" }, [secretCandidate with { Repo = "auxiliary" }]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeIndex, beforeAuxIndex], beforeCombined, ["database", "auxiliary"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterIndex, afterAuxIndex], afterCombined, ["database", "auxiliary"]));
+
+        var result = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(beforeCombined, afterCombined, output, Source: "database", IncludePriority: true));
+
+        Assert.Equal("ReleaseReviewCombinedV1", result.Report.Mode);
+        Assert.Equal(ReleaseReviewStatuses.Available, result.Report.SqlEvidence.Status);
+        Assert.Contains(result.Report.SqlEvidence.Findings, finding => finding.RuleId == RuleIds.DatabaseSqlSecretBearingStep);
+        Assert.Contains(result.Report.SqlEvidence.Findings, finding => finding.RuleId == RuleIds.DatabaseSqlSecretTextCandidate);
+        Assert.Equal(2, result.Report.SqlEvidence.Findings.Count(finding => finding.DisplayName == "user-mapping"));
+        Assert.All(result.Report.SqlEvidence.Findings, finding => Assert.Equal("database", finding.SourceLabel));
+        Assert.Contains(result.Report.SqlEvidence.Gaps, gap => gap.RuleId == RuleIds.DatabaseSqlSecretSafetyGap);
+        Assert.Contains(result.Report.Gaps, gap => gap.RuleId == RuleIds.DatabaseSqlSecretSafetyGap);
+        Assert.Contains(result.Report.SqlEvidence.Findings, finding => finding.Limitations.Contains("Static context evidence does not prove active database state."));
+        Assert.All(result.Report.SqlEvidence.Findings, finding =>
+        {
+            Assert.Equal("2222222", finding.CommitSha);
+            Assert.NotEmpty(finding.SupportingFactIds);
+            Assert.All(finding.SupportingFactIds, factId => Assert.Contains(':', factId));
+            Assert.Contains(finding.Metadata, pair => pair.Key == "coverage");
+            Assert.Contains(finding.Metadata, pair => pair.Key == "extractorVersion" && pair.Value.EndsWith("/0.1.0", StringComparison.Ordinal));
+            Assert.False(string.IsNullOrWhiteSpace(finding.ExtractorId));
+            Assert.False(string.IsNullOrWhiteSpace(finding.ExtractorVersion));
+            Assert.False(string.IsNullOrWhiteSpace(finding.CoverageLabel));
+        });
+        Assert.Contains(result.ReviewPriorityRows!, row => row.Section == "sqlEvidence");
+        var rendered = await File.ReadAllTextAsync(Path.Combine(output, "release-review.md"))
+            + await File.ReadAllTextAsync(Path.Combine(output, "release-review.json"));
+        Assert.Contains("SQL Runway Evidence", rendered, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-password-leak-sentinel", rendered, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(temp.Path, rendered, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("safe to run", rendered, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Release_review_defers_sql_runway_when_selected_index_has_no_compatible_evidence()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var manifest = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        SqliteIndexWriter.Write(beforeIndex, manifest, []);
+        SqliteIndexWriter.Write(afterIndex, manifest with { CommitSha = "2222222" }, []);
+
+        var result = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(beforeIndex, afterIndex, Path.Combine(temp.Path, "release")));
+
+        Assert.Equal(ReleaseReviewStatuses.Deferred, result.SqlEvidence.Status);
+        Assert.Contains(result.SqlEvidence.Gaps, gap => gap.GapKind == "CompatibleEvidenceUnavailable");
+        Assert.All(result.SqlEvidence.Gaps, gap => Assert.NotEmpty(gap.Metadata));
+        Assert.Contains(result.Gaps, gap => gap.GapId == result.SqlEvidence.Gaps[0].GapId);
+    }
+
+    [Fact]
+    public async Task Release_review_does_not_treat_ordinary_sql_usage_facts_as_runway_evidence()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222");
+        var ordinarySql = FactFactory.Create(after, FactTypes.SqlTextUsed, RuleIds.DatabaseSqlText,
+            EvidenceTiers.Tier3SyntaxOrTextual, new EvidenceSpan("Repository.cs", 10, 10, null, "sql-text", "sql-text/0.1.0"));
+        SqliteIndexWriter.Write(beforeIndex, before, []);
+        SqliteIndexWriter.Write(afterIndex, after, [ordinarySql]);
+
+        var report = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(beforeIndex, afterIndex, Path.Combine(temp.Path, "release")));
+
+        Assert.Equal(ReleaseReviewStatuses.Deferred, report.SqlEvidence.Status);
+        Assert.Empty(report.SqlEvidence.Findings);
+        Assert.Contains(report.SqlEvidence.Gaps, gap => gap.GapKind == "CompatibleEvidenceUnavailable");
+    }
+
+    [Fact]
+    public async Task Release_review_treats_malformed_sql_fact_properties_as_reduced_input_instead_of_crashing()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var before = Manifest("database", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("database", ScannerVersions.TraceMap, commitSha: "2222222");
+        var fact = FactFactory.Create(after, FactTypes.SqlExecutionContextCandidate, RuleIds.DatabaseSqlContextSyntax,
+            EvidenceTiers.Tier3SyntaxOrTextual, new EvidenceSpan("sql/setup.sql", 1, 1, null, "sql-execution-context", "sql-execution-context/0.1.0"));
+        SqliteIndexWriter.Write(beforeIndex, before, []);
+        SqliteIndexWriter.Write(afterIndex, after, [fact]);
+        await using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={afterIndex}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "update facts set properties_json = '{invalid-json' where fact_id = $fact_id;";
+            command.Parameters.AddWithValue("$fact_id", fact.FactId);
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var report = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(beforeIndex, afterIndex, Path.Combine(temp.Path, "release")));
+
+        Assert.Equal(ReleaseReviewStatuses.Available, report.SqlEvidence.Status);
+        Assert.NotEmpty(report.SqlEvidence.Findings);
+    }
+
+    [Fact]
     public async Task Release_review_combined_writes_safe_deterministic_packet_with_contract_context()
     {
         using var temp = new TempDirectory();
@@ -741,6 +894,7 @@ public sealed class ReleaseReviewTests
             0,
             0,
             0,
+            0,
             1,
             false,
             "Selectors matched no static evidence under requested scope.");
@@ -1064,6 +1218,7 @@ public sealed class ReleaseReviewTests
             0,
             0,
             0,
+            0,
             1,
             0,
             0,
@@ -1079,6 +1234,7 @@ public sealed class ReleaseReviewTests
             snapshot with { Side = "after" },
             summary,
             [],
+            section,
             section,
             section,
             section,

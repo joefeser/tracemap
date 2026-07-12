@@ -54,6 +54,7 @@ public sealed record ReleaseReviewDocument(
     ReleaseReviewSection ContractImpact,
     ReleaseReviewSection ApiDtoChanges,
     ReleaseReviewSection SqlSchemaImpact,
+    ReleaseReviewSection SqlEvidence,
     ReleaseReviewSection PackageImpact,
     ReleaseReviewSection PathContext,
     ReleaseReviewSection ReverseContext,
@@ -119,6 +120,7 @@ public sealed record ReleaseReviewSummary(
     int ContractFindingCount,
     int ApiDtoFindingCount,
     int SqlSchemaFindingCount,
+    int SqlEvidenceFindingCount,
     int PackageFindingCount,
     int PathFindingCount,
     int ReverseFindingCount,
@@ -164,7 +166,10 @@ public sealed record ReleaseReviewFinding(
     IReadOnlyList<KeyValuePair<string, string>> Metadata,
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> SupportingEdgeIds,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations,
+    string? ExtractorId = null,
+    string? ExtractorVersion = null,
+    string? CoverageLabel = null);
 
 public sealed record ReleaseReviewGap(
     string GapId,
@@ -195,6 +200,9 @@ internal sealed record SingleComparableFact(
     string StableKey,
     string EvidenceHash,
     ReleaseReviewFinding Finding);
+
+internal sealed record SqlEvidenceInput(string SourceLabel, ScanResult Result, bool ProvenanceCompatible);
+internal sealed record SqlEvidenceFactRow(string SourceLabel, ScanManifest Manifest, CodeFact Fact, bool ProvenanceCompatible);
 
 public static class ReleaseReviewStatuses
 {
@@ -229,6 +237,23 @@ public static class ReleaseReviewReporter
     private const string SelectorRuleId = "release.review.selector.v1";
     private const string TruncationRuleId = "release.review.truncation.v1";
 
+    private static readonly HashSet<string> SqlRunwayRuleIds = new(StringComparer.Ordinal)
+    {
+        RuleIds.DatabaseSqlContextDeclaration,
+        RuleIds.DatabaseSqlContextSyntax,
+        RuleIds.DatabaseSqlContextGap,
+        RuleIds.DatabaseSqlSecretBearingStep,
+        RuleIds.DatabaseSqlSecretTextCandidate,
+        RuleIds.DatabaseSqlSecretSafetyGap,
+        RuleIds.DatabasePostgresArchiveLink,
+        RuleIds.DatabasePostgresArchiveLinkPrerequisite,
+        RuleIds.DatabasePostgresArchiveLinkGap,
+        RuleIds.DatabasePostgresPermissionStatement,
+        RuleIds.DatabasePostgresPermissionPrerequisite,
+        RuleIds.DatabasePostgresPermissionCoverage,
+        RuleIds.DatabasePostgresPermissionGap
+    };
+
     private static readonly HashSet<string> ValidScopes = new(StringComparer.Ordinal)
     {
         "all",
@@ -238,6 +263,7 @@ public static class ReleaseReviewReporter
         "contracts",
         "api-dto",
         "sql-schema",
+        "sql-evidence",
         "packages",
         "paths",
         "reverse",
@@ -413,10 +439,12 @@ public static class ReleaseReviewReporter
             "API/DTO contract diff workflow is not implemented in this release-review slice.",
             requested: scopes.Contains("api-dto", StringComparer.Ordinal));
         var sqlSchemaImpact = BuildSqlSchemaSection(options, scopes);
+        var sqlEvidence = await BuildSqlEvidenceSectionAsync(options, scopes, afterInfo.Kind, cancellationToken);
         var packageImpact = BuildPackageSection(options, scopes, topChangedSurfaces);
         gaps.AddRange(contractImpact.Gaps);
         gaps.AddRange(apiDtoChanges.Gaps);
         gaps.AddRange(sqlSchemaImpact.Gaps);
+        gaps.AddRange(sqlEvidence.Gaps);
         gaps.AddRange(packageImpact.Gaps);
 
         var allFindings = new[]
@@ -425,6 +453,7 @@ public static class ReleaseReviewReporter
                 contractImpact,
                 apiDtoChanges,
                 sqlSchemaImpact,
+                sqlEvidence,
                 packageImpact,
                 pathContext,
                 reverseContext
@@ -441,6 +470,7 @@ public static class ReleaseReviewReporter
         contractImpact = FilterSectionFindings(contractImpact, cappedFindings);
         apiDtoChanges = FilterSectionFindings(apiDtoChanges, cappedFindings);
         sqlSchemaImpact = FilterSectionFindings(sqlSchemaImpact, cappedFindings);
+        sqlEvidence = FilterSectionFindings(sqlEvidence, cappedFindings);
         packageImpact = FilterSectionFindings(packageImpact, cappedFindings);
         pathContext = FilterSectionFindings(pathContext, cappedFindings);
         reverseContext = FilterSectionFindings(reverseContext, cappedFindings);
@@ -454,6 +484,7 @@ public static class ReleaseReviewReporter
         contractImpact = FilterSectionGaps(contractImpact, cappedGaps);
         apiDtoChanges = FilterSectionGaps(apiDtoChanges, cappedGaps);
         sqlSchemaImpact = FilterSectionGaps(sqlSchemaImpact, cappedGaps);
+        sqlEvidence = FilterSectionGaps(sqlEvidence, cappedGaps);
         packageImpact = FilterSectionGaps(packageImpact, cappedGaps);
         pathContext = FilterSectionGaps(pathContext, cappedGaps);
         reverseContext = FilterSectionGaps(reverseContext, cappedGaps);
@@ -464,6 +495,7 @@ public static class ReleaseReviewReporter
             contractImpact,
             apiDtoChanges,
             sqlSchemaImpact,
+            sqlEvidence,
             packageImpact,
             pathContext,
             reverseContext,
@@ -502,6 +534,7 @@ public static class ReleaseReviewReporter
             contractImpact,
             apiDtoChanges,
             sqlSchemaImpact,
+            sqlEvidence,
             packageImpact,
             pathContext,
             reverseContext,
@@ -753,6 +786,167 @@ public static class ReleaseReviewReporter
         return new ReleaseReviewSection(ReleaseReviewStatuses.Unavailable, [], [gap], FutureWorkflowLimitations);
     }
 
+    private static async Task<ReleaseReviewSection> BuildSqlEvidenceSectionAsync(
+        ReleaseReviewOptions options,
+        IReadOnlyList<string> scopes,
+        string indexKind,
+        CancellationToken cancellationToken)
+    {
+        if (!ScopeEnabled(scopes, "sql-evidence"))
+        {
+            return new ReleaseReviewSection(ReleaseReviewStatuses.NotRequested, [], [], ["SQL runway evidence is outside the requested release-review scope."]);
+        }
+
+        var inputs = await ReadSqlEvidenceInputsAsync(options.AfterPath, indexKind, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(options.Source))
+        {
+            inputs = inputs
+                .Where(input => string.Equals(input.SourceLabel, options.Source, StringComparison.Ordinal))
+                .ToArray();
+        }
+        if (inputs.Count == 0)
+        {
+            var noEvidenceGap = Gap(
+                "sql-evidence",
+                "CompatibleEvidenceUnavailable",
+                "sqlEvidence",
+                options.Source,
+                SectionRuleId,
+                ReleaseReviewClassifications.PartialAnalysis,
+                "No compatible SQL runway evidence was present in the selected after-index; this does not establish absence of SQL risk or database changes.",
+                metadata: CombinedReportHelpers.SortedMetadata([
+                    Pair("evidenceScope", "selected-after-index-sql-catalog"),
+                    Pair("indexKind", indexKind),
+                    Pair("sourceSelector", options.Source ?? "all-sources")
+                ]));
+            return new ReleaseReviewSection(ReleaseReviewStatuses.Deferred, [], [noEvidenceGap], SqlEvidenceLimitations());
+        }
+
+        if (inputs.Any(input => !input.ProvenanceCompatible))
+        {
+            var incompatible = inputs.Where(input => !input.ProvenanceCompatible).Select(input => input.SourceLabel).Order(StringComparer.Ordinal).ToArray();
+            var provenanceGap = Gap(
+                "sql-evidence",
+                "ExtractorProvenanceUnavailable",
+                "sqlEvidence",
+                options.Source,
+                SectionRuleId,
+                ReleaseReviewClassifications.PartialAnalysis,
+                "SQL runway facts were present, but their persisted extractor provenance was unavailable; release-review did not project incomplete evidence.",
+                metadata: [new KeyValuePair<string, string>("sourceLabels", string.Join(',', incompatible))]);
+            return new ReleaseReviewSection(ReleaseReviewStatuses.Unavailable, [], [provenanceGap], SqlEvidenceLimitations());
+        }
+
+        var findings = new List<ReleaseReviewFinding>();
+        var gaps = new List<ReleaseReviewGap>();
+        foreach (var input in inputs.OrderBy(input => input.SourceLabel, StringComparer.Ordinal))
+        {
+            var packet = SqlRunbookPacketBuilder.Build(input.Result);
+            foreach (var group in packet.StepGroups)
+            foreach (var step in group.Steps)
+                findings.Add(SqlEvidenceFinding(input.SourceLabel, "context-step", step.StepKind, ReleaseReviewClassifications.NoActionableEvidence, step.Evidence,
+                    [Pair("engine", group.Engine), Pair("serverRole", group.ServerRole), Pair("databaseRole", group.DatabaseRole), Pair("schemaRole", group.SchemaRole), Pair("executionMode", group.ExecutionMode), Pair("contextClassification", step.ContextClassification), Pair("stopConditions", string.Join(',', step.StopConditions))]));
+            foreach (var milestone in packet.Milestones)
+                findings.Add(SqlEvidenceFinding(input.SourceLabel, "milestone", milestone.Kind, ReleaseReviewClassifications.NoActionableEvidence, milestone.Evidence,
+                    [Pair("state", milestone.State), Pair("validationState", milestone.ValidationState)]));
+            foreach (var prerequisite in packet.Prerequisites)
+                findings.Add(SqlEvidenceFinding(input.SourceLabel, "prerequisite", prerequisite.Capability,
+                    prerequisite.Status == "present-in-scripts" ? ReleaseReviewClassifications.NoActionableEvidence : ReleaseReviewClassifications.ReviewRecommended,
+                    prerequisite.Evidence, [Pair("operationKind", prerequisite.OperationKind), Pair("status", prerequisite.Status), Pair("contextRole", prerequisite.ContextRole)]));
+            foreach (var protectedStep in packet.ProtectedSteps)
+            {
+                findings.Add(SqlEvidenceFinding(input.SourceLabel, "protected-step", protectedStep.Classification, ReleaseReviewClassifications.ReviewRecommended, protectedStep.Evidence,
+                    [Pair("categories", string.Join(',', protectedStep.Categories)), Pair("ownerHandling", protectedStep.OwnerHandling)]));
+            }
+            foreach (var gap in packet.Gaps)
+                gaps.Add(SqlEvidenceGap(input.SourceLabel, gap.Code, $"Upstream SQL {gap.Category} evidence recorded a bounded static-analysis gap.", gap.Evidence));
+            foreach (var question in packet.OwnerQuestions)
+                gaps.Add(SqlEvidenceGap(input.SourceLabel, "OwnerQuestion", question.Question, question.Evidence));
+        }
+
+        var orderedFindings = findings.DistinctBy(finding => finding.FindingId).OrderBy(FindingSeverityRank).ThenBy(finding => finding.FindingId, StringComparer.Ordinal).ToArray();
+        var orderedGaps = gaps.DistinctBy(gap => gap.GapId).OrderBy(GapSeverityRank).ThenBy(gap => gap.GapId, StringComparer.Ordinal).ToArray();
+        return new ReleaseReviewSection(ReleaseReviewStatuses.Available, orderedFindings, orderedGaps, SqlEvidenceLimitations());
+    }
+
+    private static ReleaseReviewFinding SqlEvidenceFinding(
+        string sourceLabel,
+        string kind,
+        string displayName,
+        string classification,
+        SqlRunbookEvidence evidence,
+        IEnumerable<KeyValuePair<string, string?>> metadata)
+    {
+        var safeMetadata = SqlEvidenceMetadata(evidence, metadata.Append(Pair("evidenceKind", kind)));
+        return new ReleaseReviewFinding(
+            StableId("finding", "sqlEvidence", sourceLabel, kind, evidence.RuleId, evidence.FilePath,
+                evidence.LineSpan.StartLine.ToString(), evidence.LineSpan.EndLine.ToString(), displayName,
+                string.Join(',', evidence.SupportingFactIds.OrderBy(value => value, StringComparer.Ordinal))),
+            "sqlEvidence",
+            sourceLabel,
+            classification,
+            evidence.RuleId,
+            evidence.EvidenceTier,
+            evidence.CommitSha,
+            displayName,
+            evidence.FilePath,
+            evidence.LineSpan.StartLine,
+            evidence.LineSpan.EndLine,
+            safeMetadata,
+            evidence.SupportingFactIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            [],
+            evidence.Limitations.Concat(SqlEvidenceLimitations()).Distinct(StringComparer.Ordinal).ToArray(),
+            evidence.ExtractorId,
+            evidence.ExtractorVersion,
+            evidence.Coverage);
+    }
+
+    private static ReleaseReviewGap SqlEvidenceGap(
+        string sourceLabel,
+        string kind,
+        string message,
+        SqlRunbookEvidence evidence,
+        IReadOnlyList<string>? supportingFindingIds = null)
+    {
+        return new ReleaseReviewGap(
+            StableId("gap", "sqlEvidence", sourceLabel, kind, evidence.RuleId, evidence.FilePath,
+                evidence.LineSpan.StartLine.ToString(), evidence.LineSpan.EndLine.ToString(), message,
+                string.Join(',', evidence.SupportingFactIds.OrderBy(value => value, StringComparer.Ordinal))),
+            kind,
+            "sqlEvidence",
+            sourceLabel,
+            evidence.RuleId,
+            evidence.EvidenceTier,
+            evidence.EvidenceTier == EvidenceTiers.Tier4Unknown ? ReleaseReviewClassifications.PartialAnalysis : ReleaseReviewClassifications.ReviewRecommended,
+            message,
+            supportingFindingIds ?? [],
+            evidence.SupportingFactIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            [],
+            SqlEvidenceMetadata(evidence, []));
+    }
+
+    private static IReadOnlyList<KeyValuePair<string, string>> SqlEvidenceMetadata(
+        SqlRunbookEvidence evidence,
+        IEnumerable<KeyValuePair<string, string?>> metadata)
+    {
+        return CombinedReportHelpers.SortedMetadata(metadata
+            .Append(Pair("coverage", evidence.Coverage))
+            .Append(Pair("extractorId", evidence.ExtractorId))
+            .Append(Pair("extractorVersion", evidence.ExtractorVersion))
+            .Append(Pair("commitSha", evidence.CommitSha))
+            .Append(Pair("filePath", evidence.FilePath))
+            .Append(Pair("startLine", evidence.LineSpan.StartLine.ToString()))
+            .Append(Pair("endLine", evidence.LineSpan.EndLine.ToString()))
+            .Append(Pair("upstreamLimitations", evidence.Limitations.Count == 0 ? null : string.Join(" | ", evidence.Limitations))));
+    }
+
+    private static IReadOnlyList<string> SqlEvidenceLimitations() =>
+    [
+        "TraceMap does not execute SQL or establish runtime reachability, production database state, effective permissions, deployment, or release approval.",
+        "SQL runway evidence does not provide an execution-safety conclusion or replace DBA/operator judgment.",
+        "Raw SQL, connection strings, credentials, scheduled command bodies, private infrastructure identities, and local absolute paths are omitted."
+    ];
+
     private static ReleaseReviewSection BuildPackageSection(ReleaseReviewOptions options, IReadOnlyList<string> scopes, ReleaseReviewSection topChangedSurfaces)
     {
         var packageFindings = topChangedSurfaces.Findings
@@ -815,6 +1009,7 @@ public static class ReleaseReviewReporter
         ReleaseReviewSection contractImpact,
         ReleaseReviewSection apiDtoChanges,
         ReleaseReviewSection sqlSchemaImpact,
+        ReleaseReviewSection sqlEvidence,
         ReleaseReviewSection packageImpact,
         ReleaseReviewSection pathContext,
         ReleaseReviewSection reverseContext,
@@ -827,6 +1022,7 @@ public static class ReleaseReviewReporter
                 contractImpact,
                 apiDtoChanges,
                 sqlSchemaImpact,
+                sqlEvidence,
                 packageImpact,
                 pathContext,
                 reverseContext
@@ -855,6 +1051,7 @@ public static class ReleaseReviewReporter
             contractImpact.Findings.Count,
             apiDtoChanges.Findings.Count,
             sqlSchemaImpact.Findings.Count,
+            sqlEvidence.Findings.Count,
             packageImpact.Findings.Count,
             pathContext.Findings.Count,
             reverseContext.Findings.Count,
@@ -1143,6 +1340,90 @@ public static class ReleaseReviewReporter
             CombinedReportHelpers.SortedMetadata([
                 Pair("changeId", gap.ChangeId)
             ]));
+    }
+
+    private static async Task<IReadOnlyList<SqlEvidenceInput>> ReadSqlEvidenceInputsAsync(
+        string path,
+        string indexKind,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = new SqliteConnection(ReadOnlyConnectionString(path));
+        await connection.OpenAsync(cancellationToken);
+        var table = indexKind == "combined" ? "combined_facts" : "facts";
+        var hasExtractorId = await ColumnExistsAsync(connection, table, "extractor_id", cancellationToken);
+        var hasExtractorVersion = await ColumnExistsAsync(connection, table, "extractor_version", cancellationToken);
+        var extractorIdColumn = hasExtractorId ? "facts.extractor_id" : "null";
+        var extractorVersionColumn = hasExtractorVersion ? "facts.extractor_version" : "null";
+        var rows = new List<SqlEvidenceFactRow>();
+        await using var command = connection.CreateCommand();
+        command.CommandText = indexKind == "combined"
+            ? $"""
+                select sources.label, sources.manifest_json,
+                       facts.combined_fact_id, facts.scan_id, facts.repo, facts.commit_sha, facts.project_path,
+                       facts.fact_type, facts.rule_id, facts.evidence_tier, facts.source_symbol, facts.target_symbol,
+                       facts.contract_element, facts.file_path, facts.start_line, facts.end_line, facts.snippet_hash,
+                       {extractorIdColumn}, {extractorVersionColumn}, facts.properties_json
+                from combined_facts facts
+                join index_sources sources on sources.source_index_id = facts.source_index_id
+                where facts.rule_id like 'database.sql.%' or facts.rule_id like 'database.postgres.%'
+                order by sources.label, facts.file_path, facts.start_line, facts.combined_fact_id;
+                """
+            : $"""
+                select manifest.repo, manifest.manifest_json,
+                       facts.fact_id, facts.scan_id, facts.repo, facts.commit_sha, facts.project_path,
+                       facts.fact_type, facts.rule_id, facts.evidence_tier, facts.source_symbol, facts.target_symbol,
+                       facts.contract_element, facts.file_path, facts.start_line, facts.end_line, facts.snippet_hash,
+                       {extractorIdColumn}, {extractorVersionColumn}, facts.properties_json
+                from facts
+                cross join scan_manifest manifest
+                where facts.rule_id like 'database.sql.%' or facts.rule_id like 'database.postgres.%'
+                order by facts.file_path, facts.start_line, facts.fact_id;
+                """;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var manifest = DeserializeManifest(StringOrNull(reader, 1))
+                ?? throw new InvalidDataException("SQL evidence input has an invalid scan manifest.");
+            var extractorId = StringOrNull(reader, 17);
+            var extractorVersion = StringOrNull(reader, 18);
+            var properties = ParseProperties(StringOrNull(reader, 19));
+            var evidence = new EvidenceSpan(
+                StringOrDefault(reader, 13, "unknown"),
+                reader.GetInt32(14),
+                reader.GetInt32(15),
+                StringOrNull(reader, 16),
+                extractorId ?? "unknown",
+                extractorVersion ?? "unknown");
+            var fact = new CodeFact(
+                StringOrDefault(reader, 2, "unknown"),
+                StringOrDefault(reader, 3, manifest.ScanId),
+                StringOrDefault(reader, 4, manifest.RepoName),
+                StringOrDefault(reader, 5, manifest.CommitSha),
+                StringOrNull(reader, 6),
+                StringOrDefault(reader, 7, FactTypes.AnalysisGap),
+                StringOrDefault(reader, 8, RuleIds.DatabaseSqlContextGap),
+                StringOrDefault(reader, 9, EvidenceTiers.Tier4Unknown),
+                StringOrNull(reader, 10),
+                StringOrNull(reader, 11),
+                StringOrNull(reader, 12),
+                evidence,
+                properties);
+            if (!SqlRunwayRuleIds.Contains(fact.RuleId))
+            {
+                continue;
+            }
+            rows.Add(new SqlEvidenceFactRow(StringOrDefault(reader, 0, manifest.RepoName), manifest, fact,
+                !string.IsNullOrWhiteSpace(extractorId) && !string.IsNullOrWhiteSpace(extractorVersion)));
+        }
+
+        return rows
+            .GroupBy(row => row.SourceLabel, StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => new SqlEvidenceInput(
+                group.Key,
+                new ScanResult(group.First().Manifest, group.Select(row => row.Fact).ToArray(), []),
+                group.All(row => row.ProvenanceCompatible)))
+            .ToArray();
     }
 
     private static async Task<ReleaseIndexInfo> ReadIndexInfoAsync(string path, string side, CancellationToken cancellationToken)
@@ -1668,6 +1949,7 @@ public static class ReleaseReviewReporter
             0,
             0,
             0,
+            0,
             gaps.Count,
             false,
             "Checklist truncation preflight.");
@@ -2020,6 +2302,7 @@ public static class ReleaseReviewReporter
         RenderSection(builder, "Contract Delta Impact", report.ContractImpact);
         RenderSection(builder, "API and DTO Changes", report.ApiDtoChanges);
         RenderSection(builder, "SQL and Schema Impact", report.SqlSchemaImpact);
+        RenderSection(builder, "SQL Runway Evidence", report.SqlEvidence);
         RenderSection(builder, "Package Impact", report.PackageImpact);
         builder.AppendLine("## Path and Reverse Context");
         builder.AppendLine();
@@ -2504,6 +2787,15 @@ public static class ReleaseReviewReporter
         command.Parameters.AddWithValue("$name", tableName);
         var value = await command.ExecuteScalarAsync(cancellationToken);
         return value is not null;
+    }
+
+    private static async Task<bool> ColumnExistsAsync(SqliteConnection connection, string tableName, string columnName, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select 1 from pragma_table_info($table_name) where name = $column_name limit 1;";
+        command.Parameters.AddWithValue("$table_name", tableName);
+        command.Parameters.AddWithValue("$column_name", columnName);
+        return await command.ExecuteScalarAsync(cancellationToken) is not null;
     }
 
     private static string ReadOnlyConnectionString(string path)
