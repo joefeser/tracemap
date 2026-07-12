@@ -10,16 +10,16 @@ PR.
 
 ### Phase 1: Read gate (no new extraction)
 
-- [ ] 1.1 Confirm SQL runway facts are readable from the combined/index readers used by route-flow and release-review; list exactly which rule IDs and fact types are reachable.
-- [ ] 1.2 Decide Target A (route-flow), Target B (release-review), or both for this PR; record the choice in implementation-state.
-- [ ] 1.3 Confirm no rule/tier/coverage/extractor-version change is required. If a change larger than a read-side hook is needed, stop and open a follow-up spec (Requirement 6).
+- [x] 1.1 Confirm SQL runway facts are readable from the combined/index readers used by route-flow and release-review; list exactly which rule IDs and fact types are reachable.
+- [x] 1.2 Decide Target A (route-flow), Target B (release-review), or both for this PR; record the choice in implementation-state.
+- [x] 1.3 Confirm no rule/tier/coverage/extractor-version change is required. If a change larger than a read-side hook is needed, stop and open a follow-up spec (Requirement 6).
 
 ### Phase 2: Release-review SQL evidence section (Target B — recommended first)
 
-- [ ] 2.1 Add a `SqlEvidence` `ReleaseReviewSection` parallel to `SqlSchemaImpact`, wired into the section list, JSON DTO, and Markdown writer.
-- [ ] 2.2 Set section status from `ReleaseReviewStatuses` (`available` / `not_requested` / `unavailable` / `deferred` / `truncated`) based on presence of SQL runway evidence in the selected inputs; keep context/permission/archive/secret-safety gaps as `ReleaseReviewGap` entries, never as a status value.
-- [ ] 2.3 Reuse `SqlRunbookPacketBuilder` output; classify findings only with the existing attention levels; append section gaps to the packet-level `gaps`.
-- [ ] 2.4 Add the non-claim footer and route output through the safe-output allowlist / forbidden-phrase checks.
+- [x] 2.1 Add a `SqlEvidence` `ReleaseReviewSection` parallel to `SqlSchemaImpact`, wired into the section list, JSON DTO, and Markdown writer.
+- [x] 2.2 Set section status from `ReleaseReviewStatuses` (`available` / `not_requested` / `unavailable` / `deferred` / `truncated`) based on presence of SQL runway evidence in the selected inputs; keep context/permission/archive/secret-safety gaps as `ReleaseReviewGap` entries, never as a status value.
+- [x] 2.3 Reuse `SqlRunbookPacketBuilder` output; classify findings only with the existing attention levels; append section gaps to the packet-level `gaps`.
+- [x] 2.4 Add the non-claim footer and route output through the safe-output allowlist / forbidden-phrase checks.
 
 ### Phase 3: Route-flow SQL context group (Target A — same PR only if small)
 
@@ -30,10 +30,10 @@ PR.
 
 ### Phase 4: Fixtures and tests (ship with the increment)
 
-- [ ] 4.1 Add `available`, `deferred`/`unavailable`, and `gap` variant tests for the chosen target(s) using existing SQL samples.
-- [ ] 4.2 Assert projected rows preserve rule ID, tier, coverage, span, commit SHA, extractor version, and fact IDs from upstream.
-- [ ] 4.3 Assert no planted sentinel values / raw SQL / paths appear; protected steps stay span-only and hash-free.
-- [ ] 4.4 Extend `docs/VALIDATION.md` with a route-flow and/or release-review SQL-evidence smoke check.
+- [x] 4.1 Add `available`, `deferred`/`unavailable`, and `gap` variant tests for the chosen target(s) using existing SQL samples.
+- [x] 4.2 Assert projected rows preserve rule ID, tier, coverage, span, commit SHA, extractor version, and fact IDs from upstream.
+- [x] 4.3 Assert no planted sentinel values / raw SQL / paths appear; protected steps stay span-only and hash-free.
+- [x] 4.4 Extend `docs/VALIDATION.md` with a route-flow and/or release-review SQL-evidence smoke check.
 
 ### Phase 5: Adjacent cleanup (may be a separate PR)
 

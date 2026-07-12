@@ -72,6 +72,8 @@ public static class SqliteIndexWriter
               start_line integer not null,
               end_line integer not null,
               snippet_hash text,
+              extractor_id text,
+              extractor_version text,
               properties_json text not null
             );
 
@@ -348,6 +350,8 @@ public static class SqliteIndexWriter
               start_line,
               end_line,
               snippet_hash,
+              extractor_id,
+              extractor_version,
               properties_json
             ) values (
               $fact_id,
@@ -365,6 +369,8 @@ public static class SqliteIndexWriter
               $start_line,
               $end_line,
               $snippet_hash,
+              $extractor_id,
+              $extractor_version,
               $properties_json
             );
             """;
@@ -383,6 +389,8 @@ public static class SqliteIndexWriter
         command.Parameters.AddWithValue("$start_line", fact.Evidence.StartLine);
         command.Parameters.AddWithValue("$end_line", fact.Evidence.EndLine);
         command.Parameters.AddWithValue("$snippet_hash", (object?)fact.Evidence.SnippetHash ?? DBNull.Value);
+        command.Parameters.AddWithValue("$extractor_id", (object?)fact.Evidence.ExtractorId ?? DBNull.Value);
+        command.Parameters.AddWithValue("$extractor_version", (object?)fact.Evidence.ExtractorVersion ?? DBNull.Value);
         command.Parameters.AddWithValue("$properties_json", JsonSerializer.Serialize(fact.Properties, JsonOptions.StableLine));
         command.ExecuteNonQuery();
 

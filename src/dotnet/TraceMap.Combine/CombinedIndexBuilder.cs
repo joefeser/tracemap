@@ -198,6 +198,8 @@ public static class CombinedIndexBuilder
               start_line integer not null,
               end_line integer not null,
               snippet_hash text,
+              extractor_id text,
+              extractor_version text,
               properties_json text not null,
               payload_json text not null
             );
@@ -661,13 +663,17 @@ public static class CombinedIndexBuilder
 
     private static async Task<int> ImportFactsAsync(SqliteConnection connection, SqliteTransaction transaction, string alias, string sourceIndexId, CancellationToken cancellationToken)
     {
+        var hasExtractorId = await ColumnExistsAsync(connection, alias, "facts", "extractor_id", cancellationToken);
+        var hasExtractorVersion = await ColumnExistsAsync(connection, alias, "facts", "extractor_version", cancellationToken);
+        var extractorIdExpression = hasExtractorId ? "extractor_id" : "null";
+        var extractorVersionExpression = hasExtractorVersion ? "extractor_version" : "null";
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = $"""
             insert into combined_facts (
               combined_fact_id, source_index_id, original_fact_id, original_scan_id, scan_id, repo, commit_sha,
               project_path, fact_type, rule_id, evidence_tier, source_symbol, target_symbol, contract_element,
-              file_path, start_line, end_line, snippet_hash, properties_json, payload_json
+              file_path, start_line, end_line, snippet_hash, extractor_id, extractor_version, properties_json, payload_json
             )
             select
               $source_index_id || ':' || fact_id,
@@ -688,6 +694,8 @@ public static class CombinedIndexBuilder
               start_line,
               end_line,
               snippet_hash,
+              {extractorIdExpression},
+              {extractorVersionExpression},
               properties_json,
               json_object(
                 'factId', fact_id,
@@ -936,6 +944,22 @@ public static class CombinedIndexBuilder
         command.Parameters.AddWithValue("$table_name", tableName);
         var value = await command.ExecuteScalarAsync(cancellationToken);
         return value is not null;
+    }
+
+    private static async Task<bool> ColumnExistsAsync(SqliteConnection connection, string alias, string tableName, string columnName, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"pragma {alias}.table_info({tableName});";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static object ToDb(string? value)
