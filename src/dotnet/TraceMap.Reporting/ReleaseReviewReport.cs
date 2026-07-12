@@ -166,7 +166,10 @@ public sealed record ReleaseReviewFinding(
     IReadOnlyList<KeyValuePair<string, string>> Metadata,
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> SupportingEdgeIds,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations,
+    string? ExtractorId = null,
+    string? ExtractorVersion = null,
+    string? CoverageLabel = null);
 
 public sealed record ReleaseReviewGap(
     string GapId,
@@ -778,6 +781,12 @@ public static class ReleaseReviewReporter
         }
 
         var inputs = await ReadSqlEvidenceInputsAsync(options.AfterPath, indexKind, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(options.Source))
+        {
+            inputs = inputs
+                .Where(input => string.Equals(input.SourceLabel, options.Source, StringComparison.Ordinal))
+                .ToArray();
+        }
         if (inputs.Count == 0)
         {
             var noEvidenceGap = Gap(
@@ -787,7 +796,12 @@ public static class ReleaseReviewReporter
                 options.Source,
                 SectionRuleId,
                 ReleaseReviewClassifications.PartialAnalysis,
-                "No compatible SQL runway evidence was present in the selected after-index; this does not establish absence of SQL risk or database changes.");
+                "No compatible SQL runway evidence was present in the selected after-index; this does not establish absence of SQL risk or database changes.",
+                metadata: CombinedReportHelpers.SortedMetadata([
+                    Pair("evidenceScope", "selected-after-index-sql-catalog"),
+                    Pair("indexKind", indexKind),
+                    Pair("sourceSelector", options.Source ?? "all-sources")
+                ]));
             return new ReleaseReviewSection(ReleaseReviewStatuses.Deferred, [], [noEvidenceGap], SqlEvidenceLimitations());
         }
 
@@ -848,7 +862,9 @@ public static class ReleaseReviewReporter
     {
         var safeMetadata = SqlEvidenceMetadata(evidence, metadata.Append(Pair("evidenceKind", kind)));
         return new ReleaseReviewFinding(
-            StableId("finding", "sqlEvidence", sourceLabel, kind, evidence.RuleId, evidence.FilePath, evidence.LineSpan.StartLine.ToString(), displayName),
+            StableId("finding", "sqlEvidence", sourceLabel, kind, evidence.RuleId, evidence.FilePath,
+                evidence.LineSpan.StartLine.ToString(), evidence.LineSpan.EndLine.ToString(), displayName,
+                string.Join(',', evidence.SupportingFactIds.OrderBy(value => value, StringComparer.Ordinal))),
             "sqlEvidence",
             sourceLabel,
             classification,
@@ -862,7 +878,10 @@ public static class ReleaseReviewReporter
             safeMetadata,
             evidence.SupportingFactIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             [],
-            evidence.Limitations.Concat(SqlEvidenceLimitations()).Distinct(StringComparer.Ordinal).ToArray());
+            evidence.Limitations.Concat(SqlEvidenceLimitations()).Distinct(StringComparer.Ordinal).ToArray(),
+            evidence.ExtractorId,
+            evidence.ExtractorVersion,
+            evidence.Coverage);
     }
 
     private static ReleaseReviewGap SqlEvidenceGap(
@@ -873,7 +892,9 @@ public static class ReleaseReviewReporter
         IReadOnlyList<string>? supportingFindingIds = null)
     {
         return new ReleaseReviewGap(
-            StableId("gap", "sqlEvidence", sourceLabel, kind, evidence.RuleId, evidence.FilePath, evidence.LineSpan.StartLine.ToString(), message),
+            StableId("gap", "sqlEvidence", sourceLabel, kind, evidence.RuleId, evidence.FilePath,
+                evidence.LineSpan.StartLine.ToString(), evidence.LineSpan.EndLine.ToString(), message,
+                string.Join(',', evidence.SupportingFactIds.OrderBy(value => value, StringComparer.Ordinal))),
             kind,
             "sqlEvidence",
             sourceLabel,
@@ -1348,8 +1369,7 @@ public static class ReleaseReviewReporter
                 ?? throw new InvalidDataException("SQL evidence input has an invalid scan manifest.");
             var extractorId = StringOrNull(reader, 17);
             var extractorVersion = StringOrNull(reader, 18);
-            var properties = JsonSerializer.Deserialize<SortedDictionary<string, string>>(StringOrDefault(reader, 19, "{}"))
-                ?? new SortedDictionary<string, string>(StringComparer.Ordinal);
+            var properties = ParseProperties(StringOrNull(reader, 19));
             var evidence = new EvidenceSpan(
                 StringOrDefault(reader, 13, "unknown"),
                 reader.GetInt32(14),
@@ -2751,17 +2771,10 @@ public static class ReleaseReviewReporter
     private static async Task<bool> ColumnExistsAsync(SqliteConnection connection, string tableName, string columnName, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = $"pragma table_info({tableName});";
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        command.CommandText = "select 1 from pragma_table_info($table_name) where name = $column_name limit 1;";
+        command.Parameters.AddWithValue("$table_name", tableName);
+        command.Parameters.AddWithValue("$column_name", columnName);
+        return await command.ExecuteScalarAsync(cancellationToken) is not null;
     }
 
     private static string ReadOnlyConnectionString(string path)

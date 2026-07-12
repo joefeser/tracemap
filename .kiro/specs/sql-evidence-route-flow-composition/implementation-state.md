@@ -94,14 +94,22 @@ families are `database.sql.context.*.v1`,
 
 ## Validation
 
-- Focused release-review/runbook/combine tests: 33 passed.
+- Focused release-review/runbook/combine tests: 34 passed after review fixes.
 - `dotnet build src/dotnet/TraceMap.sln`: passed, 0 warnings.
-- `dotnet test src/dotnet/TraceMap.sln`: 746 passed, 0 failed.
+- `dotnet test src/dotnet/TraceMap.sln`: 747 passed, 0 failed.
 - Checked-in `samples/sql-operator-runbook` scan plus release-review smoke:
   `SqlEvidence=available`, rollup `ReviewRecommended`, no truncation, 32 SQL
   findings, 18 structured gaps, and no planted sentinel or forbidden phrase.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+
+Review fixes preserve source-selector isolation, include SQL evidence in review
+priority scoring, tolerate malformed fact-property JSON, expose extractor
+provenance as first-class finding fields, preserve both shipped limitation keys,
+and disambiguate finding/gap IDs with end spans and supporting fact IDs. SQLite
+schema inspection now uses parameterized table-valued pragmas; the remaining
+combined import interpolation is restricted to validated internal identifiers
+because SQLite does not parameterize attached-schema identifiers.
 
 ## Deferred From This PR
 

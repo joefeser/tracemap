@@ -663,12 +663,14 @@ public static class CombinedIndexBuilder
 
     private static async Task<int> ImportFactsAsync(SqliteConnection connection, SqliteTransaction transaction, string alias, string sourceIndexId, CancellationToken cancellationToken)
     {
+        ValidateInternalIdentifier(alias, nameof(alias));
         var hasExtractorId = await ColumnExistsAsync(connection, alias, "facts", "extractor_id", cancellationToken);
         var hasExtractorVersion = await ColumnExistsAsync(connection, alias, "facts", "extractor_version", cancellationToken);
         var extractorIdExpression = hasExtractorId ? "extractor_id" : "null";
         var extractorVersionExpression = hasExtractorVersion ? "extractor_version" : "null";
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
+        // nosemgrep: csharp.lang.security.sqli.csharp-sqli -- SQLite cannot parameterize attached-schema identifiers; alias is restricted to ASCII identifier characters above and the two projected expressions are closed constants.
         command.CommandText = $"""
             insert into combined_facts (
               combined_fact_id, source_index_id, original_fact_id, original_scan_id, scan_id, repo, commit_sha,
@@ -940,7 +942,8 @@ public static class CombinedIndexBuilder
     private static async Task<bool> TableExistsAsync(SqliteConnection connection, string alias, string tableName, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = $"select 1 from {alias}.sqlite_master where type = 'table' and name = $table_name limit 1;";
+        command.CommandText = "select 1 from pragma_table_list where schema = $schema_name and name = $table_name limit 1;";
+        command.Parameters.AddWithValue("$schema_name", alias);
         command.Parameters.AddWithValue("$table_name", tableName);
         var value = await command.ExecuteScalarAsync(cancellationToken);
         return value is not null;
@@ -949,17 +952,19 @@ public static class CombinedIndexBuilder
     private static async Task<bool> ColumnExistsAsync(SqliteConnection connection, string alias, string tableName, string columnName, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = $"pragma {alias}.table_info({tableName});";
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
+        command.CommandText = "select 1 from pragma_table_info($table_name, $schema_name) where name = $column_name limit 1;";
+        command.Parameters.AddWithValue("$table_name", tableName);
+        command.Parameters.AddWithValue("$schema_name", alias);
+        command.Parameters.AddWithValue("$column_name", columnName);
+        return await command.ExecuteScalarAsync(cancellationToken) is not null;
+    }
 
-        return false;
+    private static void ValidateInternalIdentifier(string value, string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Any(character => !char.IsAsciiLetterOrDigit(character) && character != '_'))
+        {
+            throw new ArgumentException("SQLite internal identifiers may contain only ASCII letters, digits, and underscores.", parameterName);
+        }
     }
 
     private static object ToDb(string? value)
