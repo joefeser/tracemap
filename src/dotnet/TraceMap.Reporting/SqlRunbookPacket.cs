@@ -180,7 +180,16 @@ public static class SqlRunbookPacketBuilder
     private static IReadOnlyList<string> Codes(string value) => value.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Order(StringComparer.Ordinal).ToArray();
     private static SqlRunbookEvidence Evidence(CodeFact f, string commitSha) => new(f.RuleId, f.EvidenceTier, commitSha, CombinedReportHelpers.SafePath(f.Evidence.FilePath), new SqlRunbookLineSpan(f.Evidence.StartLine, f.Evidence.EndLine), f.Evidence.ExtractorId, f.Evidence.ExtractorVersion, Value(f, "coverage", "reduced"), [f.FactId], FactLimitations(f));
     private static SqlRunbookEvidence DerivedEvidence(CodeFact source, string commitSha) => new(RuleIds.DatabaseSqlOperatorRunbookPacket, EvidenceTiers.Tier4Unknown, commitSha, CombinedReportHelpers.SafePath(source.Evidence.FilePath), new SqlRunbookLineSpan(source.Evidence.StartLine, source.Evidence.EndLine), nameof(SqlRunbookPacketBuilder), "sql-runbook-packet/0.1.0", "reduced", [source.FactId], ["Runbook-derived stop and owner-review evidence is bounded by its supporting upstream fact."]);
-    private static IReadOnlyList<string> FactLimitations(CodeFact fact) => fact.Properties.TryGetValue("ruleLimitations", out var value) && !string.IsNullOrWhiteSpace(value) ? [value] : [];
+    private static IReadOnlyList<string> FactLimitations(CodeFact fact) => new[]
+        {
+            fact.Properties.GetValueOrDefault("ruleLimitations"),
+            fact.Properties.GetValueOrDefault("limitation")
+        }
+        .Where(value => !string.IsNullOrWhiteSpace(value))
+        .Select(value => value!)
+        .Distinct(StringComparer.Ordinal)
+        .OrderBy(value => value, StringComparer.Ordinal)
+        .ToArray();
     private static bool IsKnownCommit(string? value) => !string.IsNullOrWhiteSpace(value)
         && !value.Equals("unknown", StringComparison.OrdinalIgnoreCase)
         && value.Trim('0').Length > 0;
