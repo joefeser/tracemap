@@ -237,6 +237,23 @@ public static class ReleaseReviewReporter
     private const string SelectorRuleId = "release.review.selector.v1";
     private const string TruncationRuleId = "release.review.truncation.v1";
 
+    private static readonly HashSet<string> SqlRunwayRuleIds = new(StringComparer.Ordinal)
+    {
+        RuleIds.DatabaseSqlContextDeclaration,
+        RuleIds.DatabaseSqlContextSyntax,
+        RuleIds.DatabaseSqlContextGap,
+        RuleIds.DatabaseSqlSecretBearingStep,
+        RuleIds.DatabaseSqlSecretTextCandidate,
+        RuleIds.DatabaseSqlSecretSafetyGap,
+        RuleIds.DatabasePostgresArchiveLink,
+        RuleIds.DatabasePostgresArchiveLinkPrerequisite,
+        RuleIds.DatabasePostgresArchiveLinkGap,
+        RuleIds.DatabasePostgresPermissionStatement,
+        RuleIds.DatabasePostgresPermissionPrerequisite,
+        RuleIds.DatabasePostgresPermissionCoverage,
+        RuleIds.DatabasePostgresPermissionGap
+    };
+
     private static readonly HashSet<string> ValidScopes = new(StringComparer.Ordinal)
     {
         "all",
@@ -1391,6 +1408,10 @@ public static class ReleaseReviewReporter
                 StringOrNull(reader, 12),
                 evidence,
                 properties);
+            if (!SqlRunwayRuleIds.Contains(fact.RuleId))
+            {
+                continue;
+            }
             rows.Add(new SqlEvidenceFactRow(StringOrDefault(reader, 0, manifest.RepoName), manifest, fact,
                 !string.IsNullOrWhiteSpace(extractorId) && !string.IsNullOrWhiteSpace(extractorVersion)));
         }

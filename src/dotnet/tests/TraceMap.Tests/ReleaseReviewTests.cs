@@ -120,6 +120,26 @@ public sealed class ReleaseReviewTests
     }
 
     [Fact]
+    public async Task Release_review_does_not_treat_ordinary_sql_usage_facts_as_runway_evidence()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var before = Manifest("api", ScannerVersions.TraceMap, commitSha: "1111111");
+        var after = Manifest("api", ScannerVersions.TraceMap, commitSha: "2222222");
+        var ordinarySql = FactFactory.Create(after, FactTypes.SqlTextUsed, RuleIds.DatabaseSqlText,
+            EvidenceTiers.Tier3SyntaxOrTextual, new EvidenceSpan("Repository.cs", 10, 10, null, "sql-text", "sql-text/0.1.0"));
+        SqliteIndexWriter.Write(beforeIndex, before, []);
+        SqliteIndexWriter.Write(afterIndex, after, [ordinarySql]);
+
+        var report = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(beforeIndex, afterIndex, Path.Combine(temp.Path, "release")));
+
+        Assert.Equal(ReleaseReviewStatuses.Deferred, report.SqlEvidence.Status);
+        Assert.Empty(report.SqlEvidence.Findings);
+        Assert.Contains(report.SqlEvidence.Gaps, gap => gap.GapKind == "CompatibleEvidenceUnavailable");
+    }
+
+    [Fact]
     public async Task Release_review_treats_malformed_sql_fact_properties_as_reduced_input_instead_of_crashing()
     {
         using var temp = new TempDirectory();
