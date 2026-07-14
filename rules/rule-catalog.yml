@@ -918,7 +918,7 @@ rules:
   - id: vault-export.graph.property-flow-terminal-context.v1
     name: Vault export property-flow terminal-context navigation
     description: Packages producer-gated property-flow terminal-context metadata as hidden, path-scoped local vault navigation.
-    evidenceTier: Tier2Structural or Tier4Unknown
+    evidenceTier: Tier2Structural
     emits:
       - hidden terminal-context navigation node
       - hidden property-flow terminal-context navigation edge
