@@ -97,6 +97,18 @@ public sealed class EvidenceDocsExportTests
     }
 
     [Fact]
+    public async Task Docs_export_infers_swift_for_single_adapter_index()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = CreateSingleIndex(temp.Path, scannerVersion: "tracemap-swift/0.1.0");
+
+        var result = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(indexPath, Path.Combine(temp.Path, "docs")));
+
+        var overview = Assert.Single(result.Chunks, chunk => chunk.ChunkFamily == "source-overview");
+        Assert.Contains("| Language | `swift` |", overview.BodyMarkdown);
+    }
+
+    [Fact]
     public async Task Docs_export_jsonl_only_does_not_emit_markdown_navigation_links()
     {
         using var temp = new TempDirectory();
@@ -409,7 +421,7 @@ public sealed class EvidenceDocsExportTests
     {
         using var temp = new TempDirectory();
         var indexPath = CreateCombinedIndex(temp.Path);
-        var unsafeValue = string.Concat("/", "Users", "/private/source/Customer.sql");
+        var unsafeValue = string.Concat("/", "opt", "/build/source/Customer.sql");
         var reportPath = Path.Combine(temp.Path, "property-flow-report.json");
         await File.WriteAllTextAsync(reportPath, $$"""
             {
@@ -522,6 +534,14 @@ public sealed class EvidenceDocsExportTests
         var unsafeIndexPath = CreateCombinedIndex(
             temp.Path,
             propertyFlowPropertiesJson: $$"""{"terminalContextKind":"{{unsafeValue}}"}""");
+        var labelPrefixedUnixPath = string.Concat("path:", "/", "home", "/example/source/Customer.sql");
+        var labelPrefixedUnixIndexPath = CreateCombinedIndex(
+            temp.Path,
+            propertyFlowPropertiesJson: $$"""{"terminalContextKind":"{{labelPrefixedUnixPath}}"}""");
+        var labelPrefixedWindowsPath = string.Concat("path:", "C:", "/", "Users", "/example/source/Customer.cs");
+        var labelPrefixedWindowsIndexPath = CreateCombinedIndex(
+            temp.Path,
+            propertyFlowPropertiesJson: $$"""{"terminalContextKind":"{{labelPrefixedWindowsPath}}"}""");
 
         var absent = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
             absentIndexPath,
@@ -552,6 +572,23 @@ public sealed class EvidenceDocsExportTests
             && chunk.SupportingIds.Contains("source-api:fact-property-flow"));
         Assert.Contains("terminalContextKind:redacted-", unsafeChunk.BodyMarkdown);
         Assert.DoesNotContain(unsafeValue, JsonSerializer.Serialize(unsafeResult), StringComparison.OrdinalIgnoreCase);
+
+        foreach (var (indexPath, unsafePath, outputName) in new[]
+        {
+            (labelPrefixedUnixIndexPath, labelPrefixedUnixPath, "label-prefixed-unix-docs"),
+            (labelPrefixedWindowsIndexPath, labelPrefixedWindowsPath, "label-prefixed-windows-docs")
+        })
+        {
+            var prefixedResult = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+                indexPath,
+                Path.Combine(temp.Path, outputName),
+                Families: "property-flow,gap,limitation"));
+            var prefixedChunk = Assert.Single(prefixedResult.Chunks, chunk =>
+                chunk.ChunkFamily == "property-flow"
+                && chunk.SupportingIds.Contains("source-api:fact-property-flow"));
+            Assert.Contains("terminalContextKind:redacted-", prefixedChunk.BodyMarkdown);
+            Assert.DoesNotContain(unsafePath, JsonSerializer.Serialize(prefixedResult), StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]
@@ -639,7 +676,7 @@ public sealed class EvidenceDocsExportTests
         Assert.Equal("11:chunkFamily=8:endpoint\n7:missing=0:\n", record);
     }
 
-    private static string CreateSingleIndex(string root, string filePath = "src/Api/Controller.cs", string? propertiesJson = """{"method":"GET","route":"/api/orders/{}"}""")
+    private static string CreateSingleIndex(string root, string filePath = "src/Api/Controller.cs", string? propertiesJson = """{"method":"GET","route":"/api/orders/{}"}""", string scannerVersion = "tracemap-tests")
     {
         var path = Path.Combine(root, $"single-{Guid.NewGuid():N}.sqlite");
         using var connection = new SqliteConnection($"Data Source={path}");
@@ -678,7 +715,7 @@ public sealed class EvidenceDocsExportTests
               'scan-single',
               'sample',
               '1111111111111111111111111111111111111111',
-              'tracemap-tests',
+              $scanner_version,
               '2026-06-01T00:00:00Z',
               'Level1SemanticAnalysis',
               'Succeeded',
@@ -705,6 +742,7 @@ public sealed class EvidenceDocsExportTests
             """;
         command.Parameters.AddWithValue("$file_path", filePath);
         command.Parameters.AddWithValue("$properties_json", (object?)propertiesJson ?? DBNull.Value);
+        command.Parameters.AddWithValue("$scanner_version", scannerVersion);
         command.ExecuteNonQuery();
         return path;
     }

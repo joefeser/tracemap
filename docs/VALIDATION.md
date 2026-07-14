@@ -19,6 +19,7 @@ Every language adapter should have:
 | combine/report/paths/reverse/export smoke | proves shared schema compatibility, combined dependency reporting, static dependency path queries, and reverse dependency-surface queries across adapters |
 | public OSS smoke | proves larger real-world repos complete without unchecked assumptions |
 | private-path guard | proves generated docs/scripts do not leak developer-local paths |
+| artifact conformance | proves manifest/fact shape, registered rules, extractor provenance, minimum SQLite columns, and JSONL-to-SQLite parity |
 
 ## Required Local Commands
 
@@ -33,6 +34,7 @@ python3 -m venv /tmp/tracemap-python-venv
 /tmp/tracemap-python-venv/bin/python -m pip install -e "src/python[dev]"
 /tmp/tracemap-python-venv/bin/python -m pytest src/python/tests
 PYTHON_BIN=/tmp/tracemap-python-venv/bin/python ./scripts/smoke-python-endpoints.sh
+python3 scripts/test_validate_adapter_artifacts.py
 ./scripts/check-private-paths.sh
 ```
 
@@ -96,6 +98,7 @@ access for SwiftPM dependency restore:
 
 ```bash
 swift build --package-path src/swift
+swift test --package-path src/swift
 swift run --package-path src/swift tracemap-swift-smoke-tests
 swift run --package-path src/swift tracemap-swift scan --repo samples/swift-package-basic --out /tmp/tracemap-swift-package-basic
 swift run --package-path src/swift tracemap-swift scan --repo samples/swift-dependency-surfaces --out /tmp/tracemap-swift-dependency-surfaces
@@ -140,6 +143,19 @@ scripts/smoke-swift-route-flow.sh /tmp/tracemap-swift-route-flow-smoke
 ./scripts/check-private-paths.sh
 git diff --check
 ```
+
+For any adapter output produced by the commands above, run:
+
+```bash
+python3 scripts/validate-adapter-artifacts.py <scan-output>
+```
+
+The repository CI runs the existing .NET, TypeScript, Python, JVM, and Swift
+test suites, validates one real output per adapter, and combines all five
+indexes. Local environments with only Apple Command Line Tools may build and
+run the Swift scanner but lack the `XCTest` module needed by `swift test`; use
+a full Xcode or Swift toolchain for that package-test command and do not treat
+the smoke executable as a substitute for the CI test gate.
 
 Expected Swift behavior: scans remain deterministic static evidence over
 checked-in files, emit repo and commit SHA provenance, rule IDs, evidence
@@ -279,6 +295,19 @@ test -f <tmp>/combined-impact/impact-report.md
 test -f <tmp>/combined-impact/impact-report.json
 test -f <tmp>/release-review/release-review.md
 test -f <tmp>/release-review/release-review.json
+```
+
+For release-review SQL runway composition changes, scan the checked-in operator
+runbook sample and use its index as the selected after snapshot. Verify the
+separate `SQL Runway Evidence` section is `available`, preserves rule/tier/
+coverage/span/commit/extractor/supporting-fact provenance, and does not expose
+the planted host, password, or scheduled-command sentinels:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/sql-operator-runbook --out <tmp>/sql-after
+dotnet run --project src/dotnet/TraceMap.Cli -- release-review --before <tmp>/sql-after/index.sqlite --after <tmp>/sql-after/index.sqlite --out <tmp>/sql-release-review
+rg -n "SQL Runway Evidence|Status: `available`|database.sql.secret-bearing-step.v1" <tmp>/sql-release-review/release-review.md
+! rg -i "private-host-leak-sentinel|private-password-leak-sentinel|raw-scheduled-command-leak-sentinel|safe to run" <tmp>/sql-release-review/release-review.md <tmp>/sql-release-review/release-review.json
 ```
 
 For docs-export changes, run the focused tests plus the normal .NET and safety

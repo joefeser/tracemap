@@ -96,6 +96,8 @@ function createSchema(db: initSqlJs.Database): void {
       start_line integer not null,
       end_line integer not null,
       snippet_hash text,
+      extractor_id text not null,
+      extractor_version text not null,
       properties_json text not null
     );
 
@@ -275,8 +277,9 @@ function insertFact(db: initSqlJs.Database, fact: CodeFact): void {
   db.run(
     `insert into facts (
       fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
-      source_symbol, target_symbol, contract_element, file_path, start_line, end_line, snippet_hash, properties_json
-    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      source_symbol, target_symbol, contract_element, file_path, start_line, end_line, snippet_hash,
+      extractor_id, extractor_version, properties_json
+    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     [
       fact.factId,
       fact.scanId,
@@ -293,6 +296,8 @@ function insertFact(db: initSqlJs.Database, fact: CodeFact): void {
       fact.evidence.startLine,
       fact.evidence.endLine,
       fact.evidence.snippetHash,
+      fact.evidence.extractorId,
+      fact.evidence.extractorVersion,
       JSON.stringify(fact.properties)
     ]
   );

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from tracemap_py.ast_extractor import extract_python_files
+from tracemap_py.ast_extractor import _normalize_include_prefixes, extract_python_files
 from tracemap_py.engine import make_options, scan
 from tracemap_py.fact_factory import create_fact
 from tracemap_py.config_extractor import extract_config_files
@@ -30,6 +30,15 @@ def test_hashes_and_route_keys_are_deterministic() -> None:
     assert sha256_hex("SELECT 1", 12) == "e004ebd5b553"
     assert normalize_path_key("/API/orders/{order_id}?expand=true") == ("/API/orders/{order_id}", "/api/orders/{}")
     assert normalize_path_key("https://example.test/api/status/<status>") == ("/api/status/{status}", "/api/status/{}")
+
+
+def test_include_prefix_fallback_does_not_bind_ambiguous_router_names() -> None:
+    prefixes = _normalize_include_prefixes(
+        {"router": "/v2"},
+        {"users.router": "/users", "admin.router": "/admin"},
+    )
+
+    assert prefixes == {"router": "/v2"}
 
 
 def test_sql_query_shape_is_deterministic_without_raw_sql() -> None:
@@ -495,6 +504,8 @@ def test_sqlite_symbol_rows_follow_role_properties(tmp_path: Path) -> None:
     try:
         assert _scalar(con, "select count(*) from symbols where language='python'") == 2
         assert _scalar(con, "select count(*) from call_edges") == 1
+        assert {row[1] for row in con.execute("pragma table_info(facts)")} >= {"extractor_id", "extractor_version"}
+        assert con.execute("select extractor_id, extractor_version from facts").fetchone() == ("PythonAstExtractor", "python-ast/0.1.0")
     finally:
         con.close()
 

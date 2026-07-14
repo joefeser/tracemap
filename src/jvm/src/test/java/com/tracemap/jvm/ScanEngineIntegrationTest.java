@@ -77,6 +77,12 @@ final class ScanEngineIntegrationTest {
             assertTrue(rows.next());
             assertTrue(rows.getInt(1) > 0);
         }
+        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + out.resolve("index.sqlite").toAbsolutePath());
+             var statement = connection.createStatement();
+             var rows = statement.executeQuery("select count(*) from facts where extractor_id is not null and extractor_version is not null")) {
+            assertTrue(rows.next());
+            assertEquals(result.facts().size(), rows.getInt(1));
+        }
 
         Path report = temp.resolve("impact.md");
         Process process = new ProcessBuilder(
