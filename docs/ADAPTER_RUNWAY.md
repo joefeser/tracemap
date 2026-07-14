@@ -107,6 +107,24 @@ config, package, and dependency evidence to the data-risk conversations people
 actually have during incidents, migrations, audits, rewrites, and ownership
 reviews.
 
+### Adapter conformance foundation
+
+The adapter family now has a machine-enforced verification foundation:
+
+- CI runs the .NET, TypeScript, Python, JVM, and Swift suites;
+- every lane generates a real scan and validates the shared artifact contract;
+- manifest/fact JSON schemas, canonical minimum SQLite DDL, and a shared
+  redaction corpus live under `contracts/artifacts/`;
+- SQLite facts preserve extractor ID/version across every adapter;
+- a final CI job combines all five adapter indexes and generates the combined
+  dependency report.
+
+This foundation enforces artifact compatibility without pretending five
+language implementations can share one runtime library. Fact-ID formula
+standardization remains a versioned compatibility decision: v1 requires stable
+adapter-local IDs and preserved source IDs through combine, not identical
+cross-language identity formulas.
+
 The near-term priority order is:
 
 1. Strengthen current evidence lanes.

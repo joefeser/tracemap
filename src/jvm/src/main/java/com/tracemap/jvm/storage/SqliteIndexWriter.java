@@ -91,6 +91,8 @@ public final class SqliteIndexWriter {
                   start_line integer not null,
                   end_line integer not null,
                   snippet_hash text,
+                  extractor_id text,
+                  extractor_version text,
                   properties_json text not null
                 );
                 """);
@@ -323,8 +325,9 @@ public final class SqliteIndexWriter {
         try (PreparedStatement command = connection.prepareStatement("""
             insert into facts (
               fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
-              source_symbol, target_symbol, contract_element, file_path, start_line, end_line, snippet_hash, properties_json
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+              source_symbol, target_symbol, contract_element, file_path, start_line, end_line, snippet_hash,
+              extractor_id, extractor_version, properties_json
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """)) {
             command.setString(1, fact.factId());
             command.setString(2, fact.scanId());
@@ -341,7 +344,9 @@ public final class SqliteIndexWriter {
             command.setInt(13, fact.evidence().startLine());
             command.setInt(14, fact.evidence().endLine());
             command.setString(15, fact.evidence().snippetHash());
-            command.setString(16, JsonSupport.JSON.writeValueAsString(fact.properties()));
+            command.setString(16, fact.evidence().extractorId());
+            command.setString(17, fact.evidence().extractorVersion());
+            command.setString(18, JsonSupport.JSON.writeValueAsString(fact.properties()));
             command.executeUpdate();
         }
     }

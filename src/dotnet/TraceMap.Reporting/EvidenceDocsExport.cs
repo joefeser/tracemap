@@ -277,6 +277,7 @@ public static class EvidenceDocsExporter
     private static readonly Regex YearMonthPattern = new(@"^\d{4}-\d{2}$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex SafeClosedTextPattern = new(@"^[A-Za-z0-9._:/@,+ \[\]\-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex SafePathPattern = new(@"^[A-Za-z0-9._/\-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
+    private static readonly Regex UnixLocalPathPattern = new("(?:^|[\\s='\\\"])/(Users|home|opt|var|srv|app|mnt|private|tmp)/", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex Hex40Pattern = new(@"^[0-9a-fA-F]{40}$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex WindowsPathPattern = new(@"[A-Za-z]:\\", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex RawHostPattern = new(@"\b(www\.|[A-Za-z0-9.-]+\.(com|net|org|io|local))\b", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
@@ -2747,9 +2748,8 @@ public static class EvidenceDocsExporter
             return null;
         }
 
-        if (value.Contains("/Users/", StringComparison.OrdinalIgnoreCase)
+        if (UnixLocalPathPattern.IsMatch(value)
             || value.Contains("\\Users\\", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("/home/", StringComparison.OrdinalIgnoreCase)
             || WindowsPathPattern.IsMatch(value))
         {
             return "local-absolute-path";
@@ -2983,6 +2983,11 @@ public static class EvidenceDocsExporter
         if (scannerVersion.Contains("jvm", StringComparison.OrdinalIgnoreCase))
         {
             return "jvm";
+        }
+
+        if (scannerVersion.Contains("swift", StringComparison.OrdinalIgnoreCase))
+        {
+            return "swift";
         }
 
         return "csharp";

@@ -8,6 +8,26 @@ public enum TraceMapSwiftVersion {
     public static let defaultMaxFileByteSize = 1_048_576
 }
 
+public enum SwiftSqlShapeV1 {
+    public static func normalize(_ sql: String) -> String {
+        var value = sql.trimmingCharacters(in: .whitespacesAndNewlines)
+        value = value.replacingOccurrences(of: #"--[^\n\r]*"#, with: " ", options: .regularExpression)
+        value = value.replacingOccurrences(of: #"(?s)/\*.*?\*/"#, with: " ", options: .regularExpression)
+        value = value.replacingOccurrences(of: #"'(?:''|\\['\"]|[^'])*'"#, with: "' '", options: .regularExpression)
+        value = value.replacingOccurrences(of: #"\"(?:\"\"|\\[\"']|[^\"])*\""#, with: #"\" \""#, options: .regularExpression)
+        value = value.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        while value.hasSuffix(";") {
+            value = String(value.dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return value
+    }
+
+    public static func queryShapeHash(_ sql: String) -> String {
+        sha256Hex(normalize(sql), length: 32)
+    }
+}
+
 public enum TraceMapSwiftCLI {
     public static let usage = """
     Usage:
@@ -2178,17 +2198,7 @@ enum SwiftStorageExtractor {
     }
 
     private static func normalizeSQLForShape(_ sql: String) -> String {
-        var value = sql.trimmingCharacters(in: .whitespacesAndNewlines)
-        value = value.replacingOccurrences(of: #"--[^\n\r]*"#, with: " ", options: .regularExpression)
-        value = value.replacingOccurrences(of: #"(?s)/\*.*?\*/"#, with: " ", options: .regularExpression)
-        value = value.replacingOccurrences(of: #"'(?:''|\\['"]|[^'])*'"#, with: "' '", options: .regularExpression)
-        value = value.replacingOccurrences(of: #""(?:""|\\["']|[^"])*""#, with: #"" ""#, options: .regularExpression)
-        value = value.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-        value = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        while value.hasSuffix(";") {
-            value = String(value.dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        return value
+        SwiftSqlShapeV1.normalize(sql)
     }
 
     private static func xmlAttributes(_ tag: String) -> [String: String] {
@@ -4116,8 +4126,8 @@ enum SQLiteWriter {
     private static func insertFactSQL(_ fact: CodeFact) throws -> String {
         let propsJson = try jsonString(fact.properties, pretty: false)
         return """
-        insert into facts (fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier, source_symbol, target_symbol, contract_element, file_path, start_line, end_line, snippet_hash, properties_json)
-        values (\(q(fact.factId)), \(q(fact.scanId)), \(q(fact.repo)), \(q(fact.commitSha)), null, \(q(fact.factType)), \(q(fact.ruleId)), \(q(fact.evidenceTier.rawValue)), \(q(fact.sourceSymbol)), \(q(fact.targetSymbol)), \(q(fact.contractElement)), \(q(fact.evidence.filePath)), \(fact.evidence.startLine), \(fact.evidence.endLine), null, \(q(propsJson)));
+        insert into facts (fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier, source_symbol, target_symbol, contract_element, file_path, start_line, end_line, snippet_hash, extractor_id, extractor_version, properties_json)
+        values (\(q(fact.factId)), \(q(fact.scanId)), \(q(fact.repo)), \(q(fact.commitSha)), null, \(q(fact.factType)), \(q(fact.ruleId)), \(q(fact.evidenceTier.rawValue)), \(q(fact.sourceSymbol)), \(q(fact.targetSymbol)), \(q(fact.contractElement)), \(q(fact.evidence.filePath)), \(fact.evidence.startLine), \(fact.evidence.endLine), \(q(fact.evidence.snippetHash)), \(q(fact.evidence.extractorId)), \(q(fact.evidence.extractorVersion)), \(q(propsJson)));
 
         """
     }
@@ -4206,6 +4216,8 @@ enum SQLiteWriter {
           start_line integer not null,
           end_line integer not null,
           snippet_hash text,
+          extractor_id text,
+          extractor_version text,
           properties_json text not null
         );
         create table symbols (scan_id text not null, symbol_id text not null, language text not null, symbol_kind text not null, display_name text not null, assembly_name text, assembly_version text, containing_symbol_id text, primary key (scan_id, symbol_id));

@@ -86,6 +86,10 @@ describe("ScanEngine", () => {
     const sqlJs = await initSqlJs({ locateFile: (file) => findSqlJsFile(file) });
     const db = new sqlJs.Database(fs.readFileSync(path.join(out, "index.sqlite")));
     try {
+      const factColumns = db.exec("pragma table_info(facts)")[0]?.values.map((row) => row[1]);
+      expect(factColumns).toEqual(expect.arrayContaining(["extractor_id", "extractor_version"]));
+      const provenance = db.exec("select extractor_id, extractor_version from facts where extractor_id is not null limit 1");
+      expect(provenance[0]?.values[0]).toEqual([expect.any(String), expect.any(String)]);
       const rows = db.exec("select role, count(*) from fact_symbols where role in ('argument', 'parameter') group by role order by role");
       expect(rows[0]?.values).toEqual([
         ["argument", expect.any(Number)],

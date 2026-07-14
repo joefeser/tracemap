@@ -1,0 +1,174 @@
+name: Adapter Validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - dev
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: adapter-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dotnet:
+    name: .NET adapter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Build and test
+        run: |
+          dotnet build src/dotnet/TraceMap.sln
+          dotnet test src/dotnet/TraceMap.sln --no-build
+      - name: Generate and validate artifacts
+        run: |
+          dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan \
+            --repo samples/modern-sample \
+            --out "$RUNNER_TEMP/tracemap-dotnet"
+          python3 scripts/validate-adapter-artifacts.py "$RUNNER_TEMP/tracemap-dotnet"
+          python3 scripts/test_validate_adapter_artifacts.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: adapter-index-dotnet
+          path: ${{ runner.temp }}/tracemap-dotnet/index.sqlite
+          if-no-files-found: error
+
+  typescript:
+    name: TypeScript adapter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src/typescript/package-lock.json
+      - name: Build and test
+        working-directory: src/typescript
+        run: |
+          npm ci
+          npm run check
+      - name: Generate and validate artifacts
+        run: |
+          node src/typescript/dist/src/cli.js scan \
+            --repo samples/typescript-modern-sample \
+            --out "$RUNNER_TEMP/tracemap-typescript"
+          python3 scripts/validate-adapter-artifacts.py "$RUNNER_TEMP/tracemap-typescript"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: adapter-index-typescript
+          path: ${{ runner.temp }}/tracemap-typescript/index.sqlite
+          if-no-files-found: error
+
+  python:
+    name: Python adapter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: src/python/pyproject.toml
+      - name: Install and test
+        run: |
+          python -m pip install -e "src/python[dev]"
+          python -m pytest src/python/tests
+      - name: Generate and validate artifacts
+        run: |
+          tracemap-py scan \
+            --repo samples/python-fastapi-sample \
+            --out "$RUNNER_TEMP/tracemap-python"
+          python scripts/validate-adapter-artifacts.py "$RUNNER_TEMP/tracemap-python"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: adapter-index-python
+          path: ${{ runner.temp }}/tracemap-python/index.sqlite
+          if-no-files-found: error
+
+  jvm:
+    name: JVM adapter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.1"
+      - name: Build and test
+        run: gradle -p src/jvm test installDist
+      - name: Generate and validate artifacts
+        run: |
+          src/jvm/build/install/tracemap-jvm/bin/tracemap-jvm scan \
+            --repo samples/jvm-modern-sample \
+            --out "$RUNNER_TEMP/tracemap-jvm"
+          python3 scripts/validate-adapter-artifacts.py "$RUNNER_TEMP/tracemap-jvm"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: adapter-index-jvm
+          path: ${{ runner.temp }}/tracemap-jvm/index.sqlite
+          if-no-files-found: error
+
+  swift:
+    name: Swift adapter
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test
+        run: |
+          swift build --package-path src/swift
+          swift test --package-path src/swift
+          swift run --package-path src/swift tracemap-swift-smoke-tests
+      - name: Generate and validate artifacts
+        run: |
+          swift run --package-path src/swift tracemap-swift scan \
+            --repo samples/swift-package-basic \
+            --out "$RUNNER_TEMP/tracemap-swift"
+          python3 scripts/validate-adapter-artifacts.py "$RUNNER_TEMP/tracemap-swift"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: adapter-index-swift
+          path: ${{ runner.temp }}/tracemap-swift/index.sqlite
+          if-no-files-found: error
+
+  combined-conformance:
+    name: Five-adapter combine
+    needs:
+      - dotnet
+      - typescript
+      - python
+      - jvm
+      - swift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: adapter-index-*
+          path: adapter-indexes
+      - name: Combine every adapter family
+        run: |
+          dotnet run --project src/dotnet/TraceMap.Cli -- combine \
+            --index adapter-indexes/adapter-index-dotnet/index.sqlite --label dotnet \
+            --index adapter-indexes/adapter-index-typescript/index.sqlite --label typescript \
+            --index adapter-indexes/adapter-index-python/index.sqlite --label python \
+            --index adapter-indexes/adapter-index-jvm/index.sqlite --label jvm \
+            --index adapter-indexes/adapter-index-swift/index.sqlite --label swift \
+            --out "$RUNNER_TEMP/combined.sqlite"
+          dotnet run --project src/dotnet/TraceMap.Cli -- report \
+            --index "$RUNNER_TEMP/combined.sqlite" \
+            --out "$RUNNER_TEMP/combined-report"
+          test -f "$RUNNER_TEMP/combined-report/dependency-report.json"
