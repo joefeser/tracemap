@@ -56,82 +56,82 @@ Readiness: validated-spec-only
 
 ## PR 2: Hidden/Local Graph And Markdown Navigation
 
-- [ ] 3. Implement terminal-context evidence ingestion.
+- [x] 3. Implement terminal-context evidence ingestion.
   Requirements: 1, 3, 6.
-  - [ ] Read structured `terminalContextKind` only from compatible
+  - [x] Read structured `terminalContextKind` only from compatible
     property-flow evidence.
-  - [ ] Treat `StaticTerminalContext` prose as bounded display text only.
-  - [ ] Preserve path ID, terminal node ID, source identity, commit SHA,
+  - [x] Treat `StaticTerminalContext` prose as bounded display text only.
+  - [x] Preserve path ID, terminal node ID, source identity, commit SHA,
     extractor version, rule IDs, evidence tiers, supporting IDs, coverage, and
     limitations where available.
-  - [ ] Treat absent metadata as unknown/unavailable, not negative evidence.
+  - [x] Treat absent metadata as unknown/unavailable, not negative evidence.
 
-- [ ] 4. Implement hidden/local vault navigation.
+- [x] 4. Implement hidden/local vault navigation.
   Requirements: 2, 3, 4, 5, 6.
-  - [ ] Add terminal-context node/edge/tag rendering only for hidden output, or
+  - [x] Add terminal-context node/edge/tag rendering only for hidden output, or
     implement the chosen omission-gap-only behavior.
-  - [ ] Generate stable context-separated IDs from safe components only.
-  - [ ] Link terminal-context navigation back to property-flow path/source,
+  - [x] Generate stable context-separated IDs from safe components only.
+  - [x] Link terminal-context navigation back to property-flow path/source,
     rules, gaps, and limitations.
-  - [ ] Mark output partial when schema/safety/claim filtering affects graph
+  - [x] Mark output partial when schema/safety/claim filtering affects graph
     interpretation.
-  - [ ] Keep all wording static and non-impact.
+  - [x] Keep all wording static and non-impact.
 
-- [ ] 5. Preserve public/demo strictness.
+- [x] 5. Preserve public/demo strictness.
   Requirements: 2, 3, 6.
-  - [ ] Omit or gap terminal-context evidence for `demo-safe` and
+  - [x] Omit or gap terminal-context evidence for `demo-safe` and
     `public-safe`.
-  - [ ] Prove source claim catalog promotion does not promote this hidden
+  - [x] Prove source claim catalog promotion does not promote this hidden
     navigation.
-  - [ ] Keep existing no-visible-evidence failure behavior.
+  - [x] Keep existing no-visible-evidence failure behavior.
 
-- [ ] 6. Update rule catalog and docs when output semantics change.
+- [x] 6. Update rule catalog and docs when output semantics change.
   Requirements: 4, 6.
-  - [ ] Reuse existing vault/property-flow rules where sufficient.
-  - [ ] Add `vault-export.graph.property-flow-terminal-context.v1` only if a
+  - [x] Reuse existing vault/property-flow rules where sufficient.
+  - [x] Add `vault-export.graph.property-flow-terminal-context.v1` only if a
     new graph rule is emitted.
-  - [ ] Add `vault-export.gap.terminal-context-omitted.v1` only if existing
+  - [x] Add `vault-export.gap.terminal-context-omitted.v1` only if existing
     omission/safety rules do not fit.
-  - [ ] Add a guard test that terminal-context graph nodes or edges are not
+  - [x] Add a guard test that terminal-context graph nodes or edges are not
     emitted unless required source and vault packaging rules exist in
     `rules/rule-catalog.yml`.
-  - [ ] Update `docs/VAULT_EXPORT.md` for user-visible behavior.
-  - [ ] Do not update docs-export docs or site copy in this implementation PR.
+  - [x] Update `docs/VAULT_EXPORT.md` for user-visible behavior.
+  - [x] Do not update docs-export docs or site copy in this implementation PR.
 
 ## PR 3: Tests And Validation
 
-- [ ] 7. Add focused vault tests.
+- [x] 7. Add focused vault tests.
   Requirements: 1, 2, 3, 5, 6, 7.
-  - [ ] Hidden fixture renders or records the chosen terminal-context behavior
+  - [x] Hidden fixture renders or records the chosen terminal-context behavior
     from structured metadata.
-  - [ ] Absent-key fixture proves no negative no-surface language.
-  - [ ] Structured/prose mismatch fixture prefers structured metadata and emits
+  - [x] Absent-key fixture proves no negative no-surface language.
+  - [x] Structured/prose mismatch fixture prefers structured metadata and emits
     or reuses a gap.
-  - [ ] Unknown safe value fixture is category-labeled or gap-backed.
-  - [ ] Rule-catalog guard fixture proves terminal-context graph emission is
+  - [x] Unknown safe value fixture is category-labeled or gap-backed.
+  - [x] Rule-catalog guard fixture proves terminal-context graph emission is
     blocked or tested until required rule IDs are catalogued.
-  - [ ] Demo/public fixture omits or gaps terminal-context navigation.
-  - [ ] Source-claim-catalog fixture proves no accidental promotion.
-  - [ ] Multiple-paths fixture proves paths with the same terminal context kind
+  - [x] Demo/public fixture omits or gaps terminal-context navigation.
+  - [x] Source-claim-catalog fixture proves no accidental promotion.
+  - [x] Multiple-paths fixture proves paths with the same terminal context kind
     stay path-scoped in counts and are not merged into a stronger claim.
-  - [ ] Unsafe metadata fixture proves unsafe values do not reach generated
+  - [x] Unsafe metadata fixture proves unsafe values do not reach generated
     Markdown or `graph.json`.
-  - [ ] Determinism fixture proves byte-stable Markdown and `graph.json`.
-  - [ ] Collision/stale-hash fixture proves generated-file safety remains
+  - [x] Determinism fixture proves byte-stable Markdown and `graph.json`.
+  - [x] Collision/stale-hash fixture proves generated-file safety remains
     intact.
-  - [ ] Wording assertions reject runtime, execution, impact, and complete
+  - [x] Wording assertions reject runtime, execution, impact, and complete
     coverage claims.
-  - [ ] Demo/public omission fixture asserts a rule-backed gap when hidden
+  - [x] Demo/public omission fixture asserts a rule-backed gap when hidden
     terminal-context evidence was present but filtered.
 
-- [ ] 8. Validate implementation PRs.
+- [x] 8. Validate implementation PRs.
   Requirements: 7.
-  - [ ] Run focused vault export tests.
-  - [ ] Run `dotnet test src/dotnet/TraceMap.sln` unless explicitly deferred
+  - [x] Run focused vault export tests.
+  - [x] Run `dotnet test src/dotnet/TraceMap.sln` unless explicitly deferred
     with a recorded reason.
-  - [ ] Run `./scripts/check-private-paths.sh`.
-  - [ ] Run `git diff --check`.
-  - [ ] Update this spec's `tasks.md` checkboxes as tasks are completed.
+  - [x] Run `./scripts/check-private-paths.sh`.
+  - [x] Run `git diff --check`.
+  - [x] Update this spec's `tasks.md` checkboxes as tasks are completed.
 
 ## Deferred Follow-Ups
 

@@ -1,33 +1,31 @@
 # UI Field Property Lineage Terminal Context Vault Local Navigation Implementation State
 
-Status: ready-for-implementation
-Readiness: validated-spec-only
-Spec branch: `codex/ui-field-property-lineage-terminal-context-vault-local-navigation`
+Status: implemented-pending-pr-review
+Readiness: implementation-validation-complete
+Implementation branch: `codex/terminal-context-vault-dogfood`
 Target base: `dev`
 Public claim level: hidden
 
 ## Current Context
 
-Fetched `origin/dev` and created an isolated worktree from latest remote
-`dev`.
+Fetched `origin/dev` with an explicit refspec and created an isolated worktree
+from the current remote `dev`.
 
 Starting baseline:
 
 ```text
-c37eff84ebc12cc2b4d47bae89fb8af29b35b8bb
+a40ad6a23d3629e1e5bc7870857a2a278e2e2a43
 ```
 
-That commit is merge commit `#405`, `implement-swift-inventory-project-discovery`.
+That commit is `Add adapter conformance and CI runway (#478)`.
 
 ## Scope
 
-This is a spec-only branch. It creates an implementation-ready Kiro spec for
-hidden/local vault navigation over existing property-flow
-`terminalContextKind` evidence.
-
-No product code, generated output, site files, docs-export files, rule catalog
-entries, scanner logic, reducer logic, or existing specs are changed by this
-branch.
+This implementation adds the reviewed explicit property-flow report seam and
+hidden/local vault navigation over existing `terminalContextKind` evidence.
+It updates the vault CLI/help, packaging rules, focused tests, vault docs, and
+this spec's state. It does not change scanners, reducers, docs-export, site
+files, runtime behavior, public claims, or producer mappings.
 
 ## Source Material Reviewed
 
@@ -179,6 +177,20 @@ Initial review results:
   decision-option test matrices and multi-path/demo-public omission tests.
 
 ## Validation Log
+
+Implementation validation on the dogfood branch:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter Vault_export`: passed, 40/40.
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: passed, 756/756.
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with the existing
+  `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory warning.
+- `./scripts/check-private-paths.sh`: passed after replacing an intentionally
+  unsafe test value with a generic non-private URL fixture.
+- `git diff --check`: passed.
+
+The first `--no-restore` build in the fresh worktree stopped because NuGet
+asset files did not exist. `dotnet restore src/dotnet/TraceMap.sln` completed,
+and the build/test commands above then passed.
 
 Spec-only validation planned:
 
