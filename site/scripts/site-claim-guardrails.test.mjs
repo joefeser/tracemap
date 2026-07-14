@@ -175,6 +175,23 @@ test("validateSiteClaimGuardrailsDist keeps the route out of primary navigation"
   assert.match(errors.join("\n"), /must not be added to primary navigation/);
 });
 
+test("validateSiteClaimGuardrailsDist scans every generated nested index page", async (t) => {
+  const hardLeak = ["/", "Users", "/generated-leak"].join("");
+  const root = await createManagedFixture(t, {
+    extraPages: {
+      "nested/deep/index.html": page(`<p>${hardLeak}</p>`),
+      "nested/deep/not-index.html": page(`<p>${hardLeak}</p>`)
+    }
+  });
+  const errors = [];
+
+  await validateSiteClaimGuardrailsDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /hard private or credential-like material.*\(nested\/deep\/index\.html\)/);
+  assert.doesNotMatch(errors.join("\n"), /not-index\.html/);
+  assert.doesNotMatch(errors.join("\n"), new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
 async function createManagedFixture(t, options = {}) {
   const root = await createFixture(options);
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -184,7 +201,8 @@ async function createManagedFixture(t, options = {}) {
 async function createFixture({
   pageHtml,
   discoveryRoutes = siteClaimGuardrailsRequiredLinks,
-  sitemapRoutes = [siteClaimGuardrailsRoute]
+  sitemapRoutes = [siteClaimGuardrailsRoute],
+  extraPages = {}
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-site-claim-guardrails-test-"));
   const dist = join(root, "dist");
@@ -195,6 +213,12 @@ async function createFixture({
     await mkdir(join(dist, routePath), { recursive: true });
     const body = route === siteClaimGuardrailsRoute ? pageHtml ?? (await sourcePage()) : page(`<p>${route}</p>`);
     await writeFile(join(dist, routePath, "index.html"), body, "utf8");
+  }
+
+  for (const [artifact, html] of Object.entries(extraPages)) {
+    const artifactPath = join(dist, artifact);
+    await mkdir(dirname(artifactPath), { recursive: true });
+    await writeFile(artifactPath, html, "utf8");
   }
 
   await writeFile(join(dist, "sitemap.xml"), renderSitemap(sitemapRoutes), "utf8");
