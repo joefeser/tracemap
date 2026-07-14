@@ -958,7 +958,8 @@ public static class TraceMapCommand
                 values.GetValueOrDefault("--date"),
                 format,
                 values.HasFlag("--dry-run"),
-                values.HasFlag("--force")),
+                values.HasFlag("--force"),
+                values.GetMany("--property-flow-report")),
             cancellationToken);
 
         await output.WriteLineAsync(values.HasFlag("--dry-run")
@@ -2227,11 +2228,13 @@ public static class TraceMapCommand
               tracemap vault export --combined-index <combined.sqlite> --out <vault-output> [--format <markdown|json|markdown,json>]
               tracemap vault export --paths-report <paths-report.json> --out <vault-output>
               tracemap vault export --reverse-report <reverse-report.json> --out <vault-output>
+              tracemap vault export --property-flow-report <property-flow-report.json> --out <vault-output>
 
             Inputs:
               --combined-index <path>          Existing combined TraceMap SQLite index. Read-only.
               --paths-report <path>            Existing paths-report.json. Repeatable.
               --reverse-report <path>          Existing reverse-report.json. Repeatable.
+              --property-flow-report <path>    Existing property-flow-report.json. Repeatable; terminal-context navigation remains hidden/local.
               --source-claim-catalog <path>    source-claim-catalog.v1 JSON for demo/public promotion.
 
             Options:

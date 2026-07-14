@@ -18,7 +18,8 @@ public sealed record VaultExportOptions(
     string? Date = null,
     string Format = "markdown,json",
     bool DryRun = false,
-    bool Force = false);
+    bool Force = false,
+    IReadOnlyList<string>? PropertyFlowReportPaths = null);
 
 public sealed record VaultExportResult(
     EvidenceGraphVault Graph,
@@ -158,6 +159,8 @@ public static class VaultExporter
     private const string UnsafeSymbolRuleId = "vault-export.gap.unsafe-symbol-omitted.v1";
     private const string HiddenSafeContextRuleId = "vault-export.gap.hidden-safe-context-omitted.v1";
     private const string UnsafeIdComponentRuleId = "vault-export.gap.unsafe-id-component-omitted.v1";
+    private const string PropertyFlowTerminalContextRuleId = "vault-export.graph.property-flow-terminal-context.v1";
+    private const string TerminalContextOmittedRuleId = "vault-export.gap.terminal-context-omitted.v1";
     private const string GeneratedFileStaleRuleId = "vault-export.validation.generated-file-stale.v1";
     private const string UserFileCollisionRuleId = "vault-export.validation.user-file-collision.v1";
     private const string UnsafeRejectedRuleId = "vault-export.validation.unsafe-value-rejected.v1";
@@ -208,6 +211,8 @@ public static class VaultExporter
             UnsafeSymbolRuleId,
             HiddenSafeContextRuleId,
             UnsafeIdComponentRuleId,
+            PropertyFlowTerminalContextRuleId,
+            TerminalContextOmittedRuleId,
             GeneratedFileStaleRuleId,
             UserFileCollisionRuleId,
             UnsafeRejectedRuleId,
@@ -563,6 +568,17 @@ public static class VaultExporter
 
         compatibleInputCount += await AddPathReportsAsync(options.PathsReportPaths ?? [], nodes, edges, gaps, inputs, sourceClaimBySourceIndexId, catalog, cancellationToken);
         compatibleInputCount += await AddReverseReportsAsync(options.ReverseReportPaths ?? [], nodes, edges, gaps, inputs, sourceClaimBySourceIndexId, catalog, cancellationToken);
+        compatibleInputCount += await AddPropertyFlowReportsAsync(
+            options.PropertyFlowReportPaths ?? [],
+            minimumClaimLevel,
+            nodes,
+            edges,
+            gaps,
+            inputs,
+            sourceClaimBySourceIndexId,
+            catalog,
+            diagnostics,
+            cancellationToken);
 
         if (compatibleInputCount == 0)
         {
@@ -817,6 +833,312 @@ public static class VaultExporter
         return compatibleCount;
     }
 
+    private static readonly string[] TerminalContextKinds =
+    [
+        "data-surface terminal context",
+        "legacy-data terminal context",
+        "package/config terminal context",
+        "message-surface terminal context",
+        "legacy-communication terminal context",
+        "dependency-surface terminal context"
+    ];
+
+    private static async Task<int> AddPropertyFlowReportsAsync(
+        IReadOnlyList<string> paths,
+        string minimumClaimLevel,
+        List<VaultGraphNode> nodes,
+        List<VaultGraphEdge> edges,
+        List<VaultGraphGap> gaps,
+        List<VaultExportInputSummary> inputs,
+        Dictionary<string, string> sourceClaims,
+        SourceClaimCatalog catalog,
+        List<VaultExportDiagnostic> diagnostics,
+        CancellationToken cancellationToken)
+    {
+        var compatibleCount = 0;
+        foreach (var path in paths.OrderBy(value => value, StringComparer.Ordinal))
+        {
+            byte[]? bytes = null;
+            var inputIdentity = SafeUnavailableInputIdentity("input/property-flow-report/v1", path);
+            try
+            {
+                bytes = await File.ReadAllBytesAsync(path, cancellationToken);
+                inputIdentity = JsonReportInputIdentity("input/property-flow-report/v1", bytes);
+                await using var stream = new MemoryStream(bytes);
+                var report = await JsonSerializer.DeserializeAsync<PropertyFlowReport>(stream, JsonOptions, cancellationToken)
+                    ?? throw new InvalidDataException("empty property-flow report");
+                if (!string.Equals(report.ReportType, "property-flow", StringComparison.Ordinal)
+                    || !string.Equals(report.Version, "1.0", StringComparison.Ordinal)
+                    || report.Sources is null
+                    || report.LineagePaths is null
+                    || report.Limitations is null)
+                {
+                    throw new InvalidDataException("unsupported property-flow report schema");
+                }
+
+                compatibleCount++;
+                ApplySourceClaims(report.Sources, catalog, sourceClaims);
+                inputs.Add(new VaultExportInputSummary(
+                    "property-flow-report",
+                    inputIdentity,
+                    InputClaimLevel(report.Sources, sourceClaims),
+                    "compatible",
+                    report.Limitations.Select(SafeDiagnosticMessage).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                    SourceProvenance(report.Sources)));
+
+                foreach (var pathRow in report.LineagePaths.OrderBy(value => value.PathId, StringComparer.Ordinal))
+                {
+                    if (string.IsNullOrWhiteSpace(pathRow.PathId)
+                        || pathRow.Nodes is null
+                        || pathRow.Nodes.Count == 0
+                        || pathRow.SupportingFactIds is null
+                        || pathRow.SupportingEdgeIds is null
+                        || pathRow.Notes is null)
+                    {
+                        gaps.Add(CreateGap(
+                            $"property-flow-path-schema-{Hash(inputIdentity + (pathRow.PathId ?? string.Empty), 16)}",
+                            "hidden",
+                            "PropertyFlowTerminalContextSchemaUnsupported",
+                            TerminalContextOmittedRuleId,
+                            Tier4Unknown,
+                            "A property-flow path could not be used for terminal-context navigation because required structured identity was unavailable.",
+                            null));
+                        continue;
+                    }
+
+                    var pathClaim = ClaimForPropertyFlowPath(pathRow, sourceClaims);
+                    if (!TryIdentityComponent(pathClaim, VaultValueContext.StableTraceMapId, pathRow.PathId, "property-flow-path", out var safePathId, out var pathCategory))
+                    {
+                        gaps.Add(CreateTerminalContextGap(
+                            $"unsafe-path-{Hash(pathRow.PathId, 16)}",
+                            "hidden",
+                            "TerminalContextSafetyOmitted",
+                            $"property-flow-path:{Hash(pathRow.PathId, 24)}",
+                            pathCategory));
+                        continue;
+                    }
+
+                    var reportNodeId = StableNodeId("report", $"node/report/property-flow/v1\u001f{inputIdentity}\u001f{safePathId}");
+                    var source = SourceForPropertyFlowPath(pathRow, report.Sources);
+                    nodes.Add(new VaultGraphNode(
+                        reportNodeId,
+                        "report",
+                        pathClaim,
+                        $"property-flow path {Hash(safePathId, 12)}",
+                        null,
+                        null,
+                        $"property-flow-path:{safePathId}",
+                        null,
+                        source?.CommitSha,
+                        null,
+                        source?.AnalysisLevel,
+                        source?.BuildStatus,
+                        DistinctSorted([report.ReportCoverage, .. source?.CoverageLabels ?? []]),
+                        DistinctSorted(pathRow.Nodes.Select(node => node.RuleId).Concat(pathRow.Edges?.Select(edge => edge.RuleId) ?? [])),
+                        DistinctSorted(pathRow.Nodes.Select(node => node.EvidenceTier).Concat(pathRow.Edges?.Select(edge => edge.EvidenceTier) ?? [])),
+                        DistinctSorted(pathRow.SupportingFactIds),
+                        DistinctSorted(pathRow.SupportingEdgeIds),
+                        pathRow.Notes.Select(SafeDiagnosticMessage).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                        $"reports/{Slug(reportNodeId)}.md",
+                        source?.ScannerVersion,
+                        source?.RepositoryIdentityHash,
+                        EvidenceLocations(pathRow.Nodes)));
+
+                    var terminalNode = pathRow.Nodes[^1];
+                    if (terminalNode.SafeMetadata is null
+                        || !terminalNode.SafeMetadata.TryGetValue("terminalContextKind", out var terminalContextKind)
+                        || string.IsNullOrWhiteSpace(terminalContextKind))
+                    {
+                        continue;
+                    }
+
+                    terminalContextKind = terminalContextKind.Trim();
+                    var kindDecision = ClassifySourceValue("hidden", VaultValueContext.SymbolDisplayName, terminalContextKind);
+                    if (kindDecision.Outcome is VaultSafetyOutcome.Reject or VaultSafetyOutcome.OmitWithGap)
+                    {
+                        gaps.Add(CreateTerminalContextGap(
+                            $"unsafe-kind-{Hash(safePathId + terminalNode.NodeId, 16)}",
+                            "hidden",
+                            "TerminalContextSafetyOmitted",
+                            $"property-flow-path:{safePathId}",
+                            kindDecision.Category));
+                        continue;
+                    }
+
+                    if (!TryIdentityComponent("hidden", VaultValueContext.StableTraceMapId, terminalNode.NodeId, "terminal-node", out var safeTerminalNodeId, out var nodeCategory))
+                    {
+                        gaps.Add(CreateTerminalContextGap(
+                            $"unsafe-node-{Hash(safePathId + terminalNode.NodeId, 16)}",
+                            "hidden",
+                            "TerminalContextSafetyOmitted",
+                            $"property-flow-path:{safePathId}",
+                            nodeCategory));
+                        continue;
+                    }
+
+                    var recognizedKind = TerminalContextKinds.Contains(terminalContextKind, StringComparer.Ordinal);
+                    var safeKindIdentity = recognizedKind
+                        ? terminalContextKind
+                        : $"unrecognized:{Hash(terminalContextKind, 24)}";
+                    var displayName = recognizedKind ? terminalContextKind : "unrecognized terminal context";
+                    var surfaceSubtype = recognizedKind
+                        ? terminalContextKind.Replace(" terminal context", string.Empty, StringComparison.Ordinal).Replace('/', '-')
+                        : "unrecognized-terminal-context";
+                    var sourceScope = $"property-flow-path:{safePathId};terminal-node:{safeTerminalNodeId}";
+                    var contextNodeId = StableNodeId(
+                        "terminal-context",
+                        string.Join('\u001f', ["node/terminal-context/v1", inputIdentity, safePathId, safeTerminalNodeId, safeKindIdentity]));
+                    var sourceRuleIds = DistinctSorted([
+                        PropertyFlowTerminalContextRuleId,
+                        terminalNode.RuleId,
+                        .. pathRow.Edges?.Select(edge => edge.RuleId) ?? []
+                    ]);
+                    var evidenceTiers = DistinctSorted([
+                        terminalNode.EvidenceTier,
+                        .. pathRow.Edges?.Select(edge => edge.EvidenceTier) ?? []
+                    ]);
+                    if (evidenceTiers.Count == 0)
+                    {
+                        evidenceTiers = [Tier4Unknown];
+                    }
+
+                    nodes.Add(new VaultGraphNode(
+                        contextNodeId,
+                        "terminal-context",
+                        "hidden",
+                        displayName,
+                        reportNodeId,
+                        null,
+                        sourceScope,
+                        "terminal-context",
+                        terminalNode.CommitSha ?? source?.CommitSha,
+                        null,
+                        source?.AnalysisLevel,
+                        source?.BuildStatus,
+                        DistinctSorted([report.ReportCoverage, "partial", .. source?.CoverageLabels ?? []]),
+                        sourceRuleIds,
+                        evidenceTiers,
+                        DistinctSorted([terminalNode.CombinedFactId, .. pathRow.SupportingFactIds]),
+                        DistinctSorted(pathRow.SupportingEdgeIds),
+                        [
+                            "Static terminal context is path-scoped local navigation only.",
+                            "This navigation does not prove runtime execution, dependency execution, database execution, impact, or complete coverage."
+                        ],
+                        $"terminal-contexts/{Slug(contextNodeId)}.md",
+                        source?.ScannerVersion,
+                        terminalNode.RepositoryIdentityHash ?? source?.RepositoryIdentityHash,
+                        EvidenceLocations([terminalNode]),
+                        SurfaceSubtype: surfaceSubtype));
+
+                    edges.Add(new VaultGraphEdge(
+                        StableEdgeId(
+                            "property-flow-terminal-context",
+                            reportNodeId,
+                            contextNodeId,
+                            PropertyFlowTerminalContextRuleId,
+                            evidenceTiers[0],
+                            "StaticTerminalContextNavigation",
+                            pathRow.SupportingFactIds,
+                            pathRow.SupportingEdgeIds),
+                        "property-flow-terminal-context",
+                        reportNodeId,
+                        contextNodeId,
+                        "hidden",
+                        "StaticTerminalContextNavigation",
+                        PropertyFlowTerminalContextRuleId,
+                        evidenceTiers[0],
+                        sourceScope,
+                        DistinctSorted([terminalNode.CombinedFactId, .. pathRow.SupportingFactIds]),
+                        DistinctSorted(pathRow.SupportingEdgeIds),
+                        ["Static path-scoped navigation only; this edge does not prove runtime execution or impact."],
+                        EvidenceLocations([terminalNode])));
+
+                    if (!recognizedKind)
+                    {
+                        gaps.Add(CreateTerminalContextGap(
+                            $"unknown-kind-{Hash(safePathId + safeKindIdentity, 16)}",
+                            "hidden",
+                            "PropertyFlowTerminalContextSchemaUnsupported",
+                            sourceScope,
+                            "unrecognized-terminal-context"));
+                    }
+
+                    var conflictingKinds = TerminalContextKinds
+                        .Where(kind => !string.Equals(kind, terminalContextKind, StringComparison.Ordinal)
+                            && pathRow.Notes.Any(note => note.Contains(kind, StringComparison.Ordinal)))
+                        .ToArray();
+                    if (conflictingKinds.Length > 0)
+                    {
+                        gaps.Add(CreateTerminalContextGap(
+                            $"structured-note-mismatch-{Hash(safePathId + terminalContextKind, 16)}",
+                            "hidden",
+                            "TerminalContextStructuredNoteMismatch",
+                            sourceScope,
+                            "structured-note-mismatch"));
+                    }
+
+                    if (minimumClaimLevel != "hidden")
+                    {
+                        gaps.Add(CreateTerminalContextGap(
+                            $"claim-omitted-{Hash(safePathId + terminalContextKind, 16)}",
+                            minimumClaimLevel,
+                            "TerminalContextClaimLevelOmitted",
+                            $"property-flow-path:{Hash(safePathId, 24)}",
+                            "claim-level-filter"));
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                if (bytes is not null)
+                {
+                    inputIdentity = JsonReportInputIdentity("input/property-flow-report/v1", bytes);
+                }
+
+                inputs.Add(new VaultExportInputSummary("property-flow-report", inputIdentity, "hidden", "schema-gap", []));
+                gaps.Add(CreateGap(
+                    $"property-flow-schema-{Hash(inputIdentity, 16)}",
+                    "hidden",
+                    "InputSchemaUnsupported",
+                    SchemaGapRuleId,
+                    Tier4Unknown,
+                    "A property-flow report could not be read with the documented schema.",
+                    null));
+                diagnostics.Add(CreateDiagnostic(
+                    "InputSchemaIncompatible",
+                    SchemaGapRuleId,
+                    "/inputs/property-flow-report",
+                    "schema-incompatible",
+                    "property-flow-report"));
+            }
+        }
+
+        return compatibleCount;
+    }
+
+    private static VaultGraphGap CreateTerminalContextGap(
+        string key,
+        string claimLevel,
+        string classification,
+        string? sourceScope,
+        string? category)
+    {
+        var safeCategory = string.IsNullOrWhiteSpace(category) ? "terminal-context-omitted" : category;
+        return new VaultGraphGap(
+            $"gap:{Hash(string.Join('\u001f', ["gap/terminal-context/v1", key, claimLevel, classification, sourceScope ?? string.Empty, safeCategory]), IdHashLength)}",
+            claimLevel,
+            classification,
+            TerminalContextOmittedRuleId,
+            Tier4Unknown,
+            "Terminal-context navigation was omitted or bounded because its structured property-flow evidence was incompatible with the selected vault policy.",
+            sourceScope,
+            [$"Omission category: {safeCategory}."]);
+    }
+
     private static void ApplySourceClaims(IEnumerable<CombinedReportSource> sources, SourceClaimCatalog catalog, Dictionary<string, string> sourceClaims)
     {
         foreach (var source in sources.OrderBy(source => source.SourceIndexId, StringComparer.Ordinal))
@@ -838,6 +1160,20 @@ public static class VaultExporter
         }
     }
 
+    private static void ApplySourceClaims(IEnumerable<PropertyFlowSource> sources, SourceClaimCatalog catalog, Dictionary<string, string> sourceClaims)
+    {
+        foreach (var source in sources.OrderBy(source => source.SourceIndexId, StringComparer.Ordinal))
+        {
+            if (string.IsNullOrWhiteSpace(source.SourceIndexId))
+            {
+                continue;
+            }
+
+            sourceClaims[source.SourceIndexId] = catalog.ClaimForSource(source.SourceIndexId)
+                ?? sourceClaims.GetValueOrDefault(source.SourceIndexId, "hidden");
+        }
+    }
+
     private static string InputClaimLevel(IEnumerable<CombinedReportSource> sources, IReadOnlyDictionary<string, string> sourceClaims)
     {
         return sources.Select(source => sourceClaims.GetValueOrDefault(source.SourceIndexId, "hidden"))
@@ -849,6 +1185,16 @@ public static class VaultExporter
     private static string InputClaimLevel(IEnumerable<CombinedReverseSourceInfo> sources, IReadOnlyDictionary<string, string> sourceClaims)
     {
         return sources.Select(source => string.IsNullOrWhiteSpace(source.SourceIndexId) ? "hidden" : sourceClaims.GetValueOrDefault(source.SourceIndexId, "hidden"))
+            .DefaultIfEmpty("hidden")
+            .OrderBy(ClaimRank)
+            .First();
+    }
+
+    private static string InputClaimLevel(IEnumerable<PropertyFlowSource> sources, IReadOnlyDictionary<string, string> sourceClaims)
+    {
+        return sources.Select(source => string.IsNullOrWhiteSpace(source.SourceIndexId)
+                ? "hidden"
+                : sourceClaims.GetValueOrDefault(source.SourceIndexId, "hidden"))
             .DefaultIfEmpty("hidden")
             .OrderBy(ClaimRank)
             .First();
@@ -883,6 +1229,47 @@ public static class VaultExporter
                 source.AnalysisLevel,
                 source.BuildStatus))
             .ToArray();
+    }
+
+    private static IReadOnlyList<VaultSourceProvenance> SourceProvenance(IEnumerable<PropertyFlowSource> sources)
+    {
+        return sources
+            .Where(source => !string.IsNullOrWhiteSpace(source.SourceIndexId))
+            .OrderBy(source => source.SourceIndexId, StringComparer.Ordinal)
+            .Select(source => new VaultSourceProvenance(
+                source.SourceIndexId,
+                string.IsNullOrWhiteSpace(source.RepositoryIdentityHash)
+                    ? Hash(source.SourceIndexId, 32)
+                    : source.RepositoryIdentityHash,
+                source.ScannerVersion,
+                source.CommitSha,
+                null,
+                source.AnalysisLevel,
+                source.BuildStatus))
+            .ToArray();
+    }
+
+    private static string ClaimForPropertyFlowPath(
+        PropertyFlowPath path,
+        IReadOnlyDictionary<string, string> sourceClaims)
+    {
+        return path.Nodes
+            .Select(node => string.IsNullOrWhiteSpace(node.SourceIndexId)
+                ? "hidden"
+                : sourceClaims.GetValueOrDefault(node.SourceIndexId, "hidden"))
+            .DefaultIfEmpty("hidden")
+            .OrderBy(ClaimRank)
+            .First();
+    }
+
+    private static PropertyFlowSource? SourceForPropertyFlowPath(
+        PropertyFlowPath path,
+        IReadOnlyList<PropertyFlowSource> sources)
+    {
+        var sourceId = path.Nodes.LastOrDefault()?.SourceIndexId;
+        return string.IsNullOrWhiteSpace(sourceId)
+            ? null
+            : sources.FirstOrDefault(source => string.Equals(source.SourceIndexId, sourceId, StringComparison.Ordinal));
     }
 
     private static string SourceIdentityHash(CombinedReportSource source)
@@ -920,6 +1307,18 @@ public static class VaultExporter
     private static IReadOnlyList<VaultEvidenceLocation> EvidenceLocations(IEnumerable<CombinedPathEdge> edges)
     {
         return edges.SelectMany(EvidenceLocations)
+            .Distinct()
+            .OrderBy(location => location.FilePath, StringComparer.Ordinal)
+            .ThenBy(location => location.StartLine ?? 0)
+            .ThenBy(location => location.EndLine ?? 0)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<VaultEvidenceLocation> EvidenceLocations(IEnumerable<PropertyFlowNode> nodes)
+    {
+        return nodes
+            .Where(node => !string.IsNullOrWhiteSpace(node.FilePath))
+            .Select(node => new VaultEvidenceLocation(node.FilePath!, node.StartLine, node.EndLine, null))
             .Distinct()
             .OrderBy(location => location.FilePath, StringComparer.Ordinal)
             .ThenBy(location => location.StartLine ?? 0)
@@ -2026,9 +2425,10 @@ public static class VaultExporter
 
         if (string.IsNullOrWhiteSpace(options.CombinedIndexPath)
             && (options.PathsReportPaths is null || options.PathsReportPaths.Count == 0)
-            && (options.ReverseReportPaths is null || options.ReverseReportPaths.Count == 0))
+            && (options.ReverseReportPaths is null || options.ReverseReportPaths.Count == 0)
+            && (options.PropertyFlowReportPaths is null || options.PropertyFlowReportPaths.Count == 0))
         {
-            throw new ArgumentException("InputMissing: vault export requires --combined-index, --paths-report, or --reverse-report.");
+            throw new ArgumentException("InputMissing: vault export requires --combined-index, --paths-report, --reverse-report, or --property-flow-report.");
         }
 
         if (!string.IsNullOrWhiteSpace(options.CombinedIndexPath) && !File.Exists(options.CombinedIndexPath))
@@ -2036,7 +2436,9 @@ public static class VaultExporter
             throw new FileNotFoundException("InputMissing: combined index does not exist.", options.CombinedIndexPath);
         }
 
-        foreach (var reportPath in (options.PathsReportPaths ?? []).Concat(options.ReverseReportPaths ?? []))
+        foreach (var reportPath in (options.PathsReportPaths ?? [])
+                     .Concat(options.ReverseReportPaths ?? [])
+                     .Concat(options.PropertyFlowReportPaths ?? []))
         {
             if (!File.Exists(reportPath))
             {
@@ -2832,6 +3234,7 @@ public static class VaultExporter
             "gap" => "gap",
             "limitation" => "limitation",
             "report" => "report",
+            "terminal-context" => "terminal-context",
             _ => "source"
         };
     }
@@ -2845,6 +3248,7 @@ public static class VaultExporter
             "surface-evidence" => "surface-evidence",
             "symbol-evidence" => "symbol-evidence",
             "report-evidence" => "report-evidence",
+            "property-flow-terminal-context" => "property-flow-terminal-context",
             "links-to-rule" => "links-to-rule",
             "has-limitation" => "has-limitation",
             "has-gap" => "has-gap",
@@ -2867,6 +3271,7 @@ public static class VaultExporter
             "gap" => "gaps",
             "limitation" => "limitations",
             "report" => "reports",
+            "terminal-context" => "terminal-contexts",
             _ => "nodes"
         };
     }
