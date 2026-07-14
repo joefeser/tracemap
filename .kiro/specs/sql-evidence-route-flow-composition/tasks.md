@@ -23,10 +23,10 @@ PR.
 
 ### Phase 3: Route-flow SQL context group (Target A — same PR only if small)
 
-- [ ] 3.1 Add a SQL-context `RouteFlowContextGroup` candidate in `BuildContextGroups`, additive only, keyed off data-facing routes.
-- [ ] 3.2 Summarize ordered categorical context and transition checkpoints; list permission prerequisites and stop conditions by upstream closed status.
-- [ ] 3.3 Emit a gap row when a data-facing route lacks SQL context; preserve provenance via `ContextGroupRuleIds` / `ContextGroupLocation`.
-- [ ] 3.4 Assign the `sql-context` kind a deterministic rank in `ContextGroupKindRank` between `query` and `data-surface`; confirm ordering stability.
+- [x] 3.1 Add a SQL-context `RouteFlowContextGroup` candidate in `BuildContextGroups`, additive only, keyed off data-facing routes.
+- [x] 3.2 Summarize ordered categorical context and transition checkpoints; list permission prerequisites and stop conditions by upstream closed status.
+- [x] 3.3 Emit a gap row when a data-facing route lacks SQL context; preserve provenance via `ContextGroupRuleIds` / `ContextGroupLocation`.
+- [x] 3.4 Assign the `sql-context` kind a deterministic rank in `ContextGroupKindRank` between `query` and `data-surface`; confirm ordering stability.
 
 ### Phase 4: Fixtures and tests (ship with the increment)
 

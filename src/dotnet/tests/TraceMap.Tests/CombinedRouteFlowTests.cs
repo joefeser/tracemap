@@ -12,6 +12,83 @@ namespace TraceMap.Tests;
 public sealed class CombinedRouteFlowTests
 {
     [Fact]
+    public async Task Route_flow_projects_ordered_sql_context_with_permission_stops_and_upstream_provenance()
+    {
+        using var temp = new TempDirectory();
+        var (combinedPath, _, _) = await CreateRouteFlowCombinedIndexAsync(temp, includeSqlContext: true);
+        var options = new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query");
+
+        var result = await CombinedRouteFlowReporter.BuildReportAsync(options);
+        var repeated = await CombinedRouteFlowReporter.BuildReportAsync(options);
+
+        Assert.Equal(
+            JsonSerializer.Serialize(result, CombinedDependencyReporter.JsonOptions),
+            JsonSerializer.Serialize(repeated, CombinedDependencyReporter.JsonOptions));
+        var sqlGroups = result.ContextGroups!.Where(group => group.GroupKind == "sql-context").ToArray();
+        Assert.Equal(2, sqlGroups.Length);
+        Assert.All(sqlGroups, group =>
+        {
+            Assert.Equal("cataloged-sql-context", group.MatchKind);
+            Assert.Contains(RuleIds.DatabaseSqlContextDeclaration, group.RuleIds);
+            Assert.Contains(RuleIds.DatabasePostgresPermissionCoverage, group.RuleIds);
+            Assert.Equal("abc123", group.Evidence.CommitSha);
+            Assert.Equal("sql/setup.sql", group.Evidence.FilePath);
+            Assert.NotEmpty(group.Evidence.SupportingFactIds);
+            Assert.Equal("engine>server>database>schema>mode", group.SafeMetadata["contextOrder"]);
+            Assert.Contains("present-in-scripts", group.SafeMetadata["permissionPrerequisites"], StringComparison.Ordinal);
+            Assert.Contains("missing-evidence", group.SafeMetadata["permissionPrerequisites"], StringComparison.Ordinal);
+            Assert.Contains("sql-execution-context/0.1.0", group.SafeMetadata["upstreamExtractorVersions"], StringComparison.Ordinal);
+            Assert.Contains("postgres-permission-evidence/0.1.0", group.SafeMetadata["upstreamExtractorVersions"], StringComparison.Ordinal);
+            Assert.Contains("complete", group.SafeMetadata["upstreamCoverageLabels"], StringComparison.Ordinal);
+            Assert.Contains("verify-active-connection", group.SafeMetadata["stopConditions"], StringComparison.Ordinal);
+            Assert.Contains(group.Limitations, limitation => limitation.Contains("do not prove", StringComparison.Ordinal));
+        });
+        Assert.Equal("false", sqlGroups[0].SafeMetadata["contextTransition"]);
+        Assert.Equal("true", sqlGroups[1].SafeMetadata["contextTransition"]);
+        Assert.Equal("independently-verify-active-client-tab-connection-and-database", sqlGroups[1].SafeMetadata["transitionCheckpoint"]);
+
+        var kinds = result.ContextGroups!.Select(group => group.GroupKind).ToArray();
+        Assert.True(Array.IndexOf(kinds, "query") < Array.IndexOf(kinds, "sql-context"));
+        Assert.True(Array.IndexOf(kinds, "sql-context") < Array.IndexOf(kinds, "data-surface"));
+        var rendered = JsonSerializer.Serialize(result, CombinedDependencyReporter.JsonOptions);
+        Assert.DoesNotContain("private-sql-body-leak-sentinel", rendered, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(temp.Path, rendered, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("safe to run", rendered, StringComparison.OrdinalIgnoreCase);
+        var written = await CombinedRouteFlowReporter.WriteAsync(options);
+        var markdown = await File.ReadAllTextAsync(written.MarkdownPath!);
+        Assert.Contains("contextOrder=engine\\>server\\>database\\>schema\\>mode", markdown, StringComparison.Ordinal);
+        Assert.Contains("permissionPrerequisites=", markdown, StringComparison.Ordinal);
+        Assert.Contains("stopConditions=", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-sql-body-leak-sentinel", markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Route_flow_records_sql_context_gap_for_data_facing_route_without_cataloged_context()
+    {
+        using var temp = new TempDirectory();
+        var (combinedPath, _, _) = await CreateRouteFlowCombinedIndexAsync(temp);
+
+        var result = await CombinedRouteFlowReporter.BuildReportAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        var gap = Assert.Single(result.ContextGroups!, group => group.GroupKind == "sql-context");
+        Assert.Equal("cataloged-sql-context-gap", gap.MatchKind);
+        Assert.Equal("gap", gap.SafeMetadata["contextState"]);
+        Assert.Equal("context-evidence-unavailable", gap.SafeMetadata["gapReason"]);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Contains(RuleIds.DatabaseSqlContextGap, gap.RuleIds);
+        Assert.NotEmpty(gap.Evidence.SupportingFactIds);
+        Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, gap.Classification);
+    }
+
+    [Fact]
     public async Task Route_flow_writes_route_centered_markdown_and_json_without_mutating_combined_index()
     {
         using var temp = new TempDirectory();
@@ -99,7 +176,7 @@ public sealed class CombinedRouteFlowTests
             Assert.NotEmpty(group.EvidenceTiers);
             Assert.Equal("combined.route-flow.report.v1", group.Evidence.RuleId);
             Assert.Contains(group.ValueSafety, new[] { "safe", "hashed", "omitted" });
-            Assert.Contains(group.GroupKind, new[] { "method", "service", "interface-candidate", "repository", "query", "data-surface", "dependency", "legacy-data", "value-origin", "gap" });
+            Assert.Contains(group.GroupKind, new[] { "method", "service", "interface-candidate", "repository", "query", "sql-context", "data-surface", "dependency", "legacy-data", "value-origin", "gap" });
         });
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "ExtractorUnavailable");
         Assert.Contains(result.Report.Snapshot.Sources, source => source.ScannerVersion == "tracemap-milestone15");
@@ -127,7 +204,7 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains("## Touched Files", markdown);
         Assert.Contains("## Touched Symbols", markdown);
         Assert.Contains("## Context Groups", markdown);
-        Assert.Contains("| Kind | Name | Match | Value safety | Classification | Coverage | Supporting rows | Evidence |", markdown);
+        Assert.Contains("| Kind | Name | Match | Value safety | Classification | Coverage | Safe metadata | Supporting rows | Evidence |", markdown);
         Assert.Contains("| Kind | Method | Path key | Bridge | Classification | Evidence |", markdown);
         Assert.Contains("method-symbol", markdown);
         Assert.DoesNotContain(temp.Path, markdown, StringComparison.OrdinalIgnoreCase);
@@ -3355,7 +3432,10 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(result.Report.ContextGroups!, group => group.RuleIds.Contains("combined.route-flow.redaction.v1"));
     }
 
-    private static async Task<(string CombinedPath, string Controller, string Repository)> CreateRouteFlowCombinedIndexAsync(TempDirectory temp, string serverBuildStatus = "Succeeded")
+    private static async Task<(string CombinedPath, string Controller, string Repository)> CreateRouteFlowCombinedIndexAsync(
+        TempDirectory temp,
+        string serverBuildStatus = "Succeeded",
+        bool includeSqlContext = false)
     {
         var clientIndex = Path.Combine(temp.Path, "client.sqlite");
         var serverIndex = Path.Combine(temp.Path, "server.sqlite");
@@ -3370,16 +3450,69 @@ public sealed class CombinedRouteFlowTests
         SqliteIndexWriter.Write(clientIndex, client, [
             HttpClientFact(client, "GET", "/api/orders/{id}", "/api/orders/{}", "src/orders.ts", 5, clientMethod)
         ]);
-        SqliteIndexWriter.Write(serverIndex, server, [
+        var serverFacts = new List<CodeFact>
+        {
             RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
             CallFact(server, controller, service, "Controllers/OrdersController.cs", 14),
             ArgumentPassedFact(server, controller, service, "apiSecret", "apiSecret", "System.String", "Controllers/OrdersController.cs", 14),
             CallFact(server, service, repository, "Services/OrderService.cs", 21),
             QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true),
             ConnectionStringFact(server, repository, "Infrastructure/OrderRepository.cs", 32)
-        ]);
+        };
+        if (includeSqlContext)
+        {
+            serverFacts.Add(ObjectShapeFact(server, repository, "object-shape", "Infrastructure/OrderRepository.cs", 33, "order-shape", ["id", "status"]));
+            serverFacts.Add(SqlContextFact(server, 1, "primary-data", false));
+            serverFacts.Add(SqlContextFact(server, 2, "archive-data", true));
+            serverFacts.Add(SqlPrerequisiteFact(server, "role-membership", "present-in-scripts", 3));
+            serverFacts.Add(SqlPrerequisiteFact(server, "schema-usage", "missing-evidence", 4));
+        }
+        SqliteIndexWriter.Write(serverIndex, server, serverFacts);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
         return (combinedPath, controller, repository);
+    }
+
+    private static CodeFact SqlContextFact(ScanManifest manifest, int ordinal, string databaseRole, bool transition)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.SqlExecutionContextDeclared,
+            RuleIds.DatabaseSqlContextDeclaration,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan("sql/setup.sql", ordinal, ordinal, null, "sql-execution-context", ScannerVersions.SqlExecutionContextExtractor),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["statementOrdinal"] = ordinal.ToString(),
+                ["engineFamily"] = "postgresql",
+                ["serverRole"] = transition ? "archive-target" : "application-primary",
+                ["databaseRole"] = databaseRole,
+                ["schemaRole"] = "application",
+                ["executionMode"] = "manual",
+                ["stepKind"] = transition ? "validation-query" : "schema-change",
+                ["contextClassification"] = "declared",
+                ["coverage"] = "complete",
+                ["stopConditions"] = transition ? "verify-active-connection,needs-owner-review" : "verify-active-connection",
+                ["rawSql"] = "private-sql-body-leak-sentinel"
+            });
+    }
+
+    private static CodeFact SqlPrerequisiteFact(ScanManifest manifest, string capability, string status, int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.DatabasePrerequisiteEvidence,
+            RuleIds.DatabasePostgresPermissionCoverage,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan("sql/setup.sql", line, line, null, "postgres-permission-evidence", ScannerVersions.PostgresPermissionEvidenceExtractor),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["operationKind"] = "schema-change",
+                ["candidateCapability"] = capability,
+                ["evidenceStatus"] = status,
+                ["contextRole"] = "target-database",
+                ["coverage"] = "complete",
+                ["limitation"] = "Static permission evidence does not establish effective authorization."
+            });
     }
 
     private static async Task<string> CreateSensitiveRouteCombinedIndexAsync(TempDirectory temp)

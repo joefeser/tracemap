@@ -1350,7 +1350,7 @@ public static class ReleaseReviewReporter
             ]));
     }
 
-    private static async Task<IReadOnlyList<SqlEvidenceInput>> ReadSqlEvidenceInputsAsync(
+    internal static async Task<IReadOnlyList<SqlEvidenceInput>> ReadSqlEvidenceInputsAsync(
         string path,
         string indexKind,
         CancellationToken cancellationToken)
