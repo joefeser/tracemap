@@ -31,26 +31,26 @@ Readiness: validated-spec-only
 
 ## PR 1: Audit And Decision Gate
 
-- [ ] 1. Audit current vault input seams for property-flow reports.
+- [x] 1. Audit current vault input seams for property-flow reports.
   Requirements: 1, 2, 3.
-  - [ ] Confirm whether vault export currently accepts property-flow report
+  - [x] Confirm whether vault export currently accepts property-flow report
     JSON directly or only through combined/path report inputs.
-  - [ ] Identify the smallest product-code seam for reading
+  - [x] Identify the smallest product-code seam for reading
     `safeMetadata["terminalContextKind"]`.
-  - [ ] Confirm existing hidden/demo/public claim-level filtering behavior for
+  - [x] Confirm existing hidden/demo/public claim-level filtering behavior for
     path-like report evidence.
-  - [ ] Confirm existing vault safety contexts cover terminal-context metadata,
+  - [x] Confirm existing vault safety contexts cover terminal-context metadata,
     path IDs, node IDs, file spans, and display names.
 
-- [ ] 2. Record the implementation decision before product edits.
+- [x] 2. Record the implementation decision before product edits.
   Requirements: 2, 4.
-  - [ ] In this spec's `implementation-state.md`, choose one:
+  - [x] In this spec's `implementation-state.md`, choose one:
     `hidden-local-render`, `omission-gap-only`, or `ignore-with-schema-gap`.
-  - [ ] Record whether new rule IDs are needed or existing rules will be
+  - [x] Record whether new rule IDs are needed or existing rules will be
     reused.
-  - [ ] Record the focused test set made mandatory by the chosen decision.
-  - [ ] Record any schema compatibility assumptions.
-  - [ ] Keep the first implementation on the explicit property-flow report JSON
+  - [x] Record the focused test set made mandatory by the chosen decision.
+  - [x] Record any schema compatibility assumptions.
+  - [x] Keep the first implementation on the explicit property-flow report JSON
     seam unless the implementation updates this spec with a reviewed narrower
     alternative before product edits.
 
