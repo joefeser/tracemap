@@ -806,7 +806,7 @@ rules:
 
   - id: vault-export.gap.schema-incompatible.v1
     name: Vault export schema compatibility gap
-    description: Records when a vault export input cannot be read through a documented combined-index, paths-report, reverse-report, or claim-catalog schema.
+    description: Records when a vault export input cannot be read through a documented combined-index, paths-report, reverse-report, property-flow-report, or claim-catalog schema.
     evidenceTier: Tier4Unknown
     emits:
       - vault export schema gap
@@ -914,6 +914,28 @@ rules:
     limitations:
       - The gap proves only that TraceMap refused to construct an output identity from an unsafe component; it does not prove the omitted code is unreachable or unimportant.
       - Diagnostics include only a closed category and safe output scope; raw values, local absolute paths, remotes, URLs, SQL, snippets, and credentials are never rendered.
+
+  - id: vault-export.graph.property-flow-terminal-context.v1
+    name: Vault export property-flow terminal-context navigation
+    description: Packages producer-gated property-flow terminal-context metadata as hidden, path-scoped local vault navigation.
+    evidenceTier: Tier2Structural
+    emits:
+      - hidden terminal-context navigation node
+      - hidden property-flow terminal-context navigation edge
+    limitations:
+      - Navigation is derived only from structured property-flow terminalContextKind metadata on the terminal path node; report prose cannot create it.
+      - Static path-scoped navigation does not prove runtime execution, dependency execution, database execution, impact, release safety, or complete coverage.
+      - Terminal-context navigation remains hidden and is never promoted by a source claim catalog.
+
+  - id: vault-export.gap.terminal-context-omitted.v1
+    name: Vault export terminal-context omission gap
+    description: Records when structured property-flow terminal-context evidence is incompatible, unsafe, unrecognized, inconsistent with bounded report prose, or omitted by demo/public claim filtering.
+    evidenceTier: Tier4Unknown
+    emits:
+      - terminal-context omission gap
+    limitations:
+      - An omission gap describes vault packaging limits and does not prove terminal context, runtime behavior, or source evidence is absent.
+      - Diagnostics remain category-based and do not echo unsafe metadata, raw local paths, report internals, snippets, SQL/config values, remotes, or secrets.
 
   - id: public.demo.summary.v1
     name: Public demo summary section

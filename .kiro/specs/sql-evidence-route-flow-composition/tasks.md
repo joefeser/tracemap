@@ -38,7 +38,7 @@ PR.
 ### Phase 5: Adjacent cleanup (may be a separate PR)
 
 - [ ] 5.1 Add acceptance criteria to `docs/ACCEPTANCE.md` for the SQL runway families (execution-context, permission, archive-link, secret-safety, runbook) if missing.
-- [ ] 5.2 Extend the site claim guardrails validator (`site/scripts/site-claim-guardrails.mjs`) to scan all generated `dist/**/index.html`, not just the guardrails page; add a regression test.
+- [x] 5.2 Extend the site claim guardrails validator (`site/scripts/site-claim-guardrails.mjs`) to scan all generated `dist/**/index.html`, not just the guardrails page; add a regression test.
 
 ### Phase 6: Audit-driven status-drift cleanup (follow-up, not this PR)
 
