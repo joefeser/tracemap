@@ -19,6 +19,15 @@ a40ad6a23d3629e1e5bc7870857a2a278e2e2a43
 
 That commit is `Add adapter conformance and CI runway (#478)`.
 
+Before publication on 2026-07-14, the two local implementation commits were
+rebased without conflicts onto current `origin/dev`:
+
+```text
+abbba9192241cdca95eb4e2138805c6df0d45787
+```
+
+That commit is `Scan all generated site indexes for private leaks (#479)`.
+
 ## Scope
 
 This implementation adds the reviewed explicit property-flow report seam and
@@ -191,6 +200,16 @@ Implementation validation on the dogfood branch:
 The first `--no-restore` build in the fresh worktree stopped because NuGet
 asset files did not exist. `dotnet restore src/dotnet/TraceMap.sln` completed,
 and the build/test commands above then passed.
+
+Post-rebase publication validation reran the same gates against
+`origin/dev@abbba9192241cdca95eb4e2138805c6df0d45787`:
+
+- Focused vault export tests: passed, 40/40.
+- Full .NET solution tests: passed, 756/756.
+- Full .NET solution build: passed with the existing
+  `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory warning only.
+- Private-path guard: passed.
+- `git diff --check`: passed.
 
 Spec-only validation planned:
 
