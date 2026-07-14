@@ -65,6 +65,8 @@ def create_schema(con: sqlite3.Connection) -> None:
           start_line integer not null,
           end_line integer not null,
           snippet_hash text,
+          extractor_id text not null,
+          extractor_version text not null,
           properties_json text not null
         );
 
@@ -295,8 +297,9 @@ def insert_fact(con: sqlite3.Connection, fact: CodeFact) -> None:
     con.execute(
         """insert into facts
            (fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
-            source_symbol, target_symbol, contract_element, file_path, start_line, end_line, snippet_hash, properties_json)
-           values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            source_symbol, target_symbol, contract_element, file_path, start_line, end_line, snippet_hash,
+            extractor_id, extractor_version, properties_json)
+           values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             fact.fact_id,
             fact.scan_id,
@@ -313,6 +316,8 @@ def insert_fact(con: sqlite3.Connection, fact: CodeFact) -> None:
             fact.evidence.start_line,
             fact.evidence.end_line,
             fact.evidence.snippet_hash,
+            fact.evidence.extractor_id,
+            fact.evidence.extractor_version,
             props_json,
         ),
     )

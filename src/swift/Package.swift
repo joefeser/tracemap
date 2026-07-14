@@ -31,6 +31,10 @@ let package = Package(
         .executableTarget(
             name: "tracemap-swift-smoke-tests",
             dependencies: ["TraceMapSwift"]
+        ),
+        .testTarget(
+            name: "TraceMapSwiftTests",
+            dependencies: ["TraceMapSwift"]
         )
     ]
 )

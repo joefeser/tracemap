@@ -125,6 +125,18 @@ describe("MarkdownReportWriter", () => {
     expect(report).toContain("table `orders;order_items` columns `order_id;created_by`");
     expect(report).not.toContain("table `unknown`");
   });
+
+  it("reports the count when the readable gap list is truncated", async () => {
+    const gaps = Array.from({ length: 30 }, (_, index) => ({
+      ...factWithProperties({ gapKind: `gap-${index}` }),
+      factId: `gap-${index}`,
+      factType: FactTypes.AnalysisGap
+    }));
+
+    const report = await renderReport(gaps);
+
+    expect(report).toContain("5 additional gaps are preserved in facts.ndjson.");
+  });
 });
 
 async function renderReport(facts: CodeFact[]): Promise<string> {
