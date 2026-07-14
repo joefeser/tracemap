@@ -1,33 +1,40 @@
 # UI Field Property Lineage Terminal Context Vault Local Navigation Implementation State
 
-Status: ready-for-implementation
-Readiness: validated-spec-only
-Spec branch: `codex/ui-field-property-lineage-terminal-context-vault-local-navigation`
+Status: implemented-pending-pr-review
+Readiness: implementation-validation-complete
+Implementation branch: `codex/terminal-context-vault-dogfood`
 Target base: `dev`
 Public claim level: hidden
 
 ## Current Context
 
-Fetched `origin/dev` and created an isolated worktree from latest remote
-`dev`.
+Fetched `origin/dev` with an explicit refspec and created an isolated worktree
+from the current remote `dev`.
 
 Starting baseline:
 
 ```text
-c37eff84ebc12cc2b4d47bae89fb8af29b35b8bb
+a40ad6a23d3629e1e5bc7870857a2a278e2e2a43
 ```
 
-That commit is merge commit `#405`, `implement-swift-inventory-project-discovery`.
+That commit is `Add adapter conformance and CI runway (#478)`.
+
+Before publication on 2026-07-14, the two local implementation commits were
+rebased without conflicts onto current `origin/dev`:
+
+```text
+abbba9192241cdca95eb4e2138805c6df0d45787
+```
+
+That commit is `Scan all generated site indexes for private leaks (#479)`.
 
 ## Scope
 
-This is a spec-only branch. It creates an implementation-ready Kiro spec for
-hidden/local vault navigation over existing property-flow
-`terminalContextKind` evidence.
-
-No product code, generated output, site files, docs-export files, rule catalog
-entries, scanner logic, reducer logic, or existing specs are changed by this
-branch.
+This implementation adds the reviewed explicit property-flow report seam and
+hidden/local vault navigation over existing `terminalContextKind` evidence.
+It updates the vault CLI/help, packaging rules, focused tests, vault docs, and
+this spec's state. It does not change scanners, reducers, docs-export, site
+files, runtime behavior, public claims, or producer mappings.
 
 ## Source Material Reviewed
 
@@ -88,18 +95,50 @@ branch.
 Before any future product-code PR edits `VaultExport.cs`, it must fill this
 section with the chosen behavior:
 
-- Vault decision: pending. Choose `hidden-local-render`, `omission-gap-only`,
-  or `ignore-with-schema-gap`.
-- Rule decision: pending. Record whether existing rules are reused or candidate
-  vault-export terminal-context rules are added.
-- Test decision: pending. Record the focused test files and cases made
-  mandatory by the chosen behavior.
+- Vault decision: `hidden-local-render`. Vault export will consume an explicit,
+  repeatable `--property-flow-report <property-flow-report.json>` input. Only a
+  path whose terminal node carries structured
+  `safeMetadata["terminalContextKind"]` may create hidden, path-scoped local
+  navigation. Notes remain display-only and never create navigation.
+- Rule decision: add
+  `vault-export.graph.property-flow-terminal-context.v1` for the new hidden
+  graph node/edge packaging and
+  `vault-export.gap.terminal-context-omitted.v1` for incompatible metadata,
+  safety omission, structured/prose mismatch, and demo/public filtering. Keep
+  the property-flow producer rule IDs as preserved source evidence only.
+- Test decision: focused tests live in
+  `src/dotnet/tests/TraceMap.Tests/VaultExportTests.cs` and cover hidden render,
+  absent metadata, unknown safe metadata, structured/prose mismatch,
+  demo/public omission, source-claim non-promotion, unsafe metadata, path
+  isolation, deterministic output, generated-file safety, rule-catalog
+  presence, and static/non-impact wording. CLI option/help coverage is included
+  in the same focused test file.
 - Schema decision: selected for this spec. The first implementation SHALL use
   an explicit compatible property-flow report JSON seam for vault export, such
   as a narrow `--property-flow-report <property-flow.json>` option or an
   explicit documented report-input collection. It SHALL NOT infer
   terminal-context navigation from combined path evidence alone and SHALL NOT
   add a docs-export file-reading seam for this feature.
+
+Audit evidence from `origin/dev@a40ad6a23d3629e1e5bc7870857a2a278e2e2a43`:
+
+- Vault export accepts combined SQLite, paths-report JSON, and reverse-report
+  JSON inputs; it does not accept property-flow JSON.
+- The smallest seam is an additive `PropertyFlowReportPaths` option plus the
+  repeatable CLI flag above, feeding `BuildGraphAsync` alongside the existing
+  report readers.
+- Existing claim filtering removes hidden graph nodes/edges before packaging
+  demo/public output and emits a hidden-evidence omission gap. The new reader
+  will add its own terminal-context omission gap so the reason remains
+  explicit even when other hidden evidence is absent.
+- Existing vault safety supports stable TraceMap IDs, closed vocabulary,
+  display names, generated metadata, and evidence locations. The new reader
+  will use those contexts, require safe path/node identities before hashing,
+  and never export raw report paths.
+- Compatibility is limited to `reportType: "property-flow"` and
+  `version: "1.0"`. Missing required collections, malformed JSON, or a
+  different report type/version is schema-incompatible and cannot create
+  terminal-context navigation.
 
 Minimum test set by decision option:
 
@@ -147,6 +186,30 @@ Initial review results:
   decision-option test matrices and multi-path/demo-public omission tests.
 
 ## Validation Log
+
+Implementation validation on the dogfood branch:
+
+- `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter Vault_export`: passed, 40/40.
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: passed, 756/756.
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with the existing
+  `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory warning.
+- `./scripts/check-private-paths.sh`: passed after replacing an intentionally
+  unsafe test value with a generic non-private URL fixture.
+- `git diff --check`: passed.
+
+The first `--no-restore` build in the fresh worktree stopped because NuGet
+asset files did not exist. `dotnet restore src/dotnet/TraceMap.sln` completed,
+and the build/test commands above then passed.
+
+Post-rebase publication validation reran the same gates against
+`origin/dev@abbba9192241cdca95eb4e2138805c6df0d45787`:
+
+- Focused vault export tests: passed, 40/40.
+- Full .NET solution tests: passed, 756/756.
+- Full .NET solution build: passed with the existing
+  `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory warning only.
+- Private-path guard: passed.
+- `git diff --check`: passed.
 
 Spec-only validation planned:
 

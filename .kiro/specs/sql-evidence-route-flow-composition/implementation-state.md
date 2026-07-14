@@ -70,11 +70,32 @@ families are `database.sql.context.*.v1`,
 
 ## Adjacent / Follow-Up (tracked in tasks.md, not blocking the composition PR)
 
-- Phase 5: `docs/ACCEPTANCE.md` SQL acceptance rows; widen site claim guardrails
-  to all `dist/**/index.html`.
+- Phase 5.1: `docs/ACCEPTANCE.md` SQL acceptance rows remain open. Phase 5.2 is
+  implemented below.
 - Phase 6: audit status-drift cleanup (`NEXT_EXECUTION_REPORT.md` refresh,
   headerless implementation-state files, stale in-flight statuses, README SQL
   mention).
+
+### Implemented Phase 5.2
+
+The HACP Dispatch dogfood branch `codex/sql-site-guardrail-dogfood`, based on
+`dev@a40ad6a23d3629e1e5bc7870857a2a278e2e2a43`, widened the shared hard
+private/credential scan to every generated `dist/**/index.html` file. The
+enumerator is deterministic, does not follow symlinks, and reports only
+dist-relative evidence paths. Page-specific overclaim and bounded-example
+semantics remain with each page validator; applying the guardrails-page claim
+grammar globally produced false positives in valid teaching examples and was
+therefore rejected during the broad test pass.
+
+Focused regression coverage proves nested `index.html` files are scanned,
+non-index HTML files are outside this exact task, and diagnostics do not expose
+the temporary fixture root.
+
+ACK-authorized Qodo remediation added a whitespace-tight tag-stripped scan
+variant, retained a local hard-private check for the critical guardrails page,
+and changed directory traversal to record a sanitized subtree error while
+continuing across readable siblings. This closes the tag-split bypass and
+avoids all-or-nothing scan coverage without following symlinks.
 
 ## Implemented Target B
 
@@ -93,6 +114,16 @@ families are `database.sql.context.*.v1`,
   than silently inventing missing provenance.
 
 ## Validation
+
+Phase 5.2 validation:
+
+- `cd site && node --test scripts/site-claim-guardrails.test.mjs`: 13 passed.
+- `cd site && npm test`: 683 passed.
+- `cd site && npm run build`: passed; static site built to `dist/`.
+- `cd site && npm run validate`: passed; 92 HTML files, 3,188 internal
+  references, and 91 sitemap URLs validated.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
 
 - Focused release-review/runbook/combine tests: 37 passed after promotion-review fixes.
 - `dotnet build src/dotnet/TraceMap.sln`: passed, 0 warnings.
@@ -120,7 +151,7 @@ non-null `not-recorded` values.
 ## Deferred From This PR
 
 - Target A route-flow SQL context groups (Phase 3).
-- Acceptance/site guardrail cleanup (Phase 5).
+- Acceptance cleanup (Phase 5.1).
 - Status-drift and README cleanup (Phase 6).
 
 ## Related Specs
