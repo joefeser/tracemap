@@ -297,6 +297,40 @@ test -f <tmp>/release-review/release-review.md
 test -f <tmp>/release-review/release-review.json
 ```
 
+For route-flow SQL-context composition changes, assemble a temporary repository
+from the checked-in public demo endpoint and SQL operator-runbook fixtures. This
+keeps the endpoint/data surface and the cataloged SQL context under one source
+label without adding a purpose-built fixture:
+
+```bash
+mkdir -p <tmp>/sql-route-repo
+cp samples/public-demo/after/OrdersController.cs \
+  samples/public-demo/after/PublicDemoAfter.csproj \
+  samples/sql-operator-runbook/setup.sql \
+  <tmp>/sql-route-repo/
+dotnet run --project src/dotnet/TraceMap.Cli -- scan \
+  --repo <tmp>/sql-route-repo --out <tmp>/sql-route-scan
+dotnet run --project src/dotnet/TraceMap.Cli -- combine \
+  --index <tmp>/sql-route-scan/index.sqlite --label public-demo \
+  --out <tmp>/sql-route-combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- route-flow \
+  --index <tmp>/sql-route-combined.sqlite \
+  --route "GET /api/public/orders/{orderId}" --to-surface sql-query \
+  --out <tmp>/sql-route-flow
+rg -n 'sql-context|database.sql.context.declaration.v1|contextOrder|permissionPrerequisites|stopConditions|upstreamExtractorVersions' \
+  <tmp>/sql-route-flow/route-flow-report.json
+! rg -i 'private-host-leak-sentinel|private-password-leak-sentinel|raw-scheduled-command-leak-sentinel|safe to run' \
+  <tmp>/sql-route-flow/route-flow-report.md \
+  <tmp>/sql-route-flow/route-flow-report.json
+```
+
+The SQL-context groups must remain additive and ordered between query and data
+surface context. They preserve cataloged rule/tier/coverage/span/commit/
+extractor/supporting-fact provenance, categorical context transitions,
+permission prerequisite statuses, and stop-condition codes. They do not prove
+SQL execution, runtime reachability, database state, permission effectiveness,
+release approval, or execution safety.
+
 For release-review SQL runway composition changes, scan the checked-in operator
 runbook sample and use its index as the selected after snapshot. Verify the
 separate `SQL Runway Evidence` section is `available`, preserves rule/tier/
