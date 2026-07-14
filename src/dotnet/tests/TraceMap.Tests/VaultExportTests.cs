@@ -894,6 +894,52 @@ public sealed class VaultExportTests
                 && gap.Limitations.Contains("Omission category: terminal-node-unavailable."));
     }
 
+    [Fact]
+    public async Task Vault_export_preserves_property_flow_gaps_and_normalizes_external_tiers()
+    {
+        using var temp = new TempDirectory();
+        var path = WritePropertyFlowReport(temp.Path, "property-flow-gap.json", [
+            new PropertyFlowFixturePath("path-gap", "terminal-gap", "data-surface terminal context", [], EvidenceTier: "Tier9Invented")
+        ]);
+        var root = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        root["gaps"] = JsonSerializer.SerializeToNode(new object[]
+        {
+            new Dictionary<string, object?>
+            {
+                ["gapId"] = "gap-upstream",
+                ["gapKind"] = "UnknownAnalysisGap",
+                ["classification"] = "UnknownAnalysisGap",
+                ["message"] = "Upstream property-flow coverage was reduced.",
+                ["ruleId"] = "property-flow.gap.v1",
+                ["evidenceTier"] = "Tier9Invented",
+                ["sourceLabel"] = "server",
+                ["combinedFactId"] = null,
+                ["filePath"] = null,
+                ["startLine"] = null,
+                ["endLine"] = null,
+                ["supportingFactIds"] = Array.Empty<string>(),
+                ["limitations"] = new[] { "Static coverage gap only." },
+                ["sourceIndexId"] = "source-property-flow"
+            }
+        });
+        await File.WriteAllTextAsync(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n");
+
+        var result = await VaultExporter.ExportAsync(new VaultExportOptions(
+            null,
+            Path.Combine(temp.Path, "vault"),
+            PropertyFlowReportPaths: [path]));
+
+        var upstreamGap = Assert.Single(result.Graph.Gaps, gap => gap.Classification == "UnknownAnalysisGap");
+        Assert.Equal(EvidenceTiers.Tier4Unknown, upstreamGap.EvidenceTier);
+        Assert.Contains("Static coverage gap only.", upstreamGap.Limitations);
+        Assert.True(result.Graph.Settings.Partial);
+        Assert.DoesNotContain(result.Graph.Nodes.SelectMany(node => node.EvidenceTiers), tier => tier == "Tier9Invented");
+        Assert.Contains(result.Graph.Nodes.SelectMany(node => node.EvidenceTiers), tier => tier == EvidenceTiers.Tier4Unknown);
+        Assert.All(
+            result.Graph.Edges.Where(edge => edge.Kind == "property-flow-terminal-context"),
+            edge => Assert.Equal(EvidenceTiers.Tier2Structural, edge.EvidenceTier));
+    }
+
     private sealed record PropertyFlowFixturePath(
         string PathId,
         string TerminalNodeId,
@@ -977,6 +1023,7 @@ public sealed class VaultExportTests
                 }
             },
             ["lineagePaths"] = lineagePaths,
+            ["gaps"] = Array.Empty<object>(),
             ["limitations"] = new[] { "Static evidence only; runtime execution and impact are not proven." }
         }, new JsonSerializerOptions { WriteIndented = true }) + "\n";
         File.WriteAllText(outputPath, json);
