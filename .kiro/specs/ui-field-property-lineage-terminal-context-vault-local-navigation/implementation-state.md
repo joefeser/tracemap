@@ -88,18 +88,50 @@ branch.
 Before any future product-code PR edits `VaultExport.cs`, it must fill this
 section with the chosen behavior:
 
-- Vault decision: pending. Choose `hidden-local-render`, `omission-gap-only`,
-  or `ignore-with-schema-gap`.
-- Rule decision: pending. Record whether existing rules are reused or candidate
-  vault-export terminal-context rules are added.
-- Test decision: pending. Record the focused test files and cases made
-  mandatory by the chosen behavior.
+- Vault decision: `hidden-local-render`. Vault export will consume an explicit,
+  repeatable `--property-flow-report <property-flow-report.json>` input. Only a
+  path whose terminal node carries structured
+  `safeMetadata["terminalContextKind"]` may create hidden, path-scoped local
+  navigation. Notes remain display-only and never create navigation.
+- Rule decision: add
+  `vault-export.graph.property-flow-terminal-context.v1` for the new hidden
+  graph node/edge packaging and
+  `vault-export.gap.terminal-context-omitted.v1` for incompatible metadata,
+  safety omission, structured/prose mismatch, and demo/public filtering. Keep
+  the property-flow producer rule IDs as preserved source evidence only.
+- Test decision: focused tests live in
+  `src/dotnet/tests/TraceMap.Tests/VaultExportTests.cs` and cover hidden render,
+  absent metadata, unknown safe metadata, structured/prose mismatch,
+  demo/public omission, source-claim non-promotion, unsafe metadata, path
+  isolation, deterministic output, generated-file safety, rule-catalog
+  presence, and static/non-impact wording. CLI option/help coverage is included
+  in the same focused test file.
 - Schema decision: selected for this spec. The first implementation SHALL use
   an explicit compatible property-flow report JSON seam for vault export, such
   as a narrow `--property-flow-report <property-flow.json>` option or an
   explicit documented report-input collection. It SHALL NOT infer
   terminal-context navigation from combined path evidence alone and SHALL NOT
   add a docs-export file-reading seam for this feature.
+
+Audit evidence from `origin/dev@a40ad6a23d3629e1e5bc7870857a2a278e2e2a43`:
+
+- Vault export accepts combined SQLite, paths-report JSON, and reverse-report
+  JSON inputs; it does not accept property-flow JSON.
+- The smallest seam is an additive `PropertyFlowReportPaths` option plus the
+  repeatable CLI flag above, feeding `BuildGraphAsync` alongside the existing
+  report readers.
+- Existing claim filtering removes hidden graph nodes/edges before packaging
+  demo/public output and emits a hidden-evidence omission gap. The new reader
+  will add its own terminal-context omission gap so the reason remains
+  explicit even when other hidden evidence is absent.
+- Existing vault safety supports stable TraceMap IDs, closed vocabulary,
+  display names, generated metadata, and evidence locations. The new reader
+  will use those contexts, require safe path/node identities before hashing,
+  and never export raw report paths.
+- Compatibility is limited to `reportType: "property-flow"` and
+  `version: "1.0"`. Missing required collections, malformed JSON, or a
+  different report type/version is schema-incompatible and cannot create
+  terminal-context navigation.
 
 Minimum test set by decision option:
 
