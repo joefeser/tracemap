@@ -1,7 +1,7 @@
 # UI Field Property Lineage Terminal Context Vault Local Navigation Tasks
 
-Status: ready-for-implementation
-Readiness: validated-spec-only
+Status: implemented-pending-pr-review
+Readiness: implementation-validation-complete
 
 ## Spec-Only PR Scope
 
