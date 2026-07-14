@@ -534,6 +534,14 @@ public sealed class EvidenceDocsExportTests
         var unsafeIndexPath = CreateCombinedIndex(
             temp.Path,
             propertyFlowPropertiesJson: $$"""{"terminalContextKind":"{{unsafeValue}}"}""");
+        var labelPrefixedUnixPath = string.Concat("path:", "/", "home", "/example/source/Customer.sql");
+        var labelPrefixedUnixIndexPath = CreateCombinedIndex(
+            temp.Path,
+            propertyFlowPropertiesJson: $$"""{"terminalContextKind":"{{labelPrefixedUnixPath}}"}""");
+        var labelPrefixedWindowsPath = string.Concat("path:", "C:", "/", "Users", "/example/source/Customer.cs");
+        var labelPrefixedWindowsIndexPath = CreateCombinedIndex(
+            temp.Path,
+            propertyFlowPropertiesJson: $$"""{"terminalContextKind":"{{labelPrefixedWindowsPath}}"}""");
 
         var absent = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
             absentIndexPath,
@@ -564,6 +572,23 @@ public sealed class EvidenceDocsExportTests
             && chunk.SupportingIds.Contains("source-api:fact-property-flow"));
         Assert.Contains("terminalContextKind:redacted-", unsafeChunk.BodyMarkdown);
         Assert.DoesNotContain(unsafeValue, JsonSerializer.Serialize(unsafeResult), StringComparison.OrdinalIgnoreCase);
+
+        foreach (var (indexPath, unsafePath, outputName) in new[]
+        {
+            (labelPrefixedUnixIndexPath, labelPrefixedUnixPath, "label-prefixed-unix-docs"),
+            (labelPrefixedWindowsIndexPath, labelPrefixedWindowsPath, "label-prefixed-windows-docs")
+        })
+        {
+            var prefixedResult = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+                indexPath,
+                Path.Combine(temp.Path, outputName),
+                Families: "property-flow,gap,limitation"));
+            var prefixedChunk = Assert.Single(prefixedResult.Chunks, chunk =>
+                chunk.ChunkFamily == "property-flow"
+                && chunk.SupportingIds.Contains("source-api:fact-property-flow"));
+            Assert.Contains("terminalContextKind:redacted-", prefixedChunk.BodyMarkdown);
+            Assert.DoesNotContain(unsafePath, JsonSerializer.Serialize(prefixedResult), StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]
