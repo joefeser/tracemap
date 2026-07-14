@@ -37,6 +37,12 @@ The manifest must include:
 
 `scanId` must be deterministic. Adapters should derive it from stable repository identity, commit SHA, and a deterministic adapter-specific signature such as sorted file inventory or normalized scan options. The inputs must be documented by the adapter and must not contain a timestamp, UUID, process ID, or output path. Fact IDs may include `scanId`, so unstable scan IDs cause every fact ID to churn between identical runs.
 
+Fact IDs must remain deterministic within an adapter and compatible across
+versions unless a schema/version migration explicitly says otherwise. The v1
+contract does not require every language to use the .NET fact-ID formula.
+Persisted fact IDs are provenance, so standardizing that formula requires a
+versioned compatibility decision rather than an incidental adapter rewrite.
+
 ## Fact Contract
 
 Every fact must include:
@@ -410,6 +416,21 @@ When available, adapters should also populate:
 Adapters must use the shared SQLite DDL used by the .NET storage layer, including snake_case table and column names. JSON fact properties remain camelCase. Schema changes should be additive. `tracemap combine` imports multiple indexes, keeps original fact IDs, namespaces source indexes, and leaves room for derived cross-index rows rather than rewriting source facts.
 
 Do not hand-maintain divergent per-language schemas. If a new adapter needs a table or column, add it to the shared contract and update the existing schema tests.
+
+The machine-readable minimum is under `contracts/artifacts/`:
+
+- `scan-manifest.v1.schema.json`;
+- `code-fact.v1.schema.json`;
+- `index-sqlite.v1.sql`;
+- `redaction-corpus.v1.json`.
+
+Every indexed fact must preserve `extractor_id` and `extractor_version` in
+SQLite as well as `extractorId` and `extractorVersion` in JSONL. Run
+`python3 scripts/validate-adapter-artifacts.py <scan-output>` against generated
+adapter output. The validator checks artifact presence, provenance, registered
+rule IDs, evidence spans, safe paths/property values, minimum SQLite columns,
+row counts, and JSONL-to-SQLite parity. It does not prove runtime behavior,
+complete coverage, production state, impact, or release safety.
 
 ## Rule Catalog
 
