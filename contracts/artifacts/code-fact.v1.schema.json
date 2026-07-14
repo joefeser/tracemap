@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tracemap.tools/contracts/code-fact.v1.schema.json",
+  "title": "TraceMap code fact v1",
+  "type": "object",
+  "required": [
+    "factId",
+    "scanId",
+    "repo",
+    "commitSha",
+    "factType",
+    "ruleId",
+    "evidenceTier",
+    "evidence",
+    "properties"
+  ],
+  "properties": {
+    "factId": { "type": "string", "minLength": 1 },
+    "scanId": { "type": "string", "minLength": 1 },
+    "repo": { "type": "string", "minLength": 1 },
+    "commitSha": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$" },
+    "projectPath": { "type": ["string", "null"] },
+    "factType": { "type": "string", "minLength": 1 },
+    "ruleId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*\\.v[0-9]+$" },
+    "evidenceTier": {
+      "enum": ["Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual", "Tier4Unknown"]
+    },
+    "sourceSymbol": { "type": ["string", "null"] },
+    "targetSymbol": { "type": ["string", "null"] },
+    "contractElement": { "type": ["string", "null"] },
+    "evidence": {
+      "type": "object",
+      "required": ["filePath", "startLine", "endLine", "extractorId", "extractorVersion"],
+      "properties": {
+        "filePath": { "type": "string", "minLength": 1 },
+        "startLine": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "snippetHash": { "type": ["string", "null"] },
+        "extractorId": { "type": "string", "minLength": 1 },
+        "extractorVersion": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "properties": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    }
+  },
+  "additionalProperties": true
+}

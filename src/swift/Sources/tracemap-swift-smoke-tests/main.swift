@@ -5,6 +5,7 @@ import TraceMapSwift
 struct TraceMapSwiftSmokeTests {
     static func main() throws {
         try parsesHelpVersionAndRepeatableOptions()
+        try swiftSqlShapeMatchesSharedFixture()
         try missingRepoFailsBeforeArtifacts()
         try scanWritesRequiredArtifactsAndReducedCoverage()
         try factsAreStableWhenOnlyOutputPathChanges()
@@ -51,6 +52,22 @@ struct TraceMapSwiftSmokeTests {
         assert(options.includeGlobs == ["*.swift"])
         assert(options.excludeGlobs == ["Generated/*"])
         assert(options.maxFileByteSize == 42)
+    }
+
+    static func swiftSqlShapeMatchesSharedFixture() throws {
+        let path = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("samples/sql-shape-fixtures/sql-shape-v1.json")
+        let root = try JSONSerialization.jsonObject(with: Data(contentsOf: path)) as? [String: Any]
+        let cases = root?["cases"] as? [[String: Any]] ?? []
+        assert(!cases.isEmpty, "shared SQL shape fixture should contain cases")
+        for item in cases {
+            guard let name = item["name"] as? String,
+                  let sql = item["sql"] as? String,
+                  let expected = item["queryShapeHash"] as? String else {
+                throw SmokeFailure("shared SQL shape fixture case is malformed")
+            }
+            assert(SwiftSqlShapeV1.queryShapeHash(sql) == expected, "SQL shape mismatch for \(name)")
+        }
     }
 
     static func missingRepoFailsBeforeArtifacts() throws {
@@ -1022,6 +1039,8 @@ struct TraceMapSwiftSmokeTests {
         let factCount = try run("/usr/bin/sqlite3", [out.appendingPathComponent("index.sqlite").path, "select count(*) from facts;"]).trimmed()
         assert((Int(factCount) ?? 0) > 0)
         let db = out.appendingPathComponent("index.sqlite").path
+        let provenanceCount = try run("/usr/bin/sqlite3", [db, "select count(*) from facts where extractor_id is not null and extractor_version is not null;"]).trimmed()
+        assert(provenanceCount == factCount, "all indexed facts should preserve extractor provenance")
         let orphanCalls = try run("/usr/bin/sqlite3", [db, "select count(*) from call_edges c left join facts f on f.fact_id = c.fact_id where f.fact_id is null;"]).trimmed()
         let orphanCreations = try run("/usr/bin/sqlite3", [db, "select count(*) from object_creations o left join facts f on f.fact_id = o.fact_id where f.fact_id is null;"]).trimmed()
         let orphanOccurrences = try run("/usr/bin/sqlite3", [db, "select count(*) from symbol_occurrences o left join facts f on f.fact_id = o.fact_id where f.fact_id is null;"]).trimmed()
