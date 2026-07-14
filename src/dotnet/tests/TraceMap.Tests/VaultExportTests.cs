@@ -669,6 +669,7 @@ public sealed class VaultExportTests
         Assert.Equal(
             await File.ReadAllTextAsync(Path.Combine(firstOut, "terminal-contexts", "index.md")),
             await File.ReadAllTextAsync(Path.Combine(secondOut, "terminal-contexts", "index.md")));
+        Assert.Contains("# Terminal Contexts Index", await File.ReadAllTextAsync(Path.Combine(firstOut, "terminal-contexts", "index.md")));
     }
 
     [Fact]
@@ -713,7 +714,8 @@ public sealed class VaultExportTests
         var sourceIds = await ReadSourceIdsAsync(combinedPath);
         var sourceId = sourceIds.Values.OrderBy(value => value, StringComparer.Ordinal).First();
         var reportPath = WritePropertyFlowReport(temp.Path, "property-flow-demo.json", [
-            new PropertyFlowFixturePath("path-demo", "terminal-demo", "data-surface terminal context", [], sourceId)
+            new PropertyFlowFixturePath("path-demo", "terminal-demo", "data-surface terminal context", ["StaticTerminalContext: selected-property path reached data-surface terminal context through existing combined path evidence."], sourceId),
+            new PropertyFlowFixturePath("path-unsafe", "terminal-unsafe", "https://example.invalid/terminal-context", [], sourceId)
         ], sourceId);
         var catalogPath = WriteClaimCatalog(temp.Path, sourceIds.Values, "demo-safe");
 
@@ -728,8 +730,14 @@ public sealed class VaultExportTests
         Assert.DoesNotContain(result.Graph.Nodes, node => node.Kind == "terminal-context");
         Assert.DoesNotContain(result.Graph.Edges, edge => edge.Kind == "property-flow-terminal-context");
         Assert.Contains(result.Graph.Gaps, gap => gap.Classification == "TerminalContextClaimLevelOmitted" && gap.ClaimLevel == "demo-safe");
+        Assert.Contains(result.Graph.Gaps, gap => gap.Classification == "TerminalContextSafetyOmitted" && gap.ClaimLevel == "demo-safe");
         Assert.Contains(result.Graph.Nodes, node => node.Kind == "source" && node.ClaimLevel == "demo-safe");
         Assert.True(result.Graph.Settings.Partial);
+
+        var allText = string.Join('\n', Directory.EnumerateFiles(Path.Combine(temp.Path, "vault"), "*", SearchOption.AllDirectories).Select(File.ReadAllText));
+        Assert.DoesNotContain("StaticTerminalContext", allText, StringComparison.Ordinal);
+        Assert.DoesNotContain("selected-property path reached data-surface", allText, StringComparison.Ordinal);
+        Assert.DoesNotContain("https://example.invalid", allText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -773,6 +781,72 @@ public sealed class VaultExportTests
 
         Assert.Contains("InputSchemaUnsupported", failure.Message);
         Assert.DoesNotContain(path, failure.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Vault_export_marks_schema_incompatible_property_flow_input_partial_when_other_input_is_usable()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateCombinedIndexAsync(temp.Path);
+        var path = Path.Combine(temp.Path, "bad-property-flow.json");
+        await File.WriteAllTextAsync(path, "{\"reportType\":\"property-flow\",\"version\":\"2.0\",\"sources\":[],\"lineagePaths\":[],\"limitations\":[]}\n");
+
+        var result = await VaultExporter.ExportAsync(new VaultExportOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "vault"),
+            PropertyFlowReportPaths: [path]));
+
+        Assert.True(result.Graph.Settings.Partial);
+        Assert.Contains(result.Graph.Gaps, gap => gap.Classification == "InputSchemaUnsupported");
+    }
+
+    [Fact]
+    public async Task Vault_export_bounds_property_flow_report_reads()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await CreateCombinedIndexAsync(temp.Path);
+        var path = Path.Combine(temp.Path, "oversized-property-flow.json");
+        await using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+            stream.SetLength((4L * 1024 * 1024) + 1);
+        }
+
+        var result = await VaultExporter.ExportAsync(new VaultExportOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "vault"),
+            PropertyFlowReportPaths: [path]));
+
+        Assert.True(result.Graph.Settings.Partial);
+        Assert.Contains(result.Graph.Gaps, gap => gap.Classification == "InputTooLarge");
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "InputTooLarge");
+        var allText = string.Join('\n', Directory.EnumerateFiles(Path.Combine(temp.Path, "vault"), "*", SearchOption.AllDirectories).Select(File.ReadAllText));
+        Assert.DoesNotContain(path, allText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Vault_export_ignores_null_property_flow_collection_members()
+    {
+        using var temp = new TempDirectory();
+        var path = WritePropertyFlowReport(temp.Path, "property-flow-nulls.json", [
+            new PropertyFlowFixturePath("path-valid", "terminal-valid", "data-surface terminal context", [])
+        ]);
+        var root = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        root["sources"]!.AsArray().Add(null);
+        root["lineagePaths"]!.AsArray().Add(null);
+        var validPath = root["lineagePaths"]![0]!.AsObject();
+        validPath["nodes"]!.AsArray().Insert(0, null);
+        validPath["edges"]!.AsArray().Add(null);
+        validPath["notes"]!.AsArray().Add(null);
+        await File.WriteAllTextAsync(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n");
+
+        var result = await VaultExporter.ExportAsync(new VaultExportOptions(
+            null,
+            Path.Combine(temp.Path, "vault"),
+            PropertyFlowReportPaths: [path]));
+
+        Assert.Single(result.Graph.Nodes, node => node.Kind == "terminal-context");
+        Assert.Contains(result.Graph.Gaps, gap => gap.Classification == "PropertyFlowTerminalContextSchemaUnsupported");
+        Assert.True(result.Graph.Settings.Partial);
     }
 
     private sealed record PropertyFlowFixturePath(

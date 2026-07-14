@@ -173,6 +173,7 @@ public static class VaultExporter
     // Display text is local navigation metadata, not source proof.
     private const int MaxDisplayNameLength = 256;
     private const int MaxRepoRelativePathLength = 260;
+    private const long MaxPropertyFlowReportBytes = 4L * 1024 * 1024;
 
     private enum VaultValueContext
     {
@@ -649,7 +650,7 @@ public static class VaultExporter
             new VaultExportSettings(
                 minimumClaimLevel,
                 formats,
-                omittedNodes > 0 || omittedEdges > 0 || safetyOmittedNodeCount > 0 || safetyOmittedEdgeCount > 0,
+                gaps.Count > 0 || omittedNodes > 0 || omittedEdges > 0 || safetyOmittedNodeCount > 0 || safetyOmittedEdgeCount > 0,
                 omittedNodes + safetyOmittedNodeCount,
                 omittedEdges + safetyOmittedEdgeCount));
     }
@@ -862,6 +863,26 @@ public static class VaultExporter
             var inputIdentity = SafeUnavailableInputIdentity("input/property-flow-report/v1", path);
             try
             {
+                if (new FileInfo(path).Length > MaxPropertyFlowReportBytes)
+                {
+                    inputs.Add(new VaultExportInputSummary("property-flow-report", inputIdentity, minimumClaimLevel, "schema-gap", []));
+                    gaps.Add(CreateGap(
+                        $"property-flow-size-{Hash(inputIdentity, 16)}",
+                        minimumClaimLevel,
+                        "InputTooLarge",
+                        SchemaGapRuleId,
+                        Tier4Unknown,
+                        "A property-flow report exceeded the documented vault input size limit and was not read.",
+                        null));
+                    diagnostics.Add(CreateDiagnostic(
+                        "InputTooLarge",
+                        SchemaGapRuleId,
+                        "/inputs/property-flow-report",
+                        "input-too-large",
+                        "property-flow-report"));
+                    continue;
+                }
+
                 bytes = await File.ReadAllBytesAsync(path, cancellationToken);
                 inputIdentity = JsonReportInputIdentity("input/property-flow-report/v1", bytes);
                 await using var stream = new MemoryStream(bytes);
@@ -876,28 +897,43 @@ public static class VaultExporter
                     throw new InvalidDataException("unsupported property-flow report schema");
                 }
 
+                var reportSources = report.Sources.OfType<PropertyFlowSource>().ToArray();
+                var reportPaths = report.LineagePaths.OfType<PropertyFlowPath>().ToArray();
+                var reportLimitations = report.Limitations.OfType<string>().ToArray();
                 compatibleCount++;
-                ApplySourceClaims(report.Sources, catalog, sourceClaims);
+                ApplySourceClaims(reportSources, catalog, sourceClaims);
                 inputs.Add(new VaultExportInputSummary(
                     "property-flow-report",
                     inputIdentity,
-                    InputClaimLevel(report.Sources, sourceClaims),
+                    InputClaimLevel(reportSources, sourceClaims),
                     "compatible",
-                    report.Limitations.Select(SafeDiagnosticMessage).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-                    SourceProvenance(report.Sources)));
+                    reportLimitations.Select(SafeDiagnosticMessage).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                    SourceProvenance(reportSources)));
 
-                foreach (var pathRow in report.LineagePaths.OrderBy(value => value.PathId, StringComparer.Ordinal))
+                if (reportPaths.Length != report.LineagePaths.Count)
                 {
+                    gaps.Add(CreateTerminalContextGap(
+                        $"null-path-{Hash(inputIdentity, 16)}",
+                        minimumClaimLevel,
+                        "PropertyFlowTerminalContextSchemaUnsupported",
+                        null,
+                        "null-lineage-path"));
+                }
+
+                foreach (var pathRow in reportPaths.OrderBy(value => value.PathId, StringComparer.Ordinal))
+                {
+                    var pathNodes = pathRow.Nodes?.OfType<PropertyFlowNode>().ToArray() ?? [];
+                    var pathEdges = pathRow.Edges?.OfType<PropertyFlowEdge>().ToArray() ?? [];
+                    var pathNotes = pathRow.Notes?.OfType<string>().ToArray() ?? [];
                     if (string.IsNullOrWhiteSpace(pathRow.PathId)
-                        || pathRow.Nodes is null
-                        || pathRow.Nodes.Count == 0
+                        || pathNodes.Length == 0
                         || pathRow.SupportingFactIds is null
                         || pathRow.SupportingEdgeIds is null
                         || pathRow.Notes is null)
                     {
                         gaps.Add(CreateGap(
                             $"property-flow-path-schema-{Hash(inputIdentity + (pathRow.PathId ?? string.Empty), 16)}",
-                            "hidden",
+                            minimumClaimLevel,
                             "PropertyFlowTerminalContextSchemaUnsupported",
                             TerminalContextOmittedRuleId,
                             Tier4Unknown,
@@ -906,12 +942,12 @@ public static class VaultExporter
                         continue;
                     }
 
-                    var pathClaim = ClaimForPropertyFlowPath(pathRow, sourceClaims);
+                    var pathClaim = ClaimForPropertyFlowPath(pathNodes, sourceClaims);
                     if (!TryIdentityComponent(pathClaim, VaultValueContext.StableTraceMapId, pathRow.PathId, "property-flow-path", out var safePathId, out var pathCategory))
                     {
                         gaps.Add(CreateTerminalContextGap(
                             $"unsafe-path-{Hash(pathRow.PathId, 16)}",
-                            "hidden",
+                            minimumClaimLevel,
                             "TerminalContextSafetyOmitted",
                             $"property-flow-path:{Hash(pathRow.PathId, 24)}",
                             pathCategory));
@@ -919,7 +955,7 @@ public static class VaultExporter
                     }
 
                     var reportNodeId = StableNodeId("report", $"node/report/property-flow/v1\u001f{inputIdentity}\u001f{safePathId}");
-                    var source = SourceForPropertyFlowPath(pathRow, report.Sources);
+                    var source = SourceForPropertyFlowPath(pathNodes, reportSources);
                     nodes.Add(new VaultGraphNode(
                         reportNodeId,
                         "report",
@@ -934,17 +970,21 @@ public static class VaultExporter
                         source?.AnalysisLevel,
                         source?.BuildStatus,
                         DistinctSorted([report.ReportCoverage, .. source?.CoverageLabels ?? []]),
-                        DistinctSorted(pathRow.Nodes.Select(node => node.RuleId).Concat(pathRow.Edges?.Select(edge => edge.RuleId) ?? [])),
-                        DistinctSorted(pathRow.Nodes.Select(node => node.EvidenceTier).Concat(pathRow.Edges?.Select(edge => edge.EvidenceTier) ?? [])),
+                        DistinctSorted(pathNodes.Select(node => node.RuleId).Concat(pathEdges.Select(edge => edge.RuleId))),
+                        DistinctSorted(pathNodes.Select(node => node.EvidenceTier).Concat(pathEdges.Select(edge => edge.EvidenceTier))),
                         DistinctSorted(pathRow.SupportingFactIds),
                         DistinctSorted(pathRow.SupportingEdgeIds),
-                        pathRow.Notes.Select(SafeDiagnosticMessage).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                        pathNotes
+                            .Where(note => !note.Contains("StaticTerminalContext", StringComparison.Ordinal))
+                            .Select(SafeDiagnosticMessage)
+                            .OrderBy(value => value, StringComparer.Ordinal)
+                            .ToArray(),
                         $"reports/{Slug(reportNodeId)}.md",
                         source?.ScannerVersion,
                         source?.RepositoryIdentityHash,
-                        EvidenceLocations(pathRow.Nodes)));
+                        EvidenceLocations(pathNodes)));
 
-                    var terminalNode = pathRow.Nodes[^1];
+                    var terminalNode = pathNodes[^1];
                     if (terminalNode.SafeMetadata is null
                         || !terminalNode.SafeMetadata.TryGetValue("terminalContextKind", out var terminalContextKind)
                         || string.IsNullOrWhiteSpace(terminalContextKind))
@@ -958,7 +998,7 @@ public static class VaultExporter
                     {
                         gaps.Add(CreateTerminalContextGap(
                             $"unsafe-kind-{Hash(safePathId + terminalNode.NodeId, 16)}",
-                            "hidden",
+                            minimumClaimLevel,
                             "TerminalContextSafetyOmitted",
                             $"property-flow-path:{safePathId}",
                             kindDecision.Category));
@@ -969,7 +1009,7 @@ public static class VaultExporter
                     {
                         gaps.Add(CreateTerminalContextGap(
                             $"unsafe-node-{Hash(safePathId + terminalNode.NodeId, 16)}",
-                            "hidden",
+                            minimumClaimLevel,
                             "TerminalContextSafetyOmitted",
                             $"property-flow-path:{safePathId}",
                             nodeCategory));
@@ -991,11 +1031,11 @@ public static class VaultExporter
                     var sourceRuleIds = DistinctSorted([
                         PropertyFlowTerminalContextRuleId,
                         terminalNode.RuleId,
-                        .. pathRow.Edges?.Select(edge => edge.RuleId) ?? []
+                        .. pathEdges.Select(edge => edge.RuleId)
                     ]);
                     var evidenceTiers = DistinctSorted([
                         terminalNode.EvidenceTier,
-                        .. pathRow.Edges?.Select(edge => edge.EvidenceTier) ?? []
+                        .. pathEdges.Select(edge => edge.EvidenceTier)
                     ]);
                     if (evidenceTiers.Count == 0)
                     {
@@ -1057,7 +1097,7 @@ public static class VaultExporter
                     {
                         gaps.Add(CreateTerminalContextGap(
                             $"unknown-kind-{Hash(safePathId + safeKindIdentity, 16)}",
-                            "hidden",
+                            minimumClaimLevel,
                             "PropertyFlowTerminalContextSchemaUnsupported",
                             sourceScope,
                             "unrecognized-terminal-context"));
@@ -1065,13 +1105,13 @@ public static class VaultExporter
 
                     var conflictingKinds = TerminalContextKinds
                         .Where(kind => !string.Equals(kind, terminalContextKind, StringComparison.Ordinal)
-                            && pathRow.Notes.Any(note => note.Contains(kind, StringComparison.Ordinal)))
+                            && pathNotes.Any(note => note.Contains(kind, StringComparison.Ordinal)))
                         .ToArray();
                     if (conflictingKinds.Length > 0)
                     {
                         gaps.Add(CreateTerminalContextGap(
                             $"structured-note-mismatch-{Hash(safePathId + terminalContextKind, 16)}",
-                            "hidden",
+                            minimumClaimLevel,
                             "TerminalContextStructuredNoteMismatch",
                             sourceScope,
                             "structured-note-mismatch"));
@@ -1099,10 +1139,10 @@ public static class VaultExporter
                     inputIdentity = JsonReportInputIdentity("input/property-flow-report/v1", bytes);
                 }
 
-                inputs.Add(new VaultExportInputSummary("property-flow-report", inputIdentity, "hidden", "schema-gap", []));
+                inputs.Add(new VaultExportInputSummary("property-flow-report", inputIdentity, minimumClaimLevel, "schema-gap", []));
                 gaps.Add(CreateGap(
                     $"property-flow-schema-{Hash(inputIdentity, 16)}",
-                    "hidden",
+                    minimumClaimLevel,
                     "InputSchemaUnsupported",
                     SchemaGapRuleId,
                     Tier4Unknown,
@@ -1162,7 +1202,7 @@ public static class VaultExporter
 
     private static void ApplySourceClaims(IEnumerable<PropertyFlowSource> sources, SourceClaimCatalog catalog, Dictionary<string, string> sourceClaims)
     {
-        foreach (var source in sources.OrderBy(source => source.SourceIndexId, StringComparer.Ordinal))
+        foreach (var source in sources.OfType<PropertyFlowSource>().OrderBy(source => source.SourceIndexId, StringComparer.Ordinal))
         {
             if (string.IsNullOrWhiteSpace(source.SourceIndexId))
             {
@@ -1192,7 +1232,7 @@ public static class VaultExporter
 
     private static string InputClaimLevel(IEnumerable<PropertyFlowSource> sources, IReadOnlyDictionary<string, string> sourceClaims)
     {
-        return sources.Select(source => string.IsNullOrWhiteSpace(source.SourceIndexId)
+        return sources.OfType<PropertyFlowSource>().Select(source => string.IsNullOrWhiteSpace(source.SourceIndexId)
                 ? "hidden"
                 : sourceClaims.GetValueOrDefault(source.SourceIndexId, "hidden"))
             .DefaultIfEmpty("hidden")
@@ -1234,6 +1274,7 @@ public static class VaultExporter
     private static IReadOnlyList<VaultSourceProvenance> SourceProvenance(IEnumerable<PropertyFlowSource> sources)
     {
         return sources
+            .OfType<PropertyFlowSource>()
             .Where(source => !string.IsNullOrWhiteSpace(source.SourceIndexId))
             .OrderBy(source => source.SourceIndexId, StringComparer.Ordinal)
             .Select(source => new VaultSourceProvenance(
@@ -1250,10 +1291,10 @@ public static class VaultExporter
     }
 
     private static string ClaimForPropertyFlowPath(
-        PropertyFlowPath path,
+        IEnumerable<PropertyFlowNode> nodes,
         IReadOnlyDictionary<string, string> sourceClaims)
     {
-        return path.Nodes
+        return nodes.OfType<PropertyFlowNode>()
             .Select(node => string.IsNullOrWhiteSpace(node.SourceIndexId)
                 ? "hidden"
                 : sourceClaims.GetValueOrDefault(node.SourceIndexId, "hidden"))
@@ -1263,13 +1304,13 @@ public static class VaultExporter
     }
 
     private static PropertyFlowSource? SourceForPropertyFlowPath(
-        PropertyFlowPath path,
+        IEnumerable<PropertyFlowNode> nodes,
         IReadOnlyList<PropertyFlowSource> sources)
     {
-        var sourceId = path.Nodes.LastOrDefault()?.SourceIndexId;
+        var sourceId = nodes.OfType<PropertyFlowNode>().LastOrDefault()?.SourceIndexId;
         return string.IsNullOrWhiteSpace(sourceId)
             ? null
-            : sources.FirstOrDefault(source => string.Equals(source.SourceIndexId, sourceId, StringComparison.Ordinal));
+            : sources.OfType<PropertyFlowSource>().FirstOrDefault(source => string.Equals(source.SourceIndexId, sourceId, StringComparison.Ordinal));
     }
 
     private static string SourceIdentityHash(CombinedReportSource source)
@@ -1317,6 +1358,7 @@ public static class VaultExporter
     private static IReadOnlyList<VaultEvidenceLocation> EvidenceLocations(IEnumerable<PropertyFlowNode> nodes)
     {
         return nodes
+            .OfType<PropertyFlowNode>()
             .Where(node => !string.IsNullOrWhiteSpace(node.FilePath))
             .Select(node => new VaultEvidenceLocation(node.FilePath!, node.StartLine, node.EndLine, null))
             .Distinct()
@@ -3216,6 +3258,7 @@ public static class VaultExporter
             "gaps" => "Gaps",
             "limitations" => "Limitations",
             "reports" => "Reports",
+            "terminal-contexts" => "Terminal Contexts",
             "sources" => "Sources",
             _ => "Evidence Nodes"
         };
