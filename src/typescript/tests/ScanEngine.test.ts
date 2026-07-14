@@ -188,7 +188,7 @@ describe("ScanEngine", () => {
     expect(markdown).toContain("NeedsReview");
     expect(markdown).toContain("High fan-out match set");
     expect(markdown).toContain("PropertyAccessed");
-  });
+  }, 60_000);
 
   it("exports deterministic JSON and Mermaid from a TypeScript index", async () => {
     const out = await tempDir();

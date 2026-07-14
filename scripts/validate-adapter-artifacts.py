@@ -131,7 +131,8 @@ def validate_redaction_corpus(errors: list[str]) -> None:
     path = repo_root() / "contracts/artifacts/redaction-corpus.v1.json"
     corpus = json.loads(path.read_text(encoding="utf-8"))
     for item in corpus["unsafe"]:
-        actual = unsafe_category(item["value"])
+        value = item.get("value") or "".join(item.get("segments", []))
+        actual = unsafe_category(value)
         if actual != item["category"]:
             errors.append(f"redaction corpus expected {item['category']}, got {actual or 'safe'}")
     for value in corpus["safe"]:
