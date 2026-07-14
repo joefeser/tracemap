@@ -1,0 +1,18 @@
+{
+  "version": "tracemap.redaction-corpus.v1",
+  "unsafe": [
+    { "category": "local-absolute-path", "segments": ["/", "Users", "/example/private/source.cs"] },
+    { "category": "local-absolute-path", "segments": ["/", "home", "/example/private/source.py"] },
+    { "category": "local-absolute-path", "segments": ["/", "opt", "/build/agent/source.swift"] },
+    { "category": "local-absolute-path", "segments": ["C:", "\\", "Users", "\\example\\private\\source.java"] },
+    { "category": "credential-url", "value": "https://user:password@example.invalid/repo" },
+    { "category": "connection-string", "value": "Server=private-db;User Id=admin;Password=secret" },
+    { "category": "private-key", "value": "-----BEGIN PRIVATE KEY-----" }
+  ],
+  "safe": [
+    "src/Controllers/OrdersController.cs",
+    "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "Tier3SyntaxOrTextual",
+    "database.sql.query-pattern.v1"
+  ]
+}

@@ -24,6 +24,7 @@ export class AnalysisGapCollector {
         createEvidence(filePath, startLine, startLine, "typescript-gap", ScannerVersions.TraceMapTypeScript),
         {
           properties: {
+            gapKind: category,
             category,
             messageHash: hashMessage(message),
             ...properties

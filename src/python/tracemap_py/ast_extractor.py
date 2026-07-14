@@ -642,9 +642,13 @@ def _normalize_include_prefixes(include_prefixes: dict[str, str], local_router_p
         parts = symbol.split(".")
         if len(parts) > 2:
             normalized.setdefault(".".join(parts[1:]), prefix)
-        for candidate in local_router_prefixes:
-            if symbol.endswith("." + candidate) or candidate.endswith("." + symbol):
-                normalized.setdefault(candidate, prefix)
+        candidates = [
+            candidate
+            for candidate in local_router_prefixes
+            if symbol == candidate or symbol.endswith("." + candidate) or candidate.endswith("." + symbol)
+        ]
+        if len(candidates) == 1:
+            normalized.setdefault(candidates[0], prefix)
     return normalized
 
 

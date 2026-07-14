@@ -548,6 +548,7 @@ public static class ReleaseReviewPriorityScorer
             ["contractImpact"] = report.ContractImpact.Status,
             ["apiDtoChanges"] = report.ApiDtoChanges.Status,
             ["sqlSchemaImpact"] = report.SqlSchemaImpact.Status,
+            ["sqlEvidence"] = report.SqlEvidence.Status,
             ["packageImpact"] = report.PackageImpact.Status,
             ["pathContext"] = report.PathContext.Status,
             ["reverseContext"] = report.ReverseContext.Status
@@ -562,6 +563,7 @@ public static class ReleaseReviewPriorityScorer
                 report.ContractImpact,
                 report.ApiDtoChanges,
                 report.SqlSchemaImpact,
+                report.SqlEvidence,
                 report.PackageImpact,
                 report.PathContext,
                 report.ReverseContext

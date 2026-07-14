@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="A concept-level explanation of how TraceMap's deterministic static evidence can ground an external AI code reviewer with rule-backed facts it must cite."
+    >
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Deterministic Grounding for AI Review | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/grounding/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Deterministic Grounding for AI Review | TraceMap">
+    <meta
+      property="og:description"
+      content="Concept-level boundaries for feeding TraceMap rule-backed static facts to an external AI reviewer so it cites evidence instead of inventing impact."
+    >
+    <meta property="og:url" content="https://tracemap.tools/grounding/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span>TraceMap</span>
+      </a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a>
+        <a href="/outputs/">Outputs</a>
+        <a href="/workflows/">Workflows</a>
+        <a href="/examples/">Examples</a>
+        <a href="/blog/">Blog</a>
+        <a href="/capabilities/">Capabilities</a>
+        <a href="/docs/">Docs</a>
+        <a href="/validation/">Validation</a>
+        <a href="/limitations/">Limitations</a>
+        <a href="/demo/">Demo</a>
+        <a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Give the model something it can cite</p>
+        <h1>Ground your AI reviewer on facts, not vibes.</h1>
+        <p class="hero-subhead">
+          An LLM asked &ldquo;what does this change touch?&rdquo; will answer confidently, and sometimes
+          wrongly. TraceMap already emits the deterministic layer underneath that question:
+          rule-backed facts with a rule ID, evidence tier, coverage label, file span, commit SHA,
+          and explicit gaps. Hand those artifacts to your reviewer or agent as the evidence it must
+          cite &mdash; so its claims trace back to a fact instead of a guess.
+        </p>
+        <p class="hero-note">
+          Public claim level: concept. No public conclusion without evidence. The language model is
+          yours and lives outside TraceMap. The TraceMap scanner and reducer use no LLM calls,
+          embeddings, vector databases, or prompt-based classification. This page describes using
+          existing deterministic artifacts as grounding; it does not describe a shipped TraceMap AI
+          feature, a hosted model, or any judgement of a model&rsquo;s output.
+        </p>
+        <nav class="hero-actions" aria-label="Grounding boundary links">
+          <a class="button primary" href="/evidence/">See the evidence model</a>
+          <a class="button secondary" href="/outputs/">What the scanner emits</a>
+          <a class="button secondary" href="/limitations/">Read limitations</a>
+        </nav>
+      </section>
+
+      <section id="the-gap" class="section">
+        <div>
+          <p class="section-kicker">The gap</p>
+          <h2>An ungrounded model invents impact; a grounded one has to point at a fact.</h2>
+        </div>
+        <div class="claim-ledger-wrap">
+          <table class="claim-ledger-table">
+            <caption>
+              TraceMap supplies the deterministic evidence. The model still forms and owns its
+              answer; grounding narrows where that answer can come from.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Review question</th>
+                <th scope="col">Ungrounded model alone</th>
+                <th scope="col">Model grounded on TraceMap facts</th>
+                <th scope="col">What TraceMap supplies</th>
+                <th scope="col">Boundary</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>What does this contract change touch?</strong></td>
+                <td>A plausible list assembled from training priors and the diff, with no traceable source.</td>
+                <td>A list where each item points to a fact ID, rule ID, evidence tier, and file span.</td>
+                <td>Reducer output and index facts for the changed type, property, endpoint, or surface.</td>
+                <td>Static references are review input, not proof the change breaks at runtime.</td>
+              </tr>
+              <tr>
+                <td><strong>How confident should we be in each hit?</strong></td>
+                <td>A confidence number the model made up.</td>
+                <td>The evidence tier the fact already carries: semantic, structural, syntax/textual, or unknown.</td>
+                <td>Per-fact tier and coverage label from the scan.</td>
+                <td>Tiers describe evidence strength, not runtime certainty or release safety.</td>
+              </tr>
+              <tr>
+                <td><strong>What did we miss?</strong></td>
+                <td>Silence &mdash; the model rarely volunteers its blind spots.</td>
+                <td>The explicit <code>AnalysisGap</code> rows and reduced-coverage labels, surfaced as open questions.</td>
+                <td>Deterministic gap facts where dynamic dispatch, reflection, or partial coverage stop the analysis.</td>
+                <td>A gap is an honest unknown to route to an owner, not an all-clear.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="what-you-hand-it" class="section split-section">
+        <div>
+          <p class="section-kicker">What you hand the model</p>
+          <h2>Feed it artifacts it can read, not prose it can only paraphrase.</h2>
+        </div>
+        <div class="output-list">
+          <div><code>facts.ndjson</code><span>One deterministic fact per line with rule ID, evidence tier, file span, and scan identity &mdash; a citation source the model can quote by ID.</span></div>
+          <div><code>index.sqlite</code><span>The queryable fact store, so an agent can look up callers, surfaces, and dependency edges instead of imagining them.</span></div>
+          <div><code>export (json / mermaid)</code><span>Portable relationship and symbol shapes an agent can walk to answer &ldquo;what reaches this?&rdquo; from evidence.</span></div>
+          <div><code>reduce / release-review output</code><span>Contract-delta classifications already labeled DefiniteImpact, NeedsReview, or NoEvidence with the coverage that produced them.</span></div>
+          <div><code>rule catalog</code><span>The documented meaning and limitation of every rule ID, so a cited fact carries its own boundary.</span></div>
+        </div>
+      </section>
+
+      <section id="how-grounding-works" class="section">
+        <div class="section-header">
+          <p class="section-kicker">How grounding works</p>
+          <h2>TraceMap is the floor; your model is the ceiling.</h2>
+        </div>
+        <div class="workflow-grid">
+          <article>
+            <h3>Scan, deterministically</h3>
+            <p>TraceMap produces the facts with no model in the loop, so the evidence is reproducible and identical run to run.</p>
+          </article>
+          <article>
+            <h3>Require citation</h3>
+            <p>Prompt your reviewer or agent to answer only from the supplied facts and to attach the rule ID, tier, and span for every claim.</p>
+          </article>
+          <article>
+            <h3>Keep the gaps visible</h3>
+            <p>Pass the <code>AnalysisGap</code> and reduced-coverage rows through as open questions so the model reports unknowns instead of papering over them.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="boundary" class="section split-section">
+        <div>
+          <p class="section-kicker">Where the boundary stays</p>
+          <h2>Grounding constrains the model; it does not certify it.</h2>
+        </div>
+        <div class="detail-list">
+          <div><strong>The core stays deterministic</strong><span>No LLM, embedding, vector database, or prompt classification runs in the scanner or reducer. The facts do not depend on a model and never will.</span></div>
+          <div><strong>The model stays outside and stays yours</strong><span>Whatever reviewer, agent, or IDE assistant consumes the facts is operated by you, under your controls and data policies. TraceMap neither ships nor hosts it.</span></div>
+          <div><strong>Grounding is not a correctness guarantee</strong><span>Feeding facts reduces invented impact, but a model can still misread evidence. Its output remains a draft for human review, not an approved conclusion.</span></div>
+        </div>
+      </section>
+
+      <section id="non-claims" class="section boundary-section">
+        <div>
+          <p class="section-kicker">Non-claims</p>
+          <h2>Grounded evidence does not become an approved answer.</h2>
+        </div>
+        <ul>
+          <li>TraceMap does not perform AI impact analysis, LLM analysis, prompt-based classification, embedding search, or vector database analysis in the scanner or reducer.</li>
+          <li>TraceMap does not prove runtime behavior, production traffic, endpoint reachability, release safety, operational safety, or complete product coverage; supplying facts to a model changes none of that.</li>
+          <li>TraceMap does not validate, score, or approve any model&rsquo;s output; a grounded answer is still a draft for human review.</li>
+          <li>TraceMap does not replace code review, tests, service-owner judgment, release approval, or governance.</li>
+        </ul>
+      </section>
+
+      <section id="related-links" class="section link-section">
+        <div>
+          <p class="section-kicker">Related links</p>
+          <h2>Follow public-safe routes for evidence shape and limitations.</h2>
+        </div>
+        <div class="link-grid">
+          <a href="/evidence/">Evidence model</a>
+          <a href="/outputs/">Output artifacts</a>
+          <a href="/workflows/">Workflows</a>
+          <a href="/proof-paths/">Proof paths</a>
+          <a href="/capabilities/">Capabilities</a>
+          <a href="/static-vs-runtime/">Static vs runtime</a>
+          <a href="/limitations/">Limitations</a>
+          <a href="/docs/">Docs</a>
+          <a href="/demo/">Demo</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Grounding orientation links
+        <a href="/evidence/">evidence model</a>,
+        <a href="/outputs/">outputs</a>,
+        <a href="/proof-paths/">proof paths</a>,
+        and
+        <a href="/limitations/">limitations</a>.
+      </p>
+      <p class="copyright">© 2026 Joe Feser.</p>
+    </footer>
+  </body>
+</html>
