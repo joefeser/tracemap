@@ -151,7 +151,8 @@ def require_fields(value: dict[str, Any], expected: dict[str, type], label: str,
 def safe_relative_path(value: str) -> bool:
     normalized = value.replace("\\", "/")
     path = PurePosixPath(normalized)
-    return bool(normalized) and not path.is_absolute() and ".." not in path.parts
+    is_windows_drive_rooted = re.match(r"^[A-Za-z]:/", normalized) is not None
+    return bool(normalized) and not is_windows_drive_rooted and not path.is_absolute() and ".." not in path.parts
 
 
 def read_facts(path: Path, errors: list[str]) -> list[dict[str, Any]]:
@@ -173,12 +174,13 @@ def read_facts(path: Path, errors: list[str]) -> list[dict[str, Any]]:
 
 
 def sqlite_columns(connection: sqlite3.Connection, table: str) -> set[str]:
-    return {str(row[1]) for row in connection.execute(f"pragma table_info({table})")}
+    return {str(row[0]) for row in connection.execute("select name from pragma_table_info(?)", (table,))}
 
 
 def validate_sqlite(output: Path, manifest: dict[str, Any], facts: list[dict[str, Any]], errors: list[str]) -> None:
     try:
-        connection = sqlite3.connect(f"file:{output / 'index.sqlite'}?mode=ro", uri=True)
+        index_uri = (output / "index.sqlite").resolve().as_uri()
+        connection = sqlite3.connect(f"{index_uri}?mode=ro", uri=True)
     except sqlite3.Error as exc:
         errors.append(f"index.sqlite cannot be opened read-only: {exc}")
         return
@@ -198,27 +200,41 @@ def validate_sqlite(output: Path, manifest: dict[str, Any], facts: list[dict[str
         count = int(connection.execute("select count(*) from facts").fetchone()[0])
         if count != len(facts):
             errors.append(f"index.sqlite contains {count} facts; facts.ndjson contains {len(facts)}")
-        rows = {
-            row[0]: row[1:]
-            for row in connection.execute(
-                "select fact_id, scan_id, commit_sha, rule_id, evidence_tier, file_path, start_line, end_line, extractor_id, extractor_version from facts"
-            )
-        }
+        rows: dict[str, tuple[Any, ...]] = {}
+        for row in connection.execute(
+            "select fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier, "
+            "source_symbol, target_symbol, contract_element, file_path, start_line, end_line, snippet_hash, "
+            "extractor_id, extractor_version, properties_json from facts"
+        ):
+            try:
+                properties = json.loads(row[-1])
+            except (json.JSONDecodeError, TypeError):
+                errors.append(f"index.sqlite properties_json is invalid for fact {row[0]}")
+                properties = None
+            rows[str(row[0])] = (*row[1:-1], properties)
         for fact in facts:
             evidence = fact["evidence"]
             expected = (
                 fact["scanId"],
+                fact["repo"],
                 fact["commitSha"],
+                fact.get("projectPath"),
+                fact["factType"],
                 fact["ruleId"],
                 fact["evidenceTier"],
+                fact.get("sourceSymbol"),
+                fact.get("targetSymbol"),
+                fact.get("contractElement"),
                 evidence["filePath"],
                 evidence["startLine"],
                 evidence["endLine"],
+                evidence.get("snippetHash"),
                 evidence["extractorId"],
                 evidence["extractorVersion"],
+                fact["properties"],
             )
             if rows.get(fact["factId"]) != expected:
-                errors.append(f"index.sqlite provenance mismatch for fact {fact['factId']}")
+                errors.append(f"index.sqlite fact mismatch for fact {fact['factId']}")
     except sqlite3.Error as exc:
         errors.append(f"index.sqlite validation failed: {exc}")
     finally:

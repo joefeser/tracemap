@@ -14,7 +14,7 @@ public enum SwiftSqlShapeV1 {
         value = value.replacingOccurrences(of: #"--[^\n\r]*"#, with: " ", options: .regularExpression)
         value = value.replacingOccurrences(of: #"(?s)/\*.*?\*/"#, with: " ", options: .regularExpression)
         value = value.replacingOccurrences(of: #"'(?:''|\\['\"]|[^'])*'"#, with: "' '", options: .regularExpression)
-        value = value.replacingOccurrences(of: #"\"(?:\"\"|\\[\"']|[^\"])*\""#, with: #"\" \""#, options: .regularExpression)
+        value = value.replacingOccurrences(of: #""(?:""|\\["']|[^"])*""#, with: #"" ""#, options: .regularExpression)
         value = value.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
         value = value.trimmingCharacters(in: .whitespacesAndNewlines)
         while value.hasSuffix(";") {
@@ -4216,8 +4216,8 @@ enum SQLiteWriter {
           start_line integer not null,
           end_line integer not null,
           snippet_hash text,
-          extractor_id text,
-          extractor_version text,
+          extractor_id text not null,
+          extractor_version text not null,
           properties_json text not null
         );
         create table symbols (scan_id text not null, symbol_id text not null, language text not null, symbol_kind text not null, display_name text not null, assembly_name text, assembly_version text, containing_symbol_id text, primary key (scan_id, symbol_id));

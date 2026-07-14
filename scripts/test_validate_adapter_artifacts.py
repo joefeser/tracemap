@@ -38,6 +38,40 @@ class AdapterArtifactValidatorTests(unittest.TestCase):
             errors = MODULE.validate_output(output)
             self.assertTrue(any("repo-relative" in error for error in errors), errors)
 
+    def test_windows_absolute_evidence_path_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            self.write_output(output, file_path=r"C:\Users\example\private\source.cs")
+            errors = MODULE.validate_output(output)
+            self.assertTrue(any("repo-relative" in error for error in errors), errors)
+
+    def test_sqlite_fact_field_mismatch_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            self.write_output(output)
+            with sqlite3.connect(output / "index.sqlite") as connection:
+                connection.execute("update facts set fact_type = ?", ("DifferentFactType",))
+            errors = MODULE.validate_output(output)
+            self.assertTrue(any("fact mismatch" in error for error in errors), errors)
+
+    def test_sqlite_properties_mismatch_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            self.write_output(output)
+            with sqlite3.connect(output / "index.sqlite") as connection:
+                connection.execute("update facts set properties_json = ?", ('{"different":true}',))
+            errors = MODULE.validate_output(output)
+            self.assertTrue(any("fact mismatch" in error for error in errors), errors)
+
+    def test_canonical_extractor_provenance_columns_are_not_null(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp)
+            self.write_output(output)
+            with sqlite3.connect(output / "index.sqlite") as connection:
+                columns = {row[1]: row[3] for row in connection.execute("pragma table_info(facts)")}
+            self.assertEqual(1, columns["extractor_id"])
+            self.assertEqual(1, columns["extractor_version"])
+
     def write_output(self, output: Path, include_extractor_columns: bool = True, file_path: str = "src/Test.cs") -> None:
         (output / "logs").mkdir()
         manifest = {

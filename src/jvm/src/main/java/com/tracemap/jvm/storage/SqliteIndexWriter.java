@@ -91,8 +91,8 @@ public final class SqliteIndexWriter {
                   start_line integer not null,
                   end_line integer not null,
                   snippet_hash text,
-                  extractor_id text,
-                  extractor_version text,
+                  extractor_id text not null,
+                  extractor_version text not null,
                   properties_json text not null
                 );
                 """);
