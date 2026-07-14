@@ -633,7 +633,7 @@ public sealed class VaultExportTests
     {
         using var temp = new TempDirectory();
         var reportPath = WritePropertyFlowReport(temp.Path, "property-flow.json", [
-            new PropertyFlowFixturePath("path-a", "terminal-a", "data-surface terminal context", ["StaticTerminalContext: selected-property path reached data-surface terminal context through existing combined path evidence."]),
+            new PropertyFlowFixturePath("path-a", "terminal-a", "data-surface terminal context", ["StaticTerminalContext: selected-property path reached data-surface terminal context through existing combined path evidence."], EvidenceTier: "Tier1Semantic"),
             new PropertyFlowFixturePath("path-b", "terminal-b", "data-surface terminal context", ["StaticTerminalContext: selected-property path reached data-surface terminal context through existing combined path evidence."])
         ]);
         var firstOut = Path.Combine(temp.Path, "vault-a");
@@ -656,7 +656,12 @@ public sealed class VaultExportTests
         Assert.Equal(2, first.Graph.Edges.Count(edge => edge.Kind == "property-flow-terminal-context"));
         Assert.All(
             first.Graph.Edges.Where(edge => edge.Kind == "property-flow-terminal-context"),
-            edge => Assert.Equal("vault-export.graph.property-flow-terminal-context.v1", edge.RuleId));
+            edge =>
+            {
+                Assert.Equal("vault-export.graph.property-flow-terminal-context.v1", edge.RuleId);
+                Assert.Equal("Tier2Structural", edge.EvidenceTier);
+            });
+        Assert.Contains(contexts, node => node.EvidenceTiers.Contains("Tier1Semantic") && node.EvidenceTiers.Contains("Tier2Structural"));
         Assert.Contains(first.Graph.Inputs, input => input.Kind == "property-flow-report" && input.Compatibility == "compatible");
         Assert.DoesNotContain(first.Graph.Gaps, gap => gap.Classification == "TerminalContextClaimLevelOmitted");
 
@@ -715,6 +720,7 @@ public sealed class VaultExportTests
         var sourceId = sourceIds.Values.OrderBy(value => value, StringComparer.Ordinal).First();
         var reportPath = WritePropertyFlowReport(temp.Path, "property-flow-demo.json", [
             new PropertyFlowFixturePath("path-demo", "terminal-demo", "data-surface terminal context", ["StaticTerminalContext: selected-property path reached data-surface terminal context through existing combined path evidence."], sourceId),
+            new PropertyFlowFixturePath("path-demo-2", "terminal-demo-2", "data-surface terminal context", [], sourceId),
             new PropertyFlowFixturePath("path-unsafe", "terminal-unsafe", "https://example.invalid/terminal-context", [], sourceId)
         ], sourceId);
         var catalogPath = WriteClaimCatalog(temp.Path, sourceIds.Values, "demo-safe");
@@ -729,7 +735,7 @@ public sealed class VaultExportTests
 
         Assert.DoesNotContain(result.Graph.Nodes, node => node.Kind == "terminal-context");
         Assert.DoesNotContain(result.Graph.Edges, edge => edge.Kind == "property-flow-terminal-context");
-        Assert.Contains(result.Graph.Gaps, gap => gap.Classification == "TerminalContextClaimLevelOmitted" && gap.ClaimLevel == "demo-safe");
+        Assert.Single(result.Graph.Gaps, gap => gap.Classification == "TerminalContextClaimLevelOmitted" && gap.ClaimLevel == "demo-safe");
         Assert.Contains(result.Graph.Gaps, gap => gap.Classification == "TerminalContextSafetyOmitted" && gap.ClaimLevel == "demo-safe");
         Assert.Contains(result.Graph.Nodes, node => node.Kind == "source" && node.ClaimLevel == "demo-safe");
         Assert.True(result.Graph.Settings.Partial);
@@ -798,6 +804,8 @@ public sealed class VaultExportTests
 
         Assert.True(result.Graph.Settings.Partial);
         Assert.Contains(result.Graph.Gaps, gap => gap.Classification == "InputSchemaUnsupported");
+        Assert.Equal(0, result.Graph.Settings.OmittedHiddenNodeCount);
+        Assert.Equal(0, result.Graph.Settings.OmittedHiddenEdgeCount);
     }
 
     [Fact]
@@ -849,12 +857,50 @@ public sealed class VaultExportTests
         Assert.True(result.Graph.Settings.Partial);
     }
 
+    [Fact]
+    public async Task Vault_export_emits_gap_when_structured_terminal_node_is_unavailable()
+    {
+        using var temp = new TempDirectory();
+        var path = WritePropertyFlowReport(temp.Path, "property-flow-missing-terminal.json", [
+            new PropertyFlowFixturePath("path-missing", "terminal-missing", "data-surface terminal context", [])
+        ]);
+        var root = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        root["lineagePaths"]![0]!.AsObject()["nodes"] = new System.Text.Json.Nodes.JsonArray
+        {
+            JsonSerializer.SerializeToNode(new Dictionary<string, object?>
+            {
+                ["nodeId"] = "predecessor",
+                ["nodeKind"] = "surface",
+                ["displayName"] = "predecessor surface",
+                ["sourceIndexId"] = "source-property-flow",
+                ["sourceLabel"] = "server",
+                ["combinedFactId"] = "fact-predecessor",
+                ["ruleId"] = "property-flow.path.v1",
+                ["evidenceTier"] = "Tier2Structural",
+                ["safeMetadata"] = new Dictionary<string, string>()
+            })
+        };
+        await File.WriteAllTextAsync(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n");
+
+        var result = await VaultExporter.ExportAsync(new VaultExportOptions(
+            null,
+            Path.Combine(temp.Path, "vault"),
+            PropertyFlowReportPaths: [path]));
+
+        Assert.DoesNotContain(result.Graph.Nodes, node => node.Kind == "terminal-context");
+        Assert.Contains(
+            result.Graph.Gaps,
+            gap => gap.Classification == "PropertyFlowTerminalContextSchemaUnsupported"
+                && gap.Limitations.Contains("Omission category: terminal-node-unavailable."));
+    }
+
     private sealed record PropertyFlowFixturePath(
         string PathId,
         string TerminalNodeId,
         string? TerminalContextKind,
         IReadOnlyList<string> Notes,
-        string SourceIndexId = "source-property-flow");
+        string SourceIndexId = "source-property-flow",
+        string EvidenceTier = "Tier2Structural");
 
     private static string WritePropertyFlowReport(
         string root,
@@ -894,7 +940,7 @@ public sealed class VaultExportTests
                         ["symbolId"] = null,
                         ["combinedFactId"] = $"fact-{path.PathId}",
                         ["ruleId"] = "property-flow.path.v1",
-                        ["evidenceTier"] = "Tier2Structural",
+                        ["evidenceTier"] = path.EvidenceTier,
                         ["filePath"] = $"src/{path.PathId}.cs",
                         ["startLine"] = 10,
                         ["endLine"] = 12,
