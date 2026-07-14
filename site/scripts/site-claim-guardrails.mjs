@@ -389,7 +389,39 @@ function hardPrivateSearchText({ decodedHtml, html, pageText }) {
 }
 
 function collapseTagSplitTextTight(html) {
-  return decodeHtmlEntities(String(html).replace(/<[^>]+>/g, "")).replace(/\s+/g, "");
+  return decodeHtmlEntities(stripTagsQuoteAware(String(html))).replace(/\s+/g, "");
+}
+
+function stripTagsQuoteAware(html) {
+  let text = "";
+  let insideTag = false;
+  let quote = "";
+
+  for (const char of html) {
+    if (!insideTag) {
+      if (char === "<") {
+        insideTag = true;
+      } else {
+        text += char;
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = "";
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+    } else if (char === ">") {
+      insideTag = false;
+    }
+  }
+
+  return text;
 }
 
 function safeErrorCategory(error) {

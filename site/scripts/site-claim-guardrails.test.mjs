@@ -135,6 +135,17 @@ test("validateSiteClaimGuardrailsDist rejects tag-split private material", async
   assert.match(errors.join("\n"), /hard private or credential-like material/);
 });
 
+test("validateSiteClaimGuardrailsDist rejects tag-split private material with quoted greater-than attributes", async (t) => {
+  const root = await createManagedFixture(t, {
+    pageHtml: (await sourcePage()).replace("</main>", '<p>/Us<span title=">">ers</span>/private</p></main>')
+  });
+  const errors = [];
+
+  await validateSiteClaimGuardrailsDist({ dist: join(root, "dist"), errors });
+
+  assert.match(errors.join("\n"), /hard private or credential-like material/);
+});
+
 test("validateSiteClaimGuardrailsDist rejects private material in route metadata", async (t) => {
   const root = await createManagedFixture(t);
   await rewriteRouteEntry(join(root, "dist"), {
