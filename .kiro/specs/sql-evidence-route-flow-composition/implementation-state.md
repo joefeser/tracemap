@@ -210,6 +210,15 @@ non-null `not-recorded` values.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
 
+First ACK patch authority on PR #483 closed the current review findings by:
+recording missing SQL context as a packet-level `RouteFlowGap`, pairing
+extractor ID/version fallback decisions atomically, pre-indexing SQL inputs by
+safe source label, removing a test-only raw SQL property, and applying the
+route-flow safety selector to each categorical metadata token before rendering.
+An unsafe stop-condition sentinel proves the token is hashed rather than
+rendered. Post-fix focused tests (109), full tests (763), build, checked-in SQL
+route-flow smoke, private-path guard, and diff check all pass.
+
 ## Deferred From Target A PR
 
 - Target B is already shipped and is reused without release-review behavior or

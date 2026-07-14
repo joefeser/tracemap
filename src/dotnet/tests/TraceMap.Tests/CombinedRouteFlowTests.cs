@@ -55,7 +55,8 @@ public sealed class CombinedRouteFlowTests
         Assert.True(Array.IndexOf(kinds, "query") < Array.IndexOf(kinds, "sql-context"));
         Assert.True(Array.IndexOf(kinds, "sql-context") < Array.IndexOf(kinds, "data-surface"));
         var rendered = JsonSerializer.Serialize(result, CombinedDependencyReporter.JsonOptions);
-        Assert.DoesNotContain("private-sql-body-leak-sentinel", rendered, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("redacted-hash:", sqlGroups[0].SafeMetadata["stopConditions"], StringComparison.Ordinal);
+        Assert.DoesNotContain("unsafe-stop-condition-leak-sentinel", rendered, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(temp.Path, rendered, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("safe to run", rendered, StringComparison.OrdinalIgnoreCase);
         var written = await CombinedRouteFlowReporter.WriteAsync(options);
@@ -63,7 +64,7 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains("contextOrder=engine\\>server\\>database\\>schema\\>mode", markdown, StringComparison.Ordinal);
         Assert.Contains("permissionPrerequisites=", markdown, StringComparison.Ordinal);
         Assert.Contains("stopConditions=", markdown, StringComparison.Ordinal);
-        Assert.DoesNotContain("private-sql-body-leak-sentinel", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("unsafe-stop-condition-leak-sentinel", markdown, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -86,6 +87,10 @@ public sealed class CombinedRouteFlowTests
         Assert.Contains(RuleIds.DatabaseSqlContextGap, gap.RuleIds);
         Assert.NotEmpty(gap.Evidence.SupportingFactIds);
         Assert.Equal(RouteFlowClassifications.UnknownAnalysisGap, gap.Classification);
+        var reportGap = Assert.Single(result.Gaps, row => row.RuleId == RuleIds.DatabaseSqlContextGap);
+        Assert.Equal("UnknownAnalysisGap", reportGap.GapKind);
+        Assert.Equal("ReducedCoverage", result.ReportCoverage);
+        Assert.True(result.Summary.ExitCodeWouldBeNonZero);
     }
 
     [Fact]
@@ -244,7 +249,8 @@ public sealed class CombinedRouteFlowTests
             Assert.True(gap.Classification is RouteFlowClassifications.NeedsReviewStaticRouteFlow
                 or RouteFlowClassifications.NoRouteFlowEvidence
                 or RouteFlowClassifications.UnknownAnalysisGap);
-            Assert.StartsWith("combined.route-flow.", gap.RuleId, StringComparison.Ordinal);
+            Assert.True(gap.RuleId.StartsWith("combined.route-flow.", StringComparison.Ordinal)
+                || gap.RuleId == RuleIds.DatabaseSqlContextGap);
             Assert.NotEmpty(gap.EvidenceTier);
             Assert.NotEmpty(gap.Coverage);
             Assert.NotEmpty(gap.Message);
@@ -3491,8 +3497,9 @@ public sealed class CombinedRouteFlowTests
                 ["stepKind"] = transition ? "validation-query" : "schema-change",
                 ["contextClassification"] = "declared",
                 ["coverage"] = "complete",
-                ["stopConditions"] = transition ? "verify-active-connection,needs-owner-review" : "verify-active-connection",
-                ["rawSql"] = "private-sql-body-leak-sentinel"
+                ["stopConditions"] = transition
+                    ? "verify-active-connection,needs-owner-review"
+                    : "verify-active-connection,private://unsafe-stop-condition-leak-sentinel"
             });
     }
 
