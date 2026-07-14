@@ -14,6 +14,7 @@ tracemap vault export \
   --combined-index <combined-index> \
   --paths-report <paths-report> \
   --reverse-report <reverse-report> \
+  --property-flow-report <property-flow-report> \
   --source-claim-catalog <source-claims> \
   --out <vault-output> \
   --minimum-claim-level demo-safe \
@@ -29,8 +30,16 @@ Supported MVP inputs:
   when present.
 - `--reverse-report <reverse-report>` reads documented `reverse-report.json`
   fields when present.
+- `--property-flow-report <property-flow-report>` reads compatible
+  `property-flow` version `1.0` JSON. When a path's terminal node carries
+  structured `safeMetadata.terminalContextKind`, hidden output adds
+  path-scoped local navigation. Report prose alone cannot create navigation.
 - `--source-claim-catalog <source-claims>` may promote evidence only by stable
   `sourceIndexId` plus reviewed proof metadata.
+
+Terminal-context navigation is always hidden. Demo/public filtering omits it
+and records a sanitized, rule-backed omission gap when another visible graph
+keeps the export viable. A source claim catalog never promotes this navigation.
 
 Unknown or incompatible report shapes become sanitized schema gaps when a
 compatible graph can still be produced. With no compatible input, the command
@@ -66,6 +75,7 @@ The output directory may contain:
 - `gaps/`
 - `limitations/`
 - `reports/`
+- `terminal-contexts/`
 
 Generated Markdown files start with YAML frontmatter containing
 `tracemap_generated`, schema, generator, content hash, kind, claim level, and
