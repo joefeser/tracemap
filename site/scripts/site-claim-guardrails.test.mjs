@@ -179,7 +179,7 @@ test("validateSiteClaimGuardrailsDist scans every generated nested index page", 
   const hardLeak = ["/", "Users", "/generated-leak"].join("");
   const root = await createManagedFixture(t, {
     extraPages: {
-      "nested/deep/index.html": page(`<p>${hardLeak}</p>`),
+      "nested/deep/index.html": page("<p><span>/</span>\n  <span>Users</span>\n  <span>/generated-leak</span></p>"),
       "nested/deep/not-index.html": page(`<p>${hardLeak}</p>`)
     }
   });
