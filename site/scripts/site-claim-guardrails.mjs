@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { readdir, readFile } from "node:fs/promises";
+import { relative, resolve, sep } from "node:path";
 
 import {
   decodeHtmlEntities,
@@ -106,6 +106,8 @@ export async function validateSiteClaimGuardrailsDist({
   const localErrors = [];
   const cleanBaseUrl = normalizeBaseUrl(baseUrl);
   const pagePath = resolve(dist, "site-claim-guardrails", "index.html");
+
+  await validateGeneratedIndexPages({ dist, errors: localErrors });
 
   if (!(await fileExists(pagePath))) {
     localErrors.push(withEvidence(`Site claim guardrails page is missing required public route: ${siteClaimGuardrailsRoute}`, pageArtifact));
@@ -308,8 +310,11 @@ function validateLinks({ html, routeContext, errors }) {
 }
 
 function validatePublicSafety({ decodedHtml, html, pageText, errors }) {
-  const searchText = `${decodedHtml}\n${pageText}\n${collapseTagSplitText(decodedHtml)}`;
-  validatePublicSafetyText(searchText, errors, pageArtifact);
+  const searchText = hardPrivateSearchText({ decodedHtml, html, pageText });
+  validateHardPrivateText(searchText, errors, pageArtifact);
+  if (blameLanguagePattern.test(searchText)) {
+    errors.push(withEvidence("Site claim guardrails page contains blame language.", pageArtifact));
+  }
 
   for (const href of extractHrefs(html)) {
     for (const target of forbiddenProofPathTargets) {
@@ -327,13 +332,84 @@ function validatePublicSafety({ decodedHtml, html, pageText, errors }) {
   }
 }
 
-function validatePublicSafetyText(text, errors, artifact) {
+async function validateGeneratedIndexPages({ dist, errors }) {
+  const indexPaths = await findGeneratedIndexPages(dist, errors);
+
+  for (const indexPath of indexPaths) {
+    const artifact = relative(dist, indexPath).split(sep).join("/") || "index.html";
+    if (artifact === pageArtifact) {
+      continue;
+    }
+
+    let html;
+    try {
+      html = await readFile(indexPath, "utf8");
+    } catch (error) {
+      errors.push(withEvidence(`Site claim guardrails could not read generated index page: ${safeErrorCategory(error)}`, artifact));
+      continue;
+    }
+
+    const decodedHtml = decodeHtmlEntities(html);
+    const pageText = normalizeRenderedText(html);
+    const searchText = hardPrivateSearchText({ decodedHtml, html, pageText });
+    validateHardPrivateText(searchText, errors, artifact);
+  }
+}
+
+async function findGeneratedIndexPages(root, errors) {
+  const indexPaths = [];
+
+  async function visit(directory) {
+    let entries;
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      const subtree = relative(root, directory).split(sep).join("/");
+      const artifact = subtree ? `${subtree}/**/index.html` : "dist/**/index.html";
+      errors.push(withEvidence(`Site claim guardrails could not enumerate generated index subtree: ${safeErrorCategory(error)}`, artifact));
+      return;
+    }
+
+    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name, "en"))) {
+      const entryPath = resolve(directory, entry.name);
+      if (entry.isDirectory()) {
+        await visit(entryPath);
+      } else if (entry.isFile() && entry.name === "index.html") {
+        indexPaths.push(entryPath);
+      }
+    }
+  }
+
+  await visit(root);
+  return indexPaths;
+}
+
+function hardPrivateSearchText({ decodedHtml, html, pageText }) {
+  return `${decodedHtml}\n${pageText}\n${collapseTagSplitText(decodedHtml)}\n${collapseTagSplitTextTight(html)}`;
+}
+
+function collapseTagSplitTextTight(html) {
+  return decodeHtmlEntities(String(html).replace(/<[^>]+>/g, "")).replace(/\s+/g, "");
+}
+
+function safeErrorCategory(error) {
+  if (typeof error?.code === "string" && /^[A-Z0-9_]+$/.test(error.code)) {
+    return error.code;
+  }
+
+  return "read-failed";
+}
+
+function validateHardPrivateText(text, errors, artifact) {
   for (const pattern of hardPrivatePatterns) {
     if (pattern.test(text)) {
       errors.push(withEvidence(`Site claim guardrails page contains hard private or credential-like material: ${pattern}`, artifact));
     }
   }
+}
 
+function validatePublicSafetyText(text, errors, artifact) {
+  validateHardPrivateText(text, errors, artifact);
   if (blameLanguagePattern.test(text)) {
     errors.push(withEvidence("Site claim guardrails page contains blame language.", artifact));
   }
