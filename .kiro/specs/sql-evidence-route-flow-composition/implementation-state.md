@@ -91,6 +91,12 @@ Focused regression coverage proves nested `index.html` files are scanned,
 non-index HTML files are outside this exact task, and diagnostics do not expose
 the temporary fixture root.
 
+ACK-authorized Qodo remediation added a whitespace-tight tag-stripped scan
+variant, retained a local hard-private check for the critical guardrails page,
+and changed directory traversal to record a sanitized subtree error while
+continuing across readable siblings. This closes the tag-split bypass and
+avoids all-or-nothing scan coverage without following symlinks.
+
 ## Implemented Target B
 
 - Added a separate `SqlEvidence` release-review section for single and combined
