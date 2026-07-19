@@ -241,6 +241,10 @@ public static class FactTypes
     public const string AccessQueryDeclared = nameof(AccessQueryDeclared);
     public const string AccessQueryDependencyCandidate = nameof(AccessQueryDependencyCandidate);
     public const string AccessExternalLinkDeclared = nameof(AccessExternalLinkDeclared);
+    public const string AccessFormDeclared = nameof(AccessFormDeclared);
+    public const string AccessReportDeclared = nameof(AccessReportDeclared);
+    public const string AccessControlDeclared = nameof(AccessControlDeclared);
+    public const string AccessBindingDeclared = nameof(AccessBindingDeclared);
     public const string UiTemplateBinding = nameof(UiTemplateBinding);
     public const string UiFormControlBinding = nameof(UiFormControlBinding);
     public const string UiEventBinding = nameof(UiEventBinding);
@@ -371,6 +375,8 @@ public static class RuleIds
     public const string LegacyAccessSchema = "legacy.access.schema.v1";
     public const string LegacyAccessQuery = "legacy.access.query.v1";
     public const string LegacyAccessExternalLink = "legacy.access.external-link.v1";
+    public const string LegacyAccessUiSurface = "legacy.access.ui-surface.v1";
+    public const string LegacyAccessBinding = "legacy.access.binding.v1";
     public const string LegacyAccessCoverageGap = "legacy.access.coverage-gap.v1";
     public const string LegacyFlowInputAvailability = "legacy.flow.input-availability.v1";
     public const string LegacyFlowRootSelection = "legacy.flow.root-selection.v1";
