@@ -313,7 +313,7 @@ boundary.
 
 ## Phase 9 Platform-Neutral Work
 
-Branch: `codex/microsoft-access-adapter-v0-macro-reporting`, stacked on the
+Branch: `codex/microsoft-access-adapter-v0-macro-reporting-stacked`, stacked on the
 pushed Phase 8 fixture head `4919be5f`.
 
 The Phase 9 threat decision is to inventory macro declarations and startup/data
