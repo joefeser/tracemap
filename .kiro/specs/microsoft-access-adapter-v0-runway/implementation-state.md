@@ -231,6 +231,31 @@ unapproved until a separate threat/canary decision proves an acceptable
 worker-local handling path. No `OpenForm`, `OpenReport`, rendering, invocation,
 recordset, query, macro, or VBA execution API has been added.
 
+The first physical-Windows attempt stopped correctly with
+`phase7-probe-boundary-violation`. Its classification-only postmortem identified
+`fixture-generator-visible-or-design-open` during `fixture-generation`; no
+extraction probe ran. This exposed an orchestration ambiguity, not evidence that
+the reader loaded a surface. The corrected rerun contract separates two stages:
+
+- fixture generation may create, open in design mode, configure, save, and close
+  disposable synthetic forms/reports/controls in a dedicated generator Access
+  instance while keeping the application UI hidden and executing no event,
+  macro, VBA, query, row, link, or external action;
+- extraction starts only after that instance exits and a baseline fixture hash
+  is recorded. A fresh macro-disabled hidden Access instance opens only the
+  private verified copy, and surface loading, design opening, rendering, export,
+  invocation, or visible UI remains a hard boundary.
+
+The rerun harness must preserve three independent sanitized outcomes rather
+than collapsing them into a single boundary token: canary state after generation
+and after extraction, protected-marker counts in prohibited sinks, and baseline
+fixture unchanged after extraction. Fixture bytes, generator source, and the
+private marker declaration are expected marker carriers and are excluded from
+the prohibited-sink count; stdout, stderr, IPC, logs, TraceMap artifacts, and
+unexpected scratch remnants are not. Issue #488 carries the corrected prompt
+and fresh explicit rerun authorization. Phases 8 and 9 remain paused unless the
+corrected Phase 7 rerun completes without a boundary.
+
 Current Phase 7 validation:
 
 - 30/30 focused Access foundation/UI tests pass;
