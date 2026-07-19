@@ -359,6 +359,12 @@ representative local-only workflow in 9.5, and completion/merge sequencing for
 the foundation, Phase 7, and Phase 8 dependencies. No Phase 9 PR should open
 against `dev` while those stacked dependencies remain unmerged.
 
+Windows capability gate: issue #490 contains the local-only macro inventory
+prompt and sanitized result contract. It tests only non-invoking catalog and
+startup-presence properties, forbids command/action/body access even if exposed,
+and maps unavailable named/embedded/data/startup categories to rule-backed gaps
+instead of weakening the fixed threat decision.
+
 ## Foundation Validation
 
 Platform-neutral validation on the implementation branch:
