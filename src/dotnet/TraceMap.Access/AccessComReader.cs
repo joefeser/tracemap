@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using TraceMap.Core;
 
 namespace TraceMap.Access;
 
@@ -29,7 +30,7 @@ public sealed class AccessComReader
             var accessVersion = BoundedString(() => (string)application.Version, 64, "AccessVersionUnavailable");
             application.OpenCurrentDatabase(databaseCopyPath, false);
             database = application.CurrentDb();
-            return ReadDatabase(database, databaseHash, databaseIdentitySeed, databaseExtension, accessVersion, accessPid);
+            return ReadDatabase((object)application, database, databaseHash, databaseIdentitySeed, databaseExtension, accessVersion, accessPid);
         }
         catch (AccessScanException) { throw; }
         catch { throw new AccessScanException("AccessDatabaseOpenOrCatalogFailed"); }
@@ -46,7 +47,7 @@ public sealed class AccessComReader
         }
     }
 
-    private AccessDatabaseProjection ReadDatabase(dynamic database, string databaseHash, string databaseIdentitySeed, string extension, string accessVersion, int accessPid)
+    private AccessDatabaseProjection ReadDatabase(object application, dynamic database, string databaseHash, string databaseIdentitySeed, string extension, string accessVersion, int accessPid)
     {
         object databaseObject = database;
         var gaps = new List<AccessGapProjection>();
@@ -56,6 +57,7 @@ public sealed class AccessComReader
         var known = BuildKnownObjects(tables, tableLookup, queryIdentities);
         var relationships = ReadRelationships(databaseObject, databaseIdentitySeed, tableLookup, fieldLookups, gaps, ref systemCount);
         var queries = ReadQueries(databaseObject, databaseIdentitySeed, queryIdentities, known, gaps, external);
+        var uiInventory = ReadUiInventoryCounts(application, gaps);
 
         var gapsTruncated = gaps.Count > _limits.MaxGaps;
         var boundedGaps = gaps
@@ -82,14 +84,90 @@ public sealed class AccessComReader
             [
                 new("schemaCatalog", "observed"),
                 new("savedQueries", "observed"),
-                new("formsReports", "not-in-slice"),
+                new("formsReports", uiInventory.Coverage),
                 new("vbaModules", "not-in-slice"),
                 new("macros", "startup-suppressed-not-inventoried"),
                 new("externalLinks", "hash-only"),
                 new("startupSuppression", "force-disable-requested"),
                 new("rowDataRead", "false"),
                 new("executionPerformed", "false")
-            ]);
+            ],
+            UiSurfaces: [],
+            UiInventory: uiInventory);
+    }
+
+    internal AccessUiInventoryProjection ReadUiInventoryCounts(
+        object applicationObject,
+        List<AccessGapProjection> gaps)
+    {
+        dynamic? project = null;
+        try
+        {
+            dynamic application = applicationObject;
+            project = application.CurrentProject;
+            var formCount = ReadProjectSurfaceCollectionCount((object)project, "form", gaps);
+            var reportCount = ReadProjectSurfaceCollectionCount((object)project, "report", gaps);
+            var coverage = formCount is null || reportCount is null
+                ? "count-partial-identity-unavailable"
+                : formCount > 0 || reportCount > 0
+                    ? "count-observed-identity-unavailable"
+                    : "count-observed-empty";
+            return new(formCount, reportCount, coverage);
+        }
+        catch (AccessScanException ex)
+        {
+            gaps.Add(new(ex.Classification, "forms-reports", null, RuleIds.LegacyAccessUiSurface));
+            return new(null, null, "count-unavailable");
+        }
+        catch
+        {
+            gaps.Add(new("AccessFormReportCoverageUnavailable", "forms-reports", null, RuleIds.LegacyAccessUiSurface));
+            return new(null, null, "count-unavailable");
+        }
+        finally { Release(project); }
+    }
+
+    private int? ReadProjectSurfaceCollectionCount(
+        object projectObject,
+        string surfaceKind,
+        List<AccessGapProjection> gaps)
+    {
+        try
+        {
+            dynamic project = projectObject;
+            object collection = surfaceKind == "form"
+                ? (object)project.AllForms
+                : (object)project.AllReports;
+            return ReadSurfaceCollectionCount(collection, surfaceKind, gaps);
+        }
+        catch (AccessScanException ex)
+        {
+            gaps.Add(new(ex.Classification, $"{surfaceKind}-catalog", null, RuleIds.LegacyAccessUiSurface));
+            return null;
+        }
+        catch
+        {
+            gaps.Add(new("AccessFormReportCoverageUnavailable", $"{surfaceKind}-catalog", null, RuleIds.LegacyAccessUiSurface));
+            return null;
+        }
+    }
+
+    internal int? ReadSurfaceCollectionCount(
+        object collectionObject,
+        string surfaceKind,
+        List<AccessGapProjection> gaps)
+    {
+        dynamic collection = collectionObject;
+        try
+        {
+            var count = BoundedCount(collection, surfaceKind == "form" ? "AccessFormCollectionLimit" : "AccessReportCollectionLimit");
+            if (count > 0)
+                gaps.Add(new("AccessFormReportCoverageUnavailable", $"{surfaceKind}-catalog", null, RuleIds.LegacyAccessUiSurface));
+            return count;
+        }
+        catch (AccessScanException ex) { gaps.Add(new(ex.Classification, $"{surfaceKind}-catalog", null, RuleIds.LegacyAccessUiSurface)); return null; }
+        catch { gaps.Add(new("AccessFormReportCoverageUnavailable", $"{surfaceKind}-catalog", null, RuleIds.LegacyAccessUiSurface)); return null; }
+        finally { Release(collectionObject); }
     }
 
     private IReadOnlyList<AccessTableProjection> ReadTables(

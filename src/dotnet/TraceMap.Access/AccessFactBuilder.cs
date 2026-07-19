@@ -71,6 +71,9 @@ public static class AccessFactBuilder
                 ("metadataHash", input.DatabaseHash),
                 ("stableModelKey", databaseStableKey),
                 ("omittedSystemObjectCount", projection.OmittedSystemObjectCount.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ("formCount", projection.UiInventory?.FormCount?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ("reportCount", projection.UiInventory?.ReportCount?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ("formsReportsCoverage", projection.UiInventory?.Coverage),
                 ("coverageLabel", "reduced-static-design"),
                 ("limitations", "binary-container-span;no-rows;no-execution;no-runtime-proof"))));
 
@@ -161,9 +164,37 @@ public static class AccessFactBuilder
                     ("coverageLabel", "hash-only-boundary"), ("limitations", "no-refresh;no-connectivity-proof;no-execution"))));
         }
 
+        foreach (var surface in projection.UiSurfaces ?? [])
+        {
+            var surfaceFactType = surface.SurfaceKind == "report" ? FactTypes.AccessReportDeclared : FactTypes.AccessFormDeclared;
+            facts.Add(Create(manifest, surfaceFactType, RuleIds.LegacyAccessUiSurface, EvidenceTiers.Tier2Structural, span,
+                targetSymbol: surface.Identity.StableKey,
+                properties: IdentityProps(surface.Identity,
+                    ("surfaceKind", surface.SurfaceKind), ("stableSurfaceKey", surface.Identity.StableKey),
+                    ("modulePresence", surface.ModulePresence), ("boundState", surface.BoundState),
+                    ("designHash", surface.DesignHash), ("controlCount", surface.Controls.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    ("controlTypeCounts", ControlTypeCounts(surface.Controls)), ("eventDescriptors", EventDescriptors(surface.Events)),
+                    ("coverageLabel", surface.Coverage),
+                    ("limitations", "no-render;no-invocation;no-runtime-reachability;binary-container-span"))));
+            AddBindingFacts(facts, manifest, span, surface.Bindings);
+
+            foreach (var control in surface.Controls)
+            {
+                facts.Add(Create(manifest, FactTypes.AccessControlDeclared, RuleIds.LegacyAccessUiSurface, EvidenceTiers.Tier2Structural, span,
+                    sourceSymbol: surface.Identity.StableKey,
+                    targetSymbol: control.Identity.StableKey,
+                    properties: IdentityProps(control.Identity,
+                        ("surfaceStableKey", control.SurfaceStableKey), ("stableControlKey", control.Identity.StableKey),
+                        ("controlType", control.ControlType), ("ordinal", control.Ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                        ("eventDescriptors", EventDescriptors(control.Events)), ("coverageLabel", "static-design-metadata"),
+                        ("limitations", "no-render;no-value-read;no-event-execution"))));
+                AddBindingFacts(facts, manifest, span, control.Bindings);
+            }
+        }
+
         foreach (var gap in projectedGaps)
         {
-            facts.Add(Create(manifest, FactTypes.AnalysisGap, RuleIds.LegacyAccessCoverageGap, EvidenceTiers.Tier4Unknown, span,
+            facts.Add(Create(manifest, FactTypes.AnalysisGap, gap.RuleId ?? RuleIds.LegacyAccessCoverageGap, EvidenceTiers.Tier4Unknown, span,
                 targetSymbol: gap.StableScopeKey,
                 properties: Props(("classification", gap.Classification), ("gapKind", "access-design"), ("scopeKind", gap.ScopeKind),
                     ("scopeStableKey", gap.StableScopeKey), ("limitations", "unable-to-prove;not-clean-absence"))));
@@ -197,6 +228,40 @@ public static class AccessFactBuilder
         FactFactory.Create(manifest, type, rule, tier, span, sourceSymbol: sourceSymbol, targetSymbol: targetSymbol, properties: properties);
 
     private static EvidenceSpan Span(string path) => new(path, 1, 1, null, ExtractorId, ScannerVersions.AccessExtractor);
+
+    private static void AddBindingFacts(List<CodeFact> facts, ScanManifest manifest, EvidenceSpan span, IReadOnlyList<AccessBindingProjection> bindings)
+    {
+        foreach (var binding in bindings.OrderBy(item => item.Identity.StableKey, StringComparer.Ordinal))
+        {
+            var targets = binding.TargetStableKeys.Count == 0 ? new string?[] { null } : binding.TargetStableKeys.Cast<string?>().ToArray();
+            foreach (var target in targets)
+            {
+                facts.Add(Create(manifest, FactTypes.AccessBindingDeclared, RuleIds.LegacyAccessBinding,
+                    binding.SourceKind is "direct-object" or "direct-field" ? EvidenceTiers.Tier2Structural : EvidenceTiers.Tier3SyntaxOrTextual,
+                    span,
+                    sourceSymbol: binding.OwnerStableKey,
+                    targetSymbol: target,
+                    properties: IdentityProps(binding.Identity,
+                        ("ownerStableKey", binding.OwnerStableKey), ("stableBindingKey", binding.Identity.StableKey),
+                        ("bindingKind", binding.BindingKind), ("sourceKind", binding.SourceKind),
+                        ("expressionHash", binding.ExpressionHash),
+                        ("expressionLength", binding.ExpressionLength > 0 ? binding.ExpressionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                        ("targetStableKey", target), ("targetKind", binding.TargetKind), ("coverageLabel", binding.Coverage),
+                        ("limitations", "declared-static-binding-only;no-evaluation;no-runtime-target-proof"))));
+            }
+        }
+    }
+
+    private static string ControlTypeCounts(IReadOnlyList<AccessControlProjection> controls) =>
+        string.Join(';', controls.GroupBy(item => item.ControlType, StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => $"{group.Key}:{group.Count()}"));
+
+    private static string EventDescriptors(IReadOnlyList<AccessUiEventProjection> events) =>
+        string.Join(';', events.OrderBy(item => item.EventRole, StringComparer.Ordinal)
+            .Select(item => item.ValueHash is null
+                ? $"{item.EventRole}:{item.Category}"
+                : $"{item.EventRole}:{item.Category}:{item.ValueLength}:{item.ValueHash}"));
 
     private static SortedDictionary<string, string> IdentityProps(AccessSafeIdentity identity, params (string Key, string? Value)[] values)
     {

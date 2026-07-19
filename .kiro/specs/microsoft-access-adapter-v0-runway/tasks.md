@@ -149,17 +149,17 @@ remain separate reviewable slices.
 
 ## Phase 7: Forms, Reports, Controls, and Bindings (Follow-Up PR)
 
-- [ ] 7.0 Extend the synthetic fixture with forms, reports, controls, and binding
+- [x] 7.0 Extend the synthetic fixture with forms, reports, controls, and binding
       shapes required by this phase; do not backdate them as first-slice coverage.
-- [ ] 7.1 Add catalog rules/facts for Access forms, reports, controls, and direct
+- [x] 7.1 Add catalog rules/facts for Access forms, reports, controls, and direct
       bindings.
 - [ ] 7.2 Inventory surfaces and controls through design metadata only.
 - [ ] 7.3 Emit direct record/control/row-source binding candidates; hash complex
       expressions and emit gaps for ambiguous targets.
 - [ ] 7.4 Classify event properties without exporting expressions or embedded
       macro bodies.
-- [ ] 7.5 Add sensitive caption/label/expression/value suppression tests.
-- [ ] 7.6 Validate form/report extraction does not render or invoke surfaces.
+- [x] 7.5 Add sensitive caption/label/expression/value suppression tests.
+- [x] 7.6 Validate form/report extraction does not render or invoke surfaces.
 
 ## Phase 8: VBA and Event Flow (Follow-Up PR)
 
