@@ -389,6 +389,14 @@ representative local-only workflow in 9.5, and completion/merge sequencing for
 the foundation, Phase 7, and Phase 8 dependencies. No Phase 9 PR should open
 against `dev` while those stacked dependencies remain unmerged.
 
+Issue #491 now records the separate final task 9.5 workflow and its Windows-local
+prompt. It is intentionally sequenced after issues #488 through #490 and their
+reviewed product wiring. The workflow uses an authorized representative database
+only inside a disposable no-remote local Git repository, reports labels/counts/
+coverage/rule IDs/gaps and boolean safety outcomes only, and deletes the database,
+local commit history, outputs, and scratch state. Creating the issue does not
+complete task 9.5; the sanitized Windows result is still required.
+
 Windows capability gate: issue #490 contains the local-only macro inventory
 prompt and sanitized result contract. It tests only non-invoking catalog and
 startup-presence properties, forbids command/action/body access even if exposed,
