@@ -260,9 +260,15 @@ internal static partial class AccessVbaProjector
         }
 
         var literalIdentity = AccessSafeValues.Identity(databaseIdentitySeed, $"vba-{callKind}-target", literal);
-        var candidates = knownObjects is not null && knownObjects.TryGetValue(literal, out var values) ? values : [];
+        var catalogCandidates = knownObjects is not null && knownObjects.TryGetValue(literal, out var values) ? values : [];
+        var expectedKinds = ExpectedTargetKinds(callKind);
+        var candidates = expectedKinds is null
+            ? catalogCandidates
+            : catalogCandidates.Where(candidate => expectedKinds.Contains(candidate.Kind, StringComparer.Ordinal)).ToArray();
         var target = candidates.Count == 1 ? candidates[0].StableKey : null;
-        var targetKind = candidates.Count == 1 ? candidates[0].Kind : "access-object";
+        var targetKind = candidates.Count == 1
+            ? candidates[0].Kind
+            : expectedKinds is { Count: 1 } ? expectedKinds[0] : "access-object";
         var coverage = candidates.Count == 1 ? "complete" : "partial";
         calls.Add(new(identity, procedure.Projection.Identity.StableKey, callKind, lineNumber, lineNumber,
             target, literalIdentity, targetKind, null, 0, coverage));
@@ -272,6 +278,16 @@ internal static partial class AccessVbaProjector
             gaps.Add(new(candidates.Count == 0 ? "AccessVbaLiteralTargetUnresolved" : "AccessVbaLiteralTargetAmbiguous",
                 "vba-call", identity.StableKey, RuleIds.LegacyAccessVba));
     }
+
+    private static IReadOnlyList<string>? ExpectedTargetKinds(string callKind) => callKind switch
+    {
+        "open-form" => ["form"],
+        "open-report" => ["report"],
+        "open-query" or "dao-query-reference" => ["query"],
+        "dao-table-reference" => ["table"],
+        "open-recordset-reference" or "domain-function-reference" => ["query", "table"],
+        _ => null
+    };
 
     private static void AddDynamicCall(
         string databaseIdentitySeed,
@@ -423,6 +439,8 @@ internal static partial class AccessVbaProjector
             if (inString) continue;
             if (current == '(') { nested++; continue; }
             if (current == ')' && nested > 0) { nested--; continue; }
+            if (current == ':' && nested == 0)
+                return argumentIndex == requestedIndex ? line[argumentStart..cursor].Trim() : null;
             if ((current == ',' || current == ')' || current == '\0') && nested == 0)
             {
                 if (argumentIndex == requestedIndex) return line[argumentStart..cursor].Trim();

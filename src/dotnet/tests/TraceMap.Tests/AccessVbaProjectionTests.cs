@@ -151,6 +151,45 @@ public sealed class AccessVbaProjectionTests
     }
 
     [Fact]
+    public void Projector_ends_arguments_at_statement_separator_and_rejects_wrong_kind_catalog_targets()
+    {
+        const string source = """
+            Private Sub EntryPoint()
+                DoCmd.OpenForm "frmCustomers": Call Helper
+                DoCmd.OpenForm "qryOrders"
+            End Sub
+
+            Private Sub Helper()
+            End Sub
+            """;
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('f', 40), "fixture.accdb", "hash");
+        var form = AccessSafeValues.Identity(seed, "form", "frmCustomers");
+        var query = AccessSafeValues.Identity(seed, "query", "qryOrders");
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["frmCustomers"] = [(form.StableKey, "form")],
+            ["qryOrders"] = [(query.StableKey, "query")]
+        };
+
+        var result = AccessVbaProjector.Project(seed, [new("ModuleA", "standard", source)], knownObjects: known);
+        var calls = result.Modules.Single().Procedures
+            .Single(procedure => procedure.Identity.DisplayName == "EntryPoint").Calls;
+
+        Assert.Contains(calls, call => call.CallKind == "open-form"
+            && call.TargetStableKey == form.StableKey
+            && call.Coverage == "complete");
+        Assert.Contains(calls, call => call.CallKind == "local-procedure-call"
+            && call.TargetStableKey is not null);
+        var wrongKind = Assert.Single(calls, call => call.LiteralTargetIdentity?.DisplayName == "qryOrders");
+        Assert.Equal("open-form", wrongKind.CallKind);
+        Assert.Equal("form", wrongKind.TargetKind);
+        Assert.Null(wrongKind.TargetStableKey);
+        Assert.Equal("partial", wrongKind.Coverage);
+        Assert.Contains(result.Gaps, gap => gap.Classification == "AccessVbaLiteralTargetUnresolved"
+            && gap.StableScopeKey == wrongKind.Identity.StableKey);
+    }
+
+    [Fact]
     public void Projector_is_order_independent_hashes_secret_bearing_literal_targets_and_emits_event_and_limit_gaps()
     {
         const string sourceA = """
