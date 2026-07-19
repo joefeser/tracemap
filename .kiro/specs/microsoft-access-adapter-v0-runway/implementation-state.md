@@ -184,8 +184,8 @@ python3 scripts/test_validate_adapter_artifacts.py
 git diff --check
 ```
 
-Results: 23/23 focused Access tests passed; solution build passed with the
-pre-existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory; 786/786 solution tests
+Results: 24/24 focused Access tests passed; solution build passed with the
+pre-existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory; 787/787 solution tests
 passed; seven artifact-validator tests passed; private-path and diff checks
 passed. No shared artifact reader changed, so additional pinned adapter smokes
 were not required beyond the standard artifact validator and the downstream
@@ -241,6 +241,13 @@ artifacts into memory. SQLite is a required artifact, so excluding it would
 weaken the secret-safety proof. Instead, the harness now scans every artifact
 with a bounded 64 KiB rolling UTF-8 window. The full Windows smoke reran with
 that implementation and found zero planted markers.
+
+Fresh Codex review on head `7b001f1873ad26120b7ef02d31671201bc5d0e2c`
+identified two saved-query projection gaps. The follow-up marks parsed object
+references that cannot be resolved to a known local object as partial instead
+of silently claiming complete coverage, recognizes comma-separated Access
+`FROM` sources, and recognizes parenthesized join sources. Focused tests cover
+all three shapes without persisting raw query text.
 
 ## Spec Review
 
