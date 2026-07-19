@@ -364,7 +364,10 @@ Implemented platform-neutral Phase 9 pieces:
   `AccessEvidenceConsumerUnsupported`, using `release.review.section.v1` and
   `ReleaseReviewClassifications.PartialAnalysis`, whenever Access evidence is
   present but no dedicated Access comparison section exists. This prevents an
-  ignored fact family from becoming an absence/change conclusion.
+  ignored fact family from becoming an absence/change conclusion. Single and
+  combined index paths are both covered; their queries use fixed SQL statement
+  shapes rather than formatted table/column identifiers, and combined
+  supporting IDs retain the source-qualified `combined_fact_id`.
 
 Macro bodies remain entirely outside the raw/projection models. The projector
 accepts only a name and catalog kind; it has no field through which a command,

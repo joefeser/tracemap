@@ -196,7 +196,7 @@ public sealed record ReleaseReviewChecklistItem(
 
 internal sealed record ReleaseIndexInfo(string Kind, ReleaseReviewSnapshot Snapshot);
 
-internal sealed record AccessEvidencePresence(int FactCount, IReadOnlyList<string> SupportingFactIds);
+internal sealed record AccessEvidencePresence(long FactCount, IReadOnlyList<string> SupportingFactIds);
 
 internal sealed record SingleComparableFact(
     string StableKey,
@@ -1462,15 +1462,17 @@ public static class ReleaseReviewReporter
     {
         await using var connection = new SqliteConnection(ReadOnlyConnectionString(path));
         await connection.OpenAsync(cancellationToken);
-        var table = indexKind == "combined" ? "combined_facts" : "facts";
-        var idColumn = indexKind == "combined" ? "combined_fact_id" : "fact_id";
         await using var countCommand = connection.CreateCommand();
-        countCommand.CommandText = $"select count(*) from {table} where fact_type like 'Access%' or rule_id like 'legacy.access.%';";
-        var count = Convert.ToInt32(await countCommand.ExecuteScalarAsync(cancellationToken), System.Globalization.CultureInfo.InvariantCulture);
+        countCommand.CommandText = indexKind == "combined"
+            ? "select count(*) from combined_facts where fact_type like 'Access%' or rule_id like 'legacy.access.%';"
+            : "select count(*) from facts where fact_type like 'Access%' or rule_id like 'legacy.access.%';";
+        var count = Convert.ToInt64(await countCommand.ExecuteScalarAsync(cancellationToken), System.Globalization.CultureInfo.InvariantCulture);
 
         var ids = new List<string>();
         await using var idCommand = connection.CreateCommand();
-        idCommand.CommandText = $"select {idColumn} from {table} where fact_type like 'Access%' or rule_id like 'legacy.access.%' order by {idColumn} limit 12;";
+        idCommand.CommandText = indexKind == "combined"
+            ? "select combined_fact_id from combined_facts where fact_type like 'Access%' or rule_id like 'legacy.access.%' order by combined_fact_id limit 12;"
+            : "select fact_id from facts where fact_type like 'Access%' or rule_id like 'legacy.access.%' order by fact_id limit 12;";
         await using var reader = await idCommand.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
             ids.Add(StringOrDefault(reader, 0, "unknown"));

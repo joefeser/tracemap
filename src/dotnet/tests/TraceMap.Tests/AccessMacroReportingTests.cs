@@ -118,6 +118,15 @@ public sealed class AccessMacroReportingTests
         Assert.Equal(ReleaseReviewClassifications.PartialAnalysis, gap.Classification);
         Assert.NotEmpty(gap.SupportingFactIds);
         Assert.DoesNotContain(ProtectedMacroName, JsonSerializer.Serialize(review), StringComparison.OrdinalIgnoreCase);
+
+        var combinedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            combined,
+            combined,
+            Path.Combine(temp.Path, "combined-release-review.md")));
+        var combinedGap = Assert.Single(combinedReview.Gaps, item => item.GapKind == "AccessEvidenceConsumerUnsupported");
+        Assert.NotEmpty(combinedGap.SupportingFactIds);
+        Assert.All(combinedGap.SupportingFactIds, factId => Assert.Contains(':', factId));
+        Assert.DoesNotContain(ProtectedMacroName, JsonSerializer.Serialize(combinedReview), StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<(ScanResult Scan, string Output)> BuildScanAsync(string root)
