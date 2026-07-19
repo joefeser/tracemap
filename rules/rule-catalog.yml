@@ -1435,6 +1435,19 @@ rules:
       - Missing, ambiguous, dynamic, expression, and embedded-macro handlers remain gaps or separately classified surface evidence; the extractor never invokes an event or persists an event expression or macro body.
       - Procedure and owner identities follow safe/hash policy, and VBA source never crosses worker IPC or enters artifacts.
 
+  - id: legacy.access.macro-gap.v1
+    name: Microsoft Access macro inventory and protected-body gap
+    description: Records safe named, UI, data, embedded, or startup macro inventory while explicitly omitting all command bodies and arguments.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AccessMacroDeclared
+      - AnalysisGap
+    limitations:
+      - Macro inventory proves only that a static catalog declaration was observed; it does not prove command semantics, event attachment, startup selection, execution, branch behavior, data access, external effects, deployment, or production use.
+      - Macro commands, arguments, conditions, expressions, embedded macro text, action bodies, SQL, paths, connections, credentials, and scheduled command bodies are never inspected for semantics or persisted.
+      - Every observed macro category carries an explicit protected-body omission gap. Absence of projected body evidence is not a claim that the macro is empty, harmless, unreachable, or safe.
+      - The extractor never opens, runs, exports, imports, edits, or evaluates a macro and never invokes a startup form, startup function, event, or command.
+
   - id: legacy.access.coverage-gap.v1
     name: Microsoft Access extraction coverage gap
     description: Records bounded platform, COM/provider, trust, timeout, cleanup, parsing, ambiguity, unsafe-value, or extraction-limit gaps.

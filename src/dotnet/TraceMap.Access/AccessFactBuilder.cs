@@ -249,6 +249,17 @@ public static class AccessFactBuilder
                     ("limitations", "exact-same-module-static-candidate;no-event-execution-or-runtime-dispatch-proof"))));
         }
 
+        foreach (var macro in projection.Macros ?? [])
+        {
+            facts.Add(Create(manifest, FactTypes.AccessMacroDeclared, RuleIds.LegacyAccessMacroGap, EvidenceTiers.Tier2Structural, span,
+                targetSymbol: macro.Identity.StableKey,
+                properties: IdentityProps(macro.Identity,
+                    ("macroStableKey", macro.Identity.StableKey), ("macroKind", macro.MacroKind),
+                    ("startupRole", macro.StartupRole), ("bodyStatus", macro.BodyStatus),
+                    ("coverageLabel", macro.Coverage),
+                    ("limitations", "inventory-only;body-protected-omitted;no-open-export-execution-or-command-semantics"))));
+        }
+
         foreach (var gap in projectedGaps)
         {
             facts.Add(Create(manifest, FactTypes.AnalysisGap, gap.RuleId ?? RuleIds.LegacyAccessCoverageGap, EvidenceTiers.Tier4Unknown, span,

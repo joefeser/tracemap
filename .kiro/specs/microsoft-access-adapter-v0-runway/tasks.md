@@ -185,12 +185,12 @@ remain separate reviewable slices.
 - [ ] 9.0 Extend the synthetic fixture with the macro inventory shapes approved
       for this phase while keeping command bodies protected.
 - [ ] 9.1 Inventory named/UI/data/startup macros without command bodies.
-- [ ] 9.2 Decide through a separate threat review whether any macro command
+- [x] 9.2 Decide through a separate threat review whether any macro command
       semantics can be safely projected; keep body inspection deferred unless
       approved by rule and leak tests.
-- [ ] 9.3 Add Access evidence sections to human reports and documentation exports
+- [x] 9.3 Add Access evidence sections to human reports and documentation exports
       with hidden public claim level.
-- [ ] 9.4 Verify vault/release-review consumers preserve provenance or emit an
+- [x] 9.4 Verify vault/release-review consumers preserve provenance or emit an
       unsupported-consumer gap.
 - [ ] 9.5 Add a local-only representative customer/sample validation workflow
       using labels, counts, hashes, and gaps only.

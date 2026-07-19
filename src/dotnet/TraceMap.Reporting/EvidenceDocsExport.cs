@@ -2362,6 +2362,12 @@ public static class EvidenceDocsExporter
             return "gap";
         }
 
+        if (type.StartsWith("Access", StringComparison.Ordinal)
+            || fact.RuleId.StartsWith("legacy.access.", StringComparison.Ordinal))
+        {
+            return "legacy";
+        }
+
         if (IsPotentialLegacyDataDescriptor(fact) && TryProjectLegacyDataDescriptor(fact) is not null)
         {
             return "data-surface";
