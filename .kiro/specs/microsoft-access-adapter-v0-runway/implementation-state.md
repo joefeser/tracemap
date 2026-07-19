@@ -294,6 +294,14 @@ reader/worker wiring for task 8.2, Windows hostile-canary and protected-marker
 validation, and the focused PR/ACK sequence. No product COM/VBProject reader or
 worker IPC source field has been added on this branch.
 
+Windows capability gate: issue #489 contains a separate local-only prompt and
+sanitized result contract for `CurrentProject.AllModules`, already-loaded module
+inventory, and read-only VBProject/CodeModule access under the machine's existing
+trust policy. The prompt forbids trust-policy changes, module open/export/edit,
+execution, protected-source logging/IPC, and retrying around access denial. An
+unavailable result maps to `AccessVbaProjectUnavailable` rather than weakening the
+boundary.
+
 ## Foundation Validation
 
 Platform-neutral validation on the implementation branch:
