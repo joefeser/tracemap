@@ -1323,6 +1323,73 @@ rules:
       - Safe properties include metadataKind, metadataHash, inventoryKind, repo-relative path, coverage, and limitation.
       - Raw SQL, connection strings, config values, URLs, remotes, local absolute paths, source snippets, and secrets are hashed or omitted.
 
+  - id: legacy.access.database.inventory.v1
+    name: Microsoft Access database inventory
+    description: Records a clean Git-bound Access database and safe local extractor capability evidence.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - FileInventoried
+      - LegacyDataMetadataDeclared
+      - AnalyzerCapabilityDiagnostic
+      - AnalysisGap
+    limitations:
+      - Inventory and capability rows describe static local extraction only and do not prove database integrity, runtime behavior, record contents, query or macro execution, linked-source access, deployment, or production use.
+      - The database must be a clean tracked file at the checked-out commit and is opened only through a verified private working copy on Windows with installed Microsoft Access.
+      - Binary catalog objects use the owning database path at span 1:1; this anchors the container and is not a fabricated source line.
+      - Raw rows, SQL, connection strings, VBA, macro bodies, form/report expressions, URLs, hosts, credentials, and local absolute paths are omitted or role-hashed.
+
+  - id: legacy.access.schema.v1
+    name: Microsoft Access schema catalog
+    description: Extracts local table, field, index, key, and declared relationship metadata through non-recordset Access/DAO catalog collections.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyDataEntityDeclared
+      - LegacyDataStorageObjectDeclared
+      - LegacyDataColumnDeclared
+      - LegacyDataMappingDeclared
+      - AnalysisGap
+    limitations:
+      - Catalog evidence does not prove live constraints, row contents, query execution, calculated values, linked schema freshness, provider behavior, permissions, runtime reachability, or production use.
+      - System, temporary, hidden, linked-result, attachment, OLE, and value-bearing content is not inspected as record data.
+      - Ambiguous, unavailable, unsafe, or limit-truncated metadata is a gap rather than an inferred schema conclusion.
+      - Unsafe object names, private paths, connections, source values, SQL, snippets, and secrets are omitted or role-hashed.
+
+  - id: legacy.access.query.v1
+    name: Microsoft Access saved-query shape
+    description: Records saved-query kind, parameter metadata, full text hash/length, and bounded local-object dependency candidates without executing or materializing queries.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AccessQueryDeclared
+      - AccessQueryDependencyCandidate
+      - AnalysisGap
+    limitations:
+      - Query evidence does not prove execution, result shape, parameter values, branch selection, provider behavior, linked-source availability, permissions, runtime reachability, or production use.
+      - Raw query SQL never persists; only a full SHA-256, length, safe kind, parameters, and deterministically parsed local-object candidates may be emitted.
+      - Dynamic, malformed, ambiguous, unsupported, action, DDL, union, crosstab, and pass-through shapes remain partial or gaps where dependency projection is not credible.
+      - Query result fields and recordsets are never enumerated for pass-through, action, DDL, or unsafe query kinds.
+
+  - id: legacy.access.external-link.v1
+    name: Microsoft Access external boundary
+    description: Records hash-only linked-table and pass-through boundary metadata without refreshing or connecting to the external source.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AccessExternalLinkDeclared
+      - AnalysisGap
+    limitations:
+      - External-boundary evidence does not prove connectivity, credentials, authentication, authorization, reachable hosts/files, linked schema freshness, query execution, deployment, or production state.
+      - Connection strings, DSNs, URLs, hosts, catalogs, users, credentials, UNC paths, drive paths, and external filenames are never rendered; only role-separated full SHA-256 values and safe source-family classifications may persist.
+      - The extractor does not refresh linked tables, enumerate external rows, or materialize pass-through results.
+
+  - id: legacy.access.coverage-gap.v1
+    name: Microsoft Access extraction coverage gap
+    description: Records bounded platform, COM/provider, trust, timeout, cleanup, parsing, ambiguity, unsafe-value, or extraction-limit gaps.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - A gap records an unable-to-prove boundary and never proves absence, safety, runtime behavior, data state, query execution, linked-source availability, permissions, deployment, or production use.
+      - Diagnostics are classification-only; raw exceptions, local paths, SQL, connections, VBA, macro content, source values, and secrets are omitted.
+
   - id: legacy.data.dbml.v1
     name: Legacy LINQ to SQL DBML metadata
     description: Extracts safe DBML entity, table, column, association, and routine descriptor evidence from checked-in metadata.
