@@ -58,6 +58,7 @@ public sealed class AccessComReader
         var relationships = ReadRelationships(databaseObject, databaseIdentitySeed, tableLookup, fieldLookups, gaps, ref systemCount);
         var queries = ReadQueries(databaseObject, databaseIdentitySeed, queryIdentities, known, gaps, external);
         var uiInventory = ReadUiInventoryCounts(application, gaps);
+        var vbaInventory = ReadVbaInventoryCounts(application, gaps);
 
         var gapsTruncated = gaps.Count > _limits.MaxGaps;
         var boundedGaps = gaps
@@ -85,7 +86,7 @@ public sealed class AccessComReader
                 new("schemaCatalog", "observed"),
                 new("savedQueries", "observed"),
                 new("formsReports", uiInventory.Coverage),
-                new("vbaModules", "not-in-slice"),
+                new("vbaModules", vbaInventory.Coverage),
                 new("macros", "startup-suppressed-not-inventoried"),
                 new("externalLinks", "hash-only"),
                 new("startupSuppression", "force-disable-requested"),
@@ -93,7 +94,70 @@ public sealed class AccessComReader
                 new("executionPerformed", "false")
             ],
             UiSurfaces: [],
-            UiInventory: uiInventory);
+            VbaModules: [],
+            EventBindings: [],
+            UiInventory: uiInventory,
+            VbaInventory: vbaInventory);
+    }
+
+    internal AccessVbaInventoryProjection ReadVbaInventoryCounts(
+        object applicationObject,
+        List<AccessGapProjection> gaps)
+    {
+        var loadedBefore = ReadLoadedModuleCount(applicationObject);
+        var moduleCount = ReadVbaCatalogModuleCount(applicationObject, gaps);
+        var loadedAfter = ReadLoadedModuleCount(applicationObject);
+        if (loadedBefore.HasValue && loadedAfter.HasValue && loadedBefore.Value != loadedAfter.Value)
+            throw new AccessScanException("AccessVbaModuleStateChanged");
+
+        bool? loadedCountUnchanged = loadedBefore.HasValue && loadedAfter.HasValue ? true : null;
+        gaps.Add(new("AccessVbaProjectUnavailable", "vba-project", null, RuleIds.LegacyAccessVba));
+        var coverage = moduleCount.HasValue
+            ? loadedCountUnchanged == true
+                ? "count-observed-source-unavailable"
+                : "count-observed-source-unavailable-canary-unavailable"
+            : "count-unavailable-source-unavailable";
+        return new(moduleCount, loadedCountUnchanged, coverage);
+    }
+
+    private int? ReadVbaCatalogModuleCount(
+        object applicationObject,
+        List<AccessGapProjection> gaps)
+    {
+        object? projectObject = null;
+        object? modulesObject = null;
+        try
+        {
+            dynamic application = applicationObject;
+            projectObject = application.CurrentProject;
+            dynamic project = projectObject;
+            modulesObject = project.AllModules;
+            return BoundedCount((dynamic)modulesObject, "AccessVbaModuleCollectionLimitReached");
+        }
+        catch (AccessScanException ex)
+        {
+            gaps.Add(new(ex.Classification, "vba-project", null, RuleIds.LegacyAccessVba));
+            return null;
+        }
+        catch { return null; }
+        finally
+        {
+            Release(modulesObject);
+            Release(projectObject);
+        }
+    }
+
+    private int? ReadLoadedModuleCount(object applicationObject)
+    {
+        object? modulesObject = null;
+        try
+        {
+            dynamic application = applicationObject;
+            modulesObject = application.Modules;
+            return BoundedCount((dynamic)modulesObject, "AccessVbaLoadedModuleCountUnavailable");
+        }
+        catch { return null; }
+        finally { Release(modulesObject); }
     }
 
     internal AccessUiInventoryProjection ReadUiInventoryCounts(
