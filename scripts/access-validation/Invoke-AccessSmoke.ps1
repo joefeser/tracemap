@@ -83,6 +83,14 @@ if ($declaredRelationships.Count -ne 2) { throw "expected two declared relations
 if (@($factRows | Where-Object { $_.properties.classification -eq "AccessSchemaAmbiguous" }).Count -ne 0) {
     throw "system relationships produced schema ambiguity gaps"
 }
+$protectedNameIndex = @($factRows | Where-Object {
+    $_.factType -eq "LegacyDataMappingDeclared" -and
+    $_.properties.mappingKind -eq "table-index" -and
+    $_.properties.objectName -eq "IX_Customers_CustomerNote"
+})
+if ($protectedNameIndex.Count -ne 1 -or [string]::IsNullOrWhiteSpace($protectedNameIndex[0].properties.fieldStableKeys)) {
+    throw "index membership for a redacted field name was not preserved"
+}
 
 $markers = @(
     "FixturePassword_92817",
@@ -90,6 +98,7 @@ $markers = @(
     "PRIVATE_SQL_MARKER_92817",
     "restricted_warehouse",
     "STARTUP_CANARY_FIRED_92817",
+    "Customer Note",
     $SmokeRoot
 )
 foreach ($file in Get-ChildItem $outA -File -Recurse) {

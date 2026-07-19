@@ -5,6 +5,8 @@ namespace TraceMap.Access;
 
 internal static class AccessWorkerProtocol
 {
+    internal static long EncodedFrameBytes(string json) => Encoding.UTF8.GetByteCount(json) + 1L;
+
     public static async Task<AccessDatabaseProjection> ReadResultAsync(
         TextReader reader,
         string token,
@@ -22,7 +24,7 @@ internal static class AccessWorkerProtocol
             try { line = await reader.ReadLineAsync(cancellationToken).AsTask().WaitAsync(idleTimeout, cancellationToken); }
             catch (TimeoutException) { throw new AccessScanException("AccessWorkerHeartbeatTimeout"); }
             if (line is null) throw new AccessScanException("AccessWorkerResultMissing");
-            projectionBytes += Encoding.UTF8.GetByteCount(line) + 1;
+            projectionBytes += EncodedFrameBytes(line);
             if (projectionBytes > maxProjectionBytes) throw new AccessScanException("AccessProjectionLimitReached");
 
             AccessWorkerFrame frame;

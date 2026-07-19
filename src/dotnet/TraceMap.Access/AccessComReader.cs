@@ -51,18 +51,19 @@ public sealed class AccessComReader
         object databaseObject = database;
         var gaps = new List<AccessGapProjection>();
         var external = new List<AccessExternalLinkProjection>();
-        var tables = ReadTables(databaseObject, databaseIdentitySeed, gaps, external, out var tableLookup, out var systemCount);
+        var tables = ReadTables(databaseObject, databaseIdentitySeed, gaps, external, out var tableLookup, out var fieldLookups, out var systemCount);
         var queryIdentities = ReadQueryIdentities(databaseObject, databaseIdentitySeed, gaps);
         var known = BuildKnownObjects(tables, tableLookup, queryIdentities);
-        var relationships = ReadRelationships(databaseObject, databaseIdentitySeed, tableLookup, gaps, ref systemCount);
+        var relationships = ReadRelationships(databaseObject, databaseIdentitySeed, tableLookup, fieldLookups, gaps, ref systemCount);
         var queries = ReadQueries(databaseObject, databaseIdentitySeed, queryIdentities, known, gaps, external);
 
+        var gapsTruncated = gaps.Count > _limits.MaxGaps;
         var boundedGaps = gaps
             .OrderBy(item => item.Classification, StringComparer.Ordinal)
             .ThenBy(item => item.StableScopeKey, StringComparer.Ordinal)
-            .Take(Math.Max(0, _limits.MaxGaps - 1))
+            .Take(gapsTruncated ? Math.Max(0, _limits.MaxGaps - 1) : _limits.MaxGaps)
             .ToList();
-        if (gaps.Count > _limits.MaxGaps)
+        if (gapsTruncated)
             boundedGaps.Add(new("AccessGapLimitReached", "database", null));
         return new AccessDatabaseProjection(
             "tracemap.access-projection.v1",
@@ -97,10 +98,12 @@ public sealed class AccessComReader
         List<AccessGapProjection> gaps,
         List<AccessExternalLinkProjection> external,
         out Dictionary<string, List<AccessTableProjection>> lookup,
+        out Dictionary<string, Dictionary<string, List<AccessFieldProjection>>> fieldLookups,
         out int systemCount)
     {
         var result = new List<AccessTableProjection>();
         lookup = new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase);
+        fieldLookups = new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal);
         systemCount = 0;
         dynamic? collection = null;
         try
@@ -129,10 +132,12 @@ public sealed class AccessComReader
                         continue;
                     }
 
-                    var fields = ReadFields(table, databaseIdentitySeed, identity, gaps);
-                    var indexes = ReadIndexes(table, databaseIdentitySeed, fields, gaps);
+                    var rawFieldLookup = new Dictionary<string, List<AccessFieldProjection>>(StringComparer.OrdinalIgnoreCase);
+                    var fields = ReadFields(table, databaseIdentitySeed, identity, rawFieldLookup, gaps);
+                    var indexes = ReadIndexes(table, databaseIdentitySeed, identity, rawFieldLookup, gaps);
                     var projection = new AccessTableProjection(identity, fields, indexes);
                     result.Add(projection);
+                    fieldLookups[identity.StableKey] = rawFieldLookup;
                     if (!lookup.TryGetValue(name, out var candidates)) lookup[name] = candidates = [];
                     candidates.Add(projection);
                 }
@@ -147,7 +152,12 @@ public sealed class AccessComReader
         return result;
     }
 
-    private IReadOnlyList<AccessFieldProjection> ReadFields(dynamic table, string databaseIdentitySeed, AccessSafeIdentity tableIdentity, List<AccessGapProjection> gaps)
+    private IReadOnlyList<AccessFieldProjection> ReadFields(
+        dynamic table,
+        string databaseIdentitySeed,
+        AccessSafeIdentity tableIdentity,
+        Dictionary<string, List<AccessFieldProjection>> rawFieldLookup,
+        List<AccessGapProjection> gaps)
     {
         var result = new List<AccessFieldProjection>();
         dynamic? fields = null;
@@ -162,13 +172,17 @@ public sealed class AccessComReader
                 {
                     field = fields[index];
                     var name = BoundedString(() => (string)field.Name, 512, "AccessFieldNameUnavailable");
-                    result.Add(new AccessFieldProjection(
+                    var projection = new AccessFieldProjection(
                         AccessSafeValues.Identity(databaseIdentitySeed, $"field-{tableIdentity.StableKey}", name),
                         index,
                         AccessSafeValues.DaoTypeFamily(SafeInt(() => (int)field.Type)),
                         SafeInt(() => (int)field.Size),
-                        SafeBool(() => (bool)field.Required)));
+                        SafeBool(() => (bool)field.Required));
+                    result.Add(projection);
+                    if (!rawFieldLookup.TryGetValue(name, out var candidates)) rawFieldLookup[name] = candidates = [];
+                    candidates.Add(projection);
                 }
+                catch (AccessScanException ex) { gaps.Add(new(ex.Classification, "field", tableIdentity.StableKey)); }
                 catch { gaps.Add(new("AccessObjectMetadataUnavailable", "field", tableIdentity.StableKey)); }
                 finally { Release(field); }
             }
@@ -177,7 +191,12 @@ public sealed class AccessComReader
         return result.OrderBy(item => item.Ordinal).ToArray();
     }
 
-    private IReadOnlyList<AccessIndexProjection> ReadIndexes(dynamic table, string databaseIdentitySeed, IReadOnlyList<AccessFieldProjection> fields, List<AccessGapProjection> gaps)
+    private IReadOnlyList<AccessIndexProjection> ReadIndexes(
+        dynamic table,
+        string databaseIdentitySeed,
+        AccessSafeIdentity tableIdentity,
+        IReadOnlyDictionary<string, List<AccessFieldProjection>> rawFieldLookup,
+        List<AccessGapProjection> gaps)
     {
         var result = new List<AccessIndexProjection>();
         dynamic? indexes = null;
@@ -203,14 +222,15 @@ public sealed class AccessComReader
                         {
                             indexField = indexFields[ordinal];
                             var fieldName = BoundedString(() => (string)indexField.Name, 512, "AccessIndexFieldNameUnavailable");
-                            var match = fields.SingleOrDefault(field => string.Equals(field.Identity.DisplayName, fieldName, StringComparison.OrdinalIgnoreCase));
-                            if (match is not null) fieldKeys.Add(match.Identity.StableKey);
+                            if (!UniqueField(rawFieldLookup, fieldName, out var match)) throw new AccessScanException("AccessSchemaAmbiguous");
+                            fieldKeys.Add(match.Identity.StableKey);
                         }
                         finally { Release(indexField); }
                     }
-                    result.Add(new(AccessSafeValues.Identity(databaseIdentitySeed, "index", name), SafeBool(() => (bool)item.Primary), SafeBool(() => (bool)item.Unique), fieldKeys));
+                    result.Add(new(AccessSafeValues.Identity(databaseIdentitySeed, $"index-{tableIdentity.StableKey}", name), SafeBool(() => (bool)item.Primary), SafeBool(() => (bool)item.Unique), fieldKeys));
                 }
-                catch { gaps.Add(new("AccessObjectMetadataUnavailable", "index", null)); }
+                catch (AccessScanException ex) { gaps.Add(new(ex.Classification, "index", tableIdentity.StableKey)); }
+                catch { gaps.Add(new("AccessObjectMetadataUnavailable", "index", tableIdentity.StableKey)); }
                 finally { Release(indexFields); Release(item); }
             }
         }
@@ -222,6 +242,7 @@ public sealed class AccessComReader
         dynamic database,
         string databaseIdentitySeed,
         Dictionary<string, List<AccessTableProjection>> tables,
+        IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fieldLookups,
         List<AccessGapProjection> gaps,
         ref int systemCount)
     {
@@ -263,10 +284,12 @@ public sealed class AccessComReader
                             relationField = relationFields[ordinal];
                             var sourceField = BoundedString(() => (string)relationField.Name, 512, "AccessRelationshipFieldUnavailable");
                             var targetField = BoundedString(() => (string)relationField.ForeignName, 512, "AccessRelationshipFieldUnavailable");
-                            var sourceKey = source.Fields.SingleOrDefault(field => string.Equals(field.Identity.DisplayName, sourceField, StringComparison.OrdinalIgnoreCase))?.Identity.StableKey;
-                            var targetKey = target.Fields.SingleOrDefault(field => string.Equals(field.Identity.DisplayName, targetField, StringComparison.OrdinalIgnoreCase))?.Identity.StableKey;
-                            if (sourceKey is null || targetKey is null) throw new AccessScanException("AccessSchemaAmbiguous");
-                            fields.Add(new(sourceKey, targetKey, ordinal));
+                            if (!fieldLookups.TryGetValue(source.Identity.StableKey, out var sourceLookup)
+                                || !fieldLookups.TryGetValue(target.Identity.StableKey, out var targetLookup)
+                                || !UniqueField(sourceLookup, sourceField, out var sourceProjection)
+                                || !UniqueField(targetLookup, targetField, out var targetProjection))
+                                throw new AccessScanException("AccessSchemaAmbiguous");
+                            fields.Add(new(sourceProjection.Identity.StableKey, targetProjection.Identity.StableKey, ordinal));
                         }
                         finally { Release(relationField); }
                     }
@@ -432,22 +455,35 @@ public sealed class AccessComReader
         return true;
     }
 
+    internal static bool UniqueField(IReadOnlyDictionary<string, List<AccessFieldProjection>> lookup, string name, out AccessFieldProjection field)
+    {
+        field = null!;
+        if (!lookup.TryGetValue(name, out var candidates) || candidates.Count != 1) return false;
+        field = candidates[0];
+        return true;
+    }
+
     private static int AccessProcessId(dynamic application)
     {
         try
         {
-            var hwnd = new IntPtr((int)application.hWndAccessApp());
+            var hwnd = new IntPtr(Convert.ToInt64(application.hWndAccessApp()));
             _ = GetWindowThreadProcessId(hwnd, out var pid);
             return checked((int)pid);
         }
         catch { return 0; }
     }
 
-    private string BoundedString(Func<string> read, int limit, string classification)
+    internal static string BoundedString(Func<string> read, int limit, string classification)
     {
-        var value = read() ?? string.Empty;
-        if (value.Length > limit) throw new AccessScanException(classification);
-        return value;
+        try
+        {
+            var value = read() ?? string.Empty;
+            if (value.Length > limit) throw new AccessScanException(classification);
+            return value;
+        }
+        catch (AccessScanException) { throw; }
+        catch { throw new AccessScanException(classification); }
     }
 
     private static string? BoundedOptionalString(Func<string> read, int limit, string classification)
