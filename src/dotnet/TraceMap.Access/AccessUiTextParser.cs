@@ -30,15 +30,15 @@ internal static partial class AccessUiTextParser
         string? filter = null;
         string? orderBy = null;
         bool? hasModule = null;
-        var lineCount = 0;
-        var characterCount = 0;
+        long lineCount = 0;
+        long characterCount = 0;
         var sawSurfaceBlock = false;
 
         string? line;
         while ((line = reader.ReadLine()) is not null)
         {
             lineCount++;
-            characterCount = checked(characterCount + line.Length + 1);
+            characterCount += line.Length + 1L;
             if (lineCount > limits.MaxUiDesignLines || characterCount > limits.MaxUiDesignTextLength)
                 throw new AccessScanException("AccessUiDesignTextLimitReached");
             var trimmed = line.Trim();
@@ -121,12 +121,15 @@ internal static partial class AccessUiTextParser
             }
         }
 
+        var malformed = !sawSurfaceBlock || blocks.Count != 0
+            || gaps.Any(item => item.Classification == "AccessUiDesignTextMalformed");
         if (!sawSurfaceBlock || blocks.Count != 0)
             gaps.Add(new("AccessUiDesignTextMalformed", "ui-surface", null, RuleIds.LegacyAccessUiSurface));
         return new(
             new(surfaceName, surfaceKind, hasModule, recordSource,
                 controls.OrderBy(item => item.Ordinal).ToArray(),
                 surfaceEvents.OrderBy(item => item.Role, StringComparer.Ordinal).ToArray(),
+                Coverage: malformed ? "partial" : "complete",
                 Filter: filter,
                 OrderBy: orderBy),
             gaps.OrderBy(item => item.Classification, StringComparer.Ordinal).ToArray());

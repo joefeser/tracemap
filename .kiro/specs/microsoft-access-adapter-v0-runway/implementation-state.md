@@ -284,10 +284,13 @@ and a different proven non-loading source.
 
 Current Phase 7 validation:
 
-- 30/30 focused Access foundation/UI tests pass;
-- 793/793 full solution tests pass;
+- 9/9 focused UI projection tests pass;
+- 796/796 full solution tests pass;
 - solution build passes with the pre-existing
   `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory;
+- format verification passes for the changed C# files; the solution-wide
+  formatter continues to report pre-existing whitespace findings outside this
+  PR's changed files;
 - private-path guard and `git diff --check` pass.
 
 Phase 7 PR readiness and deferred work:
@@ -310,6 +313,12 @@ protected-output marker count was zero, and the baseline fixture was unchanged.
 Access and worker processes exited, networking was restored, cleanup completed,
 and the Windows reference worktree remained clean. The sanitized evidence is
 recorded on issue #488 in comment `5016324776`.
+
+PR #492 review hardening preserves a successful form or report count when only
+the other catalog is unavailable, marks malformed design text projections
+partial rather than complete, uses non-overflowing design size counters, and
+does not misclassify period-qualified expressions as direct Access identifiers.
+Focused regression tests cover each corrected path.
 
 ## Foundation Validation
 
