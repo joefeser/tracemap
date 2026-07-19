@@ -1,6 +1,6 @@
 # Microsoft Access Adapter v0 Runway Implementation State
 
-Status: Phase 0 through Phase 6 ACK merge-ready on PR #487; Phase 7 projection pipeline in progress pending Windows COM capability evidence
+Status: Phase 0 through Phase 6 ACK merge-ready on PR #487; Phase 7 count-only UI inventory and explicit coverage-gap slice validated on Windows and ready for review
 
 Spec branch: `codex/microsoft-access-adapter-runway`
 
@@ -284,17 +284,41 @@ and a different proven non-loading source.
 
 Current Phase 7 validation:
 
-- 30/30 focused Access foundation/UI tests pass;
-- 793/793 full solution tests pass;
+- 9/9 focused UI projection tests pass;
+- 796/796 full solution tests pass;
 - solution build passes with the pre-existing
   `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory;
+- format verification passes for the changed C# files; the solution-wide
+  formatter continues to report pre-existing whitespace findings outside this
+  PR's changed files;
 - private-path guard and `git diff --check` pass.
 
-Still required before Phase 7 PR readiness:
+Phase 7 PR readiness and deferred work:
 
-- one Windows run of the count-only product reader and downstream artifacts;
-- hostile canary, marker, determinism, concurrent-scan, export/combine/report,
-  and full solution validation on the wired implementation.
+- no implementation or validation work remains for the count-only Phase 7 slice;
+- surface identity, design metadata, controls, direct bindings, and event
+  classification remain unchecked tasks 7.2 through 7.4 because Windows evidence
+  proved that even indexing a catalog item and reading `Name` can load a surface.
+  Requirement 6.5 is satisfied by the rule-backed coverage gap. Those richer
+  tasks require a new threat review and a different proven non-loading source.
+
+Final Phase 7 Windows validation used the exact pushed head
+`bf764a1568f938ffd63720d4f818b50b2baa3bde`. The count-only product reader
+observed form and report counts, emitted zero surface/control/binding/UI-event
+identity facts, and preserved the expected coverage gaps through the standard
+artifacts and downstream export/combine/report path. Sequential and established
+concurrent outputs were deterministic. Generation and extraction canaries
+remained false, every surface remained unloaded after the product scan, the
+protected-output marker count was zero, and the baseline fixture was unchanged.
+Access and worker processes exited, networking was restored, cleanup completed,
+and the Windows reference worktree remained clean. The sanitized evidence is
+recorded on issue #488 in comment `5016324776`.
+
+PR #492 review hardening preserves a successful form or report count when only
+the other catalog is unavailable, marks malformed design text projections
+partial rather than complete, uses non-overflowing design size counters, and
+does not misclassify period-qualified expressions as direct Access identifiers.
+Focused regression tests cover each corrected path.
 
 ## Phase 8 Platform-Neutral Work
 
