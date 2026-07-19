@@ -159,7 +159,7 @@ remain separate reviewable slices.
 - [ ] 7.4 Classify event properties without exporting expressions or embedded
       macro bodies.
 - [x] 7.5 Add sensitive caption/label/expression/value suppression tests.
-- [ ] 7.6 Validate form/report extraction does not render or invoke surfaces.
+- [x] 7.6 Validate form/report extraction does not render or invoke surfaces.
 
 ## Phase 8: VBA and Event Flow (Follow-Up PR)
 
