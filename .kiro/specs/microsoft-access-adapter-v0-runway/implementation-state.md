@@ -347,6 +347,12 @@ Implemented platform-neutral Phase 9 pieces:
 - `legacy.access.macro-gap.v1`, `AccessMacroDeclared`, safe/hash macro identity,
   normalized named/UI/data/embedded/unknown categories, exact `AutoExec`
   classification, and one protected-body omission gap per observed category;
+- exact startup classification is restricted to an ownerless named `AutoExec`;
+  embedded/data macros with the same safe name remain non-startup inventory.
+  Optional safe owner stable keys and occurrence ordinals now preserve distinct
+  embedded instances and emit source-to-macro fact linkage. An invalid owner
+  channel is discarded with `AccessMacroOwnerUnavailable` rather than crossing
+  worker IPC;
 - a human Access design-evidence summary with hidden public claim level,
   category counts, rule/tier counts, gaps, and repeated non-claims;
 - evidence-doc routing of Access facts to the legacy family while preserving
@@ -366,9 +372,9 @@ argument, condition, expression, or body can enter worker IPC or artifacts.
 
 Current Phase 9 platform-neutral validation:
 
-- 3/3 focused macro/reporting tests pass;
-- 36/36 combined Access foundation/UI/VBA/macro tests pass;
-- 799/799 full solution tests pass;
+- 4/4 focused macro/reporting tests pass;
+- 39/39 combined Access foundation/UI/VBA/macro tests pass;
+- 801/801 full solution tests pass;
 - solution build passes with only the pre-existing
   `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory;
 - changed-file whitespace verification, private-path guard, and

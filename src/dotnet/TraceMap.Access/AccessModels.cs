@@ -177,6 +177,8 @@ public sealed record AccessEventBindingProjection(
 public sealed record AccessMacroProjection(
     AccessSafeIdentity Identity,
     string MacroKind,
+    string? OwnerStableKey,
+    int Ordinal,
     string StartupRole,
     string BodyStatus,
     string Coverage);

@@ -15,13 +15,26 @@ public sealed class AccessMacroReportingTests
     public void Macro_projector_is_deterministic_hashes_unsafe_names_and_records_body_omission_by_category()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('d', 40), "fixture.accdb", "hash");
-        AccessRawMacro[] forward = [new("AutoExec", "named"), new(ProtectedMacroName, "data"), new("ButtonMacro", "embedded")];
+        var firstOwner = AccessSafeValues.Identity(seed, "control", "FirstButton").StableKey;
+        var secondOwner = AccessSafeValues.Identity(seed, "control", "SecondButton").StableKey;
+        AccessRawMacro[] forward =
+        [
+            new("AutoExec", "named"),
+            new(ProtectedMacroName, "data"),
+            new("AutoExec", "embedded", firstOwner),
+            new("AutoExec", "embedded", secondOwner)
+        ];
         var projected = AccessMacroProjector.Project(seed, forward);
         var reversed = AccessMacroProjector.Project(seed, forward.Reverse().ToArray());
 
         Assert.Equal(JsonSerializer.Serialize(projected), JsonSerializer.Serialize(reversed));
-        Assert.Equal(3, projected.Macros.Count);
-        Assert.Equal("autoexec", projected.Macros.Single(item => item.Identity.DisplayName == "AutoExec").StartupRole);
+        Assert.Equal(4, projected.Macros.Count);
+        Assert.Equal("autoexec", projected.Macros.Single(item => item.MacroKind == "named").StartupRole);
+        Assert.All(projected.Macros.Where(item => item.MacroKind == "embedded"), item => Assert.Equal("not-autoexec", item.StartupRole));
+        Assert.Equal(2, projected.Macros.Where(item => item.MacroKind == "embedded").Select(item => item.Identity.StableKey).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(new[] { firstOwner, secondOwner }.OrderBy(value => value, StringComparer.Ordinal),
+            projected.Macros.Where(item => item.MacroKind == "embedded")
+                .Select(item => item.OwnerStableKey).OrderBy(value => value, StringComparer.Ordinal));
         Assert.Null(projected.Macros.Single(item => item.MacroKind == "data").Identity.DisplayName);
         Assert.All(projected.Macros, macro => Assert.Equal("protected-omitted", macro.BodyStatus));
         Assert.Equal(3, projected.Gaps.Count(gap => gap.Classification == "AccessMacroBodyOmitted"
@@ -30,11 +43,27 @@ public sealed class AccessMacroReportingTests
     }
 
     [Fact]
+    public void Macro_projector_drops_an_unsafe_owner_channel_and_records_a_rule_backed_gap()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('f', 40), "fixture.accdb", "hash");
+        const string protectedOwner = "PrivateControlOwner_92817";
+
+        var projected = AccessMacroProjector.Project(seed, [new("ButtonMacro", "embedded", protectedOwner)]);
+
+        Assert.Null(Assert.Single(projected.Macros).OwnerStableKey);
+        Assert.Contains(projected.Gaps, gap => gap.Classification == "AccessMacroOwnerUnavailable"
+            && gap.RuleId == RuleIds.LegacyAccessMacroGap);
+        Assert.DoesNotContain(protectedOwner, JsonSerializer.Serialize(projected), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Macro_evidence_reports_hidden_static_counts_and_routes_to_hidden_legacy_docs_without_protected_names()
     {
         using var temp = new TempDirectory();
         var (scan, output) = await BuildScanAsync(temp.Path);
         await AccessArtifactWriter.WriteAsync(output, scan, AccessLimits.Default);
+        Assert.Contains(scan.Facts, fact => fact.FactType == FactTypes.AccessMacroDeclared
+            && fact.SourceSymbol?.StartsWith("access-control-", StringComparison.Ordinal) == true);
 
         var report = await File.ReadAllTextAsync(Path.Combine(output, "report.md"));
         Assert.Contains("## Access Design Evidence Summary", report, StringComparison.Ordinal);
@@ -111,8 +140,9 @@ public sealed class AccessMacroReportingTests
             output,
             false);
         var seed = AccessSafeValues.DatabaseIdentitySeed(input.RepositoryIdentityHash, input.CommitSha, input.DatabaseRelativePath, input.DatabaseHash);
+        var embeddedOwner = AccessSafeValues.Identity(seed, "control", "MacroButton").StableKey;
         var macro = AccessMacroProjector.Project(seed,
-            [new("AutoExec", "named"), new(ProtectedMacroName, "data"), new("ButtonMacro", "embedded")]);
+            [new("AutoExec", "named"), new(ProtectedMacroName, "data"), new("ButtonMacro", "embedded", embeddedOwner)]);
         var projection = new AccessDatabaseProjection(
             "tracemap.access-projection.v1",
             databaseHash,

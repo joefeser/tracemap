@@ -2,7 +2,11 @@ using TraceMap.Core;
 
 namespace TraceMap.Access;
 
-internal sealed record AccessRawMacro(string Name, string MacroKind);
+internal sealed record AccessRawMacro(
+    string Name,
+    string MacroKind,
+    string? OwnerStableKey = null,
+    int Ordinal = 0);
 
 internal sealed record AccessMacroProjectionResult(
     IReadOnlyList<AccessMacroProjection> Macros,
@@ -17,26 +21,40 @@ internal static class AccessMacroProjector
     {
         limits ??= AccessLimits.Default;
         var macros = new List<AccessMacroProjection>();
+        var gaps = new List<AccessGapProjection>();
         var observedKinds = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var raw in rawMacros
                      .OrderBy(item => NormalizeKind(item.MacroKind), StringComparer.Ordinal)
+                     .ThenBy(item => SafeOwnerStableKey(item.OwnerStableKey) ?? string.Empty, StringComparer.Ordinal)
                      .ThenBy(item => AccessSafeValues.RoleHash("access-macro-sort-name", item.Name), StringComparer.Ordinal)
+                     .ThenBy(item => item.Ordinal)
                      .Take(limits.MaxObjectsPerCollection))
         {
             var kind = NormalizeKind(raw.MacroKind);
             observedKinds.Add(kind);
-            var identity = AccessSafeValues.Identity(databaseIdentitySeed, $"macro-{kind}", raw.Name);
+            var ownerStableKey = SafeOwnerStableKey(raw.OwnerStableKey);
+            var identity = AccessSafeValues.Identity(
+                databaseIdentitySeed,
+                $"macro-{kind}-{ownerStableKey ?? "database"}",
+                raw.Name,
+                raw.Ordinal);
+            if (raw.OwnerStableKey is not null && ownerStableKey is null)
+                gaps.Add(new("AccessMacroOwnerUnavailable", $"macro-{kind}", identity.StableKey, RuleIds.LegacyAccessMacroGap));
             macros.Add(new(
                 identity,
                 kind,
-                string.Equals(raw.Name.Trim(), "AutoExec", StringComparison.OrdinalIgnoreCase) ? "autoexec" : "not-autoexec",
+                ownerStableKey,
+                raw.Ordinal,
+                kind == "named" && ownerStableKey is null
+                    && string.Equals(raw.Name.Trim(), "AutoExec", StringComparison.OrdinalIgnoreCase)
+                        ? "autoexec"
+                        : "not-autoexec",
                 "protected-omitted",
                 "inventory-only"));
         }
 
-        var gaps = observedKinds
-            .Select(kind => new AccessGapProjection("AccessMacroBodyOmitted", $"macro-{kind}", null, RuleIds.LegacyAccessMacroGap))
-            .ToList();
+        gaps.AddRange(observedKinds
+            .Select(kind => new AccessGapProjection("AccessMacroBodyOmitted", $"macro-{kind}", null, RuleIds.LegacyAccessMacroGap)));
         if (rawMacros.Count > limits.MaxObjectsPerCollection)
             gaps.Add(new("AccessMacroCollectionLimitReached", "macro-catalog", null, RuleIds.LegacyAccessMacroGap));
 
@@ -53,4 +71,15 @@ internal static class AccessMacroProjector
         "embedded" or "embedded-macro" => "embedded",
         _ => "unknown"
     };
+
+    private static string? SafeOwnerStableKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var trimmed = value.Trim();
+        return trimmed.Length <= 128
+            && trimmed.StartsWith("access-", StringComparison.Ordinal)
+            && trimmed.All(character => char.IsAsciiLetterOrDigit(character) || character == '-')
+                ? trimmed
+                : null;
+    }
 }
