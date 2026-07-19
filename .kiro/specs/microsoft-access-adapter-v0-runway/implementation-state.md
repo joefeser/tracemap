@@ -294,6 +294,15 @@ reader/worker wiring for task 8.2, Windows hostile-canary and protected-marker
 validation, and the focused PR/ACK sequence. No product COM/VBProject reader or
 worker IPC source field has been added on this branch.
 
+The Phase 8 synthetic generator now includes one form event procedure with an
+observable first-statement canary plus local-call, literal navigation,
+DAO/query/table, domain-function, variable target, `Eval`, `Run`, COM/external
+process, comment, literal, fake SQL, and fake path shapes. The smoke marker set
+was extended accordingly. This does not complete task 8.0 yet: PowerShell is
+not installed on the macOS host, and the generator change remains unparsed and
+unexecuted until the isolated Windows + Access run from issue #489. No extractor
+or worker API was changed by this fixture-only commit.
+
 Windows capability gate: issue #489 contains a separate local-only prompt and
 sanitized result contract for `CurrentProject.AllModules`, already-loaded module
 inventory, and read-only VBProject/CodeModule access under the machine's existing
