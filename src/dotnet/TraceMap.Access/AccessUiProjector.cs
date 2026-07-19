@@ -318,7 +318,7 @@ internal static partial class AccessUiProjector
         "after-update", "before-update", "on-click", "on-current", "on-dbl-click", "on-load", "on-no-data", "on-open"
     };
 
-    [GeneratedRegex(@"^(?:\[(?<bracketed>[^\]]+)\]|(?<plain>[A-Za-z_][A-Za-z0-9_ .-]*))$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^(?:\[(?<bracketed>[^\]]+)\]|(?<plain>[A-Za-z_][A-Za-z0-9_ -]*))$", RegexOptions.CultureInvariant)]
     private static partial Regex DirectIdentifierPattern();
 
     [GeneratedRegex(@"\[(?<name>[^\]]+)\]", RegexOptions.CultureInvariant)]

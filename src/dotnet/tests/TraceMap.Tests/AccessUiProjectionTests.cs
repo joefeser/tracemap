@@ -100,6 +100,25 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Malformed_design_is_partial_and_does_not_claim_an_unbound_surface()
+    {
+        var parsed = AccessUiTextParser.Parse(
+            new StringReader("Begin Form\nBegin TextBox\nEnd\n"), "frmPartial", "form");
+        var raw = Assert.IsType<AccessRawUiSurface>(parsed.Surface);
+
+        Assert.Equal("partial", raw.Coverage);
+        Assert.Contains(parsed.Gaps, gap => gap.Classification == "AccessUiDesignTextMalformed");
+
+        var projected = AccessUiProjector.Project(
+            AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash"),
+            [raw],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(),
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>());
+
+        Assert.Equal("unknown", Assert.Single(projected.Surfaces).BoundState);
+    }
+
+    [Fact]
     public void Documented_surface_inventory_reads_only_bounded_counts_and_never_indexes_items()
     {
         var gaps = new List<AccessGapProjection>();
@@ -112,6 +131,36 @@ public sealed class AccessUiProjectionTests
         Assert.Single(gaps, gap => gap.Classification == "AccessFormReportCoverageUnavailable"
             && gap.ScopeKind == "form-catalog"
             && gap.RuleId == RuleIds.LegacyAccessUiSurface);
+    }
+
+    [Fact]
+    public void Surface_inventory_preserves_a_successful_count_when_the_other_catalog_is_unavailable()
+    {
+        var gaps = new List<AccessGapProjection>();
+        var projection = new AccessComReader().ReadUiInventoryCounts(
+            new FakeAccessApplication(new FakeAccessProject(new FakeAccessCollection(3))), gaps);
+
+        Assert.Equal(3, projection.FormCount);
+        Assert.Null(projection.ReportCount);
+        Assert.Equal("count-partial-identity-unavailable", projection.Coverage);
+        Assert.Contains(gaps, gap => gap.Classification == "AccessFormReportCoverageUnavailable"
+            && gap.ScopeKind == "report-catalog");
+    }
+
+    [Fact]
+    public void Dotted_binding_is_an_expression_not_a_direct_access_identifier()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('b', 40), "fixture.accdb", "hash");
+        var projected = AccessUiProjector.Project(
+            seed,
+            [new("frmQualified", "form", false, "Customers.CustomerId", [], [])],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(),
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>());
+
+        var binding = Assert.Single(Assert.Single(projected.Surfaces).Bindings);
+        Assert.Equal("expression", binding.SourceKind);
+        Assert.Contains(projected.Gaps, gap => gap.Classification == "AccessBindingExpressionPartial");
+        Assert.DoesNotContain(projected.Gaps, gap => gap.Classification == "AccessBindingTargetUnresolved");
     }
 
     [Fact]
@@ -398,5 +447,16 @@ public sealed class AccessUiProjectionTests
                 throw new InvalidOperationException("Surface item access is forbidden.");
             }
         }
+    }
+
+    public sealed class FakeAccessApplication(FakeAccessProject project)
+    {
+        public FakeAccessProject CurrentProject => project;
+    }
+
+    public sealed class FakeAccessProject(FakeAccessCollection forms)
+    {
+        public FakeAccessCollection AllForms => forms;
+        public FakeAccessCollection AllReports => throw new InvalidOperationException("Report catalog unavailable.");
     }
 }
