@@ -57,7 +57,7 @@ public sealed class AccessComReader
         var known = BuildKnownObjects(tables, tableLookup, queryIdentities);
         var relationships = ReadRelationships(databaseObject, databaseIdentitySeed, tableLookup, fieldLookups, gaps, ref systemCount);
         var queries = ReadQueries(databaseObject, databaseIdentitySeed, queryIdentities, known, gaps, external);
-        var uiSurfaces = ReadUiSurfaceInventory(application, databaseIdentitySeed, known, fieldLookups, gaps);
+        var uiInventory = ReadUiInventoryCounts(application, gaps);
 
         var gapsTruncated = gaps.Count > _limits.MaxGaps;
         var boundedGaps = gaps
@@ -84,7 +84,7 @@ public sealed class AccessComReader
             [
                 new("schemaCatalog", "observed"),
                 new("savedQueries", "observed"),
-                new("formsReports", "inventory-observed-partial"),
+                new("formsReports", uiInventory.Coverage),
                 new("vbaModules", "not-in-slice"),
                 new("macros", "startup-suppressed-not-inventoried"),
                 new("externalLinks", "hash-only"),
@@ -92,83 +92,56 @@ public sealed class AccessComReader
                 new("rowDataRead", "false"),
                 new("executionPerformed", "false")
             ],
-            uiSurfaces);
+            UiSurfaces: [],
+            UiInventory: uiInventory);
     }
 
-    private IReadOnlyList<AccessUiSurfaceProjection> ReadUiSurfaceInventory(
+    private AccessUiInventoryProjection ReadUiInventoryCounts(
         object applicationObject,
-        string databaseIdentitySeed,
-        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> knownObjects,
-        IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> rawFieldLookups,
         List<AccessGapProjection> gaps)
     {
-        var raw = new List<AccessRawUiSurface>();
         dynamic? project = null;
         try
         {
             dynamic application = applicationObject;
             project = application.CurrentProject;
-            ReadSurfaceCollection((object)project.AllForms, "form", databaseIdentitySeed, raw, gaps);
-            ReadSurfaceCollection((object)project.AllReports, "report", databaseIdentitySeed, raw, gaps);
+            var formCount = ReadSurfaceCollectionCount((object)project.AllForms, "form", gaps);
+            var reportCount = ReadSurfaceCollectionCount((object)project.AllReports, "report", gaps);
+            var coverage = formCount is null || reportCount is null
+                ? "count-partial-identity-unavailable"
+                : formCount > 0 || reportCount > 0
+                    ? "count-observed-identity-unavailable"
+                    : "count-observed-empty";
+            return new(formCount, reportCount, coverage);
         }
-        catch (AccessScanException ex) when (ex.Classification == "AccessSurfaceUnexpectedlyLoaded") { throw; }
-        catch (AccessScanException ex) { gaps.Add(new(ex.Classification, "forms-reports", null, RuleIds.LegacyAccessUiSurface)); }
-        catch { gaps.Add(new("AccessFormReportCoverageUnavailable", "forms-reports", null, RuleIds.LegacyAccessUiSurface)); }
+        catch (AccessScanException ex)
+        {
+            gaps.Add(new(ex.Classification, "forms-reports", null, RuleIds.LegacyAccessUiSurface));
+            return new(null, null, "count-unavailable");
+        }
+        catch
+        {
+            gaps.Add(new("AccessFormReportCoverageUnavailable", "forms-reports", null, RuleIds.LegacyAccessUiSurface));
+            return new(null, null, "count-unavailable");
+        }
         finally { Release(project); }
-
-        var safeFields = rawFieldLookups.ToDictionary(
-            item => item.Key,
-            item => (IReadOnlyDictionary<string, IReadOnlyList<string>>)item.Value.ToDictionary(
-                field => field.Key,
-                field => (IReadOnlyList<string>)field.Value.Select(candidate => candidate.Identity.StableKey)
-                    .OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-                StringComparer.OrdinalIgnoreCase),
-            StringComparer.Ordinal);
-        var projected = AccessUiProjector.Project(databaseIdentitySeed, raw, knownObjects, safeFields);
-        gaps.AddRange(projected.Gaps);
-        return projected.Surfaces;
     }
 
-    internal void ReadSurfaceCollection(
+    internal int? ReadSurfaceCollectionCount(
         object collectionObject,
         string surfaceKind,
-        string databaseIdentitySeed,
-        List<AccessRawUiSurface> result,
         List<AccessGapProjection> gaps)
     {
         dynamic collection = collectionObject;
         try
         {
             var count = BoundedCount(collection, surfaceKind == "form" ? "AccessFormCollectionLimit" : "AccessReportCollectionLimit");
-            for (var index = 0; index < count; index++)
-            {
-                object? itemObject = null;
-                try
-                {
-                    itemObject = collection[index];
-                    dynamic item = itemObject;
-                    var name = BoundedString(() => (string)item.Name, 512, "AccessSurfaceNameUnavailable");
-                    var identity = AccessSafeValues.Identity(databaseIdentitySeed, surfaceKind, name);
-                    bool isLoaded;
-                    try { isLoaded = (bool)item.IsLoaded; }
-                    catch
-                    {
-                        gaps.Add(new("AccessSurfaceLoadedStateUnavailable", surfaceKind, identity.StableKey, RuleIds.LegacyAccessUiSurface));
-                        result.Add(new(name, surfaceKind, null, null, [], [], "inventory-only"));
-                        continue;
-                    }
-                    if (isLoaded)
-                        throw new AccessScanException("AccessSurfaceUnexpectedlyLoaded");
-
-                    result.Add(new(name, surfaceKind, null, null, [], [], "inventory-only"));
-                    gaps.Add(new("AccessFormReportCoverageUnavailable", surfaceKind, identity.StableKey, RuleIds.LegacyAccessUiSurface));
-                }
-                catch (AccessScanException ex) when (ex.Classification == "AccessSurfaceUnexpectedlyLoaded") { throw; }
-                catch (AccessScanException ex) { gaps.Add(new(ex.Classification, surfaceKind, null, RuleIds.LegacyAccessUiSurface)); }
-                catch { gaps.Add(new("AccessObjectMetadataUnavailable", surfaceKind, null, RuleIds.LegacyAccessUiSurface)); }
-                finally { Release(itemObject); }
-            }
+            if (count > 0)
+                gaps.Add(new("AccessFormReportCoverageUnavailable", $"{surfaceKind}-catalog", null, RuleIds.LegacyAccessUiSurface));
+            return count;
         }
+        catch (AccessScanException ex) { gaps.Add(new(ex.Classification, $"{surfaceKind}-catalog", null, RuleIds.LegacyAccessUiSurface)); return null; }
+        catch { gaps.Add(new("AccessFormReportCoverageUnavailable", $"{surfaceKind}-catalog", null, RuleIds.LegacyAccessUiSurface)); return null; }
         finally { Release(collectionObject); }
     }
 
