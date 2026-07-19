@@ -124,6 +124,36 @@ public sealed class AccessVbaProjectionTests
     }
 
     [Fact]
+    public void Call_limit_gap_is_emitted_only_when_a_call_is_actually_omitted()
+    {
+        const string exactSource = """
+            Public Sub EntryPoint()
+                Call Helper
+            End Sub
+            Public Sub Helper()
+            End Sub
+            """;
+        const string overflowSource = """
+            Public Sub EntryPoint()
+                Call Helper
+                Call Helper
+            End Sub
+            Public Sub Helper()
+            End Sub
+            """;
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('d', 40), "fixture.accdb", "hash");
+        var limits = AccessLimits.Default with { MaxVbaCallsPerProcedure = 1 };
+
+        var exact = AccessVbaProjector.Project(seed, [new("ModuleA", "standard", exactSource)], limits: limits);
+        Assert.Single(exact.Modules.Single().Procedures.Single(procedure => procedure.Identity.DisplayName == "EntryPoint").Calls);
+        Assert.DoesNotContain(exact.Gaps, gap => gap.Classification == "AccessVbaCallLimitReached");
+
+        var overflow = AccessVbaProjector.Project(seed, [new("ModuleA", "standard", overflowSource)], limits: limits);
+        Assert.Single(overflow.Modules.Single().Procedures.Single(procedure => procedure.Identity.DisplayName == "EntryPoint").Calls);
+        Assert.Single(overflow.Gaps, gap => gap.Classification == "AccessVbaCallLimitReached");
+    }
+
+    [Fact]
     public async Task Fact_builder_preserves_vba_line_spans_rules_and_safe_projections_without_source()
     {
         const string source = """
