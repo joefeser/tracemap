@@ -207,6 +207,10 @@ Implemented platform-neutral pieces:
   report, eight representative controls, direct/row/calculated binding shapes,
   protected captions/expressions, and an event canary. This generator change is
   not considered validated until it runs inside Windows + Access.
+- added an artifact/downstream regression proving form, control, binding, and
+  rule provenance survive standard SQLite persistence and combined-index
+  import while planted control/expression/event values remain absent from all
+  standard and combined artifacts.
 
 Windows-only capability gate: issue #488 contains the local-only, no-upload
 probe and sanitized result format. The isolated VM deliberately disables host
@@ -221,8 +225,8 @@ recordset, query, macro, or VBA execution API has been added.
 
 Current Phase 7 validation:
 
-- 29/29 focused Access foundation/UI tests pass;
-- 792/792 full solution tests pass;
+- 30/30 focused Access foundation/UI tests pass;
+- 793/793 full solution tests pass;
 - solution build passes with the pre-existing
   `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory;
 - private-path guard and `git diff --check` pass.
