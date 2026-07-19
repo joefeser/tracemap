@@ -409,6 +409,16 @@ zero protected-output matches, unchanged baseline fixture, clean Access/worker
 exit, restored networking, complete cleanup, and clean reference worktree.
 Phase 9 and issue #491 were not started.
 
+The platform-neutral projector was also exercised directly on Windows at the
+pre-count-boundary head `3fbe3aea`: all four then-existing
+`AccessVbaProjectionTests` and all nine `AccessUiProjectionTests` passed after
+correcting a test-only SQLite pooled-connection lock. Commit `c5aad146` clears
+SQLite pools before the protected-marker byte scan and opens a fresh connection
+for the subsequent fact query; it changes no product, COM, projector, rule, or
+evidence behavior. That fix was cherry-picked into this branch and the current
+seven focused VBA tests, 41 Access tests, full 803-test solution, build, artifact
+validator, private-path guard, and diff checks all pass on macOS.
+
 ## Foundation Validation
 
 Platform-neutral validation on the implementation branch:
