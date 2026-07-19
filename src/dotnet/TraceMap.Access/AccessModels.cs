@@ -16,6 +16,10 @@ public sealed record AccessLimits(
     int MaxQueryTextLength = 4 * 1024 * 1024,
     int MaxUiDesignTextLength = 4 * 1024 * 1024,
     int MaxUiDesignLines = 100_000,
+    int MaxVbaModuleTextLength = 4 * 1024 * 1024,
+    int MaxVbaModuleLines = 100_000,
+    int MaxVbaProceduresPerModule = 10_000,
+    int MaxVbaCallsPerProcedure = 10_000,
     int MaxFacts = 100_000,
     int MaxGaps = 10_000,
     long MaxProjectionBytes = 64L * 1024 * 1024,
@@ -134,9 +138,50 @@ public sealed record AccessUiSurfaceProjection(
     IReadOnlyList<AccessUiEventProjection> Events,
     string Coverage = "complete");
 
+public sealed record AccessVbaCallProjection(
+    AccessSafeIdentity Identity,
+    string ProcedureStableKey,
+    string CallKind,
+    int StartLine,
+    int EndLine,
+    string? TargetStableKey,
+    AccessSafeIdentity? LiteralTargetIdentity,
+    string TargetKind,
+    string? ExpressionHash,
+    int ExpressionLength,
+    string Coverage);
+
+public sealed record AccessVbaProcedureProjection(
+    AccessSafeIdentity Identity,
+    string ModuleStableKey,
+    string ProcedureKind,
+    int StartLine,
+    int EndLine,
+    IReadOnlyList<AccessVbaCallProjection> Calls);
+
+public sealed record AccessVbaModuleProjection(
+    AccessSafeIdentity Identity,
+    string ModuleKind,
+    string ModuleHash,
+    int LineCount,
+    IReadOnlyList<AccessVbaProcedureProjection> Procedures,
+    string Coverage);
+
+public sealed record AccessEventBindingProjection(
+    string OwnerStableKey,
+    string EventRole,
+    string ModuleStableKey,
+    string? ProcedureStableKey,
+    string Coverage);
+
 public sealed record AccessUiInventoryProjection(
     int? FormCount,
     int? ReportCount,
+    string Coverage);
+
+public sealed record AccessVbaInventoryProjection(
+    int? ModuleCount,
+    bool? LoadedModuleCountUnchanged,
     string Coverage);
 
 public sealed record AccessGapProjection(string Classification, string ScopeKind, string? StableScopeKey, string? RuleId = null);
@@ -159,7 +204,10 @@ public sealed record AccessDatabaseProjection(
     IReadOnlyList<AccessGapProjection> Gaps,
     IReadOnlyList<AccessCapabilityProjection> Capabilities,
     IReadOnlyList<AccessUiSurfaceProjection>? UiSurfaces = null,
-    AccessUiInventoryProjection? UiInventory = null);
+    IReadOnlyList<AccessVbaModuleProjection>? VbaModules = null,
+    IReadOnlyList<AccessEventBindingProjection>? EventBindings = null,
+    AccessUiInventoryProjection? UiInventory = null,
+    AccessVbaInventoryProjection? VbaInventory = null);
 
 public sealed record AccessWorkerFrame(
     string Kind,

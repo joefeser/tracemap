@@ -74,6 +74,11 @@ public static class AccessFactBuilder
                 ("formCount", projection.UiInventory?.FormCount?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 ("reportCount", projection.UiInventory?.ReportCount?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 ("formsReportsCoverage", projection.UiInventory?.Coverage),
+                ("vbaModuleCount", projection.VbaInventory?.ModuleCount?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ("vbaLoadedModuleCountUnchanged", projection.VbaInventory?.LoadedModuleCountUnchanged is bool loadedModuleCountUnchanged
+                    ? loadedModuleCountUnchanged.ToString().ToLowerInvariant()
+                    : null),
+                ("vbaCoverage", projection.VbaInventory?.Coverage),
                 ("coverageLabel", "reduced-static-design"),
                 ("limitations", "binary-container-span;no-rows;no-execution;no-runtime-proof"))));
 
@@ -192,6 +197,66 @@ public static class AccessFactBuilder
             }
         }
 
+        foreach (var module in projection.VbaModules ?? [])
+        {
+            var moduleSpan = VbaSpan(input.DatabaseRelativePath, 1, Math.Max(1, module.LineCount));
+            facts.Add(Create(manifest, FactTypes.AccessVbaModuleDeclared, RuleIds.LegacyAccessVba, EvidenceTiers.Tier3SyntaxOrTextual, moduleSpan,
+                targetSymbol: module.Identity.StableKey,
+                properties: IdentityProps(module.Identity,
+                    ("moduleStableKey", module.Identity.StableKey), ("moduleKind", module.ModuleKind),
+                    ("moduleHash", module.ModuleHash), ("lineCount", module.LineCount.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    ("procedureCount", module.Procedures.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    ("coverageLabel", module.Coverage),
+                    ("limitations", "bounded-textual-evidence;no-source-persisted;no-execution;no-runtime-dispatch-proof"))));
+
+            foreach (var procedure in module.Procedures)
+            {
+                var procedureSpan = VbaSpan(input.DatabaseRelativePath, procedure.StartLine, procedure.EndLine);
+                facts.Add(Create(manifest, FactTypes.AccessVbaProcedureDeclared, RuleIds.LegacyAccessVba, EvidenceTiers.Tier3SyntaxOrTextual, procedureSpan,
+                    sourceSymbol: module.Identity.StableKey,
+                    targetSymbol: procedure.Identity.StableKey,
+                    properties: IdentityProps(procedure.Identity,
+                        ("moduleStableKey", procedure.ModuleStableKey), ("procedureStableKey", procedure.Identity.StableKey),
+                        ("procedureKind", procedure.ProcedureKind),
+                        ("callCount", procedure.Calls.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                        ("limitations", "declaration-shape-only;no-runtime-dispatch-proof"))));
+
+                foreach (var call in procedure.Calls)
+                {
+                    var properties = IdentityProps(call.Identity,
+                        ("procedureStableKey", call.ProcedureStableKey), ("stableCallKey", call.Identity.StableKey),
+                        ("callKind", call.CallKind), ("targetStableKey", call.TargetStableKey),
+                        ("targetKind", call.TargetKind), ("expressionHash", call.ExpressionHash),
+                        ("expressionLength", call.ExpressionLength > 0 ? call.ExpressionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                        ("coverageLabel", call.Coverage),
+                        ("limitations", "bounded-static-candidate;no-execution;no-branch-or-runtime-target-proof"));
+                    if (call.LiteralTargetIdentity is not null)
+                    {
+                        properties["literalTargetNameHash"] = call.LiteralTargetIdentity.NameHash;
+                        if (call.LiteralTargetIdentity.DisplayName is not null)
+                            properties["literalTargetName"] = call.LiteralTargetIdentity.DisplayName;
+                    }
+                    facts.Add(Create(manifest, FactTypes.AccessNavigationCandidate, RuleIds.LegacyAccessVba, EvidenceTiers.Tier3SyntaxOrTextual,
+                        VbaSpan(input.DatabaseRelativePath, call.StartLine, call.EndLine),
+                        sourceSymbol: call.ProcedureStableKey,
+                        targetSymbol: call.TargetStableKey,
+                        properties: properties));
+                }
+            }
+        }
+
+        foreach (var binding in projection.EventBindings ?? [])
+        {
+            facts.Add(Create(manifest, FactTypes.AccessEventBindingCandidate, RuleIds.LegacyAccessEventBinding, EvidenceTiers.Tier3SyntaxOrTextual, span,
+                sourceSymbol: binding.OwnerStableKey,
+                targetSymbol: binding.ProcedureStableKey,
+                properties: Props(
+                    ("ownerStableKey", binding.OwnerStableKey), ("eventRole", binding.EventRole),
+                    ("moduleStableKey", binding.ModuleStableKey), ("procedureStableKey", binding.ProcedureStableKey),
+                    ("coverageLabel", binding.Coverage),
+                    ("limitations", "exact-same-module-static-candidate;no-event-execution-or-runtime-dispatch-proof"))));
+        }
+
         foreach (var gap in projectedGaps)
         {
             facts.Add(Create(manifest, FactTypes.AnalysisGap, gap.RuleId ?? RuleIds.LegacyAccessCoverageGap, EvidenceTiers.Tier4Unknown, span,
@@ -228,6 +293,9 @@ public static class AccessFactBuilder
         FactFactory.Create(manifest, type, rule, tier, span, sourceSymbol: sourceSymbol, targetSymbol: targetSymbol, properties: properties);
 
     private static EvidenceSpan Span(string path) => new(path, 1, 1, null, ExtractorId, ScannerVersions.AccessExtractor);
+
+    private static EvidenceSpan VbaSpan(string path, int startLine, int endLine) =>
+        new(path, Math.Max(1, startLine), Math.Max(Math.Max(1, startLine), endLine), null, ExtractorId, ScannerVersions.AccessExtractor);
 
     private static void AddBindingFacts(List<CodeFact> facts, ScanManifest manifest, EvidenceSpan span, IReadOnlyList<AccessBindingProjection> bindings)
     {
