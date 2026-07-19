@@ -256,6 +256,26 @@ unexpected scratch remnants are not. Issue #488 carries the corrected prompt
 and fresh explicit rerun authorization. Phases 8 and 9 remain paused unless the
 corrected Phase 7 rerun completes without a boundary.
 
+The corrected rerun reached extraction and stopped with
+`surface-loaded-during-metadata-read`. Both generation and extraction canaries
+remained false, prohibited sinks contained zero protected-marker matches, the
+baseline fixture was unchanged, Access exited, and cleanup completed. This is
+evidence that the probed unloaded-surface property path is outside the v0 safety
+boundary; it is not evidence that forms/reports can be safely opened for richer
+metadata.
+
+The product reader now refuses to access an unloaded AccessObject's `Properties`
+collection. It inventories only catalog identity plus an explicit `IsLoaded`
+state from `AllForms`/`AllReports`, emits `inventory-only` surface projections
+and `AccessFormReportCoverageUnavailable`, and preserves unknown module/bound
+state. Encountering an already-loaded surface fails the safety boundary instead
+of continuing with a successful artifact set. Platform-neutral tests use a fake
+property accessor that would load the surface and prove the accessor is never
+called. One final narrowed Windows probe may test only collection enumeration,
+`Name`, and `IsLoaded`; all other surface properties, controls, bindings, and
+events remain unsupported gaps for v0 unless a later threat review approves a
+different non-loading source.
+
 Current Phase 7 validation:
 
 - 30/30 focused Access foundation/UI tests pass;
