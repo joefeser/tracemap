@@ -77,9 +77,12 @@ leave my controlled environment.
    local absolute path or database secret.
 7. WHEN the user requests `--help` or `--version` THEN the command SHALL work on
    every supported TraceMap host without initializing COM.
-8. WHEN a scan succeeds THEN its manifest SHALL include repository identity,
-   commit SHA, repository-relative database path, database SHA-256, adapter
-   version, Access version, provider capability labels, and extraction coverage.
+8. WHEN a scan succeeds THEN its manifest SHALL remain within the existing
+   shared `ScanManifest` contract and include repository identity, commit SHA,
+   adapter version, extraction coverage, and known gaps. The repository-relative
+   database path, database SHA-256, Access version, and provider capabilities
+   SHALL be preserved in rule-backed inventory/capability facts rather than new
+   adapter-specific manifest fields.
 
 ### Requirement 2: Non-Executing Input Safety
 
@@ -324,6 +327,9 @@ existing TraceMap evidence workflow.
 4. Existing `export`, `combine`, `report`, evidence-docs, vault, and release-review
    readers SHALL either preserve Access facts safely or declare an explicit
    unsupported-consumer gap; they SHALL NOT silently drop Access provenance.
+   When a later slice adds Access release-review sections, section gaps SHALL be
+   structured `ReleaseReviewGap` entries flowed into the packet-level `gaps`
+   collection, and section statuses SHALL use `ReleaseReviewStatuses` only.
 5. Public/demo export paths SHALL default Access object evidence to hidden until
    a separate public-safe fixture and claim review promote it.
 6. Reports SHALL repeat the non-claims: no row inspection, no SQL/query/macro/VBA
@@ -339,25 +345,29 @@ that prove both useful coverage and non-execution.
 
 1. The implementation SHALL include a generator for a synthetic zero-row Access
    fixture rather than committing a customer database or private export.
-2. The fixture SHALL cover local tables, composite and simple relationships,
-   select/parameter/action/pass-through queries, linked-source metadata, forms,
-   reports, controls, event procedures, VBA, AutoExec/startup behavior, and
-   unsupported macro coverage where the installed Access version permits.
-3. A hostile-canary fixture SHALL make any accidental startup macro, VBA, query,
+2. The first-slice fixture SHALL cover local tables, composite and simple
+   relationships, select/parameter/action/pass-through queries, linked-source
+   metadata, and AutoExec/startup non-execution canaries where the installed
+   Access version permits.
+3. WHEN the later form/report, VBA, or macro phases are implemented THEN the
+   fixture generator SHALL be extended in those PRs with the corresponding
+   forms, reports, controls, event procedures, VBA, and supported macro inventory
+   shapes; those objects are not first-slice extraction acceptance criteria.
+4. A hostile-canary fixture SHALL make any accidental startup macro, VBA, query,
    linked-source, or row access observable without contacting a real network or
    external system; tests SHALL fail if the canary fires.
-4. Tests SHALL plant fake credentials, connection strings, private hostnames,
+5. Tests SHALL plant fake credentials, connection strings, private hostnames,
    absolute Windows paths, raw SQL markers, VBA literal markers, and macro
    argument markers and assert they do not appear in artifacts or logs.
-5. Tests SHALL prove deterministic IDs and byte-stable evidence outputs apart
+6. Tests SHALL prove deterministic IDs and byte-stable evidence outputs apart
    from documented timestamps across repeated scans and varied output paths.
-6. Cross-platform CI SHALL build and test non-COM logic on existing runners;
+7. Cross-platform CI SHALL build and test non-COM logic on existing runners;
    Windows Access integration tests MAY run only on an explicitly provisioned,
    local/self-hosted runner and SHALL otherwise be reported as a documented
    validation gap, not silently marked passed.
-7. Validation SHALL include full .NET build/test, private-path checking, diff
+8. Validation SHALL include full .NET build/test, private-path checking, diff
    checking, and relevant downstream artifact-contract smokes.
-8. Tests SHALL cover an unsupported/provider-incompatible `.mdb` path, COM
+9. Tests SHALL cover an unsupported/provider-incompatible `.mdb` path, COM
    worker timeout, aggregate fact/output limits, case-only identifier collisions,
    concurrent scans of the same source, and distinct per-scan working copies.
 
