@@ -131,7 +131,8 @@ public sealed record AccessUiSurfaceProjection(
     string DesignHash,
     IReadOnlyList<AccessBindingProjection> Bindings,
     IReadOnlyList<AccessControlProjection> Controls,
-    IReadOnlyList<AccessUiEventProjection> Events);
+    IReadOnlyList<AccessUiEventProjection> Events,
+    string Coverage = "complete");
 
 public sealed record AccessGapProjection(string Classification, string ScopeKind, string? StableScopeKey, string? RuleId = null);
 

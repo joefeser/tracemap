@@ -69,6 +69,9 @@ $database = $null
 $linkedTable = $null
 $passThrough = $null
 $startupForm = $null
+$customerForm = $null
+$ordersReport = $null
+$fixtureControls = [System.Collections.Generic.List[object]]::new()
 try {
     $access = New-Object -ComObject Access.Application
     $access.AutomationSecurity = 3
@@ -172,6 +175,68 @@ End Sub
     Close-ComObject $startupForm
     $startupForm = $null
 
+    # Phase 7 disposable design fixture. Generator-only CreateForm/CreateReport
+    # calls are allowed here; the scanner must never open or render these saved
+    # surfaces. Protected values make accidental export immediately observable.
+    $customerForm = $access.CreateForm()
+    $customerFormTemporaryName = [string]$customerForm.Name
+    $customerForm.RecordSource = "Customers"
+    $customerForm.HasModule = $false
+    $customerName = $access.CreateControl($customerFormTemporaryName, 109, 0, "", "", 1800, 400, 2400, 300)
+    $fixtureControls.Add($customerName)
+    $customerName.Name = "txtCustomerName"
+    $customerName.ControlSource = "DisplayName"
+    $customerNameLabel = $access.CreateControl($customerFormTemporaryName, 100, 0, "", "", 200, 400, 1400, 300)
+    $fixtureControls.Add($customerNameLabel)
+    $customerNameLabel.Name = "lblCustomerName"
+    $customerNameLabel.Caption = "FORM_CAPTION_MARKER_92817"
+    $orderSelector = $access.CreateControl($customerFormTemporaryName, 111, 0, "", "", 1800, 900, 2400, 300)
+    $fixtureControls.Add($orderSelector)
+    $orderSelector.Name = "cboOrderStatus"
+    $orderSelector.RowSourceType = "Table/Query"
+    $orderSelector.RowSource = "qryOrdersByStatus"
+    $calculatedControl = $access.CreateControl($customerFormTemporaryName, 109, 0, "", "", 1800, 1400, 2400, 300)
+    $fixtureControls.Add($calculatedControl)
+    $calculatedControl.Name = "txtCalculatedCustomer"
+    $calculatedControl.ControlSource = '=[CustomerId] & "FORM_EXPRESSION_MARKER_92817"'
+    $probeButton = $access.CreateControl($customerFormTemporaryName, 104, 0, "", "", 1800, 1900, 2400, 400)
+    $fixtureControls.Add($probeButton)
+    $probeButton.Name = "cmdPhase7Canary"
+    $probeButton.Caption = "FORM_BUTTON_MARKER_92817"
+    $escapedPhase7CanaryPath = $CanaryPath.Replace('"', '""')
+    $probeButton.OnClick = "=Shell(`"cmd.exe /c echo PHASE7_EVENT_CANARY_FIRED_92817 > `"`"$escapedPhase7CanaryPath`"`"`",0)"
+    $access.DoCmd.Save(2, $customerFormTemporaryName)
+    $access.DoCmd.Close(2, $customerFormTemporaryName, 1)
+    $access.DoCmd.Rename("frmCustomers", 2, $customerFormTemporaryName)
+    Close-ComObject $customerForm
+    $customerForm = $null
+    foreach ($control in $fixtureControls) { Close-ComObject $control }
+    $fixtureControls.Clear()
+
+    $ordersReport = $access.CreateReport()
+    $ordersReportTemporaryName = [string]$ordersReport.Name
+    $ordersReport.RecordSource = "Orders"
+    $ordersReport.HasModule = $false
+    $statusControl = $access.CreateReportControl($ordersReportTemporaryName, 109, 0, "", "", 1800, 400, 2400, 300)
+    $fixtureControls.Add($statusControl)
+    $statusControl.Name = "txtOrderStatus"
+    $statusControl.ControlSource = "OrderStatus"
+    $statusLabel = $access.CreateReportControl($ordersReportTemporaryName, 100, 0, "", "", 200, 400, 1400, 300)
+    $fixtureControls.Add($statusLabel)
+    $statusLabel.Name = "lblOrderStatus"
+    $statusLabel.Caption = "REPORT_CAPTION_MARKER_92817"
+    $reportCalculated = $access.CreateReportControl($ordersReportTemporaryName, 109, 0, "", "", 1800, 900, 2400, 300)
+    $fixtureControls.Add($reportCalculated)
+    $reportCalculated.Name = "txtCalculatedOrder"
+    $reportCalculated.ControlSource = '=[OrderId] & "REPORT_EXPRESSION_MARKER_92817"'
+    $access.DoCmd.Save(3, $ordersReportTemporaryName)
+    $access.DoCmd.Close(3, $ordersReportTemporaryName, 1)
+    $access.DoCmd.Rename("rptOrders", 3, $ordersReportTemporaryName)
+    Close-ComObject $ordersReport
+    $ordersReport = $null
+    foreach ($control in $fixtureControls) { Close-ComObject $control }
+    $fixtureControls.Clear()
+
     try {
         $database.Properties.Item("StartupForm").Value = "frmStartupCanary_92817"
     }
@@ -195,12 +260,18 @@ End Sub
         MdbCreated = $mdbCreated
         RowsInserted = 0
         StartupCanary = "configured"
-        FormReportCoverage = "deferred-except-startup-canary"
+        Forms = 2
+        Reports = 1
+        Phase7Controls = 8
+        FormReportCoverage = "phase7-design-fixture"
         VbaCoverage = "deferred-except-startup-canary"
         MacroCoverage = "deferred"
     } | ConvertTo-Json -Compress
 }
 finally {
+    foreach ($control in $fixtureControls) { Close-ComObject $control }
+    Close-ComObject $ordersReport
+    Close-ComObject $customerForm
     Close-ComObject $startupForm
     Close-ComObject $passThrough
     Close-ComObject $linkedTable

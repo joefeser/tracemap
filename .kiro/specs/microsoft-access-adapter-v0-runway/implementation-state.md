@@ -198,6 +198,15 @@ Implemented platform-neutral pieces:
   code-behind, ignores captions/labels/values, balances unsupported property
   blocks, and gaps malformed or oversized designs. The parser is not connected
   to an Access export method yet.
+- wired the documented unloaded `CurrentProject.AllForms`/`AllReports`
+  inventory path. It emits surface facts with `inventory-only` coverage and an
+  `AccessFormReportCoverageUnavailable` gap instead of treating unavailable
+  control metadata as a complete zero-control design. Allowlisted property
+  reads are discarded and gapped if they cause `IsLoaded` to change.
+- extended the disposable Phase 7 generator source with two saved forms, one
+  report, eight representative controls, direct/row/calculated binding shapes,
+  protected captions/expressions, and an event canary. This generator change is
+  not considered validated until it runs inside Windows + Access.
 
 Windows-only capability gate: issue #488 contains the local-only, no-upload
 probe and sanitized result format. The isolated VM deliberately disables host
@@ -212,8 +221,8 @@ recordset, query, macro, or VBA execution API has been added.
 
 Current Phase 7 validation:
 
-- 28/28 focused Access foundation/UI tests pass;
-- 791/791 full solution tests pass;
+- 29/29 focused Access foundation/UI tests pass;
+- 792/792 full solution tests pass;
 - solution build passes with the pre-existing
   `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory;
 - private-path guard and `git diff --check` pass.
