@@ -162,7 +162,8 @@ powershell -ExecutionPolicy Bypass -File scripts/access-validation/Invoke-Access
   -AccessCli <guest-local-tracemap-access.exe> `
   -TraceMapCli <guest-local-tracemap.exe> `
   -Generator <guest-local-New-SyntheticAccessFixture.ps1> `
-  -SmokeRoot <guest-local-smoke-root>
+  -SmokeRoot <guest-local-smoke-root> `
+  -Phase9CheckpointPath <guest-local-sanitized-checkpoint.json>
 ```
 
 The smoke creates and locally commits a disposable zero-row `.accdb`, removes
@@ -174,6 +175,15 @@ database or scan artifacts. Access evidence remains hidden, reduced static
 design evidence: it does not prove row contents, query/macro/VBA execution,
 runtime reachability, linked-source availability, permissions, production
 state, release approval, or that a change is safe.
+
+When `-Phase9CheckpointPath` is supplied, it must be outside the disposable
+smoke root. The smoke atomically checkpoints only the closed Phase 9 status,
+stage, booleans, and protected-output match count after each gate; it never
+stores database hashes, names, paths, exception text, or protected values. It
+also validates the Access report, combined-index evidence-doc projection, vault
+rule preservation, and release-review unsupported-consumer gap. Cleanup may
+remove the smoke root while retaining this sanitized checkpoint. Delete the
+checkpoint only after its issue comment is confirmed posted.
 
 The repository CI runs the existing .NET, TypeScript, Python, JVM, and Swift
 test suites, validates one real output per adapter, and combines all five

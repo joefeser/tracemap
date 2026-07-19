@@ -558,6 +558,18 @@ gap; neither consumer is permitted to invent a dedicated Access comparison.
 Issue #491 remains paused until this corrected consumer-specific contract passes
 a fresh exact-head Windows validation.
 
+The first consumer-specific rerun stopped conservatively at `safety-check`
+because its outer Windows orchestration deleted the only sanitized summary with
+the disposable artifacts. No product or consumer failure was established; the
+posted false fields were unavailable placeholders. The smoke harness now accepts
+an out-of-root Phase 9 checkpoint and atomically records only closed status,
+stage, booleans, and the protected-output match count after each gate. It also
+runs the product, report, combine-backed evidence docs, vault, and release-review
+checks directly. Database hashes, names, paths, exception text, and protected
+values never enter the checkpoint. Raw smoke state may be cleaned first; the
+checkpoint remains until its sanitized issue comment is confirmed and is then
+deleted.
+
 The Phase 9 generator layer adds a second form button classified as
 `[Embedded Macro]` with a protected caption marker, but deliberately supplies
 no body. Named and data macro fixture creation remains deferred to the Windows

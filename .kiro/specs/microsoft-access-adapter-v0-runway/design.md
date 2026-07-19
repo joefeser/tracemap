@@ -549,6 +549,13 @@ dotnet run --project src/dotnet/TraceMap.Cli -- report <combined-access-index-ar
 git diff --check
 ```
 
+The Windows smoke accepts an optional Phase 9 checkpoint path outside its
+disposable root. It atomically persists only a closed-schema sanitized outcome
+after each product/report/combine/docs/vault/release-review gate, so destructive
+cleanup cannot erase the evidence summary. Raw artifacts and databases remain
+disposable; the checkpoint is deleted only after the sanitized issue comment is
+confirmed.
+
 Exact CLI syntax should be updated in implementation-state after the scaffold is
 chosen. Relevant pinned downstream smokes from `docs/VALIDATION.md` must run or
 be explicitly deferred if shared readers/reporters change.
