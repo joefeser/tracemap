@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using TraceMap.Access;
 using TraceMap.Access.Cli;
 using TraceMap.Combine;
@@ -142,7 +143,10 @@ public sealed class AccessMacroReportingTests
         Assert.Contains("## Access Design Evidence Summary", report, StringComparison.Ordinal);
         Assert.Contains("Public claim level: `hidden`", report, StringComparison.Ordinal);
         Assert.Contains("Macro inventory facts: 3", report, StringComparison.Ordinal);
-        Assert.Contains("Macro protected-body gaps: 3", report, StringComparison.Ordinal);
+        Assert.Contains("Named macro catalog count: `3`", report, StringComparison.Ordinal);
+        Assert.Contains("Macro coverage: `named-count-observed-loaded-state-unavailable-other-categories-identities-bodies-unavailable`", report, StringComparison.Ordinal);
+        Assert.Contains("Macro coverage gaps: 9", report, StringComparison.Ordinal);
+        Assert.Contains("`AccessMacroLoadedStateUnavailable`: 1", report, StringComparison.Ordinal);
         Assert.DoesNotContain(ProtectedMacroName, report, StringComparison.OrdinalIgnoreCase);
 
         var docsOutput = Path.Combine(temp.Path, "docs-output");
@@ -156,6 +160,9 @@ public sealed class AccessMacroReportingTests
         Assert.NotEmpty(macroChunks);
         Assert.All(macroChunks, chunk => Assert.Equal("hidden", chunk.ClaimLevel));
         Assert.Contains(macroChunks, chunk => chunk.ChunkFamily == "legacy");
+        var serializedDocs = JsonSerializer.Serialize(docs);
+        Assert.Contains("namedMacroCount", serializedDocs, StringComparison.Ordinal);
+        Assert.Contains("named-count-observed-loaded-state-unavailable-other-categories-identities-bodies-unavailable", serializedDocs, StringComparison.Ordinal);
         Assert.DoesNotContain(ProtectedMacroName, JsonSerializer.Serialize(docs), StringComparison.OrdinalIgnoreCase);
         AssertArtifactsDoNotContain(docsOutput, ProtectedMacroName);
     }
@@ -169,6 +176,16 @@ public sealed class AccessMacroReportingTests
         var index = Path.Combine(output, "index.sqlite");
         var combined = Path.Combine(temp.Path, "combined.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["access"]));
+
+        await using (var connection = new SqliteConnection($"Data Source={combined};Mode=ReadOnly"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "select properties_json from combined_facts where fact_type = 'LegacyDataMetadataDeclared' limit 1;";
+            var propertiesJson = Assert.IsType<string>(await command.ExecuteScalarAsync());
+            Assert.Contains("namedMacroCount", propertiesJson, StringComparison.Ordinal);
+            Assert.Contains("named-count-observed-loaded-state-unavailable-other-categories-identities-bodies-unavailable", propertiesJson, StringComparison.Ordinal);
+        }
 
         var vaultOutput = Path.Combine(temp.Path, "vault-output");
         var vault = await VaultExporter.ExportAsync(new VaultExportOptions(
@@ -225,6 +242,16 @@ public sealed class AccessMacroReportingTests
         var embeddedOwner = AccessSafeValues.Identity(seed, "control", "MacroButton").StableKey;
         var macro = AccessMacroProjector.Project(seed,
             [new("AutoExec", "named"), new(ProtectedMacroName, "data"), new("ButtonMacro", "embedded", embeddedOwner)]);
+        const string macroCoverage = "named-count-observed-loaded-state-unavailable-other-categories-identities-bodies-unavailable";
+        AccessGapProjection[] productMacroGaps =
+        [
+            new("AccessMacroInventoryUnavailable", "macro-catalog", null, RuleIds.LegacyAccessMacroGap),
+            new("AccessMacroLoadedStateUnavailable", "macro-loaded-state", null, RuleIds.LegacyAccessMacroGap),
+            new("AccessMacroIdentityUnavailable", "macro-named", null, RuleIds.LegacyAccessMacroGap),
+            new("AccessMacroEmbeddedInventoryUnavailable", "macro-embedded", null, RuleIds.LegacyAccessMacroGap),
+            new("AccessMacroDataInventoryUnavailable", "macro-data", null, RuleIds.LegacyAccessMacroGap),
+            new("AccessMacroStartupInventoryUnavailable", "macro-startup", null, RuleIds.LegacyAccessMacroGap)
+        ];
         var projection = new AccessDatabaseProjection(
             "tracemap.access-projection.v1",
             databaseHash,
@@ -238,9 +265,10 @@ public sealed class AccessMacroReportingTests
             [],
             [],
             [],
-            macro.Gaps,
-            [new("macros", "inventory-observed-body-omitted")],
-            Macros: macro.Macros);
+            [.. macro.Gaps, .. productMacroGaps],
+            [new("macros", macroCoverage)],
+            Macros: macro.Macros,
+            MacroInventory: new(3, null, macroCoverage));
         return (AccessFactBuilder.Build(input, projection, new(root, "fixture.accdb", output)), output);
     }
 

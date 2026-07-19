@@ -61,6 +61,9 @@ public static class AccessArtifactWriter
 
     public static string Report(ScanResult result)
     {
+        var accessMetadata = result.Facts.FirstOrDefault(fact =>
+            fact.FactType == FactTypes.LegacyDataMetadataDeclared
+            && fact.Properties.ContainsKey("macroCoverage"));
         var lines = new List<string>
         {
             "# TraceMap Microsoft Access Design Evidence",
@@ -84,7 +87,9 @@ public static class AccessArtifactWriter
         lines.Add($"- Form/report/control/binding facts: {CountByRules(result, RuleIds.LegacyAccessUiSurface, RuleIds.LegacyAccessBinding)}");
         lines.Add($"- VBA/event/navigation facts: {CountByRules(result, RuleIds.LegacyAccessVba, RuleIds.LegacyAccessEventBinding)}");
         lines.Add($"- Macro inventory facts: {result.Facts.Count(fact => fact.FactType == FactTypes.AccessMacroDeclared)}");
-        lines.Add($"- Macro protected-body gaps: {result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.LegacyAccessMacroGap)}");
+        lines.Add($"- Named macro catalog count: `{Inline(accessMetadata?.Properties.GetValueOrDefault("namedMacroCount") ?? "unavailable")}`");
+        lines.Add($"- Macro coverage: `{Inline(accessMetadata?.Properties.GetValueOrDefault("macroCoverage") ?? "unavailable")}`");
+        lines.Add($"- Macro coverage gaps: {result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.LegacyAccessMacroGap)}");
         lines.Add("");
         lines.Add("## Rules and Evidence Tiers");
         lines.Add("");
