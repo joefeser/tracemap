@@ -194,6 +194,14 @@ Implemented platform-neutral pieces:
   unresolved gaps, quote-masked bracket candidate parsing, protected event
   classification, stable control ordering, and design hashes that do not
   contain raw design text;
+- closed a pre-PR contract audit gap for Requirement 6.3: surface filters and
+  ordering expressions plus control validation expressions now use the same
+  worker-internal-only raw boundary and safe projection as other bindings. Facts
+  retain only the expression role, length, role-separated hash, safe resolved
+  field keys, partial coverage, and rule-backed gaps; planted expression text is
+  absent from worker projection, standard artifacts, and combined artifacts.
+  The COM reader does not fetch these properties until issue #488 proves an
+  approved non-loading source;
 - added a bounded worker-internal Access text-design parser that stops before
   code-behind, ignores captions/labels/values, balances unsupported property
   blocks, and gaps malformed or oversized designs. The parser is not connected

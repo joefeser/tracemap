@@ -12,14 +12,19 @@ public sealed class AccessUiProjectionTests
     private const string ProtectedExpression = "=[CustomerId] & \"Password_DesignMarker_92817\"";
     private const string ProtectedEvent = "=Run(\"PrivateEventTarget_92817\")";
     private const string ProtectedControlName = "Credential Label 92817";
+    private const string ProtectedFilter = "[CustomerId] > 0 AND [SecretFilter_92817] = 1";
+    private const string ProtectedOrder = "[CustomerId], [SecretOrder_92817]";
+    private const string ProtectedValidation = "[CustomerId] <> \"SecretValidation_92817\"";
 
     [Fact]
     public void Text_design_parser_stops_before_code_hashes_protected_design_and_balances_unsupported_property_blocks()
     {
-        const string design = """
+        const string design = """"
             Version =20
             Begin Form
                 RecordSource ="Customers"
+                Filter ="[CustomerId] > 0 AND [SecretFilter_92817] = 1"
+                OrderBy ="[CustomerId], [SecretOrder_92817]"
                 Caption ="Private Caption 92817"
                 HasModule = NotDefault
                 OnOpen ="[Event Procedure]"
@@ -27,6 +32,7 @@ public sealed class AccessUiProjectionTests
                     Begin TextBox
                         Name ="CustomerIdControl"
                         ControlSource ="CustomerId"
+                        ValidationRule ="[CustomerId] <> ""SecretValidation_92817"""
                         ValidationRule = Begin
                             0x5072697661746556616c7565
                         End
@@ -42,11 +48,13 @@ public sealed class AccessUiProjectionTests
             Private Sub Form_Open()
                 Password_DesignMarker_92817
             End Sub
-            """;
+            """";
         var parsed = AccessUiTextParser.Parse(new StringReader(design), "frmCustomers", "form");
         var surface = Assert.IsType<AccessRawUiSurface>(parsed.Surface);
         Assert.True(surface.HasModule);
         Assert.Equal("Customers", surface.RecordSource);
+        Assert.Equal(ProtectedFilter, surface.Filter);
+        Assert.Equal(ProtectedOrder, surface.OrderBy);
         Assert.Equal(2, surface.Controls.Count);
         Assert.Contains(parsed.Gaps, gap => gap.Classification == "AccessUiProtectedPropertyShapeUnsupported");
 
@@ -72,6 +80,13 @@ public sealed class AccessUiProjectionTests
         Assert.DoesNotContain("Credential Label 92817", wire, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Password_DesignMarker_92817", wire, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("PrivateEventTarget_92817", wire, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("SecretFilter_92817", wire, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("SecretOrder_92817", wire, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("SecretValidation_92817", wire, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(projected.Surfaces.Single().Bindings, binding => binding.BindingKind == "filter" && binding.ExpressionHash is not null);
+        Assert.Contains(projected.Surfaces.Single().Bindings, binding => binding.BindingKind == "order-by" && binding.ExpressionHash is not null);
+        Assert.Contains(projected.Surfaces.Single().Controls.Single(item => item.Ordinal == 0).Bindings,
+            binding => binding.BindingKind == "validation-rule" && binding.ExpressionHash is not null);
         Assert.Equal("dynamic", projected.Surfaces.Single().Controls.Single(item => item.Ordinal == 0).Events.Single().Category);
     }
 
@@ -142,8 +157,10 @@ public sealed class AccessUiProjectionTests
             "form",
             false,
             "Customers",
-            [new(ProtectedControlName, 0, 109, ProtectedExpression, null, [new("on-click", ProtectedEvent)])],
-            []);
+            [new(ProtectedControlName, 0, 109, ProtectedExpression, null, [new("on-click", ProtectedEvent)], ProtectedValidation)],
+            [],
+            Filter: ProtectedFilter,
+            OrderBy: ProtectedOrder);
         var ui = AccessUiProjector.Project(
             seed,
             [raw],
@@ -187,6 +204,9 @@ public sealed class AccessUiProjectionTests
             Assert.DoesNotContain(ProtectedEvent, artifactText, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain(ProtectedControlName, artifactText, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("Password_DesignMarker_92817", artifactText, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("SecretFilter_92817", artifactText, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("SecretOrder_92817", artifactText, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("SecretValidation_92817", artifactText, StringComparison.OrdinalIgnoreCase);
         }
 
         var combined = Path.Combine(temp.Path, "combined.sqlite");
@@ -252,9 +272,11 @@ public sealed class AccessUiProjectionTests
                 new("cboOrders", 1, 111, null, "qryOrders",
                     [new("on-dbl-click", "[Embedded Macro]")]),
                 new(ProtectedControlName, 2, 109, ProtectedExpression, null,
-                    [new("after-update", ProtectedEvent)])
+                    [new("after-update", ProtectedEvent)], ProtectedValidation)
             ],
-            [new("on-open", "[Event Procedure]"), new("on-load", ProtectedEvent)]);
+            [new("on-open", "[Event Procedure]"), new("on-load", ProtectedEvent)],
+            Filter: ProtectedFilter,
+            OrderBy: ProtectedOrder);
 
         var result = AccessUiProjector.Project(seed, [raw], known, fields);
 
@@ -262,14 +284,19 @@ public sealed class AccessUiProjectionTests
         Assert.Equal("form", surface.SurfaceKind);
         Assert.Equal("present", surface.ModulePresence);
         Assert.Equal("bound-declared", surface.BoundState);
-        Assert.Equal(table.StableKey, Assert.Single(surface.Bindings).TargetStableKeys.Single());
+        Assert.Equal(table.StableKey, surface.Bindings.Single(binding => binding.BindingKind == "record-source").TargetStableKeys.Single());
+        Assert.Equal([field.StableKey], surface.Bindings.Single(binding => binding.BindingKind == "filter").TargetStableKeys);
+        Assert.Equal([field.StableKey], surface.Bindings.Single(binding => binding.BindingKind == "order-by").TargetStableKeys);
         Assert.Equal(["combo-box", "text-box", "text-box"], surface.Controls.Select(item => item.ControlType).OrderBy(item => item, StringComparer.Ordinal));
         Assert.Equal(field.StableKey, surface.Controls.Single(item => item.Ordinal == 0).Bindings.Single().TargetStableKeys.Single());
         Assert.Equal(query.StableKey, surface.Controls.Single(item => item.Ordinal == 1).Bindings.Single().TargetStableKeys.Single());
-        var expression = surface.Controls.Single(item => item.Ordinal == 2).Bindings.Single();
+        var expression = surface.Controls.Single(item => item.Ordinal == 2).Bindings.Single(binding => binding.BindingKind == "control-source");
         Assert.Equal("expression", expression.SourceKind);
         Assert.Equal("partial", expression.Coverage);
         Assert.Equal([field.StableKey], expression.TargetStableKeys);
+        var validation = surface.Controls.Single(item => item.Ordinal == 2).Bindings.Single(binding => binding.BindingKind == "validation-rule");
+        Assert.Equal("expression", validation.SourceKind);
+        Assert.Equal([field.StableKey], validation.TargetStableKeys);
         Assert.Contains(result.Gaps, gap => gap.Classification == "AccessBindingExpressionPartial" && gap.RuleId == RuleIds.LegacyAccessBinding);
         Assert.Equal("event-procedure", surface.Events.Single(item => item.EventRole == "on-open").Category);
         Assert.Equal("dynamic", surface.Events.Single(item => item.EventRole == "on-load").Category);
@@ -280,6 +307,9 @@ public sealed class AccessUiProjectionTests
         Assert.DoesNotContain(ProtectedEvent, wire, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(ProtectedControlName, wire, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Password_DesignMarker_92817", wire, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("SecretFilter_92817", wire, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("SecretOrder_92817", wire, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("SecretValidation_92817", wire, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

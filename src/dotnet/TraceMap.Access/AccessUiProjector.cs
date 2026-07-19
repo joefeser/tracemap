@@ -12,7 +12,8 @@ internal sealed record AccessRawControl(
     int ControlType,
     string? ControlSource,
     string? RowSource,
-    IReadOnlyList<AccessRawUiEvent> Events);
+    IReadOnlyList<AccessRawUiEvent> Events,
+    string? ValidationRule = null);
 
 internal sealed record AccessRawUiSurface(
     string Name,
@@ -21,7 +22,9 @@ internal sealed record AccessRawUiSurface(
     string? RecordSource,
     IReadOnlyList<AccessRawControl> Controls,
     IReadOnlyList<AccessRawUiEvent> Events,
-    string Coverage = "complete");
+    string Coverage = "complete",
+    string? Filter = null,
+    string? OrderBy = null);
 
 internal sealed record AccessUiProjectionResult(
     IReadOnlyList<AccessUiSurfaceProjection> Surfaces,
@@ -50,6 +53,10 @@ internal static partial class AccessUiProjector
             if (recordBinding is { SourceKind: "direct-object", TargetStableKeys.Count: 1 }
                 && fieldsByTable.TryGetValue(recordBinding.TargetStableKeys[0], out var fieldLookup))
                 scopedFields = fieldLookup;
+            var filterBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "filter", raw.Filter, 0, null, scopedFields, gaps);
+            if (filterBinding is not null) bindings.Add(filterBinding);
+            var orderByBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "order-by", raw.OrderBy, 0, null, scopedFields, gaps);
+            if (orderByBinding is not null) bindings.Add(orderByBinding);
 
             var controls = new List<AccessControlProjection>();
             foreach (var rawControl in raw.Controls.OrderBy(item => item.Ordinal)
@@ -63,6 +70,9 @@ internal static partial class AccessUiProjector
                 var rowSource = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "row-source", rawControl.RowSource,
                     rawControl.Ordinal, knownObjects, null, gaps);
                 if (rowSource is not null) controlBindings.Add(rowSource);
+                var validation = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "validation-rule", rawControl.ValidationRule,
+                    rawControl.Ordinal, null, scopedFields, gaps);
+                if (validation is not null) controlBindings.Add(validation);
                 controls.Add(new(
                     controlIdentity,
                     identity.StableKey,
@@ -73,7 +83,7 @@ internal static partial class AccessUiProjector
             }
 
             var surfaceEvents = ProjectEvents(raw.Events);
-            var designHash = DesignHash(identity, kind, raw.HasModule, raw.RecordSource, raw.Controls, raw.Events);
+            var designHash = DesignHash(identity, kind, raw.HasModule, raw.RecordSource, raw.Filter, raw.OrderBy, raw.Controls, raw.Events);
             surfaces.Add(new(
                 identity,
                 kind,
@@ -214,18 +224,23 @@ internal static partial class AccessUiProjector
         string kind,
         bool? hasModule,
         string? recordSource,
+        string? filter,
+        string? orderBy,
         IReadOnlyList<AccessRawControl> controls,
         IReadOnlyList<AccessRawUiEvent> events)
     {
         var builder = new StringBuilder();
         builder.Append("access-ui-design/v1|").Append(identity.StableKey).Append('|').Append(kind).Append('|').Append(hasModule?.ToString() ?? "unknown");
         AppendProtected(builder, "record-source", recordSource);
+        AppendProtected(builder, "filter", filter);
+        AppendProtected(builder, "order-by", orderBy);
         foreach (var control in controls.OrderBy(item => item.Ordinal).ThenBy(item => AccessSafeValues.RoleHash("access-control-sort-name", item.Name), StringComparer.Ordinal))
         {
             builder.Append('|').Append(control.Ordinal).Append(':').Append(control.ControlType).Append(':')
                 .Append(AccessSafeValues.RoleHash("access-control-design-name", control.Name));
             AppendProtected(builder, "control-source", control.ControlSource);
             AppendProtected(builder, "row-source", control.RowSource);
+            AppendProtected(builder, "validation-rule", control.ValidationRule);
             AppendEvents(builder, control.Events);
         }
         AppendEvents(builder, events);
