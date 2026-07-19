@@ -76,6 +76,16 @@ public static class AccessArtifactWriter
         foreach (var group in result.Facts.GroupBy(fact => fact.FactType).OrderBy(group => group.Key, StringComparer.Ordinal))
             lines.Add($"- `{Inline(group.Key)}`: {group.Count()}");
         lines.Add("");
+        lines.Add("## Access Design Evidence Summary");
+        lines.Add("");
+        lines.Add("- Public claim level: `hidden` (promotion requires a separate public-safe fixture and claim review).");
+        lines.Add($"- Schema/relationship facts: {CountByRules(result, RuleIds.LegacyAccessSchema)}");
+        lines.Add($"- Saved-query/external-boundary facts: {CountByRules(result, RuleIds.LegacyAccessQuery, RuleIds.LegacyAccessExternalLink)}");
+        lines.Add($"- Form/report/control/binding facts: {CountByRules(result, RuleIds.LegacyAccessUiSurface, RuleIds.LegacyAccessBinding)}");
+        lines.Add($"- VBA/event/navigation facts: {CountByRules(result, RuleIds.LegacyAccessVba, RuleIds.LegacyAccessEventBinding)}");
+        lines.Add($"- Macro inventory facts: {result.Facts.Count(fact => fact.FactType == FactTypes.AccessMacroDeclared)}");
+        lines.Add($"- Macro protected-body gaps: {result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.LegacyAccessMacroGap)}");
+        lines.Add("");
         lines.Add("## Rules and Evidence Tiers");
         lines.Add("");
         lines.Add("| Rule ID | Tier | Count |");
@@ -119,4 +129,7 @@ public static class AccessArtifactWriter
     }
 
     private static string Inline(string value) => value.Replace("`", "'", StringComparison.Ordinal).Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
+
+    private static int CountByRules(ScanResult result, params string[] ruleIds) =>
+        result.Facts.Count(fact => ruleIds.Contains(fact.RuleId, StringComparer.Ordinal));
 }

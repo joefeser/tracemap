@@ -311,6 +311,63 @@ execution, protected-source logging/IPC, and retrying around access denial. An
 unavailable result maps to `AccessVbaProjectUnavailable` rather than weakening the
 boundary.
 
+## Phase 9 Platform-Neutral Work
+
+Branch: `codex/microsoft-access-adapter-v0-macro-reporting`, stacked on the
+pushed Phase 8 head `18d069070dc256540d0952d037203631d7cf95de`.
+
+The Phase 9 threat decision is to inventory macro declarations and startup/data
+macro categories only. No macro command semantic or body inspection is approved
+for v0: command names, arguments, conditions, expressions, embedded macro text,
+and action bodies remain protected and omitted. Any future command-level
+projection requires a new threat review, rule contract, Windows canary, and
+artifact/IPC leak proof; this branch must not infer semantics from names.
+
+Platform-neutral scope may add safe/hash macro identities, kind/startup-role
+classifications, rule-backed body-omission gaps, Access-specific report counts
+and non-claims, deterministic evidence-doc family routing at hidden claim level,
+and explicit unsupported-consumer gaps where release-review cannot yet present
+Access facts. Product COM macro inventory remains gated on a Windows-local
+non-invoking collection probe, and no macro execution/export API is allowed.
+
+Implemented platform-neutral Phase 9 pieces:
+
+- `legacy.access.macro-gap.v1`, `AccessMacroDeclared`, safe/hash macro identity,
+  normalized named/UI/data/embedded/unknown categories, exact `AutoExec`
+  classification, and one protected-body omission gap per observed category;
+- a human Access design-evidence summary with hidden public claim level,
+  category counts, rule/tier counts, gaps, and repeated non-claims;
+- evidence-doc routing of Access facts to the legacy family while preserving
+  hidden claim level, citations, rule IDs, tiers, spans, commit SHA, extractor
+  provenance, limitations, and supporting IDs;
+- vault verification proving the Access macro rule survives combined-index
+  graph projection at hidden claim level;
+- a structured packet-level `ReleaseReviewGap` named
+  `AccessEvidenceConsumerUnsupported`, using `release.review.section.v1` and
+  `ReleaseReviewClassifications.PartialAnalysis`, whenever Access evidence is
+  present but no dedicated Access comparison section exists. This prevents an
+  ignored fact family from becoming an absence/change conclusion.
+
+Macro bodies remain entirely outside the raw/projection models. The projector
+accepts only a name and catalog kind; it has no field through which a command,
+argument, condition, expression, or body can enter worker IPC or artifacts.
+
+Current Phase 9 platform-neutral validation:
+
+- 3/3 focused macro/reporting tests pass;
+- 36/36 combined Access foundation/UI/VBA/macro tests pass;
+- 799/799 full solution tests pass;
+- solution build passes with only the pre-existing
+  `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory;
+- changed-file whitespace verification, private-path guard, and
+  `git diff --check` pass.
+
+Still required before Phase 9 PR readiness: fixture task 9.0, a Windows-local
+non-invoking macro collection result and product-reader wiring for 9.1, the
+representative local-only workflow in 9.5, and completion/merge sequencing for
+the foundation, Phase 7, and Phase 8 dependencies. No Phase 9 PR should open
+against `dev` while those stacked dependencies remain unmerged.
+
 ## Foundation Validation
 
 Platform-neutral validation on the implementation branch:
