@@ -541,6 +541,23 @@ bounded catalog count. A future Windows rerun must validate this corrected
 contract at a new exact head; it must not revive or substitute an item-level
 loaded-state probe.
 
+The corrected Windows run at `c1761a52f6f607dd2c3ef7b56744afeca7b7d34b`
+validated the product boundary: the documented count was observed, the removed
+loaded-state field stayed absent, coverage and required rule-backed gaps were
+correct, identity facts stayed zero, outputs were deterministic, and every
+safety/cleanup assertion passed. The run stopped only at downstream validation.
+Local contract tests then identified two concrete composition defects: the
+Access human report omitted the observed count/coverage, and evidence-doc export
+mistakenly routed the Access database metadata fact through the generic legacy
+data descriptor projector, which discarded its safe Access metadata. The branch
+now renders the count/coverage in the Access report, keeps those fields in the
+hidden legacy evidence-doc chunk, and proves combined-index property retention.
+Vault continues to preserve the Access rule and limitations, while release-review
+continues to emit its documented `AccessEvidenceConsumerUnsupported` structured
+gap; neither consumer is permitted to invent a dedicated Access comparison.
+Issue #491 remains paused until this corrected consumer-specific contract passes
+a fresh exact-head Windows validation.
+
 The Phase 9 generator layer adds a second form button classified as
 `[Embedded Macro]` with a protected caption marker, but deliberately supplies
 no body. Named and data macro fixture creation remains deferred to the Windows
