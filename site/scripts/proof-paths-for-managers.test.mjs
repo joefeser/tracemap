@@ -144,14 +144,22 @@ async function createManagedFixture(t, options = {}) {
 }
 
 async function createFixture({
-  discoveryRoutes = [routeEntry(proofPathsForManagersRoute), ...proofPathsForManagersRequiredLinks.map(routeEntry)],
+  discoveryRoutes = [
+    routeEntry(proofPathsForManagersRoute),
+    ...proofPathsForManagersRequiredLinks.map(routeEntry),
+    routeEntry("/sql/operator-handoff/proof-packet/")
+  ],
   includeInboundLinks = true,
   pageHtml,
   sitemapRoutes = [proofPathsForManagersRoute]
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-proof-paths-for-managers-test-"));
   const dist = join(root, "dist");
-  const routes = new Set([proofPathsForManagersRoute, ...proofPathsForManagersRequiredLinks]);
+  const routes = new Set([
+    proofPathsForManagersRoute,
+    ...proofPathsForManagersRequiredLinks,
+    "/sql/operator-handoff/proof-packet/"
+  ]);
   const source = pageHtml ?? (await page());
 
   for (const route of routes) {
