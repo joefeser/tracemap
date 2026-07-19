@@ -339,6 +339,16 @@ API requires a literal target; even then, persist the target only if it passes a
 role-specific safe identifier policy, otherwise persist a hash. Never emit source
 snippets.
 
+The Phase 8 v0 product boundary does not acquire VBA source. It reads only the
+bounded `CurrentProject.AllModules.Count` and uses
+`Application.Modules.Count` solely as a before/after loaded-state canary. The
+product emits the module count when available, zero VBA identity/flow facts,
+and rule-backed `AccessVbaProjectUnavailable` with
+`count-observed-source-unavailable` coverage. The deterministic projector is
+retained and tested as a future input boundary, but wiring `Application.VBE`,
+`ActiveVBProject`, `VBComponents`, component identity, or `CodeModule` text
+requires a separate security-reviewed execution mechanism.
+
 ## Determinism
 
 COM collection order is not a contract. Materialize bounded safe projections,

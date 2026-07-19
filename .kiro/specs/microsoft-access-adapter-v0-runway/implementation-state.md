@@ -1,6 +1,6 @@
 # Microsoft Access Adapter v0 Runway Implementation State
 
-Status: Phase 0 through Phase 6 ACK merge-ready on PR #487; Phase 7 count-only UI inventory and explicit coverage-gap slice validated on Windows and ready for review
+Status: Phase 0 through Phase 7 merged; Phase 8 v0 revised to count-only module inventory with explicit source-unavailable evidence
 
 Spec branch: `codex/microsoft-access-adapter-runway`
 
@@ -365,19 +365,19 @@ Implemented on this branch:
 
 Phase 8 platform-neutral validation:
 
-- 4/4 focused VBA projection tests pass;
-- 35/35 combined Access foundation/UI/VBA tests pass;
-- 797/797 full solution tests pass;
+- 7/7 focused VBA projection/inventory tests pass;
+- 41/41 combined Access foundation/UI/VBA tests pass;
+- 803/803 full solution tests pass;
 - solution build passes with the pre-existing
   `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory;
-- changed-file whitespace verification passes. The repository-wide formatter
+- seven artifact-validator tests, changed-file whitespace verification,
+  private-path guard, and `git diff --check` pass. The repository-wide formatter
   still reports pre-existing whitespace findings outside this slice.
 
-Still required before Phase 8 PR readiness: Phase 7 completion, fixture task
-8.0, an approved Windows-local non-invoking VBA source capability, product
-reader/worker wiring for task 8.2, Windows hostile-canary and protected-marker
-validation, and the focused PR/ACK sequence. No product COM/VBProject reader or
-worker IPC source field has been added on this branch.
+Still required before Phase 8 PR readiness: fixture task 8.0, one Windows-local
+product-only count smoke with hostile canaries and protected-marker validation,
+and the focused PR/ACK sequence. No product COM/VBProject source reader or worker
+IPC source field exists on this branch.
 
 The Phase 8 synthetic generator now includes one form event procedure with an
 observable first-statement canary plus local-call, literal navigation,
@@ -388,13 +388,20 @@ not installed on the macOS host, and the generator change remains unparsed and
 unexecuted until the isolated Windows + Access run from issue #489. No extractor
 or worker API was changed by this fixture-only commit.
 
-Windows capability gate: issue #489 contains a separate local-only prompt and
-sanitized result contract for `CurrentProject.AllModules`, already-loaded module
-inventory, and read-only VBProject/CodeModule access under the machine's existing
-trust policy. The prompt forbids trust-policy changes, module open/export/edit,
-execution, protected-source logging/IPC, and retrying around access denial. An
-unavailable result maps to `AccessVbaProjectUnavailable` rather than weakening the
-boundary.
+The proposed live VBE capability harness was blocked by OpenAI's safety system
+before execution; Windows did not reject the APIs and no VBE attempt occurred.
+Phase 8 v0 therefore no longer seeks or accepts live VBE evidence. The product
+reader is restricted to bounded `CurrentProject.AllModules.Count` plus
+`Application.Modules.Count` before and after as a safety canary. It never
+accesses `Application.VBE`, `ActiveVBProject`, `VBComponents`, component names,
+or source lines. It persists only the catalog count, canary outcome, and
+`count-observed-source-unavailable` coverage, emits zero VBA module/procedure/
+call/event-binding facts, and records rule-backed `AccessVbaProjectUnavailable`.
+Any richer VBA extraction is deferred to a separately security-reviewed
+execution mechanism and cannot be routed through another model to evade the
+boundary. Issue #489 requires a fresh product-only offline smoke at the revised
+head. That run may observe only `CurrentProject.AllModules.Count` and
+`Application.Modules.Count`; it may not attempt VBE access or source extraction.
 
 ## Phase 9 Platform-Neutral Work
 
