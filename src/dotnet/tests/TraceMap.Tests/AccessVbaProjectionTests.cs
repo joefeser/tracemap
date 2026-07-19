@@ -206,6 +206,13 @@ public sealed class AccessVbaProjectionTests
         await AccessArtifactWriter.WriteAsync(input.OutputFullPath, scan, AccessLimits.Default);
         var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([Path.Combine(input.OutputFullPath, "index.sqlite")], combinedPath, ["access"]));
+
+        // Clear the SQLite connection pool before reading files as bytes.
+        // On Windows, pooled connections hold a file lock on the .sqlite even
+        // after the logical connection is closed, causing IOException when
+        // File.ReadAllBytesAsync tries to open the same file.
+        SqliteConnection.ClearAllPools();
+
         var protectedMarkers = new[]
         {
             "PrivateVbaComment_92817",
@@ -221,6 +228,7 @@ public sealed class AccessVbaProjectionTests
                 Assert.DoesNotContain(marker, artifactText, StringComparison.OrdinalIgnoreCase);
         }
 
+        // Open a fresh connection after the pool is cleared for the fact-count query.
         await using var connection = new SqliteConnection($"Data Source={combinedPath}");
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
