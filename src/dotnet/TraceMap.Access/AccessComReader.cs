@@ -107,15 +107,19 @@ public sealed class AccessComReader
         var loadedBefore = ReadLoadedModuleCount(applicationObject);
         var moduleCount = ReadVbaCatalogModuleCount(applicationObject, gaps);
         var loadedAfter = ReadLoadedModuleCount(applicationObject);
-        if (loadedBefore.HasValue && loadedAfter.HasValue && loadedBefore.Value != loadedAfter.Value)
-            throw new AccessScanException("AccessVbaModuleStateChanged");
+        var loadedCountUnchanged = loadedBefore.HasValue && loadedAfter.HasValue
+            ? loadedBefore.Value == loadedAfter.Value
+            : (bool?)null;
+        if (loadedCountUnchanged == false)
+            gaps.Add(new("AccessVbaModuleStateChanged", "vba-project", null, RuleIds.LegacyAccessVba));
 
-        bool? loadedCountUnchanged = loadedBefore.HasValue && loadedAfter.HasValue ? true : null;
         gaps.Add(new("AccessVbaProjectUnavailable", "vba-project", null, RuleIds.LegacyAccessVba));
         var coverage = moduleCount.HasValue
             ? loadedCountUnchanged == true
                 ? "count-observed-source-unavailable"
-                : "count-observed-source-unavailable-canary-unavailable"
+                : loadedCountUnchanged == false
+                    ? "count-observed-source-unavailable-canary-changed"
+                    : "count-observed-source-unavailable-canary-unavailable"
             : "count-unavailable-source-unavailable";
         return new(moduleCount, loadedCountUnchanged, coverage);
     }
@@ -139,7 +143,11 @@ public sealed class AccessComReader
             gaps.Add(new(ex.Classification, "vba-project", null, RuleIds.LegacyAccessVba));
             return null;
         }
-        catch { return null; }
+        catch
+        {
+            gaps.Add(new("AccessVbaModuleCatalogUnavailable", "vba-project", null, RuleIds.LegacyAccessVba));
+            return null;
+        }
         finally
         {
             Release(modulesObject);

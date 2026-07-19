@@ -1,6 +1,6 @@
 # Microsoft Access Adapter v0 Runway Implementation State
 
-Status: Phase 0 through Phase 7 merged; Phase 8 v0 revised to count-only module inventory with explicit source-unavailable evidence
+Status: Phase 0 through Phase 7 merged; Phase 8 count-only module inventory validated on Windows and ready for focused PR review
 
 Spec branch: `codex/microsoft-access-adapter-runway`
 
@@ -365,28 +365,26 @@ Implemented on this branch:
 
 Phase 8 platform-neutral validation:
 
-- 7/7 focused VBA projection/inventory tests pass;
-- 41/41 combined Access foundation/UI/VBA tests pass;
-- 803/803 full solution tests pass;
+- 8/8 focused VBA projection/inventory tests pass;
+- 42/42 combined Access foundation/UI/VBA tests pass;
+- 804/804 full solution tests pass;
 - solution build passes with the pre-existing
   `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory;
 - seven artifact-validator tests, changed-file whitespace verification,
   private-path guard, and `git diff --check` pass. The repository-wide formatter
   still reports pre-existing whitespace findings outside this slice.
 
-Still required before Phase 8 PR readiness: fixture task 8.0, one Windows-local
-product-only count smoke with hostile canaries and protected-marker validation,
-and the focused PR/ACK sequence. No product COM/VBProject source reader or worker
-IPC source field exists on this branch.
+Still required before Phase 8 completion: the focused PR/ACK sequence. No
+product COM/VBProject source reader or worker IPC source field exists on this
+branch.
 
 The Phase 8 synthetic generator now includes one form event procedure with an
 observable first-statement canary plus local-call, literal navigation,
 DAO/query/table, domain-function, variable target, `Eval`, `Run`, COM/external
 process, comment, literal, fake SQL, and fake path shapes. The smoke marker set
-was extended accordingly. This does not complete task 8.0 yet: PowerShell is
-not installed on the macOS host, and the generator change remains unparsed and
-unexecuted until the isolated Windows + Access run from issue #489. No extractor
-or worker API was changed by this fixture-only commit.
+was extended accordingly. The isolated Windows + Access run from issue #489
+generated the fixture safely and completed task 8.0. No extractor or worker API
+was changed by the fixture-only commit.
 
 The proposed live VBE capability harness was blocked by OpenAI's safety system
 before execution; Windows did not reject the APIs and no VBE attempt occurred.
@@ -399,9 +397,33 @@ or source lines. It persists only the catalog count, canary outcome, and
 call/event-binding facts, and records rule-backed `AccessVbaProjectUnavailable`.
 Any richer VBA extraction is deferred to a separately security-reviewed
 execution mechanism and cannot be routed through another model to evade the
-boundary. Issue #489 requires a fresh product-only offline smoke at the revised
-head. That run may observe only `CurrentProject.AllModules.Count` and
-`Application.Modules.Count`; it may not attempt VBE access or source extraction.
+boundary.
+
+Phase 8 Windows validation completed successfully at exact head `f332e3b1`.
+The sanitized result is recorded on
+[issue #489](https://github.com/joefeser/tracemap/issues/489#issuecomment-5016719619).
+The offline product smoke passed sequential/concurrent determinism, standard
+artifact validation, count-only VBA coverage, zero VBA identity/flow facts, the
+expected rule-backed unavailable gap, false generation and extraction canaries,
+zero protected-output matches, unchanged baseline fixture, clean Access/worker
+exit, restored networking, complete cleanup, and clean reference worktree.
+Phase 9 and issue #491 were not started.
+
+The platform-neutral projector was also exercised directly on Windows at the
+pre-count-boundary head `3fbe3aea`: all four then-existing
+`AccessVbaProjectionTests` and all nine `AccessUiProjectionTests` passed after
+correcting a test-only SQLite pooled-connection lock. Commit `c5aad146` clears
+SQLite pools before the protected-marker byte scan and opens a fresh connection
+for the subsequent fact query; it changes no product, COM, projector, rule, or
+evidence behavior. That fix was cherry-picked into this branch and the current
+eight focused VBA tests, 42 Access tests, full 804-test solution, build, artifact
+validator, private-path guard, and diff checks all pass on macOS.
+
+PR #493 review follow-up filters literal catalog candidates through the target
+families implied by typed Access APIs and treats `:` as a VBA statement
+terminator during argument parsing. The regression test proves a colon-separated
+literal `OpenForm` remains complete while a query-only catalog match for
+`OpenForm` stays partial with an explicit unresolved gap.
 
 ## Phase 9 Platform-Neutral Work
 

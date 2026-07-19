@@ -1411,7 +1411,7 @@ rules:
   - id: legacy.access.vba.v1
     name: Microsoft Access bounded VBA declaration and call candidate
     description: Records safe module/procedure declarations and bounded textual call or navigation candidates from VBA source inspected only in memory.
-    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    evidenceTier: Tier3SyntaxOrTextual
     emits:
       - AccessVbaModuleDeclared
       - AccessVbaProcedureDeclared
@@ -1427,7 +1427,7 @@ rules:
   - id: legacy.access.event-binding.v1
     name: Microsoft Access event procedure binding candidate
     description: Records an exact same-module candidate between an event-procedure design property and a bounded VBA procedure declaration.
-    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    evidenceTier: Tier3SyntaxOrTextual
     emits:
       - AccessEventBindingCandidate
       - AnalysisGap

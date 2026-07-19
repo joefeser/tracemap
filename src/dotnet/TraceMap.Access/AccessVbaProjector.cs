@@ -119,6 +119,7 @@ internal static partial class AccessVbaProjector
         for (var ordinal = 0; ordinal < declarations.Count; ordinal++)
         {
             var declaration = declarations[ordinal];
+            var identity = AccessSafeValues.Identity(databaseIdentitySeed, $"vba-procedure-{moduleIdentity.StableKey}", declaration.Name, ordinal);
             var searchEnd = ordinal + 1 < declarations.Count ? declarations[ordinal + 1].StartIndex - 1 : lines.Length - 1;
             var endIndex = -1;
             for (var index = declaration.StartIndex + 1; index <= searchEnd; index++)
@@ -131,10 +132,9 @@ internal static partial class AccessVbaProjector
             if (endIndex < 0)
             {
                 endIndex = Math.Max(declaration.StartIndex, searchEnd);
-                gaps.Add(new("AccessVbaProcedureEndUnavailable", "vba-procedure", moduleIdentity.StableKey, RuleIds.LegacyAccessVba));
+                gaps.Add(new("AccessVbaProcedureEndUnavailable", "vba-procedure", identity.StableKey, RuleIds.LegacyAccessVba));
             }
 
-            var identity = AccessSafeValues.Identity(databaseIdentitySeed, $"vba-procedure-{moduleIdentity.StableKey}", declaration.Name, ordinal);
             result.Add(new(
                 declaration.Name,
                 new(identity, moduleIdentity.StableKey, declaration.Kind, declaration.StartIndex + 1, endIndex + 1, []),
@@ -260,9 +260,15 @@ internal static partial class AccessVbaProjector
         }
 
         var literalIdentity = AccessSafeValues.Identity(databaseIdentitySeed, $"vba-{callKind}-target", literal);
-        var candidates = knownObjects is not null && knownObjects.TryGetValue(literal, out var values) ? values : [];
+        var catalogCandidates = knownObjects is not null && knownObjects.TryGetValue(literal, out var values) ? values : [];
+        var expectedKinds = ExpectedTargetKinds(callKind);
+        var candidates = expectedKinds is null
+            ? catalogCandidates
+            : catalogCandidates.Where(candidate => expectedKinds.Contains(candidate.Kind, StringComparer.Ordinal)).ToArray();
         var target = candidates.Count == 1 ? candidates[0].StableKey : null;
-        var targetKind = candidates.Count == 1 ? candidates[0].Kind : "access-object";
+        var targetKind = candidates.Count == 1
+            ? candidates[0].Kind
+            : expectedKinds is { Count: 1 } ? expectedKinds[0] : "access-object";
         var coverage = candidates.Count == 1 ? "complete" : "partial";
         calls.Add(new(identity, procedure.Projection.Identity.StableKey, callKind, lineNumber, lineNumber,
             target, literalIdentity, targetKind, null, 0, coverage));
@@ -272,6 +278,16 @@ internal static partial class AccessVbaProjector
             gaps.Add(new(candidates.Count == 0 ? "AccessVbaLiteralTargetUnresolved" : "AccessVbaLiteralTargetAmbiguous",
                 "vba-call", identity.StableKey, RuleIds.LegacyAccessVba));
     }
+
+    private static IReadOnlyList<string>? ExpectedTargetKinds(string callKind) => callKind switch
+    {
+        "open-form" => ["form"],
+        "open-report" => ["report"],
+        "open-query" or "dao-query-reference" => ["query"],
+        "dao-table-reference" => ["table"],
+        "open-recordset-reference" or "domain-function-reference" => ["query", "table"],
+        _ => null
+    };
 
     private static void AddDynamicCall(
         string databaseIdentitySeed,
@@ -295,6 +311,9 @@ internal static partial class AccessVbaProjector
         List<AccessGapProjection> gaps)
     {
         var result = new List<AccessEventBindingProjection>();
+        var modulesByRawName = modules
+            .GroupBy(item => item.RawName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
         foreach (var reference in references.OrderBy(item => item.OwnerStableKey, StringComparer.Ordinal).ThenBy(item => item.EventRole, StringComparer.Ordinal))
         {
             if (!AllowedEventRoles.Contains(reference.EventRole))
@@ -302,7 +321,9 @@ internal static partial class AccessVbaProjector
                 gaps.Add(new("AccessEventRoleUnsupported", "event-binding", reference.OwnerStableKey, RuleIds.LegacyAccessEventBinding));
                 continue;
             }
-            var moduleCandidates = modules.Where(item => string.Equals(item.RawName, reference.ModuleName, StringComparison.OrdinalIgnoreCase)).ToArray();
+            var moduleCandidates = modulesByRawName.TryGetValue(reference.ModuleName, out var candidates)
+                ? candidates
+                : [];
             var procedureCandidates = moduleCandidates
                 .SelectMany(item => item.Procedures.Select(procedure => (Module: item, Procedure: procedure)))
                 .Where(item => string.Equals(item.Procedure.RawName, reference.ProcedureName, StringComparison.OrdinalIgnoreCase))
@@ -423,6 +444,8 @@ internal static partial class AccessVbaProjector
             if (inString) continue;
             if (current == '(') { nested++; continue; }
             if (current == ')' && nested > 0) { nested--; continue; }
+            if (current == ':' && nested == 0)
+                return argumentIndex == requestedIndex ? line[argumentStart..cursor].Trim() : null;
             if ((current == ',' || current == ')' || current == '\0') && nested == 0)
             {
                 if (argumentIndex == requestedIndex) return line[argumentStart..cursor].Trim();
