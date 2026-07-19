@@ -1,7 +1,7 @@
 # Site SQL Runbook Proof Packet Implementation State
 
 Status: implemented in ready PR #486
-Readiness: ACK review loop in progress
+Readiness: merge-ready by ACK; merge authorized for `dev`
 Implementation branch: `codex/site-sql-operator-proof`
 Target base: `dev`
 Public claim level: demo
@@ -57,3 +57,6 @@ conclusions, safety certification, or DBA/operator approval.
   required leak category in focused negative tests.
 - The current repository contract is `sql-operator-runbook-packet/v2`; no stale
   `v1` ticket wording was introduced into the public fixture.
+- Terminal ACK state: `merge_ready`, with clean checks, a clean merge state,
+  zero unresolved threads, zero actionable findings, and configured review
+  quorum met.
