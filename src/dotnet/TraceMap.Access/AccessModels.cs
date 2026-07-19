@@ -14,6 +14,8 @@ public sealed record AccessLimits(
     int MaxChildrenPerObject = 10_000,
     int MaxStringLength = 1024 * 1024,
     int MaxQueryTextLength = 4 * 1024 * 1024,
+    int MaxUiDesignTextLength = 4 * 1024 * 1024,
+    int MaxUiDesignLines = 100_000,
     int MaxFacts = 100_000,
     int MaxGaps = 10_000,
     long MaxProjectionBytes = 64L * 1024 * 1024,
@@ -96,7 +98,48 @@ public sealed record AccessExternalLinkProjection(
     string SourceHash,
     string BoundaryKind);
 
-public sealed record AccessGapProjection(string Classification, string ScopeKind, string? StableScopeKey);
+public sealed record AccessUiEventProjection(
+    string EventRole,
+    string Category,
+    string? ValueHash,
+    int ValueLength);
+
+public sealed record AccessBindingProjection(
+    AccessSafeIdentity Identity,
+    string OwnerStableKey,
+    string BindingKind,
+    string SourceKind,
+    string? ExpressionHash,
+    int ExpressionLength,
+    IReadOnlyList<string> TargetStableKeys,
+    string TargetKind,
+    string Coverage);
+
+public sealed record AccessControlProjection(
+    AccessSafeIdentity Identity,
+    string SurfaceStableKey,
+    int Ordinal,
+    string ControlType,
+    IReadOnlyList<AccessBindingProjection> Bindings,
+    IReadOnlyList<AccessUiEventProjection> Events);
+
+public sealed record AccessUiSurfaceProjection(
+    AccessSafeIdentity Identity,
+    string SurfaceKind,
+    string ModulePresence,
+    string BoundState,
+    string DesignHash,
+    IReadOnlyList<AccessBindingProjection> Bindings,
+    IReadOnlyList<AccessControlProjection> Controls,
+    IReadOnlyList<AccessUiEventProjection> Events,
+    string Coverage = "complete");
+
+public sealed record AccessUiInventoryProjection(
+    int? FormCount,
+    int? ReportCount,
+    string Coverage);
+
+public sealed record AccessGapProjection(string Classification, string ScopeKind, string? StableScopeKey, string? RuleId = null);
 
 public sealed record AccessCapabilityProjection(string Name, string Status);
 
@@ -114,7 +157,9 @@ public sealed record AccessDatabaseProjection(
     IReadOnlyList<AccessQueryProjection> Queries,
     IReadOnlyList<AccessExternalLinkProjection> ExternalLinks,
     IReadOnlyList<AccessGapProjection> Gaps,
-    IReadOnlyList<AccessCapabilityProjection> Capabilities);
+    IReadOnlyList<AccessCapabilityProjection> Capabilities,
+    IReadOnlyList<AccessUiSurfaceProjection>? UiSurfaces = null,
+    AccessUiInventoryProjection? UiInventory = null);
 
 public sealed record AccessWorkerFrame(
     string Kind,

@@ -1,10 +1,12 @@
 # Microsoft Access Adapter v0 Runway Implementation State
 
-Status: Phase 0 through Phase 6 implemented; PR #487 review fixes validated and ACK rerun pending
+Status: Phase 0 through Phase 6 ACK merge-ready on PR #487; Phase 7 count-only UI inventory and explicit coverage-gap slice validated on Windows and ready for review
 
 Spec branch: `codex/microsoft-access-adapter-runway`
 
 Implementation branch: `codex/microsoft-access-adapter-v0-foundation`
+
+Phase 7 branch: `codex/microsoft-access-adapter-v0-ui-bindings`
 
 Public claim level: hidden
 
@@ -169,6 +171,154 @@ to the first implementation PR.
 - Provider-compatible `.mdb` is enabled. An incompatible or malformed `.mdb`
   either fails with a bounded capability classification or produces gap-only
   artifacts with no unsupported storage claims.
+
+## Phase 7 Implementation State
+
+The Phase 7 branch is stacked on approved foundation head
+`1b2596b54350877b6b55ebb9ee8f9dffb854589b` while PR #487 awaits explicit
+owner merge authorization. It will not open a PR against `dev` until #487 is
+merged, because doing so would repeat the entire foundation diff.
+
+Implemented platform-neutral pieces:
+
+- cataloged `legacy.access.ui-surface.v1` and `legacy.access.binding.v1` with
+  form, report, control, binding, gap, tier, limitation, and non-claim
+  contracts;
+- added safe serialized projections and fact emission for forms, reports,
+  controls, direct record/control/row-source bindings, bounded expression
+  candidates, and event categories;
+- kept all raw form/report/control descriptors in worker-internal types only;
+  IPC/facts retain safe identities, role-separated hashes, lengths, types,
+  stable target keys, coverage labels, and gaps;
+- added deterministic direct-object/direct-field matching, ambiguity and
+  unresolved gaps, quote-masked bracket candidate parsing, protected event
+  classification, stable control ordering, and design hashes that do not
+  contain raw design text;
+- closed a pre-PR contract audit gap for Requirement 6.3: surface filters and
+  ordering expressions plus control validation expressions now use the same
+  worker-internal-only raw boundary and safe projection as other bindings. Facts
+  retain only the expression role, length, role-separated hash, safe resolved
+  field keys, partial coverage, and rule-backed gaps; planted expression text is
+  absent from worker projection, standard artifacts, and combined artifacts.
+  The COM reader does not fetch these properties until issue #488 proves an
+  approved non-loading source;
+- added a bounded worker-internal Access text-design parser that stops before
+  code-behind, ignores captions/labels/values, balances unsupported property
+  blocks, and gaps malformed or oversized designs. The parser is not connected
+  to an Access export method yet.
+- wired the documented unloaded `CurrentProject.AllForms`/`AllReports`
+  inventory path. It emits surface facts with `inventory-only` coverage and an
+  `AccessFormReportCoverageUnavailable` gap instead of treating unavailable
+  control metadata as a complete zero-control design. Allowlisted property
+  reads are discarded and gapped if they cause `IsLoaded` to change.
+- extended the disposable Phase 7 generator source with two saved forms, one
+  report, eight representative controls, direct/row/calculated binding shapes,
+  protected captions/expressions, and an event canary. This generator change is
+  not considered validated until it runs inside Windows + Access.
+- added an artifact/downstream regression proving form, control, binding, and
+  rule provenance survive standard SQLite persistence and combined-index
+  import while planted control/expression/event values remain absent from all
+  standard and combined artifacts.
+
+Windows-only capability gate: issue #488 contains the local-only, no-upload
+probe and sanitized result format. The isolated VM deliberately disables host
+command execution, so the prompt is intended for a Codex session running on
+the Windows machine. Microsoft documentation confirms `AllForms`/`AllReports`
+enumerate saved surfaces while the `Forms` collection contains only loaded
+forms. `SaveAsText` is documented to export all object properties and
+definitions, which can include protected design text and code; it remains
+unapproved until a separate threat/canary decision proves an acceptable
+worker-local handling path. No `OpenForm`, `OpenReport`, rendering, invocation,
+recordset, query, macro, or VBA execution API has been added.
+
+The first physical-Windows attempt stopped correctly with
+`phase7-probe-boundary-violation`. Its classification-only postmortem identified
+`fixture-generator-visible-or-design-open` during `fixture-generation`; no
+extraction probe ran. This exposed an orchestration ambiguity, not evidence that
+the reader loaded a surface. The corrected rerun contract separates two stages:
+
+- fixture generation may create, open in design mode, configure, save, and close
+  disposable synthetic forms/reports/controls in a dedicated generator Access
+  instance while keeping the application UI hidden and executing no event,
+  macro, VBA, query, row, link, or external action;
+- extraction starts only after that instance exits and a baseline fixture hash
+  is recorded. A fresh macro-disabled hidden Access instance opens only the
+  private verified copy, and surface loading, design opening, rendering, export,
+  invocation, or visible UI remains a hard boundary.
+
+The rerun harness must preserve three independent sanitized outcomes rather
+than collapsing them into a single boundary token: canary state after generation
+and after extraction, protected-marker counts in prohibited sinks, and baseline
+fixture unchanged after extraction. Fixture bytes, generator source, and the
+private marker declaration are expected marker carriers and are excluded from
+the prohibited-sink count; stdout, stderr, IPC, logs, TraceMap artifacts, and
+unexpected scratch remnants are not. Issue #488 carries the corrected prompt
+and fresh explicit rerun authorization. Phases 8 and 9 remain paused unless the
+corrected Phase 7 rerun completes without a boundary.
+
+The corrected rerun reached extraction and stopped with
+`surface-loaded-during-metadata-read`. Both generation and extraction canaries
+remained false, prohibited sinks contained zero protected-marker matches, the
+baseline fixture was unchanged, Access exited, and cleanup completed. This is
+evidence that the probed unloaded-surface property path is outside the v0 safety
+boundary; it is not evidence that forms/reports can be safely opened for richer
+metadata.
+
+The next narrowed probe tested only collection enumeration, `IsLoaded`, and
+transient `Name`. Reading `Name` caused the surface to load, so it stopped at the
+direct-catalog boundary. Generation/direct-catalog canaries remained false,
+prohibited sinks contained zero marker matches, the fixture was unchanged,
+Access exited, cleanup completed, and no product scan ran. This rules out item
+identity enumeration itself; it is not safe to "just read names" and then gap
+richer properties.
+
+The product reader therefore never indexes an `AllForms`/`AllReports` item. It
+reads bounded collection counts only, persists those counts on the database
+metadata fact, emits `AccessFormReportCoverageUnavailable` when a nonempty
+catalog cannot be identified, and emits zero form/report/control/binding/event
+facts. The platform-neutral projector remains covered for future approved safe
+inputs but has no production COM source in v0. Tests use a collection whose
+indexer throws and prove it is never called. Any future identity, module/bound
+state, control, binding, event, or design projection requires a new threat review
+and a different proven non-loading source.
+
+Current Phase 7 validation:
+
+- 9/9 focused UI projection tests pass;
+- 796/796 full solution tests pass;
+- solution build passes with the pre-existing
+  `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory;
+- format verification passes for the changed C# files; the solution-wide
+  formatter continues to report pre-existing whitespace findings outside this
+  PR's changed files;
+- private-path guard and `git diff --check` pass.
+
+Phase 7 PR readiness and deferred work:
+
+- no implementation or validation work remains for the count-only Phase 7 slice;
+- surface identity, design metadata, controls, direct bindings, and event
+  classification remain unchecked tasks 7.2 through 7.4 because Windows evidence
+  proved that even indexing a catalog item and reading `Name` can load a surface.
+  Requirement 6.5 is satisfied by the rule-backed coverage gap. Those richer
+  tasks require a new threat review and a different proven non-loading source.
+
+Final Phase 7 Windows validation used the exact pushed head
+`bf764a1568f938ffd63720d4f818b50b2baa3bde`. The count-only product reader
+observed form and report counts, emitted zero surface/control/binding/UI-event
+identity facts, and preserved the expected coverage gaps through the standard
+artifacts and downstream export/combine/report path. Sequential and established
+concurrent outputs were deterministic. Generation and extraction canaries
+remained false, every surface remained unloaded after the product scan, the
+protected-output marker count was zero, and the baseline fixture was unchanged.
+Access and worker processes exited, networking was restored, cleanup completed,
+and the Windows reference worktree remained clean. The sanitized evidence is
+recorded on issue #488 in comment `5016324776`.
+
+PR #492 review hardening preserves a successful form or report count when only
+the other catalog is unavailable, marks malformed design text projections
+partial rather than complete, uses non-overflowing design size counters, and
+does not misclassify period-qualified expressions as direct Access identifiers.
+Focused regression tests cover each corrected path.
 
 ## Foundation Validation
 
