@@ -48,6 +48,32 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Query_projector_marks_unresolved_references_partial_and_recognizes_access_from_lists()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Customers"] = [("table-customers", "table")],
+            ["Orders"] = [("table-orders", "table")]
+        };
+
+        var commaList = AccessQueryProjector.ProjectDependencies(
+            "SELECT * FROM [Customers], Orders WHERE Customers.Id = Orders.CustomerId", known);
+        var parenthesizedJoin = AccessQueryProjector.ProjectDependencies(
+            "SELECT * FROM ([Customers] INNER JOIN Orders ON Customers.Id = Orders.CustomerId)", known);
+        var unresolved = AccessQueryProjector.ProjectDependencies(
+            "SELECT * FROM LinkedOrders", known);
+
+        Assert.Equal(["table-customers", "table-orders"], commaList.Dependencies.Select(item => item.TargetStableKey));
+        Assert.Equal("complete", commaList.Coverage);
+        Assert.False(commaList.UnsupportedShape);
+        Assert.Equal(["table-customers", "table-orders"], parenthesizedJoin.Dependencies.Select(item => item.TargetStableKey));
+        Assert.Equal("complete", parenthesizedJoin.Coverage);
+        Assert.True(unresolved.UnsupportedShape);
+        Assert.Equal("partial", unresolved.Coverage);
+        Assert.Empty(unresolved.Dependencies);
+    }
+
+    [Fact]
     public void Input_validator_requires_exact_tracked_head_bytes_preserves_requested_output_and_rejects_destructive_ancestor()
     {
         using var temp = new TempDirectory();
