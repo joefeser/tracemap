@@ -174,6 +174,11 @@ public sealed record AccessEventBindingProjection(
     string? ProcedureStableKey,
     string Coverage);
 
+public sealed record AccessUiInventoryProjection(
+    int? FormCount,
+    int? ReportCount,
+    string Coverage);
+
 public sealed record AccessGapProjection(string Classification, string ScopeKind, string? StableScopeKey, string? RuleId = null);
 
 public sealed record AccessCapabilityProjection(string Name, string Status);
@@ -195,7 +200,8 @@ public sealed record AccessDatabaseProjection(
     IReadOnlyList<AccessCapabilityProjection> Capabilities,
     IReadOnlyList<AccessUiSurfaceProjection>? UiSurfaces = null,
     IReadOnlyList<AccessVbaModuleProjection>? VbaModules = null,
-    IReadOnlyList<AccessEventBindingProjection>? EventBindings = null);
+    IReadOnlyList<AccessEventBindingProjection>? EventBindings = null,
+    AccessUiInventoryProjection? UiInventory = null);
 
 public sealed record AccessWorkerFrame(
     string Kind,

@@ -264,17 +264,23 @@ evidence that the probed unloaded-surface property path is outside the v0 safety
 boundary; it is not evidence that forms/reports can be safely opened for richer
 metadata.
 
-The product reader now refuses to access an unloaded AccessObject's `Properties`
-collection. It inventories only catalog identity plus an explicit `IsLoaded`
-state from `AllForms`/`AllReports`, emits `inventory-only` surface projections
-and `AccessFormReportCoverageUnavailable`, and preserves unknown module/bound
-state. Encountering an already-loaded surface fails the safety boundary instead
-of continuing with a successful artifact set. Platform-neutral tests use a fake
-property accessor that would load the surface and prove the accessor is never
-called. One final narrowed Windows probe may test only collection enumeration,
-`Name`, and `IsLoaded`; all other surface properties, controls, bindings, and
-events remain unsupported gaps for v0 unless a later threat review approves a
-different non-loading source.
+The next narrowed probe tested only collection enumeration, `IsLoaded`, and
+transient `Name`. Reading `Name` caused the surface to load, so it stopped at the
+direct-catalog boundary. Generation/direct-catalog canaries remained false,
+prohibited sinks contained zero marker matches, the fixture was unchanged,
+Access exited, cleanup completed, and no product scan ran. This rules out item
+identity enumeration itself; it is not safe to "just read names" and then gap
+richer properties.
+
+The product reader therefore never indexes an `AllForms`/`AllReports` item. It
+reads bounded collection counts only, persists those counts on the database
+metadata fact, emits `AccessFormReportCoverageUnavailable` when a nonempty
+catalog cannot be identified, and emits zero form/report/control/binding/event
+facts. The platform-neutral projector remains covered for future approved safe
+inputs but has no production COM source in v0. Tests use a collection whose
+indexer throws and prove it is never called. Any future identity, module/bound
+state, control, binding, event, or design projection requires a new threat review
+and a different proven non-loading source.
 
 Current Phase 7 validation:
 
@@ -286,9 +292,7 @@ Current Phase 7 validation:
 
 Still required before Phase 7 PR readiness:
 
-- sanitized Windows capability result on issue #488;
-- approved non-invoking COM/design source for control and binding metadata;
-- fixture generator extension and complete product-reader wiring;
+- one Windows run of the count-only product reader and downstream artifacts;
 - hostile canary, marker, determinism, concurrent-scan, export/combine/report,
   and full solution validation on the wired implementation.
 
