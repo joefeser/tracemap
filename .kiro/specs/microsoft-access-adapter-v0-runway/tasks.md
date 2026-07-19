@@ -167,8 +167,10 @@ remain separate reviewable slices.
       shapes required by this phase.
 - [x] 8.1 Add catalog rules/facts for module/procedure inventory, bounded calls,
       events, navigation, and dynamic gaps.
-- [ ] 8.2 Read VBA source in memory and persist only hashes, counts, safe names,
-      spans, and bounded call candidates.
+- [x] 8.2 Bound the v0 product reader to `AllModules.Count`, use loaded-module
+      count only as a before/after canary, emit no VBA identity/flow facts, and
+      record `AccessVbaProjectUnavailable`; defer source reads to a separately
+      security-reviewed mechanism.
 - [x] 8.3 Tokenize while excluding comments and string contents from ordinary
       call matching.
 - [x] 8.4 Project direct Access APIs such as `DoCmd.OpenForm`,
