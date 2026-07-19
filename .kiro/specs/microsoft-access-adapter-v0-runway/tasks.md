@@ -81,7 +81,8 @@ phases must remain separate reviewable slices.
 - [ ] 3.6 Write the required manifest, NDJSON, SQLite, report, and analyzer log
       using shared contracts.
 - [ ] 3.7 Record `rowDataRead=false` and `executionPerformed=false` as extractor
-      capability declarations without overstating hostile-input safety.
+      `AnalyzerCapabilityDiagnostic` or Access inventory facts without adding
+      adapter-specific manifest fields or overstating hostile-input safety.
 - [ ] 3.8 Add catalog-guard, artifact-schema, deterministic-ID, sorted-property,
       and raw-value-suppression tests.
 - [ ] 3.9 Reuse `LegacyDataSafeValues` or a shared equivalent and record any
@@ -149,6 +150,8 @@ phases must remain separate reviewable slices.
 
 ## Phase 7: Forms, Reports, Controls, and Bindings (Follow-Up PR)
 
+- [ ] 7.0 Extend the synthetic fixture with forms, reports, controls, and binding
+      shapes required by this phase; do not backdate them as first-slice coverage.
 - [ ] 7.1 Add catalog rules/facts for Access forms, reports, controls, and direct
       bindings.
 - [ ] 7.2 Inventory surfaces and controls through design metadata only.
@@ -161,6 +164,8 @@ phases must remain separate reviewable slices.
 
 ## Phase 8: VBA and Event Flow (Follow-Up PR)
 
+- [ ] 8.0 Extend the synthetic fixture with event procedures and VBA call/dynamic
+      shapes required by this phase.
 - [ ] 8.1 Add catalog rules/facts for module/procedure inventory, bounded calls,
       events, navigation, and dynamic gaps.
 - [ ] 8.2 Read VBA source in memory and persist only hashes, counts, safe names,
@@ -178,6 +183,8 @@ phases must remain separate reviewable slices.
 
 ## Phase 9: Macro/External Depth and Reporting (Follow-Up PR)
 
+- [ ] 9.0 Extend the synthetic fixture with the macro inventory shapes approved
+      for this phase while keeping command bodies protected.
 - [ ] 9.1 Inventory named/UI/data/startup macros without command bodies.
 - [ ] 9.2 Decide through a separate threat review whether any macro command
       semantics can be safely projected; keep body inspection deferred unless

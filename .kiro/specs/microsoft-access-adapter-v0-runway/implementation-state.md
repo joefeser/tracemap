@@ -69,6 +69,12 @@ the full Git/artifact/rule/test contracts in this spec.
 - Prefer the existing `LegacyDataSafeValues` contract or a shared equivalent;
   record any Access-specific secret-bearing identifier heuristics before
   implementation emits clear object names.
+- Keep `ScanManifest` within the existing shared contract. Preserve database
+  path/hash, Access version, provider capabilities, `rowDataRead=false`, and
+  `executionPerformed=false` in rule-backed inventory/capability facts.
+- Treat forms/reports/controls, VBA/event procedures, and macro inventory fixture
+  expansion as Phase 7/8/9 work respectively; the first-slice fixture requires
+  only schema/query/external metadata plus startup and execution canaries.
 
 ## First Implementation Slice
 
@@ -139,6 +145,17 @@ same-session re-review with model selection `auto`.
 - Re-review reported full coverage, no blocking issues, and ready to merge.
 - Remaining implementation-time notes are recorded above rather than treated as
   completed product behavior.
+
+PR review-loop follow-up on PR #485 patched four current-head findings:
+
+- kept Access-specific provenance/capabilities in rule-backed facts rather than
+  unsupported adapter-specific `ScanManifest` fields;
+- split the synthetic fixture contract so forms/reports, VBA, and macro shapes
+  enter only their Phase 7/8/9 implementation PRs;
+- required segment-based relative-path validation instead of slash-substring
+  matching;
+- required future release-review gaps to use structured `ReleaseReviewGap`
+  entries and statuses to use `ReleaseReviewStatuses` only.
 
 ## Validation for the Future Implementation Branch
 

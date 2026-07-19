@@ -125,7 +125,9 @@ tracemap-access scan \
 The implementation must:
 
 - resolve and canonicalize the Git root;
-- reject absolute database arguments and traversal outside the root;
+- reject absolute database arguments and traversal outside the root; relative
+  path validation must normalize separators, split into segments, and inspect
+  individual segments rather than relying on slash-delimited substring checks;
 - reject symlink/reparse-point escape;
 - resolve a concrete commit SHA;
 - verify the selected path is tracked at `HEAD`;
@@ -386,7 +388,8 @@ local string invention.
 | Useful evidence plus one or more unsupported/limited collections | `Level1SemanticAnalysisReduced` | `FailedOrPartial` |
 | File inventory only, Access/DAO unavailable, database cannot open, or no useful design facts | command fails; no successful artifact set | n/a |
 
-Manifest capability metadata should distinguish:
+Rule-backed `AnalyzerCapabilityDiagnostic` and Access database inventory facts
+should distinguish:
 
 - `schemaCatalog`;
 - `savedQueries`;
@@ -398,8 +401,12 @@ Manifest capability metadata should distinguish:
 - `rowDataRead=false`;
 - `executionPerformed=false`.
 
-Capabilities are evidence about extractor behavior, not proof about the safety of
-the input database outside the observed scan.
+These values must not be introduced as adapter-specific `ScanManifest` fields.
+The manifest remains within the existing shared model; it carries repository,
+commit, scanner version, coverage, and known gaps, while facts carry the selected
+database path/hash and Access/provider capability evidence. Capabilities are
+evidence about extractor behavior, not proof about the safety of the input
+database outside the observed scan.
 
 ## Gap Taxonomy
 
