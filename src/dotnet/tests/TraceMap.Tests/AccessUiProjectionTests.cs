@@ -100,7 +100,7 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
-    public void Documented_surface_inventory_keeps_objects_unloaded_and_discards_metadata_if_property_access_loads_one()
+    public void Documented_surface_inventory_never_reads_loading_properties_and_fails_if_a_surface_is_already_loaded()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('d', 40), "fixture.accdb", "hash");
         var stable = new FakeAccessObject("frmStable", new Dictionary<string, object?>
@@ -120,12 +120,20 @@ public sealed class AccessUiProjectionTests
             new FakeAccessCollection([stable, loadOnProperties]), "form", seed, raw, gaps);
 
         Assert.False(stable.IsLoaded);
-        Assert.Equal("Customers", raw.Single(item => item.Name == "frmStable").RecordSource);
         var loaded = raw.Single(item => item.Name == "frmLoads");
         Assert.Null(loaded.RecordSource);
         Assert.Equal("inventory-only", loaded.Coverage);
-        Assert.Contains(gaps, gap => gap.Classification == "AccessSurfaceMetadataCausedLoad");
+        Assert.Null(raw.Single(item => item.Name == "frmStable").RecordSource);
+        Assert.Equal(0, stable.PropertiesReadCount);
+        Assert.Equal(0, loadOnProperties.PropertiesReadCount);
+        Assert.Equal(2, gaps.Count(gap => gap.Classification == "AccessFormReportCoverageUnavailable"));
+        Assert.DoesNotContain(gaps, gap => gap.Classification == "AccessSurfaceMetadataCausedLoad");
         Assert.DoesNotContain("PrivateSource_92817", JsonSerializer.Serialize(raw), StringComparison.OrdinalIgnoreCase);
+
+        var exception = Assert.Throws<AccessScanException>(() => new AccessComReader().ReadSurfaceCollection(
+            new FakeAccessCollection([new("frmAlreadyLoaded", new Dictionary<string, object?>(), initiallyLoaded: true)]),
+            "form", seed, [], []));
+        Assert.Equal("AccessSurfaceUnexpectedlyLoaded", exception.Classification);
     }
 
     [Fact]
@@ -401,14 +409,20 @@ public sealed class AccessUiProjectionTests
         public FakeAccessObject this[int index] => items[index];
     }
 
-    public sealed class FakeAccessObject(string name, IReadOnlyDictionary<string, object?> values, bool loadWhenPropertiesRead = false)
+    public sealed class FakeAccessObject(
+        string name,
+        IReadOnlyDictionary<string, object?> values,
+        bool loadWhenPropertiesRead = false,
+        bool initiallyLoaded = false)
     {
         public string Name { get; } = name;
-        public bool IsLoaded { get; private set; }
+        public bool IsLoaded { get; private set; } = initiallyLoaded;
+        public int PropertiesReadCount { get; private set; }
         public FakeAccessProperties Properties
         {
             get
             {
+                PropertiesReadCount++;
                 if (loadWhenPropertiesRead) IsLoaded = true;
                 return new(values);
             }
