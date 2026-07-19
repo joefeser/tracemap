@@ -33,16 +33,36 @@ public sealed class AccessVbaProjectionTests
     }
 
     [Fact]
-    public void Product_vba_inventory_fails_when_loaded_module_count_changes()
+    public void Product_vba_inventory_records_gap_when_loaded_module_count_changes()
     {
         var application = new FakeVbaApplication(
             new FakeVbaProject(new FakeCountCollection(1)), [0, 1]);
+        var gaps = new List<AccessGapProjection>();
 
-        var exception = Assert.Throws<AccessScanException>(() =>
-            new AccessComReader().ReadVbaInventoryCounts(application, []));
+        var inventory = new AccessComReader().ReadVbaInventoryCounts(application, gaps);
 
-        Assert.Equal("AccessVbaModuleStateChanged", exception.Classification);
+        Assert.False(inventory.LoadedModuleCountUnchanged);
+        Assert.Equal("count-observed-source-unavailable-canary-changed", inventory.Coverage);
+        Assert.Contains(gaps, gap => gap.Classification == "AccessVbaModuleStateChanged"
+            && gap.ScopeKind == "vba-project"
+            && gap.RuleId == RuleIds.LegacyAccessVba);
         Assert.Equal(0, application.VbeReadCount);
+    }
+
+    [Fact]
+    public void Product_vba_inventory_records_gap_when_module_catalog_count_is_unavailable()
+    {
+        var application = new ThrowingVbaApplication([0, 0]);
+        var gaps = new List<AccessGapProjection>();
+
+        var inventory = new AccessComReader().ReadVbaInventoryCounts(application, gaps);
+
+        Assert.Null(inventory.ModuleCount);
+        Assert.True(inventory.LoadedModuleCountUnchanged);
+        Assert.Equal("count-unavailable-source-unavailable", inventory.Coverage);
+        Assert.Contains(gaps, gap => gap.Classification == "AccessVbaModuleCatalogUnavailable"
+            && gap.ScopeKind == "vba-project"
+            && gap.RuleId == RuleIds.LegacyAccessVba);
     }
 
     [Fact]
@@ -148,6 +168,68 @@ public sealed class AccessVbaProjectionTests
         Assert.DoesNotContain("PasswordEventRole_92817", wire, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(source, wire, StringComparison.Ordinal);
         Assert.Contains(result.Gaps, gap => gap.Classification == "AccessEventRoleUnsupported");
+    }
+
+    [Fact]
+    public void Projector_ends_arguments_at_statement_separator_and_rejects_wrong_kind_catalog_targets()
+    {
+        const string source = """
+            Private Sub EntryPoint()
+                DoCmd.OpenForm "frmCustomers": Call Helper
+                DoCmd.OpenForm "qryOrders"
+            End Sub
+
+            Private Sub Helper()
+            End Sub
+            """;
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('f', 40), "fixture.accdb", "hash");
+        var form = AccessSafeValues.Identity(seed, "form", "frmCustomers");
+        var query = AccessSafeValues.Identity(seed, "query", "qryOrders");
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["frmCustomers"] = [(form.StableKey, "form")],
+            ["qryOrders"] = [(query.StableKey, "query")]
+        };
+
+        var result = AccessVbaProjector.Project(seed, [new("ModuleA", "standard", source)], knownObjects: known);
+        var calls = result.Modules.Single().Procedures
+            .Single(procedure => procedure.Identity.DisplayName == "EntryPoint").Calls;
+
+        Assert.Contains(calls, call => call.CallKind == "open-form"
+            && call.TargetStableKey == form.StableKey
+            && call.Coverage == "complete");
+        Assert.Contains(calls, call => call.CallKind == "local-procedure-call"
+            && call.TargetStableKey is not null);
+        var wrongKind = Assert.Single(calls, call => call.LiteralTargetIdentity?.DisplayName == "qryOrders");
+        Assert.Equal("open-form", wrongKind.CallKind);
+        Assert.Equal("form", wrongKind.TargetKind);
+        Assert.Null(wrongKind.TargetStableKey);
+        Assert.Equal("partial", wrongKind.Coverage);
+        Assert.Contains(result.Gaps, gap => gap.Classification == "AccessVbaLiteralTargetUnresolved"
+            && gap.StableScopeKey == wrongKind.Identity.StableKey);
+    }
+
+    [Fact]
+    public void Projector_scopes_missing_procedure_terminator_gaps_to_distinct_procedures()
+    {
+        const string source = """
+            Private Sub First()
+                Call Helper
+            Private Sub Second()
+                Call Helper
+            """;
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('1', 40), "fixture.accdb", "hash");
+
+        var result = AccessVbaProjector.Project(seed, [new("ModuleA", "standard", source)]);
+
+        var procedureKeys = result.Modules.Single().Procedures
+            .Select(procedure => procedure.Identity.StableKey)
+            .OfType<string>()
+            .ToHashSet();
+        var gaps = result.Gaps.Where(gap => gap.Classification == "AccessVbaProcedureEndUnavailable").ToArray();
+        Assert.Equal(2, gaps.Length);
+        Assert.All(gaps, gap => Assert.Contains(Assert.IsType<string>(gap.StableScopeKey), procedureKeys));
+        Assert.Equal(2, gaps.Select(gap => gap.StableScopeKey).Distinct().Count());
     }
 
     [Fact]
@@ -271,6 +353,13 @@ public sealed class AccessVbaProjectionTests
         await AccessArtifactWriter.WriteAsync(input.OutputFullPath, scan, AccessLimits.Default);
         var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([Path.Combine(input.OutputFullPath, "index.sqlite")], combinedPath, ["access"]));
+
+        // Clear the SQLite connection pool before reading files as bytes.
+        // On Windows, pooled connections hold a file lock on the .sqlite even
+        // after the logical connection is closed, causing IOException when
+        // File.ReadAllBytesAsync tries to open the same file.
+        SqliteConnection.ClearAllPools();
+
         var protectedMarkers = new[]
         {
             "PrivateVbaComment_92817",
@@ -286,6 +375,7 @@ public sealed class AccessVbaProjectionTests
                 Assert.DoesNotContain(marker, artifactText, StringComparison.OrdinalIgnoreCase);
         }
 
+        // Open a fresh connection after the pool is cleared for the fact-count query.
         await using var connection = new SqliteConnection($"Data Source={combinedPath}");
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
@@ -333,6 +423,21 @@ public sealed class AccessVbaProjectionTests
     public sealed class FakeVbaProject(FakeCountCollection modules)
     {
         public FakeCountCollection AllModules => modules;
+    }
+
+    public sealed class ThrowingVbaApplication(IReadOnlyList<int> loadedModuleCounts)
+    {
+        private int _loadedModuleReadIndex;
+        public object CurrentProject => throw new InvalidOperationException("Module catalog unavailable.");
+        public FakeCountCollection Modules
+        {
+            get
+            {
+                var index = Math.Min(_loadedModuleReadIndex, loadedModuleCounts.Count - 1);
+                _loadedModuleReadIndex++;
+                return new(loadedModuleCounts[index]);
+            }
+        }
     }
 
     public sealed class FakeCountCollection(int count)
