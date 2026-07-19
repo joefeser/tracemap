@@ -163,7 +163,7 @@ remain separate reviewable slices.
 
 ## Phase 8: VBA and Event Flow (Follow-Up PR)
 
-- [ ] 8.0 Extend the synthetic fixture with event procedures and VBA call/dynamic
+- [x] 8.0 Extend the synthetic fixture with event procedures and VBA call/dynamic
       shapes required by this phase.
 - [x] 8.1 Add catalog rules/facts for module/procedure inventory, bounded calls,
       events, navigation, and dynamic gaps.
