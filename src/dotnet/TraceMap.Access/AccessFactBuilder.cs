@@ -171,7 +171,7 @@ public static class AccessFactBuilder
                     ("modulePresence", surface.ModulePresence), ("boundState", surface.BoundState),
                     ("designHash", surface.DesignHash), ("controlCount", surface.Controls.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                     ("controlTypeCounts", ControlTypeCounts(surface.Controls)), ("eventDescriptors", EventDescriptors(surface.Events)),
-                    ("coverageLabel", "static-design-metadata"),
+                    ("coverageLabel", surface.Coverage),
                     ("limitations", "no-render;no-invocation;no-runtime-reachability;binary-container-span"))));
             AddBindingFacts(facts, manifest, span, surface.Bindings);
 
