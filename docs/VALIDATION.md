@@ -150,6 +150,31 @@ For any adapter output produced by the commands above, run:
 python3 scripts/validate-adapter-artifacts.py <scan-output>
 ```
 
+## Microsoft Access Adapter Smoke
+
+Access extraction requires Windows with installed Microsoft Access/DAO. Run it
+in an isolated local VM with networking and broad host sharing disabled. Stage
+only the self-contained CLI binaries and checked-in validation scripts through
+a scoped read-only share; use a guest-local Git repository and output root.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/access-validation/Invoke-AccessSmoke.ps1 `
+  -AccessCli <guest-local-tracemap-access.exe> `
+  -TraceMapCli <guest-local-tracemap.exe> `
+  -Generator <guest-local-New-SyntheticAccessFixture.ps1> `
+  -SmokeRoot <guest-local-smoke-root>
+```
+
+The smoke creates and locally commits a disposable zero-row `.accdb`, removes
+the linked source before scanning, runs sequential and concurrent scans, and
+checks deterministic facts/report/log output, the unchanged original database,
+startup-canary non-execution, protected-marker suppression, standard artifacts,
+index export, combine, and combined reporting. Do not commit the generated
+database or scan artifacts. Access evidence remains hidden, reduced static
+design evidence: it does not prove row contents, query/macro/VBA execution,
+runtime reachability, linked-source availability, permissions, production
+state, release approval, or that a change is safe.
+
 The repository CI runs the existing .NET, TypeScript, Python, JVM, and Swift
 test suites, validates one real output per adapter, and combines all five
 indexes. Local environments with only Apple Command Line Tools may build and
