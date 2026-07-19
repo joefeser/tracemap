@@ -163,21 +163,23 @@ remain separate reviewable slices.
 
 ## Phase 8: VBA and Event Flow (Follow-Up PR)
 
-- [ ] 8.0 Extend the synthetic fixture with event procedures and VBA call/dynamic
+- [x] 8.0 Extend the synthetic fixture with event procedures and VBA call/dynamic
       shapes required by this phase.
-- [ ] 8.1 Add catalog rules/facts for module/procedure inventory, bounded calls,
+- [x] 8.1 Add catalog rules/facts for module/procedure inventory, bounded calls,
       events, navigation, and dynamic gaps.
-- [ ] 8.2 Read VBA source in memory and persist only hashes, counts, safe names,
-      spans, and bounded call candidates.
-- [ ] 8.3 Tokenize while excluding comments and string contents from ordinary
+- [x] 8.2 Bound the v0 product reader to `AllModules.Count`, use loaded-module
+      count only as a before/after canary, emit no VBA identity/flow facts, and
+      record `AccessVbaProjectUnavailable`; defer source reads to a separately
+      security-reviewed mechanism.
+- [x] 8.3 Tokenize while excluding comments and string contents from ordinary
       call matching.
-- [ ] 8.4 Project direct Access APIs such as `DoCmd.OpenForm`,
+- [x] 8.4 Project direct Access APIs such as `DoCmd.OpenForm`,
       `DoCmd.OpenReport`, `DoCmd.OpenQuery`, DAO object references, domain
       functions, and `OpenRecordset` as Tier3 candidates without execution.
-- [ ] 8.5 Map exact same-module event procedures and emit ambiguity/missing gaps.
-- [ ] 8.6 Add `Eval`, `Run`, callbacks, variables, concatenation, COM, external
+- [x] 8.5 Map exact same-module event procedures and emit ambiguity/missing gaps.
+- [x] 8.6 Add `Eval`, `Run`, callbacks, variables, concatenation, COM, external
       process, and conditional-target gaps.
-- [ ] 8.7 Prove raw VBA, comments, literals, SQL, paths, and command bodies never
+- [x] 8.7 Prove raw VBA, comments, literals, SQL, paths, and command bodies never
       enter artifacts or failure messages.
 
 ## Phase 9: Macro/External Depth and Reporting (Follow-Up PR)
