@@ -14,6 +14,71 @@ public sealed class AccessVbaProjectionTests
     private const string ProtectedCommand = "PrivateCommandBody_92817";
 
     [Fact]
+    public void Product_vba_inventory_reads_only_counts_and_never_accesses_vbe_or_catalog_items()
+    {
+        var catalog = new FakeCountCollection(4);
+        var application = new FakeVbaApplication(new FakeVbaProject(catalog), [0, 0]);
+        var gaps = new List<AccessGapProjection>();
+
+        var inventory = new AccessComReader().ReadVbaInventoryCounts(application, gaps);
+
+        Assert.Equal(4, inventory.ModuleCount);
+        Assert.True(inventory.LoadedModuleCountUnchanged);
+        Assert.Equal("count-observed-source-unavailable", inventory.Coverage);
+        Assert.Equal(0, catalog.IndexerReadCount);
+        Assert.Equal(0, application.VbeReadCount);
+        Assert.Equal(2, application.LoadedModulesReadCount);
+        Assert.Single(gaps, gap => gap.Classification == "AccessVbaProjectUnavailable"
+            && gap.RuleId == RuleIds.LegacyAccessVba);
+    }
+
+    [Fact]
+    public void Product_vba_inventory_fails_when_loaded_module_count_changes()
+    {
+        var application = new FakeVbaApplication(
+            new FakeVbaProject(new FakeCountCollection(1)), [0, 1]);
+
+        var exception = Assert.Throws<AccessScanException>(() =>
+            new AccessComReader().ReadVbaInventoryCounts(application, []));
+
+        Assert.Equal("AccessVbaModuleStateChanged", exception.Classification);
+        Assert.Equal(0, application.VbeReadCount);
+    }
+
+    [Fact]
+    public async Task Count_only_vba_inventory_emits_metadata_and_gap_without_identity_or_flow_facts()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        await File.WriteAllBytesAsync(databasePath, [1, 2, 3, 4]);
+        var databaseHash = AccessInputValidator.HashFile(databasePath);
+        var input = new AccessValidatedInput(
+            temp.Path, "repo", AccessSafeValues.RoleHash("access-repository-identity", "repo"), null, "test",
+            new string('e', 40), databasePath, "fixture.accdb", databaseHash, ".accdb", Path.Combine(temp.Path, "out"), false);
+        var inventory = new AccessVbaInventoryProjection(3, true, "count-observed-source-unavailable");
+        var projection = new AccessDatabaseProjection(
+            "tracemap.access-projection.v1", databaseHash, ".accdb", "16.0", 1234, false, false, 0,
+            [], [], [], [],
+            [new("AccessVbaProjectUnavailable", "vba-project", null, RuleIds.LegacyAccessVba)],
+            [new("vbaModules", inventory.Coverage)],
+            VbaModules: [], EventBindings: [], VbaInventory: inventory);
+
+        var scan = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath));
+
+        var databaseFact = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.LegacyDataMetadataDeclared);
+        Assert.Equal("3", databaseFact.Properties.GetValueOrDefault("vbaModuleCount"));
+        Assert.Equal("true", databaseFact.Properties.GetValueOrDefault("vbaLoadedModuleCountUnchanged"));
+        Assert.Equal("count-observed-source-unavailable", databaseFact.Properties.GetValueOrDefault("vbaCoverage"));
+        Assert.DoesNotContain(scan.Facts, fact => fact.FactType is FactTypes.AccessVbaModuleDeclared
+            or FactTypes.AccessVbaProcedureDeclared
+            or FactTypes.AccessNavigationCandidate
+            or FactTypes.AccessEventBindingCandidate);
+        Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyAccessVba
+            && fact.Properties.GetValueOrDefault("classification") == "AccessVbaProjectUnavailable");
+    }
+
+    [Fact]
     public void Projector_masks_comments_and_ordinary_literals_projects_allowlisted_calls_and_maps_exact_event_procedure()
     {
         const string source = """
@@ -238,5 +303,49 @@ public sealed class AccessVbaProjectionTests
         while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, ".git")) && !File.Exists(Path.Combine(directory.FullName, ".git")))
             directory = directory.Parent;
         return directory?.FullName ?? throw new InvalidOperationException("Repository root not found.");
+    }
+
+    public sealed class FakeVbaApplication(FakeVbaProject project, IReadOnlyList<int> loadedModuleCounts)
+    {
+        private int _loadedModuleReadIndex;
+        public FakeVbaProject CurrentProject => project;
+        public int LoadedModulesReadCount => _loadedModuleReadIndex;
+        public int VbeReadCount { get; private set; }
+        public FakeCountCollection Modules
+        {
+            get
+            {
+                var index = Math.Min(_loadedModuleReadIndex, loadedModuleCounts.Count - 1);
+                _loadedModuleReadIndex++;
+                return new(loadedModuleCounts[index]);
+            }
+        }
+        public object VBE
+        {
+            get
+            {
+                VbeReadCount++;
+                throw new InvalidOperationException("VBE access is forbidden for v0.");
+            }
+        }
+    }
+
+    public sealed class FakeVbaProject(FakeCountCollection modules)
+    {
+        public FakeCountCollection AllModules => modules;
+    }
+
+    public sealed class FakeCountCollection(int count)
+    {
+        public int Count => count;
+        public int IndexerReadCount { get; private set; }
+        public object this[int index]
+        {
+            get
+            {
+                IndexerReadCount++;
+                throw new InvalidOperationException("Collection item access is forbidden for v0.");
+            }
+        }
     }
 }

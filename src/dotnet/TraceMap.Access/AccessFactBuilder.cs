@@ -74,6 +74,11 @@ public static class AccessFactBuilder
                 ("formCount", projection.UiInventory?.FormCount?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 ("reportCount", projection.UiInventory?.ReportCount?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 ("formsReportsCoverage", projection.UiInventory?.Coverage),
+                ("vbaModuleCount", projection.VbaInventory?.ModuleCount?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ("vbaLoadedModuleCountUnchanged", projection.VbaInventory?.LoadedModuleCountUnchanged is bool loadedModuleCountUnchanged
+                    ? loadedModuleCountUnchanged.ToString().ToLowerInvariant()
+                    : null),
+                ("vbaCoverage", projection.VbaInventory?.Coverage),
                 ("coverageLabel", "reduced-static-design"),
                 ("limitations", "binary-container-span;no-rows;no-execution;no-runtime-proof"))));
 
