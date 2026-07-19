@@ -96,7 +96,7 @@ public sealed class AccessComReader
             UiInventory: uiInventory);
     }
 
-    private AccessUiInventoryProjection ReadUiInventoryCounts(
+    internal AccessUiInventoryProjection ReadUiInventoryCounts(
         object applicationObject,
         List<AccessGapProjection> gaps)
     {
@@ -105,8 +105,8 @@ public sealed class AccessComReader
         {
             dynamic application = applicationObject;
             project = application.CurrentProject;
-            var formCount = ReadSurfaceCollectionCount((object)project.AllForms, "form", gaps);
-            var reportCount = ReadSurfaceCollectionCount((object)project.AllReports, "report", gaps);
+            var formCount = ReadProjectSurfaceCollectionCount((object)project, "form", gaps);
+            var reportCount = ReadProjectSurfaceCollectionCount((object)project, "report", gaps);
             var coverage = formCount is null || reportCount is null
                 ? "count-partial-identity-unavailable"
                 : formCount > 0 || reportCount > 0
@@ -125,6 +125,31 @@ public sealed class AccessComReader
             return new(null, null, "count-unavailable");
         }
         finally { Release(project); }
+    }
+
+    private int? ReadProjectSurfaceCollectionCount(
+        object projectObject,
+        string surfaceKind,
+        List<AccessGapProjection> gaps)
+    {
+        try
+        {
+            dynamic project = projectObject;
+            object collection = surfaceKind == "form"
+                ? (object)project.AllForms
+                : (object)project.AllReports;
+            return ReadSurfaceCollectionCount(collection, surfaceKind, gaps);
+        }
+        catch (AccessScanException ex)
+        {
+            gaps.Add(new(ex.Classification, $"{surfaceKind}-catalog", null, RuleIds.LegacyAccessUiSurface));
+            return null;
+        }
+        catch
+        {
+            gaps.Add(new("AccessFormReportCoverageUnavailable", $"{surfaceKind}-catalog", null, RuleIds.LegacyAccessUiSurface));
+            return null;
+        }
     }
 
     internal int? ReadSurfaceCollectionCount(
