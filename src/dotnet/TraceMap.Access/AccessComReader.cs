@@ -107,16 +107,10 @@ public sealed class AccessComReader
         object applicationObject,
         List<AccessGapProjection> gaps)
     {
-        var loadedBefore = ReadLoadedMacroCount(applicationObject);
         var namedMacroCount = ReadMacroCatalogCount(applicationObject, gaps);
-        var loadedAfter = ReadLoadedMacroCount(applicationObject);
-        var loadedCountUnchanged = loadedBefore.HasValue && loadedAfter.HasValue
-            ? loadedBefore.Value == loadedAfter.Value
-            : (bool?)null;
-        if (loadedCountUnchanged == false)
-            gaps.Add(new("AccessMacroLoadedStateChanged", "macro-catalog", null, RuleIds.LegacyAccessMacroGap));
 
         gaps.Add(new("AccessMacroInventoryUnavailable", "macro-catalog", null, RuleIds.LegacyAccessMacroGap));
+        gaps.Add(new("AccessMacroLoadedStateUnavailable", "macro-loaded-state", null, RuleIds.LegacyAccessMacroGap));
         gaps.Add(new("AccessMacroIdentityUnavailable", "macro-named", null, RuleIds.LegacyAccessMacroGap));
         gaps.Add(new("AccessMacroEmbeddedInventoryUnavailable", "macro-embedded", null, RuleIds.LegacyAccessMacroGap));
         gaps.Add(new("AccessMacroDataInventoryUnavailable", "macro-data", null, RuleIds.LegacyAccessMacroGap));
@@ -124,13 +118,9 @@ public sealed class AccessComReader
         if (namedMacroCount > 0)
             gaps.Add(new("AccessMacroBodyOmitted", "macro-named", null, RuleIds.LegacyAccessMacroGap));
         var coverage = namedMacroCount.HasValue
-            ? loadedCountUnchanged == true
-                ? "named-count-observed-other-categories-identities-bodies-unavailable"
-                : loadedCountUnchanged == false
-                    ? "named-count-observed-other-categories-identities-bodies-unavailable-canary-changed"
-                    : "named-count-observed-other-categories-identities-bodies-unavailable-canary-unavailable"
-            : "named-count-unavailable-other-categories-identities-bodies-unavailable";
-        return new(namedMacroCount, loadedCountUnchanged, coverage);
+            ? "named-count-observed-loaded-state-unavailable-other-categories-identities-bodies-unavailable"
+            : "named-count-unavailable-loaded-state-unavailable-other-categories-identities-bodies-unavailable";
+        return new(namedMacroCount, LoadedMacroCountUnchanged: null, coverage);
     }
 
     private int? ReadMacroCatalogCount(
@@ -162,19 +152,6 @@ public sealed class AccessComReader
             Release(macrosObject);
             Release(projectObject);
         }
-    }
-
-    private int? ReadLoadedMacroCount(object applicationObject)
-    {
-        object? macrosObject = null;
-        try
-        {
-            dynamic application = applicationObject;
-            macrosObject = application.Macros;
-            return BoundedCount((dynamic)macrosObject, "AccessMacroLoadedCollectionLimitReached");
-        }
-        catch { return null; }
-        finally { Release(macrosObject); }
     }
 
     internal AccessVbaInventoryProjection ReadVbaInventoryCounts(

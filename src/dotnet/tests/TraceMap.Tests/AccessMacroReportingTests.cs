@@ -15,17 +15,19 @@ public sealed class AccessMacroReportingTests
     public void Product_macro_inventory_reads_only_counts_and_never_catalog_items()
     {
         var catalog = new FakeMacroCountCollection(3);
-        var application = new FakeMacroApplication(new FakeMacroProject(catalog), [0, 0]);
+        var application = new FakeMacroApplication(new FakeMacroProject(catalog));
         var gaps = new List<AccessGapProjection>();
 
         var inventory = new AccessComReader().ReadMacroInventoryCounts(application, gaps);
 
         Assert.Equal(3, inventory.NamedMacroCount);
-        Assert.True(inventory.LoadedMacroCountUnchanged);
-        Assert.Equal("named-count-observed-other-categories-identities-bodies-unavailable", inventory.Coverage);
+        Assert.Null(inventory.LoadedMacroCountUnchanged);
+        Assert.Equal("named-count-observed-loaded-state-unavailable-other-categories-identities-bodies-unavailable", inventory.Coverage);
         Assert.Equal(0, catalog.IndexerReadCount);
-        Assert.Equal(2, application.LoadedMacrosReadCount);
+        Assert.Equal(0, application.UnsupportedLoadedMacrosReadCount);
         Assert.Single(gaps, gap => gap.Classification == "AccessMacroInventoryUnavailable"
+            && gap.RuleId == RuleIds.LegacyAccessMacroGap);
+        Assert.Contains(gaps, gap => gap.Classification == "AccessMacroLoadedStateUnavailable"
             && gap.RuleId == RuleIds.LegacyAccessMacroGap);
         Assert.Contains(gaps, gap => gap.Classification == "AccessMacroIdentityUnavailable");
         Assert.Contains(gaps, gap => gap.Classification == "AccessMacroEmbeddedInventoryUnavailable");
@@ -35,17 +37,20 @@ public sealed class AccessMacroReportingTests
     }
 
     [Fact]
-    public void Product_macro_inventory_records_loaded_state_change_without_claiming_stable_coverage()
+    public void Product_macro_inventory_records_unavailable_catalog_without_accessing_unsupported_loaded_collection()
     {
-        var application = new FakeMacroApplication(
-            new FakeMacroProject(new FakeMacroCountCollection(1)), [0, 1]);
+        var application = new FakeMacroApplication(new FakeMacroProject(new FakeUnavailableMacroCountCollection()));
         var gaps = new List<AccessGapProjection>();
 
         var inventory = new AccessComReader().ReadMacroInventoryCounts(application, gaps);
 
-        Assert.False(inventory.LoadedMacroCountUnchanged);
-        Assert.Equal("named-count-observed-other-categories-identities-bodies-unavailable-canary-changed", inventory.Coverage);
-        Assert.Contains(gaps, gap => gap.Classification == "AccessMacroLoadedStateChanged"
+        Assert.Null(inventory.NamedMacroCount);
+        Assert.Null(inventory.LoadedMacroCountUnchanged);
+        Assert.Equal("named-count-unavailable-loaded-state-unavailable-other-categories-identities-bodies-unavailable", inventory.Coverage);
+        Assert.Equal(0, application.UnsupportedLoadedMacrosReadCount);
+        Assert.Contains(gaps, gap => gap.Classification == "AccessMacroCollectionLimitReached"
+            && gap.RuleId == RuleIds.LegacyAccessMacroGap);
+        Assert.Contains(gaps, gap => gap.Classification == "AccessMacroLoadedStateUnavailable"
             && gap.RuleId == RuleIds.LegacyAccessMacroGap);
     }
 
@@ -59,7 +64,7 @@ public sealed class AccessMacroReportingTests
         var input = new AccessValidatedInput(
             temp.Path, "repo", AccessSafeValues.RoleHash("access-repository-identity", "repo"), null, "test",
             new string('e', 40), databasePath, "fixture.accdb", databaseHash, ".accdb", Path.Combine(temp.Path, "out"), false);
-        var inventory = new AccessMacroInventoryProjection(2, true, "named-count-observed-other-categories-identities-bodies-unavailable");
+        var inventory = new AccessMacroInventoryProjection(2, null, "named-count-observed-loaded-state-unavailable-other-categories-identities-bodies-unavailable");
         var projection = new AccessDatabaseProjection(
             "tracemap.access-projection.v1", databaseHash, ".accdb", "16.0", 1234, false, false, 0,
             [], [], [], [],
@@ -71,8 +76,8 @@ public sealed class AccessMacroReportingTests
 
         var databaseFact = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.LegacyDataMetadataDeclared);
         Assert.Equal("2", databaseFact.Properties.GetValueOrDefault("namedMacroCount"));
-        Assert.Equal("true", databaseFact.Properties.GetValueOrDefault("macroLoadedCountUnchanged"));
-        Assert.Equal("named-count-observed-other-categories-identities-bodies-unavailable", databaseFact.Properties.GetValueOrDefault("macroCoverage"));
+        Assert.DoesNotContain("macroLoadedCountUnchanged", databaseFact.Properties);
+        Assert.Equal("named-count-observed-loaded-state-unavailable-other-categories-identities-bodies-unavailable", databaseFact.Properties.GetValueOrDefault("macroCoverage"));
         Assert.DoesNotContain(scan.Facts, fact => fact.FactType == FactTypes.AccessMacroDeclared);
         Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyAccessMacroGap
@@ -250,29 +255,23 @@ public sealed class AccessMacroReportingTests
 
     public sealed class FakeMacroApplication
     {
-        private readonly Queue<int> _loadedCounts;
-
-        public FakeMacroApplication(FakeMacroProject project, IEnumerable<int> loadedCounts)
-        {
-            CurrentProject = project;
-            _loadedCounts = new Queue<int>(loadedCounts);
-        }
+        public FakeMacroApplication(FakeMacroProject project) => CurrentProject = project;
 
         public FakeMacroProject CurrentProject { get; }
-        public int LoadedMacrosReadCount { get; private set; }
-        public FakeMacroCountCollection Macros
+        public int UnsupportedLoadedMacrosReadCount { get; private set; }
+        public object Macros
         {
             get
             {
-                LoadedMacrosReadCount++;
-                return new FakeMacroCountCollection(_loadedCounts.Dequeue());
+                UnsupportedLoadedMacrosReadCount++;
+                throw new InvalidOperationException("Application.Macros is not an approved Access API.");
             }
         }
     }
 
-    public sealed class FakeMacroProject(FakeMacroCountCollection macros)
+    public sealed class FakeMacroProject(object macros)
     {
-        public FakeMacroCountCollection AllMacros { get; } = macros;
+        public object AllMacros { get; } = macros;
     }
 
     public sealed class FakeMacroCountCollection(int count)
@@ -287,5 +286,10 @@ public sealed class AccessMacroReportingTests
                 throw new InvalidOperationException($"Macro catalog item {index} must not be read.");
             }
         }
+    }
+
+    public sealed class FakeUnavailableMacroCountCollection
+    {
+        public int Count => throw new InvalidOperationException("Count unavailable.");
     }
 }

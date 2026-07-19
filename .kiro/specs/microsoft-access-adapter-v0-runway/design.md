@@ -350,9 +350,10 @@ retained and tested as a future input boundary, but wiring `Application.VBE`,
 requires a separate security-reviewed execution mechanism.
 
 The Phase 9 v0 product boundary likewise does not enumerate macro catalog
-items. It reads only bounded `CurrentProject.AllMacros.Count` and uses
-`Application.Macros.Count` solely as a before/after loaded-state canary. The
-product emits the named-macro count when available, zero macro identity/body
+items. It reads only bounded `CurrentProject.AllMacros.Count`. Access does not
+document an `Application.Macros` collection analogous to `Application.Modules`,
+so loaded-macro state remains explicitly unavailable instead of being inferred.
+The product emits the named-macro count when available, zero macro identity/body
 facts, and rule-backed gaps for unavailable named identity, embedded, data,
 startup, and protected-body evidence. The deterministic macro projector remains
 a tested future input boundary; catalog item names, startup properties, macro

@@ -1,6 +1,7 @@
 # Microsoft Access Adapter v0 Runway Implementation State
 
-Status: Phase 0 through Phase 8 merged; Phase 9 platform-neutral work rebased by merge onto current `dev`
+Status: Phase 0 through Phase 8 merged; Phase 9 platform-neutral work is pushed,
+but its Windows product gate stopped at the authorized count-only boundary
 
 Spec branch: `codex/microsoft-access-adapter-runway`
 
@@ -508,15 +509,37 @@ complete task 9.5; the sanitized Windows result is still required.
 
 The earlier broad Windows capability prompt on issue #490 is obsolete because
 it authorized macro catalog item names and startup properties. Phase 9 now uses
-the same conservative product boundary validated for Phase 8: bounded
-`CurrentProject.AllMacros.Count` plus `Application.Macros.Count` solely as a
-before/after loaded-state canary. It never indexes either collection and never
+a conservative documented product boundary: bounded
+`CurrentProject.AllMacros.Count`. It never indexes the collection and never
 reads names, `IsLoaded`, startup properties, macro actions, arguments,
 conditions, expressions, XML/text, or bodies. Product output contains only the
-named catalog count, canary outcome, explicit coverage, zero macro identity/body
+named catalog count, explicit coverage, zero macro identity/body
 facts, and rule-backed named/embedded/data/startup/body gaps. Issue #490 requires
 a fresh exact-head product-only authorization; issue #491 remains paused until
 that succeeds.
+
+The authorized Windows product smoke at exact head `42cff969b231d88daab61938bc6c209e57226217`
+stopped at the count-only boundary and posted its sanitized result on issue
+#490. The run retained no unsafe detail: fixture-generation and extraction
+canaries stayed false, protected-output matches were zero, the baseline fixture
+was unchanged, processes exited, networking was restored, scratch was removed,
+and the worktree stayed clean. However, no named-macro count was observed, the
+loaded-macro canary was not established, the success coverage label was absent,
+and downstream preservation was not demonstrated. The deterministic runs did
+emit zero macro identity facts and the required rule-backed gaps. This is a safe
+boundary result, not a successful product validation. Task 9.0 remains open,
+task 9.5 and issue #491 remain paused, and no further Windows rerun is authorized
+until the product/count boundary is investigated without expanding the approved
+COM reads.
+
+Post-run review found that Microsoft documents `CurrentProject.AllMacros` but
+does not document the `Application.Macros` collection used by the original
+loaded-state canary. The fake product test had modeled that unsupported member.
+The branch therefore removes that read, keeps loaded-macro state explicitly
+unavailable under `legacy.access.macro-gap.v1`, and retains only the documented
+bounded catalog count. A future Windows rerun must validate this corrected
+contract at a new exact head; it must not revive or substitute an item-level
+loaded-state probe.
 
 The Phase 9 generator layer adds a second form button classified as
 `[Embedded Macro]` with a protected caption marker, but deliberately supplies
