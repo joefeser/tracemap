@@ -236,10 +236,11 @@ ACK released 12 current-head review threads. The verified fixes:
 - remove redundant write-through mode while retaining a forced flush and hash
   verification for the private copy.
 
-One suggestion to skip `index.sqlite` during protected-marker scanning was not
-implemented: SQLite is a required artifact and excluding it would weaken the
-secret-safety proof. The synthetic artifact is bounded, and the full Windows
-smoke scanned it successfully with zero planted-marker matches.
+The marker-scan review suggested skipping `index.sqlite` to avoid loading binary
+artifacts into memory. SQLite is a required artifact, so excluding it would
+weaken the secret-safety proof. Instead, the harness now scans every artifact
+with a bounded 64 KiB rolling UTF-8 window. The full Windows smoke reran with
+that implementation and found zero planted markers.
 
 ## Spec Review
 
