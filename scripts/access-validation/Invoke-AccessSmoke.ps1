@@ -12,6 +12,36 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+function Find-ProtectedMarker {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string[]]$Markers
+    )
+
+    $encoding = [Text.Encoding]::UTF8
+    $maxMarkerBytes = ($Markers | ForEach-Object { $encoding.GetByteCount($_) } | Measure-Object -Maximum).Maximum
+    $buffer = New-Object byte[] 65536
+    $tail = New-Object byte[] 0
+    $stream = [IO.File]::OpenRead($Path)
+    try {
+        while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            $window = New-Object byte[] ($tail.Length + $read)
+            if ($tail.Length -gt 0) { [Buffer]::BlockCopy($tail, 0, $window, 0, $tail.Length) }
+            [Buffer]::BlockCopy($buffer, 0, $window, $tail.Length, $read)
+            $text = $encoding.GetString($window)
+            foreach ($marker in $Markers) {
+                if ($text.IndexOf($marker, [StringComparison]::OrdinalIgnoreCase) -ge 0) { return $marker }
+            }
+            $tailLength = [Math]::Min([Math]::Max(0, $maxMarkerBytes - 1), $window.Length)
+            $tail = New-Object byte[] $tailLength
+            if ($tailLength -gt 0) { [Buffer]::BlockCopy($window, $window.Length - $tailLength, $tail, 0, $tailLength) }
+        }
+    }
+    finally { $stream.Dispose() }
+    return $null
+}
+
 $SmokeRoot = [IO.Path]::GetFullPath($SmokeRoot)
 $repo = Join-Path $SmokeRoot "repo"
 $databaseRelative = "fixture\synthetic-tracemap.accdb"
@@ -102,12 +132,8 @@ $markers = @(
     $SmokeRoot
 )
 foreach ($file in Get-ChildItem $outA -File -Recurse) {
-    $text = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($file.FullName))
-    foreach ($marker in $markers) {
-        if ($text.IndexOf($marker, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
-            throw "protected marker leaked into $($file.Name)"
-        }
-    }
+    $foundMarker = Find-ProtectedMarker -Path $file.FullName -Markers $markers
+    if ($null -ne $foundMarker) { throw "protected marker leaked into $($file.Name)" }
 }
 
 $concurrentArgumentsA = @("scan", "--repo", $repo, "--database", $databaseRelative.Replace('\', '/'), "--out", $outConcurrentA, "--timeout-seconds", "120")
