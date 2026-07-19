@@ -11,4 +11,6 @@
 - [x] Run focused and full site tests and build validation.
 - [x] Complete desktop and mobile browser checks.
 - [x] Run the private-path guard and diff check.
-- [ ] Commit, push, open a ready PR to `dev`, run ACK, and merge if authorized.
+- [x] Commit, push, and open ready PR #486 to `dev`.
+- [x] Patch the current authorized ACK validator findings and rerun validation.
+- [ ] Reach the terminal ACK result and merge if authorized.
