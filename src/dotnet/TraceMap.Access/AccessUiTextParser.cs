@@ -27,6 +27,8 @@ internal static partial class AccessUiTextParser
         ControlBuilder? control = null;
         var controlDepth = -1;
         string? recordSource = null;
+        string? filter = null;
+        string? orderBy = null;
         bool? hasModule = null;
         var lineCount = 0;
         var characterCount = 0;
@@ -97,6 +99,7 @@ internal static partial class AccessUiTextParser
                     case "Name": control.Name = value; break;
                     case "ControlSource": control.ControlSource = value; break;
                     case "RowSource": control.RowSource = value; break;
+                    case "ValidationRule": control.ValidationRule = value; break;
                     default:
                         if (EventRoles.TryGetValue(name, out var controlEventRole))
                             control.Events.Add(new(controlEventRole, value));
@@ -108,6 +111,8 @@ internal static partial class AccessUiTextParser
             switch (name)
             {
                 case "RecordSource": recordSource = value; break;
+                case "Filter": filter = value; break;
+                case "OrderBy": orderBy = value; break;
                 case "HasModule": hasModule = ReadBoolean(value); break;
                 default:
                     if (EventRoles.TryGetValue(name, out var surfaceEventRole))
@@ -121,7 +126,9 @@ internal static partial class AccessUiTextParser
         return new(
             new(surfaceName, surfaceKind, hasModule, recordSource,
                 controls.OrderBy(item => item.Ordinal).ToArray(),
-                surfaceEvents.OrderBy(item => item.Role, StringComparer.Ordinal).ToArray()),
+                surfaceEvents.OrderBy(item => item.Role, StringComparer.Ordinal).ToArray(),
+                Filter: filter,
+                OrderBy: orderBy),
             gaps.OrderBy(item => item.Classification, StringComparer.Ordinal).ToArray());
     }
 
@@ -186,11 +193,12 @@ internal static partial class AccessUiTextParser
         public string? Name { get; set; }
         public string? ControlSource { get; set; }
         public string? RowSource { get; set; }
+        public string? ValidationRule { get; set; }
         public List<AccessRawUiEvent> Events { get; } = [];
 
         public AccessRawControl Build() => new(
             Name!, ordinal, controlType, ControlSource, RowSource,
-            Events.OrderBy(item => item.Role, StringComparer.Ordinal).ToArray());
+            Events.OrderBy(item => item.Role, StringComparer.Ordinal).ToArray(), ValidationRule);
     }
 
     private static readonly Dictionary<string, string> EventRoles = new(StringComparer.Ordinal)
