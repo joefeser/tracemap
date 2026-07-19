@@ -239,6 +239,61 @@ Still required before Phase 7 PR readiness:
 - hostile canary, marker, determinism, concurrent-scan, export/combine/report,
   and full solution validation on the wired implementation.
 
+## Phase 8 Platform-Neutral Work
+
+Branch: `codex/microsoft-access-adapter-v0-vba-flow`, stacked on the pushed
+Phase 7 head `ad8a36eec5184a02a68e869ed06fcbecb1b01967`.
+
+Phase 8 begins as a platform-neutral projection slice only. It may add the
+cataloged VBA/event/navigation fact contracts, bounded source tokenizer, safe
+hash/identity projection, exact same-module event mapping, gaps, and leak tests.
+It must not connect any COM/VBProject reader until a separate Windows-local
+capability probe proves that source can be obtained from the private copy while
+macro security is forced off, without invocation, export, trust-policy changes,
+or protected material crossing worker IPC. Raw VBA may exist only transiently
+inside that future isolated worker; parser inputs in tests are synthetic.
+
+The parser will treat VBA as Tier3 textual evidence, preserve real module line
+coordinates, mask comments and ordinary string contents before call matching,
+retain literal targets only through role-specific safe identity projection, and
+emit dynamic-boundary gaps for variable/concatenated/`Eval`/`Run`/callback or
+otherwise unsupported dispatch. It will not claim runtime dispatch, branch
+feasibility, query or row access, navigation, external process execution, or
+production use.
+
+Implemented on this branch:
+
+- `legacy.access.vba.v1` and `legacy.access.event-binding.v1`, with cataloged
+  limitations and the module, procedure, navigation/call, event-binding, and
+  gap fact vocabulary;
+- bounded module, procedure, and call projection contracts with role-separated
+  identities and module-source/dynamic-expression hashes only;
+- a two-pass VBA projector that preserves real module line coordinates, masks
+  apostrophe/`Rem` comments and ordinary string contents, recognizes explicit
+  same-module calls and allowlisted `DoCmd`, DAO collection, `OpenRecordset`,
+  and domain-function literal target shapes, and gaps dynamic or unresolved
+  targets rather than guessing;
+- exact same-module event-procedure mapping with missing/ambiguity gaps;
+- standard-artifact and combined-index tests proving rule/line provenance
+  survives while planted VBA comments, SQL, paths, literals, and command bodies
+  remain absent.
+
+Phase 8 platform-neutral validation:
+
+- 3/3 focused VBA projection tests pass;
+- 33/33 combined Access foundation/UI/VBA tests pass;
+- 796/796 full solution tests pass;
+- solution build passes with the pre-existing
+  `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory;
+- changed-file whitespace verification passes. The repository-wide formatter
+  still reports pre-existing whitespace findings outside this slice.
+
+Still required before Phase 8 PR readiness: Phase 7 completion, fixture task
+8.0, an approved Windows-local non-invoking VBA source capability, product
+reader/worker wiring for task 8.2, Windows hostile-canary and protected-marker
+validation, and the focused PR/ACK sequence. No product COM/VBProject reader or
+worker IPC source field has been added on this branch.
+
 ## Foundation Validation
 
 Platform-neutral validation on the implementation branch:

@@ -1408,6 +1408,33 @@ rules:
       - Ambiguous, dynamic, unsupported, or unresolved targets are explicit gaps; the extractor does not choose an arbitrary object or field.
       - Binding extraction never opens a recordset, executes a query, renders a surface, invokes an event, or reads a submitted/control value.
 
+  - id: legacy.access.vba.v1
+    name: Microsoft Access bounded VBA declaration and call candidate
+    description: Records safe module/procedure declarations and bounded textual call or navigation candidates from VBA source inspected only in memory.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - AccessVbaModuleDeclared
+      - AccessVbaProcedureDeclared
+      - AccessNavigationCandidate
+      - AnalysisGap
+    limitations:
+      - VBA evidence is bounded textual evidence and does not prove runtime dispatch, branch feasibility, error-handler outcome, query execution, record access, navigation, COM resolution, external process execution, deployment, or production use.
+      - Raw source, declaration text, comments, string literals, SQL, connection values, command bodies, and local paths never persist; modules and dynamic expressions retain only role-separated hashes, lengths, counts, safe identities, and real module line coordinates.
+      - Ordinary call matching excludes comments and string contents. Literal targets are considered only for allowlisted Access/DAO call shapes and are emitted through the role-specific safe identifier policy or as hashes.
+      - Variables, concatenation, Eval, Run, callbacks, reflection-like dispatch, external libraries, conditional targets, malformed modules, and limit hits are explicit gaps rather than inferred targets.
+
+  - id: legacy.access.event-binding.v1
+    name: Microsoft Access event procedure binding candidate
+    description: Records an exact same-module candidate between an event-procedure design property and a bounded VBA procedure declaration.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - AccessEventBindingCandidate
+      - AnalysisGap
+    limitations:
+      - Event binding candidates prove only an exact static naming match in the owning module; they do not prove event firing, runtime dispatch, user interaction, branch feasibility, rendering, navigation, deployment, or production use.
+      - Missing, ambiguous, dynamic, expression, and embedded-macro handlers remain gaps or separately classified surface evidence; the extractor never invokes an event or persists an event expression or macro body.
+      - Procedure and owner identities follow safe/hash policy, and VBA source never crosses worker IPC or enters artifacts.
+
   - id: legacy.access.coverage-gap.v1
     name: Microsoft Access extraction coverage gap
     description: Records bounded platform, COM/provider, trust, timeout, cleanup, parsing, ambiguity, unsafe-value, or extraction-limit gaps.
