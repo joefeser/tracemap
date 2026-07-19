@@ -166,43 +166,43 @@ internal static partial class AccessVbaProjector
             foreach (Match match in DynamicDispatchPattern().Matches(masked))
             {
                 AddDynamicCall(databaseIdentitySeed, moduleIdentity, procedure, lineNumber, sourceLine, calls, gaps);
-                if (calls.Count >= limits.MaxVbaCallsPerProcedure) break;
+                if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
             }
-            if (calls.Count >= limits.MaxVbaCallsPerProcedure) break;
+            if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
 
             foreach (Match match in DoCmdNavigationPattern().Matches(masked))
             {
                 var callKind = "open-" + match.Groups["kind"].Value.ToLowerInvariant();
                 AddLiteralTargetCall(databaseIdentitySeed, procedure, lineNumber, callKind, sourceLine, match.Index + match.Length,
                     0, knownObjects, calls, gaps);
-                if (calls.Count >= limits.MaxVbaCallsPerProcedure) break;
+                if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
             }
-            if (calls.Count >= limits.MaxVbaCallsPerProcedure) break;
+            if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
 
             foreach (Match match in DaoCollectionPattern().Matches(masked))
             {
                 var collection = match.Groups["kind"].Value.ToLowerInvariant();
                 AddLiteralTargetCall(databaseIdentitySeed, procedure, lineNumber, collection == "querydefs" ? "dao-query-reference" : "dao-table-reference",
                     sourceLine, match.Index + match.Length, 0, knownObjects, calls, gaps);
-                if (calls.Count >= limits.MaxVbaCallsPerProcedure) break;
+                if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
             }
-            if (calls.Count >= limits.MaxVbaCallsPerProcedure) break;
+            if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
 
             foreach (Match match in OpenRecordsetPattern().Matches(masked))
             {
                 AddLiteralTargetCall(databaseIdentitySeed, procedure, lineNumber, "open-recordset-reference", sourceLine,
                     match.Index + match.Length, 0, knownObjects, calls, gaps);
-                if (calls.Count >= limits.MaxVbaCallsPerProcedure) break;
+                if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
             }
-            if (calls.Count >= limits.MaxVbaCallsPerProcedure) break;
+            if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
 
             foreach (Match match in DomainFunctionPattern().Matches(masked))
             {
                 AddLiteralTargetCall(databaseIdentitySeed, procedure, lineNumber, "domain-function-reference", sourceLine,
                     match.Index + match.Length, 1, knownObjects, calls, gaps);
-                if (calls.Count >= limits.MaxVbaCallsPerProcedure) break;
+                if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
             }
-            if (calls.Count >= limits.MaxVbaCallsPerProcedure) break;
+            if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
 
             foreach (Match match in ExplicitLocalCallPattern().Matches(masked))
             {
@@ -217,12 +217,18 @@ internal static partial class AccessVbaProjector
                 if (candidates.Length != 1)
                     gaps.Add(new(candidates.Length == 0 ? "AccessVbaCallTargetUnresolved" : "AccessVbaCallTargetAmbiguous",
                         "vba-call", identity.StableKey, RuleIds.LegacyAccessVba));
-                if (calls.Count >= limits.MaxVbaCallsPerProcedure) break;
+                if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
             }
         }
 
-        if (calls.Count >= limits.MaxVbaCallsPerProcedure)
+        if (calls.Count > limits.MaxVbaCallsPerProcedure)
+        {
+            var omittedCallKeys = calls.Skip(limits.MaxVbaCallsPerProcedure)
+                .Select(call => call.Identity.StableKey)
+                .ToHashSet(StringComparer.Ordinal);
+            gaps.RemoveAll(gap => gap.StableScopeKey is not null && omittedCallKeys.Contains(gap.StableScopeKey));
             gaps.Add(new("AccessVbaCallLimitReached", "vba-procedure", procedure.Projection.Identity.StableKey, RuleIds.LegacyAccessVba));
+        }
         return calls.Take(limits.MaxVbaCallsPerProcedure)
             .OrderBy(item => item.StartLine)
             .ThenBy(item => item.CallKind, StringComparer.Ordinal)
