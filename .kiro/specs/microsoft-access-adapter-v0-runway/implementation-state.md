@@ -486,19 +486,17 @@ argument, condition, expression, or body can enter worker IPC or artifacts.
 
 Current Phase 9 platform-neutral validation:
 
-- 4/4 focused macro/reporting tests pass;
-- 39/39 combined Access foundation/UI/VBA/macro tests pass;
-- 801/801 full solution tests pass;
+- 7/7 focused macro/reporting tests pass;
+- 51/51 combined Access foundation/UI/VBA/macro tests pass;
+- 813/813 full solution tests pass;
 - solution build passes with only the pre-existing
   `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory;
-- changed-file whitespace verification, private-path guard, and
-  `git diff --check` pass.
+- seven artifact-validator tests, changed-file formatting verification, the
+  two-test ACK lane regression, private-path guard, and `git diff --check` pass.
 
 Still required before Phase 9 PR readiness: fixture task 9.0, a Windows-local
-non-invoking macro collection result and product-reader wiring for 9.1, the
-representative local-only workflow in 9.5, and completion/merge sequencing for
-the foundation, Phase 7, and Phase 8 dependencies. No Phase 9 PR should open
-against `dev` while those stacked dependencies remain unmerged.
+product-only count smoke, and the representative local-only workflow in 9.5.
+The foundation and Phases 7/8 are merged into `dev`.
 
 Issue #491 now records the separate final task 9.5 workflow and its Windows-local
 prompt. It is intentionally sequenced after issues #488 through #490 and their
@@ -508,11 +506,17 @@ coverage/rule IDs/gaps and boolean safety outcomes only, and deletes the databas
 local commit history, outputs, and scratch state. Creating the issue does not
 complete task 9.5; the sanitized Windows result is still required.
 
-Windows capability gate: issue #490 contains the local-only macro inventory
-prompt and sanitized result contract. It tests only non-invoking catalog and
-startup-presence properties, forbids command/action/body access even if exposed,
-and maps unavailable named/embedded/data/startup categories to rule-backed gaps
-instead of weakening the fixed threat decision.
+The earlier broad Windows capability prompt on issue #490 is obsolete because
+it authorized macro catalog item names and startup properties. Phase 9 now uses
+the same conservative product boundary validated for Phase 8: bounded
+`CurrentProject.AllMacros.Count` plus `Application.Macros.Count` solely as a
+before/after loaded-state canary. It never indexes either collection and never
+reads names, `IsLoaded`, startup properties, macro actions, arguments,
+conditions, expressions, XML/text, or bodies. Product output contains only the
+named catalog count, canary outcome, explicit coverage, zero macro identity/body
+facts, and rule-backed named/embedded/data/startup/body gaps. Issue #490 requires
+a fresh exact-head product-only authorization; issue #491 remains paused until
+that succeeds.
 
 The Phase 9 generator layer adds a second form button classified as
 `[Embedded Macro]` with a protected caption marker, but deliberately supplies
