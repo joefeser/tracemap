@@ -81,7 +81,7 @@ const forbiddenPatterns = [
   /\b(?:Server|Password|User Id)\s*=/i,
   /\b(?:SELECT\s+.+\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM|CREATE\s+(?:SERVER|USER\s+MAPPING|SUBSCRIPTION)|ALTER\s+SUBSCRIPTION|DROP\s+SERVER)\b/i,
   /\b(?:safe to run|setup succeeded|permissions are effective|replication is healthy|validation passed|rollback worked)\b/i,
-  /\b(?:private-host|private-password|raw-scheduled-command|ticket-[0-9]+)\b/i,
+  /\b(?:private-host|private-password|private-infrastructure|raw-scheduled-command|validation-output|ticket-[0-9]+)\b/i,
   /\b(?:host|hostname|password|connectionString|scheduledCommandBody|rawSql|validationOutput)\b\s*:/i
 ];
 
@@ -101,6 +101,7 @@ export async function validateSqlRunbookProofPacketDist({ baseUrl = "https://tra
   const html = await readFile(pagePath, "utf8");
   const text = normalizeRenderedText(html);
   const decoded = decodeHtmlEntities(html);
+  const tagCollapsedText = decoded.replace(/<[^>]*>/g, "");
   const assetText = await readFile(assetPath, "utf8");
 
   for (const phrase of requiredPageText) {
@@ -109,7 +110,7 @@ export async function validateSqlRunbookProofPacketDist({ baseUrl = "https://tra
     }
   }
   for (const pattern of forbiddenPatterns) {
-    if (pattern.test(`${decoded} ${text} ${assetText}`)) {
+    if (pattern.test(`${decoded} ${text} ${tagCollapsedText} ${assetText}`)) {
       errors.push(`SQL runbook proof packet contains forbidden private, executable, protected, or overclaim text: ${pattern}`);
     }
   }
@@ -129,6 +130,7 @@ export async function validateSqlRunbookProofPacketDist({ baseUrl = "https://tra
   }
   if (packet) validatePacketShape(packet, errors);
 
+  const routeLinkRegex = new RegExp(`href\\s*=\\s*["']${escapeRegExp(sqlRunbookProofPacketRoute)}["']`, "i");
   for (const route of sqlRunbookProofPacketInboundRoutes) {
     const inboundPath = resolve(dist, route.slice(1), "index.html");
     if (!(await fileExists(inboundPath))) {
@@ -136,7 +138,7 @@ export async function validateSqlRunbookProofPacketDist({ baseUrl = "https://tra
       continue;
     }
     const inbound = await readFile(inboundPath, "utf8");
-    if (!new RegExp(`href\\s*=\\s*["']${escapeRegExp(sqlRunbookProofPacketRoute)}["']`, "i").test(inbound)) {
+    if (!routeLinkRegex.test(inbound)) {
       errors.push(`SQL runbook proof packet inbound route does not link to ${sqlRunbookProofPacketRoute}: ${route}`);
     }
   }
@@ -198,7 +200,7 @@ function validatePacketShape(packet, errors) {
         errors.push(`SQL runbook proof packet context group ${index + 1} is missing deterministic order or categorical context.`);
       }
     }
-    if (!packet.contextGroups.some((group) => group.transition === true && /wrong-tab|verify/.test(group.checkpoint))) {
+    if (!packet.contextGroups.some((group) => group?.transition === true && /wrong-tab|verify/.test(group?.checkpoint ?? ""))) {
       errors.push("SQL runbook proof packet must include a manual-client transition verification checkpoint.");
     }
   }
@@ -219,13 +221,15 @@ function validatePacketShape(packet, errors) {
     if (!permissionStatuses.has(row?.status)) errors.push(`SQL runbook proof packet contains invalid permission status: ${row?.status}`);
   }
 
-  const protectedCategories = new Set(
-    (Array.isArray(packet.protectedSteps) ? packet.protectedSteps : []).flatMap((row) => row?.protectedCategories ?? [])
-  );
+  const protectedSteps = Array.isArray(packet.protectedSteps) ? packet.protectedSteps : [];
+  if (!Array.isArray(packet.protectedSteps)) {
+    errors.push("SQL runbook proof packet protectedSteps must be an array.");
+  }
+  const protectedCategories = new Set(protectedSteps.flatMap((row) => row?.protectedCategories ?? []));
   for (const category of requiredProtectedCategories) {
     if (!protectedCategories.has(category)) errors.push(`SQL runbook proof packet is missing protected category: ${category}`);
   }
-  if ((packet.protectedSteps ?? []).some((row) => row?.valuesOmitted !== true)) {
+  if (protectedSteps.some((row) => row?.valuesOmitted !== true)) {
     errors.push("Every SQL runbook proof packet protected step must explicitly omit values.");
   }
 

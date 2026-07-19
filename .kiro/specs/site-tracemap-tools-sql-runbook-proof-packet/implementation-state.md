@@ -1,7 +1,7 @@
 # Site SQL Runbook Proof Packet Implementation State
 
-Status: implemented locally
-Readiness: ready for commit and PR review
+Status: implemented in ready PR #486
+Readiness: ACK review loop in progress
 Implementation branch: `codex/site-sql-operator-proof`
 Target base: `dev`
 Public claim level: demo
@@ -33,8 +33,8 @@ conclusions, safety certification, or DBA/operator approval.
 
 ## Validation
 
-- Focused SQL proof/manager/packet/proof-path tests: 35 passed.
-- Full site tests: 688 passed.
+- Focused SQL proof/manager/packet/proof-path tests: 45 passed.
+- Full site tests: 698 passed.
 - `npm run build` and `npm run validate`: passed; 93 HTML pages, 3,224
   internal references, and 92 sitemap URLs validated.
 - Desktop 1440×1000 browser check: 11 sections, no horizontal overflow,
@@ -45,3 +45,15 @@ conclusions, safety certification, or DBA/operator approval.
   built JSON asset itself is covered by focused schema/link validation and the
   full internal-reference validator.
 - Private-path guard and `git diff --check`: passed.
+
+## Review state
+
+- Ready PR: #486, targeting `dev`.
+- First refreshed-ACK run returned `patch_actionable_findings` for validator
+  resilience and negative-test coverage.
+- The authorized patch now normalizes tag-split text, keeps inbound-link
+  matching tolerant while compiling its pattern once, handles malformed
+  context/protected-step collections without throwing, and plants each
+  required leak category in focused negative tests.
+- The current repository contract is `sql-operator-runbook-packet/v2`; no stale
+  `v1` ticket wording was introduced into the public fixture.

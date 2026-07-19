@@ -18,13 +18,39 @@ test("SQL runbook proof packet builds with public provenance, bounded claims, di
   assert.deepEqual(errors, []);
 });
 
-test("SQL runbook proof packet validator rejects private, executable, and protected payloads", async (t) => {
+test("SQL runbook proof packet validator rejects every required planted leak category", async (t) => {
+  const slash = String.fromCharCode(47);
+  const leakCases = [
+    ["executable statement", "SELECT fixture_value FROM private_table"],
+    ["credential", "Password=credential-leak-sentinel"],
+    ["connection string", "Server=private-host.invalid;User Id=fixture;Password=credential-leak-sentinel"],
+    ["infrastructure name", "private-infrastructure-leak-sentinel"],
+    ["machine-local path", `${slash}Users${slash}example${slash}private`],
+    ["validation output", "validation-output-leak-sentinel"],
+    ["ticket identifier", "ticket-12345"],
+    ["scheduled command body", "raw-scheduled-command-leak-sentinel"]
+  ];
+
+  for (const [label, leak] of leakCases) {
+    await t.test(label, async (subtest) => {
+      const root = await createSiteFixture(subtest);
+      const assetPath = join(root, "src", "assets", "sql-operator-runbook-proof-packet.json");
+      const packet = JSON.parse(await readFile(assetPath, "utf8"));
+      packet.limitations.push(leak);
+      await writeFile(assetPath, `${JSON.stringify(packet, null, 2)}\n`);
+      await buildSite({ root, log() {} });
+      const errors = [];
+      await validateSqlRunbookProofPacketDist({ dist: join(root, "dist"), errors });
+      assert.match(errors.join("\n"), /forbidden private, executable, protected, or overclaim text/);
+    });
+  }
+});
+
+test("SQL runbook proof packet validator rejects tag-split protected text", async (t) => {
   const root = await createSiteFixture(t);
-  const assetPath = join(root, "src", "assets", "sql-operator-runbook-proof-packet.json");
-  const packet = JSON.parse(await readFile(assetPath, "utf8"));
-  packet.ownerQuestions.push("SELECT fixture_value FROM private_table");
-  packet.limitations.push("private-password-leak-sentinel");
-  await writeFile(assetPath, `${JSON.stringify(packet, null, 2)}\n`);
+  const pagePath = join(root, "src", "sql", "operator-handoff", "proof-packet", "index.html");
+  const html = await readFile(pagePath, "utf8");
+  await writeFile(pagePath, html.replace("</main>", "<p>Passw<span>ord</span>=tag-split-leak</p></main>"));
   await buildSite({ root, log() {} });
   const errors = [];
   await validateSqlRunbookProofPacketDist({ dist: join(root, "dist"), errors });
@@ -57,6 +83,18 @@ test("SQL runbook proof packet validator rejects a broken public evidence refere
   const errors = [];
   await validateSqlRunbookProofPacketDist({ dist: join(root, "dist"), errors });
   assert.match(errors.join("\n"), /gaps row references missing evidence: missing-evidence-row/);
+});
+
+test("SQL runbook proof packet validator reports a malformed protectedSteps collection", async (t) => {
+  const root = await createSiteFixture(t);
+  const assetPath = join(root, "src", "assets", "sql-operator-runbook-proof-packet.json");
+  const packet = JSON.parse(await readFile(assetPath, "utf8"));
+  packet.protectedSteps = {};
+  await writeFile(assetPath, `${JSON.stringify(packet, null, 2)}\n`);
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateSqlRunbookProofPacketDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /protectedSteps must be an array/);
 });
 
 async function createSiteFixture(t) {
