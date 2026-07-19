@@ -1,10 +1,12 @@
 # Microsoft Access Adapter v0 Runway Implementation State
 
-Status: Phase 0 through Phase 6 implemented; PR #487 review fixes validated and ACK rerun pending
+Status: Phase 0 through Phase 6 ACK merge-ready on PR #487; Phase 7 projection pipeline in progress pending Windows COM capability evidence
 
 Spec branch: `codex/microsoft-access-adapter-runway`
 
 Implementation branch: `codex/microsoft-access-adapter-v0-foundation`
+
+Phase 7 branch: `codex/microsoft-access-adapter-v0-ui-bindings`
 
 Public claim level: hidden
 
@@ -169,6 +171,60 @@ to the first implementation PR.
 - Provider-compatible `.mdb` is enabled. An incompatible or malformed `.mdb`
   either fails with a bounded capability classification or produces gap-only
   artifacts with no unsupported storage claims.
+
+## Phase 7 Implementation State
+
+The Phase 7 branch is stacked on approved foundation head
+`1b2596b54350877b6b55ebb9ee8f9dffb854589b` while PR #487 awaits explicit
+owner merge authorization. It will not open a PR against `dev` until #487 is
+merged, because doing so would repeat the entire foundation diff.
+
+Implemented platform-neutral pieces:
+
+- cataloged `legacy.access.ui-surface.v1` and `legacy.access.binding.v1` with
+  form, report, control, binding, gap, tier, limitation, and non-claim
+  contracts;
+- added safe serialized projections and fact emission for forms, reports,
+  controls, direct record/control/row-source bindings, bounded expression
+  candidates, and event categories;
+- kept all raw form/report/control descriptors in worker-internal types only;
+  IPC/facts retain safe identities, role-separated hashes, lengths, types,
+  stable target keys, coverage labels, and gaps;
+- added deterministic direct-object/direct-field matching, ambiguity and
+  unresolved gaps, quote-masked bracket candidate parsing, protected event
+  classification, stable control ordering, and design hashes that do not
+  contain raw design text;
+- added a bounded worker-internal Access text-design parser that stops before
+  code-behind, ignores captions/labels/values, balances unsupported property
+  blocks, and gaps malformed or oversized designs. The parser is not connected
+  to an Access export method yet.
+
+Windows-only capability gate: issue #488 contains the local-only, no-upload
+probe and sanitized result format. The isolated VM deliberately disables host
+command execution, so the prompt is intended for a Codex session running on
+the Windows machine. Microsoft documentation confirms `AllForms`/`AllReports`
+enumerate saved surfaces while the `Forms` collection contains only loaded
+forms. `SaveAsText` is documented to export all object properties and
+definitions, which can include protected design text and code; it remains
+unapproved until a separate threat/canary decision proves an acceptable
+worker-local handling path. No `OpenForm`, `OpenReport`, rendering, invocation,
+recordset, query, macro, or VBA execution API has been added.
+
+Current Phase 7 validation:
+
+- 28/28 focused Access foundation/UI tests pass;
+- 791/791 full solution tests pass;
+- solution build passes with the pre-existing
+  `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory;
+- private-path guard and `git diff --check` pass.
+
+Still required before Phase 7 PR readiness:
+
+- sanitized Windows capability result on issue #488;
+- approved non-invoking COM/design source for control and binding metadata;
+- fixture generator extension and complete product-reader wiring;
+- hostile canary, marker, determinism, concurrent-scan, export/combine/report,
+  and full solution validation on the wired implementation.
 
 ## Foundation Validation
 

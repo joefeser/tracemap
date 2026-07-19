@@ -151,7 +151,7 @@ remain separate reviewable slices.
 
 - [ ] 7.0 Extend the synthetic fixture with forms, reports, controls, and binding
       shapes required by this phase; do not backdate them as first-slice coverage.
-- [ ] 7.1 Add catalog rules/facts for Access forms, reports, controls, and direct
+- [x] 7.1 Add catalog rules/facts for Access forms, reports, controls, and direct
       bindings.
 - [ ] 7.2 Inventory surfaces and controls through design metadata only.
 - [ ] 7.3 Emit direct record/control/row-source binding candidates; hash complex

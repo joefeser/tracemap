@@ -1380,6 +1380,34 @@ rules:
       - Connection strings, DSNs, URLs, hosts, catalogs, users, credentials, UNC paths, drive paths, and external filenames are never rendered; only role-separated full SHA-256 values and safe source-family classifications may persist.
       - The extractor does not refresh linked tables, enumerate external rows, or materialize pass-through results.
 
+  - id: legacy.access.ui-surface.v1
+    name: Microsoft Access form and report design surface
+    description: Records safe form, report, and control design metadata obtained without rendering, invoking, or executing the surface.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AccessFormDeclared
+      - AccessReportDeclared
+      - AccessControlDeclared
+      - AnalysisGap
+    limitations:
+      - Surface evidence is static design metadata and does not prove rendering, navigation, visibility, enabled state, user access, submitted values, event execution, filter outcomes, printed output, runtime reachability, deployment, or production use.
+      - Captions, labels, status text, validation messages, literal values, filters, ordering text, raw record/control/row-source expressions, images, OLE contents, VBA, and macro bodies are omitted or role-hashed.
+      - A surface or control that cannot be inspected without loading, rendering, exporting protected text outside the private worker, or invoking Access behavior is reported as a gap rather than opened or inferred.
+      - Binary catalog evidence uses the owning database path at span 1:1; this anchors the container and is not a source-line claim.
+
+  - id: legacy.access.binding.v1
+    name: Microsoft Access static design binding candidate
+    description: Records direct form/report/control source bindings and bounded expression reference candidates from protected design metadata without evaluating expressions.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AccessBindingDeclared
+      - AnalysisGap
+    limitations:
+      - Direct bindings prove only a declared design reference; expression candidates are bounded textual evidence and do not prove evaluation, runtime target selection, data access, event execution, filter outcomes, navigation, or production use.
+      - Raw record sources, control sources, row sources, filters, ordering expressions, validation expressions, calculated expressions, SQL, VBA, and macro bodies never persist; complex values retain only role-separated hashes, lengths, safe target keys, and coverage labels.
+      - Ambiguous, dynamic, unsupported, or unresolved targets are explicit gaps; the extractor does not choose an arbitrary object or field.
+      - Binding extraction never opens a recordset, executes a query, renders a surface, invokes an event, or reads a submitted/control value.
+
   - id: legacy.access.coverage-gap.v1
     name: Microsoft Access extraction coverage gap
     description: Records bounded platform, COM/provider, trust, timeout, cleanup, parsing, ambiguity, unsafe-value, or extraction-limit gaps.
