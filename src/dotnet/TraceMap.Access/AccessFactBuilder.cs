@@ -71,6 +71,9 @@ public static class AccessFactBuilder
                 ("metadataHash", input.DatabaseHash),
                 ("stableModelKey", databaseStableKey),
                 ("omittedSystemObjectCount", projection.OmittedSystemObjectCount.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ("formCount", projection.UiInventory?.FormCount?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ("reportCount", projection.UiInventory?.ReportCount?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ("formsReportsCoverage", projection.UiInventory?.Coverage),
                 ("coverageLabel", "reduced-static-design"),
                 ("limitations", "binary-container-span;no-rows;no-execution;no-runtime-proof"))));
 

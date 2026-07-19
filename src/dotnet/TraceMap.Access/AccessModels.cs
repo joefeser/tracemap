@@ -134,6 +134,11 @@ public sealed record AccessUiSurfaceProjection(
     IReadOnlyList<AccessUiEventProjection> Events,
     string Coverage = "complete");
 
+public sealed record AccessUiInventoryProjection(
+    int? FormCount,
+    int? ReportCount,
+    string Coverage);
+
 public sealed record AccessGapProjection(string Classification, string ScopeKind, string? StableScopeKey, string? RuleId = null);
 
 public sealed record AccessCapabilityProjection(string Name, string Status);
@@ -153,7 +158,8 @@ public sealed record AccessDatabaseProjection(
     IReadOnlyList<AccessExternalLinkProjection> ExternalLinks,
     IReadOnlyList<AccessGapProjection> Gaps,
     IReadOnlyList<AccessCapabilityProjection> Capabilities,
-    IReadOnlyList<AccessUiSurfaceProjection>? UiSurfaces = null);
+    IReadOnlyList<AccessUiSurfaceProjection>? UiSurfaces = null,
+    AccessUiInventoryProjection? UiInventory = null);
 
 public sealed record AccessWorkerFrame(
     string Kind,
