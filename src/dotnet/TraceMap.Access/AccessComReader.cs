@@ -111,6 +111,7 @@ public sealed class AccessComReader
             ReadSurfaceCollection((object)project.AllForms, "form", databaseIdentitySeed, raw, gaps);
             ReadSurfaceCollection((object)project.AllReports, "report", databaseIdentitySeed, raw, gaps);
         }
+        catch (AccessScanException ex) when (ex.Classification == "AccessSurfaceUnexpectedlyLoaded") { throw; }
         catch (AccessScanException ex) { gaps.Add(new(ex.Classification, "forms-reports", null, RuleIds.LegacyAccessUiSurface)); }
         catch { gaps.Add(new("AccessFormReportCoverageUnavailable", "forms-reports", null, RuleIds.LegacyAccessUiSurface)); }
         finally { Release(project); }
@@ -148,57 +149,27 @@ public sealed class AccessComReader
                     dynamic item = itemObject;
                     var name = BoundedString(() => (string)item.Name, 512, "AccessSurfaceNameUnavailable");
                     var identity = AccessSafeValues.Identity(databaseIdentitySeed, surfaceKind, name);
-                    if (SafeBool(() => (bool)item.IsLoaded))
+                    bool isLoaded;
+                    try { isLoaded = (bool)item.IsLoaded; }
+                    catch
                     {
-                        gaps.Add(new("AccessSurfaceUnexpectedlyLoaded", surfaceKind, identity.StableKey, RuleIds.LegacyAccessUiSurface));
+                        gaps.Add(new("AccessSurfaceLoadedStateUnavailable", surfaceKind, identity.StableKey, RuleIds.LegacyAccessUiSurface));
                         result.Add(new(name, surfaceKind, null, null, [], [], "inventory-only"));
                         continue;
                     }
+                    if (isLoaded)
+                        throw new AccessScanException("AccessSurfaceUnexpectedlyLoaded");
 
-                    var hasModule = ReadOptionalBooleanProperty(itemObject, "HasModule");
-                    var recordSource = ReadOptionalStringProperty(itemObject, "RecordSource");
-                    if (SafeBool(() => (bool)item.IsLoaded))
-                    {
-                        gaps.Add(new("AccessSurfaceMetadataCausedLoad", surfaceKind, identity.StableKey, RuleIds.LegacyAccessUiSurface));
-                        result.Add(new(name, surfaceKind, null, null, [], [], "inventory-only"));
-                        continue;
-                    }
-
-                    result.Add(new(name, surfaceKind, hasModule, recordSource, [], [], "inventory-only"));
+                    result.Add(new(name, surfaceKind, null, null, [], [], "inventory-only"));
                     gaps.Add(new("AccessFormReportCoverageUnavailable", surfaceKind, identity.StableKey, RuleIds.LegacyAccessUiSurface));
                 }
+                catch (AccessScanException ex) when (ex.Classification == "AccessSurfaceUnexpectedlyLoaded") { throw; }
                 catch (AccessScanException ex) { gaps.Add(new(ex.Classification, surfaceKind, null, RuleIds.LegacyAccessUiSurface)); }
                 catch { gaps.Add(new("AccessObjectMetadataUnavailable", surfaceKind, null, RuleIds.LegacyAccessUiSurface)); }
                 finally { Release(itemObject); }
             }
         }
         finally { Release(collectionObject); }
-    }
-
-    private string? ReadOptionalStringProperty(object itemObject, string propertyName)
-    {
-        dynamic? properties = null;
-        dynamic? property = null;
-        try
-        {
-            dynamic item = itemObject;
-            properties = item.Properties;
-            property = properties[propertyName];
-            var value = property.Value;
-            if (value is null) return null;
-            var text = Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture);
-            if (text is null || text.Length > _limits.MaxStringLength) return null;
-            return text;
-        }
-        catch { return null; }
-        finally { Release(property); Release(properties); }
-    }
-
-    private bool? ReadOptionalBooleanProperty(object item, string propertyName)
-    {
-        var value = ReadOptionalStringProperty(item, propertyName);
-        if (bool.TryParse(value, out bool parsed)) return parsed;
-        return value switch { "-1" => true, "0" => false, _ => (bool?)null };
     }
 
     private IReadOnlyList<AccessTableProjection> ReadTables(
