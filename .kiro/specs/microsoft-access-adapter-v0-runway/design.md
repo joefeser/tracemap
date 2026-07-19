@@ -349,6 +349,16 @@ retained and tested as a future input boundary, but wiring `Application.VBE`,
 `ActiveVBProject`, `VBComponents`, component identity, or `CodeModule` text
 requires a separate security-reviewed execution mechanism.
 
+The Phase 9 v0 product boundary likewise does not enumerate macro catalog
+items. It reads only bounded `CurrentProject.AllMacros.Count` and uses
+`Application.Macros.Count` solely as a before/after loaded-state canary. The
+product emits the named-macro count when available, zero macro identity/body
+facts, and rule-backed gaps for unavailable named identity, embedded, data,
+startup, and protected-body evidence. The deterministic macro projector remains
+a tested future input boundary; catalog item names, startup properties, macro
+actions, arguments, conditions, expressions, XML/text, and bodies require a
+separately security-reviewed mechanism.
+
 ## Determinism
 
 COM collection order is not a contract. Materialize bounded safe projections,

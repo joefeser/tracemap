@@ -79,6 +79,11 @@ public static class AccessFactBuilder
                     ? loadedModuleCountUnchanged.ToString().ToLowerInvariant()
                     : null),
                 ("vbaCoverage", projection.VbaInventory?.Coverage),
+                ("namedMacroCount", projection.MacroInventory?.NamedMacroCount?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ("macroLoadedCountUnchanged", projection.MacroInventory?.LoadedMacroCountUnchanged is bool loadedMacroCountUnchanged
+                    ? loadedMacroCountUnchanged.ToString().ToLowerInvariant()
+                    : null),
+                ("macroCoverage", projection.MacroInventory?.Coverage),
                 ("coverageLabel", "reduced-static-design"),
                 ("limitations", "binary-container-span;no-rows;no-execution;no-runtime-proof"))));
 

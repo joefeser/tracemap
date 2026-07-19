@@ -193,6 +193,11 @@ public sealed record AccessVbaInventoryProjection(
     bool? LoadedModuleCountUnchanged,
     string Coverage);
 
+public sealed record AccessMacroInventoryProjection(
+    int? NamedMacroCount,
+    bool? LoadedMacroCountUnchanged,
+    string Coverage);
+
 public sealed record AccessGapProjection(string Classification, string ScopeKind, string? StableScopeKey, string? RuleId = null);
 
 public sealed record AccessCapabilityProjection(string Name, string Status);
@@ -217,7 +222,8 @@ public sealed record AccessDatabaseProjection(
     IReadOnlyList<AccessEventBindingProjection>? EventBindings = null,
     IReadOnlyList<AccessMacroProjection>? Macros = null,
     AccessUiInventoryProjection? UiInventory = null,
-    AccessVbaInventoryProjection? VbaInventory = null);
+    AccessVbaInventoryProjection? VbaInventory = null,
+    AccessMacroInventoryProjection? MacroInventory = null);
 
 public sealed record AccessWorkerFrame(
     string Kind,

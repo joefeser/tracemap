@@ -1444,6 +1444,7 @@ rules:
       - AccessMacroDeclared
       - AnalysisGap
     limitations:
+      - The Access v0 product reader observes only a bounded named-macro catalog count and loaded-macro before/after count canary. It emits no macro identities or startup, embedded, data-macro, action, argument, condition, expression, or body evidence; unavailable categories and protected bodies remain explicit gaps.
       - Macro inventory proves only that a static catalog declaration was observed; it does not prove command semantics, event attachment, startup selection, execution, branch behavior, data access, external effects, deployment, or production use.
       - Macro commands, arguments, conditions, expressions, embedded macro text, action bodies, SQL, paths, connections, credentials, and scheduled command bodies are never inspected for semantics or persisted.
       - Every observed macro category carries an explicit protected-body omission gap. Absence of projected body evidence is not a claim that the macro is empty, harmless, unreachable, or safe.

@@ -12,6 +12,74 @@ public sealed class AccessMacroReportingTests
     private const string ProtectedMacroName = "PasswordMacro_92817";
 
     [Fact]
+    public void Product_macro_inventory_reads_only_counts_and_never_catalog_items()
+    {
+        var catalog = new FakeMacroCountCollection(3);
+        var application = new FakeMacroApplication(new FakeMacroProject(catalog), [0, 0]);
+        var gaps = new List<AccessGapProjection>();
+
+        var inventory = new AccessComReader().ReadMacroInventoryCounts(application, gaps);
+
+        Assert.Equal(3, inventory.NamedMacroCount);
+        Assert.True(inventory.LoadedMacroCountUnchanged);
+        Assert.Equal("named-count-observed-other-categories-identities-bodies-unavailable", inventory.Coverage);
+        Assert.Equal(0, catalog.IndexerReadCount);
+        Assert.Equal(2, application.LoadedMacrosReadCount);
+        Assert.Single(gaps, gap => gap.Classification == "AccessMacroInventoryUnavailable"
+            && gap.RuleId == RuleIds.LegacyAccessMacroGap);
+        Assert.Contains(gaps, gap => gap.Classification == "AccessMacroIdentityUnavailable");
+        Assert.Contains(gaps, gap => gap.Classification == "AccessMacroEmbeddedInventoryUnavailable");
+        Assert.Contains(gaps, gap => gap.Classification == "AccessMacroDataInventoryUnavailable");
+        Assert.Contains(gaps, gap => gap.Classification == "AccessMacroStartupInventoryUnavailable");
+        Assert.Contains(gaps, gap => gap.Classification == "AccessMacroBodyOmitted");
+    }
+
+    [Fact]
+    public void Product_macro_inventory_records_loaded_state_change_without_claiming_stable_coverage()
+    {
+        var application = new FakeMacroApplication(
+            new FakeMacroProject(new FakeMacroCountCollection(1)), [0, 1]);
+        var gaps = new List<AccessGapProjection>();
+
+        var inventory = new AccessComReader().ReadMacroInventoryCounts(application, gaps);
+
+        Assert.False(inventory.LoadedMacroCountUnchanged);
+        Assert.Equal("named-count-observed-other-categories-identities-bodies-unavailable-canary-changed", inventory.Coverage);
+        Assert.Contains(gaps, gap => gap.Classification == "AccessMacroLoadedStateChanged"
+            && gap.RuleId == RuleIds.LegacyAccessMacroGap);
+    }
+
+    [Fact]
+    public async Task Count_only_macro_inventory_emits_metadata_and_gap_without_macro_identity_facts()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        await File.WriteAllBytesAsync(databasePath, [1, 2, 3, 4]);
+        var databaseHash = AccessInputValidator.HashFile(databasePath);
+        var input = new AccessValidatedInput(
+            temp.Path, "repo", AccessSafeValues.RoleHash("access-repository-identity", "repo"), null, "test",
+            new string('e', 40), databasePath, "fixture.accdb", databaseHash, ".accdb", Path.Combine(temp.Path, "out"), false);
+        var inventory = new AccessMacroInventoryProjection(2, true, "named-count-observed-other-categories-identities-bodies-unavailable");
+        var projection = new AccessDatabaseProjection(
+            "tracemap.access-projection.v1", databaseHash, ".accdb", "16.0", 1234, false, false, 0,
+            [], [], [], [],
+            [new("AccessMacroInventoryUnavailable", "macro-catalog", null, RuleIds.LegacyAccessMacroGap)],
+            [new("macros", inventory.Coverage)],
+            Macros: [], MacroInventory: inventory);
+
+        var scan = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath));
+
+        var databaseFact = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.LegacyDataMetadataDeclared);
+        Assert.Equal("2", databaseFact.Properties.GetValueOrDefault("namedMacroCount"));
+        Assert.Equal("true", databaseFact.Properties.GetValueOrDefault("macroLoadedCountUnchanged"));
+        Assert.Equal("named-count-observed-other-categories-identities-bodies-unavailable", databaseFact.Properties.GetValueOrDefault("macroCoverage"));
+        Assert.DoesNotContain(scan.Facts, fact => fact.FactType == FactTypes.AccessMacroDeclared);
+        Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyAccessMacroGap
+            && fact.Properties.GetValueOrDefault("classification") == "AccessMacroInventoryUnavailable");
+    }
+
+    [Fact]
     public void Macro_projector_is_deterministic_hashes_unsafe_names_and_records_body_omission_by_category()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('d', 40), "fixture.accdb", "hash");
@@ -177,6 +245,47 @@ public sealed class AccessMacroReportingTests
         {
             var text = System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(file));
             Assert.DoesNotContain(marker, text, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    public sealed class FakeMacroApplication
+    {
+        private readonly Queue<int> _loadedCounts;
+
+        public FakeMacroApplication(FakeMacroProject project, IEnumerable<int> loadedCounts)
+        {
+            CurrentProject = project;
+            _loadedCounts = new Queue<int>(loadedCounts);
+        }
+
+        public FakeMacroProject CurrentProject { get; }
+        public int LoadedMacrosReadCount { get; private set; }
+        public FakeMacroCountCollection Macros
+        {
+            get
+            {
+                LoadedMacrosReadCount++;
+                return new FakeMacroCountCollection(_loadedCounts.Dequeue());
+            }
+        }
+    }
+
+    public sealed class FakeMacroProject(FakeMacroCountCollection macros)
+    {
+        public FakeMacroCountCollection AllMacros { get; } = macros;
+    }
+
+    public sealed class FakeMacroCountCollection(int count)
+    {
+        public int Count { get; } = count;
+        public int IndexerReadCount { get; private set; }
+        public object this[int index]
+        {
+            get
+            {
+                IndexerReadCount++;
+                throw new InvalidOperationException($"Macro catalog item {index} must not be read.");
+            }
         }
     }
 }

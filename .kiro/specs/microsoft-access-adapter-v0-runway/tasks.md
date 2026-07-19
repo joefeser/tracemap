@@ -186,7 +186,10 @@ remain separate reviewable slices.
 
 - [ ] 9.0 Extend the synthetic fixture with the macro inventory shapes approved
       for this phase while keeping command bodies protected.
-- [ ] 9.1 Inventory named/UI/data/startup macros without command bodies.
+- [x] 9.1 Bound the v0 product reader to `AllMacros.Count`, use loaded-macro
+      count only as a before/after canary, emit no macro identity or body facts,
+      and gap named identity, embedded, data, startup, and body coverage; retain
+      the deterministic projector for a separately reviewed future source.
 - [x] 9.2 Decide through a separate threat review whether any macro command
       semantics can be safely projected; keep body inspection deferred unless
       approved by rule and leak tests.
