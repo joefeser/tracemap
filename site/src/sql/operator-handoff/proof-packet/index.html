@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A public-safe SQL operator runbook proof packet with categorical context, prerequisites, protected steps, validation boundaries, stop conditions, gaps, and evidence provenance.">
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>SQL Runbook Proof Packet | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/sql/operator-handoff/proof-packet/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap SQL Runbook Proof Packet">
+    <meta property="og:description" content="Inspect a synthetic public-safe SQL handoff packet without raw SQL, protected values, or runtime conclusions.">
+    <meta property="og:url" content="https://tracemap.tools/sql/operator-handoff/proof-packet/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home"><span class="brand-mark" aria-hidden="true">T</span><span>TraceMap</span></a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a><a href="/outputs/">Outputs</a><a href="/workflows/">Workflows</a><a href="/examples/">Examples</a><a href="/blog/">Blog</a><a href="/capabilities/">Capabilities</a><a href="/docs/">Docs</a><a href="/validation/">Validation</a><a href="/limitations/">Limitations</a><a href="/demo/">Demo</a><a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero" data-sql-proof-section="hero">
+        <p class="eyebrow">Public-safe SQL proof packet</p>
+        <h1>Show the operator handoff without publishing the scripts.</h1>
+        <p class="hero-subhead">This checked-in synthetic example makes expected context, prerequisite status, protected handling categories, validation-step presence, stop conditions, gaps, and provenance inspectable before a DBA or operator makes an independent decision.</p>
+        <p class="hero-note">Public claim level: demo. Derived from <code>sql-operator-runbook-packet/v2</code> at a public commit with reduced static-analysis coverage. It contains no statement text, protected values, connection details, scheduled command body, or observed database result.</p>
+        <nav class="hero-actions" aria-label="SQL proof packet links"><a class="button primary" href="/assets/sql-operator-runbook-proof-packet.json">Inspect the JSON packet</a><a class="button secondary" href="/sql/operator-handoff/">Read the manager story</a><a class="button secondary" href="/manager-packet/">Manager packet</a><a class="button secondary" href="/limitations/">Limitations</a></nav>
+      </section>
+
+      <section class="section split-section" data-sql-proof-section="provenance">
+        <div><p class="section-kicker">Proof identity</p><h2>One public fixture, one public commit, one bounded projection.</h2></div>
+        <div class="detail-list">
+          <div><strong>Repository</strong><span><code>joefeser/tracemap</code></span></div>
+          <div><strong>Commit</strong><span><code>a522705b3b9f331d65ef4e05e723fc4d2d647f08</code></span></div>
+          <div><strong>Fixture</strong><span><code>samples/sql-operator-runbook/setup.sql</code> · synthetic and repo-relative</span></div>
+          <div><strong>Packet identity</strong><span><code>public-sql-runbook-proof-v1</code> · public-safe projection, not raw scan output</span></div>
+          <div><strong>Coverage</strong><span><code>reduced</code> · static analysis only · build not run · runtime observation unavailable</span></div>
+        </div>
+      </section>
+
+      <section class="section" data-sql-proof-section="contexts">
+        <div class="section-header"><p class="section-kicker">Ordered context checkpoints</p><h2>Every transition is a reason to verify the active client context.</h2><p>The example uses categorical server, database, schema, and execution-mode roles. It cannot observe which pgAdmin tab or connection is active.</p></div>
+        <div class="workflow-grid">
+          <article><p class="card-meta">01 · manual</p><h3>Admin / admin / extension</h3><p>Independently verify the active tab, connection, server, and database before extension intent.</p></article>
+          <article><p class="card-meta">02 · manual · transition</p><h3>Archive target / archive data / archive</h3><p>Stop on wrong-tab or wrong-database uncertainty before foreign-server, permission, user-mapping, or schema-import intent.</p></article>
+          <article><p class="card-meta">03 · manual · transition</p><h3>Source / source data / application</h3><p>Independently verify the source context before publication intent.</p></article>
+          <article><p class="card-meta">04 · scheduled · transition</p><h3>Archive target / archive data / archive</h3><p>Require owner review at the <code>pg_cron</code> scheduled-context boundary.</p></article>
+          <article><p class="card-meta">05 · validation-only · transition</p><h3>Archive target / validation only / archive</h3><p>Keep validation-step presence separate from any observed result.</p></article>
+          <article><p class="card-meta">06 · manual · transition</p><h3>Archive target / archive data / archive</h3><p>Require owner review before a cleanup or rollback-shaped candidate.</p></article>
+        </div>
+      </section>
+
+      <section class="section split-section" data-sql-proof-section="surfaces">
+        <div><p class="section-kicker">PostgreSQL surfaces</p><h2>The fixture shows some mechanisms and preserves the rest as gaps.</h2></div>
+        <div class="detail-list">
+          <div><strong><code>postgres_fdw</code> · illustrated</strong><span>Extension, foreign-server, user-mapping, schema-import, and permission-candidate categories are visible.</span></div>
+          <div><strong><code>dblink</code> · missing-evidence</strong><span>This fixture does not illustrate extension or call boundaries; absence from the fixture is not a runtime conclusion.</span></div>
+          <div><strong>Logical replication · partial</strong><span>Publication intent is visible. Subscription evidence is not established, and replication health remains outside static proof.</span></div>
+          <div><strong><code>pg_cron</code> · illustrated</strong><span>Extension and scheduled-operation categories are visible; the scheduled command body is omitted and execution is not observed.</span></div>
+        </div>
+      </section>
+
+      <section class="section" data-sql-proof-section="permissions">
+        <div class="section-header"><p class="section-kicker">Permission prerequisite language</p><h2>A closed vocabulary keeps checked-in evidence from becoming an authorization claim.</h2></div>
+        <div class="output-list">
+          <div><code>present-in-scripts</code><span>Compatible checked-in evidence appears for the illustrated operation; effective permission still requires DBA validation.</span></div>
+          <div><code>missing-evidence</code><span>Compatible evidence was not established within coverage; runtime absence is not established.</span></div>
+          <div><code>conflicting-evidence</code><span>Static grant, revoke, ordering, or context evidence disagrees.</span></div>
+          <div><code>unknown</code><span>Identity, ordering, parsing, or coverage does not support a stronger status.</span></div>
+          <div><code>needs-owner-review</code><span>Administrative capability, protected handling, or scheduled context requires a named human owner.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" data-sql-proof-section="protected">
+        <div><p class="section-kicker">Protected categories</p><h2>The packet names the boundary and omits the material.</h2></div>
+        <div class="detail-list">
+          <div><strong>User mapping</strong><span><code>user-mapping</code> and <code>credential-option</code> categories; values omitted.</span></div>
+          <div><strong>Connection setup</strong><span><code>connection-material</code> and <code>credential-option</code> categories; values omitted.</span></div>
+          <div><strong>Remote input</strong><span><code>remote-query-input</code> category; statement content omitted.</span></div>
+          <div><strong>Scheduled operation</strong><span><code>scheduled-command-body</code> category; command content omitted.</span></div>
+        </div>
+      </section>
+
+      <section class="section" data-sql-proof-section="milestones">
+        <div class="section-header"><p class="section-kicker">Intent versus validation</p><h2>Four columns that never collapse into runtime success.</h2></div>
+        <div class="output-list">
+          <div><code>foreign-server</code><span><code>intended-by-script</code> · milestone validation step not established · <code>validation-evidence-not-provided</code></span></div>
+          <div><code>scheduled-job</code><span><code>intended-by-script</code> · milestone validation step not established · <code>validation-evidence-not-provided</code></span></div>
+          <div><code>validation</code><span><code>validation-step-present</code> · no database result is published or observed</span></div>
+          <div><code>cleanup-candidate</code><span><code>intended-by-script</code> · completion and reversibility remain unknown</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" data-sql-proof-section="evidence">
+        <div><p class="section-kicker">Evidence attachment</p><h2>Every illustrated row can be traced without exposing source text.</h2></div>
+        <div class="detail-list">
+          <div><strong>Context and validation</strong><span><code>database.sql.context.declaration.v1</code> · <code>Tier2Structural</code> · repo-relative spans · <code>sql-execution-context/0.1.0</code></span></div>
+          <div><strong>Protected handling</strong><span><code>database.sql.secret-bearing-step.v1</code> · <code>Tier2Structural</code> · repo-relative spans · <code>sql-secret-safety/0.1.0</code></span></div>
+          <div><strong>Permission prerequisites</strong><span><code>database.postgres.permission.coverage.v1</code> · <code>Tier2Structural</code> · complete or reduced coverage · <code>postgres-permission-evidence/0.1.0</code></span></div>
+          <div><strong>Archive-link surfaces</strong><span><code>database.postgres.archive-link.v1</code> · <code>Tier2Structural</code>; gaps use <code>Tier4Unknown</code> · <code>postgres-archive-link/0.1.0</code></span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" data-sql-proof-section="stops">
+        <div><p class="section-kicker">Stops, gaps, and owners</p><h2>The packet ends at the point where operator judgment begins.</h2></div>
+        <ul>
+          <li>Stop at every manual context transition until the active client tab, connection, server, database, schema, and role are independently verified.</li>
+          <li>Stop at protected-material boundaries and route handling through the approved owner process.</li>
+          <li>Stop on missing, conflicting, unknown, or owner-review permission evidence until a DBA validates the prerequisite candidate.</li>
+          <li>Keep <code>dblink</code>, logical-subscription, archive-link direction, and reduced-coverage gaps visible.</li>
+          <li>Ask who owns execution order, scheduled-operation review, independent validation, and cleanup review outside TraceMap.</li>
+        </ul>
+      </section>
+
+      <section class="section boundary-section" data-sql-proof-section="limitations">
+        <div><p class="section-kicker">Public claim boundary</p><h2>This packet supports review questions, not operator authorization.</h2></div>
+        <ul>
+          <li>It does not execute SQL, connect to a live database, or observe an active database client.</li>
+          <li>It does not establish setup completion, effective permissions, object existence, replication health, scheduled execution, validation results, or successful rollback.</li>
+          <li>It contains no raw SQL, credentials, connection strings, scheduled command bodies, local paths, private infrastructure names, raw database output, or internal ticket details.</li>
+          <li>It does not replace DBA/operator approval, security review, change control, tests, telemetry, logs, or human judgment.</li>
+          <li>The core scanner and reducer use no LLM calls, embeddings, vector databases, or prompt-based classification.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section" data-sql-proof-section="links">
+        <div><p class="section-kicker">Keep the proof attached</p><h2>Carry the packet with its limits and owner questions.</h2></div>
+        <div class="link-grid"><a href="/assets/sql-operator-runbook-proof-packet.json">Public JSON packet</a><a href="/sql/operator-handoff/">SQL operator handoff story</a><a href="/manager-packet/">Manager packet</a><a href="/proof-paths/for-managers/">Proof paths for managers</a><a href="/packets/examples/">Packet examples</a><a href="/outputs/">Output artifacts</a><a href="/limitations/">Limitations</a><a href="https://github.com/joefeser/tracemap/blob/dev/docs/SQL_OPERATOR_RUNBOOK_PACKET.md">Packet contract documentation</a></div>
+      </section>
+    </main>
+
+    <footer class="site-footer"><p>This synthetic proof packet keeps deterministic static evidence, gaps, and approval boundaries together.</p><p class="copyright">© 2026 Joe Feser.</p></footer>
+  </body>
+</html>

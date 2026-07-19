@@ -1144,6 +1144,23 @@
     ]
   },
   {
+    "path": "/sql/operator-handoff/proof-packet/",
+    "title": "SQL Runbook Proof Packet",
+    "summary": "Demo-level synthetic public-safe SQL runbook packet with categorical contexts, prerequisite status, protected-step categories, validation boundaries, stop conditions, gaps, owner questions, and evidence provenance.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/sql/operator-handoff/",
+    "limitations": [
+      "The route and JSON asset are a bounded projection of a checked-in synthetic fixture, not raw scan output, executable statements, a runtime observation, or an operator plan.",
+      "Reduced static-analysis coverage, unillustrated dblink and logical-subscription surfaces, permission gaps, and owner-review boundaries remain explicit."
+    ],
+    "nonClaims": [
+      "No live database connection, database execution, active-client observation, effective authorization proof, object-existence proof, replication-health proof, scheduled-execution proof, observed validation result, rollback proof, safety certification, or DBA approval.",
+      "No statement text, credentials, connection details, scheduled command bodies, protected values, machine-local paths, private infrastructure names, raw database output, internal ticket details, LLM analysis, embeddings, vector databases, or prompt-based classification."
+    ]
+  },
+  {
     "path": "/manager-brief/",
     "title": "Manager Problem Brief",
     "summary": "Concept-level manager brief for the coordination problem TraceMap reduces with deterministic static evidence packets and visible limitations.",
