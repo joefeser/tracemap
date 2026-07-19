@@ -282,15 +282,19 @@ Implemented on this branch:
   and domain-function literal target shapes, and gaps dynamic or unresolved
   targets rather than guessing;
 - exact same-module event-procedure mapping with missing/ambiguity gaps;
+- call-limit handling proven by one-call-over-cap lookahead: an exact-cap module
+  remains complete, while a genuinely omitted call emits one scoped
+  `AccessVbaCallLimitReached` gap without retaining a dangling projection or
+  target gap for the omitted call;
 - standard-artifact and combined-index tests proving rule/line provenance
   survives while planted VBA comments, SQL, paths, literals, and command bodies
   remain absent.
 
 Phase 8 platform-neutral validation:
 
-- 3/3 focused VBA projection tests pass;
-- 33/33 combined Access foundation/UI/VBA tests pass;
-- 796/796 full solution tests pass;
+- 4/4 focused VBA projection tests pass;
+- 35/35 combined Access foundation/UI/VBA tests pass;
+- 797/797 full solution tests pass;
 - solution build passes with the pre-existing
   `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory;
 - changed-file whitespace verification passes. The repository-wide formatter
