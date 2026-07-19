@@ -314,7 +314,7 @@ boundary.
 ## Phase 9 Platform-Neutral Work
 
 Branch: `codex/microsoft-access-adapter-v0-macro-reporting`, stacked on the
-pushed Phase 8 head `18d069070dc256540d0952d037203631d7cf95de`.
+pushed Phase 8 fixture head `4919be5f`.
 
 The Phase 9 threat decision is to inventory macro declarations and startup/data
 macro categories only. No macro command semantic or body inspection is approved
@@ -373,6 +373,15 @@ prompt and sanitized result contract. It tests only non-invoking catalog and
 startup-presence properties, forbids command/action/body access even if exposed,
 and maps unavailable named/embedded/data/startup categories to rule-backed gaps
 instead of weakening the fixed threat decision.
+
+The Phase 9 generator layer adds a second form button classified as
+`[Embedded Macro]` with a protected caption marker, but deliberately supplies
+no body. Named and data macro fixture creation remains deferred to the Windows
+probe because no documented, bounded generator path was established locally.
+Task 9.0 therefore remains unchecked. PowerShell is not installed on the macOS
+host (`brew info powershell` reports “Not installed”), so script parsing and
+Access behavior must be validated in issue #490 before this fixture claim can
+advance.
 
 ## Foundation Validation
 

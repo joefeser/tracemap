@@ -143,6 +143,7 @@ $markers = @(
     "VBA_EVAL_MARKER_92817",
     "VBA_RUN_MARKER_92817",
     "VBA_COMMAND_MARKER_92817",
+    "EMBEDDED_MACRO_CAPTION_MARKER_92817",
     "Customer Note",
     $SmokeRoot
 )
