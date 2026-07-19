@@ -70,6 +70,7 @@ $linkedTable = $null
 $passThrough = $null
 $startupForm = $null
 $customerForm = $null
+$customerFormModule = $null
 $ordersReport = $null
 $fixtureControls = [System.Collections.Generic.List[object]]::new()
 try {
@@ -181,7 +182,7 @@ End Sub
     $customerForm = $access.CreateForm()
     $customerFormTemporaryName = [string]$customerForm.Name
     $customerForm.RecordSource = "Customers"
-    $customerForm.HasModule = $false
+    $customerForm.HasModule = $true
     $customerName = $access.CreateControl($customerFormTemporaryName, 109, 0, "", "", 1800, 400, 2400, 300)
     $fixtureControls.Add($customerName)
     $customerName.Name = "txtCustomerName"
@@ -205,9 +206,56 @@ End Sub
     $probeButton.Caption = "FORM_BUTTON_MARKER_92817"
     $escapedPhase7CanaryPath = $CanaryPath.Replace('"', '""')
     $probeButton.OnClick = "=Shell(`"cmd.exe /c echo PHASE7_EVENT_CANARY_FIRED_92817 > `"`"$escapedPhase7CanaryPath`"`"`",0)"
+
+    # Phase 8 generator-only code-behind fixture. The scanner must never open,
+    # compile, invoke, export, or persist this source. The first event statement
+    # writes the shared sentinel so any accidental invocation is observable.
+    $vbaFlowButton = $access.CreateControl($customerFormTemporaryName, 104, 0, "", "", 1800, 2400, 2400, 400)
+    $fixtureControls.Add($vbaFlowButton)
+    $vbaFlowButton.Name = "cmdVbaFlow"
+    $vbaFlowButton.Caption = "VBA_BUTTON_MARKER_92817"
+    $vbaFlowButton.OnClick = "[Event Procedure]"
+    $escapedPhase8CanaryPath = $CanaryPath.Replace('"', '""')
+    $customerFormModule = $customerForm.Module
+    $customerFormModule.InsertLines(1, @"
+Option Compare Database
+Option Explicit
+' VBA_COMMENT_MARKER_92817
+Private Sub cmdVbaFlow_Click()
+    Dim handle As Integer
+    Dim target As String
+    Dim q As Object
+    Dim rs As Object
+    Dim value As Variant
+    handle = FreeFile
+    Open "$escapedPhase8CanaryPath" For Output As #handle
+    Print #handle, "PHASE8_VBA_CANARY_FIRED_92817"
+    Close #handle
+    Call HelperStatic
+    DoCmd.OpenForm "frmCustomers"
+    DoCmd.OpenReport "rptOrders"
+    DoCmd.OpenQuery "qryOrdersByStatus"
+    Set q = CurrentDb.QueryDefs("qryOrdersByStatus")
+    Set rs = CurrentDb.OpenRecordset("Customers")
+    value = DLookup("CustomerId", "Customers")
+    target = "frmCustomers"
+    DoCmd.OpenForm target
+    value = "VBA_LITERAL_MARKER_92817"
+    value = "SELECT * FROM VBA_SQL_MARKER_92817"
+    value = "C:\Private\VBA_PATH_MARKER_92817.txt"
+    Eval ("VBA_EVAL_MARKER_92817")
+    Application.Run "VBA_RUN_MARKER_92817"
+    CreateObject("WScript.Shell").Run "VBA_COMMAND_MARKER_92817"
+End Sub
+
+Private Sub HelperStatic()
+End Sub
+"@)
     $access.DoCmd.Save(2, $customerFormTemporaryName)
     $access.DoCmd.Close(2, $customerFormTemporaryName, 1)
     $access.DoCmd.Rename("frmCustomers", 2, $customerFormTemporaryName)
+    Close-ComObject $customerFormModule
+    $customerFormModule = $null
     Close-ComObject $customerForm
     $customerForm = $null
     foreach ($control in $fixtureControls) { Close-ComObject $control }
@@ -263,14 +311,17 @@ End Sub
         Forms = 2
         Reports = 1
         Phase7Controls = 8
+        Phase8Controls = 1
+        TotalFormReportControls = 9
         FormReportCoverage = "phase7-design-fixture"
-        VbaCoverage = "deferred-except-startup-canary"
+        VbaCoverage = "phase8-form-code-behind-fixture"
         MacroCoverage = "deferred"
     } | ConvertTo-Json -Compress
 }
 finally {
     foreach ($control in $fixtureControls) { Close-ComObject $control }
     Close-ComObject $ordersReport
+    Close-ComObject $customerFormModule
     Close-ComObject $customerForm
     Close-ComObject $startupForm
     Close-ComObject $passThrough
