@@ -1,3 +1,16 @@
+# The one-pass Qodo posture below requires ACK PR #281 or newer. Semver and
+# capability gates remain necessary but cannot distinguish older 0.2.0 builds;
+# operators must also verify the reported build SHA is d4eeead or a descendant.
+agentControl:
+  requiredVersion: ">=0.2.0"
+  channel: stable
+  allowPrerelease: false
+  requiredCapabilities:
+    - reviewQuorum
+    - requiredReviewerBatching
+    - runPrLoopUntilTerminal
+    - quietJson
+
 lane:
   id: tracemap-pr-review-loop
   version: 0.1.0
@@ -47,7 +60,7 @@ prLoopPacket:
   bots:
     qodo:
       requirement: required
-      waitUntilReturnedBeforeProcessing: true
+      waitUntilReturnedBeforeProcessing: false
       waitTimeoutSeconds: 900
       requestAllowed: explicit_only
       requestRetryCeiling: 0
