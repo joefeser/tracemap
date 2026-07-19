@@ -20,7 +20,8 @@ internal sealed record AccessRawUiSurface(
     bool? HasModule,
     string? RecordSource,
     IReadOnlyList<AccessRawControl> Controls,
-    IReadOnlyList<AccessRawUiEvent> Events);
+    IReadOnlyList<AccessRawUiEvent> Events,
+    string Coverage = "complete");
 
 internal sealed record AccessUiProjectionResult(
     IReadOnlyList<AccessUiSurfaceProjection> Surfaces,
@@ -77,11 +78,14 @@ internal static partial class AccessUiProjector
                 identity,
                 kind,
                 raw.HasModule switch { true => "present", false => "absent", null => "unknown" },
-                string.IsNullOrWhiteSpace(raw.RecordSource) ? "unbound" : "bound-declared",
+                string.IsNullOrWhiteSpace(raw.RecordSource)
+                    ? raw.Coverage == "complete" ? "unbound" : "unknown"
+                    : "bound-declared",
                 designHash,
                 bindings,
                 controls,
-                surfaceEvents));
+                surfaceEvents,
+                raw.Coverage));
         }
 
         return new(

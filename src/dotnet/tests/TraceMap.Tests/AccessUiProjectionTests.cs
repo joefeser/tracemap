@@ -82,6 +82,35 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Documented_surface_inventory_keeps_objects_unloaded_and_discards_metadata_if_property_access_loads_one()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('d', 40), "fixture.accdb", "hash");
+        var stable = new FakeAccessObject("frmStable", new Dictionary<string, object?>
+        {
+            ["HasModule"] = false,
+            ["RecordSource"] = "Customers",
+            ["OnOpen"] = "[Event Procedure]"
+        });
+        var loadOnProperties = new FakeAccessObject("frmLoads", new Dictionary<string, object?>
+        {
+            ["RecordSource"] = "PrivateSource_92817"
+        }, loadWhenPropertiesRead: true);
+        var raw = new List<AccessRawUiSurface>();
+        var gaps = new List<AccessGapProjection>();
+
+        new AccessComReader().ReadSurfaceCollection(
+            new FakeAccessCollection([stable, loadOnProperties]), "form", seed, raw, gaps);
+
+        Assert.False(stable.IsLoaded);
+        Assert.Equal("Customers", raw.Single(item => item.Name == "frmStable").RecordSource);
+        var loaded = raw.Single(item => item.Name == "frmLoads");
+        Assert.Null(loaded.RecordSource);
+        Assert.Equal("inventory-only", loaded.Coverage);
+        Assert.Contains(gaps, gap => gap.Classification == "AccessSurfaceMetadataCausedLoad");
+        Assert.DoesNotContain("PrivateSource_92817", JsonSerializer.Serialize(raw), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Ui_projector_resolves_direct_bindings_hashes_expressions_and_classifies_events_without_raw_values()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "database-hash");
@@ -222,5 +251,37 @@ public sealed class AccessUiProjectionTests
             current = Directory.GetParent(current)?.FullName ?? string.Empty;
         }
         throw new DirectoryNotFoundException("Repository root unavailable.");
+    }
+
+    public sealed class FakeAccessCollection(IReadOnlyList<FakeAccessObject> items)
+    {
+        public int Count => items.Count;
+        public FakeAccessObject this[int index] => items[index];
+    }
+
+    public sealed class FakeAccessObject(string name, IReadOnlyDictionary<string, object?> values, bool loadWhenPropertiesRead = false)
+    {
+        public string Name { get; } = name;
+        public bool IsLoaded { get; private set; }
+        public FakeAccessProperties Properties
+        {
+            get
+            {
+                if (loadWhenPropertiesRead) IsLoaded = true;
+                return new(values);
+            }
+        }
+    }
+
+    public sealed class FakeAccessProperties(IReadOnlyDictionary<string, object?> values)
+    {
+        public FakeAccessProperty this[string name] => values.TryGetValue(name, out var value)
+            ? new(value)
+            : throw new KeyNotFoundException();
+    }
+
+    public sealed class FakeAccessProperty(object? value)
+    {
+        public object? Value { get; } = value;
     }
 }
