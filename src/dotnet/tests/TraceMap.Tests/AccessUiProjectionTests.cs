@@ -100,40 +100,18 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
-    public void Documented_surface_inventory_never_reads_loading_properties_and_fails_if_a_surface_is_already_loaded()
+    public void Documented_surface_inventory_reads_only_bounded_counts_and_never_indexes_items()
     {
-        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('d', 40), "fixture.accdb", "hash");
-        var stable = new FakeAccessObject("frmStable", new Dictionary<string, object?>
-        {
-            ["HasModule"] = false,
-            ["RecordSource"] = "Customers",
-            ["OnOpen"] = "[Event Procedure]"
-        });
-        var loadOnProperties = new FakeAccessObject("frmLoads", new Dictionary<string, object?>
-        {
-            ["RecordSource"] = "PrivateSource_92817"
-        }, loadWhenPropertiesRead: true);
-        var raw = new List<AccessRawUiSurface>();
         var gaps = new List<AccessGapProjection>();
+        var collection = new FakeAccessCollection(2);
 
-        new AccessComReader().ReadSurfaceCollection(
-            new FakeAccessCollection([stable, loadOnProperties]), "form", seed, raw, gaps);
+        var count = new AccessComReader().ReadSurfaceCollectionCount(collection, "form", gaps);
 
-        Assert.False(stable.IsLoaded);
-        var loaded = raw.Single(item => item.Name == "frmLoads");
-        Assert.Null(loaded.RecordSource);
-        Assert.Equal("inventory-only", loaded.Coverage);
-        Assert.Null(raw.Single(item => item.Name == "frmStable").RecordSource);
-        Assert.Equal(0, stable.PropertiesReadCount);
-        Assert.Equal(0, loadOnProperties.PropertiesReadCount);
-        Assert.Equal(2, gaps.Count(gap => gap.Classification == "AccessFormReportCoverageUnavailable"));
-        Assert.DoesNotContain(gaps, gap => gap.Classification == "AccessSurfaceMetadataCausedLoad");
-        Assert.DoesNotContain("PrivateSource_92817", JsonSerializer.Serialize(raw), StringComparison.OrdinalIgnoreCase);
-
-        var exception = Assert.Throws<AccessScanException>(() => new AccessComReader().ReadSurfaceCollection(
-            new FakeAccessCollection([new("frmAlreadyLoaded", new Dictionary<string, object?>(), initiallyLoaded: true)]),
-            "form", seed, [], []));
-        Assert.Equal("AccessSurfaceUnexpectedlyLoaded", exception.Classification);
+        Assert.Equal(2, count);
+        Assert.Equal(0, collection.IndexerReadCount);
+        Assert.Single(gaps, gap => gap.Classification == "AccessFormReportCoverageUnavailable"
+            && gap.ScopeKind == "form-catalog"
+            && gap.RuleId == RuleIds.LegacyAccessUiSurface);
     }
 
     [Fact]
@@ -198,13 +176,18 @@ public sealed class AccessUiProjectionTests
             [],
             ui.Gaps,
             [new("formsReports", "observed")],
-            ui.Surfaces);
+            UiSurfaces: ui.Surfaces,
+            UiInventory: new(1, 0, "count-observed-identity-unavailable"));
         var scan = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", output));
 
         await AccessArtifactWriter.WriteAsync(output, scan, AccessLimits.Default);
         Assert.Contains(scan.Facts, fact => fact.FactType == FactTypes.AccessFormDeclared);
         Assert.Contains(scan.Facts, fact => fact.FactType == FactTypes.AccessControlDeclared);
         Assert.Contains(scan.Facts, fact => fact.FactType == FactTypes.AccessBindingDeclared);
+        var databaseFact = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.LegacyDataMetadataDeclared);
+        Assert.Equal("1", databaseFact.Properties.GetValueOrDefault("formCount"));
+        Assert.Equal("0", databaseFact.Properties.GetValueOrDefault("reportCount"));
+        Assert.Equal("count-observed-identity-unavailable", databaseFact.Properties.GetValueOrDefault("formsReportsCoverage"));
         foreach (var file in Directory.EnumerateFiles(output, "*", SearchOption.AllDirectories))
         {
             var artifactText = System.Text.Encoding.UTF8.GetString(await File.ReadAllBytesAsync(file));
@@ -403,41 +386,17 @@ public sealed class AccessUiProjectionTests
         throw new DirectoryNotFoundException("Repository root unavailable.");
     }
 
-    public sealed class FakeAccessCollection(IReadOnlyList<FakeAccessObject> items)
+    public sealed class FakeAccessCollection(int count)
     {
-        public int Count => items.Count;
-        public FakeAccessObject this[int index] => items[index];
-    }
-
-    public sealed class FakeAccessObject(
-        string name,
-        IReadOnlyDictionary<string, object?> values,
-        bool loadWhenPropertiesRead = false,
-        bool initiallyLoaded = false)
-    {
-        public string Name { get; } = name;
-        public bool IsLoaded { get; private set; } = initiallyLoaded;
-        public int PropertiesReadCount { get; private set; }
-        public FakeAccessProperties Properties
+        public int Count => count;
+        public int IndexerReadCount { get; private set; }
+        public object this[int index]
         {
             get
             {
-                PropertiesReadCount++;
-                if (loadWhenPropertiesRead) IsLoaded = true;
-                return new(values);
+                IndexerReadCount++;
+                throw new InvalidOperationException("Surface item access is forbidden.");
             }
         }
-    }
-
-    public sealed class FakeAccessProperties(IReadOnlyDictionary<string, object?> values)
-    {
-        public FakeAccessProperty this[string name] => values.TryGetValue(name, out var value)
-            ? new(value)
-            : throw new KeyNotFoundException();
-    }
-
-    public sealed class FakeAccessProperty(object? value)
-    {
-        public object? Value { get; } = value;
     }
 }
