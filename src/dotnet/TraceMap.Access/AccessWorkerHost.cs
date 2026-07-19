@@ -24,10 +24,11 @@ public static class AccessWorkerHost
         async Task WriteAsync(AccessWorkerFrame frame)
         {
             var json = JsonSerializer.Serialize(frame, AccessJsonContext.Default.AccessWorkerFrame);
-            if (json.Length > limits.MaxProjectionBytes) throw new AccessScanException("AccessProjectionLimitReached");
+            if (AccessWorkerProtocol.EncodedFrameBytes(json) > limits.MaxProjectionBytes) throw new AccessScanException("AccessProjectionLimitReached");
             lock (writeGate)
             {
-                output.WriteLine(json);
+                output.Write(json);
+                output.Write('\n');
                 output.Flush();
             }
             await Task.CompletedTask;

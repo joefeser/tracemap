@@ -45,8 +45,10 @@ public static class AccessArtifactWriter
             var totalBytes = Directory.EnumerateFiles(staging, "*", SearchOption.AllDirectories).Sum(path => new FileInfo(path).Length);
             if (totalBytes > limits.MaxArtifactBytes) throw new AccessScanException("AccessArtifactLimitReached");
 
-            if (Directory.Exists(target)) Directory.Delete(target, recursive: true);
-            else if (File.Exists(target)) throw new AccessScanException("AccessOutputIsFile");
+            // Validation rejects existing outputs, and this second check closes
+            // the race between validation and publication. Never delete or
+            // replace a caller-owned path.
+            if (Directory.Exists(target) || File.Exists(target)) throw new AccessScanException("AccessOutputAlreadyExists");
             try { Directory.Move(staging, target); }
             catch { throw new AccessScanException("AccessArtifactPublishFailed"); }
         }

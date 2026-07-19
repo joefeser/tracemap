@@ -14,12 +14,13 @@ public static class AccessFactBuilder
             throw new AccessScanException("AccessProjectionHashMismatch");
 
         if (limits.MaxFacts < 1 || limits.MaxGaps < 1) throw new AccessScanException("AccessInvalidLimitConfiguration");
+        var gapsTruncated = projection.Gaps.Count > limits.MaxGaps;
         var projectedGaps = projection.Gaps
             .OrderBy(gap => gap.Classification, StringComparer.Ordinal)
             .ThenBy(gap => gap.StableScopeKey, StringComparer.Ordinal)
-            .Take(Math.Max(0, limits.MaxGaps - 1))
+            .Take(gapsTruncated ? Math.Max(0, limits.MaxGaps - 1) : limits.MaxGaps)
             .ToList();
-        if (projection.Gaps.Count > limits.MaxGaps)
+        if (gapsTruncated)
             projectedGaps.Add(new("AccessGapLimitReached", "database", null));
         var gapNames = projectedGaps.Select(gap => gap.Classification).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
         var scanId = "access-scan-" + FactFactory.Hash(string.Join('|',

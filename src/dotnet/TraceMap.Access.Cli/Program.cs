@@ -95,16 +95,16 @@ public static class AccessCommand
         TraceMap Microsoft Access adapter
 
         Usage:
-          tracemap-access scan --repo <git-worktree> --database <repo-relative.accdb-or-mdb> --out <directory> [--timeout-seconds <30-3600>]
+          tracemap-access scan --repo <git-worktree> --database <repo-relative.accdb-or-mdb> --out <new-directory> [--timeout-seconds <30-3600>]
           tracemap-access --version
 
         The adapter reads static design metadata only. It does not read rows or execute queries, macros, forms, reports, or VBA.
         """;
 
     private static string ScanHelp() => """
-        Usage: tracemap-access scan --repo <git-worktree> --database <repo-relative.accdb-or-mdb> --out <directory> [--timeout-seconds <30-3600>]
+        Usage: tracemap-access scan --repo <git-worktree> --database <repo-relative.accdb-or-mdb> --out <new-directory> [--timeout-seconds <30-3600>]
 
-        Requirements: Windows, installed Microsoft Access/DAO, clean tracked database at checked-out HEAD.
+        Requirements: Windows, installed Microsoft Access/DAO, clean tracked database at checked-out HEAD, and a non-existing output directory.
         Outputs: scan-manifest.json, facts.ndjson, index.sqlite, report.md, logs/analyzer.log.
         """;
 }

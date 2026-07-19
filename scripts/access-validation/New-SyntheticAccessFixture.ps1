@@ -81,6 +81,7 @@ try {
 CREATE TABLE Customers (
     CustomerId AUTOINCREMENT CONSTRAINT PK_Customers PRIMARY KEY,
     DisplayName TEXT(120) NOT NULL,
+    [Customer Note] TEXT(50),
     IsActive YESNO NOT NULL,
     CreatedAt DATETIME
 )
@@ -113,6 +114,7 @@ CREATE TABLE AuditLog (
 "@, $dbFailOnError)
     $database.Execute("CREATE INDEX IX_Orders_CustomerId ON Orders (CustomerId)", $dbFailOnError)
     $database.Execute("CREATE INDEX IX_OrderItems_OrderId ON OrderItems (OrderId)", $dbFailOnError)
+    $database.Execute("CREATE INDEX IX_Customers_CustomerNote ON Customers ([Customer Note])", $dbFailOnError)
     $database.Execute("ALTER TABLE Orders ADD CONSTRAINT FK_Orders_Customers FOREIGN KEY (CustomerId) REFERENCES Customers (CustomerId)", $dbFailOnError)
     $database.Execute("ALTER TABLE OrderItems ADD CONSTRAINT FK_OrderItems_Orders FOREIGN KEY (OrderId) REFERENCES Orders (OrderId)", $dbFailOnError)
 

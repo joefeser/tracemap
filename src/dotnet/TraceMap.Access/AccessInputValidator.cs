@@ -24,6 +24,7 @@ public static partial class AccessInputValidator
 
         var gitRoot = Path.GetFullPath(rootResult.Output.Trim());
         var logicalGitRoot = FindLogicalGitRoot(repoCandidate) ?? gitRoot;
+        var gitDirectory = Path.GetFullPath(RunGit(repoCandidate, "rev-parse", "--absolute-git-dir").Required("AccessGitRootUnavailable").Trim());
         var relativeSegments = NormalizeRelativeSegments(options.DatabasePath);
         var databaseRelativePath = string.Join('/', relativeSegments);
         var databaseFullPath = Path.GetFullPath(Path.Combine(gitRoot, Path.Combine(relativeSegments.ToArray())));
@@ -63,7 +64,7 @@ public static partial class AccessInputValidator
         var outputFullPath = IsAncestor(logicalGitRoot, outputCandidate)
             ? Path.GetFullPath(Path.Combine(gitRoot, Path.GetRelativePath(logicalGitRoot, outputCandidate)))
             : outputCandidate;
-        ValidateOutputPath(outputFullPath, gitRoot, databaseFullPath);
+        ValidateOutputPath(outputFullPath, gitRoot, gitDirectory, databaseFullPath);
 
         return new AccessValidatedInput(
             gitRoot,
@@ -115,13 +116,21 @@ public static partial class AccessInputValidator
             throw new AccessScanException("AccessInputNotAtCommit");
     }
 
-    private static void ValidateOutputPath(string output, string gitRoot, string database)
+    private static void ValidateOutputPath(string output, string gitRoot, string gitDirectory, string database)
     {
         var root = Path.GetPathRoot(output);
         if (string.IsNullOrWhiteSpace(root) || PathsEqual(output, root) || PathsEqual(output, gitRoot) || PathsEqual(output, database))
             throw new AccessScanException("AccessUnsafeOutputPath");
-        if (IsAncestor(output, gitRoot) || IsAncestor(output, database)) throw new AccessScanException("AccessUnsafeOutputPath");
+        var logicalGitMetadata = Path.Combine(gitRoot, ".git");
+        if (IsAncestor(output, gitRoot)
+            || IsAncestor(output, database)
+            || PathsEqual(output, gitDirectory)
+            || IsAncestor(gitDirectory, output)
+            || PathsEqual(output, logicalGitMetadata)
+            || IsAncestor(logicalGitMetadata, output))
+            throw new AccessScanException("AccessUnsafeOutputPath");
         RejectExistingReparsePath(output);
+        if (File.Exists(output) || Directory.Exists(output)) throw new AccessScanException("AccessOutputAlreadyExists");
     }
 
     private static void RejectExistingReparsePath(string path)
@@ -215,7 +224,7 @@ public static partial class AccessInputValidator
         var errorTask = process.StandardError.ReadToEndAsync();
         if (!process.WaitForExit(15_000))
         {
-            process.Kill(true);
+            try { process.Kill(true); } catch { }
             throw new AccessScanException("AccessGitTimeout");
         }
         var output = outputTask.GetAwaiter().GetResult();

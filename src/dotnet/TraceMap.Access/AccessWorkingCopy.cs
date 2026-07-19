@@ -25,7 +25,7 @@ public sealed class AccessWorkingCopy : IDisposable
         {
             RestrictDirectory(directory);
             using (var source = new FileStream(input.DatabaseFullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024, FileOptions.SequentialScan))
-            using (var target = new FileStream(copyPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1024 * 1024, FileOptions.WriteThrough))
+            using (var target = new FileStream(copyPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1024 * 1024, FileOptions.None))
             {
                 source.CopyTo(target);
                 target.Flush(flushToDisk: true);

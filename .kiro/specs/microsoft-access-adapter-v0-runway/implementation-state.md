@@ -1,6 +1,6 @@
 # Microsoft Access Adapter v0 Runway Implementation State
 
-Status: Phase 0 through Phase 6 implemented and validated; PR publication pending
+Status: Phase 0 through Phase 6 implemented; PR #487 review fixes validated and ACK rerun pending
 
 Spec branch: `codex/microsoft-access-adapter-runway`
 
@@ -184,8 +184,8 @@ python3 scripts/test_validate_adapter_artifacts.py
 git diff --check
 ```
 
-Results: 20/20 focused Access tests passed; solution build passed with the
-pre-existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory; 783/783 solution tests
+Results: 23/23 focused Access tests passed; solution build passed with the
+pre-existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory; 786/786 solution tests
 passed; seven artifact-validator tests passed; private-path and diff checks
 passed. No shared artifact reader changed, so additional pinned adapter smokes
 were not required beyond the standard artifact validator and the downstream
@@ -200,7 +200,7 @@ fixture and completed:
   `logs/analyzer.log`;
 - two concurrent scans with identical facts, distinct private working copies,
   and unchanged original hash;
-- 61 facts for the synthetic `.accdb`, including exactly two declared
+- 63 facts for the synthetic `.accdb`, including exactly two declared
   relationship facts and no system-schema ambiguity;
 - a successful real Access 2002-2003 `.mdb` scan with 15 facts;
 - a malformed `.mdb` gap-only scan with 14 unique facts, three gaps, zero
@@ -208,10 +208,38 @@ fixture and completed:
 - zero startup-canary firings and zero planted protected markers in artifacts;
 - successful Access-index JSON export, combine, and combined markdown report.
 
-After the exact-HEAD object check and Git-subdirectory output mapping were
-hardened, the final self-contained Windows binary was republished and rerun
-against the same clean synthetic repository: it again produced 61 facts and
-exactly two declared relationship facts. The isolated VM was then stopped.
+After review hardening, the self-contained Windows binary and full committed
+harness were rerun. The fixture included an indexed field with a redacted raw
+name; index membership remained present while that raw name remained absent
+from every text and SQLite artifact. The run again passed sequential and
+concurrent determinism, real and malformed `.mdb`, canary, protected-marker,
+export, combine, and report checks, producing 63 facts and exactly two declared
+relationship facts. The isolated VM was then stopped.
+
+## PR #487 Review Fixes
+
+ACK released 12 current-head review threads. The verified fixes:
+
+- reject `.git` and actual Git-directory outputs, require a new output path,
+  and preserve existing caller-owned directories in both validation and atomic
+  publication;
+- preserve exact Git-timeout classifications even if process cleanup races;
+- count worker frames as UTF-8 bytes plus an explicit LF delimiter;
+- preserve specific bounded COM read classifications and use pointer-width-safe
+  Access window-handle conversion;
+- retain raw field names only in worker-local lookup maps so redacted field
+  names still resolve index/relationship membership without entering IPC or
+  artifacts;
+- scope index identities to the owning table;
+- preserve every gap when the list exactly equals the ceiling and add a limit
+  gap only when evidence is actually truncated;
+- remove redundant write-through mode while retaining a forced flush and hash
+  verification for the private copy.
+
+One suggestion to skip `index.sqlite` during protected-marker scanning was not
+implemented: SQLite is a required artifact and excluding it would weaken the
+secret-safety proof. The synthetic artifact is bounded, and the full Windows
+smoke scanned it successfully with zero planted-marker matches.
 
 ## Spec Review
 

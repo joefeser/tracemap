@@ -69,6 +69,19 @@ public sealed class AccessFoundationTests
         Assert.Equal(Path.GetDirectoryName(fromSubdirectory.DatabaseFullPath), Path.GetDirectoryName(fromSubdirectory.OutputFullPath));
         Assert.Equal("requested-output", Path.GetFileName(fromSubdirectory.OutputFullPath));
 
+        var gitMetadata = Assert.Throws<AccessScanException>(() =>
+            AccessInputValidator.Validate(new(repo, "data/fixture.accdb", Path.Combine(repo, ".git", "hooks", "access-output"))));
+        Assert.Equal("AccessUnsafeOutputPath", gitMetadata.Classification);
+
+        var existingOutput = Path.Combine(repo, "existing-output");
+        Directory.CreateDirectory(existingOutput);
+        var sentinel = Path.Combine(existingOutput, "do-not-delete.txt");
+        File.WriteAllText(sentinel, "owned by caller");
+        var existing = Assert.Throws<AccessScanException>(() =>
+            AccessInputValidator.Validate(new(repo, "data/fixture.accdb", existingOutput)));
+        Assert.Equal("AccessOutputAlreadyExists", existing.Classification);
+        Assert.Equal("owned by caller", File.ReadAllText(sentinel));
+
         var ancestor = Assert.Throws<AccessScanException>(() =>
             AccessInputValidator.Validate(new(repo, "data/fixture.accdb", Path.Combine(repo, "data"))));
         Assert.Equal("AccessUnsafeOutputPath", ancestor.Classification);
@@ -150,6 +163,12 @@ public sealed class AccessFoundationTests
             Assert.DoesNotContain(ConnectionMarker, contents, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain(temp.Path, contents, StringComparison.OrdinalIgnoreCase);
         }
+
+        var existingArtifactHash = AccessInputValidator.HashFile(Path.Combine(input.OutputFullPath, "facts.ndjson"));
+        var existingOutput = await Assert.ThrowsAsync<AccessScanException>(() =>
+            AccessArtifactWriter.WriteAsync(input.OutputFullPath, result, AccessLimits.Default));
+        Assert.Equal("AccessOutputAlreadyExists", existingOutput.Classification);
+        Assert.Equal(existingArtifactHash, AccessInputValidator.HashFile(Path.Combine(input.OutputFullPath, "facts.ndjson")));
     }
 
     [Fact]
@@ -290,6 +309,53 @@ public sealed class AccessFoundationTests
         var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.mdb", input.OutputFullPath));
         Assert.Single(result.Facts, fact => fact.Properties.GetValueOrDefault("classification") == "AccessTableCatalogUnavailable");
         Assert.Equal(result.Facts.Count, result.Facts.Select(fact => fact.FactId).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void Exact_gap_limit_preserves_all_gaps_and_over_limit_replaces_only_one_with_limit_evidence()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        File.WriteAllBytes(databasePath, [1, 2, 3, 4]);
+        var input = Input(databasePath, Path.Combine(temp.Path, "out"));
+        var limits = AccessLimits.Default with { MaxGaps = 2 };
+        var two = Projection(input) with { Gaps = [new("GapA", "database", null), new("GapB", "database", null)] };
+        var three = two with { Gaps = [.. two.Gaps, new("GapC", "database", null)] };
+
+        var exact = AccessFactBuilder.Build(input, two, new(temp.Path, "fixture.accdb", input.OutputFullPath), limits);
+        Assert.Contains(exact.Facts, fact => fact.Properties.GetValueOrDefault("classification") == "GapA");
+        Assert.Contains(exact.Facts, fact => fact.Properties.GetValueOrDefault("classification") == "GapB");
+        Assert.DoesNotContain(exact.Facts, fact => fact.Properties.GetValueOrDefault("classification") == "AccessGapLimitReached");
+
+        var truncated = AccessFactBuilder.Build(input, three, new(temp.Path, "fixture.accdb", input.OutputFullPath), limits);
+        Assert.Single(truncated.Facts, fact => fact.Properties.GetValueOrDefault("classification") == "AccessGapLimitReached");
+        Assert.Equal(2, truncated.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap));
+    }
+
+    [Fact]
+    public void Internal_raw_field_lookup_supports_redacted_names_and_index_scopes_are_table_specific()
+    {
+        var databaseSeed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var firstTable = AccessSafeValues.Identity(databaseSeed, "table", "First");
+        var secondTable = AccessSafeValues.Identity(databaseSeed, "table", "Second");
+        var protectedField = new AccessFieldProjection(AccessSafeValues.Identity(databaseSeed, $"field-{firstTable.StableKey}", "Order ID"), 0, "long", 4, true);
+        var lookup = new Dictionary<string, List<AccessFieldProjection>>(StringComparer.OrdinalIgnoreCase) { ["Order ID"] = [protectedField] };
+
+        Assert.Null(protectedField.Identity.DisplayName);
+        Assert.True(AccessComReader.UniqueField(lookup, "order id", out var resolved));
+        Assert.Same(protectedField, resolved);
+        Assert.NotEqual(
+            AccessSafeValues.Identity(databaseSeed, $"index-{firstTable.StableKey}", "PrimaryKey").StableKey,
+            AccessSafeValues.Identity(databaseSeed, $"index-{secondTable.StableKey}", "PrimaryKey").StableKey);
+    }
+
+    [Fact]
+    public void Bounded_com_strings_preserve_classification_and_frame_limits_count_utf8_plus_lf()
+    {
+        var failure = Assert.Throws<AccessScanException>(() =>
+            AccessComReader.BoundedString(() => throw new InvalidOperationException("raw COM failure"), 10, "AccessVersionUnavailable"));
+        Assert.Equal("AccessVersionUnavailable", failure.Classification);
+        Assert.Equal(3, AccessWorkerProtocol.EncodedFrameBytes("é"));
     }
 
     [Fact]
