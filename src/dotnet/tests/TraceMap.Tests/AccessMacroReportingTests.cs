@@ -219,6 +219,24 @@ public sealed class AccessMacroReportingTests
         Assert.DoesNotContain(ProtectedMacroName, JsonSerializer.Serialize(combinedReview), StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Windows_smoke_checkpoints_the_closed_Phase_9_contract_before_disposable_cleanup()
+    {
+        var script = File.ReadAllText(Path.Combine(
+            FindRepoRoot(), "scripts", "access-validation", "Invoke-AccessSmoke.ps1"));
+
+        Assert.Contains("[string]$Phase9CheckpointPath", script, StringComparison.Ordinal);
+        Assert.Contains("tracemap.access-phase9-checkpoint.v1", script, StringComparison.Ordinal);
+        Assert.Contains("phase9ConsumerContracts = \"boundary-stop\"", script, StringComparison.Ordinal);
+        Assert.Contains("phase9ConsumerContracts = \"completed\"", script, StringComparison.Ordinal);
+        Assert.Contains("docs-export --index $combined", script, StringComparison.Ordinal);
+        Assert.Contains("vault export --combined-index $combined", script, StringComparison.Ordinal);
+        Assert.Contains("release-review --before $combined --after $combined", script, StringComparison.Ordinal);
+        Assert.Contains("Phase 9 checkpoint must be outside the disposable smoke root", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("DatabaseHash = $originalHash", script, StringComparison.Ordinal);
+        Assert.Contains("OriginalUnchanged = $true", script, StringComparison.Ordinal);
+    }
+
     private static async Task<(ScanResult Scan, string Output)> BuildScanAsync(string root)
     {
         var databasePath = Path.Combine(root, "fixture.accdb");
@@ -279,6 +297,19 @@ public sealed class AccessMacroReportingTests
             var text = System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(file));
             Assert.DoesNotContain(marker, text, StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    private static string FindRepoRoot()
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "src", "dotnet", "TraceMap.sln")))
+                return current.FullName;
+            current = current.Parent;
+        }
+
+        throw new DirectoryNotFoundException("TraceMap repository root was not found.");
     }
 
     public sealed class FakeMacroApplication

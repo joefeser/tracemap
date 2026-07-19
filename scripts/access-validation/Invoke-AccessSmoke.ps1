@@ -8,7 +8,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Generator,
 
-    [string]$SmokeRoot = "C:\TraceMapAccessSmoke"
+    [string]$SmokeRoot = "C:\TraceMapAccessSmoke",
+
+    [string]$Phase9CheckpointPath
 )
 
 $ErrorActionPreference = "Stop"
@@ -43,6 +45,56 @@ function Find-ProtectedMarker {
 }
 
 $SmokeRoot = [IO.Path]::GetFullPath($SmokeRoot)
+$phase9Coverage = "named-count-observed-loaded-state-unavailable-other-categories-identities-bodies-unavailable"
+$phase9Checkpoint = $null
+if (-not [string]::IsNullOrWhiteSpace($Phase9CheckpointPath)) {
+    $Phase9CheckpointPath = [IO.Path]::GetFullPath($Phase9CheckpointPath)
+    if ($Phase9CheckpointPath.StartsWith($SmokeRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Phase 9 checkpoint must be outside the disposable smoke root"
+    }
+    $phase9Checkpoint = [ordered]@{
+        schemaVersion = "tracemap.access-phase9-checkpoint.v1"
+        phase9ConsumerContracts = "boundary-stop"
+        stopStage = "generation"
+        namedFixtureShapeAvailable = $false
+        namedMacroCountObserved = $false
+        productContractCorrect = $false
+        reportContractCorrect = $false
+        combineContractCorrect = $false
+        docsContractCorrect = $false
+        vaultContractCorrect = $false
+        releaseReviewContractCorrect = $false
+        macroIdentityFactsZero = $false
+        deterministic = $false
+        generationCanariesFalse = $false
+        extractionCanariesFalse = $false
+        protectedOutputMatchCount = 0
+        baselineFixtureUnchanged = $false
+    }
+}
+
+function Save-Phase9Checkpoint {
+    if ($null -eq $phase9Checkpoint) { return }
+    $directory = Split-Path -Parent $Phase9CheckpointPath
+    New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    $temporary = "$Phase9CheckpointPath.tmp"
+    $checkpointJson = $phase9Checkpoint | ConvertTo-Json -Compress
+    [IO.File]::WriteAllText($temporary, $checkpointJson + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
+    if (Test-Path $Phase9CheckpointPath -PathType Leaf) {
+        [IO.File]::Replace($temporary, $Phase9CheckpointPath, $null)
+    }
+    else {
+        [IO.File]::Move($temporary, $Phase9CheckpointPath)
+    }
+}
+
+function Set-Phase9Stage([string]$Stage) {
+    if ($null -eq $phase9Checkpoint) { return }
+    $phase9Checkpoint.stopStage = $Stage
+    Save-Phase9Checkpoint
+}
+
+Save-Phase9Checkpoint
 $repo = Join-Path $SmokeRoot "repo"
 $databaseRelative = "fixture\synthetic-tracemap.accdb"
 $database = Join-Path $repo $databaseRelative
@@ -61,11 +113,18 @@ $outInvalidMdb = Join-Path $SmokeRoot "scan-invalid-mdb"
 $combined = Join-Path $SmokeRoot "combined.sqlite"
 $combinedReport = Join-Path $SmokeRoot "combined-report.md"
 $export = Join-Path $SmokeRoot "index-export.json"
+$docsOutput = Join-Path $SmokeRoot "evidence-docs"
+$vaultOutput = Join-Path $SmokeRoot "vault"
+$releaseReviewOutput = Join-Path $SmokeRoot "release-review"
 
 Remove-Item $SmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path (Split-Path -Parent $database) -Force | Out-Null
 & $Generator -DatabasePath $database -CanaryPath $canary
 if (Test-Path $canary) { throw "startup canary fired during fixture generation cleanup" }
+if ($null -ne $phase9Checkpoint) {
+    $phase9Checkpoint.generationCanariesFalse = $true
+    Save-Phase9Checkpoint
+}
 
 Push-Location $repo
 try {
@@ -85,6 +144,7 @@ $originalHash = (Get-FileHash $database -Algorithm SHA256).Hash.ToLowerInvariant
 Remove-Item $external -Force
 Remove-Item $canary -Force -ErrorAction SilentlyContinue
 
+Set-Phase9Stage "product-scan"
 & $AccessCli scan --repo $repo --database ($databaseRelative.Replace('\', '/')) --out $outA --timeout-seconds 120
 if ($LASTEXITCODE -ne 0) { throw "first Access scan failed" }
 & $AccessCli scan --repo $repo --database ($databaseRelative.Replace('\', '/')) --out $outB --timeout-seconds 120
@@ -106,6 +166,36 @@ foreach ($relative in $required) {
 }
 
 $factRows = Get-Content (Join-Path $outA "facts.ndjson") | ForEach-Object { $_ | ConvertFrom-Json }
+$databaseMetadata = @($factRows | Where-Object { $_.factType -eq "LegacyDataMetadataDeclared" })
+if ($databaseMetadata.Count -ne 1) { throw "expected one Access database metadata fact" }
+$macroCount = $databaseMetadata[0].properties.namedMacroCount
+if ($null -eq $macroCount) { throw "named macro count was not observed" }
+if ($null -ne $databaseMetadata[0].properties.macroLoadedCountUnchanged) { throw "unsupported loaded-macro field was emitted" }
+if ($databaseMetadata[0].properties.macroCoverage -ne $phase9Coverage) { throw "macro coverage label mismatch" }
+$macroCapability = @($factRows | Where-Object {
+    $_.factType -eq "AnalyzerCapabilityDiagnostic" -and $_.properties.capability -eq "macros"
+})
+if ($macroCapability.Count -ne 1 -or $macroCapability[0].properties.status -ne $phase9Coverage) {
+    throw "macro capability label mismatch"
+}
+$requiredMacroGaps = @(
+    "AccessMacroInventoryUnavailable",
+    "AccessMacroLoadedStateUnavailable",
+    "AccessMacroIdentityUnavailable",
+    "AccessMacroEmbeddedInventoryUnavailable",
+    "AccessMacroDataInventoryUnavailable",
+    "AccessMacroStartupInventoryUnavailable"
+)
+foreach ($classification in $requiredMacroGaps) {
+    if (@($factRows | Where-Object {
+        $_.factType -eq "AnalysisGap" -and
+        $_.ruleId -eq "legacy.access.macro-gap.v1" -and
+        $_.properties.classification -eq $classification
+    }).Count -ne 1) { throw "required macro coverage gap missing" }
+}
+if (@($factRows | Where-Object { $_.factType -eq "AccessMacroDeclared" }).Count -ne 0) {
+    throw "count-only product emitted macro identity facts"
+}
 $declaredRelationships = @($factRows | Where-Object {
     $_.factType -eq "LegacyDataMappingDeclared" -and $_.properties.mappingKind -eq "declared-relationship"
 })
@@ -166,6 +256,15 @@ if ((Get-FileHash (Join-Path $outConcurrentA "facts.ndjson") -Algorithm SHA256).
     throw "concurrent scan determinism mismatch"
 }
 if ((Get-FileHash $database -Algorithm SHA256).Hash.ToLowerInvariant() -ne $originalHash) { throw "original database changed during concurrent scans" }
+if ($null -ne $phase9Checkpoint) {
+    $phase9Checkpoint.namedMacroCountObserved = $true
+    $phase9Checkpoint.productContractCorrect = $true
+    $phase9Checkpoint.macroIdentityFactsZero = $true
+    $phase9Checkpoint.deterministic = $true
+    $phase9Checkpoint.extractionCanariesFalse = (-not (Test-Path $canary))
+    $phase9Checkpoint.baselineFixtureUnchanged = $true
+    Save-Phase9Checkpoint
+}
 
 if (Test-Path $mdb) {
     & $AccessCli scan --repo $repo --database ($mdbRelative.Replace('\', '/')) --out $outMdb --timeout-seconds 120
@@ -188,14 +287,99 @@ elseif ($invalidMdbOutput -notmatch "Access(DatabaseOpenOrCatalogFailed|WorkerTi
 
 & $TraceMapCli export --index (Join-Path $outA "index.sqlite") --out $export --format json
 if ($LASTEXITCODE -ne 0) { throw "Access index export failed" }
+Set-Phase9Stage "report-validation"
+$accessReportText = Get-Content (Join-Path $outA "report.md") -Raw
+if ($accessReportText -notmatch [Regex]::Escape("Named macro catalog count: ``$macroCount``") -or
+    $accessReportText -notmatch [Regex]::Escape("Macro coverage: ``$phase9Coverage``") -or
+    $accessReportText -notmatch "AccessMacroLoadedStateUnavailable") {
+    throw "Access report omitted Phase 9 count or coverage evidence"
+}
+if ($null -ne $phase9Checkpoint) {
+    $phase9Checkpoint.reportContractCorrect = $true
+    Save-Phase9Checkpoint
+}
+
+Set-Phase9Stage "combine-validation"
 & $TraceMapCli combine --index (Join-Path $outA "index.sqlite") --label access --out $combined
 if ($LASTEXITCODE -ne 0) { throw "Access index combine failed" }
 & $TraceMapCli report --index $combined --out $combinedReport --format markdown
 if ($LASTEXITCODE -ne 0) { throw "combined report failed" }
 
-[pscustomobject]@{
+Set-Phase9Stage "docs-validation"
+& $TraceMapCli docs-export --index $combined --out $docsOutput --families legacy,gap,limitation --format markdown,jsonl
+if ($LASTEXITCODE -ne 0) { throw "Access evidence docs export failed" }
+$docsJsonl = Join-Path $docsOutput "chunks.jsonl"
+if (-not (Test-Path $docsJsonl -PathType Leaf)) { throw "Access evidence docs JSONL missing" }
+$docsText = Get-Content $docsJsonl -Raw
+if ($docsText -notmatch [Regex]::Escape("namedMacroCount:$macroCount") -or
+    $docsText -notmatch [Regex]::Escape("macroCoverage:$phase9Coverage") -or
+    $docsText -notmatch [Regex]::Escape("legacy.access.macro-gap.v1") -or
+    $docsText -notmatch '"claimLevel":"hidden"') {
+    throw "Access evidence docs omitted Phase 9 metadata or hidden rule evidence"
+}
+if ($null -ne $phase9Checkpoint) {
+    $phase9Checkpoint.combineContractCorrect = $true
+    $phase9Checkpoint.docsContractCorrect = $true
+    Save-Phase9Checkpoint
+}
+
+Set-Phase9Stage "vault-validation"
+& $TraceMapCli vault export --combined-index $combined --out $vaultOutput --minimum-claim-level hidden --format json
+if ($LASTEXITCODE -ne 0) { throw "Access vault export failed" }
+$vaultJson = Join-Path $vaultOutput "graph.json"
+if (-not (Test-Path $vaultJson -PathType Leaf)) { throw "Access vault graph missing" }
+$vault = Get-Content $vaultJson -Raw | ConvertFrom-Json
+if (@($vault.nodes | Where-Object { $_.ruleIds -contains "legacy.access.macro-gap.v1" }).Count -eq 0) {
+    throw "Access vault omitted macro rule evidence"
+}
+if ($null -ne $phase9Checkpoint) {
+    $phase9Checkpoint.vaultContractCorrect = $true
+    Save-Phase9Checkpoint
+}
+
+Set-Phase9Stage "release-review-validation"
+& $TraceMapCli release-review --before $combined --after $combined --out $releaseReviewOutput --format json
+if ($LASTEXITCODE -ne 0) { throw "Access release review failed" }
+$releaseReviewJson = Join-Path $releaseReviewOutput "release-review.json"
+if (-not (Test-Path $releaseReviewJson -PathType Leaf)) { throw "Access release review JSON missing" }
+$releaseReview = Get-Content $releaseReviewJson -Raw | ConvertFrom-Json
+$accessConsumerGaps = @($releaseReview.gaps | Where-Object {
+    $_.gapKind -eq "AccessEvidenceConsumerUnsupported" -and
+    $_.ruleId -eq "release.review.section.v1" -and
+    $_.classification -eq "PartialAnalysis"
+})
+if ($accessConsumerGaps.Count -ne 1 -or @($accessConsumerGaps[0].supportingFactIds).Count -eq 0) {
+    throw "Access release review omitted structured unsupported-consumer evidence"
+}
+if ($null -ne $phase9Checkpoint) {
+    $phase9Checkpoint.releaseReviewContractCorrect = $true
+    Save-Phase9Checkpoint
+}
+
+Set-Phase9Stage "safety-check"
+$protectedOutputs = @($outA, $outB, $outConcurrentA, $outConcurrentB, $outMdb, $outInvalidMdb, $export, $combined, $combinedReport, $docsOutput, $vaultOutput, $releaseReviewOutput)
+foreach ($outputItem in $protectedOutputs) {
+    if (-not (Test-Path $outputItem)) { continue }
+    $files = if (Test-Path $outputItem -PathType Container) { Get-ChildItem $outputItem -File -Recurse } else { Get-Item $outputItem }
+    foreach ($file in $files) {
+        $foundMarker = Find-ProtectedMarker -Path $file.FullName -Markers $markers
+        if ($null -ne $foundMarker) { throw "protected marker leaked into downstream output" }
+    }
+}
+if (Test-Path $canary) { throw "Access canary fired during downstream validation" }
+if ((Get-FileHash $database -Algorithm SHA256).Hash.ToLowerInvariant() -ne $originalHash) { throw "original database changed during downstream validation" }
+if ($null -ne $phase9Checkpoint) {
+    $phase9Checkpoint.phase9ConsumerContracts = "completed"
+    $phase9Checkpoint.stopStage = "none"
+    $phase9Checkpoint.protectedOutputMatchCount = 0
+    $phase9Checkpoint.extractionCanariesFalse = $true
+    $phase9Checkpoint.baselineFixtureUnchanged = $true
+    Save-Phase9Checkpoint
+}
+
+$smokeResult = [pscustomobject]@{
     Schema = "tracemap.access-smoke-result.v1"
-    DatabaseHash = $originalHash
+    OriginalUnchanged = $true
     CanaryFired = $false
     DeterministicFacts = $true
     DeterministicReport = $true
@@ -207,4 +391,6 @@ if ($LASTEXITCODE -ne 0) { throw "combined report failed" }
     Export = "passed"
     Combine = "passed"
     CombinedReport = "passed"
-} | ConvertTo-Json -Compress
+    Phase9Checkpoint = if ($null -ne $phase9Checkpoint) { "written" } else { "not-requested" }
+}
+$smokeResult | ConvertTo-Json -Compress
