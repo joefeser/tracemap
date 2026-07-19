@@ -1,6 +1,6 @@
 # Microsoft Access Adapter v0 Runway Implementation State
 
-Status: Phase 0 through Phase 7 merged; Phase 8 count-only module inventory validated on Windows and ready for focused PR review
+Status: Phase 0 through Phase 8 merged; Phase 9 platform-neutral work rebased by merge onto current `dev`
 
 Spec branch: `codex/microsoft-access-adapter-runway`
 
@@ -427,8 +427,17 @@ literal `OpenForm` remains complete while a query-only catalog match for
 
 ## Phase 9 Platform-Neutral Work
 
-Branch: `codex/microsoft-access-adapter-v0-macro-reporting-stacked`, stacked on the
-pushed Phase 8 fixture head `4919be5f`.
+Branch: `codex/microsoft-access-adapter-v0-macro-reporting-stacked`, synchronized
+with Phase 8 merge commit `71cfd901` through branch merge `99fdbb14`.
+
+Before the next PR loop, the repo-local ACK lane adopted the one-pass Qodo
+posture enabled by agent-control-kit PR #281: Qodo remains required and
+`explicit_only`, but `waitUntilReturnedBeforeProcessing` is false; exact-head
+required Codex, fast quorum, and every mechanical/risky-file gate remain intact.
+The source checkout was fast-forwarded and built at `d4eeead`, the lane passed
+ACK `doctor`, the consumer config regression passed 2/2, and the three focused
+ACK #281 behavior tests passed. Future TraceMap loops must invoke that built
+`dist/cli.js` (or a verified descendant), not installed stable build `eeb217a`.
 
 The Phase 9 threat decision is to inventory macro declarations and startup/data
 macro categories only. No macro command semantic or body inspection is approved
