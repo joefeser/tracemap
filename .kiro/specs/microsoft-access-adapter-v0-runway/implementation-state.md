@@ -365,9 +365,9 @@ Implemented on this branch:
 
 Phase 8 platform-neutral validation:
 
-- 7/7 focused VBA projection/inventory tests pass;
-- 41/41 combined Access foundation/UI/VBA tests pass;
-- 803/803 full solution tests pass;
+- 8/8 focused VBA projection/inventory tests pass;
+- 42/42 combined Access foundation/UI/VBA tests pass;
+- 804/804 full solution tests pass;
 - solution build passes with the pre-existing
   `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory;
 - seven artifact-validator tests, changed-file whitespace verification,
@@ -416,8 +416,14 @@ correcting a test-only SQLite pooled-connection lock. Commit `c5aad146` clears
 SQLite pools before the protected-marker byte scan and opens a fresh connection
 for the subsequent fact query; it changes no product, COM, projector, rule, or
 evidence behavior. That fix was cherry-picked into this branch and the current
-seven focused VBA tests, 41 Access tests, full 803-test solution, build, artifact
+eight focused VBA tests, 42 Access tests, full 804-test solution, build, artifact
 validator, private-path guard, and diff checks all pass on macOS.
+
+PR #493 review follow-up filters literal catalog candidates through the target
+families implied by typed Access APIs and treats `:` as a VBA statement
+terminator during argument parsing. The regression test proves a colon-separated
+literal `OpenForm` remains complete while a query-only catalog match for
+`OpenForm` stays partial with an explicit unresolved gap.
 
 ## Foundation Validation
 
