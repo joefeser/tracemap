@@ -146,6 +146,8 @@ public sealed class AccessMacroReportingTests
         Assert.Contains("Named macro catalog count: `3`", report, StringComparison.Ordinal);
         Assert.Contains("Macro coverage: `named-count-observed-loaded-state-unavailable-other-categories-identities-bodies-unavailable`", report, StringComparison.Ordinal);
         Assert.Contains("Macro coverage gaps: 9", report, StringComparison.Ordinal);
+        Assert.Contains("Form/report/control/binding facts: 0", report, StringComparison.Ordinal);
+        Assert.Contains("VBA/event/navigation facts: 0", report, StringComparison.Ordinal);
         Assert.Contains("`AccessMacroLoadedStateUnavailable`: 1", report, StringComparison.Ordinal);
         Assert.DoesNotContain(ProtectedMacroName, report, StringComparison.OrdinalIgnoreCase);
 
@@ -259,6 +261,14 @@ public sealed class AccessMacroReportingTests
         Assert.Contains("fixture-incompatible-input-failed", script, StringComparison.Ordinal);
         Assert.Contains("fixture-hash-failed", script, StringComparison.Ordinal);
         Assert.Contains("fixture-boundary-cleanup-failed", script, StringComparison.Ordinal);
+        Assert.Contains("switch ($phase9Checkpoint.stopStage)", script, StringComparison.Ordinal);
+        Assert.Contains("product-scan-failed", script, StringComparison.Ordinal);
+        Assert.Contains("report-validation-failed", script, StringComparison.Ordinal);
+        Assert.Contains("combine-validation-failed", script, StringComparison.Ordinal);
+        Assert.Contains("docs-validation-failed", script, StringComparison.Ordinal);
+        Assert.Contains("vault-validation-failed", script, StringComparison.Ordinal);
+        Assert.Contains("release-review-validation-failed", script, StringComparison.Ordinal);
+        Assert.Contains("safety-check-failed", script, StringComparison.Ordinal);
         Assert.Contains("docs-export --index $combined", script, StringComparison.Ordinal);
         Assert.Contains("vault export --combined-index $combined", script, StringComparison.Ordinal);
         Assert.Contains("release-review --before $combined --after $combined", script, StringComparison.Ordinal);
@@ -353,7 +363,12 @@ public sealed class AccessMacroReportingTests
             [],
             [],
             [],
-            [.. macro.Gaps, .. productMacroGaps],
+            [
+                .. macro.Gaps,
+                .. productMacroGaps,
+                new("AccessUiSurfaceUnavailable", "ui-surface", null, RuleIds.LegacyAccessUiSurface),
+                new("AccessVbaProjectUnavailable", "vba-project", null, RuleIds.LegacyAccessVba)
+            ],
             [new("macros", macroCoverage)],
             Macros: macro.Macros,
             MacroInventory: new(3, null, macroCoverage));

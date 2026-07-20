@@ -250,6 +250,7 @@ catch {
     Stop-Phase9 "fixture-boundary-cleanup-failed" "fixture boundary cleanup failed"
 }
 
+try {
 Set-Phase9Stage "product-scan"
 & $AccessCli scan --repo $repo --database ($databaseRelative.Replace('\', '/')) --out $outA --timeout-seconds 120
 if ($LASTEXITCODE -ne 0) { throw "first Access scan failed" }
@@ -486,6 +487,25 @@ if ($null -ne $phase9Checkpoint) {
     $phase9Checkpoint.extractionCanariesFalse = $true
     $phase9Checkpoint.baselineFixtureUnchanged = $true
     Save-Phase9Checkpoint
+}
+}
+catch {
+    if ($null -ne $phase9Checkpoint -and
+        $phase9Checkpoint.phase9ConsumerContracts -ne "completed" -and
+        $phase9Checkpoint.failureClassification -eq "none") {
+        $failureClassification = switch ($phase9Checkpoint.stopStage) {
+            "product-scan" { "product-scan-failed" }
+            "report-validation" { "report-validation-failed" }
+            "combine-validation" { "combine-validation-failed" }
+            "docs-validation" { "docs-validation-failed" }
+            "vault-validation" { "vault-validation-failed" }
+            "release-review-validation" { "release-review-validation-failed" }
+            "safety-check" { "safety-check-failed" }
+            default { "phase9-validation-failed" }
+        }
+        Stop-Phase9 $failureClassification "Phase 9 validation failed at a recorded stage"
+    }
+    throw
 }
 
 $smokeResult = [pscustomobject]@{
