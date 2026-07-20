@@ -1,10 +1,13 @@
 # Access Design-Review Composition Implementation State
 
-Status: pr-open-ack-merge-ready
+Status: implemented-reviewed-and-merged-to-dev
 
 Branch: `codex/access-design-review-composition`
 
 Target base: `dev`
+
+Implementation PR: #506, merged as
+`6e9b5f88f4c140f139f0d810fc2434a103d58ef6`
 
 Public claim level: hidden
 
