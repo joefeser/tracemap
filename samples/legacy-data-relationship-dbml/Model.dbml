@@ -1,0 +1,17 @@
+<Database Name="Store"
+          xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007"
+          xmlns:vendor="urn:public-safe:dbml-extension">
+  <Table Name="Customers" Member="Customers">
+    <Type Name="Customer">
+      <Column Name="CustomerId" Member="CustomerId" IsPrimaryKey="true" />
+      <Column Name="TenantId" Member="TenantId" IsPrimaryKey="true" />
+      <Association Name="CustomerOrders" Type="Order" ThisKey="CustomerId" OtherKey="CustomerId" />
+      <Association Name="NeedsReview" Type="Order" ThisKey="CustomerId" OtherKey="CustomerId" />
+      <Association Name="NeedsReview" ThisKey="CustomerId" OtherKey="CustomerId" />
+      <Association Name="CompositeRelationship" Type="Order" ThisKey="CustomerId,TenantId" OtherKey="CustomerId,TenantId" />
+      <Association Name="MissingKey" Type="Order" OtherKey="CustomerId" />
+      <Association Name="MismatchedComposite" Type="Order" ThisKey="CustomerId,TenantId" OtherKey="CustomerId" />
+      <Association Name="ProviderExtended" Type="Order" ThisKey="CustomerId" OtherKey="CustomerId" vendor:Join="public-safe-extension" />
+    </Type>
+  </Table>
+</Database>

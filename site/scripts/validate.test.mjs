@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -78,6 +78,10 @@ import { siteClaimGuardrailsRoute } from "./site-claim-guardrails.mjs";
 import { staticTriageRoute } from "./static-triage.mjs";
 import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
 import { sqlOperatorHandoffInboundRoutes, sqlOperatorHandoffRoute } from "./sql-operator-handoff.mjs";
+import {
+  sqlRunbookProofPacketInboundRoutes,
+  sqlRunbookProofPacketRoute
+} from "./sql-runbook-proof-packet.mjs";
 import { swiftAdapterStoryRoute } from "./swift-adapter-story.mjs";
 import { swiftApiClientWalkthroughRoute } from "./swift-api-client-walkthrough.mjs";
 import { swiftClaimLanguageRoute } from "./swift-claim-language.mjs";
@@ -265,6 +269,7 @@ async function createDistFixture({
       staticTriageRoute,
       staticVsRuntimeRoute,
       sqlOperatorHandoffRoute,
+      sqlRunbookProofPacketRoute,
       swiftAdapterStoryRoute,
       swiftApiClientWalkthroughRoute,
       swiftClaimLanguageRoute,
@@ -343,6 +348,7 @@ async function createDistFixture({
     staticTriageRoute,
     staticVsRuntimeRoute,
     sqlOperatorHandoffRoute,
+    sqlRunbookProofPacketRoute,
     swiftAdapterStoryRoute,
     swiftApiClientWalkthroughRoute,
     swiftClaimLanguageRoute,
@@ -369,6 +375,9 @@ async function createDistFixture({
     if (sqlOperatorHandoffInboundRoutes.includes(route) && !html.includes(sqlOperatorHandoffRoute)) {
       html = html.replace("</main>", `<a href="${sqlOperatorHandoffRoute}">SQL operator handoff</a></main>`);
     }
+    if (sqlRunbookProofPacketInboundRoutes.includes(route) && !html.includes(sqlRunbookProofPacketRoute)) {
+      html = html.replace("</main>", `<a href="${sqlRunbookProofPacketRoute}">SQL runbook proof packet</a></main>`);
+    }
     await writeFile(join(dist, path, "index.html"), html, "utf8");
   }
 
@@ -376,6 +385,11 @@ async function createDistFixture({
   await writeFile(join(dist, "docs", "index.html"), docsHtml, "utf8");
   await writeFile(join(dist, "favicon.svg"), "<svg></svg>", "utf8");
   await writeFile(join(dist, "styles.css"), "body { margin: 0; }\n", "utf8");
+  await mkdir(join(dist, "assets"), { recursive: true });
+  await cp(
+    new URL("../src/assets/sql-operator-runbook-proof-packet.json", import.meta.url),
+    join(dist, "assets", "sql-operator-runbook-proof-packet.json")
+  );
   await writeFile(join(dist, "robots.txt"), robots, "utf8");
   await writeFile(join(dist, "sitemap.xml"), renderSitemap(sitemapUrls), "utf8");
   await writeDiscoveryFiles(dist);
@@ -558,6 +572,9 @@ Browser sanity: fixture-only state record for aggregate validation.
 }
 
 async function fixturePageHtml(route, path) {
+  if (route === sqlRunbookProofPacketRoute) {
+    return readFile(new URL("../src/sql/operator-handoff/proof-packet/index.html", import.meta.url), "utf8");
+  }
   if (route === sqlOperatorHandoffRoute) {
     return readFile(new URL("../src/sql/operator-handoff/index.html", import.meta.url), "utf8");
   }
@@ -988,6 +1005,17 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: "/manager-packet/",
         limitations: ["Static script evidence does not prove runtime database state or operational safety."],
         nonClaims: ["No live database access, SQL execution, secrets, raw SQL, or DBA approval."]
+      },
+      {
+        path: sqlRunbookProofPacketRoute,
+        title: "SQL runbook proof packet",
+        summary: "Synthetic public-safe SQL packet with categorical contexts, protected boundaries, gaps, and evidence provenance.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: sqlOperatorHandoffRoute,
+        limitations: ["Static fixture evidence remains reduced and does not establish runtime state."],
+        nonClaims: ["No live database access, execution, effective permission proof, or DBA approval."]
       },
       ...deployAuditRequiredRoutes.map((route) => ({
         path: route,

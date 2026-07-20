@@ -1,0 +1,362 @@
+{
+  "schemaVersion": "tracemap-public-sql-proof-packet/v1",
+  "derivedFromContract": "sql-operator-runbook-packet/v2",
+  "publicClaimLevel": "demo",
+  "purpose": "A synthetic public-safe projection of checked-in SQL evidence for manager, DBA, and operator review before any independent operator action.",
+  "source": {
+    "repository": "joefeser/tracemap",
+    "commitSha": "a522705b3b9f331d65ef4e05e723fc4d2d647f08",
+    "scanId": "public-sql-runbook-proof-v1",
+    "fixturePath": "samples/sql-operator-runbook/setup.sql",
+    "sourceKind": "checked-in-synthetic-fixture"
+  },
+  "coverage": {
+    "status": "reduced",
+    "labels": [
+      "synthetic-public-safe-example",
+      "static-analysis-only",
+      "build-not-run",
+      "validation-evidence-not-provided"
+    ],
+    "reducedComponents": [
+      "build",
+      "sql-static-analysis",
+      "runtime-observation"
+    ]
+  },
+  "contextGroups": [
+    {
+      "order": 1,
+      "serverRole": "admin",
+      "databaseRole": "admin",
+      "schemaRole": "extension",
+      "executionMode": "manual",
+      "transition": false,
+      "checkpoint": "independently-verify-active-pgadmin-tab-connection-server-and-database",
+      "stepCategories": ["extension-setup"]
+    },
+    {
+      "order": 2,
+      "serverRole": "archive-target",
+      "databaseRole": "archive-data",
+      "schemaRole": "archive",
+      "executionMode": "manual",
+      "transition": true,
+      "checkpoint": "stop-and-verify-wrong-tab-or-wrong-database-risk",
+      "stepCategories": ["foreign-server-setup", "permission-candidate", "user-mapping", "schema-import"]
+    },
+    {
+      "order": 3,
+      "serverRole": "source",
+      "databaseRole": "source-data",
+      "schemaRole": "application",
+      "executionMode": "manual",
+      "transition": true,
+      "checkpoint": "independently-verify-source-context-before-publication-intent",
+      "stepCategories": ["publication-setup"]
+    },
+    {
+      "order": 4,
+      "serverRole": "archive-target",
+      "databaseRole": "archive-data",
+      "schemaRole": "archive",
+      "executionMode": "scheduled",
+      "transition": true,
+      "checkpoint": "owner-review-required-for-scheduled-context",
+      "stepCategories": ["scheduled-operation"]
+    },
+    {
+      "order": 5,
+      "serverRole": "archive-target",
+      "databaseRole": "validation-only",
+      "schemaRole": "archive",
+      "executionMode": "validation-only",
+      "transition": true,
+      "checkpoint": "independently-verify-validation-context-without-publishing-results",
+      "stepCategories": ["validation-step"]
+    },
+    {
+      "order": 6,
+      "serverRole": "archive-target",
+      "databaseRole": "archive-data",
+      "schemaRole": "archive",
+      "executionMode": "manual",
+      "transition": true,
+      "checkpoint": "owner-review-required-before-cleanup-candidate",
+      "stepCategories": ["cleanup-candidate"]
+    }
+  ],
+  "surfaceCoverage": [
+    {
+      "surface": "postgres_fdw",
+      "status": "illustrated-by-synthetic-fixture",
+      "visibleCategories": ["extension", "foreign-server", "user-mapping", "schema-import", "permission-candidate"]
+    },
+    {
+      "surface": "dblink",
+      "status": "missing-evidence",
+      "visibleCategories": [],
+      "gap": "This fixture does not illustrate dblink extension or call boundaries."
+    },
+    {
+      "surface": "logical-replication",
+      "status": "partial",
+      "visibleCategories": ["publication"],
+      "gap": "Subscription evidence is not established in this fixture, and replication health is outside static evidence."
+    },
+    {
+      "surface": "pg_cron",
+      "status": "illustrated-by-synthetic-fixture",
+      "visibleCategories": ["extension", "scheduled-operation"],
+      "gap": "The scheduled command body is omitted and execution is not observed."
+    }
+  ],
+  "permissionStatusVocabulary": [
+    "present-in-scripts",
+    "missing-evidence",
+    "conflicting-evidence",
+    "unknown",
+    "needs-owner-review"
+  ],
+  "prerequisites": [
+    {
+      "operationCategory": "user-mapping",
+      "capabilityCategory": "usage-foreign-server",
+      "status": "present-in-scripts",
+      "contextRole": "archive-target",
+      "evidenceRef": "evidence-permission-present"
+    },
+    {
+      "operationCategory": "schema-import",
+      "capabilityCategory": "create-schema-object",
+      "status": "unknown",
+      "contextRole": "archive-target",
+      "evidenceRef": "evidence-permission-unknown"
+    },
+    {
+      "operationCategory": "scheduled-operation",
+      "capabilityCategory": "schedule-job",
+      "status": "needs-owner-review",
+      "contextRole": "scheduled",
+      "evidenceRef": "evidence-scheduled"
+    }
+  ],
+  "protectedSteps": [
+    {
+      "stepCategory": "foreign-server-setup",
+      "classification": "secret-bearing",
+      "protectedCategories": ["connection-material", "credential-option"],
+      "ownerHandling": "route-protected-material-through-owner-approved-process",
+      "valuesOmitted": true,
+      "evidenceRef": "evidence-protected-connection"
+    },
+    {
+      "stepCategory": "user-mapping",
+      "classification": "secret-bearing",
+      "protectedCategories": ["user-mapping", "credential-option"],
+      "ownerHandling": "route-protected-material-through-owner-approved-process",
+      "valuesOmitted": true,
+      "evidenceRef": "evidence-protected-mapping"
+    },
+    {
+      "stepCategory": "scheduled-operation",
+      "classification": "protected-reference",
+      "protectedCategories": ["scheduled-command-body", "remote-query-input"],
+      "ownerHandling": "review-category-only-and-keep-command-body-out-of-public-packet",
+      "valuesOmitted": true,
+      "evidenceRef": "evidence-scheduled"
+    }
+  ],
+  "milestones": [
+    {
+      "kind": "foreign-server",
+      "intentState": "intended-by-script",
+      "validationStepState": "not-established-for-this-milestone",
+      "observationState": "validation-evidence-not-provided",
+      "evidenceRef": "evidence-foreign-server"
+    },
+    {
+      "kind": "scheduled-job",
+      "intentState": "intended-by-script",
+      "validationStepState": "not-established-for-this-milestone",
+      "observationState": "validation-evidence-not-provided",
+      "evidenceRef": "evidence-scheduled"
+    },
+    {
+      "kind": "validation",
+      "intentState": "validation-step-present",
+      "validationStepState": "validation-step-present",
+      "observationState": "validation-evidence-not-provided",
+      "evidenceRef": "evidence-validation"
+    },
+    {
+      "kind": "cleanup-candidate",
+      "intentState": "intended-by-script",
+      "validationStepState": "not-established-for-this-milestone",
+      "observationState": "validation-evidence-not-provided",
+      "evidenceRef": "evidence-cleanup"
+    }
+  ],
+  "stopConditions": [
+    "verify-active-client-context-at-every-manual-transition",
+    "stop-on-wrong-tab-or-wrong-database-uncertainty",
+    "stop-at-protected-material-boundary",
+    "resolve-missing-conflicting-unknown-or-owner-review-permission-evidence",
+    "keep-validation-step-presence-separate-from-observed-results",
+    "require-owner-review-before-scheduled-or-cleanup-candidates"
+  ],
+  "gaps": [
+    {
+      "category": "archive-link",
+      "code": "direction-not-established",
+      "coverage": "reduced",
+      "evidenceRef": "evidence-foreign-server"
+    },
+    {
+      "category": "permission",
+      "code": "create-schema-object-unknown",
+      "coverage": "reduced",
+      "evidenceRef": "evidence-permission-unknown"
+    },
+    {
+      "category": "surface",
+      "code": "dblink-not-illustrated",
+      "coverage": "missing-evidence",
+      "evidenceRef": "evidence-fixture-boundary"
+    },
+    {
+      "category": "surface",
+      "code": "logical-subscription-not-illustrated",
+      "coverage": "missing-evidence",
+      "evidenceRef": "evidence-publication"
+    }
+  ],
+  "ownerQuestions": [
+    "Who independently verifies the active pgAdmin tab, connection, server, database, schema, and role at each transition?",
+    "Who owns the approved handling path for user-mapping, connection, remote-query, and scheduled-command categories?",
+    "Which DBA validates unresolved permission prerequisite candidates outside TraceMap?",
+    "Who confirms the intended order across manual, scheduled, validation, and cleanup contexts?",
+    "Who performs independent runtime validation and records it outside this static public packet?"
+  ],
+  "evidence": [
+    {
+      "id": "evidence-foreign-server",
+      "ruleId": "database.postgres.archive-link.v1",
+      "evidenceTier": "Tier2Structural",
+      "filePath": "samples/sql-operator-runbook/setup.sql",
+      "lineSpan": { "startLine": 4, "endLine": 4 },
+      "extractorId": "PostgresArchiveLinkExtractor",
+      "extractorVersion": "postgres-archive-link/0.1.0",
+      "coverage": "complete",
+      "commitSha": "a522705b3b9f331d65ef4e05e723fc4d2d647f08"
+    },
+    {
+      "id": "evidence-permission-present",
+      "ruleId": "database.postgres.permission.coverage.v1",
+      "evidenceTier": "Tier2Structural",
+      "filePath": "samples/sql-operator-runbook/setup.sql",
+      "lineSpan": { "startLine": 8, "endLine": 8 },
+      "extractorId": "PostgresPermissionEvidenceExtractor",
+      "extractorVersion": "postgres-permission-evidence/0.1.0",
+      "coverage": "complete",
+      "commitSha": "a522705b3b9f331d65ef4e05e723fc4d2d647f08"
+    },
+    {
+      "id": "evidence-permission-unknown",
+      "ruleId": "database.postgres.permission.coverage.v1",
+      "evidenceTier": "Tier2Structural",
+      "filePath": "samples/sql-operator-runbook/setup.sql",
+      "lineSpan": { "startLine": 10, "endLine": 10 },
+      "extractorId": "PostgresPermissionEvidenceExtractor",
+      "extractorVersion": "postgres-permission-evidence/0.1.0",
+      "coverage": "reduced",
+      "commitSha": "a522705b3b9f331d65ef4e05e723fc4d2d647f08"
+    },
+    {
+      "id": "evidence-protected-connection",
+      "ruleId": "database.sql.secret-bearing-step.v1",
+      "evidenceTier": "Tier2Structural",
+      "filePath": "samples/sql-operator-runbook/setup.sql",
+      "lineSpan": { "startLine": 4, "endLine": 4 },
+      "extractorId": "SqlSecretSafetyExtractor",
+      "extractorVersion": "sql-secret-safety/0.1.0",
+      "coverage": "complete",
+      "commitSha": "a522705b3b9f331d65ef4e05e723fc4d2d647f08"
+    },
+    {
+      "id": "evidence-protected-mapping",
+      "ruleId": "database.sql.secret-bearing-step.v1",
+      "evidenceTier": "Tier2Structural",
+      "filePath": "samples/sql-operator-runbook/setup.sql",
+      "lineSpan": { "startLine": 8, "endLine": 8 },
+      "extractorId": "SqlSecretSafetyExtractor",
+      "extractorVersion": "sql-secret-safety/0.1.0",
+      "coverage": "complete",
+      "commitSha": "a522705b3b9f331d65ef4e05e723fc4d2d647f08"
+    },
+    {
+      "id": "evidence-scheduled",
+      "ruleId": "database.postgres.archive-link.v1",
+      "evidenceTier": "Tier2Structural",
+      "filePath": "samples/sql-operator-runbook/setup.sql",
+      "lineSpan": { "startLine": 16, "endLine": 16 },
+      "extractorId": "PostgresArchiveLinkExtractor",
+      "extractorVersion": "postgres-archive-link/0.1.0",
+      "coverage": "complete",
+      "commitSha": "a522705b3b9f331d65ef4e05e723fc4d2d647f08"
+    },
+    {
+      "id": "evidence-validation",
+      "ruleId": "database.sql.context.declaration.v1",
+      "evidenceTier": "Tier2Structural",
+      "filePath": "samples/sql-operator-runbook/setup.sql",
+      "lineSpan": { "startLine": 17, "endLine": 17 },
+      "extractorId": "SqlExecutionContextExtractor",
+      "extractorVersion": "sql-execution-context/0.1.0",
+      "coverage": "complete",
+      "commitSha": "a522705b3b9f331d65ef4e05e723fc4d2d647f08"
+    },
+    {
+      "id": "evidence-cleanup",
+      "ruleId": "database.sql.context.declaration.v1",
+      "evidenceTier": "Tier2Structural",
+      "filePath": "samples/sql-operator-runbook/setup.sql",
+      "lineSpan": { "startLine": 19, "endLine": 19 },
+      "extractorId": "SqlExecutionContextExtractor",
+      "extractorVersion": "sql-execution-context/0.1.0",
+      "coverage": "complete",
+      "commitSha": "a522705b3b9f331d65ef4e05e723fc4d2d647f08"
+    },
+    {
+      "id": "evidence-publication",
+      "ruleId": "database.postgres.archive-link.v1",
+      "evidenceTier": "Tier2Structural",
+      "filePath": "samples/sql-operator-runbook/setup.sql",
+      "lineSpan": { "startLine": 14, "endLine": 14 },
+      "extractorId": "PostgresArchiveLinkExtractor",
+      "extractorVersion": "postgres-archive-link/0.1.0",
+      "coverage": "complete",
+      "commitSha": "a522705b3b9f331d65ef4e05e723fc4d2d647f08"
+    },
+    {
+      "id": "evidence-fixture-boundary",
+      "ruleId": "database.sql.operator-runbook.packet.v1",
+      "evidenceTier": "Tier4Unknown",
+      "filePath": "samples/sql-operator-runbook/setup.sql",
+      "lineSpan": { "startLine": 1, "endLine": 20 },
+      "extractorId": "SqlRunbookPacketBuilder",
+      "extractorVersion": "sql-runbook-packet/0.1.0",
+      "coverage": "reduced",
+      "commitSha": "a522705b3b9f331d65ef4e05e723fc4d2d647f08"
+    }
+  ],
+  "limitations": [
+    "This is a synthetic public-safe projection, not raw scanner output or an execution plan.",
+    "TraceMap does not connect to a live database, execute SQL, or observe the active pgAdmin tab or connection.",
+    "Static permission evidence does not establish effective authorization.",
+    "Checked-in validation-step presence does not establish an observed validation result.",
+    "Publication evidence does not establish replication health, and a scheduled surface does not establish that a job ran.",
+    "Cleanup evidence is an intended candidate and does not establish completion or reversibility.",
+    "The packet does not certify operational safety, approve operator action, or replace DBA and operator judgment."
+  ]
+}

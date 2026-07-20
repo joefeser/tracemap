@@ -6,7 +6,8 @@ import {
   fileExists,
   normalizeBaseUrl,
   normalizeRenderedText,
-  readSitemapLocSet
+  readSitemapLocSet,
+  stripTagsQuoteAware
 } from "./validate-utils.mjs";
 
 export const siteClaimGuardrailsRoute = "/site-claim-guardrails/";
@@ -390,38 +391,6 @@ function hardPrivateSearchText({ decodedHtml, html, pageText }) {
 
 function collapseTagSplitTextTight(html) {
   return decodeHtmlEntities(stripTagsQuoteAware(String(html))).replace(/\s+/g, "");
-}
-
-function stripTagsQuoteAware(html) {
-  let text = "";
-  let insideTag = false;
-  let quote = "";
-
-  for (const char of html) {
-    if (!insideTag) {
-      if (char === "<") {
-        insideTag = true;
-      } else {
-        text += char;
-      }
-      continue;
-    }
-
-    if (quote) {
-      if (char === quote) {
-        quote = "";
-      }
-      continue;
-    }
-
-    if (char === '"' || char === "'") {
-      quote = char;
-    } else if (char === ">") {
-      insideTag = false;
-    }
-  }
-
-  return text;
 }
 
 function safeErrorCategory(error) {

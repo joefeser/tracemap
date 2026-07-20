@@ -4,7 +4,7 @@ import { FileInventoryItem, ScanOptions } from "../facts/Models";
 import { matchesSimpleGlob, normalizePath, repoRelative } from "../util/Paths";
 
 const defaultExcludedNames = new Set([".git", "node_modules", ".pnpm-store", "dist", "build", "coverage", ".angular", ".next", ".nuxt", ".turbo"]);
-const sourceExtensions = new Set([".ts", ".tsx", ".d.ts", ".json", ".html"]);
+const sourceExtensions = new Set([".ts", ".tsx", ".d.ts", ".js", ".jsx", ".json", ".html", ".sql"]);
 
 export async function collectFileInventory(options: ScanOptions): Promise<FileInventoryItem[]> {
   const repoPath = path.resolve(options.repoPath);
@@ -61,7 +61,7 @@ function isSupported(relativePath: string): boolean {
   if (/^tsconfig.*\.json$/.test(path.basename(relativePath))) {
     return true;
   }
-  return sourceExtensions.has(path.extname(relativePath)) && !relativePath.endsWith(".js");
+  return sourceExtensions.has(path.extname(relativePath));
 }
 
 function kindFor(relativePath: string): string {
@@ -74,8 +74,17 @@ function kindFor(relativePath: string): string {
   if (relativePath.endsWith(".ts")) {
     return "typescript";
   }
+  if (relativePath.endsWith(".jsx")) {
+    return "javascript-jsx";
+  }
+  if (relativePath.endsWith(".js")) {
+    return "javascript";
+  }
   if (relativePath.endsWith(".html")) {
     return "angular-template";
+  }
+  if (relativePath.endsWith(".sql")) {
+    return "sql-migration";
   }
   if (path.basename(relativePath) === "package.json") {
     return "package-json";

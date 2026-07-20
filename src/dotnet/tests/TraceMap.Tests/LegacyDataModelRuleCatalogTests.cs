@@ -71,6 +71,58 @@ public sealed class LegacyDataModelRuleCatalogTests
         Assert.DoesNotContain("      - LegacyDataModelSurfaceProjected", block, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Relationship_rule_catalogs_closed_classifier_vocabulary_and_existing_gap_ownership()
+    {
+        var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
+        var relationship = RuleBlock(catalog, RuleIds.LegacyDataModelRelationship);
+
+        AssertCatalogList(relationship, "safeReasonCodes",
+        [
+            "deterministic-relationship",
+            "missing-endpoint",
+            "duplicate-relationship-identity",
+            "ambiguous-endpoint-candidates",
+            "unsupported-relationship-shape",
+            "reduced-parser-coverage",
+            "unsafe-redacted-endpoint-identity",
+            "not-in-scope"
+        ]);
+        AssertCatalogList(relationship, "gapClassifications",
+        [
+            "AmbiguousLegacyDataModelIdentity",
+            "IncompleteLegacyDataModelRelationship",
+            "ReducedLegacyDataModelRelationshipCoverage",
+            "UnsupportedLegacyOrmDescriptor",
+            "UnsupportedLegacyOrmMappingShape"
+        ]);
+        AssertCatalogList(relationship, "limitationCodes",
+        [
+            "ambiguous-constraint-name",
+            "constraint-endpoint-needs-review",
+            "duplicate-relationship-name",
+            "inherited-endpoint-needs-review",
+            "missing-endpoint",
+            "missing-endpoint-type",
+            "missing-relationship-endpoint",
+            "missing-source-endpoint",
+            "missing-target-endpoint",
+            "duplicate-relationship-identity",
+            "ambiguous-endpoint-candidates",
+            "unsupported-relationship-shape",
+            "reduced-parser-coverage",
+            "unsafe-redacted-endpoint-identity"
+        ]);
+        Assert.Contains("      - descriptorOrdinal", relationship, StringComparison.Ordinal);
+        Assert.Contains("AmbiguousLegacyDataModelIdentity", RuleBlock(catalog, RuleIds.LegacyDataDbml), StringComparison.Ordinal);
+        Assert.Contains("UnsupportedLegacyOrmMappingShape", RuleBlock(catalog, RuleIds.LegacyDataDbml), StringComparison.Ordinal);
+        Assert.Contains("AmbiguousLegacyDataModelIdentity", RuleBlock(catalog, RuleIds.LegacyDataEdmx), StringComparison.Ordinal);
+        Assert.Contains("AmbiguousLegacyDataModelIdentity", RuleBlock(catalog, RuleIds.LegacyDataTypedDataSet), StringComparison.Ordinal);
+        Assert.Contains("AmbiguousLegacyDataModelIdentity", RuleBlock(catalog, RuleIds.LegacyDataOrmNHibernate), StringComparison.Ordinal);
+        Assert.Contains("UnsupportedLegacyOrmMappingShape", RuleBlock(catalog, RuleIds.LegacyDataOrmNHibernate), StringComparison.Ordinal);
+        Assert.Contains("UnsupportedLegacyOrmDescriptor", RuleBlock(catalog, RuleIds.LegacyDataOrmUnsupported), StringComparison.Ordinal);
+    }
+
     private static string RuleBlock(string catalog, string ruleId)
     {
         var startMatch = Regex.Match(catalog, $@"(?m)^\s*-\s*id:\s*{Regex.Escape(ruleId)}\s*$");
@@ -88,6 +140,18 @@ public sealed class LegacyDataModelRuleCatalogTests
         var match = Regex.Match(ruleBlock, @"(?m)^\s*evidenceTier:\s*(\S+)\s*$");
         Assert.True(match.Success, "Rule catalog entry is missing a single evidenceTier value.");
         return match.Groups[1].Value;
+    }
+
+    private static void AssertCatalogList(string ruleBlock, string key, IReadOnlyList<string> expected)
+    {
+        var match = Regex.Match(
+            ruleBlock,
+            $@"(?ms)^\s*{Regex.Escape(key)}:\s*\n(?<items>(?:\s+-\s+[^\r\n]+\r?\n?)+)");
+        Assert.True(match.Success, $"Rule catalog entry is missing {key}.");
+        var actual = Regex.Matches(match.Groups["items"].Value, @"(?m)^\s+-\s+(\S+)\s*$")
+            .Select(item => item.Groups[1].Value)
+            .ToArray();
+        Assert.Equal(expected, actual);
     }
 
     private static string FindRepoRoot()
