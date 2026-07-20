@@ -219,6 +219,10 @@ agent-authored probe:
   -InputExplicitlyAuthorized
 ```
 
+`-ScratchRoot` must name a new, nonexistent, non-filesystem-root path beneath
+the operator's restricted disposable parent. The harness refuses an existing
+path instead of recursively deleting caller-owned contents.
+
 The representative workflow hashes the original in memory, stream-copies it
 under a generic name into a disposable no-remote Git repository, scans two
 sequential and two concurrent working copies, validates standard artifacts and

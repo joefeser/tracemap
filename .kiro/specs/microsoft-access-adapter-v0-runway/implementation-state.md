@@ -648,6 +648,21 @@ networking, exited processes, and a clean exact-head worktree. These results do
 not claim row contents, execution, runtime reachability, production state,
 release approval, or that the database or any change is safe.
 
+PR #495 review hardening makes the positive nullable macro-count predicate
+explicit, rejects missing or malformed sequential/concurrent job exit results,
+checks the emitted `AccessNavigationCandidate` and
+`AccessEventBindingCandidate` fact types in the zero-flow canary, disposes both
+copy streams across partial-open failures, refuses existing or filesystem-root
+representative scratch paths instead of recursively deleting caller-owned
+contents, and simplifies the synthetic marker-present condition. The review
+delta adds no COM read and does not widen extraction. The successful issue #491
+representative result remains pinned to `f3103555`; another representative run
+is deferred because the reviewed changes affect harness failure detection,
+filesystem safety, and an equivalent positive-count expression rather than the
+approved Access read boundary. The post-review head passes 9 focused tests, the
+full solution build/test, seven artifact-validator tests, the two-test ACK lane
+regression, the private-path guard, and `git diff --check`.
+
 The Phase 9 generator layer adds a second form button classified as
 `[Embedded Macro]` with a protected caption marker, but deliberately supplies
 no body. Named and data macro fixture creation remains deferred to the Windows
