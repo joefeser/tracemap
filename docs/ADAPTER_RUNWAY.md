@@ -125,6 +125,23 @@ standardization remains a versioned compatibility decision: v1 requires stable
 adapter-local IDs and preserved source IDs through combine, not identical
 cross-language identity formulas.
 
+### Microsoft Access design-evidence runway
+
+Microsoft Access is a bounded data-design evidence follow-up, not a new language
+family and not a departure from the deepen-before-broadening direction. A local
+feasibility pass established that installed Access/DAO automation can expose
+deterministic structural metadata without reading rows or executing saved
+queries. The proposed v0 runway is specified in
+`.kiro/specs/microsoft-access-adapter-v0-runway/`.
+
+Implementation remains gated by stronger product controls than the feasibility
+prototype: a clean Git-tracked database at a concrete commit, a verified private
+working copy, forced startup/macro suppression, hostile non-execution canaries,
+standard TraceMap artifacts, rule-backed gaps, and raw SQL/connection/VBA/macro
+suppression. The first slice is schema, relationships, saved-query shape, and
+external-boundary hashes only. Forms/reports, VBA flow, macros, composition, and
+public claims remain separate follow-ups.
+
 The near-term priority order is:
 
 1. Strengthen current evidence lanes.

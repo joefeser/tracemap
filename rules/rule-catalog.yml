@@ -3,6 +3,78 @@
 # - deferred: documented future/planned rule that must not appear in emitted facts.
 # Existing rules without an explicit status are treated as active.
 rules:
+  - id: base44.sdk.import.v1
+    name: Base44 SDK import
+    description: Records syntax-visible Base44 SDK imports and their requested package/version identity.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44SdkImport]
+    limitations:
+      - Import evidence does not prove package resolution, substitution, bundling, browser execution, or runtime compatibility.
+
+  - id: base44.sdk.primitive.v1
+    name: Base44 SDK primitive call
+    description: Records syntax-visible Base44 auth, entity, function, integration, Analytics, and AppLogs call chains.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44SdkPrimitive]
+    limitations:
+      - Static call syntax does not prove runtime reachability, execution, authorization, response compatibility, or provider delivery.
+
+  - id: base44.function.invocation.v1
+    name: Base44 frontend function invocation
+    description: Records static or explicitly dynamic Base44 function invocation targets.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44FunctionInvocation]
+    limitations:
+      - A named invocation does not prove route binding or execution; dynamic targets remain Tier4Unknown.
+
+  - id: base44.function.surface.v1
+    name: Base44 function source surface
+    description: Records exported Base44 function entry surfaces and statically visible handler kind.
+    evidenceTier: Tier2Structural
+    emits: [Base44FunctionSurface]
+    limitations:
+      - Source presence does not prove deployment, reachability, isolation, callback exposure, or runtime execution; unknown handlers remain Tier4Unknown.
+
+  - id: base44.entity.operation.v1
+    name: Base44 entity operation
+    description: Records syntax-visible Base44 entity names and CRUD or subscription operations.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44EntityOperation]
+    limitations:
+      - Entity calls do not prove schema, migration, RLS, service-role, tenant isolation, persistence, or runtime success.
+
+  - id: base44.environment.access.v1
+    name: Base44 function environment access
+    description: Records environment variable names or explicit dynamic access gaps without values.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44EnvironmentAccess]
+    limitations:
+      - Environment access does not prove secret existence, value correctness, IAM access, deployment materialization, or runtime use; dynamic names remain Tier4Unknown.
+
+  - id: base44.http.target.v1
+    name: Base44 customer/provider HTTP target
+    description: Records hashed static origins or explicit dynamic HTTP target gaps without URL paths, queries, or credentials.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44HttpTarget]
+    limitations:
+      - Static target evidence does not prove network reachability, authentication, provider configuration, callback registration, delivery, or runtime execution; dynamic targets remain Tier4Unknown.
+
+  - id: base44.migration.surface.v1
+    name: Base44 SQL migration surface
+    description: Records SQL migration file hashes and visible statement-kind inventory without raw SQL.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44MigrationSurface]
+    limitations:
+      - Migration source does not prove SQL validity, execution, completion, schema state, RLS correctness, rollback, or runtime compatibility.
+
+  - id: base44.customer.boundary.v1
+    name: Base44 customer-authored source boundary
+    description: Identifies customer-authored Base44 function and entity source boundaries without reclassifying their behavior as platform-owned.
+    evidenceTier: Tier2Structural
+    emits: [Base44CustomerBoundary]
+    limitations:
+      - Ownership classification does not prove safety, support, reachability, runtime execution, or migration readiness.
+
   - id: explorer.input.unsupported-schema.v1
     name: Static HTML explorer unsupported input schema
     description: Records generated artifacts that the local static HTML evidence explorer discovered but cannot safely parse in the current implementation slice.
@@ -937,6 +1009,17 @@ rules:
       - An omission gap describes vault packaging limits and does not prove terminal context, runtime behavior, or source evidence is absent.
       - Diagnostics remain category-based and do not echo unsafe metadata, raw local paths, report internals, snippets, SQL/config values, remotes, or secrets.
 
+  - id: vault-export.gap.access-evidence-consumer-unsupported.v1
+    name: Vault export Access evidence consumer gap
+    description: Records when Microsoft Access facts are present in a combined index but vault export has no dedicated Access count, identity, or flow projection.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AccessEvidenceConsumerUnsupported
+    limitations:
+      - The gap preserves bounded supporting Access fact IDs but does not convert catalog counts or coverage gaps into Access identity, navigation, flow, runtime, or impact conclusions.
+      - It does not prove Access evidence is absent, that a database object exists or executes, or that a change is safe or approved.
+      - Supporting IDs are stable TraceMap identifiers; raw database names, paths, SQL, connections, VBA, macro bodies, expressions, and protected material are not rendered.
+
   - id: public.demo.summary.v1
     name: Public demo summary section
     description: Records public demo workflow section status, coverage labels, artifact references, and deterministic counts produced by checked-in validation scripts.
@@ -1323,6 +1406,143 @@ rules:
       - Safe properties include metadataKind, metadataHash, inventoryKind, repo-relative path, coverage, and limitation.
       - Raw SQL, connection strings, config values, URLs, remotes, local absolute paths, source snippets, and secrets are hashed or omitted.
 
+  - id: legacy.access.database.inventory.v1
+    name: Microsoft Access database inventory
+    description: Records a clean Git-bound Access database and safe local extractor capability evidence.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - FileInventoried
+      - LegacyDataMetadataDeclared
+      - AnalyzerCapabilityDiagnostic
+      - AnalysisGap
+    limitations:
+      - Inventory and capability rows describe static local extraction only and do not prove database integrity, runtime behavior, record contents, query or macro execution, linked-source access, deployment, or production use.
+      - The database must be a clean tracked file at the checked-out commit and is opened only through a verified private working copy on Windows with installed Microsoft Access.
+      - Binary catalog objects use the owning database path at span 1:1; this anchors the container and is not a fabricated source line.
+      - Raw rows, SQL, connection strings, VBA, macro bodies, form/report expressions, URLs, hosts, credentials, and local absolute paths are omitted or role-hashed.
+
+  - id: legacy.access.schema.v1
+    name: Microsoft Access schema catalog
+    description: Extracts local table, field, index, key, and declared relationship metadata through non-recordset Access/DAO catalog collections.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - LegacyDataEntityDeclared
+      - LegacyDataStorageObjectDeclared
+      - LegacyDataColumnDeclared
+      - LegacyDataMappingDeclared
+      - AnalysisGap
+    limitations:
+      - Catalog evidence does not prove live constraints, row contents, query execution, calculated values, linked schema freshness, provider behavior, permissions, runtime reachability, or production use.
+      - System, temporary, hidden, linked-result, attachment, OLE, and value-bearing content is not inspected as record data.
+      - Ambiguous, unavailable, unsafe, or limit-truncated metadata is a gap rather than an inferred schema conclusion.
+      - Unsafe object names, private paths, connections, source values, SQL, snippets, and secrets are omitted or role-hashed.
+
+  - id: legacy.access.query.v1
+    name: Microsoft Access saved-query shape
+    description: Records saved-query kind, parameter metadata, full text hash/length, and bounded local-object dependency candidates without executing or materializing queries.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AccessQueryDeclared
+      - AccessQueryDependencyCandidate
+      - AnalysisGap
+    limitations:
+      - Query evidence does not prove execution, result shape, parameter values, branch selection, provider behavior, linked-source availability, permissions, runtime reachability, or production use.
+      - Raw query SQL never persists; only a full SHA-256, length, safe kind, parameters, and deterministically parsed local-object candidates may be emitted.
+      - Dynamic, malformed, ambiguous, unsupported, action, DDL, union, crosstab, and pass-through shapes remain partial or gaps where dependency projection is not credible.
+      - Query result fields and recordsets are never enumerated for pass-through, action, DDL, or unsafe query kinds.
+
+  - id: legacy.access.external-link.v1
+    name: Microsoft Access external boundary
+    description: Records hash-only linked-table and pass-through boundary metadata without refreshing or connecting to the external source.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AccessExternalLinkDeclared
+      - AnalysisGap
+    limitations:
+      - External-boundary evidence does not prove connectivity, credentials, authentication, authorization, reachable hosts/files, linked schema freshness, query execution, deployment, or production state.
+      - Connection strings, DSNs, URLs, hosts, catalogs, users, credentials, UNC paths, drive paths, and external filenames are never rendered; only role-separated full SHA-256 values and safe source-family classifications may persist.
+      - The extractor does not refresh linked tables, enumerate external rows, or materialize pass-through results.
+
+  - id: legacy.access.ui-surface.v1
+    name: Microsoft Access form and report design surface
+    description: Records safe form, report, and control design metadata obtained without rendering, invoking, or executing the surface.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AccessFormDeclared
+      - AccessReportDeclared
+      - AccessControlDeclared
+      - AnalysisGap
+    limitations:
+      - Surface evidence is static design metadata and does not prove rendering, navigation, visibility, enabled state, user access, submitted values, event execution, filter outcomes, printed output, runtime reachability, deployment, or production use.
+      - Captions, labels, status text, validation messages, literal values, filters, ordering text, raw record/control/row-source expressions, images, OLE contents, VBA, and macro bodies are omitted or role-hashed.
+      - A surface or control that cannot be inspected without loading, rendering, exporting protected text outside the private worker, or invoking Access behavior is reported as a gap rather than opened or inferred.
+      - Binary catalog evidence uses the owning database path at span 1:1; this anchors the container and is not a source-line claim.
+
+  - id: legacy.access.binding.v1
+    name: Microsoft Access static design binding candidate
+    description: Records direct form/report/control source bindings and bounded expression reference candidates from protected design metadata without evaluating expressions.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - AccessBindingDeclared
+      - AnalysisGap
+    limitations:
+      - Direct bindings prove only a declared design reference; expression candidates are bounded textual evidence and do not prove evaluation, runtime target selection, data access, event execution, filter outcomes, navigation, or production use.
+      - Raw record sources, control sources, row sources, filters, ordering expressions, validation expressions, calculated expressions, SQL, VBA, and macro bodies never persist; complex values retain only role-separated hashes, lengths, safe target keys, and coverage labels.
+      - Ambiguous, dynamic, unsupported, or unresolved targets are explicit gaps; the extractor does not choose an arbitrary object or field.
+      - Binding extraction never opens a recordset, executes a query, renders a surface, invokes an event, or reads a submitted/control value.
+
+  - id: legacy.access.vba.v1
+    name: Microsoft Access bounded VBA declaration and call candidate
+    description: Records safe module/procedure declarations and bounded textual call or navigation candidates from VBA source inspected only in memory.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - AccessVbaModuleDeclared
+      - AccessVbaProcedureDeclared
+      - AccessNavigationCandidate
+      - AnalysisGap
+    limitations:
+      - The Access v0 product reader does not acquire VBA source and therefore emits no module, procedure, call, navigation, or event-binding facts from a database scan; it records only bounded module-count metadata plus AccessVbaProjectUnavailable. Richer evidence requires a separately security-reviewed source mechanism.
+      - VBA evidence is bounded textual evidence and does not prove runtime dispatch, branch feasibility, error-handler outcome, query execution, record access, navigation, COM resolution, external process execution, deployment, or production use.
+      - Raw source, declaration text, comments, string literals, SQL, connection values, command bodies, and local paths never persist; modules and dynamic expressions retain only role-separated hashes, lengths, counts, safe identities, and real module line coordinates.
+      - Ordinary call matching excludes comments and string contents. Literal targets are considered only for allowlisted Access/DAO call shapes and are emitted through the role-specific safe identifier policy or as hashes.
+      - Variables, concatenation, Eval, Run, callbacks, reflection-like dispatch, external libraries, conditional targets, malformed modules, and limit hits are explicit gaps rather than inferred targets.
+
+  - id: legacy.access.event-binding.v1
+    name: Microsoft Access event procedure binding candidate
+    description: Records an exact same-module candidate between an event-procedure design property and a bounded VBA procedure declaration.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - AccessEventBindingCandidate
+      - AnalysisGap
+    limitations:
+      - Event binding candidates prove only an exact static naming match in the owning module; they do not prove event firing, runtime dispatch, user interaction, branch feasibility, rendering, navigation, deployment, or production use.
+      - Missing, ambiguous, dynamic, expression, and embedded-macro handlers remain gaps or separately classified surface evidence; the extractor never invokes an event or persists an event expression or macro body.
+      - Procedure and owner identities follow safe/hash policy, and VBA source never crosses worker IPC or enters artifacts.
+
+  - id: legacy.access.macro-gap.v1
+    name: Microsoft Access macro inventory and protected-body gap
+    description: Records safe named, UI, data, embedded, or startup macro inventory while explicitly omitting all command bodies and arguments.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - AccessMacroDeclared
+      - AnalysisGap
+    limitations:
+      - The Access v0 product reader observes only a bounded named-macro catalog count. Access does not document a loaded-macro collection suitable for a count-only canary, so loaded state remains an explicit gap. The reader emits no macro identities or startup, embedded, data-macro, action, argument, condition, expression, or body evidence; unavailable categories and protected bodies remain explicit gaps.
+      - Macro inventory proves only that a static catalog declaration was observed; it does not prove command semantics, event attachment, startup selection, execution, branch behavior, data access, external effects, deployment, or production use.
+      - Macro commands, arguments, conditions, expressions, embedded macro text, action bodies, SQL, paths, connections, credentials, and scheduled command bodies are never inspected for semantics or persisted.
+      - Every observed macro category carries an explicit protected-body omission gap. Absence of projected body evidence is not a claim that the macro is empty, harmless, unreachable, or safe.
+      - The extractor never opens, runs, exports, imports, edits, or evaluates a macro and never invokes a startup form, startup function, event, or command.
+
+  - id: legacy.access.coverage-gap.v1
+    name: Microsoft Access extraction coverage gap
+    description: Records bounded platform, COM/provider, trust, timeout, cleanup, parsing, ambiguity, unsafe-value, or extraction-limit gaps.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - A gap records an unable-to-prove boundary and never proves absence, safety, runtime behavior, data state, query execution, linked-source availability, permissions, deployment, or production use.
+      - Diagnostics are classification-only; raw exceptions, local paths, SQL, connections, VBA, macro content, source values, and secrets are omitted.
+
   - id: legacy.data.dbml.v1
     name: Legacy LINQ to SQL DBML metadata
     description: Extracts safe DBML entity, table, column, association, and routine descriptor evidence from checked-in metadata.
@@ -1336,6 +1556,8 @@ rules:
     limitations:
       - DBML metadata is static design-time evidence and does not prove database existence, LINQ runtime behavior, routine existence, lazy loading, query execution, or provider compatibility.
       - Generated-code linkage is separate evidence and does not upgrade metadata descriptor tier.
+      - AmbiguousLegacyDataModelIdentity owns duplicate or ambiguous DBML descriptor identity gaps; such gaps do not select an authoritative relationship endpoint.
+      - UnsupportedLegacyOrmMappingShape owns foreign-namespace DBML association extension gaps; such gaps do not prove provider support or a runtime mapping failure.
       - Safe reducer-facing properties include entityName, typeName, tableName, storageObjectName, propertyName, fieldName, columnName, mappingKind, and hash variants for unsafe identifiers.
       - Unsafe names, provider metadata, database names, connection names, and routine identifiers are hashed or omitted when required.
 
@@ -1351,6 +1573,7 @@ rules:
       - AnalysisGap
     limitations:
       - EDMX metadata is static design-time evidence and does not prove EF runtime model loading, lazy loading, change tracking, query execution, provider compatibility, migrations, or schema existence.
+      - AmbiguousLegacyDataModelIdentity and UnsupportedLegacyOrmMappingShape own ambiguous and unsupported EDMX descriptor gaps; neither classification proves a runtime model error.
       - Complex, inherited, split, conditional, many-to-many, duplicate-container, and provider-extension mappings are gaps unless a future spec defines deterministic handling.
       - Safe reducer-facing properties include entityName, typeName, tableName, storageObjectName, propertyName, fieldName, columnName, mappingKind, and hash variants for unsafe identifiers.
       - Namespace URIs, provider details, unsafe identifiers, and raw metadata content are hashed or omitted.
@@ -1369,6 +1592,7 @@ rules:
       - AnalysisGap
     limitations:
       - Typed DataSet metadata is static design-time evidence and does not prove adapter execution, stored-procedure existence, command reachability, SQL execution, provider compatibility, or database schema existence.
+      - AmbiguousLegacyDataModelIdentity owns duplicate or ambiguous typed DataSet descriptor identity gaps; such gaps do not infer a relationship from SQL text or generated names.
       - Raw SQL command text is never stored; complete static command text may produce only existing hash/length and safe shape evidence.
       - Safe reducer-facing properties include entityName, typeName, tableName, storageObjectName, propertyName, fieldName, columnName, mappingKind, textHash, textLength, queryShapeHash, and hash variants for unsafe identifiers.
       - Unrelated XSD files, dynamic commands, incomplete schemas, unsupported provider metadata, and stale or missing generated code remain gaps or unsupported evidence.
@@ -1421,8 +1645,55 @@ rules:
     evidenceTier: Tier2Structural
     emits:
       - AnalysisGap
+    gapClassifications:
+      - AmbiguousLegacyDataModelIdentity
+      - IncompleteLegacyDataModelRelationship
+      - ReducedLegacyDataModelRelationshipCoverage
+      - UnsupportedLegacyOrmDescriptor
+      - UnsupportedLegacyOrmMappingShape
+    safeReasonCodes:
+      - deterministic-relationship
+      - missing-endpoint
+      - duplicate-relationship-identity
+      - ambiguous-endpoint-candidates
+      - unsupported-relationship-shape
+      - reduced-parser-coverage
+      - unsafe-redacted-endpoint-identity
+      - not-in-scope
+    coverageLabels:
+      - full
+      - reduced
+    relationshipEndpointCoverageLabels:
+      - full
+      - unidirectional
+    limitationCodes:
+      - ambiguous-constraint-name
+      - constraint-endpoint-needs-review
+      - duplicate-relationship-name
+      - inherited-endpoint-needs-review
+      - missing-endpoint
+      - missing-endpoint-type
+      - missing-relationship-endpoint
+      - missing-source-endpoint
+      - missing-target-endpoint
+      - duplicate-relationship-identity
+      - ambiguous-endpoint-candidates
+      - unsupported-relationship-shape
+      - reduced-parser-coverage
+      - unsafe-redacted-endpoint-identity
+    safeProperties:
+      - classification
+      - coverage
+      - descriptorKind
+      - descriptorOrdinal
+      - limitations
+      - modelRelationshipRuleId
+      - relationshipFamily
+      - runtimeProof
+      - safeReasonCode
     limitations:
       - This rule owns derived relationship semantics and availability gaps; source extractors continue to emit LegacyDataMappingDeclared under their source rule IDs.
+      - The closed safeReasonCodes registry is machine-readable classifier vocabulary; reason codes never contain relationship names, endpoint identities, key values, SQL, config, paths, remotes, URLs, or secrets.
       - Relationship evidence is static descriptor metadata and does not prove database constraints, runtime navigation, lazy loading, cascade behavior, query execution, schema existence, deployment, provider compatibility, or production usage.
       - Existing source mappingKind values such as association, relation, entity-storage, property-column, adapter-command, orm-class, and orm-property remain stable; model relationship semantics are additive.
       - Bidirectional relationships require deterministic endpoints; unidirectional, ambiguous, duplicate, inherited, split, conditional, many-to-many, provider-specific, or unsupported shapes are gaps or needs-review evidence.
@@ -1442,6 +1713,8 @@ rules:
       - AnalysisGap
     limitations:
       - NHibernate mapping evidence is checked-in XML metadata only and does not prove session factory loading, runtime mapping validity, lazy loading, cascade behavior, dirty tracking, query execution, database schema existence, provider compatibility, deployment, or production usage.
+      - AmbiguousLegacyDataModelIdentity owns NHibernate relationship descriptors with multiple deterministic endpoint candidates; no candidate is selected and no relationship fact is emitted for that descriptor.
+      - UnsupportedLegacyOrmMappingShape owns recognized NHibernate relationship constructs outside deterministic handling; it is a static coverage gap, not a runtime mapping failure.
       - XML parsing uses the legacy data safe parser bounds and rejects DTDs, external entities, malformed input, oversized input, excessive node count, and excessive depth as reduced-coverage gaps.
       - Safe properties include metadataFormat, modelKind, descriptorRole, stableModelKey, mappingKind, modelRelationshipKind when deterministic, safe display labels or hashes, supportingFactIds, coverageLabel, and limitation codes.
       - Schema, catalog, formula, filter, SQL, query, dialect, connection, provider-specific values, raw mapping content, URLs, remotes, local absolute paths, private labels, and secrets are hashed or omitted.
@@ -1456,6 +1729,7 @@ rules:
       - AnalysisGap
     limitations:
       - Unsupported ORM evidence is a static coverage gap and does not prove data access, runtime mapping validity, query execution, database schema existence, provider compatibility, deployment, or production usage.
+      - UnsupportedLegacyOrmDescriptor is the closed classification for a recognized legacy ORM descriptor family outside the deterministic parser scope.
       - Recognized family labels are public-safe descriptors only; raw mapping content, SQL, config values, connection strings, URLs, remotes, local absolute paths, private labels, and secrets are hashed or omitted.
       - LLBLGen, SubSonic, iBATIS.NET/MyBatis.NET, Castle ActiveRecord, Fluent-only mappings, and project-local mapping DSLs remain unsupported unless a future rule defines deterministic parser behavior.
       - Project-local mapping DSLs are not detected unless they use recognized public family signals; absence of this gap is not absence of ORM metadata.

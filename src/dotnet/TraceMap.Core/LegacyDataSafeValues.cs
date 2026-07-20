@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace TraceMap.Core;
 
-internal static partial class LegacyDataSafeValues
+public static partial class LegacyDataSafeValues
 {
     private static readonly Regex SafeIdentifierRegex = SafeIdentifierPattern();
     private static readonly string[] UnsafeSubstrings =

@@ -1,5 +1,10 @@
 # Route-Centered Endpoint Trace Completeness Implementation State
 
+Status: implementation-slices-merged-with-follow-ups
+Readiness: follow-up-slices-available
+Merged PR 1: #241 (`a3d3cd95a434b0888d9b1d69d2d6cc1f20dd1869`)
+Merged PR 2: #253 (`51f18335023ff787b82269ffb80f522773f505df`)
+
 ## Snapshot
 
 - Spec: `route-centered-endpoint-trace-completeness`
