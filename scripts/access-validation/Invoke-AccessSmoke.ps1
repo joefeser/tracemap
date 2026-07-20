@@ -251,7 +251,8 @@ catch {
 }
 
 try {
-Set-Phase9Stage "product-scan"
+$productScanStage = "product-scan"
+Set-Phase9Stage $productScanStage
 & $AccessCli scan --repo $repo --database ($databaseRelative.Replace('\', '/')) --out $outA --timeout-seconds 120
 if ($LASTEXITCODE -ne 0) { throw "first Access scan failed" }
 & $AccessCli scan --repo $repo --database ($databaseRelative.Replace('\', '/')) --out $outB --timeout-seconds 120
