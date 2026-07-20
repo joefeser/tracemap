@@ -503,6 +503,21 @@ Deferred after PR 3:
 - EDMX classifier wiring, broad downstream expansion, and all runtime
   NHibernate/database behavior.
 
+Initial ACK review follow-up on PR #501:
+
+- Codex identified that the new NHibernate ambiguity gap used
+  `AmbiguousLegacyDataModelIdentity` under the NHibernate rule without literal
+  ownership text in that rule block. The catalog and catalog regression now
+  document the classification before emission.
+- Gemini requested explicit ordering in the repeated-scan fact-ID assertion;
+  both sequences are now ordered ordinally. Its endpoint-aware fallback thread
+  described the implementation already present at the reviewed lines: when the
+  classifier omits coverage, either missing endpoint yields `unidirectional`
+  and two present endpoints yield `full`; no code change was required there.
+- Post-patch validation remained 61 focused and 825 full tests passed; the
+  build, private-path guard, and diff check remained clean apart from the
+  existing 8 `NU1903` advisories.
+
 ## Oddities And Follow-Ups
 
 - The predecessor ORM mapping completion spec is intentionally broad; this
