@@ -1,9 +1,11 @@
 # SQL Evidence Route-Flow Composition Implementation State
 
-Status: target-a-implementation-complete-awaiting-pr-review
-Implementation branch: `codex/implement-sql-evidence-route-flow-composition`
+Status: targets-a-b-merged-closeout-complete-awaiting-pr-review
+Implementation branch: `codex/sql-runway-acceptance-status-closeout`
 Target base: `dev`
 Public claim level: static evidence packet
+
+Composition PRs: #475 (Target B) and #483 (Target A)
 
 ## Scope State
 
@@ -223,8 +225,44 @@ route-flow smoke, private-path guard, and diff check all pass.
 
 - Target B is already shipped and is reused without release-review behavior or
   status changes beyond exposing its internal read helper to route-flow.
-- Acceptance cleanup (Phase 5.1), status-drift/README cleanup (Phase 6), site
-  work, and unrelated route-flow cleanup remain deferred.
+- Acceptance cleanup (Phase 5.1) and status-drift/README cleanup (Phase 6) were
+  deferred from #483 and are completed by the closeout below. Site work shipped
+  separately; unrelated route-flow cleanup remains outside this spec.
+
+## Acceptance And Status Closeout
+
+This focused documentation slice closes Phase 5.1 and Phase 6 after auditing
+`origin/dev@da7f4f2c56dcd4b88c2abd82bdff04a9a7687309` and live GitHub merge
+records. It does not change extraction, facts, rules, tiers, coverage,
+rendering, or public claim level.
+
+- `docs/ACCEPTANCE.md` now names the execution-context, permission,
+  archive-link, secret-safety, runbook, release-review, and route-flow
+  composition invariants together with their non-claims and leak boundary.
+- `docs/NEXT_EXECUTION_REPORT.md` now distinguishes the product on `main` from
+  additional merged work on `dev`, removes the completed Swift recommendation,
+  and selects the reviewed legacy relationship spec as the next product slice.
+- Headerless evidence-export and route-centered state files now have parseable
+  shipped-with-follow-ups statuses.
+- Legacy relationship state now records that PR #398 merged a reviewed spec but
+  no product slice; static-dispatch state records the merged PR #331/#333 Task 6
+  slices while leaving later tasks visible.
+- `README.md` now documents the shipped PostgreSQL-first SQL evidence runway,
+  generated runbook artifacts, release-review/route-flow composition, and
+  static-only limitations.
+
+Closeout validation:
+
+- focused SQL execution-context, secret-safety, permission, archive-link,
+  runbook, release-review, and route-flow tests: 149 passed;
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero errors
+  and the existing eight `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisories;
+- `dotnet test src/dotnet/TraceMap.sln --no-build --no-restore`: 815 passed;
+- README SQL documentation links resolve to checked-in files;
+- all five reconciled implementation-state files expose a top-level parseable
+  `Status:` line;
+- `./scripts/check-private-paths.sh`: passed; and
+- `git diff --check`: passed.
 
 ## Related Specs
 
