@@ -7,7 +7,11 @@ import { RuleIds, ScannerVersions } from "../facts/RuleIds";
 import { hash } from "../util/Hash";
 
 const entityOperations = new Set(["list", "filter", "get", "create", "update", "delete", "bulkCreate", "subscribe"]);
-const primitiveRoots = new Set(["auth", "entities", "functions", "integrations", "Analytics", "AppLogs"]);
+const primitiveRoots = new Set([
+  "auth", "entities", "functions", "integrations",
+  "analytics", "appLogs", "users", "asServiceRole",
+  "Analytics", "AppLogs"
+]);
 const base44FactoryNames = new Set(["createClient", "createClientFromRequest"]);
 const axiosMethods = new Set(["request", "get", "post", "put", "patch", "delete", "head", "options"]);
 
@@ -29,7 +33,7 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
     for (const statement of source.statements) {
       if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
       const requested = statement.moduleSpecifier.text;
-      if (!isBase44Sdk(requested)) continue;
+      if (!isBase44SdkPackageImport(requested)) continue;
       const clause = statement.importClause;
       facts.push(fact(manifest, FactTypes.Base44SdkImport, RuleIds.Base44SdkImport, statement, source, item.relativePath, requested, {
         requestedPackage: requested,
@@ -95,7 +99,8 @@ function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceF
     primitiveRoot: relative[0],
     sourceFileSha256: hash(text, 64)
   }));
-  if (relative[0] === "functions" && relative[1] === "invoke") {
+  const functionsIndex = sdkRootIndex(relative, "functions");
+  if (functionsIndex >= 0 && relative[functionsIndex + 1] === "invoke" && functionsIndex + 2 === relative.length) {
     const functionName = stringArgument(node.arguments[0]);
     facts.push(fact(manifest, FactTypes.Base44FunctionInvocation, RuleIds.Base44FunctionInvocation, node, source, filePath, functionName ?? "dynamic", {
       functionName: functionName ?? "dynamic",
@@ -103,13 +108,21 @@ function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceF
       sourceFileSha256: hash(text, 64)
     }, functionName ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown));
   }
-  if (relative[0] === "entities" && relative.length >= 3 && entityOperations.has(relative[2])) {
-    facts.push(fact(manifest, FactTypes.Base44EntityOperation, RuleIds.Base44EntityOperation, node, source, filePath, relative[1], {
-      entityName: relative[1],
-      operationName: relative[2],
+  const entitiesIndex = sdkRootIndex(relative, "entities");
+  if (entitiesIndex >= 0
+    && entityOperations.has(relative[entitiesIndex + 2])
+    && entitiesIndex + 3 === relative.length) {
+    facts.push(fact(manifest, FactTypes.Base44EntityOperation, RuleIds.Base44EntityOperation, node, source, filePath, relative[entitiesIndex + 1], {
+      entityName: relative[entitiesIndex + 1],
+      operationName: relative[entitiesIndex + 2],
       sourceFileSha256: hash(text, 64)
     }));
   }
+}
+
+function sdkRootIndex(chain: string[], root: string): number {
+  if (chain[0] === root) return 0;
+  return chain[0] === "asServiceRole" && chain[1] === root ? 1 : -1;
 }
 
 async function sqlFact(manifest: ScanManifest, item: FileInventoryItem): Promise<CodeFact> {
@@ -150,7 +163,14 @@ function stringArgument(node: ts.Expression | undefined): string | null {
   return node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) ? node.text : null;
 }
 
-function isBase44Sdk(value: string): boolean {
+function isBase44SdkPackageImport(value: string): boolean {
+  const normalized = value.startsWith("npm:") ? value.slice(4) : value;
+  return normalized === "@base44/sdk"
+    || normalized.startsWith("@base44/sdk@")
+    || normalized.startsWith("@base44/sdk/");
+}
+
+function isBase44SdkClientImport(value: string): boolean {
   const normalized = value.startsWith("npm:") ? value.slice(4) : value;
   return normalized === "@base44/sdk" || normalized.startsWith("@base44/sdk@");
 }
@@ -221,7 +241,7 @@ async function buildAliasMaps(items: readonly FileInventoryItem[]): Promise<Map<
 
 function seedDirectSdkImports(context: SourceContext): void {
   for (const statement of context.source.statements) {
-    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || !isBase44Sdk(statement.moduleSpecifier.text)) continue;
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || !isBase44SdkClientImport(statement.moduleSpecifier.text)) continue;
     const clause = statement.importClause;
     if (!clause || clause.isTypeOnly) continue;
     if (clause.name) {
