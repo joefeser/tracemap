@@ -626,6 +626,27 @@ Validation results:
   broader model-surface/report/query/export filters remain not applicable
   because those code paths are unchanged.
 
+Initial ACK review follow-up on PR #503:
+
+- Gemini identified an unnecessary descendant traversal for DBML tables. Table
+  discovery now uses direct `Database` children in the DBML namespace.
+- Qodo identified two correctness gaps. Blank `Table@Name` values now use the
+  whitespace-aware `Member` fallback for duplicate-scope classification, and
+  deterministic composite key lists are normalized and emitted in clear form
+  only when every member is a public-safe identifier. Unsafe lists remain
+  hash-only.
+- Codex identified that a foreign-namespace element named `Association` could
+  treat its own namespace as DBML. Provider-extension detection is now anchored
+  to the enclosing DBML `Database` namespace; foreign associations emit the
+  cataloged unsupported-shape gap and no relationship fact.
+- Regression coverage includes blank-name duplicate table scopes, normalized
+  composite members, foreign association elements, repeated-scan determinism,
+  and default-artifact privacy. Post-patch validation passed 64 focused and 828
+  full .NET tests, the pinned JVM integration test, a five-artifact CLI smoke at
+  fixture commit `dc3ce949ff0f128bdc4291d7133956f9080b6de1`, the private-path guard,
+  and `git diff --check`. The build remained clean apart from the existing eight
+  `NU1903` SQLite advisories.
+
 Deferred after PR 5:
 
 - Non-DBML family follow-ups, broader downstream expansion, runtime LINQ to SQL
