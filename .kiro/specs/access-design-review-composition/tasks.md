@@ -9,4 +9,4 @@
 - [x] Add single/combined, scope, provenance, determinism, and leak-regression tests.
 - [x] Update release-review documentation and Access/SQL bookkeeping state.
 - [x] Run focused/full validation, private-path checking, and `git diff --check`.
-- [ ] Commit, push, open a ready PR to `dev`, and run ACK.
+- [x] Commit, push, open a ready PR to `dev`, and run ACK.
