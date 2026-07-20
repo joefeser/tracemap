@@ -1652,8 +1652,8 @@ public sealed class LegacyDataMetadataExtractorTests
             && fact.Properties.GetValueOrDefault("safeReasonCode") == "missing-endpoint");
 
         Assert.Equal(
-            result.Facts.Where(IsNHibernateRelationshipEvidence).Select(fact => fact.FactId),
-            repeated.Facts.Where(IsNHibernateRelationshipEvidence).Select(fact => fact.FactId));
+            result.Facts.Where(IsNHibernateRelationshipEvidence).Select(fact => fact.FactId).Order(StringComparer.Ordinal),
+            repeated.Facts.Where(IsNHibernateRelationshipEvidence).Select(fact => fact.FactId).Order(StringComparer.Ordinal));
     }
 
     [Fact]
