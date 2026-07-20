@@ -582,6 +582,18 @@ the 814-test solution, a clean solution build, seven artifact-validator tests,
 the private-path guard, and `git diff --check` on macOS. PowerShell parsing and
 the closed failure classification remain exact-head Windows gates.
 
+The rerun at `b2c8c7e5ee37ff47425fb702b46d473ffe6e17f1` again stopped with
+the initial generation checkpoint (`failureClassification=none`). That outcome
+proves only that the coordinator did not persist a later gate; it cannot
+distinguish in-process host termination from failure of the mutable latest-file
+replacement. It does not establish a product or extraction failure. Fixture
+generation now runs in an output-suppressed child PowerShell process. Every
+checkpoint update also creates an immutable sequenced snapshot before a
+best-effort latest-file replacement. The surviving coordinator records a closed
+classification for generation plus every fixture-provenance operation before
+the product scan. This remains an orchestration-only change with no new Access
+read or extraction permission.
+
 The Phase 9 generator layer adds a second form button classified as
 `[Embedded Macro]` with a protected caption marker, but deliberately supplies
 no body. Named and data macro fixture creation remains deferred to the Windows
