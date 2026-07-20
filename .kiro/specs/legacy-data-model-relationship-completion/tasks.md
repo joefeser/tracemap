@@ -1,7 +1,7 @@
 # Legacy Data Model Relationship Completion Tasks
 
-Current state: implementation PRs 1 and 2 merged; implementation PR 3 is
-validated with narrow NHibernate endpoint-classifier integration.
+Current state: implementation PRs 1 through 3 merged; implementation PR 4 is
+validated with narrow EDMX endpoint-classifier integration.
 
 ## Spec Authoring Tasks
 
@@ -113,7 +113,7 @@ validated with narrow NHibernate endpoint-classifier integration.
         generated runtime relationship behavior, or table existence.
 
 - [ ] 5. Add EDMX relationship follow-ups. Requirements: 2, 5, 8, 9.
-  - [ ] Harden ambiguous CSDL association endpoint and MSL association-set
+  - [x] Harden ambiguous CSDL association endpoint and MSL association-set
         mapping behavior.
   - [ ] Add gaps or reduced evidence for multiple containers, inherited
         endpoints, split entity mappings, conditional mappings, complex
