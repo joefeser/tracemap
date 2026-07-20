@@ -746,7 +746,19 @@ public static class LegacyDataMetadataExtractor
         var ends = association.Elements().Where(element => element.Name.LocalName == "End").ToArray();
         if (ends.Length != 2)
         {
-            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataEdmx, "AmbiguousLegacyDataModelIdentity", "EDMX association did not contain exactly two deterministic endpoints.", association);
+            AddRelationshipGap(
+                manifest,
+                facts,
+                relativePath,
+                ClassifyEdmxRelationship(
+                    "csdl-association",
+                    LegacyRelationshipEndpointState.Ambiguous,
+                    LegacyRelationshipEndpointState.Ambiguous,
+                    existingFamilyAllowsUnidirectional: true),
+                "edmx",
+                "csdl-association",
+                "EDMX association did not contain exactly two deterministic endpoints.",
+                association);
             return;
         }
 
@@ -756,26 +768,55 @@ public static class LegacyDataMetadataExtractor
             || string.IsNullOrWhiteSpace(secondRole)
             || string.Equals(firstRole, secondRole, StringComparison.Ordinal))
         {
-            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataEdmx, "AmbiguousLegacyDataModelIdentity", "EDMX association endpoints were missing or duplicated.", association);
+            AddRelationshipGap(
+                manifest,
+                facts,
+                relativePath,
+                ClassifyEdmxRelationship(
+                    "csdl-association",
+                    LegacyRelationshipEndpointState.Ambiguous,
+                    LegacyRelationshipEndpointState.Ambiguous,
+                    existingFamilyAllowsUnidirectional: true),
+                "edmx",
+                "csdl-association",
+                "EDMX association endpoint roles were missing or duplicated.",
+                association);
             return;
         }
 
         var firstType = LocalName(AttributeValue(ends[0], "Type"));
         var secondType = LocalName(AttributeValue(ends[1], "Type"));
+        var relationshipDecision = ClassifyEdmxRelationship(
+            "csdl-association",
+            EdmxEndpointState(firstType),
+            EdmxEndpointState(secondType),
+            existingFamilyAllowsUnidirectional: true);
+        if (relationshipDecision.Decision == LegacyRelationshipDecision.EmitAnalysisGap)
+        {
+            AddRelationshipGap(
+                manifest,
+                facts,
+                relativePath,
+                relationshipDecision,
+                "edmx",
+                "csdl-association",
+                "EDMX association did not provide a deterministic conceptual type endpoint.",
+                association);
+            return;
+        }
+
         var relationshipCoverageLabel = coverageLabel;
-        var relationshipEndpointCoverage = "full";
-        var relationshipLimitations = new List<string>();
-        if (string.IsNullOrWhiteSpace(firstType) || string.IsNullOrWhiteSpace(secondType))
+        var inheritedEndpoint = (!string.IsNullOrWhiteSpace(firstType) && inheritedEdmxTypeNames.Contains(firstType))
+            || (!string.IsNullOrWhiteSpace(secondType) && inheritedEdmxTypeNames.Contains(secondType));
+        if (relationshipDecision.Decision != LegacyRelationshipDecision.EmitRelationship
+            || inheritedEndpoint)
         {
             relationshipCoverageLabel = "reduced";
-            relationshipEndpointCoverage = "unidirectional";
-            relationshipLimitations.Add("missing-endpoint-type");
         }
-        else if (inheritedEdmxTypeNames.Contains(firstType) || inheritedEdmxTypeNames.Contains(secondType))
-        {
-            relationshipCoverageLabel = "reduced";
-            relationshipLimitations.Add("inherited-endpoint-needs-review");
-        }
+        var relationshipLimitations = EdmxRelationshipLimitations(
+            relationshipDecision,
+            descriptorKind: "csdl-association",
+            inheritedEndpoint);
 
         var properties = MetadataProperties("Edmx", metadataHash, "csdl-association");
         properties["sourceSection"] = "CSDL";
@@ -787,7 +828,14 @@ public static class LegacyDataMetadataExtractor
         AddSafeName(properties, "targetEndpointRole", "targetEndpointRoleHash", secondRole);
         AddSafeName(properties, "sourceMultiplicity", "sourceMultiplicityHash", AttributeValue(ends[0], "Multiplicity"));
         AddSafeName(properties, "targetMultiplicity", "targetMultiplicityHash", AttributeValue(ends[1], "Multiplicity"));
-        AddRelationshipSemantics(properties, sourceMetadataFactId, relationshipEndpointCoverage, relationshipLimitations);
+        AddRelationshipSemantics(
+            properties,
+            sourceMetadataFactId,
+            relationshipDecision.RelationshipEndpointCoverage
+                ?? (string.IsNullOrWhiteSpace(firstType) || string.IsNullOrWhiteSpace(secondType)
+                    ? "unidirectional"
+                    : "full"),
+            relationshipLimitations);
         AddModelIdentity(
             properties,
             "Edmx",
@@ -816,19 +864,55 @@ public static class LegacyDataMetadataExtractor
         var endProperties = associationSetMapping.Elements().Where(element => element.Name.LocalName == "EndProperty").ToArray();
         if (endProperties.Length != 2)
         {
-            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataEdmx, "AmbiguousLegacyDataModelIdentity", "AssociationSetMapping did not contain exactly two deterministic endpoints.", associationSetMapping);
+            var endpointState = endProperties.Length < 2
+                ? LegacyRelationshipEndpointState.Missing
+                : LegacyRelationshipEndpointState.Ambiguous;
+            AddRelationshipGap(
+                manifest,
+                facts,
+                relativePath,
+                ClassifyEdmxRelationship(
+                    "msl-association",
+                    endpointState,
+                    endpointState,
+                    existingFamilyAllowsUnidirectional: false),
+                "edmx",
+                "msl-association",
+                endProperties.Length < 2
+                    ? "AssociationSetMapping did not provide two endpoint descriptors."
+                    : "AssociationSetMapping exposed more than two endpoint candidates.",
+                associationSetMapping);
             return;
         }
 
         var firstRole = AttributeValue(endProperties[0], "Name");
         var secondRole = AttributeValue(endProperties[1], "Name");
-        if (string.IsNullOrWhiteSpace(firstRole)
-            || string.IsNullOrWhiteSpace(secondRole)
-            || string.Equals(firstRole, secondRole, StringComparison.Ordinal))
+        var duplicateRole = !string.IsNullOrWhiteSpace(firstRole)
+            && string.Equals(firstRole, secondRole, StringComparison.Ordinal);
+        var relationshipDecision = ClassifyEdmxRelationship(
+            "msl-association",
+            duplicateRole ? LegacyRelationshipEndpointState.Ambiguous : EdmxEndpointState(firstRole),
+            duplicateRole ? LegacyRelationshipEndpointState.Ambiguous : EdmxEndpointState(secondRole),
+            existingFamilyAllowsUnidirectional: false);
+        if (relationshipDecision.Decision == LegacyRelationshipDecision.EmitAnalysisGap)
         {
-            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataEdmx, "AmbiguousLegacyDataModelIdentity", "AssociationSetMapping endpoints were missing or duplicated.", associationSetMapping);
+            AddRelationshipGap(
+                manifest,
+                facts,
+                relativePath,
+                relationshipDecision,
+                "edmx",
+                "msl-association",
+                duplicateRole
+                    ? "AssociationSetMapping endpoint roles were duplicated."
+                    : "AssociationSetMapping did not provide two deterministic endpoint roles.",
+                associationSetMapping);
             return;
         }
+
+        var relationshipCoverageLabel = relationshipDecision.Decision == LegacyRelationshipDecision.EmitRelationship
+            ? coverageLabel
+            : "reduced";
 
         var properties = MetadataProperties("Edmx", metadataHash, "msl-association");
         properties["sourceSection"] = "MSL";
@@ -837,7 +921,11 @@ public static class LegacyDataMetadataExtractor
         AddSafeName(properties, "storeEntitySetName", "storeEntitySetHash", AttributeValue(associationSetMapping, "StoreEntitySet"));
         AddSafeName(properties, "sourceEndpointName", "sourceEndpointHash", firstRole);
         AddSafeName(properties, "targetEndpointName", "targetEndpointHash", secondRole);
-        AddRelationshipSemantics(properties, sourceMetadataFactId, "full", Array.Empty<string>());
+        AddRelationshipSemantics(
+            properties,
+            sourceMetadataFactId,
+            relationshipDecision.RelationshipEndpointCoverage ?? "full",
+            relationshipDecision.Limitations);
         AddModelIdentity(
             properties,
             "Edmx",
@@ -849,7 +937,7 @@ public static class LegacyDataMetadataExtractor
             AttributeValue(associationSetMapping, "StoreEntitySet"),
             sourceMetadataFactId,
             Parts(("association", associationName), ("store-set", AttributeValue(associationSetMapping, "StoreEntitySet")), ("source-role", firstRole), ("target-role", secondRole)),
-            coverageLabel);
+            relationshipCoverageLabel);
         facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataEdmx, relativePath, associationSetMapping, TargetFrom(properties, "associationName", "associationHash"), properties));
     }
 
@@ -1811,6 +1899,58 @@ public static class LegacyDataMetadataExtractor
             LegacyRelationshipParserCoverageState.Full,
             LegacyRelationshipShapeFlags.None,
             ExistingFamilyAllowsUnidirectional: true));
+    }
+
+    private static LegacyRelationshipGapDecision ClassifyEdmxRelationship(
+        string descriptorKind,
+        LegacyRelationshipEndpointState sourceEndpointState,
+        LegacyRelationshipEndpointState targetEndpointState,
+        bool existingFamilyAllowsUnidirectional)
+    {
+        return LegacyDataRelationshipGapClassifier.Classify(new LegacyRelationshipGapInput(
+            "edmx",
+            RuleIds.LegacyDataEdmx,
+            descriptorKind,
+            IsRelationshipDescriptor: true,
+            sourceEndpointState,
+            targetEndpointState,
+            LegacyRelationshipJoinOrKeyState.NotApplicable,
+            LegacyRelationshipParserCoverageState.Full,
+            LegacyRelationshipShapeFlags.None,
+            ExistingFamilyAllowsUnidirectional: existingFamilyAllowsUnidirectional));
+    }
+
+    private static LegacyRelationshipEndpointState EdmxEndpointState(string? endpoint)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            return LegacyRelationshipEndpointState.Missing;
+        }
+
+        return IsSafeIdentifier(endpoint)
+            ? LegacyRelationshipEndpointState.Deterministic
+            : LegacyRelationshipEndpointState.UnsafeRedacted;
+    }
+
+    private static IReadOnlyList<string> EdmxRelationshipLimitations(
+        LegacyRelationshipGapDecision decision,
+        string descriptorKind,
+        bool inheritedEndpoint)
+    {
+        var limitations = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var limitation in decision.Limitations)
+        {
+            limitations.Add(limitation == "missing-endpoint" && descriptorKind == "csdl-association"
+                ? "missing-endpoint-type"
+                : limitation);
+        }
+
+        if (inheritedEndpoint)
+        {
+            limitations.Add("inherited-endpoint-needs-review");
+        }
+
+        return limitations.ToArray();
     }
 
     private static LegacyRelationshipGapDecision ClassifyNHibernateRelationship(

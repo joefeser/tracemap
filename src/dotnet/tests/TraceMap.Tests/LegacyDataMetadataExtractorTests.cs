@@ -685,6 +685,10 @@ public sealed class LegacyDataMetadataExtractorTests
                       <End Role="Customer" Type="Model.Customer" />
                       <End Role="UnknownOrder" />
                     </Association>
+                    <Association Name="MissingBothTypes">
+                      <End Role="FirstRole" />
+                      <End Role="SecondRole" />
+                    </Association>
                     <Association Name="AmbiguousAssociation">
                       <End Role="OnlyOne" Type="Model.Customer" />
                     </Association>
@@ -715,6 +719,10 @@ public sealed class LegacyDataMetadataExtractorTests
                         <EndProperty Name="Customer" />
                         <EndProperty Name="Customer" />
                       </AssociationSetMapping>
+                      <AssociationSetMapping Name="MissingRoleAssociation" TypeName="Model.MissingRole" StoreEntitySet="FK_MissingRole">
+                        <EndProperty Name="Customer" />
+                        <EndProperty />
+                      </AssociationSetMapping>
                     </EntityContainerMapping>
                   </Mapping>
                 </edmx:Mappings>
@@ -723,6 +731,7 @@ public sealed class LegacyDataMetadataExtractorTests
             """);
 
         var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var repeated = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out-repeat")));
 
         var csdlAssociation = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
             && fact.RuleId == RuleIds.LegacyDataEdmx
@@ -756,6 +765,21 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.Equal("reduced", missingTypeAssociation.Properties.GetValueOrDefault("coverageLabel"));
         Assert.Contains("missing-endpoint-type", missingTypeAssociation.Properties.GetValueOrDefault("limitations"));
 
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("associationName") is "MissingBothTypes" or "MissingRoleAssociation");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataModelRelationship
+            && fact.Properties.GetValueOrDefault("classification") == "IncompleteLegacyDataModelRelationship"
+            && fact.Properties.GetValueOrDefault("relationshipFamily") == "edmx"
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "csdl-association"
+            && fact.Properties.GetValueOrDefault("safeReasonCode") == "missing-endpoint");
+        Assert.Equal(2, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataModelRelationship
+            && fact.Properties.GetValueOrDefault("classification") == "IncompleteLegacyDataModelRelationship"
+            && fact.Properties.GetValueOrDefault("relationshipFamily") == "edmx"
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "msl-association"
+            && fact.Properties.GetValueOrDefault("safeReasonCode") == "missing-endpoint"));
+
         var mslAssociation = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
             && fact.RuleId == RuleIds.LegacyDataEdmx
             && fact.Properties.GetValueOrDefault("descriptorKind") == "msl-association"
@@ -764,12 +788,88 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.Equal("relationship", mslAssociation.Properties.GetValueOrDefault("modelRelationshipKind"));
         Assert.Equal("FK_CustomerOrders", mslAssociation.Properties.GetValueOrDefault("containerName"));
 
-        Assert.Equal(3, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
+        Assert.Equal(2, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataEdmx
             && fact.Properties.GetValueOrDefault("classification") == "AmbiguousLegacyDataModelIdentity"));
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataEdmx
             && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmMappingShape");
+
+        Assert.Equal(
+            result.Facts.Where(IsEdmxRelationshipEvidence).Select(fact => fact.FactId).Order(StringComparer.Ordinal),
+            repeated.Facts.Where(IsEdmxRelationshipEvidence).Select(fact => fact.FactId).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task Edmx_relationship_outputs_hash_unsafe_endpoint_values_across_default_artifacts()
+    {
+        using var temp = new TempDirectory();
+        const string unsafeAssociation = "https://private.example/relation?token=secret";
+        const string unsafeType = "Server=private;Password=secret";
+        const string unsafeRole = "C:\\private\\endpoint";
+        const string unsafeStoreSet = "private-server;Initial Catalog=Secret";
+        File.WriteAllText(Path.Combine(temp.Path, "Unsafe.edmx"), $$"""
+            <edmx:Edmx xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx" Version="3.0">
+              <edmx:Runtime>
+                <edmx:ConceptualModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="Model">
+                    <EntityContainer Name="ModelContainer" />
+                    <Association Name="{{unsafeAssociation}}">
+                      <End Role="{{unsafeRole}}" Type="Model.{{unsafeType}}" />
+                      <End Role="SafeRole" Type="Model.SafeType" />
+                    </Association>
+                  </Schema>
+                </edmx:ConceptualModels>
+                <edmx:StorageModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl" Namespace="Store">
+                    <EntityContainer Name="StoreContainer" />
+                  </Schema>
+                </edmx:StorageModels>
+                <edmx:Mappings>
+                  <Mapping xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+                    <EntityContainerMapping StorageEntityContainer="StoreContainer" CdmEntityContainer="ModelContainer">
+                      <AssociationSetMapping Name="{{unsafeAssociation}}" StoreEntitySet="{{unsafeStoreSet}}">
+                        <EndProperty Name="{{unsafeRole}}" />
+                        <EndProperty Name="SafeRole" />
+                      </AssociationSetMapping>
+                    </EntityContainerMapping>
+                  </Mapping>
+                </edmx:Mappings>
+              </edmx:Runtime>
+            </edmx:Edmx>
+            """);
+
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(output);
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, output));
+        var factsPath = Path.Combine(output, "facts.ndjson");
+        var indexPath = Path.Combine(output, "index.sqlite");
+        await JsonlFactWriter.WriteAsync(factsPath, result.Facts);
+        SqliteIndexWriter.Write(indexPath, result.Manifest, result.Facts);
+
+        var relationships = result.Facts
+            .Where(fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+                && fact.RuleId == RuleIds.LegacyDataEdmx
+                && fact.Properties.GetValueOrDefault("modelRelationshipKind") == "relationship")
+            .ToArray();
+        Assert.Equal(2, relationships.Length);
+        Assert.All(relationships, relationship =>
+        {
+            Assert.Equal("reduced", relationship.Properties.GetValueOrDefault("coverageLabel"));
+            Assert.Equal("unsafe-redacted-endpoint-identity", relationship.Properties.GetValueOrDefault("limitations"));
+            Assert.True(relationship.Properties.ContainsKey("associationHash"));
+            Assert.True(relationship.Properties.ContainsKey("sourceEndpointHash"));
+        });
+
+        var defaultArtifacts = string.Join(
+            "\n",
+            await File.ReadAllTextAsync(factsPath),
+            MarkdownReportWriter.Build(result),
+            await ReadAllPropertiesAsync(indexPath));
+        foreach (var protectedValue in new[] { unsafeAssociation, unsafeType, unsafeRole, unsafeStoreSet, "private.example", "Password=secret", "Initial Catalog=Secret", temp.Path })
+        {
+            Assert.DoesNotContain(protectedValue, defaultArtifacts, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -2081,6 +2181,14 @@ public sealed class LegacyDataMetadataExtractorTests
                 || fact.RuleId == RuleIds.LegacyDataModelRelationship)
             && (fact.Properties.GetValueOrDefault("modelRelationshipKind") == "relationship"
                 || fact.Properties.GetValueOrDefault("relationshipFamily") == "nhibernate-hbm");
+    }
+
+    private static bool IsEdmxRelationshipEvidence(CodeFact fact)
+    {
+        return (fact.RuleId == RuleIds.LegacyDataEdmx
+                || fact.RuleId == RuleIds.LegacyDataModelRelationship)
+            && (fact.Properties.GetValueOrDefault("modelRelationshipKind") == "relationship"
+                || fact.Properties.GetValueOrDefault("relationshipFamily") == "edmx");
     }
 
     private static async Task<string> ReadAllPropertiesAsync(string sqlitePath)
