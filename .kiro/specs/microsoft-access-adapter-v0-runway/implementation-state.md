@@ -180,10 +180,10 @@ to the first implementation PR.
 
 ## Phase 7 Implementation State
 
-The Phase 7 branch is stacked on approved foundation head
-`1b2596b54350877b6b55ebb9ee8f9dffb854589b` while PR #487 awaits explicit
-owner merge authorization. It will not open a PR against `dev` until #487 is
-merged, because doing so would repeat the entire foundation diff.
+The Phase 7 branch was originally stacked on approved foundation head
+`1b2596b54350877b6b55ebb9ee8f9dffb854589b` while PR #487 awaited explicit
+owner merge authorization. After #487 merged, Phase 7 shipped through PR #492
+and is now part of `dev`.
 
 Implemented platform-neutral pieces:
 
@@ -299,14 +299,16 @@ Current Phase 7 validation:
   PR's changed files;
 - private-path guard and `git diff --check` pass.
 
-Phase 7 PR readiness and deferred work:
+Phase 7 closeout and deferred work:
 
 - no implementation or validation work remains for the count-only Phase 7 slice;
 - surface identity, design metadata, controls, direct bindings, and event
-  classification remain unchecked tasks 7.2 through 7.4 because Windows evidence
-  proved that even indexing a catalog item and reading `Name` can load a surface.
-  Requirement 6.5 is satisfied by the rule-backed coverage gap. Those richer
-  tasks require a new threat review and a different proven non-loading source.
+  classification remain deferred beyond v0 because Windows evidence proved that
+  even indexing a catalog item and reading `Name` can load a surface. Tasks 7.2
+  through 7.4 now record the completed count-only product boundary and retained
+  pure-projector coverage, not item-level extraction. Requirement 6.5 is
+  satisfied by the rule-backed coverage gap. Richer product extraction requires
+  a new threat review and a different proven non-loading source.
 
 Final Phase 7 Windows validation used the exact pushed head
 `bf764a1568f938ffd63720d4f818b50b2baa3bde`. The count-only product reader
