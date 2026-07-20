@@ -44,7 +44,27 @@ function Find-ProtectedMarker {
     return $null
 }
 
+function Assert-DisposableSmokeRoot {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $pathRoot = [IO.Path]::GetPathRoot($Path)
+    if ([string]::IsNullOrWhiteSpace($pathRoot) -or
+        [string]::Equals($Path.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar), $pathRoot.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar), [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Smoke root must be a non-root disposable directory"
+    }
+    if (Test-Path $Path) {
+        if (-not (Test-Path $Path -PathType Container)) {
+            throw "Smoke root must be a directory"
+        }
+        $marker = Join-Path $Path ".tracemap-smoke-root"
+        if (-not (Test-Path $marker -PathType Leaf)) {
+            throw "Existing smoke root is missing the TraceMap disposable marker"
+        }
+    }
+}
+
 $SmokeRoot = [IO.Path]::GetFullPath($SmokeRoot)
+Assert-DisposableSmokeRoot -Path $SmokeRoot
 $phase9Coverage = "named-count-observed-loaded-state-unavailable-other-categories-identities-bodies-unavailable"
 $phase9Checkpoint = $null
 if (-not [string]::IsNullOrWhiteSpace($Phase9CheckpointPath)) {
@@ -164,8 +184,11 @@ $docsOutput = Join-Path $SmokeRoot "evidence-docs"
 $vaultOutput = Join-Path $SmokeRoot "vault"
 $releaseReviewOutput = Join-Path $SmokeRoot "release-review"
 
-Remove-Item $SmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $SmokeRoot -PathType Container) {
+    Remove-Item $SmokeRoot -Recurse -Force -ErrorAction Stop
+}
 New-Item -ItemType Directory -Path (Split-Path -Parent $database) -Force | Out-Null
+[IO.File]::WriteAllText((Join-Path $SmokeRoot ".tracemap-smoke-root"), "TraceMap disposable Access smoke root" + [Environment]::NewLine)
 try {
     $generatorArguments = @(
         "-NoProfile",

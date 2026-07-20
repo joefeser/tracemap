@@ -58,6 +58,30 @@ export function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+export function stripTagsQuoteAware(html) {
+  let text = "";
+  let insideTag = false;
+  let quote = "";
+
+  for (const char of String(html)) {
+    if (!insideTag) {
+      if (char === "<") insideTag = true;
+      else text += char;
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) quote = "";
+      continue;
+    }
+
+    if (char === '"' || char === "'") quote = char;
+    else if (char === ">") insideTag = false;
+  }
+
+  return text;
+}
+
 function decodeCodePoint(codePoint, fallback) {
   if (!Number.isFinite(codePoint)) {
     return fallback;

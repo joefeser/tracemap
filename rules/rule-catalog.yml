@@ -1409,7 +1409,8 @@ rules:
   - id: legacy.access.database.inventory.v1
     name: Microsoft Access database inventory
     description: Records a clean Git-bound Access database and safe local extractor capability evidence.
-    evidenceTier: Tier2Structural or Tier4Unknown
+    evidenceTier: Tier2Structural
+    possibleEvidenceTiers: [Tier2Structural, Tier4Unknown]
     emits:
       - FileInventoried
       - LegacyDataMetadataDeclared
@@ -1424,7 +1425,8 @@ rules:
   - id: legacy.access.schema.v1
     name: Microsoft Access schema catalog
     description: Extracts local table, field, index, key, and declared relationship metadata through non-recordset Access/DAO catalog collections.
-    evidenceTier: Tier2Structural or Tier4Unknown
+    evidenceTier: Tier2Structural
+    possibleEvidenceTiers: [Tier2Structural, Tier4Unknown]
     emits:
       - LegacyDataEntityDeclared
       - LegacyDataStorageObjectDeclared
@@ -1440,7 +1442,8 @@ rules:
   - id: legacy.access.query.v1
     name: Microsoft Access saved-query shape
     description: Records saved-query kind, parameter metadata, full text hash/length, and bounded local-object dependency candidates without executing or materializing queries.
-    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier2Structural
+    possibleEvidenceTiers: [Tier2Structural, Tier3SyntaxOrTextual, Tier4Unknown]
     emits:
       - AccessQueryDeclared
       - AccessQueryDependencyCandidate
@@ -1454,7 +1457,8 @@ rules:
   - id: legacy.access.external-link.v1
     name: Microsoft Access external boundary
     description: Records hash-only linked-table and pass-through boundary metadata without refreshing or connecting to the external source.
-    evidenceTier: Tier2Structural or Tier4Unknown
+    evidenceTier: Tier2Structural
+    possibleEvidenceTiers: [Tier2Structural, Tier4Unknown]
     emits:
       - AccessExternalLinkDeclared
       - AnalysisGap
@@ -1466,7 +1470,8 @@ rules:
   - id: legacy.access.ui-surface.v1
     name: Microsoft Access form and report design surface
     description: Records safe form, report, and control design metadata obtained without rendering, invoking, or executing the surface.
-    evidenceTier: Tier2Structural or Tier4Unknown
+    evidenceTier: Tier2Structural
+    possibleEvidenceTiers: [Tier2Structural, Tier4Unknown]
     emits:
       - AccessFormDeclared
       - AccessReportDeclared
@@ -1481,7 +1486,8 @@ rules:
   - id: legacy.access.binding.v1
     name: Microsoft Access static design binding candidate
     description: Records direct form/report/control source bindings and bounded expression reference candidates from protected design metadata without evaluating expressions.
-    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    evidenceTier: Tier2Structural
+    possibleEvidenceTiers: [Tier2Structural, Tier3SyntaxOrTextual, Tier4Unknown]
     emits:
       - AccessBindingDeclared
       - AnalysisGap
@@ -1522,7 +1528,8 @@ rules:
   - id: legacy.access.macro-gap.v1
     name: Microsoft Access macro inventory and protected-body gap
     description: Records safe named, UI, data, embedded, or startup macro inventory while explicitly omitting all command bodies and arguments.
-    evidenceTier: Tier2Structural or Tier4Unknown
+    evidenceTier: Tier2Structural
+    possibleEvidenceTiers: [Tier2Structural, Tier4Unknown]
     emits:
       - AccessMacroDeclared
       - AnalysisGap

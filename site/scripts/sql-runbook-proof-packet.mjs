@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { decodeHtmlEntities, escapeRegExp, fileExists, normalizeRenderedText, readSitemapLocSet } from "./validate-utils.mjs";
+import { decodeHtmlEntities, escapeRegExp, fileExists, normalizeRenderedText, readSitemapLocSet, stripTagsQuoteAware } from "./validate-utils.mjs";
 
 export const sqlRunbookProofPacketRoute = "/sql/operator-handoff/proof-packet/";
 export const sqlRunbookProofPacketAsset = "/assets/sql-operator-runbook-proof-packet.json";
@@ -101,7 +101,7 @@ export async function validateSqlRunbookProofPacketDist({ baseUrl = "https://tra
   const html = await readFile(pagePath, "utf8");
   const text = normalizeRenderedText(html);
   const decoded = decodeHtmlEntities(html);
-  const tagCollapsedText = decoded.replace(/<[^>]*>/g, "");
+  const tagCollapsedText = decodeHtmlEntities(stripTagsQuoteAware(html));
   const assetText = await readFile(assetPath, "utf8");
 
   for (const phrase of requiredPageText) {

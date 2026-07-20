@@ -57,6 +57,17 @@ test("SQL runbook proof packet validator rejects tag-split protected text", asyn
   assert.match(errors.join("\n"), /forbidden private, executable, protected, or overclaim text/);
 });
 
+test("SQL runbook proof packet validator rejects tag-split protected text with quoted angle brackets", async (t) => {
+  const root = await createSiteFixture(t);
+  const pagePath = join(root, "src", "sql", "operator-handoff", "proof-packet", "index.html");
+  const html = await readFile(pagePath, "utf8");
+  await writeFile(pagePath, html.replace("</main>", '<p>Passw<em title=">">ord</em>=quoted-tag-leak</p></main>'));
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateSqlRunbookProofPacketDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /forbidden private, executable, protected, or overclaim text/);
+});
+
 test("SQL runbook proof packet validator rejects incomplete evidence provenance and invalid permission status", async (t) => {
   const root = await createSiteFixture(t);
   const assetPath = join(root, "src", "assets", "sql-operator-runbook-proof-packet.json");
