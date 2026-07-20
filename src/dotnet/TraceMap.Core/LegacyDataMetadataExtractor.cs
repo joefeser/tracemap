@@ -199,7 +199,8 @@ public static class LegacyDataMetadataExtractor
         string sourceMetadataFactId,
         XElement classElement)
     {
-        var className = AttributeValue(classElement, "name") ?? AttributeValue(classElement, "entity-name") ?? "mapped-class";
+        var declaredClassName = AttributeValue(classElement, "name") ?? AttributeValue(classElement, "entity-name");
+        var className = declaredClassName ?? "mapped-class";
         var mappedTypeName = NHibernateMappedTypeName(classElement);
         var tableName = AttributeValue(classElement, "table");
         var schemaName = AttributeValue(classElement, "schema");
@@ -256,7 +257,7 @@ public static class LegacyDataMetadataExtractor
             .ToArray();
         foreach (var relationship in relationshipElements.Take(MaxNHibernateRelationshipsPerClass))
         {
-            AddNHibernateRelationshipFact(manifest, facts, relativePath, metadataHash, sourceMetadataFactId, className, relationship);
+            AddNHibernateRelationshipFact(manifest, facts, relativePath, metadataHash, sourceMetadataFactId, declaredClassName, relationship);
         }
 
         if (relationshipElements.Length > MaxNHibernateRelationshipsPerClass)
@@ -313,25 +314,63 @@ public static class LegacyDataMetadataExtractor
         string relativePath,
         string metadataHash,
         string sourceMetadataFactId,
-        string className,
+        string? declaredClassName,
         XElement relationship)
     {
         var relationshipName = AttributeValue(relationship, "name") ?? relationship.Name.LocalName;
-        var targetClass = AttributeValue(relationship, "class")
-            ?? AttributeValue(relationship.Elements().FirstOrDefault(element => element.Name.LocalName is "one-to-many" or "many-to-many"), "class");
-        var coverageLabel = string.IsNullOrWhiteSpace(targetClass) ? "reduced" : "full";
-        var limitations = string.IsNullOrWhiteSpace(targetClass)
-            ? new[] { "missing-target-endpoint" }
-            : Array.Empty<string>();
+        var directTargetClass = AttributeValue(relationship, "class");
+        var collectionTargetElements = relationship.Elements()
+            .Where(element => element.Name.LocalName is "one-to-many" or "many-to-many")
+            .ToArray();
+        var ambiguousTarget = collectionTargetElements.Length > 1
+            || (!string.IsNullOrWhiteSpace(directTargetClass) && collectionTargetElements.Length > 0);
+        var targetClass = directTargetClass
+            ?? (collectionTargetElements.Length == 1
+                ? AttributeValue(collectionTargetElements[0], "class")
+                : null);
+        var relationshipDecision = ClassifyNHibernateRelationship(
+            relationship.Name.LocalName,
+            NHibernateEndpointState(declaredClassName),
+            ambiguousTarget
+                ? LegacyRelationshipEndpointState.Ambiguous
+                : NHibernateEndpointState(targetClass));
+        if (relationshipDecision.Decision == LegacyRelationshipDecision.EmitAnalysisGap)
+        {
+            AddRelationshipGap(
+                manifest,
+                facts,
+                relativePath,
+                relationshipDecision,
+                "nhibernate-hbm",
+                NormalizeToken(relationship.Name.LocalName, "relationship"),
+                ambiguousTarget
+                    ? "NHibernate collection exposed multiple relationship target candidates."
+                    : "NHibernate relationship did not provide a deterministic source or target endpoint.",
+                relationship);
+            return;
+        }
+
+        var coverageLabel = relationshipDecision.CoverageLabel;
+        var limitations = NHibernateRelationshipLimitations(
+            relationshipDecision,
+            declaredClassName,
+            targetClass);
 
         var properties = MetadataProperties("NHibernateHbm", metadataHash, $"orm-{NormalizeToken(relationship.Name.LocalName, "relationship")}");
         properties["mappingKind"] = NormalizeToken(relationship.Name.LocalName, "relationship");
         AddSafeName(properties, "associationName", "associationHash", relationshipName);
-        AddSafeName(properties, "sourceEndpointName", "sourceEndpointHash", className);
+        AddSafeName(properties, "sourceEndpointName", "sourceEndpointHash", declaredClassName);
         AddSafeName(properties, "targetEndpointName", "targetEndpointHash", targetClass);
         AddSafeName(properties, "columnName", "columnHash", AttributeValue(relationship, "column") ?? NHibernateKeyColumn(relationship));
-        AddRelationshipSemantics(properties, sourceMetadataFactId, coverageLabel == "full" ? "full" : "unidirectional", limitations);
-        AddModelIdentity(properties, "NHibernateHbm", "relationship", "mapping", relativePath, "nhibernate-relationship", relationshipName, className, sourceMetadataFactId, Parts(("class", className), ("relationship", relationshipName), ("target-class", targetClass), ("descriptor", relationship.Name.LocalName)), coverageLabel);
+        AddRelationshipSemantics(
+            properties,
+            sourceMetadataFactId,
+            relationshipDecision.RelationshipEndpointCoverage
+                ?? (string.IsNullOrWhiteSpace(declaredClassName) || string.IsNullOrWhiteSpace(targetClass)
+                    ? "unidirectional"
+                    : "full"),
+            limitations);
+        AddModelIdentity(properties, "NHibernateHbm", "relationship", "mapping", relativePath, "nhibernate-relationship", relationshipName, declaredClassName, sourceMetadataFactId, Parts(("class", declaredClassName), ("relationship", relationshipName), ("target-class", targetClass), ("descriptor", relationship.Name.LocalName)), coverageLabel);
         facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataOrmNHibernate, relativePath, relationship, TargetFrom(properties, "associationName", "associationHash"), properties));
     }
 
@@ -367,9 +406,28 @@ public static class LegacyDataMetadataExtractor
         }
 
         var provider = AttributeValue(database, "Provider");
-        foreach (var table in database.Descendants().Where(element => element.Name.LocalName == "Table").OrderBy(GetLine).ThenBy(element => AttributeValue(element, "Name"), StringComparer.Ordinal))
+        var dbmlNamespace = database.Name.Namespace;
+        var tables = database.Elements()
+            .Where(element => element.Name.LocalName == "Table" && element.Name.Namespace == dbmlNamespace)
+            .ToArray();
+        var duplicateTableScopeNames = tables
+            .Select(table => FirstPresent(AttributeValue(table, "Name"), AttributeValue(table, "Member")))
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .GroupBy(name => name!, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToHashSet(StringComparer.Ordinal);
+        var duplicateTypeScopeNames = tables
+            .SelectMany(table => table.Descendants().Where(element => element.Name.LocalName == "Type"))
+            .Select(type => AttributeValue(type, "Name"))
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .GroupBy(name => name!, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var table in tables.OrderBy(GetLine).ThenBy(element => AttributeValue(element, "Name"), StringComparer.Ordinal))
         {
-            var tableName = AttributeValue(table, "Name") ?? AttributeValue(table, "Member") ?? "table";
+            var tableName = FirstPresent(AttributeValue(table, "Name"), AttributeValue(table, "Member")) ?? "table";
             var typeElement = table.Elements().FirstOrDefault(element => element.Name.LocalName == "Type");
             var typeName = AttributeValue(typeElement, "Name") ?? AttributeValue(table, "Type") ?? AttributeValue(table, "Member");
             var storageProps = MetadataProperties("Dbml", metadataHash, "table");
@@ -423,32 +481,67 @@ public static class LegacyDataMetadataExtractor
 
         var associations = database.Descendants().Where(element => element.Name.LocalName == "Association").ToArray();
         var duplicateAssociationKeys = associations
-            .GroupBy(association => $"{AttributeValue(association.Parent, "Name") ?? "unknown"}|{AttributeValue(association, "Name") ?? AttributeValue(association, "Member") ?? "association"}", StringComparer.Ordinal)
+            .Where(association => association.Name.Namespace == dbmlNamespace)
+            .GroupBy(association => $"{FirstPresent(AttributeValue(association.Parent, "Name")) ?? "unknown"}|{FirstPresent(AttributeValue(association, "Name"), AttributeValue(association, "Member")) ?? "association"}", StringComparer.Ordinal)
             .Where(group => group.Count() > 1)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         foreach (var duplicate in duplicateAssociationKeys.Values.OrderBy(GetLine))
         {
-            AddGap(manifest, facts, item.RelativePath, RuleIds.LegacyDataDbml, "AmbiguousLegacyDataModelIdentity", "Duplicate DBML association names in the same source type require selector review.", duplicate);
+            var decision = ClassifyDbmlDuplicateAssociation();
+            AddRelationshipGap(
+                manifest,
+                facts,
+                item.RelativePath,
+                decision,
+                "dbml",
+                "association",
+                "Duplicate DBML association names in the same source type require selector review.",
+                duplicate);
         }
 
         foreach (var association in associations.OrderBy(GetLine))
         {
-            var associationName = AttributeValue(association, "Name") ?? AttributeValue(association, "Member") ?? "association";
+            var associationName = FirstPresent(AttributeValue(association, "Name"), AttributeValue(association, "Member")) ?? "association";
             var sourceTypeName = AttributeValue(association.Parent, "Name");
             var targetTypeName = AttributeValue(association, "Type");
             var associationKey = $"{sourceTypeName ?? "unknown"}|{associationName}";
-            var relationshipCoverageLabel = coverageLabel;
-            var relationshipLimitations = new List<string>();
-            if (duplicateAssociationKeys.ContainsKey(associationKey))
+            var relationshipDecision = ClassifyDbmlAssociation(
+                association,
+                duplicateTypeScopeNames,
+                duplicateTableScopeNames,
+                dbmlNamespace);
+            if (relationshipDecision.Decision == LegacyRelationshipDecision.EmitAnalysisGap)
             {
-                relationshipCoverageLabel = "reduced";
-                relationshipLimitations.Add("duplicate-relationship-name");
+                var message = relationshipDecision.SafeReasonCode switch
+                {
+                    "missing-endpoint" => "DBML association did not provide deterministic endpoint or key metadata.",
+                    "ambiguous-endpoint-candidates" => "DBML association endpoint or key candidates were ambiguous in descriptor-local scope.",
+                    "unsupported-relationship-shape" => "DBML association included provider-extension relationship metadata outside deterministic handling.",
+                    _ => "DBML association relationship metadata could not be classified deterministically."
+                };
+                AddRelationshipGap(
+                    manifest,
+                    facts,
+                    item.RelativePath,
+                    relationshipDecision,
+                    "dbml",
+                    "association",
+                    message,
+                    association);
+                continue;
             }
 
-            if (string.IsNullOrWhiteSpace(targetTypeName))
+            var duplicateRelationshipIdentity = duplicateAssociationKeys.ContainsKey(associationKey);
+            var relationshipCoverageLabel = coverageLabel;
+            var relationshipLimitations = DbmlRelationshipLimitations(
+                relationshipDecision,
+                sourceTypeName,
+                targetTypeName,
+                duplicateRelationshipIdentity);
+            if (relationshipDecision.Decision != LegacyRelationshipDecision.EmitRelationship
+                || duplicateRelationshipIdentity)
             {
                 relationshipCoverageLabel = "reduced";
-                relationshipLimitations.Add("missing-target-endpoint");
             }
 
             var properties = MetadataProperties("Dbml", metadataHash, "association");
@@ -456,10 +549,17 @@ public static class LegacyDataMetadataExtractor
             AddSafeName(properties, "associationName", "associationHash", associationName);
             AddSafeName(properties, "sourceEndpointName", "sourceEndpointHash", sourceTypeName);
             AddSafeName(properties, "targetEndpointName", "targetEndpointHash", targetTypeName);
-            AddSafeName(properties, "sourceMemberName", "sourceMemberHash", AttributeValue(association, "ThisKey"));
-            AddSafeName(properties, "targetMemberName", "targetMemberHash", AttributeValue(association, "OtherKey"));
+            AddSafeDbmlKeyList(properties, "sourceMemberName", "sourceMemberHash", AttributeValue(association, "ThisKey"));
+            AddSafeDbmlKeyList(properties, "targetMemberName", "targetMemberHash", AttributeValue(association, "OtherKey"));
             AddOptional(properties, "isForeignKey", AttributeValue(association, "IsForeignKey"));
-            AddRelationshipSemantics(properties, metadataFact.FactId, string.IsNullOrWhiteSpace(targetTypeName) ? "unidirectional" : "full", relationshipLimitations);
+            AddRelationshipSemantics(
+                properties,
+                metadataFact.FactId,
+                relationshipDecision.RelationshipEndpointCoverage
+                    ?? (string.IsNullOrWhiteSpace(sourceTypeName) || string.IsNullOrWhiteSpace(targetTypeName)
+                        ? "unidirectional"
+                        : "full"),
+                relationshipLimitations);
             AddModelIdentity(properties, "Dbml", "relationship", "mapping", item.RelativePath, "dbml-association", associationName, sourceTypeName, metadataFact.FactId, Parts(("association", associationName), ("source-type", sourceTypeName), ("target-type", targetTypeName), ("this-key", AttributeValue(association, "ThisKey")), ("other-key", AttributeValue(association, "OtherKey"))), relationshipCoverageLabel);
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataDbml, item.RelativePath, association, TargetFrom(properties, "associationName", "associationHash"), properties));
         }
@@ -677,7 +777,19 @@ public static class LegacyDataMetadataExtractor
         var ends = association.Elements().Where(element => element.Name.LocalName == "End").ToArray();
         if (ends.Length != 2)
         {
-            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataEdmx, "AmbiguousLegacyDataModelIdentity", "EDMX association did not contain exactly two deterministic endpoints.", association);
+            AddRelationshipGap(
+                manifest,
+                facts,
+                relativePath,
+                ClassifyEdmxRelationship(
+                    "csdl-association",
+                    LegacyRelationshipEndpointState.Ambiguous,
+                    LegacyRelationshipEndpointState.Ambiguous,
+                    existingFamilyAllowsUnidirectional: true),
+                "edmx",
+                "csdl-association",
+                "EDMX association did not contain exactly two deterministic endpoints.",
+                association);
             return;
         }
 
@@ -687,26 +799,55 @@ public static class LegacyDataMetadataExtractor
             || string.IsNullOrWhiteSpace(secondRole)
             || string.Equals(firstRole, secondRole, StringComparison.Ordinal))
         {
-            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataEdmx, "AmbiguousLegacyDataModelIdentity", "EDMX association endpoints were missing or duplicated.", association);
+            AddRelationshipGap(
+                manifest,
+                facts,
+                relativePath,
+                ClassifyEdmxRelationship(
+                    "csdl-association",
+                    LegacyRelationshipEndpointState.Ambiguous,
+                    LegacyRelationshipEndpointState.Ambiguous,
+                    existingFamilyAllowsUnidirectional: true),
+                "edmx",
+                "csdl-association",
+                "EDMX association endpoint roles were missing or duplicated.",
+                association);
             return;
         }
 
         var firstType = LocalName(AttributeValue(ends[0], "Type"));
         var secondType = LocalName(AttributeValue(ends[1], "Type"));
+        var relationshipDecision = ClassifyEdmxRelationship(
+            "csdl-association",
+            EdmxEndpointState(firstType),
+            EdmxEndpointState(secondType),
+            existingFamilyAllowsUnidirectional: true);
+        if (relationshipDecision.Decision == LegacyRelationshipDecision.EmitAnalysisGap)
+        {
+            AddRelationshipGap(
+                manifest,
+                facts,
+                relativePath,
+                relationshipDecision,
+                "edmx",
+                "csdl-association",
+                "EDMX association did not provide a deterministic conceptual type endpoint.",
+                association);
+            return;
+        }
+
         var relationshipCoverageLabel = coverageLabel;
-        var relationshipEndpointCoverage = "full";
-        var relationshipLimitations = new List<string>();
-        if (string.IsNullOrWhiteSpace(firstType) || string.IsNullOrWhiteSpace(secondType))
+        var inheritedEndpoint = (!string.IsNullOrWhiteSpace(firstType) && inheritedEdmxTypeNames.Contains(firstType))
+            || (!string.IsNullOrWhiteSpace(secondType) && inheritedEdmxTypeNames.Contains(secondType));
+        if (relationshipDecision.Decision != LegacyRelationshipDecision.EmitRelationship
+            || inheritedEndpoint)
         {
             relationshipCoverageLabel = "reduced";
-            relationshipEndpointCoverage = "unidirectional";
-            relationshipLimitations.Add("missing-endpoint-type");
         }
-        else if (inheritedEdmxTypeNames.Contains(firstType) || inheritedEdmxTypeNames.Contains(secondType))
-        {
-            relationshipCoverageLabel = "reduced";
-            relationshipLimitations.Add("inherited-endpoint-needs-review");
-        }
+        var relationshipLimitations = EdmxRelationshipLimitations(
+            relationshipDecision,
+            descriptorKind: "csdl-association",
+            inheritedEndpoint);
 
         var properties = MetadataProperties("Edmx", metadataHash, "csdl-association");
         properties["sourceSection"] = "CSDL";
@@ -718,7 +859,14 @@ public static class LegacyDataMetadataExtractor
         AddSafeName(properties, "targetEndpointRole", "targetEndpointRoleHash", secondRole);
         AddSafeName(properties, "sourceMultiplicity", "sourceMultiplicityHash", AttributeValue(ends[0], "Multiplicity"));
         AddSafeName(properties, "targetMultiplicity", "targetMultiplicityHash", AttributeValue(ends[1], "Multiplicity"));
-        AddRelationshipSemantics(properties, sourceMetadataFactId, relationshipEndpointCoverage, relationshipLimitations);
+        AddRelationshipSemantics(
+            properties,
+            sourceMetadataFactId,
+            relationshipDecision.RelationshipEndpointCoverage
+                ?? (string.IsNullOrWhiteSpace(firstType) || string.IsNullOrWhiteSpace(secondType)
+                    ? "unidirectional"
+                    : "full"),
+            relationshipLimitations);
         AddModelIdentity(
             properties,
             "Edmx",
@@ -747,19 +895,55 @@ public static class LegacyDataMetadataExtractor
         var endProperties = associationSetMapping.Elements().Where(element => element.Name.LocalName == "EndProperty").ToArray();
         if (endProperties.Length != 2)
         {
-            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataEdmx, "AmbiguousLegacyDataModelIdentity", "AssociationSetMapping did not contain exactly two deterministic endpoints.", associationSetMapping);
+            var endpointState = endProperties.Length < 2
+                ? LegacyRelationshipEndpointState.Missing
+                : LegacyRelationshipEndpointState.Ambiguous;
+            AddRelationshipGap(
+                manifest,
+                facts,
+                relativePath,
+                ClassifyEdmxRelationship(
+                    "msl-association",
+                    endpointState,
+                    endpointState,
+                    existingFamilyAllowsUnidirectional: false),
+                "edmx",
+                "msl-association",
+                endProperties.Length < 2
+                    ? "AssociationSetMapping did not provide two endpoint descriptors."
+                    : "AssociationSetMapping exposed more than two endpoint candidates.",
+                associationSetMapping);
             return;
         }
 
         var firstRole = AttributeValue(endProperties[0], "Name");
         var secondRole = AttributeValue(endProperties[1], "Name");
-        if (string.IsNullOrWhiteSpace(firstRole)
-            || string.IsNullOrWhiteSpace(secondRole)
-            || string.Equals(firstRole, secondRole, StringComparison.Ordinal))
+        var duplicateRole = !string.IsNullOrWhiteSpace(firstRole)
+            && string.Equals(firstRole, secondRole, StringComparison.Ordinal);
+        var relationshipDecision = ClassifyEdmxRelationship(
+            "msl-association",
+            duplicateRole ? LegacyRelationshipEndpointState.Ambiguous : EdmxEndpointState(firstRole),
+            duplicateRole ? LegacyRelationshipEndpointState.Ambiguous : EdmxEndpointState(secondRole),
+            existingFamilyAllowsUnidirectional: false);
+        if (relationshipDecision.Decision == LegacyRelationshipDecision.EmitAnalysisGap)
         {
-            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataEdmx, "AmbiguousLegacyDataModelIdentity", "AssociationSetMapping endpoints were missing or duplicated.", associationSetMapping);
+            AddRelationshipGap(
+                manifest,
+                facts,
+                relativePath,
+                relationshipDecision,
+                "edmx",
+                "msl-association",
+                duplicateRole
+                    ? "AssociationSetMapping endpoint roles were duplicated."
+                    : "AssociationSetMapping did not provide two deterministic endpoint roles.",
+                associationSetMapping);
             return;
         }
+
+        var relationshipCoverageLabel = relationshipDecision.Decision == LegacyRelationshipDecision.EmitRelationship
+            ? coverageLabel
+            : "reduced";
 
         var properties = MetadataProperties("Edmx", metadataHash, "msl-association");
         properties["sourceSection"] = "MSL";
@@ -768,7 +952,11 @@ public static class LegacyDataMetadataExtractor
         AddSafeName(properties, "storeEntitySetName", "storeEntitySetHash", AttributeValue(associationSetMapping, "StoreEntitySet"));
         AddSafeName(properties, "sourceEndpointName", "sourceEndpointHash", firstRole);
         AddSafeName(properties, "targetEndpointName", "targetEndpointHash", secondRole);
-        AddRelationshipSemantics(properties, sourceMetadataFactId, "full", Array.Empty<string>());
+        AddRelationshipSemantics(
+            properties,
+            sourceMetadataFactId,
+            relationshipDecision.RelationshipEndpointCoverage ?? "full",
+            relationshipDecision.Limitations);
         AddModelIdentity(
             properties,
             "Edmx",
@@ -780,7 +968,7 @@ public static class LegacyDataMetadataExtractor
             AttributeValue(associationSetMapping, "StoreEntitySet"),
             sourceMetadataFactId,
             Parts(("association", associationName), ("store-set", AttributeValue(associationSetMapping, "StoreEntitySet")), ("source-role", firstRole), ("target-role", secondRole)),
-            coverageLabel);
+            relationshipCoverageLabel);
         facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataEdmx, relativePath, associationSetMapping, TargetFrom(properties, "associationName", "associationHash"), properties));
     }
 
@@ -798,45 +986,77 @@ public static class LegacyDataMetadataExtractor
             {
                 Element = element,
                 Name = LocalQualifiedName(AttributeValue(element, "name")),
-                Table = LastXPathIdentifier(element.Elements().FirstOrDefault(IsXsdSelector) is { } selector ? AttributeValue(selector, "xpath") : null)
+                Table = LastXPathIdentifier(element.Elements().FirstOrDefault(IsXsdSelector) is { } selector ? AttributeValue(selector, "xpath") : null),
+                Fields = TypedDataSetConstraintFields(element)
             })
-            .Where(item => !string.IsNullOrWhiteSpace(item.Name) && !string.IsNullOrWhiteSpace(item.Table))
-            .Select(item => new ConstraintDefinition(item.Element, item.Name, item.Table!))
+            .Where(item => !string.IsNullOrWhiteSpace(item.Name))
+            .Select(item => new ConstraintDefinition(item.Element, item.Name, item.Table, item.Fields))
             .ToArray();
         var ambiguousConstraintNames = constraintDefinitions
             .GroupBy(item => item.Name, StringComparer.Ordinal)
-            .Where(group => group.Select(item => item.Table).Distinct(StringComparer.Ordinal).Count() > 1)
+            .Where(group => group.Count() > 1)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         foreach (var ambiguousGroup in ambiguousConstraintNames.Values.SelectMany(group => group).OrderBy(item => GetLine(item.Element)))
         {
-            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataTypedDataSet, "AmbiguousLegacyDataModelIdentity", "Typed DataSet constraint name resolved to multiple selector tables.", ambiguousGroup.Element);
+            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataTypedDataSet, "AmbiguousLegacyDataModelIdentity", "Typed DataSet constraint name resolved to multiple definitions.", ambiguousGroup.Element);
         }
 
-        var keyedTables = constraintDefinitions
-            .Where(item => !ambiguousConstraintNames.ContainsKey(item.Name))
+        var keyedConstraints = constraintDefinitions
+            .Where(item => !ambiguousConstraintNames.ContainsKey(item.Name)
+                && !string.IsNullOrWhiteSpace(item.Table))
             .GroupBy(item => item.Name, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First().Table, StringComparer.Ordinal);
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
 
         foreach (var keyref in document.Descendants().Where(IsXsdKeyRef).OrderBy(GetLine))
         {
             var relationName = AttributeValue(keyref, "name") ?? "keyref";
             var referencedKey = LocalQualifiedName(AttributeValue(keyref, "refer"));
             var referencesAmbiguousConstraint = ambiguousConstraintNames.ContainsKey(referencedKey);
-            var parentTableName = keyedTables.GetValueOrDefault(referencedKey);
+            var referencedConstraint = keyedConstraints.GetValueOrDefault(referencedKey);
+            var parentTableName = referencedConstraint?.Table;
             var selector = keyref.Elements().FirstOrDefault(IsXsdSelector);
             var childTableName = LastXPathIdentifier(AttributeValue(selector, "xpath"));
-            var coverageLabel = string.IsNullOrWhiteSpace(parentTableName) || string.IsNullOrWhiteSpace(childTableName) ? "reduced" : "full";
-            var limitations = new List<string>();
-            if (coverageLabel == "reduced")
+            var fieldState = referencesAmbiguousConstraint || referencedConstraint is null
+                ? LegacyRelationshipJoinOrKeyState.NotApplicable
+                : TypedDataSetConstraintFieldState(
+                    referencedConstraint?.Fields ?? [],
+                    TypedDataSetConstraintFields(keyref));
+            var relationshipDecision = ClassifyTypedDataSetRelationship(
+                "keyref",
+                referencesAmbiguousConstraint
+                    ? LegacyRelationshipEndpointState.Ambiguous
+                    : EndpointState(parentTableName),
+                EndpointState(childTableName),
+                fieldState);
+            if (relationshipDecision.Decision == LegacyRelationshipDecision.EmitAnalysisGap)
             {
-                limitations.Add("constraint-endpoint-needs-review");
+                AddRelationshipGap(
+                    manifest,
+                    facts,
+                    relativePath,
+                    relationshipDecision,
+                    "typed-dataset",
+                    "constraint-relation",
+                    referencesAmbiguousConstraint
+                        ? "Typed DataSet keyref referenced an ambiguous constraint name."
+                        : fieldState is LegacyRelationshipJoinOrKeyState.Missing or LegacyRelationshipJoinOrKeyState.Ambiguous
+                            ? "Typed DataSet keyref fields could not be matched deterministically."
+                            : "Typed DataSet keyref did not provide a deterministic parent or child endpoint.",
+                    keyref);
+                if (fieldState is LegacyRelationshipJoinOrKeyState.Missing or LegacyRelationshipJoinOrKeyState.Ambiguous
+                    || (string.IsNullOrWhiteSpace(parentTableName)
+                        && string.IsNullOrWhiteSpace(childTableName)))
+                {
+                    continue;
+                }
             }
 
-            if (referencesAmbiguousConstraint)
-            {
-                limitations.Add("ambiguous-constraint-name");
-                AddGap(manifest, facts, relativePath, RuleIds.LegacyDataTypedDataSet, "AmbiguousLegacyDataModelIdentity", "Typed DataSet keyref referenced an ambiguous constraint name.", keyref);
-            }
+            var coverageLabel = relationshipDecision.Decision == LegacyRelationshipDecision.EmitRelationship
+                ? "full"
+                : "reduced";
+            var limitations = TypedDataSetRelationshipLimitations(
+                relationshipDecision,
+                "keyref");
 
             var properties = MetadataProperties("TypedDataSet", metadataHash, "constraint-relation");
             properties["mappingKind"] = "relation";
@@ -846,7 +1066,14 @@ public static class LegacyDataMetadataExtractor
             AddSafeName(properties, "sourceEndpointName", "sourceEndpointHash", parentTableName);
             AddSafeName(properties, "targetEndpointName", "targetEndpointHash", childTableName);
             AddSafeName(properties, "referencedConstraintName", "referencedConstraintHash", referencedKey);
-            AddRelationshipSemantics(properties, sourceMetadataFactId, coverageLabel == "reduced" ? "unidirectional" : "full", limitations);
+            AddRelationshipSemantics(
+                properties,
+                sourceMetadataFactId,
+                relationshipDecision.RelationshipEndpointCoverage
+                    ?? (string.IsNullOrWhiteSpace(parentTableName) || string.IsNullOrWhiteSpace(childTableName)
+                        ? "unidirectional"
+                        : "full"),
+                limitations);
             AddModelIdentity(
                 properties,
                 "TypedDataSet",
@@ -937,12 +1164,28 @@ public static class LegacyDataMetadataExtractor
         {
             var parentTableName = AttributeValue(relation, "parent");
             var childTableName = AttributeValue(relation, "child");
-            var relationshipCoverageLabel = string.IsNullOrWhiteSpace(parentTableName) || string.IsNullOrWhiteSpace(childTableName) ? "reduced" : "full";
-            var limitations = new List<string>();
-            if (relationshipCoverageLabel == "reduced")
+            var relationshipDecision = ClassifyTypedDataSetRelationship(
+                "relation",
+                EndpointState(parentTableName),
+                EndpointState(childTableName));
+            if (relationshipDecision.Decision == LegacyRelationshipDecision.EmitAnalysisGap)
             {
-                limitations.Add("missing-relationship-endpoint");
+                AddRelationshipGap(
+                    manifest,
+                    facts,
+                    item.RelativePath,
+                    relationshipDecision,
+                    "typed-dataset",
+                    "relation",
+                    "Typed DataSet relationship did not provide a deterministic parent or child endpoint.",
+                    relation);
+                continue;
             }
+
+            var relationshipCoverageLabel = relationshipDecision.CoverageLabel;
+            var limitations = TypedDataSetRelationshipLimitations(
+                relationshipDecision,
+                "relation");
 
             var properties = MetadataProperties("TypedDataSet", metadataHash, "relation");
             properties["mappingKind"] = "relation";
@@ -951,7 +1194,14 @@ public static class LegacyDataMetadataExtractor
             AddSafeName(properties, "childTableName", "childTableHash", childTableName);
             AddSafeName(properties, "sourceEndpointName", "sourceEndpointHash", parentTableName);
             AddSafeName(properties, "targetEndpointName", "targetEndpointHash", childTableName);
-            AddRelationshipSemantics(properties, metadataFact.FactId, relationshipCoverageLabel == "reduced" ? "unidirectional" : "full", limitations);
+            AddRelationshipSemantics(
+                properties,
+                metadataFact.FactId,
+                relationshipDecision.RelationshipEndpointCoverage
+                    ?? (string.IsNullOrWhiteSpace(parentTableName) || string.IsNullOrWhiteSpace(childTableName)
+                        ? "unidirectional"
+                        : "full"),
+                limitations);
             AddModelIdentity(properties, "TypedDataSet", "relationship", "generated", item.RelativePath, "typed-dataset-relation", AttributeValue(relation, "name"), parentTableName, metadataFact.FactId, Parts(("relation", AttributeValue(relation, "name")), ("parent", parentTableName), ("child", childTableName)), relationshipCoverageLabel);
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataTypedDataSet, item.RelativePath, relation, TargetFrom(properties, "relationName", "relationHash"), properties));
         }
@@ -1546,6 +1796,407 @@ public static class LegacyDataMetadataExtractor
             }));
     }
 
+    private static void AddRelationshipGap(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string relativePath,
+        LegacyRelationshipGapDecision decision,
+        string relationshipFamily,
+        string descriptorKind,
+        string message,
+        XObject? node,
+        int? explicitLine = null)
+    {
+        if (decision.Decision != LegacyRelationshipDecision.EmitAnalysisGap
+            || string.IsNullOrWhiteSpace(decision.Classification))
+        {
+            throw new ArgumentException("Relationship gap emission requires an analysis-gap classifier decision.", nameof(decision));
+        }
+
+        var line = explicitLine ?? (node is null ? 1 : GetLine(node));
+        var descriptorOrdinal = GetDocumentNodeOrdinal(node);
+        facts.Add(FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            decision.RuleId,
+            decision.EvidenceTier,
+            Evidence(relativePath, line, $"{relativePath}:{line}:{decision.Classification}:{decision.SafeReasonCode}:{descriptorOrdinal}"),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["classification"] = decision.Classification,
+                ["coverage"] = decision.CoverageLabel,
+                ["descriptorKind"] = descriptorKind,
+                ["descriptorOrdinal"] = descriptorOrdinal.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["limitations"] = string.Join(";", decision.Limitations),
+                ["message"] = message,
+                ["modelRelationshipRuleId"] = RuleIds.LegacyDataModelRelationship,
+                ["relationshipFamily"] = relationshipFamily,
+                ["runtimeProof"] = "False",
+                ["safeReasonCode"] = decision.SafeReasonCode
+            }));
+    }
+
+    private static int GetDocumentNodeOrdinal(XObject? node)
+    {
+        if (node is not XElement element || element.Document is null)
+        {
+            return 0;
+        }
+
+        var ordinal = 0;
+        foreach (var candidate in element.Document.Descendants())
+        {
+            if (ReferenceEquals(candidate, element))
+            {
+                return ordinal;
+            }
+
+            ordinal++;
+        }
+
+        return 0;
+    }
+
+    private static LegacyRelationshipGapDecision ClassifyDbmlDuplicateAssociation()
+    {
+        return LegacyDataRelationshipGapClassifier.Classify(new LegacyRelationshipGapInput(
+            "dbml",
+            RuleIds.LegacyDataDbml,
+            "association",
+            IsRelationshipDescriptor: true,
+            LegacyRelationshipEndpointState.Deterministic,
+            LegacyRelationshipEndpointState.Deterministic,
+            LegacyRelationshipJoinOrKeyState.NotApplicable,
+            LegacyRelationshipParserCoverageState.Full,
+            LegacyRelationshipShapeFlags.DuplicateRelationshipIdentity,
+            ExistingFamilyAllowsUnidirectional: true));
+    }
+
+    private static LegacyRelationshipGapDecision ClassifyDbmlAssociation(
+        XElement association,
+        IReadOnlySet<string> duplicateTypeScopeNames,
+        IReadOnlySet<string> duplicateTableScopeNames,
+        XNamespace dbmlNamespace)
+    {
+        var sourceTypeName = AttributeValue(association.Parent, "Name");
+        var targetTypeName = AttributeValue(association, "Type");
+        var sourceTable = association.Ancestors().FirstOrDefault(element => element.Name.LocalName == "Table");
+        var sourceTableName = FirstPresent(AttributeValue(sourceTable, "Name"), AttributeValue(sourceTable, "Member"));
+        var sourceScopeAmbiguous = (!string.IsNullOrWhiteSpace(sourceTypeName) && duplicateTypeScopeNames.Contains(sourceTypeName))
+            || (!string.IsNullOrWhiteSpace(sourceTableName) && duplicateTableScopeNames.Contains(sourceTableName));
+        var targetScopeAmbiguous = !string.IsNullOrWhiteSpace(targetTypeName)
+            && duplicateTypeScopeNames.Contains(targetTypeName);
+        return LegacyDataRelationshipGapClassifier.Classify(new LegacyRelationshipGapInput(
+            "dbml",
+            RuleIds.LegacyDataDbml,
+            "association",
+            IsRelationshipDescriptor: true,
+            DbmlEndpointState(sourceTypeName, sourceScopeAmbiguous),
+            DbmlEndpointState(targetTypeName, targetScopeAmbiguous),
+            DbmlJoinOrKeyState(association),
+            LegacyRelationshipParserCoverageState.Full,
+            HasDbmlProviderExtension(association, dbmlNamespace)
+                ? LegacyRelationshipShapeFlags.UnsupportedRelationshipShape
+                : LegacyRelationshipShapeFlags.None,
+            ExistingFamilyAllowsUnidirectional: true));
+    }
+
+    private static LegacyRelationshipEndpointState DbmlEndpointState(string? endpoint, bool ambiguousScope)
+    {
+        if (ambiguousScope)
+        {
+            return LegacyRelationshipEndpointState.Ambiguous;
+        }
+
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            return LegacyRelationshipEndpointState.Missing;
+        }
+
+        return IsSafeIdentifier(endpoint)
+            ? LegacyRelationshipEndpointState.Deterministic
+            : LegacyRelationshipEndpointState.UnsafeRedacted;
+    }
+
+    private static LegacyRelationshipJoinOrKeyState DbmlJoinOrKeyState(XElement association)
+    {
+        var sourceKey = AttributeValue(association, "ThisKey");
+        var targetKey = AttributeValue(association, "OtherKey");
+        if (string.IsNullOrWhiteSpace(sourceKey) || string.IsNullOrWhiteSpace(targetKey))
+        {
+            return LegacyRelationshipJoinOrKeyState.Missing;
+        }
+
+        var sourceMembers = sourceKey.Split(',', StringSplitOptions.None).Select(member => member.Trim()).ToArray();
+        var targetMembers = targetKey.Split(',', StringSplitOptions.None).Select(member => member.Trim()).ToArray();
+        if (sourceMembers.Any(string.IsNullOrWhiteSpace)
+            || targetMembers.Any(string.IsNullOrWhiteSpace)
+            || sourceMembers.Length != targetMembers.Length
+            || sourceMembers.Distinct(StringComparer.Ordinal).Count() != sourceMembers.Length
+            || targetMembers.Distinct(StringComparer.Ordinal).Count() != targetMembers.Length)
+        {
+            return LegacyRelationshipJoinOrKeyState.Ambiguous;
+        }
+
+        return sourceMembers.Concat(targetMembers).All(IsSafeIdentifier)
+            ? LegacyRelationshipJoinOrKeyState.Deterministic
+            : LegacyRelationshipJoinOrKeyState.UnsafeRedacted;
+    }
+
+    private static bool HasDbmlProviderExtension(XElement association, XNamespace dbmlNamespace)
+    {
+        return association.DescendantsAndSelf().Any(element =>
+            element.Name.Namespace != dbmlNamespace
+            || element.Attributes().Any(attribute =>
+                !attribute.IsNamespaceDeclaration
+                && attribute.Name.Namespace != XNamespace.None
+                && attribute.Name.Namespace != XNamespace.Xml
+                && attribute.Name.Namespace != dbmlNamespace));
+    }
+
+    private static IReadOnlyList<string> DbmlRelationshipLimitations(
+        LegacyRelationshipGapDecision decision,
+        string? sourceTypeName,
+        string? targetTypeName,
+        bool duplicateRelationshipIdentity)
+    {
+        var limitations = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var limitation in decision.Limitations)
+        {
+            switch (limitation)
+            {
+                case "duplicate-relationship-identity":
+                    limitations.Add("duplicate-relationship-name");
+                    break;
+                case "missing-endpoint":
+                    if (string.IsNullOrWhiteSpace(sourceTypeName))
+                    {
+                        limitations.Add("missing-source-endpoint");
+                    }
+
+                    if (string.IsNullOrWhiteSpace(targetTypeName))
+                    {
+                        limitations.Add("missing-target-endpoint");
+                    }
+
+                    break;
+                default:
+                    limitations.Add(limitation);
+                    break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(sourceTypeName))
+        {
+            limitations.Add("missing-source-endpoint");
+        }
+
+        if (string.IsNullOrWhiteSpace(targetTypeName))
+        {
+            limitations.Add("missing-target-endpoint");
+        }
+
+        if (duplicateRelationshipIdentity)
+        {
+            limitations.Add("duplicate-relationship-name");
+        }
+
+        return limitations.ToArray();
+    }
+
+    private static LegacyRelationshipGapDecision ClassifyTypedDataSetRelationship(
+        string descriptorKind,
+        LegacyRelationshipEndpointState sourceEndpointState,
+        LegacyRelationshipEndpointState targetEndpointState,
+        LegacyRelationshipJoinOrKeyState joinOrKeyState = LegacyRelationshipJoinOrKeyState.NotApplicable)
+    {
+        return LegacyDataRelationshipGapClassifier.Classify(new LegacyRelationshipGapInput(
+            "typed-dataset",
+            RuleIds.LegacyDataTypedDataSet,
+            descriptorKind,
+            IsRelationshipDescriptor: true,
+            sourceEndpointState,
+            targetEndpointState,
+            joinOrKeyState,
+            LegacyRelationshipParserCoverageState.Full,
+            LegacyRelationshipShapeFlags.None,
+            ExistingFamilyAllowsUnidirectional: true));
+    }
+
+    private static IReadOnlyList<string?> TypedDataSetConstraintFields(XElement constraint)
+    {
+        return constraint.Elements()
+            .Where(element => element.Name == Xs + "field")
+            .Select(element => LastXPathIdentifier(AttributeValue(element, "xpath")))
+            .ToArray();
+    }
+
+    private static LegacyRelationshipJoinOrKeyState TypedDataSetConstraintFieldState(
+        IReadOnlyList<string?> keyFields,
+        IReadOnlyList<string?> keyrefFields)
+    {
+        if (keyFields.Count == 0 || keyrefFields.Count == 0)
+        {
+            return LegacyRelationshipJoinOrKeyState.Missing;
+        }
+
+        if (keyFields.Count != keyrefFields.Count
+            || keyFields.Any(string.IsNullOrWhiteSpace)
+            || keyrefFields.Any(string.IsNullOrWhiteSpace)
+            || keyFields.Distinct(StringComparer.Ordinal).Count() != keyFields.Count
+            || keyrefFields.Distinct(StringComparer.Ordinal).Count() != keyrefFields.Count)
+        {
+            return LegacyRelationshipJoinOrKeyState.Ambiguous;
+        }
+
+        return keyFields.Concat(keyrefFields).All(field => IsSafeIdentifier(field!))
+            ? LegacyRelationshipJoinOrKeyState.Deterministic
+            : LegacyRelationshipJoinOrKeyState.UnsafeRedacted;
+    }
+
+    private static LegacyRelationshipGapDecision ClassifyEdmxRelationship(
+        string descriptorKind,
+        LegacyRelationshipEndpointState sourceEndpointState,
+        LegacyRelationshipEndpointState targetEndpointState,
+        bool existingFamilyAllowsUnidirectional)
+    {
+        return LegacyDataRelationshipGapClassifier.Classify(new LegacyRelationshipGapInput(
+            "edmx",
+            RuleIds.LegacyDataEdmx,
+            descriptorKind,
+            IsRelationshipDescriptor: true,
+            sourceEndpointState,
+            targetEndpointState,
+            LegacyRelationshipJoinOrKeyState.NotApplicable,
+            LegacyRelationshipParserCoverageState.Full,
+            LegacyRelationshipShapeFlags.None,
+            ExistingFamilyAllowsUnidirectional: existingFamilyAllowsUnidirectional));
+    }
+
+    private static LegacyRelationshipEndpointState EdmxEndpointState(string? endpoint)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            return LegacyRelationshipEndpointState.Missing;
+        }
+
+        return IsSafeIdentifier(endpoint)
+            ? LegacyRelationshipEndpointState.Deterministic
+            : LegacyRelationshipEndpointState.UnsafeRedacted;
+    }
+
+    private static IReadOnlyList<string> EdmxRelationshipLimitations(
+        LegacyRelationshipGapDecision decision,
+        string descriptorKind,
+        bool inheritedEndpoint)
+    {
+        var limitations = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var limitation in decision.Limitations)
+        {
+            limitations.Add(limitation == "missing-endpoint" && descriptorKind == "csdl-association"
+                ? "missing-endpoint-type"
+                : limitation);
+        }
+
+        if (inheritedEndpoint)
+        {
+            limitations.Add("inherited-endpoint-needs-review");
+        }
+
+        return limitations.ToArray();
+    }
+
+    private static LegacyRelationshipGapDecision ClassifyNHibernateRelationship(
+        string descriptorKind,
+        LegacyRelationshipEndpointState sourceEndpointState,
+        LegacyRelationshipEndpointState targetEndpointState)
+    {
+        return LegacyDataRelationshipGapClassifier.Classify(new LegacyRelationshipGapInput(
+            "nhibernate-hbm",
+            RuleIds.LegacyDataOrmNHibernate,
+            NormalizeToken(descriptorKind, "relationship"),
+            IsRelationshipDescriptor: true,
+            sourceEndpointState,
+            targetEndpointState,
+            LegacyRelationshipJoinOrKeyState.NotApplicable,
+            LegacyRelationshipParserCoverageState.Full,
+            LegacyRelationshipShapeFlags.None,
+            ExistingFamilyAllowsUnidirectional: true));
+    }
+
+    private static LegacyRelationshipEndpointState NHibernateEndpointState(string? endpoint)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            return LegacyRelationshipEndpointState.Missing;
+        }
+
+        return IsSafeIdentifier(endpoint)
+            ? LegacyRelationshipEndpointState.Deterministic
+            : LegacyRelationshipEndpointState.UnsafeRedacted;
+    }
+
+    private static IReadOnlyList<string> NHibernateRelationshipLimitations(
+        LegacyRelationshipGapDecision decision,
+        string? sourceEndpoint,
+        string? targetEndpoint)
+    {
+        var limitations = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var limitation in decision.Limitations)
+        {
+            if (limitation != "missing-endpoint")
+            {
+                limitations.Add(limitation);
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(sourceEndpoint))
+            {
+                limitations.Add("missing-source-endpoint");
+            }
+
+            if (string.IsNullOrWhiteSpace(targetEndpoint))
+            {
+                limitations.Add("missing-target-endpoint");
+            }
+        }
+
+        return limitations.ToArray();
+    }
+
+    private static LegacyRelationshipEndpointState EndpointState(string? endpoint)
+    {
+        return string.IsNullOrWhiteSpace(endpoint)
+            ? LegacyRelationshipEndpointState.Missing
+            : LegacyRelationshipEndpointState.Deterministic;
+    }
+
+    private static IReadOnlyList<string> TypedDataSetRelationshipLimitations(
+        LegacyRelationshipGapDecision decision,
+        string descriptorKind)
+    {
+        if (decision.Decision == LegacyRelationshipDecision.EmitRelationship)
+        {
+            return [];
+        }
+
+        var limitations = new SortedSet<string>(StringComparer.Ordinal);
+        if (descriptorKind == "keyref")
+        {
+            limitations.Add("constraint-endpoint-needs-review");
+            if (decision.SafeReasonCode == "ambiguous-endpoint-candidates")
+            {
+                limitations.Add("ambiguous-constraint-name");
+            }
+        }
+        else if (descriptorKind == "relation" && decision.SafeReasonCode == "missing-endpoint")
+        {
+            limitations.Add("missing-relationship-endpoint");
+        }
+
+        return limitations.ToArray();
+    }
+
     private static void AddUnsupportedOrmGap(
         ScanManifest manifest,
         List<CodeFact> facts,
@@ -1756,6 +2407,25 @@ public static class LegacyDataMetadataExtractor
         }
 
         LegacyDataSafeValues.AddSafeOrHash(properties, clearKey, hashKey, value, "hashed-unsafe-value");
+    }
+
+    private static void AddSafeDbmlKeyList(SortedDictionary<string, string> properties, string clearKey, string hashKey, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        var members = value.Split(',', StringSplitOptions.None).Select(member => member.Trim()).ToArray();
+        if (members.Length > 0
+            && members.All(IsSafeIdentifier)
+            && members.Distinct(StringComparer.Ordinal).Count() == members.Length)
+        {
+            properties[clearKey] = string.Join(',', members);
+            return;
+        }
+
+        AddSafeName(properties, clearKey, hashKey, value);
     }
 
     private static void AddHashOnly(SortedDictionary<string, string> properties, string key, string? value)
@@ -2272,7 +2942,7 @@ public static class LegacyDataMetadataExtractor
 
     private sealed record TypedDataSetIndicatorResult(bool HasIntrinsicIndicator, bool HasDescriptorContent);
 
-    private sealed record ConstraintDefinition(XElement Element, string Name, string Table);
+    private sealed record ConstraintDefinition(XElement Element, string Name, string? Table, IReadOnlyList<string?> Fields);
 
     private sealed record GeneratedCandidate(string FilePath, IReadOnlyDictionary<string, IReadOnlyList<int>> TypeLines)
     {

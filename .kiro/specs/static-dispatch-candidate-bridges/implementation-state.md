@@ -1,5 +1,10 @@
 # Static Dispatch Candidate Bridges Implementation State
 
+Status: implementation-task-6-merged-with-follow-ups
+Readiness: follow-up-tasks-available
+Merged PR 1: #331 (`086ad376e387ea8d87e430175ef2673cbc74c0f1`)
+Merged PR 2: #333 (`84f72e0faa9dd6c106c625de175a194d9c1515ff`)
+
 ## Branch
 
 - Branch: `codex/impl-static-dispatch-candidate-bridges-task6`
@@ -9,11 +14,9 @@
   traversal in the shared builder
 - Suggested PR target: `dev`
 
-## Current Status
+## Current Merged State
 
-Status: `implementation-slice-complete-awaiting-pr-loop`
-
-This branch continues task 6 after PR #331. It keeps the existing
+This branch completed the selected Task 6 slice after PR #331. It keeps the existing
 `tracemap paths` JSON/Markdown shape while strengthening the shared
 `StaticDispatchCandidateBuilder` implementation and tests.
 
@@ -200,7 +203,8 @@ appropriate.
   gaps remain deferred within task 6.
 - Route-flow, reverse, impact, report/portfolio, vault, and docs-export
   consumption remain deferred to later slices.
-- Record the final PR-loop ACK decision in the handoff.
+- The selected Task 6 slice merged through PR #333; later tasks remain explicit
+  follow-ups.
 
 ## PR Review Loop Notes
 
@@ -211,4 +215,6 @@ appropriate.
 - Patched the authorized findings by precomputing the override target map,
   pruning repeated override traversal, normalizing unknown evidence tiers to
   `Tier4Unknown`, and adding a depth-cap truncation gap.
-- Final ACK decision is pending after the review-fix push.
+- Final state: PR #333 merged into `dev` as
+  `84f72e0faa9dd6c106c625de175a194d9c1515ff` from exact reviewed head
+  `c5d79cbdb2ef9e01d1265e3ff8218bf96d2e88e8`.

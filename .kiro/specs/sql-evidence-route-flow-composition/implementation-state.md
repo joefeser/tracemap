@@ -1,15 +1,18 @@
 # SQL Evidence Route-Flow Composition Implementation State
 
-Status: implementation-complete-awaiting-pr-review
-Implementation branch: `codex/implement-sql-evidence-release-review-composition`
+Status: targets-a-b-merged-closeout-complete-awaiting-pr-review
+Implementation branch: `codex/sql-runway-acceptance-status-closeout`
 Target base: `dev`
 Public claim level: static evidence packet
 
+Composition PRs: #475 (Target B) and #483 (Target A)
+
 ## Scope State
 
-Spec skeleton only — no code implemented in this pass. This slice **composes**
-the already-shipped PostgreSQL SQL runway evidence into the combined route-flow
-report and/or the release-review packet. It does not add SQL extraction.
+Implementation now includes both composition targets in separate focused PRs:
+Target B is shipped on `dev`, and this branch implements Target A. Both reuse
+the already-shipped PostgreSQL SQL runway evidence without adding SQL
+extraction.
 
 Confirmed shipped on `main` at spec creation (audited files present at HEAD):
 
@@ -30,8 +33,9 @@ Confirmed composition gap (the reason this spec exists):
 
 ## Implementation Choices To Record When Started
 
-- This PR delivers Target B (release-review) only. Target A (route-flow) is
-  deferred to a separate PR so this slice stays focused.
+- The preceding focused PR delivered Target B (release-review) only. Target A
+  is implemented on the separate branch recorded above so both slices stay
+  focused.
 - A tiny read-side persistence hook is required: `facts` and `combined_facts`
   preserve the already-emitted `EvidenceSpan.ExtractorId` and
   `EvidenceSpan.ExtractorVersion` in additive columns, and release-review reads
@@ -41,6 +45,24 @@ Confirmed composition gap (the reason this spec exists):
   coverage, or extractor-version behavior changes.
 - No new sample fixture is planned; Target B tests reuse the existing SQL
   extractors and synthetic release-review indexes.
+
+### Target A Reuse / Read Decision
+
+- Target A is a separate focused PR from `origin/dev@3dd7e455503e5bad5028323254c59976ffa75a10`.
+- Route-flow will reuse the Target B additive `combined_facts.extractor_id` /
+  `extractor_version` persistence runway and the same exact shipped SQL rule
+  allowlist. It will reconstruct only already-emitted facts from the combined
+  index and pass them through `SqlRunbookPacketBuilder`; it will not parse SQL,
+  change extraction, or introduce facts, rules, tiers, coverage labels, or
+  extractor versions.
+- SQL-context candidates will be added only when the selected route already has
+  a data-facing dependency surface. Inputs are source-scoped to those selected
+  surfaces; a data-facing source with no compatible context steps receives a
+  structured `sql-context` gap candidate instead of a silent omission.
+- Projection is limited to the runbook packet's categorical context, transition
+  checkpoint, prerequisite capability/status/context-role codes, stop-condition
+  codes, and safe provenance. Raw properties and SQL text never enter the
+  context-group metadata.
 
 ### Read Gate Inventory
 
@@ -148,11 +170,99 @@ Promotion review also aligned single-index SQL findings to the canonical
 review counts, and made missing generic finding provenance explicit with
 non-null `not-recorded` values.
 
-## Deferred From This PR
+## Implemented Target A
 
-- Target A route-flow SQL context groups (Phase 3).
-- Acceptance cleanup (Phase 5.1).
-- Status-drift and README cleanup (Phase 6).
+- `CombinedRouteFlowReport.BuildContextGroups` now adds source-scoped
+  `sql-context` candidates only when selected route rows already reach a
+  `sql-query` or `sql-persistence` surface.
+- The candidates reuse Target B's exact SQL runway reader and
+  `SqlRunbookPacketBuilder` projection. They render ordered engine/server/
+  database/schema/mode context, ordered step kinds, transition checkpoints,
+  permission capability/status/context-role codes, and stop-condition codes in
+  safe JSON and Markdown metadata.
+- Context groups preserve upstream rule IDs, evidence tiers, coverage labels,
+  safe file spans, commit SHA, extractor IDs/versions, supporting fact IDs, and
+  limitations. Multiple upstream extractors remain enumerated in safe metadata;
+  a single common extractor remains first-class group evidence.
+- A selected SQL data-facing source with missing context, missing extractor
+  provenance, or no compatible context steps receives a Tier 4
+  `cataloged-sql-context-gap` row under `database.sql.context.gap.v1`.
+- `sql-context` has deterministic rank 6, after `query` and before
+  `data-surface`. No extraction, fact/rule/tier/coverage, or extractor-version
+  behavior changed.
+
+### Target A Validation
+
+- Focused `CombinedRouteFlowTests`: 72 passed.
+- Focused release-review/runbook regression tests: 37 passed.
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with 0 errors;
+  existing `NU1903` advisory warnings remain for
+  `SQLitePCLRaw.lib.e_sqlite3` 2.1.11.
+- `dotnet test src/dotnet/TraceMap.sln --no-build --no-restore`: 763 passed,
+  0 failed. One first-pass environment-sensitive restore diagnostic did not
+  observe its forced restore failure; it passed immediately in isolation and
+  the complete rerun passed.
+- Checked-in-fixture SQL route-flow smoke: copied the public demo endpoint and
+  SQL operator-runbook fixture into temporary storage, scanned and combined one
+  source, and produced ordered `sql-context` groups with categorical context,
+  prerequisite statuses, stop codes, rule IDs, spans, extractor versions, and
+  supporting fact IDs. Planted host/password/scheduled-command sentinels,
+  `safe to run`, local paths, and temporary paths were absent from Markdown and
+  JSON.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+
+First ACK patch authority on PR #483 closed the current review findings by:
+recording missing SQL context as a packet-level `RouteFlowGap`, pairing
+extractor ID/version fallback decisions atomically, pre-indexing SQL inputs by
+safe source label, removing a test-only raw SQL property, and applying the
+route-flow safety selector to each categorical metadata token before rendering.
+An unsafe stop-condition sentinel proves the token is hashed rather than
+rendered. Post-fix focused tests (109), full tests (763), build, checked-in SQL
+route-flow smoke, private-path guard, and diff check all pass.
+
+## Deferred From Target A PR
+
+- Target B is already shipped and is reused without release-review behavior or
+  status changes beyond exposing its internal read helper to route-flow.
+- Acceptance cleanup (Phase 5.1) and status-drift/README cleanup (Phase 6) were
+  deferred from #483 and are completed by the closeout below. Site work shipped
+  separately; unrelated route-flow cleanup remains outside this spec.
+
+## Acceptance And Status Closeout
+
+This focused documentation slice closes Phase 5.1 and Phase 6 after auditing
+`origin/dev@da7f4f2c56dcd4b88c2abd82bdff04a9a7687309` and live GitHub merge
+records. It does not change extraction, facts, rules, tiers, coverage,
+rendering, or public claim level.
+
+- `docs/ACCEPTANCE.md` now names the execution-context, permission,
+  archive-link, secret-safety, runbook, release-review, and route-flow
+  composition invariants together with their non-claims and leak boundary.
+- `docs/NEXT_EXECUTION_REPORT.md` now distinguishes the product on `main` from
+  additional merged work on `dev`, removes the completed Swift recommendation,
+  and selects the reviewed legacy relationship spec as the next product slice.
+- Headerless evidence-export and route-centered state files now have parseable
+  shipped-with-follow-ups statuses.
+- Legacy relationship state now records that PR #398 merged a reviewed spec but
+  no product slice; static-dispatch state records the merged PR #331/#333 Task 6
+  slices while leaving later tasks visible.
+- `README.md` now documents the shipped PostgreSQL-first SQL evidence runway,
+  generated runbook artifacts, release-review/route-flow composition, and
+  static-only limitations.
+
+Closeout validation:
+
+- focused SQL execution-context, secret-safety, permission, archive-link,
+  runbook, release-review, and route-flow tests: 149 passed;
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero errors
+  and the existing eight `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisories;
+- `dotnet test src/dotnet/TraceMap.sln --no-build --no-restore`: 815 passed;
+- README SQL documentation links resolve to checked-in files;
+- all five reconciled implementation-state files expose a top-level parseable
+  `Status:` line;
+- `./scripts/check-private-paths.sh`: passed; and
+- `git diff --check`: passed.
 
 ## Related Specs
 

@@ -1,151 +1,145 @@
 # TraceMap Next Execution Report
 
-Date: 2026-06-27
+Date: 2026-07-20
 
-## Current State
+## Branch State
 
-- `dev` is the active integration branch for implementation loops.
-- Main promotions remain human-mediated and should happen only at slice
-  boundaries.
-- Legacy .NET v0 is complete on `dev`. Route-flow Task 10 and the follow-up
-  hardening slices landed; remaining legacy .NET work is focused depth or polish,
-  not v0 foundation.
-- Keep the site manager lane separate from core implementation work.
+- `main` is the human-mediated release branch at
+  `3dd7e455503e5bad5028323254c59976ffa75a10`.
+- `dev` is the active integration branch at
+  `da7f4f2c56dcd4b88c2abd82bdff04a9a7687309` before this closeout slice.
+- Main promotions remain owner-mediated. ACK `merge_ready` on a feature-to-dev
+  PR does not authorize an automatic dev-to-main promotion.
+- The public site lane remains separate from core implementation unless it is
+  explicitly selected.
 
 ## Product Shape On Main
 
-TraceMap now has a broad deterministic static-evidence base:
+`main` contains the deterministic multi-language evidence foundation and the
+SQL evidence runway:
 
-- .NET scanner, reducer, graph/flow facts, and reporting commands.
-- TypeScript scanner.
-- Python scanner MVP plus endpoint/SQL detail slices.
-- JVM scanner MVP for Java plus Kotlin syntax fallback.
-- Combined index builder.
-- Combined dependency report, paths, diff, reverse query, and change impact.
-- Route-flow and property-flow reports.
-- Snapshot diff by SHA/index.
-- SQL dependency surfaces, query pattern reporting, and SQL schema impact.
-- Package dependency surfaces and package upgrade impact.
-- Multi-index portfolio report.
-- API/DTO contract diff and contract delta reducer paths.
-- Release-review report with opt-in deterministic review priority scoring.
-- Static HTML evidence explorer first slice.
-- Obsidian/vault export with hidden/local safety fixes.
-- Legacy .NET evidence families including WebForms, WinForms, ASMX/SOAP, WCF,
-  Remoting, legacy ASP.NET routes, legacy build diagnostics, legacy data
-  metadata, and legacy sample evidence packs.
-- Static `tracemap.tools` site under `site/`, built by Amplify from `site/dist`.
+- .NET/C#, TypeScript, Python, JVM/Java/Kotlin, and Swift scanners;
+- standard manifest, NDJSON, SQLite, Markdown, and analyzer-log artifacts;
+- combine, report, paths, reverse, route-flow, property-flow, diff, impact,
+  portfolio, contract-diff, snapshot-diff, vault, docs-export, explorer, and
+  release-review workflows;
+- legacy .NET evidence families for WebForms, WinForms, ASMX/SOAP, WCF,
+  Remoting, legacy routes/build diagnostics, and legacy data metadata;
+- PostgreSQL-first SQL execution-context, protected-material, permission,
+  archive-link, and operator-runbook evidence;
+- release-review SQL runway composition with structured gaps and preserved
+  upstream provenance;
+- hidden terminal-context vault navigation and the static
+  `tracemap.tools` site.
 
-Current CLI surface includes:
+These are static, coverage-relative evidence lanes. They do not establish
+runtime execution, production traffic/state, deployment, authorization,
+vulnerability, release approval, or that a change is safe.
 
-- `tracemap scan`
-- `tracemap report`
-- `tracemap reduce`
-- `tracemap flow`
-- `tracemap relate`
-- `tracemap export`
-- `tracemap endpoints`
-- `tracemap combine`
-- `tracemap paths`
-- `tracemap route-flow`
-- `tracemap property-flow`
-- `tracemap diff`
-- `tracemap impact`
-- `tracemap reverse`
-- `tracemap snapshot-diff`
-- `tracemap portfolio`
-- `tracemap package-impact`
-- `tracemap vault`
-- `tracemap docs-export`
-- `tracemap contract-diff`
-- `tracemap baseline`
-- `tracemap evidence-pack`
-- `tracemap explorer generate`
-- `tracemap release-review`
+## Additional Product Shape On Dev
+
+`dev` additionally contains:
+
+- Route-flow SQL-context composition for already-selected SQL-facing static
+  paths (PR #483);
+- The public-safe SQL operator proof page and generated-site guard hardening
+  (PR #486);
+- The source/tree/commit-bound Base44 static evidence adapter and its
+  service-role/SDK follow-up (PRs #494 and #496);
+- Microsoft Access adapter v0 foundation, bounded form/report counts,
+  conservative VBA/module counts, macro counts, downstream gaps, and local-only
+  Windows validation (PRs #487, #492, #493, #495, and closeout #497).
+
+Access UI/VBA/macro item identities and bodies remain deliberately unavailable
+in the shipped count-only v0. Their absence is rule-backed reduced coverage, not
+evidence that those objects or flows do not exist.
 
 ## Runway Interpretation Rules
 
-- Treat `Status: implemented*` as shipped for the implemented slice, even if
-  the spec still has unchecked continuation tasks.
-- Treat `Status: continuation-ready` or `follow-up-slices-available` as backlog,
-  not abandoned current work.
-- Do not use raw unchecked checkbox count as the source of truth. Read the
-  implementation-state header first.
-- Site specs are owned by the site lane unless explicitly handed back to core.
-- Main promotions remain human-mediated.
+- Read each spec's parseable `Status:` header before interpreting unchecked
+  tasks.
+- `implemented*` or `*-merged-with-follow-ups` means the named slice is
+  shipped; unchecked continuation tasks remain backlog.
+- `spec-merged-implementation-ready` means design/review work is complete but
+  product implementation has not begun.
+- `continuation-ready` and `follow-up-slices-available` are backlog states,
+  not abandoned in-flight work.
+- Historical branch/PR narratives may describe earlier waits; the current
+  status header and final merge record are authoritative.
+- No unchecked checkbox may be marked complete solely because adjacent code
+  exists. Require a merged PR or current code/test evidence for that exact
+  behavior.
 
-## Core Specs With Follow-Up Value
+## Reconciled Follow-Up Lanes
 
-These are good future implementation choices if legacy .NET depth becomes
-valuable again. They are not blockers for Swift v0.
+- Evidence export usability polish: PR #193 merged the first navigation and
+  docs-export ergonomics slice; review graph mode, dedicated route indexes, and
+  explicit question-family request gaps remain follow-ups.
+- Route-centered endpoint trace completeness: PRs #241 and #253 merged touched
+  summaries and selector trace metadata; method/service grouping and remaining
+  presentation polish stay follow-ups.
+- Static dispatch candidate bridges: PRs #331 and #333 merged the shared
+  builder and bounded override traversal; DI annotations and broader consumer
+  composition remain follow-ups.
+- Legacy data model relationship completion: PR #398 merged only the reviewed
+  spec. Its shared relationship gap classifier/harness is not implemented.
+- Route-flow service/data composition final reports Task 10 public-safe
+  validation complete. Issues #159, #179, and #201 should be closed or narrowed
+  from merged evidence before being treated as new implementation queues.
+- Base44 issue #484 is complete through PRs #494/#496. Cross-product validation
+  remains owned by the 88mph consumer contract, not a second TraceMap capability
+  registry.
 
-1. `route-centered-endpoint-trace-completeness`
-   - First touched-file/touched-symbol slice is implemented.
-   - Follow-up value: selector trace metadata, method/service grouping,
-     data/query/dependency rows, value-origin/fact-symbol projection, and
-     stronger downgrade tests.
+## Recommended Next Product Story
 
-2. `route-flow-service-data-composition`
-   - First composition slice is implemented.
-   - Follow-up value: richer service/data grouping and projection polish for
-     endpoint-centered reports.
+Implement PR 1 from
+`.kiro/specs/legacy-data-model-relationship-completion/`:
 
-3. `ui-field-property-lineage`
-   - V1 `property-flow` is implemented.
-   - Follow-up value: deeper property-to-property mapping, route-flow joins,
-     and optional browser/computer-use evidence as labeled external context.
+1. Re-audit current `origin/dev` and the live rule catalog/extractors.
+2. Add the small shared deterministic relationship-gap classifier/harness
+   described by the reviewed spec.
+3. Wire at most one descriptor family if the shared harness alone is not a
+   useful reviewable slice.
+4. Preserve existing DBML, EDMX, typed DataSet, and NHibernate family behavior;
+   do not invent endpoints, runtime mappings, database access, or provider
+   compatibility.
+5. Add rule-catalog coverage before any new reason/gap string, focused
+   determinism and ambiguity tests, full .NET validation, private-path checking,
+   and ACK review-loop evidence.
 
-4. `legacy-data-model-metadata-extraction`
-   - Earlier legacy data metadata and reporting slices are implemented.
-   - Follow-up value: deeper relationship extraction, unsupported-shape gaps,
-     and old ORM metadata normalization.
+This is the next authoritative product story because its spec is merged and
+reviewed, its first product slice is explicitly unstarted, it deepens an
+existing buyer-relevant data-design lane, and it requires no private customer
+artifact or Windows-only capability.
 
-5. `legacy-data-model-reporting-integration`
-   - First descriptor projection/reporting slice is implemented.
-   - Follow-up value: vault/RAG/export integration and richer selector support.
+## Subsequent Choices
 
-6. `static-html-evidence-explorer`
-   - First explorer slice is implemented.
-   - Follow-up value: richer rendering, provenance conflict UI, stronger
-     public/demo safety parity, and no-JavaScript/accessibility hardening.
+After the relationship classifier slice:
 
-7. `event-message-surfaces`
-   - V1 message surfaces are implemented.
-   - Follow-up value: semantic extraction, direction filtering, route-flow async
-     message-hop rendering, and adapter parity in TypeScript/Python/JVM.
+1. choose one static-dispatch follow-up (DI context or one downstream consumer),
+   not the entire remaining task list;
+2. choose one event/message follow-up such as release-review context or
+   route-flow async-boundary rendering;
+3. reconcile and close the already-delivered route/property-flow issues before
+   reopening them as product work;
+4. promote `dev` to `main` only as a separate owner-mediated release PR.
 
 ## Site Lane
 
 - Keep site changes in a separate worktree.
-- Site specs use the `site-` prefix and include `implementation-state.md`.
-- `site/src/` is editable source. `site/dist/` and `site/output/` are generated
-  and ignored.
-- Validate site changes with `npm run build` from `site/`; layout or
-  interaction changes also need desktop and mobile browser sanity checks.
-- Public claims must stay evidence-bound: rule IDs, evidence tiers, coverage
-  labels, limitations, generated artifacts, and no LLM/AI impact-analysis
-  claims.
-
-## Recommended Next Move
-
-1. Promote the current `dev` cleanup slice to `main`.
-2. Start the Swift v0 adapter lane from the Swift runway issues:
-   - #377 Swift adapter v0 runway;
-   - #378 scaffold CLI and output contract;
-   - #379 inventory and project/package discovery.
-3. Keep legacy .NET follow-ups available for targeted depth, especially
-   property-flow composition, data model depth, static dispatch approximation,
-   evidence export polish, and route-flow projection performance.
-4. In parallel, keep no more than 2 to 4 reviewed specs ahead of
-   implementation. Avoid creating a large spec pile that outruns the product.
+- Edit `site/src/`; never hand-edit ignored `site/dist/` or `site/output/`.
+- Run `npm run build` and relevant validation from `site/`; use desktop and
+  mobile browser checks for layout/interaction changes.
+- Keep public claims bounded to deterministic evidence, rule IDs, tiers,
+  coverage labels, limitations, and generated artifacts.
 
 ## Notes For Future Agents
 
-- Do not rewrite old spec histories to pretend all future work is complete.
-  Mark shipped slices and leave continuation tasks visible.
-- If a spec says `implemented-v1-with-follow-ups`, consume it only after
-  choosing a specific follow-up slice.
-- If a required tool is missing, check Homebrew and known local tool locations
-  before stopping, per `AGENTS.md`.
-- Do not merge or auto-promote `main`; report merge readiness and let Joe make
-  the owner call.
+- Do not recommend completed Swift v0 work as the next runway.
+- Do not describe `dev`-only features as already on `main`.
+- Do not turn stale open issues into duplicate implementations without checking
+  merged PRs and current spec authority.
+- Do not add LLMs, embeddings, vector databases, prompt classification, or
+  runtime systems to the scanner/reducer.
+- If a required tool is missing, follow `AGENTS.md`: check Homebrew and known
+  local tool paths before stopping.
