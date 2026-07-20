@@ -3,6 +3,78 @@
 # - deferred: documented future/planned rule that must not appear in emitted facts.
 # Existing rules without an explicit status are treated as active.
 rules:
+  - id: base44.sdk.import.v1
+    name: Base44 SDK import
+    description: Records syntax-visible Base44 SDK imports and their requested package/version identity.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44SdkImport]
+    limitations:
+      - Import evidence does not prove package resolution, substitution, bundling, browser execution, or runtime compatibility.
+
+  - id: base44.sdk.primitive.v1
+    name: Base44 SDK primitive call
+    description: Records syntax-visible Base44 auth, entity, function, integration, Analytics, and AppLogs call chains.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44SdkPrimitive]
+    limitations:
+      - Static call syntax does not prove runtime reachability, execution, authorization, response compatibility, or provider delivery.
+
+  - id: base44.function.invocation.v1
+    name: Base44 frontend function invocation
+    description: Records static or explicitly dynamic Base44 function invocation targets.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44FunctionInvocation]
+    limitations:
+      - A named invocation does not prove route binding or execution; dynamic targets remain Tier4Unknown.
+
+  - id: base44.function.surface.v1
+    name: Base44 function source surface
+    description: Records exported Base44 function entry surfaces and statically visible handler kind.
+    evidenceTier: Tier2Structural
+    emits: [Base44FunctionSurface]
+    limitations:
+      - Source presence does not prove deployment, reachability, isolation, callback exposure, or runtime execution; unknown handlers remain Tier4Unknown.
+
+  - id: base44.entity.operation.v1
+    name: Base44 entity operation
+    description: Records syntax-visible Base44 entity names and CRUD or subscription operations.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44EntityOperation]
+    limitations:
+      - Entity calls do not prove schema, migration, RLS, service-role, tenant isolation, persistence, or runtime success.
+
+  - id: base44.environment.access.v1
+    name: Base44 function environment access
+    description: Records environment variable names or explicit dynamic access gaps without values.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44EnvironmentAccess]
+    limitations:
+      - Environment access does not prove secret existence, value correctness, IAM access, deployment materialization, or runtime use; dynamic names remain Tier4Unknown.
+
+  - id: base44.http.target.v1
+    name: Base44 customer/provider HTTP target
+    description: Records hashed static origins or explicit dynamic HTTP target gaps without URL paths, queries, or credentials.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44HttpTarget]
+    limitations:
+      - Static target evidence does not prove network reachability, authentication, provider configuration, callback registration, delivery, or runtime execution; dynamic targets remain Tier4Unknown.
+
+  - id: base44.migration.surface.v1
+    name: Base44 SQL migration surface
+    description: Records SQL migration file hashes and visible statement-kind inventory without raw SQL.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44MigrationSurface]
+    limitations:
+      - Migration source does not prove SQL validity, execution, completion, schema state, RLS correctness, rollback, or runtime compatibility.
+
+  - id: base44.customer.boundary.v1
+    name: Base44 customer-authored source boundary
+    description: Identifies customer-authored Base44 function and entity source boundaries without reclassifying their behavior as platform-owned.
+    evidenceTier: Tier2Structural
+    emits: [Base44CustomerBoundary]
+    limitations:
+      - Ownership classification does not prove safety, support, reachability, runtime execution, or migration readiness.
+
   - id: explorer.input.unsupported-schema.v1
     name: Static HTML explorer unsupported input schema
     description: Records generated artifacts that the local static HTML evidence explorer discovered but cannot safely parse in the current implementation slice.
