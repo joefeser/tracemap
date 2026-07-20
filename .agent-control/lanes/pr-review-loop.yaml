@@ -18,9 +18,12 @@ lane:
   description: >
     Repo-local PR-loop policy for TraceMap. This YAML file is lane
     configuration consumed by agent-control, not an exchanged coordination
-    packet payload. Required reviewers should return before agents process
-    partial review findings, with bounded timeouts so stuck bots produce typed
-    human-decision evidence instead of endless retags.
+    packet payload. Codex must return before agents process partial review
+    findings. Qodo remains required review evidence but uses the documented
+    one-pass quorum posture below, so ACK can process an exact-head Codex result
+    without waiting for a Qodo refresh; stale reviews cannot manufacture merge
+    readiness. Bounded timeouts produce typed human-decision evidence instead
+    of endless retags.
 
 # agent-control lane config key; not an inter-agent coordination packet payload.
 prLoopPacket:

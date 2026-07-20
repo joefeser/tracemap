@@ -276,6 +276,11 @@ public sealed class AccessMacroReportingTests
         Assert.Contains("vault-export.gap.access-evidence-consumer-unsupported.v1", script, StringComparison.Ordinal);
         Assert.Contains("Phase 9 checkpoint must be outside the disposable smoke root", script, StringComparison.Ordinal);
         Assert.Contains("[string]::Equals($Phase9CheckpointPath, $SmokeRoot", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-DisposableSmokeRoot -Path $SmokeRoot", script, StringComparison.Ordinal);
+        Assert.Contains("Existing smoke root is missing the TraceMap disposable marker", script, StringComparison.Ordinal);
+        Assert.Contains(".tracemap-smoke-root", script, StringComparison.Ordinal);
+        Assert.Contains("Remove-Item $SmokeRoot -Recurse -Force -ErrorAction Stop", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Remove-Item $SmokeRoot -Recurse -Force -ErrorAction SilentlyContinue", script, StringComparison.Ordinal);
         Assert.DoesNotContain("DatabaseHash = $originalHash", script, StringComparison.Ordinal);
         Assert.Contains("if ($foundMarker) { throw \"protected marker leaked into downstream output\" }", script, StringComparison.Ordinal);
         Assert.Contains("OriginalUnchanged = $true", script, StringComparison.Ordinal);

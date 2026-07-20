@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using TraceMap.Access;
 using TraceMap.Access.Cli;
 using TraceMap.Core;
@@ -11,6 +12,42 @@ public sealed class AccessFoundationTests
     private const string SecretMarker = "Password_ProdVault_92817";
     private const string SqlMarker = "SELECT * FROM PayrollSecrets_92817";
     private const string ConnectionMarker = "ODBC;DSN=PrivateLedger_92817;PWD=NeverPersistThis";
+
+    [Fact]
+    public void Access_rule_catalog_uses_standard_primary_tiers_and_documents_all_possible_tiers()
+    {
+        var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
+        foreach (var ruleId in new[]
+        {
+            "legacy.access.database.inventory.v1",
+            "legacy.access.schema.v1",
+            "legacy.access.query.v1",
+            "legacy.access.external-link.v1",
+            "legacy.access.ui-surface.v1",
+            "legacy.access.binding.v1",
+            "legacy.access.macro-gap.v1"
+        })
+        {
+            var start = Regex.Match(catalog, $@"(?m)^\s*-\s*id:\s*{Regex.Escape(ruleId)}\s*$");
+            Assert.True(start.Success, $"Missing rule catalog entry for {ruleId}.");
+            var remainder = catalog[start.Index..];
+            var next = Regex.Match(remainder[start.Length..], @"(?m)^\s*-\s*id:\s*\S+\s*$");
+            var block = next.Success ? remainder[..(start.Length + next.Index)] : remainder;
+            Assert.Matches(@"(?m)^\s*evidenceTier:\s*Tier(?:1Semantic|2Structural|3SyntaxOrTextual|4Unknown)\s*$", block);
+            Assert.Contains("possibleEvidenceTiers:", block, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void Access_worker_always_observes_the_bounded_stderr_drain()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepoRoot(), "src", "dotnet", "TraceMap.Access", "AccessWorkerSupervisor.cs"));
+
+        Assert.Contains("DrainBoundedAsync(worker.StandardError, total.Token)", source, StringComparison.Ordinal);
+        Assert.Contains("finally", source, StringComparison.Ordinal);
+        Assert.Contains("await stderrTask.WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None)", source, StringComparison.Ordinal);
+    }
 
     [Fact]
     public void Safe_identity_hashes_protected_names_and_scopes_keys_to_repository_commit_and_path()
@@ -520,6 +557,17 @@ public sealed class AccessFoundationTests
         var error = process.StandardError.ReadToEnd();
         process.WaitForExit();
         Assert.True(process.ExitCode == 0, $"git {string.Join(' ', args)} failed: {output} {error}");
+    }
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "rules", "rule-catalog.yml"))) return directory.FullName;
+            directory = directory.Parent;
+        }
+        throw new DirectoryNotFoundException("Could not locate repository root.");
     }
 
     private sealed class BlockingTextReader : TextReader

@@ -20,9 +20,9 @@ public sealed class AccessWorkerSupervisor
         var start = CreateStartInfo(token, databaseCopyPath, input);
         using var worker = Process.Start(start) ?? throw new AccessScanException("AccessWorkerStartFailed");
         var workerStartedAt = DateTimeOffset.UtcNow;
-        var stderrTask = DrainBoundedAsync(worker.StandardError, cancellationToken);
         using var total = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         total.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+        var stderrTask = DrainBoundedAsync(worker.StandardError, total.Token);
         OwnedAccessProcess? ownedProcess = null;
         AccessDatabaseProjection result;
 
@@ -46,7 +46,6 @@ public sealed class AccessWorkerSupervisor
             if (!string.Equals(result.DatabaseHash, input.DatabaseHash, StringComparison.Ordinal)) throw new AccessScanException("AccessProjectionHashMismatch");
             if (!worker.WaitForExit(30_000)) throw new AccessScanException("AccessWorkerExitTimeout");
             if (worker.ExitCode != 0) throw new AccessScanException("AccessWorkerFailedAfterResult");
-            await stderrTask;
             return result;
         }
         catch
@@ -54,6 +53,12 @@ public sealed class AccessWorkerSupervisor
             TryKill(worker);
             if (ownedProcess is not null) TryKillOwned(ownedProcess);
             throw;
+        }
+        finally
+        {
+            total.Cancel();
+            try { await stderrTask.WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None); }
+            catch { }
         }
     }
 
