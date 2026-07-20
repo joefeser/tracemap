@@ -1027,7 +1027,10 @@ public static class LegacyDataMetadataExtractor
             AddRelationshipSemantics(
                 properties,
                 metadataFact.FactId,
-                relationshipDecision.RelationshipEndpointCoverage ?? "full",
+                relationshipDecision.RelationshipEndpointCoverage
+                    ?? (string.IsNullOrWhiteSpace(parentTableName) || string.IsNullOrWhiteSpace(childTableName)
+                        ? "unidirectional"
+                        : "full"),
                 limitations);
             AddModelIdentity(properties, "TypedDataSet", "relationship", "generated", item.RelativePath, "typed-dataset-relation", AttributeValue(relation, "name"), parentTableName, metadataFact.FactId, Parts(("relation", AttributeValue(relation, "name")), ("parent", parentTableName), ("child", childTableName)), relationshipCoverageLabel);
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataTypedDataSet, item.RelativePath, relation, TargetFrom(properties, "relationName", "relationHash"), properties));
@@ -1641,17 +1644,19 @@ public static class LegacyDataMetadataExtractor
         }
 
         var line = explicitLine ?? (node is null ? 1 : GetLine(node));
+        var descriptorOrdinal = GetDocumentNodeOrdinal(node);
         facts.Add(FactFactory.Create(
             manifest,
             FactTypes.AnalysisGap,
             decision.RuleId,
             decision.EvidenceTier,
-            Evidence(relativePath, line, $"{relativePath}:{line}:{decision.Classification}:{decision.SafeReasonCode}"),
+            Evidence(relativePath, line, $"{relativePath}:{line}:{decision.Classification}:{decision.SafeReasonCode}:{descriptorOrdinal}"),
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
                 ["classification"] = decision.Classification,
                 ["coverage"] = decision.CoverageLabel,
                 ["descriptorKind"] = descriptorKind,
+                ["descriptorOrdinal"] = descriptorOrdinal.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ["limitations"] = string.Join(";", decision.Limitations),
                 ["message"] = message,
                 ["modelRelationshipRuleId"] = RuleIds.LegacyDataModelRelationship,
@@ -1659,6 +1664,27 @@ public static class LegacyDataMetadataExtractor
                 ["runtimeProof"] = "False",
                 ["safeReasonCode"] = decision.SafeReasonCode
             }));
+    }
+
+    private static int GetDocumentNodeOrdinal(XObject? node)
+    {
+        if (node is not XNode xmlNode || xmlNode.Document is null)
+        {
+            return 0;
+        }
+
+        var ordinal = 0;
+        foreach (var candidate in xmlNode.Document.DescendantNodes())
+        {
+            if (ReferenceEquals(candidate, xmlNode))
+            {
+                return ordinal;
+            }
+
+            ordinal++;
+        }
+
+        return 0;
     }
 
     private static LegacyRelationshipGapDecision ClassifyDbmlAssociation(

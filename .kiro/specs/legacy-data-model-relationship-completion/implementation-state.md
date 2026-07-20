@@ -413,6 +413,19 @@ Validation results:
   broader surface/report/query/export filters remain not applicable because
   those code paths are unchanged.
 
+Review follow-up on PR #500:
+
+- Qodo identified that multiple relationship descriptors on the same XML line
+  could produce duplicate analysis-gap fact IDs. Relationship gaps now include
+  the descriptor's deterministic document-node ordinal in their evidence seed
+  and public-safe properties. A minified-XSD regression proves four same-line
+  typed DataSet gaps retain distinct IDs and write successfully to SQLite.
+- Gemini requested consistent endpoint-coverage fallback behavior between the
+  two typed DataSet relationship paths. The `msdata:Relationship` path now uses
+  the same endpoint-aware fallback as `xs:keyref`.
+- Post-patch focused validation passed 3 tests; the build passed with 0 errors
+  and the existing 8 `NU1903` advisories; the full solution passed 824 tests.
+
 Deferred after PR 2:
 
 - Composite key/keyref field-count and field-identity matching.

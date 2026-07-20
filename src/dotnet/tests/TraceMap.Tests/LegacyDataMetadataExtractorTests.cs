@@ -894,6 +894,31 @@ public sealed class LegacyDataMetadataExtractorTests
     }
 
     [Fact]
+    public void Scan_keeps_same_line_typed_dataset_relationship_gaps_distinct_in_sqlite()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Minified.xsd"), """
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata" xmlns:msprop="urn:schemas-microsoft-com:xml-msprop"><xs:element name="SafeDataSet" msdata:IsDataSet="true" msprop:Generator_DataSetName="SafeDataSet"/><xs:keyref name="MissingKeyrefA"/><xs:keyref name="MissingKeyrefB"/><xs:annotation><xs:appinfo><msdata:Relationship name="MissingRelationA"/><msdata:Relationship name="MissingRelationB"/></xs:appinfo></xs:annotation></xs:schema>
+            """);
+
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(output);
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, output));
+        var relationshipGaps = result.Facts
+            .Where(fact => fact.FactType == FactTypes.AnalysisGap
+                && fact.RuleId == RuleIds.LegacyDataModelRelationship
+                && fact.Properties.GetValueOrDefault("relationshipFamily") == "typed-dataset")
+            .ToArray();
+
+        Assert.Equal(4, relationshipGaps.Length);
+        Assert.Single(relationshipGaps.Select(fact => fact.Evidence.StartLine).Distinct());
+        Assert.Equal(4, relationshipGaps.Select(fact => fact.FactId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(4, relationshipGaps.Select(fact => fact.Properties.GetValueOrDefault("descriptorOrdinal")).Distinct(StringComparer.Ordinal).Count());
+
+        SqliteIndexWriter.Write(Path.Combine(output, "index.sqlite"), result.Manifest, result.Facts);
+    }
+
+    [Fact]
     public void Scan_marks_ambiguous_typed_dataset_constraints_and_ignores_non_xsd_lookalikes()
     {
         using var temp = new TempDirectory();
