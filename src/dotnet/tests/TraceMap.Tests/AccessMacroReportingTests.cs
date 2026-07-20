@@ -229,6 +229,13 @@ public sealed class AccessMacroReportingTests
         Assert.Contains("tracemap.access-phase9-checkpoint.v1", script, StringComparison.Ordinal);
         Assert.Contains("phase9ConsumerContracts = \"boundary-stop\"", script, StringComparison.Ordinal);
         Assert.Contains("phase9ConsumerContracts = \"completed\"", script, StringComparison.Ordinal);
+        Assert.Contains("failureClassification = \"none\"", script, StringComparison.Ordinal);
+        Assert.Contains("tool-missing", script, StringComparison.Ordinal);
+        Assert.Contains("tool-inside-disposable-root", script, StringComparison.Ordinal);
+        Assert.Contains("generator-process-failed", script, StringComparison.Ordinal);
+        Assert.Contains("fixture-database-missing", script, StringComparison.Ordinal);
+        Assert.Contains("generation-canary-fired", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("$LASTEXITCODE -ne 0) { throw \"generator returned", script, StringComparison.Ordinal);
         Assert.Contains("docs-export --index $combined", script, StringComparison.Ordinal);
         Assert.Contains("vault export --combined-index $combined", script, StringComparison.Ordinal);
         Assert.Contains("release-review --before $combined --after $combined", script, StringComparison.Ordinal);
