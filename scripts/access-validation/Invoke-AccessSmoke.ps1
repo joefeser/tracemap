@@ -435,8 +435,13 @@ if ($LASTEXITCODE -ne 0) { throw "Access vault export failed" }
 $vaultJson = Join-Path $vaultOutput "graph.json"
 if (-not (Test-Path $vaultJson -PathType Leaf)) { throw "Access vault graph missing" }
 $vault = Get-Content $vaultJson -Raw | ConvertFrom-Json
-if (@($vault.nodes | Where-Object { $_.ruleIds -contains "legacy.access.macro-gap.v1" }).Count -eq 0) {
-    throw "Access vault omitted macro rule evidence"
+$accessVaultGaps = @($vault.gaps | Where-Object {
+    $_.classification -eq "AccessEvidenceConsumerUnsupported" -and
+    $_.ruleId -eq "vault-export.gap.access-evidence-consumer-unsupported.v1" -and
+    @($_.supportingFactIds).Count -gt 0
+})
+if ($accessVaultGaps.Count -ne 1) {
+    throw "Access vault omitted structured unsupported-consumer evidence"
 }
 if ($null -ne $phase9Checkpoint) {
     $phase9Checkpoint.vaultContractCorrect = $true

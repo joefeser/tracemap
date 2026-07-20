@@ -594,6 +594,17 @@ classification for generation plus every fixture-provenance operation before
 the product scan. This remains an orchestration-only change with no new Access
 read or extraction permission.
 
+The Windows run at `ca1b5aa680e4355fd57fd430e5e4d8dabd760f62`
+advanced through immutable checkpoint sequence 10. Product, report, combine,
+evidence-doc, determinism, canary,
+baseline, protected-output, process, cleanup, and worktree gates passed; only
+vault validation stopped. Local reproduction showed that the prior vault test
+depended on platform-neutral `AccessMacroDeclared` projector fixtures, while the
+shipped count-only reader correctly emits zero macro identity facts. Vault now
+records a structured `AccessEvidenceConsumerUnsupported` gap under
+`vault-export.gap.access-evidence-consumer-unsupported.v1` with bounded
+supporting combined fact IDs. It does not invent Access identities or flows.
+
 The Phase 9 generator layer adds a second form button classified as
 `[Embedded Macro]` with a protected caption marker, but deliberately supplies
 no body. Named and data macro fixture creation remains deferred to the Windows

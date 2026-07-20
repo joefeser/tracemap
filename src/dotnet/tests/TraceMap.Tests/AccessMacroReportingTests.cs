@@ -172,7 +172,11 @@ public sealed class AccessMacroReportingTests
     {
         using var temp = new TempDirectory();
         var (scan, output) = await BuildScanAsync(temp.Path);
-        await AccessArtifactWriter.WriteAsync(output, scan, AccessLimits.Default);
+        var countOnlyScan = scan with
+        {
+            Facts = scan.Facts.Where(fact => fact.FactType != FactTypes.AccessMacroDeclared).ToArray()
+        };
+        await AccessArtifactWriter.WriteAsync(output, countOnlyScan, AccessLimits.Default);
         var index = Path.Combine(output, "index.sqlite");
         var combined = Path.Combine(temp.Path, "combined.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["access"]));
@@ -194,7 +198,12 @@ public sealed class AccessMacroReportingTests
             MinimumClaimLevel: "hidden",
             Date: "2026-07",
             Format: "markdown,json"));
-        Assert.Contains(vault.Graph.Nodes, node => node.RuleIds.Contains(RuleIds.LegacyAccessMacroGap, StringComparer.Ordinal));
+        var vaultGap = Assert.Single(vault.Graph.Gaps, gap => gap.Classification == "AccessEvidenceConsumerUnsupported");
+        Assert.Equal("vault-export.gap.access-evidence-consumer-unsupported.v1", vaultGap.RuleId);
+        Assert.NotEmpty(vaultGap.SupportingFactIds ?? []);
+        Assert.Contains(vault.Graph.Nodes, node =>
+            node.RuleIds.Contains("vault-export.gap.access-evidence-consumer-unsupported.v1", StringComparer.Ordinal)
+            && node.SupportingFactIds.Count > 0);
         Assert.DoesNotContain(ProtectedMacroName, JsonSerializer.Serialize(vault), StringComparison.OrdinalIgnoreCase);
         AssertArtifactsDoNotContain(vaultOutput, ProtectedMacroName);
 
@@ -253,6 +262,8 @@ public sealed class AccessMacroReportingTests
         Assert.Contains("docs-export --index $combined", script, StringComparison.Ordinal);
         Assert.Contains("vault export --combined-index $combined", script, StringComparison.Ordinal);
         Assert.Contains("release-review --before $combined --after $combined", script, StringComparison.Ordinal);
+        Assert.Contains("AccessEvidenceConsumerUnsupported", script, StringComparison.Ordinal);
+        Assert.Contains("vault-export.gap.access-evidence-consumer-unsupported.v1", script, StringComparison.Ordinal);
         Assert.Contains("Phase 9 checkpoint must be outside the disposable smoke root", script, StringComparison.Ordinal);
         Assert.DoesNotContain("DatabaseHash = $originalHash", script, StringComparison.Ordinal);
         Assert.Contains("OriginalUnchanged = $true", script, StringComparison.Ordinal);
