@@ -28,6 +28,20 @@ describe("Base44 source-bound static evidence", () => {
       expect.objectContaining({ factType: FactTypes.Base44MigrationSurface })
     ]));
     expect(packet.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.Base44SdkPrimitive, contractElement: "Analytics.track" }));
+    expect(packet.facts[0]).toEqual(expect.objectContaining({
+      repo: expect.any(String),
+      commitSha: expect.stringMatching(/^[0-9a-f]{40}$/),
+      lineSpan: { startLine: expect.any(Number), endLine: expect.any(Number) }
+    }));
+    expect(packet.facts.some((fact) => fact.evidence.filePath === "src/unrelated.ts" && fact.factType === FactTypes.Base44SdkPrimitive)).toBe(false);
+    expect(packet.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.Base44FunctionInvocation,
+      targetSymbol: "wrappedFunction",
+      evidence: expect.objectContaining({ filePath: "src/wrapped-consumer.ts" })
+    }));
+    expect(packet.facts.some((fact) => fact.evidence.filePath === "reports/query.sql" && fact.factType === FactTypes.Base44MigrationSurface)).toBe(false);
+    const migration = packet.facts.find((fact) => fact.factType === FactTypes.Base44MigrationSurface);
+    expect(migration?.properties.statementKinds).toBe("create-policy;create-table");
     const serialized = JSON.stringify(packet);
     expect(serialized).not.toContain("secret-value");
     expect(serialized).not.toContain("provider.example/private/path");
@@ -48,7 +62,17 @@ describe("Base44 source-bound static evidence", () => {
     await fs.writeFile(path.join(afterOut, "base44-evidence.json"), `${JSON.stringify(after.packet, null, 2)}\n`);
     const diff = await diffBase44Evidence(path.join(beforeOut, "base44-evidence.json"), path.join(afterOut, "base44-evidence.json"), path.join(afterOut, "diff.json"));
     expect(diff.coverageReduced).toBe(true);
+    expect(diff.coverageEvidence).toEqual(expect.objectContaining({
+      beforeAnalysisLevel: "Level3SyntaxAnalysis",
+      afterAnalysisLevel: "Level3SyntaxAnalysis",
+      addedKnownGaps: ["seeded coverage loss"]
+    }));
     expect(diff.limitations.join(" ")).toContain("must not be interpreted as clean absence");
+
+    const extensionlessOutput = path.join(afterOut, "extensionless-diff");
+    await diffBase44Evidence(path.join(beforeOut, "base44-evidence.json"), path.join(afterOut, "base44-evidence.json"), extensionlessOutput);
+    expect(JSON.parse(await fs.readFile(extensionlessOutput, "utf8")).schemaVersion).toBe("tracemap.base44.static-diff.v1");
+    expect(await fs.readFile(`${extensionlessOutput}.md`, "utf8")).toContain("# TraceMap Base44 Static Diff");
   });
 });
 
@@ -72,6 +96,7 @@ async function fixtureRepo(): Promise<string> {
   await fs.mkdir(path.join(repo, "src"), { recursive: true });
   await fs.mkdir(path.join(repo, "base44/functions/sendReceipt"), { recursive: true });
   await fs.mkdir(path.join(repo, "base44/migrations"), { recursive: true });
+  await fs.mkdir(path.join(repo, "reports"), { recursive: true });
   await fs.writeFile(path.join(repo, "package.json"), JSON.stringify({ dependencies: { "@base44/sdk": "0.8.3" } }));
   await fs.writeFile(path.join(repo, "src/app.ts"), `import { base44 } from "@base44/sdk";
 export async function run() {
@@ -82,13 +107,17 @@ export async function run() {
 }
 `);
   await fs.writeFile(path.join(repo, "src/analytics.jsx"), `import { base44 } from "@base44/sdk";\nexport const send = () => base44.Analytics.track("opened");\n`);
+  await fs.writeFile(path.join(repo, "src/unrelated.ts"), `const base44 = { auth: { me: () => "not-base44" } };\nconst supabase = otherSdk.createClient();\nbase44.auth.me();\nsupabase.auth.getUser();\nsupabase.functions.invoke("not-base44");\n`);
+  await fs.writeFile(path.join(repo, "src/wrapper.ts"), `import { createClient as makeBase44 } from "@base44/sdk";\nexport const wrappedClient = makeBase44({ appId: "fixture" });\n`);
+  await fs.writeFile(path.join(repo, "src/wrapped-consumer.ts"), `import { wrappedClient as client } from "./wrapper";\nexport const invoke = () => client.functions.invoke("wrappedFunction");\n`);
   await fs.writeFile(path.join(repo, "base44/functions/sendReceipt/entry.ts"), `Deno.serve(async () => {
   const token = Deno.env.get("PROVIDER_TOKEN");
   return new Response(token ? "configured" : "missing");
 });
 `);
-  await fs.writeFile(path.join(repo, "base44/functions/sendReceipt/server.ts"), `import { createClientFromRequest } from "npm:@base44/sdk@0.8.39";\nconst serviceClient = createClientFromRequest(new Request("https://example.invalid"));\nexport const load = () => serviceClient.entities.Order.list();\n`);
-  await fs.writeFile(path.join(repo, "base44/migrations/001.sql"), "create table orders (id text primary key);\ncreate policy orders_rls on orders;\n");
+  await fs.writeFile(path.join(repo, "base44/functions/sendReceipt/server.ts"), `import axios from "axios";\nimport { createClientFromRequest } from "npm:@base44/sdk@0.8.39";\nconst serviceClient = createClientFromRequest(new Request("https://example.invalid"));\nexport const load = async () => { await axios.post("https://mail.example.invalid/send", {}); return serviceClient.entities.Order.list(); };\n`);
+  await fs.writeFile(path.join(repo, "base44/migrations/001.sql"), "-- drop table retained;\n/* alter table ignored; */\ncreate table orders (id text primary key);\ncreate policy orders_rls on orders;\n");
+  await fs.writeFile(path.join(repo, "reports/query.sql"), "select * from orders;\n");
   execFileSync("git", ["init", "-q"], { cwd: repo });
   execFileSync("git", ["config", "user.email", "tracemap@example.invalid"], { cwd: repo });
   execFileSync("git", ["config", "user.name", "TraceMap Test"], { cwd: repo });

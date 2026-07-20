@@ -25,4 +25,6 @@ Static evidence does not prove bundling, routes, browser execution, runtime beha
 
 - `cd src/typescript && npm run check` — 32 tests passed.
 - Harbor, DigitalTwin-Fork, and ShopGenie-Fork immutable authority scans passed; exact identities, counts, and packet hashes are recorded in `docs/validation/base44-static-evidence-2026-07-19.md`.
-- PR review and merge remain pending.
+- Exact-head Qodo, Codex, and overlapping Gemini findings were patched after owner authorization: SDK aliases now require direct or local-wrapper provenance, common Axios methods are covered, migration SQL is path-gated and comment-safe, packet facts carry commit/line identity, coverage reductions carry evidence, large artifacts are stream-hashed, and extensionless diff output cannot overwrite JSON.
+- Post-fix validation: 32 TypeScript tests, adapter artifact validation, three packet field/artifact-hash checks, private-path guard, JSON syntax, and diff check passed.
+- Fresh PR review and merge remain pending.
