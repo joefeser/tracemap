@@ -136,5 +136,6 @@ public static class AccessArtifactWriter
     private static string Inline(string value) => value.Replace("`", "'", StringComparison.Ordinal).Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
 
     private static int CountByRules(ScanResult result, params string[] ruleIds) =>
-        result.Facts.Count(fact => ruleIds.Contains(fact.RuleId, StringComparer.Ordinal));
+        result.Facts.Count(fact => fact.FactType != FactTypes.AnalysisGap
+            && ruleIds.Contains(fact.RuleId, StringComparer.Ordinal));
 }

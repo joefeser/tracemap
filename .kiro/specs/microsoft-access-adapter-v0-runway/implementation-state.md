@@ -663,6 +663,14 @@ approved Access read boundary. The post-review head passes 9 focused tests, the
 full solution build/test, seven artifact-validator tests, the two-test ACK lane
 regression, the private-path guard, and `git diff --check`.
 
+Fresh Codex review on PR #495 required two additional correctness fixes. Every
+post-generation synthetic Phase 9 failure now records a closed classification
+derived from its checkpoint stage before throwing, so the highest immutable
+checkpoint cannot retain `failureClassification=none` after a real gate
+failure. The Access design summary now excludes `AnalysisGap` rows from its
+rule-based evidence counts; coverage gaps remain reported separately and can no
+longer inflate UI/VBA evidence totals.
+
 The Phase 9 generator layer adds a second form button classified as
 `[Embedded Macro]` with a protected caption marker, but deliberately supplies
 no body. Named and data macro fixture creation remains deferred to the Windows
