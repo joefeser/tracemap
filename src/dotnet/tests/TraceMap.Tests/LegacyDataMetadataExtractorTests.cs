@@ -636,12 +636,13 @@ public sealed class LegacyDataMetadataExtractorTests
               <Table Name="Orders" Member="Orders"><Type Name="Order" /></Table>
               <Table Name="DuplicateTargetsOne" Member="DuplicateTargetsOne"><Type Name="DuplicateTarget" /></Table>
               <Table Name="DuplicateTargetsTwo" Member="DuplicateTargetsTwo"><Type Name="DuplicateTarget" /></Table>
-              <Table Name="SharedScope" Member="SharedScopeOne">
+              <Table Name="" Member="SharedScope">
                 <Type Name="UniqueSourceOne">
                   <Association Name="DuplicateTableScope" Type="Order" ThisKey="CustomerId" OtherKey="CustomerId" />
                 </Type>
               </Table>
-              <Table Name="SharedScope" Member="SharedScopeTwo"><Type Name="UniqueSourceTwo" /></Table>
+              <Table Name="" Member="SharedScope"><Type Name="UniqueSourceTwo" /></Table>
+              <vendor:Association Name="ForeignAssociation" Type="Order" ThisKey="CustomerId" OtherKey="CustomerId" />
             </Database>
             """);
 
@@ -656,6 +657,10 @@ public sealed class LegacyDataMetadataExtractorTests
             && fact.Properties.GetValueOrDefault("associationName") == "DeterministicComposite");
         Assert.Equal("full", deterministic.Properties.GetValueOrDefault("coverageLabel"));
         Assert.Equal("full", deterministic.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+        Assert.Equal("CustomerId,TenantId", deterministic.Properties.GetValueOrDefault("sourceMemberName"));
+        Assert.Equal("CustomerId,TenantId", deterministic.Properties.GetValueOrDefault("targetMemberName"));
+        Assert.False(deterministic.Properties.ContainsKey("sourceMemberHash"));
+        Assert.False(deterministic.Properties.ContainsKey("targetMemberHash"));
 
         var unsafeKey = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
             && fact.RuleId == RuleIds.LegacyDataDbml
@@ -672,6 +677,7 @@ public sealed class LegacyDataMetadataExtractorTests
             "MismatchedComposite",
             "DuplicateKeyMember",
             "ProviderExtended",
+            "ForeignAssociation",
             "DuplicateTargetScope",
             "DuplicateTableScope"
         };
@@ -686,10 +692,10 @@ public sealed class LegacyDataMetadataExtractorTests
             && fact.RuleId == RuleIds.LegacyDataDbml
             && fact.Properties.GetValueOrDefault("classification") == "AmbiguousLegacyDataModelIdentity"
             && fact.Properties.GetValueOrDefault("safeReasonCode") == "ambiguous-endpoint-candidates"));
-        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+        Assert.Equal(2, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataDbml
             && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmMappingShape"
-            && fact.Properties.GetValueOrDefault("safeReasonCode") == "unsupported-relationship-shape");
+            && fact.Properties.GetValueOrDefault("safeReasonCode") == "unsupported-relationship-shape"));
 
         var firstRelationshipFactIds = result.Facts
             .Where(fact => fact.Properties.GetValueOrDefault("relationshipFamily") == "dbml"

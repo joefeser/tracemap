@@ -406,9 +406,12 @@ public static class LegacyDataMetadataExtractor
         }
 
         var provider = AttributeValue(database, "Provider");
-        var tables = database.Descendants().Where(element => element.Name.LocalName == "Table").ToArray();
+        var dbmlNamespace = database.Name.Namespace;
+        var tables = database.Elements()
+            .Where(element => element.Name.LocalName == "Table" && element.Name.Namespace == dbmlNamespace)
+            .ToArray();
         var duplicateTableScopeNames = tables
-            .Select(table => AttributeValue(table, "Name") ?? AttributeValue(table, "Member"))
+            .Select(table => FirstPresent(AttributeValue(table, "Name"), AttributeValue(table, "Member")))
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .GroupBy(name => name!, StringComparer.Ordinal)
             .Where(group => group.Count() > 1)
@@ -424,7 +427,7 @@ public static class LegacyDataMetadataExtractor
             .ToHashSet(StringComparer.Ordinal);
         foreach (var table in tables.OrderBy(GetLine).ThenBy(element => AttributeValue(element, "Name"), StringComparer.Ordinal))
         {
-            var tableName = AttributeValue(table, "Name") ?? AttributeValue(table, "Member") ?? "table";
+            var tableName = FirstPresent(AttributeValue(table, "Name"), AttributeValue(table, "Member")) ?? "table";
             var typeElement = table.Elements().FirstOrDefault(element => element.Name.LocalName == "Type");
             var typeName = AttributeValue(typeElement, "Name") ?? AttributeValue(table, "Type") ?? AttributeValue(table, "Member");
             var storageProps = MetadataProperties("Dbml", metadataHash, "table");
@@ -478,7 +481,8 @@ public static class LegacyDataMetadataExtractor
 
         var associations = database.Descendants().Where(element => element.Name.LocalName == "Association").ToArray();
         var duplicateAssociationKeys = associations
-            .GroupBy(association => $"{AttributeValue(association.Parent, "Name") ?? "unknown"}|{AttributeValue(association, "Name") ?? AttributeValue(association, "Member") ?? "association"}", StringComparer.Ordinal)
+            .Where(association => association.Name.Namespace == dbmlNamespace)
+            .GroupBy(association => $"{FirstPresent(AttributeValue(association.Parent, "Name")) ?? "unknown"}|{FirstPresent(AttributeValue(association, "Name"), AttributeValue(association, "Member")) ?? "association"}", StringComparer.Ordinal)
             .Where(group => group.Count() > 1)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         foreach (var duplicate in duplicateAssociationKeys.Values.OrderBy(GetLine))
@@ -497,14 +501,15 @@ public static class LegacyDataMetadataExtractor
 
         foreach (var association in associations.OrderBy(GetLine))
         {
-            var associationName = AttributeValue(association, "Name") ?? AttributeValue(association, "Member") ?? "association";
+            var associationName = FirstPresent(AttributeValue(association, "Name"), AttributeValue(association, "Member")) ?? "association";
             var sourceTypeName = AttributeValue(association.Parent, "Name");
             var targetTypeName = AttributeValue(association, "Type");
             var associationKey = $"{sourceTypeName ?? "unknown"}|{associationName}";
             var relationshipDecision = ClassifyDbmlAssociation(
                 association,
                 duplicateTypeScopeNames,
-                duplicateTableScopeNames);
+                duplicateTableScopeNames,
+                dbmlNamespace);
             if (relationshipDecision.Decision == LegacyRelationshipDecision.EmitAnalysisGap)
             {
                 var message = relationshipDecision.SafeReasonCode switch
@@ -544,8 +549,8 @@ public static class LegacyDataMetadataExtractor
             AddSafeName(properties, "associationName", "associationHash", associationName);
             AddSafeName(properties, "sourceEndpointName", "sourceEndpointHash", sourceTypeName);
             AddSafeName(properties, "targetEndpointName", "targetEndpointHash", targetTypeName);
-            AddSafeName(properties, "sourceMemberName", "sourceMemberHash", AttributeValue(association, "ThisKey"));
-            AddSafeName(properties, "targetMemberName", "targetMemberHash", AttributeValue(association, "OtherKey"));
+            AddSafeDbmlKeyList(properties, "sourceMemberName", "sourceMemberHash", AttributeValue(association, "ThisKey"));
+            AddSafeDbmlKeyList(properties, "targetMemberName", "targetMemberHash", AttributeValue(association, "OtherKey"));
             AddOptional(properties, "isForeignKey", AttributeValue(association, "IsForeignKey"));
             AddRelationshipSemantics(
                 properties,
@@ -1858,12 +1863,13 @@ public static class LegacyDataMetadataExtractor
     private static LegacyRelationshipGapDecision ClassifyDbmlAssociation(
         XElement association,
         IReadOnlySet<string> duplicateTypeScopeNames,
-        IReadOnlySet<string> duplicateTableScopeNames)
+        IReadOnlySet<string> duplicateTableScopeNames,
+        XNamespace dbmlNamespace)
     {
         var sourceTypeName = AttributeValue(association.Parent, "Name");
         var targetTypeName = AttributeValue(association, "Type");
         var sourceTable = association.Ancestors().FirstOrDefault(element => element.Name.LocalName == "Table");
-        var sourceTableName = AttributeValue(sourceTable, "Name") ?? AttributeValue(sourceTable, "Member");
+        var sourceTableName = FirstPresent(AttributeValue(sourceTable, "Name"), AttributeValue(sourceTable, "Member"));
         var sourceScopeAmbiguous = (!string.IsNullOrWhiteSpace(sourceTypeName) && duplicateTypeScopeNames.Contains(sourceTypeName))
             || (!string.IsNullOrWhiteSpace(sourceTableName) && duplicateTableScopeNames.Contains(sourceTableName));
         var targetScopeAmbiguous = !string.IsNullOrWhiteSpace(targetTypeName)
@@ -1877,7 +1883,7 @@ public static class LegacyDataMetadataExtractor
             DbmlEndpointState(targetTypeName, targetScopeAmbiguous),
             DbmlJoinOrKeyState(association),
             LegacyRelationshipParserCoverageState.Full,
-            HasDbmlProviderExtension(association)
+            HasDbmlProviderExtension(association, dbmlNamespace)
                 ? LegacyRelationshipShapeFlags.UnsupportedRelationshipShape
                 : LegacyRelationshipShapeFlags.None,
             ExistingFamilyAllowsUnidirectional: true));
@@ -1925,11 +1931,10 @@ public static class LegacyDataMetadataExtractor
             : LegacyRelationshipJoinOrKeyState.UnsafeRedacted;
     }
 
-    private static bool HasDbmlProviderExtension(XElement association)
+    private static bool HasDbmlProviderExtension(XElement association, XNamespace dbmlNamespace)
     {
-        var dbmlNamespace = association.Name.Namespace;
         return association.DescendantsAndSelf().Any(element =>
-            (element != association && element.Name.Namespace != dbmlNamespace)
+            element.Name.Namespace != dbmlNamespace
             || element.Attributes().Any(attribute =>
                 !attribute.IsNamespaceDeclaration
                 && attribute.Name.Namespace != XNamespace.None
@@ -2358,6 +2363,25 @@ public static class LegacyDataMetadataExtractor
         }
 
         LegacyDataSafeValues.AddSafeOrHash(properties, clearKey, hashKey, value, "hashed-unsafe-value");
+    }
+
+    private static void AddSafeDbmlKeyList(SortedDictionary<string, string> properties, string clearKey, string hashKey, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        var members = value.Split(',', StringSplitOptions.None).Select(member => member.Trim()).ToArray();
+        if (members.Length > 0
+            && members.All(IsSafeIdentifier)
+            && members.Distinct(StringComparer.Ordinal).Count() == members.Length)
+        {
+            properties[clearKey] = string.Join(',', members);
+            return;
+        }
+
+        AddSafeName(properties, clearKey, hashKey, value);
     }
 
     private static void AddHashOnly(SortedDictionary<string, string> properties, string key, string? value)
