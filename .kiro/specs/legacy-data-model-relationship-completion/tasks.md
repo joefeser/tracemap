@@ -1,7 +1,7 @@
 # Legacy Data Model Relationship Completion Tasks
 
-Current state: implementation PR 1 merged; implementation PR 2 is validated and
-ready for delivery with narrow typed DataSet classifier integration.
+Current state: implementation PRs 1 and 2 merged; implementation PR 3 is
+validated with narrow NHibernate endpoint-classifier integration.
 
 ## Spec Authoring Tasks
 
@@ -134,7 +134,7 @@ ready for delivery with narrow typed DataSet classifier integration.
   - [x] Prove TableAdapter SQL text never becomes relationship evidence.
 
 - [ ] 7. Add NHibernate relationship follow-ups. Requirements: 2, 7, 8, 9.
-  - [ ] Harden `many-to-one`, `one-to-one`, collection/key, `one-to-many`, and
+  - [x] Harden `many-to-one`, `one-to-one`, collection/key, `one-to-many`, and
         deterministic `many-to-many` endpoint decisions.
   - [ ] Add gaps or reduced evidence for composite IDs, composite keys,
         formula-only joins, filters, custom SQL, dynamic components,

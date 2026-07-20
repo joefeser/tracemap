@@ -1,7 +1,7 @@
 # Legacy Data Model Relationship Completion Implementation State
 
-Status: implementation-pr2-validated
-Readiness: ready-for-pr2-delivery
+Status: implementation-pr3-validated
+Readiness: ready-for-pr3-delivery
 Spec branch: `codex/legacy-data-model-relationship-completion`
 Target base: `dev`
 Public claim level: hidden
@@ -45,6 +45,28 @@ Public claim level: hidden
 - Deferred: composite key/keyref field matching, broader duplicate-constraint
   redesign, schema-indicator behavior outside the existing gate, EDMX,
   NHibernate, projections/reports/exports, and all runtime database behavior.
+
+## Implementation PR 3
+
+- Implementation branch:
+  `codex/nhibernate-relationship-classifier-pr3`.
+- Base: `origin/dev` at merged PR #500 commit
+  `b561b765b4d823fc844f7a9a366d8af1ec2b4e60`.
+- Selected boundary: route existing NHibernate `.hbm.xml` relationship endpoint
+  decisions through the shared classifier for `many-to-one`, `one-to-one`,
+  `set`, `list`, `bag`, and `map` descriptors. Preserve deterministic facts and
+  existing one-missing-endpoint unidirectional evidence; emit a cataloged gap
+  and no relationship fact when neither endpoint is deterministic.
+- Harden collection target selection by treating multiple `one-to-many` or
+  `many-to-many` child candidates as ambiguous instead of selecting the first.
+  Unsafe endpoint identities remain hash-only and classifier-labeled reduced
+  evidence. Add focused determinism, privacy, no-invented-endpoint, and
+  committed public-safe smoke coverage.
+- Deferred: composite IDs/keys, formula-only joins, filters, custom SQL,
+  dynamic components, inheritance shapes, custom types/provider extensions,
+  relationship-cap redesign, runtime-loaded config, EDMX, broad downstream
+  workflows, and all runtime NHibernate/database behavior. Existing cataloged
+  gaps and safe XML bounds for those shapes remain unchanged.
 
 ## Current Context
 
@@ -433,6 +455,53 @@ Deferred after PR 2:
   existing deterministic resolver.
 - Schema-indicator behavior outside the existing typed DataSet gate.
 - EDMX, NHibernate, broad downstream expansion, and runtime database behavior.
+
+## Implementation PR 3 Validation
+
+Implemented scope:
+
+- Routed existing NHibernate `many-to-one`, `one-to-one`, `set`, `list`, `bag`,
+  and `map` endpoint decisions through the shared relationship classifier.
+- Preserved deterministic full facts and existing one-missing-target reduced
+  facts, and added the symmetric missing-source reduced case without inventing
+  a placeholder source endpoint.
+- Multiple collection target children now emit an
+  `AmbiguousLegacyDataModelIdentity` gap instead of selecting the first child.
+  Relationships with neither endpoint emit
+  `IncompleteLegacyDataModelRelationship` and no terminal relationship fact.
+- Unsafe endpoint identities remain hash-only and now carry reduced coverage
+  plus `unsafe-redacted-endpoint-identity`; deterministic one-to-one,
+  one-to-many, and many-to-many shapes retain full endpoint coverage.
+- Added `descriptorOrdinal` to the relationship rule's public-safe property
+  registry, closing the catalog documentation gap from PR #500's collision
+  fix, and added a committed public-safe NHibernate smoke fixture.
+
+Validation results:
+
+- Focused extractor/classifier/catalog filter: 61 passed, 0 failed.
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with 0 errors and
+  the existing 8 `NU1903` SQLite advisories.
+- `dotnet test src/dotnet/TraceMap.sln --no-restore --no-build`: 825 passed,
+  0 failed.
+- CLI smoke copied the committed sample into a temporary Git repository,
+  committed it as `bbddbc69cfdff47c8335ea3509c520c8726fa065`, and scanned that exact
+  commit. The scan emitted all five required artifacts with
+  `Level3SyntaxAnalysis`, metadata-only `NotRun` build status, deterministic
+  full and unidirectional NHibernate relationship evidence, one ambiguous
+  collection gap, and one missing-both endpoint gap.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- The pinned legacy-data metadata guidance in `docs/VALIDATION.md` was run;
+  broader model-surface/report/query/export filters remain not applicable
+  because those code paths are unchanged.
+
+Deferred after PR 3:
+
+- Composite IDs/keys, formula-only joins, filters, custom SQL, dynamic
+  components, inheritance shapes, custom types/provider extensions,
+  relationship-cap redesign, and runtime-loaded configuration.
+- EDMX classifier wiring, broad downstream expansion, and all runtime
+  NHibernate/database behavior.
 
 ## Oddities And Follow-Ups
 

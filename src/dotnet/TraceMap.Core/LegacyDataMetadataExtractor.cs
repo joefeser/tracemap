@@ -199,7 +199,8 @@ public static class LegacyDataMetadataExtractor
         string sourceMetadataFactId,
         XElement classElement)
     {
-        var className = AttributeValue(classElement, "name") ?? AttributeValue(classElement, "entity-name") ?? "mapped-class";
+        var declaredClassName = AttributeValue(classElement, "name") ?? AttributeValue(classElement, "entity-name");
+        var className = declaredClassName ?? "mapped-class";
         var mappedTypeName = NHibernateMappedTypeName(classElement);
         var tableName = AttributeValue(classElement, "table");
         var schemaName = AttributeValue(classElement, "schema");
@@ -256,7 +257,7 @@ public static class LegacyDataMetadataExtractor
             .ToArray();
         foreach (var relationship in relationshipElements.Take(MaxNHibernateRelationshipsPerClass))
         {
-            AddNHibernateRelationshipFact(manifest, facts, relativePath, metadataHash, sourceMetadataFactId, className, relationship);
+            AddNHibernateRelationshipFact(manifest, facts, relativePath, metadataHash, sourceMetadataFactId, className, declaredClassName, relationship);
         }
 
         if (relationshipElements.Length > MaxNHibernateRelationshipsPerClass)
@@ -314,23 +315,62 @@ public static class LegacyDataMetadataExtractor
         string metadataHash,
         string sourceMetadataFactId,
         string className,
+        string? declaredClassName,
         XElement relationship)
     {
         var relationshipName = AttributeValue(relationship, "name") ?? relationship.Name.LocalName;
-        var targetClass = AttributeValue(relationship, "class")
-            ?? AttributeValue(relationship.Elements().FirstOrDefault(element => element.Name.LocalName is "one-to-many" or "many-to-many"), "class");
-        var coverageLabel = string.IsNullOrWhiteSpace(targetClass) ? "reduced" : "full";
-        var limitations = string.IsNullOrWhiteSpace(targetClass)
-            ? new[] { "missing-target-endpoint" }
-            : Array.Empty<string>();
+        var directTargetClass = AttributeValue(relationship, "class");
+        var collectionTargetElements = relationship.Elements()
+            .Where(element => element.Name.LocalName is "one-to-many" or "many-to-many")
+            .ToArray();
+        var ambiguousTarget = collectionTargetElements.Length > 1
+            || (!string.IsNullOrWhiteSpace(directTargetClass) && collectionTargetElements.Length > 0);
+        var targetClass = directTargetClass
+            ?? (collectionTargetElements.Length == 1
+                ? AttributeValue(collectionTargetElements[0], "class")
+                : null);
+        var relationshipDecision = ClassifyNHibernateRelationship(
+            relationship.Name.LocalName,
+            NHibernateEndpointState(declaredClassName),
+            ambiguousTarget
+                ? LegacyRelationshipEndpointState.Ambiguous
+                : NHibernateEndpointState(targetClass));
+        if (relationshipDecision.Decision == LegacyRelationshipDecision.EmitAnalysisGap)
+        {
+            AddRelationshipGap(
+                manifest,
+                facts,
+                relativePath,
+                relationshipDecision,
+                "nhibernate-hbm",
+                NormalizeToken(relationship.Name.LocalName, "relationship"),
+                ambiguousTarget
+                    ? "NHibernate collection exposed multiple relationship target candidates."
+                    : "NHibernate relationship did not provide a deterministic source or target endpoint.",
+                relationship);
+            return;
+        }
+
+        var coverageLabel = relationshipDecision.CoverageLabel;
+        var limitations = NHibernateRelationshipLimitations(
+            relationshipDecision,
+            declaredClassName,
+            targetClass);
 
         var properties = MetadataProperties("NHibernateHbm", metadataHash, $"orm-{NormalizeToken(relationship.Name.LocalName, "relationship")}");
         properties["mappingKind"] = NormalizeToken(relationship.Name.LocalName, "relationship");
         AddSafeName(properties, "associationName", "associationHash", relationshipName);
-        AddSafeName(properties, "sourceEndpointName", "sourceEndpointHash", className);
+        AddSafeName(properties, "sourceEndpointName", "sourceEndpointHash", declaredClassName);
         AddSafeName(properties, "targetEndpointName", "targetEndpointHash", targetClass);
         AddSafeName(properties, "columnName", "columnHash", AttributeValue(relationship, "column") ?? NHibernateKeyColumn(relationship));
-        AddRelationshipSemantics(properties, sourceMetadataFactId, coverageLabel == "full" ? "full" : "unidirectional", limitations);
+        AddRelationshipSemantics(
+            properties,
+            sourceMetadataFactId,
+            relationshipDecision.RelationshipEndpointCoverage
+                ?? (string.IsNullOrWhiteSpace(declaredClassName) || string.IsNullOrWhiteSpace(targetClass)
+                    ? "unidirectional"
+                    : "full"),
+            limitations);
         AddModelIdentity(properties, "NHibernateHbm", "relationship", "mapping", relativePath, "nhibernate-relationship", relationshipName, className, sourceMetadataFactId, Parts(("class", className), ("relationship", relationshipName), ("target-class", targetClass), ("descriptor", relationship.Name.LocalName)), coverageLabel);
         facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataOrmNHibernate, relativePath, relationship, TargetFrom(properties, "associationName", "associationHash"), properties));
     }
@@ -1772,6 +1812,64 @@ public static class LegacyDataMetadataExtractor
             LegacyRelationshipParserCoverageState.Full,
             LegacyRelationshipShapeFlags.None,
             ExistingFamilyAllowsUnidirectional: true));
+    }
+
+    private static LegacyRelationshipGapDecision ClassifyNHibernateRelationship(
+        string descriptorKind,
+        LegacyRelationshipEndpointState sourceEndpointState,
+        LegacyRelationshipEndpointState targetEndpointState)
+    {
+        return LegacyDataRelationshipGapClassifier.Classify(new LegacyRelationshipGapInput(
+            "nhibernate-hbm",
+            RuleIds.LegacyDataOrmNHibernate,
+            NormalizeToken(descriptorKind, "relationship"),
+            IsRelationshipDescriptor: true,
+            sourceEndpointState,
+            targetEndpointState,
+            LegacyRelationshipJoinOrKeyState.NotApplicable,
+            LegacyRelationshipParserCoverageState.Full,
+            LegacyRelationshipShapeFlags.None,
+            ExistingFamilyAllowsUnidirectional: true));
+    }
+
+    private static LegacyRelationshipEndpointState NHibernateEndpointState(string? endpoint)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            return LegacyRelationshipEndpointState.Missing;
+        }
+
+        return IsSafeIdentifier(endpoint)
+            ? LegacyRelationshipEndpointState.Deterministic
+            : LegacyRelationshipEndpointState.UnsafeRedacted;
+    }
+
+    private static IReadOnlyList<string> NHibernateRelationshipLimitations(
+        LegacyRelationshipGapDecision decision,
+        string? sourceEndpoint,
+        string? targetEndpoint)
+    {
+        var limitations = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var limitation in decision.Limitations)
+        {
+            if (limitation != "missing-endpoint")
+            {
+                limitations.Add(limitation);
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(sourceEndpoint))
+            {
+                limitations.Add("missing-source-endpoint");
+            }
+
+            if (string.IsNullOrWhiteSpace(targetEndpoint))
+            {
+                limitations.Add("missing-target-endpoint");
+            }
+        }
+
+        return limitations.ToArray();
     }
 
     private static LegacyRelationshipEndpointState EndpointState(string? endpoint)
