@@ -570,6 +570,18 @@ values never enter the checkpoint. Raw smoke state may be cleaned first; the
 checkpoint remains until its sanitized issue comment is confirmed and is then
 deleted.
 
+The first checkpointed run stopped at generation. Because the checkpoint did
+not yet include a closed failure reason, it could not distinguish an Access
+generator failure from the harness deleting tools staged under its disposable
+root. The harness now preflights that its own script, generator, and both CLI
+executables exist outside the smoke root before deletion, and it checkpoints a
+closed generation failure classification without exception text. This is an
+orchestration correction; it does not widen product extraction or authorize a
+new Access API. The corrected harness contract passed 8 focused reporting tests,
+the 814-test solution, a clean solution build, seven artifact-validator tests,
+the private-path guard, and `git diff --check` on macOS. PowerShell parsing and
+the closed failure classification remain exact-head Windows gates.
+
 The Phase 9 generator layer adds a second form button classified as
 `[Embedded Macro]` with a protected caption marker, but deliberately supplies
 no body. Named and data macro fixture creation remains deferred to the Windows

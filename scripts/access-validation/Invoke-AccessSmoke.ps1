@@ -56,6 +56,7 @@ if (-not [string]::IsNullOrWhiteSpace($Phase9CheckpointPath)) {
         schemaVersion = "tracemap.access-phase9-checkpoint.v1"
         phase9ConsumerContracts = "boundary-stop"
         stopStage = "generation"
+        failureClassification = "none"
         namedFixtureShapeAvailable = $false
         namedMacroCountObserved = $false
         productContractCorrect = $false
@@ -95,6 +96,33 @@ function Set-Phase9Stage([string]$Stage) {
 }
 
 Save-Phase9Checkpoint
+
+function Stop-Phase9Preflight([string]$Classification, [string]$Message) {
+    if ($null -ne $phase9Checkpoint) {
+        $phase9Checkpoint.failureClassification = $Classification
+        Save-Phase9Checkpoint
+    }
+    throw $Message
+}
+
+$toolPaths = [ordered]@{
+    accessCli = [IO.Path]::GetFullPath($AccessCli)
+    traceMapCli = [IO.Path]::GetFullPath($TraceMapCli)
+    generator = [IO.Path]::GetFullPath($Generator)
+    harness = [IO.Path]::GetFullPath($PSCommandPath)
+}
+foreach ($tool in $toolPaths.GetEnumerator()) {
+    if (-not (Test-Path $tool.Value -PathType Leaf)) {
+        Stop-Phase9Preflight "tool-missing" "required validation tool is missing"
+    }
+    if ($tool.Value.StartsWith($SmokeRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        Stop-Phase9Preflight "tool-inside-disposable-root" "validation tools must be staged outside the disposable smoke root"
+    }
+}
+$AccessCli = $toolPaths.accessCli
+$TraceMapCli = $toolPaths.traceMapCli
+$Generator = $toolPaths.generator
+
 $repo = Join-Path $SmokeRoot "repo"
 $databaseRelative = "fixture\synthetic-tracemap.accdb"
 $database = Join-Path $repo $databaseRelative
@@ -119,8 +147,22 @@ $releaseReviewOutput = Join-Path $SmokeRoot "release-review"
 
 Remove-Item $SmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path (Split-Path -Parent $database) -Force | Out-Null
-& $Generator -DatabasePath $database -CanaryPath $canary
-if (Test-Path $canary) { throw "startup canary fired during fixture generation cleanup" }
+try {
+    & $Generator -DatabasePath $database -CanaryPath $canary
+}
+catch {
+    if ($null -ne $phase9Checkpoint) {
+        $phase9Checkpoint.failureClassification = "generator-process-failed"
+        Save-Phase9Checkpoint
+    }
+    throw "synthetic fixture generation failed"
+}
+if (-not (Test-Path $database -PathType Leaf)) {
+    Stop-Phase9Preflight "fixture-database-missing" "synthetic fixture generator produced no database"
+}
+if (Test-Path $canary) {
+    Stop-Phase9Preflight "generation-canary-fired" "startup canary fired during fixture generation cleanup"
+}
 if ($null -ne $phase9Checkpoint) {
     $phase9Checkpoint.generationCanariesFalse = $true
     Save-Phase9Checkpoint

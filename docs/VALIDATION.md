@@ -178,12 +178,20 @@ state, release approval, or that a change is safe.
 
 When `-Phase9CheckpointPath` is supplied, it must be outside the disposable
 smoke root. The smoke atomically checkpoints only the closed Phase 9 status,
-stage, booleans, and protected-output match count after each gate; it never
-stores database hashes, names, paths, exception text, or protected values. It
+stage, failure classification, booleans, and protected-output match count after
+each gate; it never stores database hashes, names, paths, exception text, or
+protected values. It
 also validates the Access report, combined-index evidence-doc projection, vault
 rule preservation, and release-review unsupported-consumer gap. Cleanup may
 remove the smoke root while retaining this sanitized checkpoint. Delete the
 checkpoint only after its issue comment is confirmed posted.
+
+The harness script, generator, and both CLI executables must also be staged
+outside `-SmokeRoot`; the harness deletes that root before generation. Preflight
+rejects a missing tool or a tool inside the disposable root before deletion and
+records only `tool-missing` or `tool-inside-disposable-root`. Generator failures
+use the closed classifications `generator-process-failed`,
+`fixture-database-missing`, or `generation-canary-fired`.
 
 The repository CI runs the existing .NET, TypeScript, Python, JVM, and Swift
 test suites, validates one real output per adapter, and combines all five
