@@ -1,7 +1,8 @@
 # Legacy Data Model Relationship Completion Tasks
 
-Current state: implementation PRs 1 through 3 merged; implementation PR 4 is
-validated with narrow EDMX endpoint-classifier integration.
+Current state: implementation PRs 1 through 4 merged; implementation PR 5 is
+validated for bounded DBML key, scope, provider-extension, and unsafe-identity
+classification.
 
 ## Spec Authoring Tasks
 
@@ -103,9 +104,9 @@ validated with narrow EDMX endpoint-classifier integration.
   - [x] Shared helper added in PR 1; no alternate-path deferral rationale is
         required. Remaining family wiring stays explicit for later PRs.
 
-- [ ] 4. Add DBML relationship follow-ups. Requirements: 2, 4, 8, 9.
+- [x] 4. Add DBML relationship follow-ups. Requirements: 2, 4, 8, 9.
   - [x] Harden duplicate association name handling without choosing a winner.
-  - [ ] Add gaps or reduced evidence for missing/ambiguous `Type`, `ThisKey`,
+  - [x] Add gaps or reduced evidence for missing/ambiguous `Type`, `ThisKey`,
         `OtherKey`, duplicate table/type scopes, provider extensions, and unsafe
         endpoint identity.
   - [x] Prove deterministic association evidence remains stable.
