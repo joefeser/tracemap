@@ -197,7 +197,7 @@ remain separate reviewable slices.
       with hidden public claim level.
 - [x] 9.4 Verify vault/release-review consumers preserve provenance or emit an
       unsupported-consumer gap.
-- [ ] 9.5 Add a local-only representative customer/sample validation workflow
+- [x] 9.5 Add a local-only representative customer/sample validation workflow
       using labels, counts, hashes, and gaps only.
 
 ## Deferred Beyond V0

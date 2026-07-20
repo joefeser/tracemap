@@ -1,8 +1,7 @@
 # Microsoft Access Adapter v0 Runway Implementation State
 
-Status: Phase 0 through Phase 9 implementation and synthetic Windows validation
-are complete; Phase 9.5 representative validation awaits one committed-harness
-rerun
+Status: Phase 0 through Phase 9.5 implementation, synthetic Windows validation,
+and representative local-only validation are complete; ready for Phase 9 PR
 
 Spec branch: `codex/microsoft-access-adapter-runway`
 
@@ -487,27 +486,28 @@ Macro bodies remain entirely outside the raw/projection models. The projector
 accepts only a name and catalog kind; it has no field through which a command,
 argument, condition, expression, or body can enter worker IPC or artifacts.
 
-Current Phase 9 platform-neutral validation:
+Final Phase 9 validation:
 
-- 7/7 focused macro/reporting tests pass;
-- 51/51 combined Access foundation/UI/VBA/macro tests pass;
-- 813/813 full solution tests pass;
+- 9/9 focused macro/reporting tests pass;
+- 815/815 full solution tests pass across the final branch history;
 - solution build passes with only the pre-existing
   `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory;
 - seven artifact-validator tests, changed-file formatting verification, the
   two-test ACK lane regression, private-path guard, and `git diff --check` pass.
+- issue #490 synthetic product/consumer validation and issue #491 representative
+  local-only validation both completed with their separate confirmed cleanup
+  acknowledgments.
 
-Still required before Phase 9 PR readiness: fixture task 9.0, a Windows-local
-product-only count smoke, and the representative local-only workflow in 9.5.
-The foundation and Phases 7/8 are merged into `dev`.
+Phase 9 is ready for PR review. The foundation and Phases 7/8 are merged into
+`dev`.
 
-Issue #491 now records the separate final task 9.5 workflow and its Windows-local
-prompt. It is intentionally sequenced after issues #488 through #490 and their
-reviewed product wiring. The workflow uses an authorized representative database
-only inside a disposable no-remote local Git repository, reports labels/counts/
-coverage/rule IDs/gaps and boolean safety outcomes only, and deletes the database,
-local commit history, outputs, and scratch state. Creating the issue does not
-complete task 9.5; the sanitized Windows result is still required.
+Issue #491 records the completed final task 9.5 workflow and its Windows-local
+result. It was sequenced after issues #488 through #490 and their reviewed
+product wiring. The workflow used an authorized representative database only
+inside a disposable no-remote local Git repository, reported labels/counts/
+coverage/rule IDs/gaps and boolean safety outcomes only, and deleted the
+database, local commit history, outputs, scratch state, checkpoint family, and
+sanitized temporary result after confirming the issue comment.
 
 The earlier broad Windows capability prompt on issue #490 is obsolete because
 it authorized macro catalog item names and startup properties. Phase 9 now uses
@@ -517,8 +517,8 @@ reads names, `IsLoaded`, startup properties, macro actions, arguments,
 conditions, expressions, XML/text, or bodies. Product output contains only the
 named catalog count, explicit coverage, zero macro identity/body
 facts, and rule-backed named/embedded/data/startup/body gaps. Issue #490 requires
-a fresh exact-head product-only authorization; issue #491 remains paused until
-that succeeds.
+a fresh exact-head product-only authorization; issue #491 remained paused at
+that point until it succeeded.
 
 The authorized Windows product smoke at exact head `42cff969b231d88daab61938bc6c209e57226217`
 stopped at the count-only boundary and posted its sanitized result on issue
@@ -528,11 +528,11 @@ was unchanged, processes exited, networking was restored, scratch was removed,
 and the worktree stayed clean. However, no named-macro count was observed, the
 loaded-macro canary was not established, the success coverage label was absent,
 and downstream preservation was not demonstrated. The deterministic runs did
-emit zero macro identity facts and the required rule-backed gaps. This is a safe
-boundary result, not a successful product validation. Task 9.0 remains open,
-task 9.5 and issue #491 remain paused, and no further Windows rerun is authorized
-until the product/count boundary is investigated without expanding the approved
-COM reads.
+emit zero macro identity facts and the required rule-backed gaps. This was a
+safe boundary result, not a successful product validation. At that point task
+9.0 remained open, task 9.5 and issue #491 remained paused, and no further
+Windows rerun was authorized until the product/count boundary could be
+investigated without expanding the approved COM reads.
 
 Post-run review found that Microsoft documents `CurrentProject.AllMacros` but
 does not document the `Application.Macros` collection used by the original
@@ -632,8 +632,21 @@ Access surface and validates manifest/fact commit, rule, tier, and extractor
 provenance. The harness contract passed 9 focused tests, the full solution test
 run, a zero-error solution build, seven artifact-validator tests, the
 private-path guard, and `git diff --check` on macOS. The known SQLite package
-advisory warnings remain unchanged. Task 9.5 remains unchecked until this
-committed workflow produces a sanitized Windows result.
+advisory warnings remain unchanged.
+
+The exact-head Windows run at
+`f3103555baf81995c3ca97c1e2ce3e1d1f9a9de8` completed task 9.5. The primary
+issue #491 result records an explicitly authorized `.mdb`, an unchanged
+original, a disposable no-remote repository, all standard artifacts, sequential
+and concurrent determinism, structural/query/external-boundary evidence, and
+count-only form/report/VBA/macro metadata. It records zero UI, VBA-flow, and
+macro identity facts; `rowDataRead=false`; `executionPerformed=false`; every
+report/combine/docs/vault/release-review contract passing; no visible Access
+surface; and zero protected-output matches. The separate confirmed cleanup
+acknowledgment records deleted checkpoints and sanitized results, restored
+networking, exited processes, and a clean exact-head worktree. These results do
+not claim row contents, execution, runtime reachability, production state,
+release approval, or that the database or any change is safe.
 
 The Phase 9 generator layer adds a second form button classified as
 `[Embedded Macro]` with a protected caption marker, but deliberately supplies
@@ -641,8 +654,8 @@ no body. Named and data macro fixture creation remains deferred to the Windows
 probe because no documented, bounded generator path was established locally.
 Task 9.0 is complete at the approved count-only/embedded-marker boundary.
 PowerShell is not installed on the macOS host (`brew info powershell` reports
-“Not installed”), so the new representative script still requires syntax and
-Access behavior validation on issue #491.
+“Not installed”); syntax and Access behavior were therefore validated by the
+successful exact-head issue #491 Windows run.
 
 ## Foundation Validation
 
