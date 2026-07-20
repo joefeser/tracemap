@@ -4,8 +4,8 @@ Date: 2026-07-20
 
 ## Branch State
 
-- `main` remains at promotion PR #505 commit
-  `81033b4fee9abc6b3dbed63234570e9bb7cb66ca`.
+- Live `origin/main`, verified on 2026-07-20, remains at promotion PR #505
+  commit `81033b4fee9abc6b3dbed63234570e9bb7cb66ca`.
 - `dev` contains Access design-review composition PR #506 and its normalized
   closeout PR #507 at `51cc0847c411dd0a6742797f17f03d8d8cc4f398`.
 - Main promotions remain owner-mediated. ACK `merge_ready` on a feature-to-dev
@@ -102,7 +102,8 @@ Specify and implement the first bounded slice of
    must not connect to a database or execute SQL.
 4. Reject expired, malformed, unsupported-validator/assertion,
    mismatched-commit/context, duplicate, conflicting, or unsafe artifacts as
-   cataloged gaps.
+   structured `ReleaseReviewGap` entries flowed into the packet-level `gaps`
+   collection; gaps are not status values.
 5. Render static intent and observed evidence separately in the SQL runbook and
    release review. Observations never rewrite the upstream static evidence tier.
 6. Prove the boundary with synthetic success/failure fixtures, deterministic
