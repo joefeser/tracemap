@@ -307,6 +307,10 @@ For every successful `tracemap release-review --before <before.sqlite> --after <
 - every release-level rollup, checklist item, section gap, selector gap, truncation gap, and source/coverage gap cites a `release.review.*` rule ID and evidence tier.
 - contract delta context is included when `--contract-delta` is provided and the reducer workflow is available.
 - API/DTO, SQL/schema, and package-upgrade workflows render explicit `unavailable` or `deferred` sections when they are not implemented or not requested; missing sections are never silently treated as clean evidence.
+- Access evidence renders a dedicated `Access Design Evidence` section from the after snapshot when compatible facts are present; `--scope access-evidence` selects it explicitly.
+- Access design findings preserve upstream rule ID, evidence tier, coverage label, repository-relative span, commit SHA, extractor ID/version, supporting fact IDs, and limitations while rendering only allowlisted categorical/count metadata.
+- Access analysis gaps remain structured `ReleaseReviewGap` rows; item-level UI/VBA/event/navigation/macro facts are not upgraded beyond the shipped count-only product boundary.
+- Access release-review output does not render raw SQL, query/external-source hashes, connections, credentials, private object names, captions, expressions, VBA, macro bodies, local paths, or private infrastructure identities.
 - `--include-paths` and `--include-reverse` are off by default; single-index mode renders requested path/reverse context as unavailable with a rule-backed gap.
 - `--include-priority` is off by default; when omitted, release-review Markdown and JSON remain unscored and do not include `reviewPriority` or `reviewPriorityRows`.
 - when `--include-priority` is supplied, Markdown includes a Review Priority section and JSON includes top-level `reviewPriority` plus sidecar `reviewPriorityRows` keyed by stable row IDs.

@@ -4,10 +4,9 @@ Date: 2026-07-20
 
 ## Branch State
 
-- `main` is the human-mediated release branch at
-  `3dd7e455503e5bad5028323254c59976ffa75a10`.
-- `dev` is the active integration branch at
-  `da7f4f2c56dcd4b88c2abd82bdff04a9a7687309` before this closeout slice.
+- `main` and `dev` were synchronized by promotion PR #505 at
+  `81033b4fee9abc6b3dbed63234570e9bb7cb66ca` before the current Access
+  design-review composition slice.
 - Main promotions remain owner-mediated. ACK `merge_ready` on a feature-to-dev
   PR does not authorize an automatic dev-to-main promotion.
 - The public site lane remains separate from core implementation unless it is
@@ -29,6 +28,11 @@ SQL evidence runway:
   archive-link, and operator-runbook evidence;
 - release-review SQL runway composition with structured gaps and preserved
   upstream provenance;
+- route-flow SQL-context composition and the public-safe SQL operator proof
+  packet;
+- the Microsoft Access adapter v0 foundation, count-only form/report/VBA/macro
+  boundaries, downstream gaps, and completed Windows validation;
+- the Base44 adapter and typed DataSet relationship-field completion;
 - hidden terminal-context vault navigation and the static
   `tracemap.tools` site.
 
@@ -36,23 +40,12 @@ These are static, coverage-relative evidence lanes. They do not establish
 runtime execution, production traffic/state, deployment, authorization,
 vulnerability, release approval, or that a change is safe.
 
-## Additional Product Shape On Dev
+## Current Product Slice
 
-`dev` additionally contains:
-
-- Route-flow SQL-context composition for already-selected SQL-facing static
-  paths (PR #483);
-- The public-safe SQL operator proof page and generated-site guard hardening
-  (PR #486);
-- The source/tree/commit-bound Base44 static evidence adapter and its
-  service-role/SDK follow-up (PRs #494 and #496);
-- Microsoft Access adapter v0 foundation, bounded form/report counts,
-  conservative VBA/module counts, macro counts, downstream gaps, and local-only
-  Windows validation (PRs #487, #492, #493, #495, and closeout #497).
-
-Access UI/VBA/macro item identities and bodies remain deliberately unavailable
-in the shipped count-only v0. Their absence is rule-backed reduced coverage, not
-evidence that those objects or flows do not exist.
+The active `codex/access-design-review-composition` slice composes already
+persisted Access inventory, schema, relationship, saved-query, external-boundary,
+count-only metadata, and coverage gaps into release review. It does not add COM
+reads or reopen UI, VBA, macro, row-data, execution, or Windows probe boundaries.
 
 ## Runway Interpretation Rules
 
@@ -81,8 +74,8 @@ evidence that those objects or flows do not exist.
 - Static dispatch candidate bridges: PRs #331 and #333 merged the shared
   builder and bounded override traversal; DI annotations and broader consumer
   composition remain follow-ups.
-- Legacy data model relationship completion: PR #398 merged only the reviewed
-  spec. Its shared relationship gap classifier/harness is not implemented.
+- Legacy data model relationship completion is implemented through PR #504,
+  including the typed DataSet relationship-field classification follow-up.
 - Route-flow service/data composition final reports Task 10 public-safe
   validation complete. Issues #159, #179, and #201 should be closed or narrowed
   from merged evidence before being treated as new implementation queues.
@@ -92,29 +85,21 @@ evidence that those objects or flows do not exist.
 
 ## Recommended Next Product Story
 
-Implement PR 1 from
-`.kiro/specs/legacy-data-model-relationship-completion/`:
+Complete the current Access design-review composition, then choose one bounded
+follow-up from current evidence rather than reopening the v0 reader:
 
-1. Re-audit current `origin/dev` and the live rule catalog/extractors.
-2. Add the small shared deterministic relationship-gap classifier/harness
-   described by the reviewed spec.
-3. Wire at most one descriptor family if the shared harness alone is not a
-   useful reviewable slice.
-4. Preserve existing DBML, EDMX, typed DataSet, and NHibernate family behavior;
-   do not invent endpoints, runtime mappings, database access, or provider
-   compatibility.
-5. Add rule-catalog coverage before any new reason/gap string, focused
-   determinism and ambiguity tests, full .NET validation, private-path checking,
-   and ACK review-loop evidence.
+1. compose Access evidence into one additional downstream consumer such as
+   vault or route/property-flow, preserving count-only gaps; or
+2. specify the reserved `sql-validation-summary/v1` checked-in provenance
+   contract if operator-observed validation evidence is the higher priority.
 
-This is the next authoritative product story because its spec is merged and
-reviewed, its first product slice is explicitly unstarted, it deepens an
-existing buyer-relevant data-design lane, and it requires no private customer
-artifact or Windows-only capability.
+Richer Access UI/VBA/macro identity or body extraction is not the default next
+story. It requires a separate threat review and Windows authorization because
+the v0 probes proved that apparently simple item access can load surfaces.
 
 ## Subsequent Choices
 
-After the relationship classifier slice:
+After the Access composition slice:
 
 1. choose one static-dispatch follow-up (DI context or one downstream consumer),
    not the entire remaining task list;

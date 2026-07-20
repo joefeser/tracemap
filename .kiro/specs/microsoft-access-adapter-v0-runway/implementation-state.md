@@ -1,8 +1,8 @@
 # Microsoft Access Adapter v0 Runway Implementation State
 
-Status: Phase 0 through Phase 9.5 are complete and merged into `dev`; synthetic,
-representative local-only, and exact-merge post-review Windows validation are
-complete
+Status: Phase 0 through Phase 9.5 are complete, merged, and promoted to `main`;
+synthetic, representative local-only, and exact-merge post-review Windows
+validation are complete
 
 Spec branch: `codex/microsoft-access-adapter-runway`
 
@@ -10,6 +10,9 @@ Final implementation branch: `codex/microsoft-access-adapter-v0-macro-reporting-
 
 Final implementation PR: #495, merged as
 `63424d7b39f69b285899c5ca395661835384e4f0`
+
+Main promotion PR: #505, merged as
+`81033b4fee9abc6b3dbed63234570e9bb7cb66ca`
 
 Phase 7 branch: `codex/microsoft-access-adapter-v0-ui-bindings`
 

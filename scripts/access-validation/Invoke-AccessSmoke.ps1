@@ -480,13 +480,21 @@ if ($LASTEXITCODE -ne 0) { throw "Access release review failed" }
 $releaseReviewJson = Join-Path $releaseReviewOutput "release-review.json"
 if (-not (Test-Path $releaseReviewJson -PathType Leaf)) { throw "Access release review JSON missing" }
 $releaseReview = Get-Content $releaseReviewJson -Raw | ConvertFrom-Json
-$accessConsumerGaps = @($releaseReview.gaps | Where-Object {
-    $_.gapKind -eq "AccessEvidenceConsumerUnsupported" -and
-    $_.ruleId -eq "release.review.section.v1" -and
-    $_.classification -eq "PartialAnalysis"
+$accessFindings = @($releaseReview.accessEvidence.findings | Where-Object {
+    $_.section -eq "accessEvidence" -and
+    $_.ruleId -like "legacy.access.*" -and
+    -not [string]::IsNullOrWhiteSpace([string]$_.extractorId) -and
+    -not [string]::IsNullOrWhiteSpace([string]$_.extractorVersion) -and
+    -not [string]::IsNullOrWhiteSpace([string]$_.coverageLabel) -and
+    @($_.supportingFactIds).Count -gt 0
 })
-if ($accessConsumerGaps.Count -ne 1 -or @($accessConsumerGaps[0].supportingFactIds).Count -eq 0) {
-    throw "Access release review omitted structured unsupported-consumer evidence"
+$accessGaps = @($releaseReview.accessEvidence.gaps | Where-Object {
+    $_.section -eq "accessEvidence" -and
+    $_.ruleId -like "legacy.access.*" -and
+    @($_.supportingFactIds).Count -gt 0
+})
+if ($releaseReview.accessEvidence.status -ne "available" -or $accessFindings.Count -eq 0 -or $accessGaps.Count -eq 0) {
+    throw "Access release review omitted composed design evidence or structured coverage gaps"
 }
 if ($null -ne $phase9Checkpoint) {
     $phase9Checkpoint.releaseReviewContractCorrect = $true
