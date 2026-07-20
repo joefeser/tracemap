@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tracemap.dev/contracts/base44-static-evidence.v1.schema.json",
+  "title": "TraceMap Base44 static evidence packet",
+  "type": "object",
+  "required": ["schemaVersion", "source", "scanner", "coverage", "artifacts", "facts", "limitations"],
+  "properties": {
+    "schemaVersion": { "const": "tracemap.base44.static-evidence.v1" },
+    "source": {
+      "type": "object",
+      "required": ["repo", "commitSha", "acceptedSourceSha256", "acceptedTreeSha256", "scanRootRelativePath"],
+      "properties": {
+        "repo": { "type": "string", "minLength": 1 },
+        "commitSha": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+        "acceptedSourceSha256": { "$ref": "#/$defs/sha256" },
+        "acceptedTreeSha256": { "$ref": "#/$defs/sha256" },
+        "scanRootRelativePath": { "type": "string" }
+      }
+    },
+    "scanner": {
+      "type": "object",
+      "required": ["version", "scanId"],
+      "properties": { "version": { "type": "string" }, "scanId": { "type": "string" } }
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["label", "analysisLevel", "buildStatus", "knownGaps", "ruleIds", "extractorIdentities", "evidenceTiers"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "analysisLevel": { "type": "string" },
+        "buildStatus": { "type": "string" },
+        "knownGaps": { "type": "array", "items": { "type": "string" } },
+        "ruleIds": { "type": "array", "items": { "type": "string", "pattern": "^base44\\." } },
+        "extractorIdentities": { "type": "array", "items": { "type": "string" } },
+        "evidenceTiers": { "type": "array", "items": { "enum": ["Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual", "Tier4Unknown"] } }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "required": ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log"],
+      "additionalProperties": {
+        "type": "object",
+        "required": ["sha256"],
+        "properties": { "sha256": { "$ref": "#/$defs/sha256" } }
+      }
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["factId", "repo", "commitSha", "factType", "ruleId", "evidenceTier", "lineSpan", "evidence", "properties"],
+        "properties": {
+          "factId": { "type": "string" },
+          "repo": { "type": "string", "minLength": 1 },
+          "commitSha": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+          "factType": { "type": "string", "pattern": "^Base44" },
+          "ruleId": { "type": "string", "pattern": "^base44\\." },
+          "evidenceTier": { "enum": ["Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual", "Tier4Unknown"] },
+          "lineSpan": {
+            "type": "object",
+            "required": ["startLine", "endLine"],
+            "properties": {
+              "startLine": { "type": "integer", "minimum": 1 },
+              "endLine": { "type": "integer", "minimum": 1 }
+            }
+          },
+          "evidence": {
+            "type": "object",
+            "required": ["filePath", "startLine", "endLine", "extractorId", "extractorVersion"],
+            "properties": {
+              "filePath": { "type": "string" },
+              "startLine": { "type": "integer", "minimum": 1 },
+              "endLine": { "type": "integer", "minimum": 1 },
+              "snippetHash": { "type": ["string", "null"] },
+              "extractorId": { "type": "string" },
+              "extractorVersion": { "type": "string" }
+            }
+          },
+          "properties": { "type": "object", "additionalProperties": { "type": "string" } }
+        }
+      }
+    },
+    "limitations": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+  },
+  "$defs": { "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+}

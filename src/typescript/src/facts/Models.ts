@@ -124,5 +124,14 @@ export const FactTypes = {
   UiFormControlBinding: "UiFormControlBinding",
   UiEventBinding: "UiEventBinding",
   UiTemplateVariable: "UiTemplateVariable",
-  UiBindingGap: "UiBindingGap"
+  UiBindingGap: "UiBindingGap",
+  Base44SdkImport: "Base44SdkImport",
+  Base44SdkPrimitive: "Base44SdkPrimitive",
+  Base44FunctionInvocation: "Base44FunctionInvocation",
+  Base44FunctionSurface: "Base44FunctionSurface",
+  Base44EntityOperation: "Base44EntityOperation",
+  Base44EnvironmentAccess: "Base44EnvironmentAccess",
+  Base44HttpTarget: "Base44HttpTarget",
+  Base44MigrationSurface: "Base44MigrationSurface",
+  Base44CustomerBoundary: "Base44CustomerBoundary"
 } as const;
