@@ -79,6 +79,11 @@ public static class AccessFactBuilder
                     ? loadedModuleCountUnchanged.ToString().ToLowerInvariant()
                     : null),
                 ("vbaCoverage", projection.VbaInventory?.Coverage),
+                ("namedMacroCount", projection.MacroInventory?.NamedMacroCount?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ("macroLoadedCountUnchanged", projection.MacroInventory?.LoadedMacroCountUnchanged is bool loadedMacroCountUnchanged
+                    ? loadedMacroCountUnchanged.ToString().ToLowerInvariant()
+                    : null),
+                ("macroCoverage", projection.MacroInventory?.Coverage),
                 ("coverageLabel", "reduced-static-design"),
                 ("limitations", "binary-container-span;no-rows;no-execution;no-runtime-proof"))));
 
@@ -255,6 +260,20 @@ public static class AccessFactBuilder
                     ("moduleStableKey", binding.ModuleStableKey), ("procedureStableKey", binding.ProcedureStableKey),
                     ("coverageLabel", binding.Coverage),
                     ("limitations", "exact-same-module-static-candidate;no-event-execution-or-runtime-dispatch-proof"))));
+        }
+
+        foreach (var macro in projection.Macros ?? [])
+        {
+            facts.Add(Create(manifest, FactTypes.AccessMacroDeclared, RuleIds.LegacyAccessMacroGap, EvidenceTiers.Tier2Structural, span,
+                sourceSymbol: macro.OwnerStableKey,
+                targetSymbol: macro.Identity.StableKey,
+                properties: IdentityProps(macro.Identity,
+                    ("macroStableKey", macro.Identity.StableKey), ("macroKind", macro.MacroKind),
+                    ("ownerStableKey", macro.OwnerStableKey),
+                    ("ordinal", macro.Ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    ("startupRole", macro.StartupRole), ("bodyStatus", macro.BodyStatus),
+                    ("coverageLabel", macro.Coverage),
+                    ("limitations", "inventory-only;body-protected-omitted;no-open-export-execution-or-command-semantics"))));
         }
 
         foreach (var gap in projectedGaps)

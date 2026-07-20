@@ -174,6 +174,15 @@ public sealed record AccessEventBindingProjection(
     string? ProcedureStableKey,
     string Coverage);
 
+public sealed record AccessMacroProjection(
+    AccessSafeIdentity Identity,
+    string MacroKind,
+    string? OwnerStableKey,
+    int Ordinal,
+    string StartupRole,
+    string BodyStatus,
+    string Coverage);
+
 public sealed record AccessUiInventoryProjection(
     int? FormCount,
     int? ReportCount,
@@ -182,6 +191,11 @@ public sealed record AccessUiInventoryProjection(
 public sealed record AccessVbaInventoryProjection(
     int? ModuleCount,
     bool? LoadedModuleCountUnchanged,
+    string Coverage);
+
+public sealed record AccessMacroInventoryProjection(
+    int? NamedMacroCount,
+    bool? LoadedMacroCountUnchanged,
     string Coverage);
 
 public sealed record AccessGapProjection(string Classification, string ScopeKind, string? StableScopeKey, string? RuleId = null);
@@ -206,8 +220,10 @@ public sealed record AccessDatabaseProjection(
     IReadOnlyList<AccessUiSurfaceProjection>? UiSurfaces = null,
     IReadOnlyList<AccessVbaModuleProjection>? VbaModules = null,
     IReadOnlyList<AccessEventBindingProjection>? EventBindings = null,
+    IReadOnlyList<AccessMacroProjection>? Macros = null,
     AccessUiInventoryProjection? UiInventory = null,
-    AccessVbaInventoryProjection? VbaInventory = null);
+    AccessVbaInventoryProjection? VbaInventory = null,
+    AccessMacroInventoryProjection? MacroInventory = null);
 
 public sealed record AccessWorkerFrame(
     string Kind,

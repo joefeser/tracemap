@@ -61,6 +61,9 @@ public static class AccessArtifactWriter
 
     public static string Report(ScanResult result)
     {
+        var accessMetadata = result.Facts.FirstOrDefault(fact =>
+            fact.FactType == FactTypes.LegacyDataMetadataDeclared
+            && fact.Properties.ContainsKey("macroCoverage"));
         var lines = new List<string>
         {
             "# TraceMap Microsoft Access Design Evidence",
@@ -75,6 +78,18 @@ public static class AccessArtifactWriter
         };
         foreach (var group in result.Facts.GroupBy(fact => fact.FactType).OrderBy(group => group.Key, StringComparer.Ordinal))
             lines.Add($"- `{Inline(group.Key)}`: {group.Count()}");
+        lines.Add("");
+        lines.Add("## Access Design Evidence Summary");
+        lines.Add("");
+        lines.Add("- Public claim level: `hidden` (promotion requires a separate public-safe fixture and claim review).");
+        lines.Add($"- Schema/relationship facts: {CountEvidenceByRules(result, RuleIds.LegacyAccessSchema)}");
+        lines.Add($"- Saved-query/external-boundary facts: {CountEvidenceByRules(result, RuleIds.LegacyAccessQuery, RuleIds.LegacyAccessExternalLink)}");
+        lines.Add($"- Form/report/control/binding facts: {CountEvidenceByRules(result, RuleIds.LegacyAccessUiSurface, RuleIds.LegacyAccessBinding)}");
+        lines.Add($"- VBA/event/navigation facts: {CountEvidenceByRules(result, RuleIds.LegacyAccessVba, RuleIds.LegacyAccessEventBinding)}");
+        lines.Add($"- Macro inventory facts: {result.Facts.Count(fact => fact.FactType == FactTypes.AccessMacroDeclared)}");
+        lines.Add($"- Named macro catalog count: `{Inline(accessMetadata?.Properties.GetValueOrDefault("namedMacroCount") ?? "unavailable")}`");
+        lines.Add($"- Macro coverage: `{Inline(accessMetadata?.Properties.GetValueOrDefault("macroCoverage") ?? "unavailable")}`");
+        lines.Add($"- Macro coverage gaps: {result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.LegacyAccessMacroGap)}");
         lines.Add("");
         lines.Add("## Rules and Evidence Tiers");
         lines.Add("");
@@ -119,4 +134,8 @@ public static class AccessArtifactWriter
     }
 
     private static string Inline(string value) => value.Replace("`", "'", StringComparison.Ordinal).Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
+
+    private static int CountEvidenceByRules(ScanResult result, params string[] ruleIds) =>
+        result.Facts.Count(fact => fact.FactType != FactTypes.AnalysisGap
+            && ruleIds.Contains(fact.RuleId, StringComparer.Ordinal));
 }

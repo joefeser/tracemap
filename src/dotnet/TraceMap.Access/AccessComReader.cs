@@ -59,6 +59,7 @@ public sealed class AccessComReader
         var queries = ReadQueries(databaseObject, databaseIdentitySeed, queryIdentities, known, gaps, external);
         var uiInventory = ReadUiInventoryCounts(application, gaps);
         var vbaInventory = ReadVbaInventoryCounts(application, gaps);
+        var macroInventory = ReadMacroInventoryCounts(application, gaps);
 
         var gapsTruncated = gaps.Count > _limits.MaxGaps;
         var boundedGaps = gaps
@@ -87,7 +88,7 @@ public sealed class AccessComReader
                 new("savedQueries", "observed"),
                 new("formsReports", uiInventory.Coverage),
                 new("vbaModules", vbaInventory.Coverage),
-                new("macros", "startup-suppressed-not-inventoried"),
+                new("macros", macroInventory.Coverage),
                 new("externalLinks", "hash-only"),
                 new("startupSuppression", "force-disable-requested"),
                 new("rowDataRead", "false"),
@@ -96,8 +97,61 @@ public sealed class AccessComReader
             UiSurfaces: [],
             VbaModules: [],
             EventBindings: [],
+            Macros: [],
             UiInventory: uiInventory,
-            VbaInventory: vbaInventory);
+            VbaInventory: vbaInventory,
+            MacroInventory: macroInventory);
+    }
+
+    internal AccessMacroInventoryProjection ReadMacroInventoryCounts(
+        object applicationObject,
+        List<AccessGapProjection> gaps)
+    {
+        var namedMacroCount = ReadMacroCatalogCount(applicationObject, gaps);
+
+        gaps.Add(new("AccessMacroInventoryUnavailable", "macro-catalog", null, RuleIds.LegacyAccessMacroGap));
+        gaps.Add(new("AccessMacroLoadedStateUnavailable", "macro-loaded-state", null, RuleIds.LegacyAccessMacroGap));
+        gaps.Add(new("AccessMacroIdentityUnavailable", "macro-named", null, RuleIds.LegacyAccessMacroGap));
+        gaps.Add(new("AccessMacroEmbeddedInventoryUnavailable", "macro-embedded", null, RuleIds.LegacyAccessMacroGap));
+        gaps.Add(new("AccessMacroDataInventoryUnavailable", "macro-data", null, RuleIds.LegacyAccessMacroGap));
+        gaps.Add(new("AccessMacroStartupInventoryUnavailable", "macro-startup", null, RuleIds.LegacyAccessMacroGap));
+        if (namedMacroCount is > 0)
+            gaps.Add(new("AccessMacroBodyOmitted", "macro-named", null, RuleIds.LegacyAccessMacroGap));
+        var coverage = namedMacroCount.HasValue
+            ? "named-count-observed-loaded-state-unavailable-other-categories-identities-bodies-unavailable"
+            : "named-count-unavailable-loaded-state-unavailable-other-categories-identities-bodies-unavailable";
+        return new(namedMacroCount, LoadedMacroCountUnchanged: null, coverage);
+    }
+
+    private int? ReadMacroCatalogCount(
+        object applicationObject,
+        List<AccessGapProjection> gaps)
+    {
+        object? projectObject = null;
+        object? macrosObject = null;
+        try
+        {
+            dynamic application = applicationObject;
+            projectObject = application.CurrentProject;
+            dynamic project = projectObject;
+            macrosObject = project.AllMacros;
+            return BoundedCount((dynamic)macrosObject, "AccessMacroCollectionLimitReached");
+        }
+        catch (AccessScanException ex)
+        {
+            gaps.Add(new(ex.Classification, "macro-catalog", null, RuleIds.LegacyAccessMacroGap));
+            return null;
+        }
+        catch
+        {
+            gaps.Add(new("AccessMacroCatalogCountUnavailable", "macro-catalog", null, RuleIds.LegacyAccessMacroGap));
+            return null;
+        }
+        finally
+        {
+            Release(macrosObject);
+            Release(projectObject);
+        }
     }
 
     internal AccessVbaInventoryProjection ReadVbaInventoryCounts(

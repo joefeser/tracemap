@@ -249,6 +249,7 @@ public static class FactTypes
     public const string AccessVbaProcedureDeclared = nameof(AccessVbaProcedureDeclared);
     public const string AccessEventBindingCandidate = nameof(AccessEventBindingCandidate);
     public const string AccessNavigationCandidate = nameof(AccessNavigationCandidate);
+    public const string AccessMacroDeclared = nameof(AccessMacroDeclared);
     public const string UiTemplateBinding = nameof(UiTemplateBinding);
     public const string UiFormControlBinding = nameof(UiFormControlBinding);
     public const string UiEventBinding = nameof(UiEventBinding);
@@ -383,6 +384,7 @@ public static class RuleIds
     public const string LegacyAccessBinding = "legacy.access.binding.v1";
     public const string LegacyAccessVba = "legacy.access.vba.v1";
     public const string LegacyAccessEventBinding = "legacy.access.event-binding.v1";
+    public const string LegacyAccessMacroGap = "legacy.access.macro-gap.v1";
     public const string LegacyAccessCoverageGap = "legacy.access.coverage-gap.v1";
     public const string LegacyFlowInputAvailability = "legacy.flow.input-availability.v1";
     public const string LegacyFlowRootSelection = "legacy.flow.root-selection.v1";

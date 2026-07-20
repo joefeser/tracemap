@@ -162,7 +162,8 @@ powershell -ExecutionPolicy Bypass -File scripts/access-validation/Invoke-Access
   -AccessCli <guest-local-tracemap-access.exe> `
   -TraceMapCli <guest-local-tracemap.exe> `
   -Generator <guest-local-New-SyntheticAccessFixture.ps1> `
-  -SmokeRoot <guest-local-smoke-root>
+  -SmokeRoot <guest-local-smoke-root> `
+  -Phase9CheckpointPath <guest-local-sanitized-checkpoint.json>
 ```
 
 The smoke creates and locally commits a disposable zero-row `.accdb`, removes
@@ -174,6 +175,64 @@ database or scan artifacts. Access evidence remains hidden, reduced static
 design evidence: it does not prove row contents, query/macro/VBA execution,
 runtime reachability, linked-source availability, permissions, production
 state, release approval, or that a change is safe.
+
+When `-Phase9CheckpointPath` is supplied, it must be outside the disposable
+smoke root. After each gate, the smoke atomically creates an immutable,
+monotonically sequenced snapshot containing only the closed Phase 9 status,
+stage, failure classification, booleans, and protected-output match count. It
+also updates the unnumbered latest-file pointer on a best-effort basis. Consumers
+must select the valid snapshot with the highest `checkpointSequence` rather than
+trusting an older unnumbered file. Checkpoints never store database hashes,
+names, paths, exception text, or protected values. The harness also validates
+the Access report, combined-index evidence-doc projection, and structured
+vault/release-review unsupported-consumer gaps. Cleanup may
+remove the smoke root while retaining this sanitized checkpoint. Delete the
+checkpoint family only after its issue comment is confirmed posted.
+
+The harness script, generator, and both CLI executables must also be staged
+outside `-SmokeRoot`; the harness deletes that root before generation. Preflight
+rejects a missing tool or a tool inside the disposable root before deletion and
+records only `tool-missing` or `tool-inside-disposable-root`. Generator failures
+use the closed classifications `generator-process-failed`,
+`fixture-database-missing`, or `generation-canary-fired`.
+
+Fixture generation runs in an output-suppressed child PowerShell process so an
+Access/COM host failure cannot terminate the checkpoint coordinator. Private
+working paths pass through the child's inherited environment rather than its
+command line. After generation, the
+checkpoint advances to `fixture-provenance`. Git
+initialization/configuration/staging/commit,
+the bounded incompatible-input fixture, baseline hashing, and boundary cleanup
+each use a closed `fixture-*` failure classification before product scanning.
+
+For an explicitly authorized representative `.accdb` or `.mdb`, use the
+separate committed workflow; never substitute the synthetic harness or an
+agent-authored probe:
+
+```powershell
+.\scripts\access-validation\Invoke-AccessRepresentativeSmoke.ps1 `
+  -AccessCli <durable-tool-root>\tracemap-access.exe `
+  -TraceMapCli <durable-tool-root>\tracemap.exe `
+  -DatabasePath <authorized-local-database> `
+  -ScratchRoot <restricted-disposable-root> `
+  -CheckpointBasePath <durable-sanitized-checkpoint-base> `
+  -InputExplicitlyAuthorized
+```
+
+`-ScratchRoot` must name a new, nonexistent, non-filesystem-root path beneath
+the operator's restricted disposable parent. The harness refuses an existing
+path instead of recursively deleting caller-owned contents.
+
+The representative workflow hashes the original in memory, stream-copies it
+under a generic name into a disposable no-remote Git repository, scans two
+sequential and two concurrent working copies, validates standard artifacts and
+the report/combine/docs/vault/release-review contracts, actively observes the
+Access process for any visible surface during every scan, validates manifest
+and per-fact rule/evidence/commit/extractor provenance, and persists only
+allowlisted booleans, counts, labels, and gaps. It never records the input path,
+name, hash, object identities, SQL, VBA, macro bodies, expressions, connections,
+or exception text in its checkpoint. Raw scratch remains disposable; retain the
+sanitized checkpoint family until its issue result is confirmed posted.
 
 The repository CI runs the existing .NET, TypeScript, Python, JVM, and Swift
 test suites, validates one real output per adapter, and combines all five
