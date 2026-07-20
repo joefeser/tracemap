@@ -1,0 +1,40 @@
+<edmx:Edmx xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx" Version="3.0">
+  <edmx:Runtime>
+    <edmx:ConceptualModels>
+      <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="Model">
+        <EntityContainer Name="ModelContainer" />
+        <Association Name="CustomerOrders">
+          <End Role="Customer" Type="Model.Customer" Multiplicity="1" />
+          <End Role="Orders" Type="Model.Order" Multiplicity="*" />
+        </Association>
+        <Association Name="MissingOrderType">
+          <End Role="Customer" Type="Model.Customer" />
+          <End Role="Orders" />
+        </Association>
+        <Association Name="MissingBothTypes">
+          <End Role="FirstRole" />
+          <End Role="SecondRole" />
+        </Association>
+      </Schema>
+    </edmx:ConceptualModels>
+    <edmx:StorageModels>
+      <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl" Namespace="Store">
+        <EntityContainer Name="StoreContainer" />
+      </Schema>
+    </edmx:StorageModels>
+    <edmx:Mappings>
+      <Mapping xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+        <EntityContainerMapping StorageEntityContainer="StoreContainer" CdmEntityContainer="ModelContainer">
+          <AssociationSetMapping Name="CustomerOrders" StoreEntitySet="FK_CustomerOrders">
+            <EndProperty Name="Customer" />
+            <EndProperty Name="Orders" />
+          </AssociationSetMapping>
+          <AssociationSetMapping Name="MissingRole" StoreEntitySet="FK_MissingRole">
+            <EndProperty Name="Customer" />
+            <EndProperty />
+          </AssociationSetMapping>
+        </EntityContainerMapping>
+      </Mapping>
+    </edmx:Mappings>
+  </edmx:Runtime>
+</edmx:Edmx>
