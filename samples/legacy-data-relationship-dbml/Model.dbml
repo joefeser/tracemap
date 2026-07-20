@@ -1,0 +1,10 @@
+<Database Name="Store" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+  <Table Name="Customers" Member="Customers">
+    <Type Name="Customer">
+      <Column Name="CustomerId" Member="CustomerId" IsPrimaryKey="true" />
+      <Association Name="CustomerOrders" Type="Order" ThisKey="CustomerId" OtherKey="CustomerId" />
+      <Association Name="NeedsReview" Type="Order" ThisKey="CustomerId" OtherKey="CustomerId" />
+      <Association Name="NeedsReview" ThisKey="CustomerId" OtherKey="CustomerId" />
+    </Type>
+  </Table>
+</Database>
