@@ -1,7 +1,7 @@
 # Legacy Data Model Relationship Completion Implementation State
 
-Status: implementation-pr4-validated
-Readiness: ready-for-pr4-delivery
+Status: implementation-pr5-validated
+Readiness: ready-for-pr5-delivery
 Spec branch: `codex/legacy-data-model-relationship-completion`
 Target base: `dev`
 Public claim level: hidden
@@ -88,6 +88,25 @@ Public claim level: hidden
   many-to-many join proof, provider extensions, missing broader MSL metadata,
   EDMX runtime loading, broad downstream workflows, and all database/runtime
   behavior.
+
+## Implementation PR 5
+
+- Implementation branch:
+  `codex/dbml-relationship-key-state-pr5`.
+- Base: `origin/dev` at merged PR #502 commit
+  `54f1733207069fc9e66ceaad921cc4d712039d06`.
+- Selected boundary: complete the remaining bounded DBML relationship follow-up
+  by routing existing association key and scope evidence through the shared
+  classifier. No new XML extraction or downstream projection is required.
+- Missing `ThisKey` or `OtherKey`, malformed or mismatched composite key lists,
+  duplicate table/type endpoint scopes, and foreign-namespace association
+  extensions produce cataloged gaps without an invented relationship. Equal-
+  arity deterministic composite keys preserve existing relationship facts.
+  Unsafe endpoint or key identities remain hash-only and reduced. Existing
+  one-missing-`Type` unidirectional evidence remains unchanged.
+- Deferred: runtime LINQ to SQL model loading, database/schema validation,
+  provider behavior, generated navigation behavior, broad downstream
+  workflows, and all non-DBML family follow-ups.
 
 ## Current Context
 
@@ -567,6 +586,72 @@ Deferred after PR 4:
   many-to-many join proof, provider extensions, and missing broader MSL
   metadata.
 - Broad downstream expansion and all EF/runtime/database behavior.
+
+## Implementation PR 5 Validation
+
+Implemented scope:
+
+- Routed DBML `ThisKey`/`OtherKey` state, endpoint safety, duplicate type/table
+  scopes, and foreign-namespace association extensions through the shared
+  relationship classifier.
+- Missing keys now emit `IncompleteLegacyDataModelRelationship`; malformed,
+  duplicate-member, mismatched composite keys and duplicate endpoint scopes
+  emit `AmbiguousLegacyDataModelIdentity`; provider extensions emit
+  `UnsupportedLegacyOrmMappingShape`. These gap-only shapes do not emit a
+  terminal relationship fact.
+- Equal-arity deterministic composite keys preserve full relationship evidence.
+  Unsafe endpoint/key values remain hash-only with reduced coverage and
+  `unsafe-redacted-endpoint-identity`. Existing missing-`Type` unidirectional
+  evidence and duplicate-association behavior remain stable.
+- Cataloged DBML ownership for provider-extension relationship gaps and added a
+  public-safe smoke fixture plus determinism, privacy, composite-key, duplicate-
+  scope, unsupported-extension, and no-invented-endpoint regressions.
+
+Validation results:
+
+- Focused extractor/classifier/catalog filter: 64 passed, 0 failed.
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with 0 errors and
+  the existing 8 `NU1903` SQLite advisories.
+- `dotnet test src/dotnet/TraceMap.sln --no-restore --no-build`: 828 passed,
+  0 failed.
+- CLI smoke copied the committed sample into a temporary Git repository,
+  committed it as `5aaabce1295e05a10a867f169ba8cdb49a8fd570`, and scanned that exact
+  commit. The scan emitted all five required artifacts with
+  `Level3SyntaxAnalysis`, metadata-only `NotRun` build status, full deterministic
+  composite evidence, reduced duplicate/unidirectional evidence, and separate
+  missing-key, ambiguous-composite, and provider-extension gaps.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- The pinned legacy-data metadata guidance in `docs/VALIDATION.md` was run;
+  broader model-surface/report/query/export filters remain not applicable
+  because those code paths are unchanged.
+
+Initial ACK review follow-up on PR #503:
+
+- Gemini identified an unnecessary descendant traversal for DBML tables. Table
+  discovery now uses direct `Database` children in the DBML namespace.
+- Qodo identified two correctness gaps. Blank `Table@Name` values now use the
+  whitespace-aware `Member` fallback for duplicate-scope classification, and
+  deterministic composite key lists are normalized and emitted in clear form
+  only when every member is a public-safe identifier. Unsafe lists remain
+  hash-only.
+- Codex identified that a foreign-namespace element named `Association` could
+  treat its own namespace as DBML. Provider-extension detection is now anchored
+  to the enclosing DBML `Database` namespace; foreign associations emit the
+  cataloged unsupported-shape gap and no relationship fact.
+- Regression coverage includes blank-name duplicate table scopes, normalized
+  composite members, foreign association elements, repeated-scan determinism,
+  and default-artifact privacy. Post-patch validation passed 64 focused and 828
+  full .NET tests, the pinned JVM integration test, a five-artifact CLI smoke at
+  fixture commit `dc3ce949ff0f128bdc4291d7133956f9080b6de1`, the private-path guard,
+  and `git diff --check`. The build remained clean apart from the existing eight
+  `NU1903` SQLite advisories.
+
+Deferred after PR 5:
+
+- Non-DBML family follow-ups, broader downstream expansion, runtime LINQ to SQL
+  model loading, database/schema/provider validation, generated navigation
+  behavior, and all query/runtime behavior.
 
 Initial ACK review follow-up on PR #502:
 

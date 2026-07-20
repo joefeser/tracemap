@@ -612,6 +612,123 @@ public sealed class LegacyDataMetadataExtractorTests
     }
 
     [Fact]
+    public async Task Dbml_relationship_key_scope_and_extension_gaps_are_deterministic_and_do_not_invent_endpoints()
+    {
+        using var temp = new TempDirectory();
+        const string protectedExtension = "Server=private-db;Password=super-secret";
+        File.WriteAllText(Path.Combine(temp.Path, "RelationshipPrecision.dbml"), $$"""
+            <Database Name="Store"
+                      xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007"
+                      xmlns:vendor="urn:public-safe:dbml-extension">
+              <Table Name="Customers" Member="Customers">
+                <Type Name="Customer">
+                  <Column Name="CustomerId" Member="CustomerId" />
+                  <Column Name="TenantId" Member="TenantId" />
+                  <Association Name="DeterministicComposite" Type="Order" ThisKey="CustomerId,TenantId" OtherKey="CustomerId,TenantId" />
+                  <Association Name="MissingKey" Type="Order" OtherKey="CustomerId" />
+                  <Association Name="MismatchedComposite" Type="Order" ThisKey="CustomerId,TenantId" OtherKey="CustomerId" />
+                  <Association Name="DuplicateKeyMember" Type="Order" ThisKey="CustomerId,CustomerId" OtherKey="CustomerId,TenantId" />
+                  <Association Name="UnsafeKey" Type="Order" ThisKey="Password=super-secret" OtherKey="CustomerId" />
+                  <Association Name="ProviderExtended" Type="Order" ThisKey="CustomerId" OtherKey="CustomerId" vendor:Join="{{protectedExtension}}" />
+                  <Association Name="DuplicateTargetScope" Type="DuplicateTarget" ThisKey="CustomerId" OtherKey="CustomerId" />
+                </Type>
+              </Table>
+              <Table Name="Orders" Member="Orders"><Type Name="Order" /></Table>
+              <Table Name="DuplicateTargetsOne" Member="DuplicateTargetsOne"><Type Name="DuplicateTarget" /></Table>
+              <Table Name="DuplicateTargetsTwo" Member="DuplicateTargetsTwo"><Type Name="DuplicateTarget" /></Table>
+              <Table Name="" Member="SharedScope">
+                <Type Name="UniqueSourceOne">
+                  <Association Name="DuplicateTableScope" Type="Order" ThisKey="CustomerId" OtherKey="CustomerId" />
+                </Type>
+              </Table>
+              <Table Name="" Member="SharedScope"><Type Name="UniqueSourceTwo" /></Table>
+              <vendor:Association Name="ForeignAssociation" Type="Order" ThisKey="CustomerId" OtherKey="CustomerId" />
+            </Database>
+            """);
+
+        var output = Path.Combine(temp.Path, "out");
+        var repeatedOutput = Path.Combine(temp.Path, "out-repeat");
+        Directory.CreateDirectory(output);
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, output));
+        var repeated = ScanEngine.Scan(new ScanOptions(temp.Path, repeatedOutput));
+
+        var deterministic = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("associationName") == "DeterministicComposite");
+        Assert.Equal("full", deterministic.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("full", deterministic.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+        Assert.Equal("CustomerId,TenantId", deterministic.Properties.GetValueOrDefault("sourceMemberName"));
+        Assert.Equal("CustomerId,TenantId", deterministic.Properties.GetValueOrDefault("targetMemberName"));
+        Assert.False(deterministic.Properties.ContainsKey("sourceMemberHash"));
+        Assert.False(deterministic.Properties.ContainsKey("targetMemberHash"));
+
+        var unsafeKey = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("associationName") == "UnsafeKey");
+        Assert.Equal("reduced", unsafeKey.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("full", unsafeKey.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+        Assert.Equal("unsafe-redacted-endpoint-identity", unsafeKey.Properties.GetValueOrDefault("limitations"));
+        Assert.True(unsafeKey.Properties.ContainsKey("sourceMemberHash"));
+        Assert.False(unsafeKey.Properties.ContainsKey("sourceMemberName"));
+
+        var rejectedNames = new[]
+        {
+            "MissingKey",
+            "MismatchedComposite",
+            "DuplicateKeyMember",
+            "ProviderExtended",
+            "ForeignAssociation",
+            "DuplicateTargetScope",
+            "DuplicateTableScope"
+        };
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && rejectedNames.Contains(fact.Properties.GetValueOrDefault("associationName"), StringComparer.Ordinal));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataModelRelationship
+            && fact.Properties.GetValueOrDefault("classification") == "IncompleteLegacyDataModelRelationship"
+            && fact.Properties.GetValueOrDefault("safeReasonCode") == "missing-endpoint");
+        Assert.Equal(4, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("classification") == "AmbiguousLegacyDataModelIdentity"
+            && fact.Properties.GetValueOrDefault("safeReasonCode") == "ambiguous-endpoint-candidates"));
+        Assert.Equal(2, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmMappingShape"
+            && fact.Properties.GetValueOrDefault("safeReasonCode") == "unsupported-relationship-shape"));
+
+        var firstRelationshipFactIds = result.Facts
+            .Where(fact => fact.Properties.GetValueOrDefault("relationshipFamily") == "dbml"
+                || (fact.RuleId == RuleIds.LegacyDataDbml
+                    && fact.Properties.GetValueOrDefault("modelRelationshipKind") == "relationship"))
+            .Select(fact => fact.FactId)
+            .OrderBy(factId => factId, StringComparer.Ordinal)
+            .ToArray();
+        var repeatedRelationshipFactIds = repeated.Facts
+            .Where(fact => fact.Properties.GetValueOrDefault("relationshipFamily") == "dbml"
+                || (fact.RuleId == RuleIds.LegacyDataDbml
+                    && fact.Properties.GetValueOrDefault("modelRelationshipKind") == "relationship"))
+            .Select(fact => fact.FactId)
+            .OrderBy(factId => factId, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(firstRelationshipFactIds, repeatedRelationshipFactIds);
+
+        var factsPath = Path.Combine(output, "facts.ndjson");
+        var indexPath = Path.Combine(output, "index.sqlite");
+        await JsonlFactWriter.WriteAsync(factsPath, result.Facts);
+        SqliteIndexWriter.Write(indexPath, result.Manifest, result.Facts);
+        var defaultArtifacts = string.Join(
+            "\n",
+            await File.ReadAllTextAsync(factsPath),
+            MarkdownReportWriter.Build(result),
+            await ReadAllPropertiesAsync(indexPath));
+        Assert.DoesNotContain(protectedExtension, defaultArtifacts, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-db", defaultArtifacts, StringComparison.Ordinal);
+        Assert.DoesNotContain("super-secret", defaultArtifacts, StringComparison.Ordinal);
+        Assert.DoesNotContain(temp.Path, defaultArtifacts, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Dbml_relationship_outputs_hash_unsafe_endpoint_and_key_values_across_default_artifacts()
     {
         using var temp = new TempDirectory();
@@ -645,6 +762,8 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.True(relationship.Properties.ContainsKey("associationHash"));
         Assert.True(relationship.Properties.ContainsKey("targetEndpointHash"));
         Assert.True(relationship.Properties.ContainsKey("sourceMemberHash"));
+        Assert.Equal("reduced", relationship.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("unsafe-redacted-endpoint-identity", relationship.Properties.GetValueOrDefault("limitations"));
 
         var defaultArtifacts = string.Join(
             "\n",
