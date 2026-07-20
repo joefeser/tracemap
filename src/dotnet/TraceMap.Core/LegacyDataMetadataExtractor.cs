@@ -989,8 +989,8 @@ public static class LegacyDataMetadataExtractor
                 Table = LastXPathIdentifier(element.Elements().FirstOrDefault(IsXsdSelector) is { } selector ? AttributeValue(selector, "xpath") : null),
                 Fields = TypedDataSetConstraintFields(element)
             })
-            .Where(item => !string.IsNullOrWhiteSpace(item.Name) && !string.IsNullOrWhiteSpace(item.Table))
-            .Select(item => new ConstraintDefinition(item.Element, item.Name, item.Table!, item.Fields))
+            .Where(item => !string.IsNullOrWhiteSpace(item.Name))
+            .Select(item => new ConstraintDefinition(item.Element, item.Name, item.Table, item.Fields))
             .ToArray();
         var ambiguousConstraintNames = constraintDefinitions
             .GroupBy(item => item.Name, StringComparer.Ordinal)
@@ -1002,7 +1002,8 @@ public static class LegacyDataMetadataExtractor
         }
 
         var keyedConstraints = constraintDefinitions
-            .Where(item => !ambiguousConstraintNames.ContainsKey(item.Name))
+            .Where(item => !ambiguousConstraintNames.ContainsKey(item.Name)
+                && !string.IsNullOrWhiteSpace(item.Table))
             .GroupBy(item => item.Name, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
 
@@ -1015,7 +1016,7 @@ public static class LegacyDataMetadataExtractor
             var parentTableName = referencedConstraint?.Table;
             var selector = keyref.Elements().FirstOrDefault(IsXsdSelector);
             var childTableName = LastXPathIdentifier(AttributeValue(selector, "xpath"));
-            var fieldState = referencesAmbiguousConstraint
+            var fieldState = referencesAmbiguousConstraint || referencedConstraint is null
                 ? LegacyRelationshipJoinOrKeyState.NotApplicable
                 : TypedDataSetConstraintFieldState(
                     referencedConstraint?.Fields ?? [],
@@ -2941,7 +2942,7 @@ public static class LegacyDataMetadataExtractor
 
     private sealed record TypedDataSetIndicatorResult(bool HasIntrinsicIndicator, bool HasDescriptorContent);
 
-    private sealed record ConstraintDefinition(XElement Element, string Name, string Table, IReadOnlyList<string?> Fields);
+    private sealed record ConstraintDefinition(XElement Element, string Name, string? Table, IReadOnlyList<string?> Fields);
 
     private sealed record GeneratedCandidate(string FilePath, IReadOnlyDictionary<string, IReadOnlyList<int>> TypeLines)
     {

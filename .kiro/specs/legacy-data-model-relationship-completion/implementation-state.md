@@ -145,6 +145,21 @@ Validation results:
 - Broader projection/report/query/export validation remains not applicable
   because this slice changes only typed DataSet extractor classification.
 
+Initial ACK review follow-up on PR #504:
+
+- Codex identified that duplicate constraint detection ran after malformed
+  selector filtering. Named `xs:key`/`xs:unique` candidates now participate in
+  duplicate detection before selector eligibility, so a malformed same-name
+  definition cannot make another definition appear unique.
+- Codex also identified that an unresolved parent key incorrectly suppressed
+  deterministic child-only selector evidence. Field-list validation now runs
+  only when a unique referenced constraint is available; unknown or ambiguous
+  parent constraints preserve the existing reduced unidirectional child
+  relationship plus the appropriate ambiguity evidence.
+- Regressions cover malformed same-name constraints and unknown-parent child-
+  only evidence. Post-patch validation remained 65 focused and 829 full tests;
+  the private-path guard and diff check passed.
+
 ## Current Context
 
 Authoring started from a clean worktree created from current `origin/dev`.
