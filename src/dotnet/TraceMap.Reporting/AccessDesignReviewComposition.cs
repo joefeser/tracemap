@@ -14,6 +14,7 @@ internal static class AccessDesignReviewComposer
 {
     internal const string SectionName = "accessEvidence";
     private const string SectionRuleId = "release.review.section.v1";
+    private static readonly JsonSerializerOptions ManifestJsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     private static readonly IReadOnlyList<string> Limitations =
     [
@@ -40,6 +41,7 @@ internal static class AccessDesignReviewComposer
         string path,
         string indexKind,
         bool requested,
+        string? sourceSelector,
         CancellationToken cancellationToken)
     {
         if (!requested)
@@ -52,6 +54,12 @@ internal static class AccessDesignReviewComposer
         }
 
         var rows = await ReadRowsAsync(path, indexKind, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(sourceSelector))
+        {
+            rows = rows
+                .Where(row => string.Equals(row.SourceLabel, sourceSelector, StringComparison.Ordinal))
+                .ToArray();
+        }
         if (rows.Count == 0)
         {
             var gap = Gap(
@@ -62,13 +70,18 @@ internal static class AccessDesignReviewComposer
                 ReleaseReviewClassifications.PartialAnalysis,
                 "No compatible Microsoft Access design evidence is present in the after snapshot.",
                 [],
-                []);
+                [
+                    Pair("evidenceScope", "selected-after-index-access-catalog"),
+                    Pair("indexKind", indexKind),
+                    Pair("sourceSelector", sourceSelector ?? "all-sources")
+                ]);
             return new ReleaseReviewSection(ReleaseReviewStatuses.Deferred, [], [gap], Limitations);
         }
 
-        if (rows.Any(row => !row.ProvenanceCompatible))
+        var incompatibleRows = rows.Where(row => !row.ProvenanceCompatible).ToArray();
+        if (incompatibleRows.Length > 0)
         {
-            var ids = rows.Where(row => !row.ProvenanceCompatible)
+            var ids = incompatibleRows
                 .Select(row => row.Fact.FactId)
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(value => value, StringComparer.Ordinal)
@@ -82,16 +95,13 @@ internal static class AccessDesignReviewComposer
                 ReleaseReviewClassifications.UnknownAnalysisGap,
                 "Microsoft Access facts are present, but extractor ID/version provenance is unavailable; the design section is not projected.",
                 ids,
-                [Pair("incompatibleFactCount", rows.Count(row => !row.ProvenanceCompatible).ToString(System.Globalization.CultureInfo.InvariantCulture))]);
+                [Pair("incompatibleFactCount", incompatibleRows.Length.ToString(System.Globalization.CultureInfo.InvariantCulture))]);
             return new ReleaseReviewSection(ReleaseReviewStatuses.Unavailable, [], [gap], Limitations);
         }
 
         var findings = new List<ReleaseReviewFinding>();
         var gaps = new List<ReleaseReviewGap>();
-        foreach (var row in rows.OrderBy(row => row.SourceLabel, StringComparer.Ordinal)
-                     .ThenBy(row => row.Fact.Evidence.FilePath, StringComparer.Ordinal)
-                     .ThenBy(row => row.Fact.Evidence.StartLine)
-                     .ThenBy(row => row.Fact.FactId, StringComparer.Ordinal))
+        foreach (var row in rows)
         {
             if (row.Fact.FactType == FactTypes.AnalysisGap)
             {
@@ -111,18 +121,39 @@ internal static class AccessDesignReviewComposer
         }
 
         foreach (var group in rows.Where(row => row.Fact.FactType == FactTypes.AnalysisGap)
-                     .GroupBy(row => string.Join('\u001f',
+                     .GroupBy(row => (
                          row.SourceLabel,
                          row.Fact.RuleId,
-                         SafeToken(row.Fact.Properties.GetValueOrDefault("classification"), "AccessAnalysisGap")), StringComparer.Ordinal)
-                     .OrderBy(group => group.Key, StringComparer.Ordinal))
+                         Classification: SafeToken(row.Fact.Properties.GetValueOrDefault("classification"), "AccessAnalysisGap"),
+                         row.Fact.Evidence.FilePath,
+                         row.Fact.Evidence.StartLine,
+                         row.Fact.Evidence.EndLine,
+                         ScopeKind: SafeToken(row.Fact.Properties.GetValueOrDefault("scopeKind"), "unknown"),
+                         ScopeStableKey: row.Fact.Properties.GetValueOrDefault("scopeStableKey") ?? string.Empty))
+                     .OrderBy(group => group.Key.SourceLabel, StringComparer.Ordinal)
+                     .ThenBy(group => group.Key.RuleId, StringComparer.Ordinal)
+                     .ThenBy(group => group.Key.Classification, StringComparer.Ordinal)
+                     .ThenBy(group => group.Key.FilePath, StringComparer.Ordinal)
+                     .ThenBy(group => group.Key.StartLine)
+                     .ThenBy(group => group.Key.EndLine)
+                     .ThenBy(group => group.Key.ScopeKind, StringComparer.Ordinal)
+                     .ThenBy(group => group.Key.ScopeStableKey, StringComparer.Ordinal))
         {
             gaps.Add(FromAnalysisGap(group));
         }
 
         foreach (var group in rows.Where(row => ItemLevelFactTypes.Contains(row.Fact.FactType))
-                     .GroupBy(row => $"{row.SourceLabel}\u001f{row.Fact.FactType}", StringComparer.Ordinal)
-                     .OrderBy(group => group.Key, StringComparer.Ordinal))
+                     .GroupBy(row => (
+                         row.SourceLabel,
+                         row.Fact.FactType,
+                         row.Fact.Evidence.FilePath,
+                         row.Fact.Evidence.StartLine,
+                         row.Fact.Evidence.EndLine))
+                     .OrderBy(group => group.Key.SourceLabel, StringComparer.Ordinal)
+                     .ThenBy(group => group.Key.FactType, StringComparer.Ordinal)
+                     .ThenBy(group => group.Key.FilePath, StringComparer.Ordinal)
+                     .ThenBy(group => group.Key.StartLine)
+                     .ThenBy(group => group.Key.EndLine))
         {
             var first = group.OrderBy(row => row.Fact.FactId, StringComparer.Ordinal).First();
             gaps.Add(Gap(
@@ -213,7 +244,17 @@ internal static class AccessDesignReviewComposer
             ? ReleaseReviewClassifications.TruncatedByLimit
             : ReleaseReviewClassifications.PartialAnalysis;
         return new ReleaseReviewGap(
-            StableId("gap", row.SourceLabel, kind, fact.RuleId),
+            StableId(
+                "gap",
+                row.SourceLabel,
+                kind,
+                fact.RuleId,
+                fact.Evidence.FilePath,
+                fact.Evidence.StartLine.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                fact.Evidence.EndLine.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                fact.Properties.GetValueOrDefault("scopeKind") ?? string.Empty,
+                fact.Properties.GetValueOrDefault("scopeStableKey") ?? string.Empty,
+                string.Join(';', rows.Select(item => item.Fact.FactId))),
             kind,
             SectionName,
             row.SourceLabel,
@@ -231,6 +272,8 @@ internal static class AccessDesignReviewComposer
                 Pair("filePath", SafeRelativePath(fact.Evidence.FilePath) ?? "unknown"),
                 Pair("startLine", fact.Evidence.StartLine.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 Pair("endLine", fact.Evidence.EndLine.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                Pair("scopeKind", SafeToken(fact.Properties.GetValueOrDefault("scopeKind"), "unknown")),
+                Pair("scopeDesignKey", SafeOpaqueKey(fact.Properties.GetValueOrDefault("scopeStableKey")) ?? string.Empty),
                 Pair("factCount", rows.Length.ToString(System.Globalization.CultureInfo.InvariantCulture))
             ]));
     }
@@ -335,12 +378,14 @@ internal static class AccessDesignReviewComposer
 
     private static string? SafeRelativePath(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value) || Path.IsPathRooted(value))
+        if (string.IsNullOrWhiteSpace(value))
             return null;
-        var normalized = value.Replace('\\', '/');
-        return normalized.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment == "..")
+
+        var safePath = CombinedReportHelpers.SafePath(value);
+        return safePath == "n/a"
+            || safePath.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment == "..")
             ? null
-            : normalized;
+            : safePath;
     }
 
     private static KeyValuePair<string, string> Pair(string key, string value) => new(key, value);
@@ -395,7 +440,7 @@ internal static class AccessDesignReviewComposer
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            var manifest = JsonSerializer.Deserialize<ScanManifest>(reader.GetString(1), new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            var manifest = JsonSerializer.Deserialize<ScanManifest>(reader.GetString(1), ManifestJsonOptions)
                 ?? throw new InvalidDataException("Access design evidence input has an invalid scan manifest.");
             var extractorIdValue = reader.IsDBNull(17) ? null : reader.GetString(17);
             var extractorVersionValue = reader.IsDBNull(18) ? null : reader.GetString(18);

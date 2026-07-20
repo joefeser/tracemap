@@ -1,6 +1,6 @@
 # Access Design-Review Composition Implementation State
 
-Status: implementation-and-local-validation-complete-awaiting-pr-review
+Status: pr-open-review-fixes-validated-awaiting-fresh-ack
 
 Branch: `codex/access-design-review-composition`
 
@@ -45,6 +45,12 @@ were updated for the new composed release-review contract; Access COM,
 product-reader, and fixture-generation code are unchanged. The completed
 Windows smoke evidence remains authoritative and no new Windows probe is
 required for this read-side slice.
+
+PR #506 ACK review on initial head `cbf80097` found source-selector handling,
+cross-platform path redaction, and per-file gap identity issues. The review
+patch also added evidence-scope metadata to the no-facts gap and applied the
+supported allocation/pool-lifetime cleanups. Focused tests and the full 832-test
+solution run passed again after the patch; a fresh ACK run is pending.
 
 ## Deferred
 
