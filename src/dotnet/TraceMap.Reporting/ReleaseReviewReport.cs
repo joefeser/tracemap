@@ -449,6 +449,7 @@ public static class ReleaseReviewReporter
             options.AfterPath,
             afterInfo.Kind,
             ScopeEnabled(scopes, "access-evidence"),
+            options.Source,
             cancellationToken);
         var packageImpact = BuildPackageSection(options, scopes, topChangedSurfaces);
         gaps.AddRange(contractImpact.Gaps);

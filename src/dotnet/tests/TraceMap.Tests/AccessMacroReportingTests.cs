@@ -283,6 +283,25 @@ public sealed class AccessMacroReportingTests
         Assert.All(combinedReview.AccessEvidence.Findings, finding => Assert.Equal("access", finding.SourceLabel));
         Assert.DoesNotContain(ProtectedMacroName, JsonSerializer.Serialize(combinedReview), StringComparison.OrdinalIgnoreCase);
 
+        var selectedCombinedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            combined,
+            combined,
+            Path.Combine(temp.Path, "selected-combined-release-review.md"),
+            Scope: "access-evidence",
+            Source: "access"));
+        Assert.Equal(ReleaseReviewStatuses.Available, selectedCombinedReview.AccessEvidence.Status);
+        Assert.All(selectedCombinedReview.AccessEvidence.Findings, finding => Assert.Equal("access", finding.SourceLabel));
+
+        var excludedCombinedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            combined,
+            combined,
+            Path.Combine(temp.Path, "excluded-combined-release-review.md"),
+            Scope: "access-evidence",
+            Source: "other"));
+        Assert.Equal(ReleaseReviewStatuses.Deferred, excludedCombinedReview.AccessEvidence.Status);
+        var excludedGap = Assert.Single(excludedCombinedReview.AccessEvidence.Gaps);
+        Assert.Contains(excludedGap.Metadata, pair => pair.Key == "sourceSelector" && pair.Value == "other");
+
         var scopedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
             index,
             index,
@@ -291,14 +310,71 @@ public sealed class AccessMacroReportingTests
         Assert.Equal(ReleaseReviewStatuses.Available, scopedReview.AccessEvidence.Status);
         Assert.Equal(ReleaseReviewStatuses.NotRequested, scopedReview.SqlEvidence.Status);
 
+        SqliteConnection.ClearAllPools();
+        var unsafePathIndex = Path.Combine(temp.Path, "unsafe-path.sqlite");
+        File.Copy(index, unsafePathIndex);
+        await using (var connection = new SqliteConnection($"Data Source={unsafePathIndex}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "update facts set file_path = 'C:\\private\\customer\\fixture.accdb';";
+            await command.ExecuteNonQueryAsync();
+        }
+        SqliteConnection.ClearAllPools();
+
+        var unsafePathReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            unsafePathIndex,
+            unsafePathIndex,
+            Path.Combine(temp.Path, "unsafe-path-release-review.md"),
+            Scope: "access-evidence"));
+        var unsafePathSerialized = JsonSerializer.Serialize(unsafePathReview.AccessEvidence);
+        Assert.DoesNotContain("C:\\private", unsafePathSerialized, StringComparison.OrdinalIgnoreCase);
+        Assert.All(unsafePathReview.AccessEvidence.Findings, finding => Assert.StartsWith("absolute-path-hash:", finding.FilePath, StringComparison.Ordinal));
+
+        var collisionIndex = Path.Combine(temp.Path, "gap-collision.sqlite");
+        File.Copy(index, collisionIndex);
+        await using (var connection = new SqliteConnection($"Data Source={collisionIndex}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                insert into facts (
+                    fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
+                    source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
+                    snippet_hash, extractor_id, extractor_version, properties_json)
+                select fact_id || '-second-file', scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
+                    source_symbol, target_symbol, contract_element, 'second.accdb', start_line, end_line,
+                    snippet_hash, extractor_id, extractor_version, properties_json
+                from facts
+                where fact_type = 'AnalysisGap'
+                  and json_extract(properties_json, '$.classification') = 'AccessMacroIdentityUnavailable'
+                limit 1;
+                """;
+            Assert.Equal(1, await command.ExecuteNonQueryAsync());
+        }
+        SqliteConnection.ClearAllPools();
+
+        var collisionReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            collisionIndex,
+            collisionIndex,
+            Path.Combine(temp.Path, "gap-collision-release-review.md"),
+            Scope: "access-evidence"));
+        var identityGaps = collisionReview.AccessEvidence.Gaps
+            .Where(gap => gap.GapKind == "AccessMacroIdentityUnavailable")
+            .ToArray();
+        Assert.Equal(2, identityGaps.Length);
+        Assert.Equal(2, identityGaps.Select(gap => gap.GapId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(identityGaps, gap => gap.Metadata.Any(pair => pair.Key == "filePath" && pair.Value == "fixture.accdb"));
+        Assert.Contains(identityGaps, gap => gap.Metadata.Any(pair => pair.Key == "filePath" && pair.Value == "second.accdb"));
+
         await using (var connection = new SqliteConnection($"Data Source={index}"))
         {
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
             command.CommandText = "update facts set extractor_version = '' where rule_id like 'legacy.access.%';";
             await command.ExecuteNonQueryAsync();
-            SqliteConnection.ClearAllPools();
         }
+        SqliteConnection.ClearAllPools();
 
         var incompatible = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
             index,
