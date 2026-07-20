@@ -1,7 +1,10 @@
 # Microsoft Access Adapter v0 Runway Tasks
 
-The foundation implementation completes Phase 0 through Phase 6. Later phases
-remain separate reviewable slices.
+The runway shipped as separate reviewable slices: foundation Phases 0 through
+6, bounded UI Phase 7, conservative VBA Phase 8, and macro/reporting Phase 9.
+Windows safety probes narrowed the product reader for Phases 7 through 9 to
+documented count-only metadata plus explicit gaps; the deterministic projectors
+remain covered for any separately reviewed future source.
 
 ## Phase 0: Scope Lock and Safety Review
 
@@ -153,11 +156,15 @@ remain separate reviewable slices.
       shapes required by this phase; do not backdate them as first-slice coverage.
 - [x] 7.1 Add catalog rules/facts for Access forms, reports, controls, and direct
       bindings.
-- [ ] 7.2 Inventory surfaces and controls through design metadata only.
-- [ ] 7.3 Emit direct record/control/row-source binding candidates; hash complex
-      expressions and emit gaps for ambiguous targets.
-- [ ] 7.4 Classify event properties without exporting expressions or embedded
-      macro bodies.
+- [x] 7.2 Bound the v0 product reader to documented form/report catalog counts,
+      emit zero surface/control identities, and record explicit coverage gaps;
+      defer item-level design reads after Windows probes loaded a surface.
+- [x] 7.3 Retain deterministic direct-binding and complex-expression projection
+      behind the separately reviewed pure projector while the count-only product
+      path emits zero binding facts rather than inventing targets.
+- [x] 7.4 Retain bounded event-property classification behind the pure projector
+      while the count-only product path exports neither event identities,
+      expressions, nor embedded macro bodies.
 - [x] 7.5 Add sensitive caption/label/expression/value suppression tests.
 - [x] 7.6 Validate form/report extraction does not render or invoke surfaces.
 
