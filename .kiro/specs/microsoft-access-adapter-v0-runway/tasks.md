@@ -184,7 +184,7 @@ remain separate reviewable slices.
 
 ## Phase 9: Macro/External Depth and Reporting (Follow-Up PR)
 
-- [ ] 9.0 Extend the synthetic fixture with the macro inventory shapes approved
+- [x] 9.0 Extend the synthetic fixture with the macro inventory shapes approved
       for this phase while keeping command bodies protected.
 - [x] 9.1 Bound the v0 product reader to documented `AllMacros.Count`, emit no
       macro identity or body facts, explicitly gap loaded-state, named identity,
