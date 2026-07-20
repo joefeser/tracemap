@@ -3042,7 +3042,7 @@ public static class CombinedRouteFlowReporter
         foreach (var sourceGroup in dataFacingSurfaces.GroupBy(surface => surface.Evidence.SourceLabel, StringComparer.Ordinal))
         {
             var sourceLabel = sourceGroup.Key;
-            inputsBySafeLabel.TryGetValue(sourceLabel, out var input);
+            inputsBySafeLabel.TryGetValue(SafeLabel(sourceLabel), out var input);
             if (input is null || !input.ProvenanceCompatible)
             {
                 yield return MissingSqlContextCandidate(sourceGroup.First(), input is null ? "context-evidence-unavailable" : "extractor-provenance-unavailable");
@@ -3128,7 +3128,7 @@ public static class CombinedRouteFlowReporter
             .GroupBy(surface => surface.Evidence.SourceLabel, StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal))
         {
-            inputsBySafeLabel.TryGetValue(sourceGroup.Key, out var input);
+            inputsBySafeLabel.TryGetValue(SafeLabel(sourceGroup.Key), out var input);
             var reason = input is null
                 ? "context-evidence-unavailable"
                 : !input.ProvenanceCompatible
