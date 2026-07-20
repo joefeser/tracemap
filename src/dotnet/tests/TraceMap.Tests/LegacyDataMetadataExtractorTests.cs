@@ -1154,6 +1154,8 @@ public sealed class LegacyDataMetadataExtractorTests
               </xs:key>
               <xs:key name="DuplicateKey"><xs:selector xpath=".//mstns:Customers" /><xs:field xpath="mstns:CustomerId" /></xs:key>
               <xs:unique name="DuplicateKey"><xs:selector xpath=".//mstns:Customers" /><xs:field xpath="mstns:CustomerId" /></xs:unique>
+              <xs:key name="MalformedDuplicate"><xs:selector xpath=".//mstns:Customers" /><xs:field xpath="mstns:CustomerId" /></xs:key>
+              <xs:unique name="MalformedDuplicate"><xs:field xpath="mstns:CustomerId" /></xs:unique>
               <xs:keyref name="CompositeMatch" refer="mstns:CompositeKey">
                 <xs:selector xpath=".//mstns:Orders" />
                 <xs:field xpath="mstns:CustomerId" />
@@ -1165,6 +1167,8 @@ public sealed class LegacyDataMetadataExtractorTests
               </xs:keyref>
               <xs:keyref name="MissingFields" refer="mstns:CompositeKey"><xs:selector xpath=".//mstns:Orders" /></xs:keyref>
               <xs:keyref name="DuplicateReference" refer="mstns:DuplicateKey"><xs:selector xpath=".//mstns:Orders" /><xs:field xpath="mstns:CustomerId" /></xs:keyref>
+              <xs:keyref name="MalformedDuplicateReference" refer="mstns:MalformedDuplicate"><xs:selector xpath=".//mstns:Orders" /><xs:field xpath="mstns:CustomerId" /></xs:keyref>
+              <xs:keyref name="UnknownParent" refer="mstns:UnknownKey"><xs:selector xpath=".//mstns:Orders" /><xs:field xpath="mstns:CustomerId" /></xs:keyref>
             </xs:schema>
             """);
 
@@ -1188,8 +1192,16 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.Equal("reduced", duplicateReference.Properties.GetValueOrDefault("coverageLabel"));
         Assert.Equal("unidirectional", duplicateReference.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
         Assert.False(duplicateReference.Properties.ContainsKey("sourceEndpointName"));
+        var malformedDuplicateReference = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("relationName") == "MalformedDuplicateReference");
+        Assert.Equal("reduced", malformedDuplicateReference.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.False(malformedDuplicateReference.Properties.ContainsKey("sourceEndpointName"));
+        var unknownParent = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("relationName") == "UnknownParent");
+        Assert.Equal("reduced", unknownParent.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("Orders", unknownParent.Properties.GetValueOrDefault("targetEndpointName"));
 
-        Assert.Equal(4, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
+        Assert.Equal(7, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataTypedDataSet
             && fact.Properties.GetValueOrDefault("classification") == "AmbiguousLegacyDataModelIdentity"));
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
