@@ -264,6 +264,9 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataColumnDeclared && fact.Properties.GetValueOrDefault("columnName") == "OrderId");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.SqlTextUsed && fact.RuleId == RuleIds.LegacyDataTypedDataSet && fact.Properties.ContainsKey("textHash"));
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.QueryPatternDetected && fact.Properties.GetValueOrDefault("tableName") == "Orders");
+        Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.LegacyDataTypedDataSet
+            && fact.Properties.GetValueOrDefault("metadataFormat") == "tableadapter"
+            && fact.Properties.GetValueOrDefault("modelRelationshipKind") == "relationship");
         Assert.DoesNotContain("ApiSecret", report);
         Assert.DoesNotContain("SELECT OrderId", report);
     }
@@ -835,11 +838,16 @@ public sealed class LegacyDataMetadataExtractorTests
                 <xs:selector xpath=".//mstns:Orders" />
                 <xs:field xpath="mstns:CustomerId" />
               </xs:keyref>
-              <xs:annotation><xs:appinfo><msdata:Relationship name="CustomerOrders" parent="Customers" child="Orders" /></xs:appinfo></xs:annotation>
+              <xs:annotation><xs:appinfo>
+                <msdata:Relationship name="CustomerOrders" parent="Customers" child="Orders" />
+                <msdata:Relationship name="MissingParent" child="Orders" />
+                <msdata:Relationship name="MissingBoth" />
+              </xs:appinfo></xs:annotation>
             </xs:schema>
             """);
 
         var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var repeated = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out-repeat")));
 
         var relation = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
             && fact.RuleId == RuleIds.LegacyDataTypedDataSet
@@ -861,6 +869,28 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.Equal("Orders", constraint.Properties.GetValueOrDefault("targetEndpointName"));
         Assert.Equal("Customers.IdKey", constraint.Properties.GetValueOrDefault("referencedConstraintName"));
         Assert.Equal("full", constraint.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+
+        var missingParent = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataTypedDataSet
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "relation"
+            && fact.Properties.GetValueOrDefault("relationName") == "MissingParent");
+        Assert.Equal("reduced", missingParent.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("unidirectional", missingParent.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+        Assert.Equal("missing-relationship-endpoint", missingParent.Properties.GetValueOrDefault("limitations"));
+        Assert.False(missingParent.Properties.ContainsKey("sourceEndpointName"));
+        Assert.Equal("Orders", missingParent.Properties.GetValueOrDefault("targetEndpointName"));
+
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("relationName") == "MissingBoth");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataModelRelationship
+            && fact.Properties.GetValueOrDefault("classification") == "IncompleteLegacyDataModelRelationship"
+            && fact.Properties.GetValueOrDefault("relationshipFamily") == "typed-dataset"
+            && fact.Properties.GetValueOrDefault("safeReasonCode") == "missing-endpoint");
+
+        Assert.Equal(
+            result.Facts.Where(IsTypedDataSetRelationshipEvidence).Select(fact => fact.FactId),
+            repeated.Facts.Where(IsTypedDataSetRelationshipEvidence).Select(fact => fact.FactId));
     }
 
     [Fact]
@@ -888,6 +918,8 @@ public sealed class LegacyDataMetadataExtractorTests
                 <xs:selector xpath=".//mstns:OrderLines" />
                 <xs:field xpath="mstns:OrderId" />
               </xs:keyref>
+              <xs:keyref name="AmbiguousMissingChild" refer="mstns:SharedKey" />
+              <xs:keyref name="MissingBoth" />
               <custom:keyref name="FakeRelationship" refer="mstns:SharedKey">
                 <custom:selector xpath=".//mstns:Orders" />
               </custom:keyref>
@@ -896,7 +928,7 @@ public sealed class LegacyDataMetadataExtractorTests
 
         var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
 
-        Assert.Equal(3, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
+        Assert.Equal(4, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataTypedDataSet
             && fact.Properties.GetValueOrDefault("classification") == "AmbiguousLegacyDataModelIdentity"));
 
@@ -910,6 +942,58 @@ public sealed class LegacyDataMetadataExtractorTests
 
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
             && fact.Properties.GetValueOrDefault("relationName") == "FakeRelationship");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("relationName") == "MissingBoth");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("relationName") == "AmbiguousMissingChild");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataModelRelationship
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "constraint-relation"
+            && fact.Properties.GetValueOrDefault("safeReasonCode") == "missing-endpoint");
+    }
+
+    [Fact]
+    public async Task Typed_dataset_relationship_outputs_hash_unsafe_names_across_default_artifacts()
+    {
+        using var temp = new TempDirectory();
+        const string unsafeRelation = "https://private.example/relation?token=secret";
+        const string unsafeParent = "private-server;Database=Catalog";
+        const string unsafeChild = "C:\\private\\child.table";
+        File.WriteAllText(Path.Combine(temp.Path, "UnsafeRelationships.xsd"), $$"""
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                       xmlns:msdata="urn:schemas-microsoft-com:xml-msdata"
+                       xmlns:msprop="urn:schemas-microsoft-com:xml-msprop">
+              <xs:element name="SafeDataSet" msdata:IsDataSet="true" msprop:Generator_DataSetName="SafeDataSet" />
+              <xs:annotation><xs:appinfo>
+                <msdata:Relationship name="{{unsafeRelation}}" parent="{{unsafeParent}}" child="{{unsafeChild}}" />
+              </xs:appinfo></xs:annotation>
+            </xs:schema>
+            """);
+
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(output);
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, output));
+        var factsPath = Path.Combine(output, "facts.ndjson");
+        var indexPath = Path.Combine(output, "index.sqlite");
+        await JsonlFactWriter.WriteAsync(factsPath, result.Facts);
+        SqliteIndexWriter.Write(indexPath, result.Manifest, result.Facts);
+
+        var relationship = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataTypedDataSet
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "relation");
+        Assert.True(relationship.Properties.ContainsKey("relationHash"));
+        Assert.True(relationship.Properties.ContainsKey("sourceEndpointHash"));
+        Assert.True(relationship.Properties.ContainsKey("targetEndpointHash"));
+
+        var defaultArtifacts = string.Join(
+            "\n",
+            await File.ReadAllTextAsync(factsPath),
+            MarkdownReportWriter.Build(result),
+            await ReadAllPropertiesAsync(indexPath));
+        foreach (var protectedValue in new[] { unsafeRelation, unsafeParent, unsafeChild, "private.example", "private-server", "Catalog", temp.Path })
+        {
+            Assert.DoesNotContain(protectedValue, defaultArtifacts, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -1827,6 +1911,14 @@ public sealed class LegacyDataMetadataExtractorTests
             && fact.Properties.GetValueOrDefault("classification") == "LegacyDataParserSecurityRejected");
         Assert.DoesNotContain(result.Facts, fact => fact.FactType.StartsWith("LegacyData", StringComparison.Ordinal)
             && fact.RuleId == RuleIds.LegacyDataOrmNHibernate);
+    }
+
+    private static bool IsTypedDataSetRelationshipEvidence(CodeFact fact)
+    {
+        return (fact.RuleId == RuleIds.LegacyDataTypedDataSet
+                || fact.RuleId == RuleIds.LegacyDataModelRelationship)
+            && (fact.Properties.GetValueOrDefault("modelRelationshipKind") == "relationship"
+                || fact.Properties.GetValueOrDefault("relationshipFamily") == "typed-dataset");
     }
 
     private static async Task<string> ReadAllPropertiesAsync(string sqlitePath)

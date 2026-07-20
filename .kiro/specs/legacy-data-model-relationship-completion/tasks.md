@@ -1,7 +1,7 @@
 # Legacy Data Model Relationship Completion Tasks
 
-Current state: implementation PR 1 in progress on the shared relationship gap
-classifier plus narrow DBML integration.
+Current state: implementation PR 1 merged; implementation PR 2 is validated and
+ready for delivery with narrow typed DataSet classifier integration.
 
 ## Spec Authoring Tasks
 
@@ -125,13 +125,13 @@ classifier plus narrow DBML integration.
 
 - [ ] 6. Add typed DataSet relationship follow-ups. Requirements:
       2, 6, 8, 9.
-  - [ ] Harden `msdata:Relationship`, `xs:key`, `xs:unique`, and `xs:keyref`
+  - [x] Harden `msdata:Relationship`, `xs:key`, `xs:unique`, and `xs:keyref`
         endpoint decisions.
   - [ ] Add gaps or reduced evidence for missing parent/child endpoints,
         duplicate constraints, ambiguous selectors, unsupported composite field
         matching, schema indicators without DataSet content, and SQL-only
         relationship hints.
-  - [ ] Prove TableAdapter SQL text never becomes relationship evidence.
+  - [x] Prove TableAdapter SQL text never becomes relationship evidence.
 
 - [ ] 7. Add NHibernate relationship follow-ups. Requirements: 2, 7, 8, 9.
   - [ ] Harden `many-to-one`, `one-to-one`, collection/key, `one-to-many`, and

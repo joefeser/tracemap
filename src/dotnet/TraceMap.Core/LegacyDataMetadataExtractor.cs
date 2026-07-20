@@ -855,18 +855,38 @@ public static class LegacyDataMetadataExtractor
             var parentTableName = keyedTables.GetValueOrDefault(referencedKey);
             var selector = keyref.Elements().FirstOrDefault(IsXsdSelector);
             var childTableName = LastXPathIdentifier(AttributeValue(selector, "xpath"));
-            var coverageLabel = string.IsNullOrWhiteSpace(parentTableName) || string.IsNullOrWhiteSpace(childTableName) ? "reduced" : "full";
-            var limitations = new List<string>();
-            if (coverageLabel == "reduced")
+            var relationshipDecision = ClassifyTypedDataSetRelationship(
+                "keyref",
+                referencesAmbiguousConstraint
+                    ? LegacyRelationshipEndpointState.Ambiguous
+                    : EndpointState(parentTableName),
+                EndpointState(childTableName));
+            if (relationshipDecision.Decision == LegacyRelationshipDecision.EmitAnalysisGap)
             {
-                limitations.Add("constraint-endpoint-needs-review");
+                AddRelationshipGap(
+                    manifest,
+                    facts,
+                    relativePath,
+                    relationshipDecision,
+                    "typed-dataset",
+                    "constraint-relation",
+                    referencesAmbiguousConstraint
+                        ? "Typed DataSet keyref referenced an ambiguous constraint name."
+                        : "Typed DataSet keyref did not provide a deterministic parent or child endpoint.",
+                    keyref);
+                if (string.IsNullOrWhiteSpace(parentTableName)
+                    && string.IsNullOrWhiteSpace(childTableName))
+                {
+                    continue;
+                }
             }
 
-            if (referencesAmbiguousConstraint)
-            {
-                limitations.Add("ambiguous-constraint-name");
-                AddGap(manifest, facts, relativePath, RuleIds.LegacyDataTypedDataSet, "AmbiguousLegacyDataModelIdentity", "Typed DataSet keyref referenced an ambiguous constraint name.", keyref);
-            }
+            var coverageLabel = relationshipDecision.Decision == LegacyRelationshipDecision.EmitRelationship
+                ? "full"
+                : "reduced";
+            var limitations = TypedDataSetRelationshipLimitations(
+                relationshipDecision,
+                "keyref");
 
             var properties = MetadataProperties("TypedDataSet", metadataHash, "constraint-relation");
             properties["mappingKind"] = "relation";
@@ -876,7 +896,14 @@ public static class LegacyDataMetadataExtractor
             AddSafeName(properties, "sourceEndpointName", "sourceEndpointHash", parentTableName);
             AddSafeName(properties, "targetEndpointName", "targetEndpointHash", childTableName);
             AddSafeName(properties, "referencedConstraintName", "referencedConstraintHash", referencedKey);
-            AddRelationshipSemantics(properties, sourceMetadataFactId, coverageLabel == "reduced" ? "unidirectional" : "full", limitations);
+            AddRelationshipSemantics(
+                properties,
+                sourceMetadataFactId,
+                relationshipDecision.RelationshipEndpointCoverage
+                    ?? (string.IsNullOrWhiteSpace(parentTableName) || string.IsNullOrWhiteSpace(childTableName)
+                        ? "unidirectional"
+                        : "full"),
+                limitations);
             AddModelIdentity(
                 properties,
                 "TypedDataSet",
@@ -967,12 +994,28 @@ public static class LegacyDataMetadataExtractor
         {
             var parentTableName = AttributeValue(relation, "parent");
             var childTableName = AttributeValue(relation, "child");
-            var relationshipCoverageLabel = string.IsNullOrWhiteSpace(parentTableName) || string.IsNullOrWhiteSpace(childTableName) ? "reduced" : "full";
-            var limitations = new List<string>();
-            if (relationshipCoverageLabel == "reduced")
+            var relationshipDecision = ClassifyTypedDataSetRelationship(
+                "relation",
+                EndpointState(parentTableName),
+                EndpointState(childTableName));
+            if (relationshipDecision.Decision == LegacyRelationshipDecision.EmitAnalysisGap)
             {
-                limitations.Add("missing-relationship-endpoint");
+                AddRelationshipGap(
+                    manifest,
+                    facts,
+                    item.RelativePath,
+                    relationshipDecision,
+                    "typed-dataset",
+                    "relation",
+                    "Typed DataSet relationship did not provide a deterministic parent or child endpoint.",
+                    relation);
+                continue;
             }
+
+            var relationshipCoverageLabel = relationshipDecision.CoverageLabel;
+            var limitations = TypedDataSetRelationshipLimitations(
+                relationshipDecision,
+                "relation");
 
             var properties = MetadataProperties("TypedDataSet", metadataHash, "relation");
             properties["mappingKind"] = "relation";
@@ -981,7 +1024,11 @@ public static class LegacyDataMetadataExtractor
             AddSafeName(properties, "childTableName", "childTableHash", childTableName);
             AddSafeName(properties, "sourceEndpointName", "sourceEndpointHash", parentTableName);
             AddSafeName(properties, "targetEndpointName", "targetEndpointHash", childTableName);
-            AddRelationshipSemantics(properties, metadataFact.FactId, relationshipCoverageLabel == "reduced" ? "unidirectional" : "full", limitations);
+            AddRelationshipSemantics(
+                properties,
+                metadataFact.FactId,
+                relationshipDecision.RelationshipEndpointCoverage ?? "full",
+                limitations);
             AddModelIdentity(properties, "TypedDataSet", "relationship", "generated", item.RelativePath, "typed-dataset-relation", AttributeValue(relation, "name"), parentTableName, metadataFact.FactId, Parts(("relation", AttributeValue(relation, "name")), ("parent", parentTableName), ("child", childTableName)), relationshipCoverageLabel);
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataTypedDataSet, item.RelativePath, relation, TargetFrom(properties, "relationName", "relationHash"), properties));
         }
@@ -1678,6 +1725,57 @@ public static class LegacyDataMetadataExtractor
         if (string.IsNullOrWhiteSpace(targetTypeName))
         {
             limitations.Add("missing-target-endpoint");
+        }
+
+        return limitations.ToArray();
+    }
+
+    private static LegacyRelationshipGapDecision ClassifyTypedDataSetRelationship(
+        string descriptorKind,
+        LegacyRelationshipEndpointState sourceEndpointState,
+        LegacyRelationshipEndpointState targetEndpointState)
+    {
+        return LegacyDataRelationshipGapClassifier.Classify(new LegacyRelationshipGapInput(
+            "typed-dataset",
+            RuleIds.LegacyDataTypedDataSet,
+            descriptorKind,
+            IsRelationshipDescriptor: true,
+            sourceEndpointState,
+            targetEndpointState,
+            LegacyRelationshipJoinOrKeyState.NotApplicable,
+            LegacyRelationshipParserCoverageState.Full,
+            LegacyRelationshipShapeFlags.None,
+            ExistingFamilyAllowsUnidirectional: true));
+    }
+
+    private static LegacyRelationshipEndpointState EndpointState(string? endpoint)
+    {
+        return string.IsNullOrWhiteSpace(endpoint)
+            ? LegacyRelationshipEndpointState.Missing
+            : LegacyRelationshipEndpointState.Deterministic;
+    }
+
+    private static IReadOnlyList<string> TypedDataSetRelationshipLimitations(
+        LegacyRelationshipGapDecision decision,
+        string descriptorKind)
+    {
+        if (decision.Decision == LegacyRelationshipDecision.EmitRelationship)
+        {
+            return [];
+        }
+
+        var limitations = new SortedSet<string>(StringComparer.Ordinal);
+        if (descriptorKind == "keyref")
+        {
+            limitations.Add("constraint-endpoint-needs-review");
+            if (decision.SafeReasonCode == "ambiguous-endpoint-candidates")
+            {
+                limitations.Add("ambiguous-constraint-name");
+            }
+        }
+        else if (descriptorKind == "relation" && decision.SafeReasonCode == "missing-endpoint")
+        {
+            limitations.Add("missing-relationship-endpoint");
         }
 
         return limitations.ToArray();

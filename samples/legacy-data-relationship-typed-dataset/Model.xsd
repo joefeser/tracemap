@@ -1,0 +1,27 @@
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:msdata="urn:schemas-microsoft-com:xml-msdata"
+           xmlns:msprop="urn:schemas-microsoft-com:xml-msprop"
+           xmlns:mstns="urn:store">
+  <xs:element name="StoreDataSet" msdata:IsDataSet="true" msprop:Generator_DataSetName="StoreDataSet">
+    <xs:complexType>
+      <xs:choice maxOccurs="unbounded">
+        <xs:element name="Customers" msprop:Generator_UserTableName="Customers" msprop:Generator_RowClassName="CustomersRow" />
+        <xs:element name="Orders" msprop:Generator_UserTableName="Orders" msprop:Generator_RowClassName="OrdersRow" />
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+  <xs:key name="CustomerKey">
+    <xs:selector xpath=".//mstns:Customers" />
+    <xs:field xpath="mstns:CustomerId" />
+  </xs:key>
+  <xs:keyref name="CustomerOrders" refer="mstns:CustomerKey">
+    <xs:selector xpath=".//mstns:Orders" />
+    <xs:field xpath="mstns:CustomerId" />
+  </xs:keyref>
+  <xs:keyref name="MissingEndpoints" />
+  <xs:annotation><xs:appinfo>
+    <msdata:Relationship name="CustomerOrdersRelation" parent="Customers" child="Orders" />
+    <msdata:Relationship name="MissingParent" child="Orders" />
+    <msdata:Relationship name="MissingBoth" />
+  </xs:appinfo></xs:annotation>
+</xs:schema>
