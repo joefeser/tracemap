@@ -1,10 +1,32 @@
 # Legacy Data Model Relationship Completion Implementation State
 
-Status: spec-merged-implementation-ready
-Readiness: first-product-slice-not-started
+Status: implementation-pr1-validated
+Readiness: ready-for-pr-delivery
 Spec branch: `codex/legacy-data-model-relationship-completion`
 Target base: `dev`
 Public claim level: hidden
+
+## Implementation PR 1
+
+- Implementation branch:
+  `codex/legacy-relationship-gap-classifier-pr1`.
+- Base: `origin/dev` at
+  `31cd8f0415fc691aede8ba3b12e201b164c599db`.
+- Selected boundary: add the preferred shared deterministic relationship gap
+  classifier and focused harness, then wire only the existing DBML duplicate
+  association and missing-target decisions through it.
+- Rationale: DBML already emits a duplicate-name `AnalysisGap` and preserves a
+  missing-target association as reduced unidirectional evidence. Centralizing
+  those live decisions exercises both gap and reduced-relationship outcomes
+  without changing an existing fact type, `mappingKind`, endpoint policy, or
+  downstream projection. EDMX, typed DataSet, and NHibernate wiring would make
+  this first PR materially broader and remains deferred.
+- Catalog gate: add a machine-readable closed reason-code list under
+  `legacy.data.model.relationship.v1`, repair ownership text for the three
+  already-emitted extractor classifications, and test catalog ownership before
+  classifier-driven output is emitted.
+- Product non-scope: no new XML extraction, runtime ORM or database access,
+  projection/report changes, or broad downstream expansion.
 
 ## Current Context
 
@@ -266,6 +288,71 @@ Spec delivery validation after rebasing onto refreshed `origin/dev`:
   `3d52856e7999014e67972e4b5def48fccdae5255` from exact reviewed head
   `e10241a6cbee0f35b1f6fd0e81e33909324026c6`. This merged the reviewed spec;
   it did not implement the first product slice.
+
+## Implementation PR 1 Validation
+
+Implemented scope:
+
+- Added a pure closed-state relationship classifier covering deterministic,
+  reduced, gap, and not-in-scope outcomes with explicit precedence.
+- Added machine-readable `gapClassifications`, `safeReasonCodes`, coverage,
+  endpoint-coverage, limitation-code, and safe-property registries under
+  `legacy.data.model.relationship.v1`.
+- Repaired catalog ownership text for
+  `AmbiguousLegacyDataModelIdentity`, `UnsupportedLegacyOrmMappingShape`, and
+  `UnsupportedLegacyOrmDescriptor` under their emitting source rules.
+- Wired DBML duplicate association gaps and the existing missing-target
+  unidirectional policy through the shared classifier. Existing fact types,
+  source rule IDs, `mappingKind`, deterministic relationship properties, and
+  family policy remain unchanged.
+- Added a public-safe committed DBML sample plus focused classifier, catalog,
+  extractor, determinism, no-invented-endpoint, non-claim, and default-artifact
+  privacy tests.
+
+Validation results:
+
+- Focused extractor/classifier/catalog filter: 58 passed, 0 failed.
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with 0 errors and
+  the existing 8 `NU1903` SQLite advisories.
+- `dotnet test src/dotnet/TraceMap.sln --no-restore --no-build`: 822 passed,
+  0 failed.
+- CLI smoke copied the committed synthetic sample into a temporary Git
+  repository, committed it as
+  `58e408f420b4778e813359527292d26a744bf8b7`, and scanned that exact commit.
+  The scan emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`; analysis was
+  `Level3SyntaxAnalysis`, build status was `NotRun` because the fixture is
+  metadata-only, deterministic relationship coverage included `full` and
+  `reduced`, and the expected `AmbiguousLegacyDataModelIdentity` gap carried
+  `safeReasonCode=duplicate-relationship-identity`.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- The pinned legacy-data metadata guidance in `docs/VALIDATION.md` was run.
+  Broader model-surface projection/report/query/export filters were not
+  applicable because this slice does not change those paths.
+
+Deferred after PR 1:
+
+- EDMX, typed DataSet, and NHibernate classifier wiring.
+- Remaining DBML missing/ambiguous keys, duplicate scopes, provider-extension,
+  and unsafe-identity decision integration beyond existing hash behavior.
+- Broad downstream projection/report/export work and runtime ORM/database
+  validation.
+
+Initial implementation ACK on PR #499 returned `actionable_findings` at exact
+head `b0c3f08820f54e0121146fea52d88900ea7e135c`:
+
+- Qodo correctly found that the DBML adapter used only the classifier decision
+  and ignored its endpoint-coverage and limitation outputs. The patch now
+  applies classifier endpoint coverage and deterministically maps classifier
+  limitations to the existing DBML compatibility vocabulary, including a
+  focused missing-source-endpoint regression.
+- Codex correctly found that the closed `limitationCodes` catalog registry
+  omitted limitation values already emitted by DBML, EDMX, typed DataSet, and
+  NHibernate relationship facts. The registry and exact-list test now include
+  those existing values plus the classifier values.
+- Post-patch focused validation remained 58 passed; the full solution remained
+  822 passed; private-path and diff checks passed.
 
 ## Oddities And Follow-Ups
 

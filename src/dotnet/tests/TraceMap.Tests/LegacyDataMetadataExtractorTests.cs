@@ -529,10 +529,17 @@ public sealed class LegacyDataMetadataExtractorTests
                   <Association Name="DuplicateRelation" ThisKey="CustomerId" OtherKey="CustomerId" />
                 </Type>
               </Table>
+              <Table Name="Anonymous" Member="Anonymous">
+                <Type>
+                  <Association Name="MissingSource" Type="Order" ThisKey="CustomerId" OtherKey="CustomerId" />
+                  <Association Name="MissingBoth" ThisKey="CustomerId" OtherKey="CustomerId" />
+                </Type>
+              </Table>
             </Database>
             """);
 
         var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var repeated = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out-repeat")));
 
         var association = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
             && fact.RuleId == RuleIds.LegacyDataDbml
@@ -553,10 +560,98 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.Equal("reduced", duplicateWithoutTarget.Properties.GetValueOrDefault("coverageLabel"));
         Assert.Contains("missing-target-endpoint", duplicateWithoutTarget.Properties.GetValueOrDefault("limitations"));
         Assert.Contains("duplicate-relationship-name", duplicateWithoutTarget.Properties.GetValueOrDefault("limitations"));
+        Assert.False(duplicateWithoutTarget.Properties.ContainsKey("targetEndpointName"));
+        Assert.False(duplicateWithoutTarget.Properties.ContainsKey("targetEndpointHash"));
+        Assert.Equal(2, result.Facts.Count(fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("associationName") == "DuplicateRelation"));
+        Assert.DoesNotContain(result.Facts, fact => fact.Properties.ContainsKey("referentialIntegrity")
+            || fact.Properties.ContainsKey("runtimeRelationshipLoaded")
+            || fact.Properties.ContainsKey("tableExists"));
 
+        var missingSource = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("associationName") == "MissingSource");
+        Assert.Equal("reduced", missingSource.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("unidirectional", missingSource.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+        Assert.Equal("missing-source-endpoint", missingSource.Properties.GetValueOrDefault("limitations"));
+        Assert.False(missingSource.Properties.ContainsKey("sourceEndpointName"));
+        Assert.Equal("Order", missingSource.Properties.GetValueOrDefault("targetEndpointName"));
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("associationName") == "MissingBoth");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataModelRelationship
+            && fact.Properties.GetValueOrDefault("classification") == "IncompleteLegacyDataModelRelationship"
+            && fact.Properties.GetValueOrDefault("safeReasonCode") == "missing-endpoint");
+
+        var duplicateGap = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataDbml
             && fact.Properties.GetValueOrDefault("classification") == "AmbiguousLegacyDataModelIdentity");
+        Assert.Equal("duplicate-relationship-identity", duplicateGap.Properties.GetValueOrDefault("safeReasonCode"));
+        Assert.Equal("dbml", duplicateGap.Properties.GetValueOrDefault("relationshipFamily"));
+        Assert.Equal("association", duplicateGap.Properties.GetValueOrDefault("descriptorKind"));
+        Assert.Equal("False", duplicateGap.Properties.GetValueOrDefault("runtimeProof"));
+        Assert.Equal(RuleIds.LegacyDataModelRelationship, duplicateGap.Properties.GetValueOrDefault("modelRelationshipRuleId"));
+
+        var firstRelationshipFacts = result.Facts
+            .Where(fact => fact.RuleId == RuleIds.LegacyDataDbml
+                && (fact.FactType == FactTypes.AnalysisGap
+                    || fact.Properties.GetValueOrDefault("modelRelationshipKind") == "relationship"))
+            .Select(fact => fact.FactId)
+            .ToArray();
+        var repeatedRelationshipFacts = repeated.Facts
+            .Where(fact => fact.RuleId == RuleIds.LegacyDataDbml
+                && (fact.FactType == FactTypes.AnalysisGap
+                    || fact.Properties.GetValueOrDefault("modelRelationshipKind") == "relationship"))
+            .Select(fact => fact.FactId)
+            .ToArray();
+        Assert.Equal(firstRelationshipFacts, repeatedRelationshipFacts);
+    }
+
+    [Fact]
+    public async Task Dbml_relationship_outputs_hash_unsafe_endpoint_and_key_values_across_default_artifacts()
+    {
+        using var temp = new TempDirectory();
+        const string unsafeAssociation = "https://private.example/token";
+        const string unsafeEndpoint = "prod-db.example.com;Password=super-secret";
+        const string unsafeKey = "SELECT * FROM CredentialTable";
+        const string unsafeOtherKey = "C:\\private\\secret.key;Provider=PrivateDialect";
+        const string unsafeStorage = "private-server/private-catalog";
+        File.WriteAllText(Path.Combine(temp.Path, "UnsafeRelationship.dbml"), $$"""
+            <Database Name="Store" xmlns="http://schemas.microsoft.com/linqtosql/dbml/2007">
+              <Table Name="{{unsafeStorage}}" Member="Customers">
+                <Type Name="Customer">
+                  <Association Name="{{unsafeAssociation}}" Type="{{unsafeEndpoint}}" ThisKey="{{unsafeKey}}" OtherKey="{{unsafeOtherKey}}" />
+                </Type>
+              </Table>
+            </Database>
+            """);
+
+        var output = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(output);
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, output));
+        var factsPath = Path.Combine(output, "facts.ndjson");
+        var indexPath = Path.Combine(output, "index.sqlite");
+        await JsonlFactWriter.WriteAsync(factsPath, result.Facts);
+        SqliteIndexWriter.Write(indexPath, result.Manifest, result.Facts);
+
+        var relationship = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "association");
+        Assert.True(relationship.Properties.ContainsKey("associationHash"));
+        Assert.True(relationship.Properties.ContainsKey("targetEndpointHash"));
+        Assert.True(relationship.Properties.ContainsKey("sourceMemberHash"));
+
+        var defaultArtifacts = string.Join(
+            "\n",
+            await File.ReadAllTextAsync(factsPath),
+            MarkdownReportWriter.Build(result),
+            await ReadAllPropertiesAsync(indexPath));
+        foreach (var protectedValue in new[] { unsafeAssociation, unsafeEndpoint, unsafeKey, unsafeOtherKey, unsafeStorage, "super-secret", "private.example", "CredentialTable", "PrivateDialect", temp.Path })
+        {
+            Assert.DoesNotContain(protectedValue, defaultArtifacts, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
