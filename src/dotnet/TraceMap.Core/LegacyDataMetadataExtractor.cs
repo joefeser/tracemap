@@ -864,18 +864,23 @@ public static class LegacyDataMetadataExtractor
         var endProperties = associationSetMapping.Elements().Where(element => element.Name.LocalName == "EndProperty").ToArray();
         if (endProperties.Length != 2)
         {
+            var endpointState = endProperties.Length < 2
+                ? LegacyRelationshipEndpointState.Missing
+                : LegacyRelationshipEndpointState.Ambiguous;
             AddRelationshipGap(
                 manifest,
                 facts,
                 relativePath,
                 ClassifyEdmxRelationship(
                     "msl-association",
-                    LegacyRelationshipEndpointState.Ambiguous,
-                    LegacyRelationshipEndpointState.Ambiguous,
+                    endpointState,
+                    endpointState,
                     existingFamilyAllowsUnidirectional: false),
                 "edmx",
                 "msl-association",
-                "AssociationSetMapping did not contain exactly two deterministic endpoints.",
+                endProperties.Length < 2
+                    ? "AssociationSetMapping did not provide two endpoint descriptors."
+                    : "AssociationSetMapping exposed more than two endpoint candidates.",
                 associationSetMapping);
             return;
         }
