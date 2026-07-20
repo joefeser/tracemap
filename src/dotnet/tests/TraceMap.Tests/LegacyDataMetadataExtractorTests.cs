@@ -919,6 +919,41 @@ public sealed class LegacyDataMetadataExtractorTests
     }
 
     [Fact]
+    public void Scan_keeps_relationship_gap_descriptor_ordinals_stable_across_xml_formatting()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Minified.xsd"), """
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata" xmlns:msprop="urn:schemas-microsoft-com:xml-msprop"><xs:element name="SafeDataSet" msdata:IsDataSet="true" msprop:Generator_DataSetName="SafeDataSet"/><xs:annotation><xs:appinfo><msdata:Relationship name="Missing"/></xs:appinfo></xs:annotation></xs:schema>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Formatted.xsd"), """
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                       xmlns:msdata="urn:schemas-microsoft-com:xml-msdata"
+                       xmlns:msprop="urn:schemas-microsoft-com:xml-msprop">
+              <xs:element name="SafeDataSet"
+                          msdata:IsDataSet="true"
+                          msprop:Generator_DataSetName="SafeDataSet" />
+              <xs:annotation>
+                <xs:appinfo>
+                  <msdata:Relationship name="Missing" />
+                </xs:appinfo>
+              </xs:annotation>
+            </xs:schema>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var ordinals = result.Facts
+            .Where(fact => fact.FactType == FactTypes.AnalysisGap
+                && fact.RuleId == RuleIds.LegacyDataModelRelationship
+                && fact.Properties.GetValueOrDefault("relationshipFamily") == "typed-dataset")
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .Select(fact => fact.Properties.GetValueOrDefault("descriptorOrdinal"))
+            .ToArray();
+
+        Assert.Equal(2, ordinals.Length);
+        Assert.Equal(ordinals[0], ordinals[1]);
+    }
+
+    [Fact]
     public void Scan_marks_ambiguous_typed_dataset_constraints_and_ignores_non_xsd_lookalikes()
     {
         using var temp = new TempDirectory();

@@ -517,6 +517,16 @@ Initial ACK review follow-up on PR #501:
 - Post-patch validation remained 61 focused and 825 full tests passed; the
   build, private-path guard, and diff check remained clean apart from the
   existing 8 `NU1903` advisories.
+- Qodo's later return identified two additional correctness issues. NHibernate
+  relationship model identities now omit the generic `mapped-class` placeholder
+  when the source endpoint is absent, matching the emitted
+  `missing-source-endpoint` limitation. Relationship gap ordinals now count
+  structural XML elements only, so indentation, comments, and whitespace text
+  do not change the public-safe discriminator; a formatting-equivalence
+  regression covers that invariant.
+- Final batched review validation passed 62 focused and 826 full tests; the
+  build, private-path guard, and diff check remained clean apart from the
+  existing 8 `NU1903` advisories.
 
 ## Oddities And Follow-Ups
 
