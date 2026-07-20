@@ -54,6 +54,14 @@ describe("Base44 source-bound static evidence", () => {
       factType: FactTypes.Base44FunctionInvocation,
       targetSymbol: "serviceFunction"
     }));
+    expect(packet.facts).not.toContainEqual(expect.objectContaining({
+      factType: FactTypes.Base44FunctionInvocation,
+      targetSymbol: "helperFunction"
+    }));
+    expect(packet.facts).not.toContainEqual(expect.objectContaining({
+      factType: FactTypes.Base44EntityOperation,
+      targetSymbol: "Helper"
+    }));
     expect(packet.facts[0]).toEqual(expect.objectContaining({
       repo: expect.any(String),
       commitSha: expect.stringMatching(/^[0-9a-f]{40}$/),
@@ -142,6 +150,8 @@ export async function currentSdkSurfaces() {
   base44.asServiceRole.integrations.Core.SendEmail({ to: "owned@example.invalid" });
   base44.asServiceRole.entities.Order.filter({ status: "open" });
   base44.asServiceRole.functions.invoke("serviceFunction");
+  base44.integrations.functions.invoke("helperFunction");
+  base44.integrations.entities.Helper.filter({ status: "open" });
   return sdkAxios;
 }
 `);
