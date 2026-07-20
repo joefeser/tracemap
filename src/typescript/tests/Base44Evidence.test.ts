@@ -123,6 +123,8 @@ describe("Base44 source-bound static evidence", () => {
     const { packet } = await buildBase44Evidence(options(repo, out));
 
     expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44MigrationSurface)).toBe(false);
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44HttpTarget)).toBe(false);
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EnvironmentAccess)).toBe(false);
   });
 });
 
@@ -195,7 +197,7 @@ async function nonBase44MigrationRepo(): Promise<string> {
   const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-non-base44-fixture-"));
   await fs.mkdir(path.join(repo, "src"), { recursive: true });
   await fs.mkdir(path.join(repo, "db/migrations"), { recursive: true });
-  await fs.writeFile(path.join(repo, "src/app.ts"), "export const value = 1;\n");
+  await fs.writeFile(path.join(repo, "src/app.ts"), 'const token = Deno.env.get("GENERIC_TOKEN");\nexport const load = () => fetch("https://ordinary.example.invalid/path");\n');
   await fs.writeFile(path.join(repo, "db/migrations/001.sql"), "create table orders (id text primary key);\n");
   execFileSync("git", ["init", "-q"], { cwd: repo });
   execFileSync("git", ["config", "user.email", "tracemap@example.invalid"], { cwd: repo });
