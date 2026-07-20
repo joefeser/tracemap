@@ -115,6 +115,7 @@ public sealed class LegacyDataModelRuleCatalogTests
         ]);
         Assert.Contains("      - descriptorOrdinal", relationship, StringComparison.Ordinal);
         Assert.Contains("AmbiguousLegacyDataModelIdentity", RuleBlock(catalog, RuleIds.LegacyDataDbml), StringComparison.Ordinal);
+        Assert.Contains("UnsupportedLegacyOrmMappingShape", RuleBlock(catalog, RuleIds.LegacyDataDbml), StringComparison.Ordinal);
         Assert.Contains("AmbiguousLegacyDataModelIdentity", RuleBlock(catalog, RuleIds.LegacyDataEdmx), StringComparison.Ordinal);
         Assert.Contains("AmbiguousLegacyDataModelIdentity", RuleBlock(catalog, RuleIds.LegacyDataTypedDataSet), StringComparison.Ordinal);
         Assert.Contains("AmbiguousLegacyDataModelIdentity", RuleBlock(catalog, RuleIds.LegacyDataOrmNHibernate), StringComparison.Ordinal);

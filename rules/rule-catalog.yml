@@ -1557,6 +1557,7 @@ rules:
       - DBML metadata is static design-time evidence and does not prove database existence, LINQ runtime behavior, routine existence, lazy loading, query execution, or provider compatibility.
       - Generated-code linkage is separate evidence and does not upgrade metadata descriptor tier.
       - AmbiguousLegacyDataModelIdentity owns duplicate or ambiguous DBML descriptor identity gaps; such gaps do not select an authoritative relationship endpoint.
+      - UnsupportedLegacyOrmMappingShape owns foreign-namespace DBML association extension gaps; such gaps do not prove provider support or a runtime mapping failure.
       - Safe reducer-facing properties include entityName, typeName, tableName, storageObjectName, propertyName, fieldName, columnName, mappingKind, and hash variants for unsafe identifiers.
       - Unsafe names, provider metadata, database names, connection names, and routine identifiers are hashed or omitted when required.
 
