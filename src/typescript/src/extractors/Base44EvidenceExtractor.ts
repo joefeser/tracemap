@@ -100,7 +100,7 @@ function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceF
     sourceFileSha256: hash(text, 64)
   }));
   const functionsIndex = sdkRootIndex(relative, "functions");
-  if (functionsIndex >= 0 && relative[functionsIndex + 1] === "invoke") {
+  if (functionsIndex >= 0 && relative[functionsIndex + 1] === "invoke" && functionsIndex + 2 === relative.length) {
     const functionName = stringArgument(node.arguments[0]);
     facts.push(fact(manifest, FactTypes.Base44FunctionInvocation, RuleIds.Base44FunctionInvocation, node, source, filePath, functionName ?? "dynamic", {
       functionName: functionName ?? "dynamic",
@@ -109,7 +109,9 @@ function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceF
     }, functionName ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown));
   }
   const entitiesIndex = sdkRootIndex(relative, "entities");
-  if (entitiesIndex >= 0 && entityOperations.has(relative[entitiesIndex + 2])) {
+  if (entitiesIndex >= 0
+    && entityOperations.has(relative[entitiesIndex + 2])
+    && entitiesIndex + 3 === relative.length) {
     facts.push(fact(manifest, FactTypes.Base44EntityOperation, RuleIds.Base44EntityOperation, node, source, filePath, relative[entitiesIndex + 1], {
       entityName: relative[entitiesIndex + 1],
       operationName: relative[entitiesIndex + 2],
