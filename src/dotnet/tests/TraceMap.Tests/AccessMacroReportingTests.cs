@@ -275,6 +275,7 @@ public sealed class AccessMacroReportingTests
         Assert.Contains("AccessEvidenceConsumerUnsupported", script, StringComparison.Ordinal);
         Assert.Contains("vault-export.gap.access-evidence-consumer-unsupported.v1", script, StringComparison.Ordinal);
         Assert.Contains("Phase 9 checkpoint must be outside the disposable smoke root", script, StringComparison.Ordinal);
+        Assert.Contains("[string]::Equals($Phase9CheckpointPath, $SmokeRoot", script, StringComparison.Ordinal);
         Assert.DoesNotContain("DatabaseHash = $originalHash", script, StringComparison.Ordinal);
         Assert.Contains("if ($foundMarker) { throw \"protected marker leaked into downstream output\" }", script, StringComparison.Ordinal);
         Assert.Contains("OriginalUnchanged = $true", script, StringComparison.Ordinal);
@@ -287,6 +288,7 @@ public sealed class AccessMacroReportingTests
             FindRepoRoot(), "scripts", "access-validation", "Invoke-AccessRepresentativeSmoke.ps1"));
 
         Assert.Contains("[switch]$InputExplicitlyAuthorized", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("[Parameter(Mandatory = $true)]\n    [switch]$InputExplicitlyAuthorized", script, StringComparison.Ordinal);
         Assert.Contains("tracemap.access-phase9-representative-checkpoint.v1", script, StringComparison.Ordinal);
         Assert.Contains("$sequencePath = \"$CheckpointBasePath.$($checkpoint.checkpointSequence)\"", script, StringComparison.Ordinal);
         Assert.Contains("Wait-AccessScanJobs", script, StringComparison.Ordinal);

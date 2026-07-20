@@ -49,7 +49,8 @@ $phase9Coverage = "named-count-observed-loaded-state-unavailable-other-categorie
 $phase9Checkpoint = $null
 if (-not [string]::IsNullOrWhiteSpace($Phase9CheckpointPath)) {
     $Phase9CheckpointPath = [IO.Path]::GetFullPath($Phase9CheckpointPath)
-    if ($Phase9CheckpointPath.StartsWith($SmokeRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    if ([string]::Equals($Phase9CheckpointPath, $SmokeRoot, [StringComparison]::OrdinalIgnoreCase) -or
+        $Phase9CheckpointPath.StartsWith($SmokeRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
         throw "Phase 9 checkpoint must be outside the disposable smoke root"
     }
     $phase9Checkpoint = [ordered]@{
