@@ -184,8 +184,9 @@ also updates the unnumbered latest-file pointer on a best-effort basis. Consumer
 must select the valid snapshot with the highest `checkpointSequence` rather than
 trusting an older unnumbered file. Checkpoints never store database hashes,
 names, paths, exception text, or protected values. The harness also validates
-the Access report, combined-index evidence-doc projection, and structured
-vault/release-review unsupported-consumer gaps. Cleanup may
+the Access report, combined-index evidence-doc projection, the structured vault
+unsupported-consumer gap, and the composed release-review Access design section
+with explicit coverage gaps. Cleanup may
 remove the smoke root while retaining this sanitized checkpoint. Delete the
 checkpoint family only after its issue comment is confirmed posted.
 
@@ -233,6 +234,16 @@ allowlisted booleans, counts, labels, and gaps. It never records the input path,
 name, hash, object identities, SQL, VBA, macro bodies, expressions, connections,
 or exception text in its checkpoint. Raw scratch remains disposable; retain the
 sanitized checkpoint family until its issue result is confirmed posted.
+
+For Access design-review composition changes, run the focused Access and
+release-review tests and verify both single and combined indexes produce an
+`Access Design Evidence` section with `available` status, upstream rule/tier/
+commit/extractor/span provenance, allowlisted categorical metadata, and
+structured count-only coverage gaps. Verify `--scope access-evidence` selects
+the section. Protected names, SQL, hashes, connections, VBA, macro bodies,
+captions, expressions, local paths, and infrastructure identities must remain
+absent. These read-side composition changes do not require a new Windows probe
+when Access COM, the product reader, and fixture generation are unchanged.
 
 The repository CI runs the existing .NET, TypeScript, Python, JVM, and Swift
 test suites, validates one real output per adapter, and combines all five

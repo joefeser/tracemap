@@ -948,6 +948,7 @@ public sealed class ReleaseReviewTests
             0,
             0,
             0,
+            0,
             1,
             false,
             "Selectors matched no static evidence under requested scope.");
@@ -1272,6 +1273,7 @@ public sealed class ReleaseReviewTests
             0,
             0,
             0,
+            0,
             1,
             0,
             0,
@@ -1287,6 +1289,7 @@ public sealed class ReleaseReviewTests
             snapshot with { Side = "after" },
             summary,
             [],
+            section,
             section,
             section,
             section,

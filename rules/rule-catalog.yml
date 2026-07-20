@@ -4309,9 +4309,12 @@ rules:
     evidenceTier: Tier4Unknown
     emits:
       - ReleaseReviewGap
+      - AccessEvidenceProvenanceUnavailable
+      - AccessItemEvidenceOutsideCountOnlyBoundary
     limitations:
       - Unavailable or deferred sections are explicit analysis gaps, not clean results.
       - Section status does not imply an underlying workflow ran unless the status is available with findings or gaps from that workflow.
+      - Access composition gaps preserve supporting fact IDs and categorical upstream rule/tier metadata but do not upgrade count-only UI, VBA, event, navigation, or macro evidence into supported identities or behavior.
 
   - id: release.review.selector.v1
     name: Release review selector handling
