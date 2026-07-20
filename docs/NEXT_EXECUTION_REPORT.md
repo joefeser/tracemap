@@ -4,9 +4,10 @@ Date: 2026-07-20
 
 ## Branch State
 
-- `main` and `dev` were synchronized by promotion PR #505 at
-  `81033b4fee9abc6b3dbed63234570e9bb7cb66ca` before the current Access
-  design-review composition slice.
+- `main` remains at promotion PR #505 commit
+  `81033b4fee9abc6b3dbed63234570e9bb7cb66ca`.
+- `dev` contains Access design-review composition PR #506 and its normalized
+  closeout PR #507 at `51cc0847c411dd0a6742797f17f03d8d8cc4f398`.
 - Main promotions remain owner-mediated. ACK `merge_ready` on a feature-to-dev
   PR does not authorize an automatic dev-to-main promotion.
 - The public site lane remains separate from core implementation unless it is
@@ -40,12 +41,14 @@ These are static, coverage-relative evidence lanes. They do not establish
 runtime execution, production traffic/state, deployment, authorization,
 vulnerability, release approval, or that a change is safe.
 
-## Current Product Slice
+## Most Recently Completed Product Slice
 
-The active `codex/access-design-review-composition` slice composes already
-persisted Access inventory, schema, relationship, saved-query, external-boundary,
-count-only metadata, and coverage gaps into release review. It does not add COM
-reads or reopen UI, VBA, macro, row-data, execution, or Windows probe boundaries.
+Access design-review composition is implemented on `dev` through PR #506.
+Release review now composes already persisted Access inventory, schema,
+relationship, saved-query, external-boundary, count-only metadata, and coverage
+gaps. It added no COM reads and did not reopen UI, VBA, macro, row-data,
+execution, or Windows probe boundaries. PR #507 records the normalized merged
+state.
 
 ## Runway Interpretation Rules
 
@@ -85,13 +88,31 @@ reads or reopen UI, VBA, macro, row-data, execution, or Windows probe boundaries
 
 ## Recommended Next Product Story
 
-Complete the current Access design-review composition, then choose one bounded
-follow-up from current evidence rather than reopening the v0 reader:
+Specify and implement the first bounded slice of
+[`sql-validation-summary/v1` ingestion (#508)](https://github.com/joefeser/tracemap/issues/508).
 
-1. compose Access evidence into one additional downstream consumer such as
-   vault or route/property-flow, preserving count-only gaps; or
-2. specify the reserved `sql-validation-summary/v1` checked-in provenance
-   contract if operator-observed validation evidence is the higher priority.
+1. Define the versioned public-safe schema, repository/commit binding,
+   categorical target context, observation/expiry times, validator
+   identity/version, artifact identity, closed assertion codes/statuses, and
+   limitations.
+2. Define an explicit producer/trust policy. Prefer validator-generated
+   assertions; do not treat a free-form DBA/operator statement such as
+   `passed` as evidence merely because a person supplied it.
+3. Accept only an opt-in checked-in or explicitly supplied summary. TraceMap
+   must not connect to a database or execute SQL.
+4. Reject expired, malformed, unsupported-validator/assertion,
+   mismatched-commit/context, duplicate, conflicting, or unsafe artifacts as
+   cataloged gaps.
+5. Render static intent and observed evidence separately in the SQL runbook and
+   release review. Observations never rewrite the upstream static evidence tier.
+6. Prove the boundary with synthetic success/failure fixtures, deterministic
+   IDs/order, planted-secret/output/path checks, full .NET validation, and ACK.
+
+This is next because the shipped runbook currently proves only that a
+validation step exists; its observation state remains
+`validation-evidence-not-provided`. The new boundary provides provenance,
+freshness, and narrow machine-readable observations without importing raw SQL,
+database output, screenshots, tickets, private target names, or operator prose.
 
 Richer Access UI/VBA/macro identity or body extraction is not the default next
 story. It requires a separate threat review and Windows authorization because
@@ -99,15 +120,16 @@ the v0 probes proved that apparently simple item access can load surfaces.
 
 ## Subsequent Choices
 
-After the Access composition slice:
+After the SQL validation-summary slice:
 
-1. choose one static-dispatch follow-up (DI context or one downstream consumer),
-   not the entire remaining task list;
-2. choose one event/message follow-up such as release-review context or
-   route-flow async-boundary rendering;
-3. reconcile and close the already-delivered route/property-flow issues before
+1. decide whether an approved external validator/harness can produce the v1
+   artifact; do not move SQL execution into TraceMap to manufacture evidence;
+2. consider one additional Access downstream consumer while preserving the
+   count-only gaps;
+3. choose one static-dispatch or event/message follow-up;
+4. reconcile and close the already-delivered route/property-flow issues before
    reopening them as product work;
-4. promote `dev` to `main` only as a separate owner-mediated release PR.
+5. promote `dev` to `main` only as a separate owner-mediated release PR.
 
 ## Site Lane
 
@@ -124,6 +146,9 @@ After the Access composition slice:
 - Do not describe `dev`-only features as already on `main`.
 - Do not turn stale open issues into duplicate implementations without checking
   merged PRs and current spec authority.
+- Do not accept free-form SQL validation claims, pasted command output, or
+  screenshots as `sql-validation-summary/v1`; require the versioned producer,
+  provenance, context, assertion-code, freshness, and limitation contract.
 - Do not add LLMs, embeddings, vector databases, prompt classification, or
   runtime systems to the scanner/reducer.
 - If a required tool is missing, follow `AGENTS.md`: check Homebrew and known
