@@ -95,15 +95,19 @@ describe("Base44 source-bound static evidence", () => {
     const beforeOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-before-"));
     const afterOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-after-"));
     await buildBase44Evidence(options(repo, beforeOut));
+    const before = await buildBase44Evidence(options(repo, beforeOut));
+    before.packet.coverage.knownGaps = ["replaced coverage gap"];
+    await fs.writeFile(path.join(beforeOut, "base44-evidence.json"), `${JSON.stringify(before.packet, null, 2)}\n`);
     const after = await buildBase44Evidence(options(repo, afterOut));
-    after.packet.coverage.knownGaps.push("seeded coverage loss");
+    after.packet.coverage.knownGaps = ["seeded coverage loss"];
     await fs.writeFile(path.join(afterOut, "base44-evidence.json"), `${JSON.stringify(after.packet, null, 2)}\n`);
     const diff = await diffBase44Evidence(path.join(beforeOut, "base44-evidence.json"), path.join(afterOut, "base44-evidence.json"), path.join(afterOut, "diff.json"));
     expect(diff.coverageReduced).toBe(true);
     expect(diff.coverageEvidence).toEqual(expect.objectContaining({
       beforeAnalysisLevel: "Level3SyntaxAnalysis",
       afterAnalysisLevel: "Level3SyntaxAnalysis",
-      addedKnownGaps: ["seeded coverage loss"]
+      addedKnownGaps: ["seeded coverage loss"],
+      removedKnownGaps: ["replaced coverage gap"]
     }));
     expect(diff.limitations.join(" ")).toContain("must not be interpreted as clean absence");
 
@@ -111,6 +115,14 @@ describe("Base44 source-bound static evidence", () => {
     await diffBase44Evidence(path.join(beforeOut, "base44-evidence.json"), path.join(afterOut, "base44-evidence.json"), extensionlessOutput);
     expect(JSON.parse(await fs.readFile(extensionlessOutput, "utf8")).schemaVersion).toBe("tracemap.base44.static-diff.v1");
     expect(await fs.readFile(`${extensionlessOutput}.md`, "utf8")).toContain("# TraceMap Base44 Static Diff");
+  });
+
+  it("does not classify conventional migrations as Base44 without a Base44 signal", async () => {
+    const repo = await nonBase44MigrationRepo();
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-non-base44-out-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44MigrationSurface)).toBe(false);
   });
 });
 
@@ -171,6 +183,20 @@ export async function currentSdkSurfaces() {
   await fs.writeFile(path.join(repo, "base44/functions/sendReceipt/server.ts"), `import axios from "axios";\nimport { createClientFromRequest } from "npm:@base44/sdk@0.8.39";\nconst serviceClient = createClientFromRequest(new Request("https://example.invalid"));\nexport const load = async () => { await axios.post("https://mail.example.invalid/send", {}); return serviceClient.entities.Order.list(); };\n`);
   await fs.writeFile(path.join(repo, "base44/migrations/001.sql"), "-- drop table retained;\n/* alter table ignored; */\ncreate table orders (id text primary key);\ncreate policy orders_rls on orders;\n");
   await fs.writeFile(path.join(repo, "reports/query.sql"), "select * from orders;\n");
+  execFileSync("git", ["init", "-q"], { cwd: repo });
+  execFileSync("git", ["config", "user.email", "tracemap@example.invalid"], { cwd: repo });
+  execFileSync("git", ["config", "user.name", "TraceMap Test"], { cwd: repo });
+  execFileSync("git", ["add", "."], { cwd: repo });
+  execFileSync("git", ["commit", "-qm", "fixture"], { cwd: repo });
+  return repo;
+}
+
+async function nonBase44MigrationRepo(): Promise<string> {
+  const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-non-base44-fixture-"));
+  await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await fs.mkdir(path.join(repo, "db/migrations"), { recursive: true });
+  await fs.writeFile(path.join(repo, "src/app.ts"), "export const value = 1;\n");
+  await fs.writeFile(path.join(repo, "db/migrations/001.sql"), "create table orders (id text primary key);\n");
   execFileSync("git", ["init", "-q"], { cwd: repo });
   execFileSync("git", ["config", "user.email", "tracemap@example.invalid"], { cwd: repo });
   execFileSync("git", ["config", "user.name", "TraceMap Test"], { cwd: repo });

@@ -68,6 +68,27 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_matches_sql_context_by_normalized_safe_source_label()
+    {
+        using var temp = new TempDirectory();
+        const string unsafeSourceLabel = "server?source=legacy";
+        var (combinedPath, _, _) = await CreateRouteFlowCombinedIndexAsync(
+            temp,
+            includeSqlContext: true,
+            serverSourceLabel: unsafeSourceLabel);
+
+        var result = await CombinedRouteFlowReporter.BuildReportAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders/{id}",
+            ToSurface: "sql-query"));
+
+        Assert.Equal(2, result.ContextGroups!.Count(group => group.GroupKind == "sql-context"));
+        Assert.DoesNotContain(result.Gaps, gap => gap.RuleId == RuleIds.DatabaseSqlContextGap);
+        Assert.DoesNotContain(unsafeSourceLabel, JsonSerializer.Serialize(result, CombinedDependencyReporter.JsonOptions), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Route_flow_records_sql_context_gap_for_data_facing_route_without_cataloged_context()
     {
         using var temp = new TempDirectory();
@@ -3441,7 +3462,8 @@ public sealed class CombinedRouteFlowTests
     private static async Task<(string CombinedPath, string Controller, string Repository)> CreateRouteFlowCombinedIndexAsync(
         TempDirectory temp,
         string serverBuildStatus = "Succeeded",
-        bool includeSqlContext = false)
+        bool includeSqlContext = false,
+        string serverSourceLabel = "server")
     {
         var clientIndex = Path.Combine(temp.Path, "client.sqlite");
         var serverIndex = Path.Combine(temp.Path, "server.sqlite");
@@ -3474,7 +3496,7 @@ public sealed class CombinedRouteFlowTests
             serverFacts.Add(SqlPrerequisiteFact(server, "schema-usage", "missing-evidence", 4));
         }
         SqliteIndexWriter.Write(serverIndex, server, serverFacts);
-        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", "server"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([clientIndex, serverIndex], combinedPath, ["client", serverSourceLabel]));
         return (combinedPath, controller, repository);
     }
 

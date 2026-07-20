@@ -79,7 +79,7 @@ const requiredProtectedCategories = new Set(["user-mapping", "connection-materia
 const forbiddenPatterns = [
   /(?:\/Users\/|\/home\/|[A-Z]:\\Users\\)/i,
   /\b(?:Server|Password|User Id)\s*=/i,
-  /\b(?:SELECT\s+.+\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM|CREATE\s+(?:SERVER|USER\s+MAPPING|SUBSCRIPTION)|ALTER\s+SUBSCRIPTION|DROP\s+SERVER)\b/i,
+  /\b(?:SELECT\s+.+?\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM|CREATE\s+(?:SERVER|USER\s+MAPPING|SUBSCRIPTION)|ALTER\s+SUBSCRIPTION|DROP\s+SERVER)\b/i,
   /\b(?:safe to run|setup succeeded|permissions are effective|replication is healthy|validation passed|rollback worked)\b/i,
   /\b(?:private-host|private-password|private-infrastructure|raw-scheduled-command|validation-output|ticket-[0-9]+)\b/i,
   /\b(?:host|hostname|password|connectionString|scheduledCommandBody|rawSql|validationOutput)\b\s*:/i

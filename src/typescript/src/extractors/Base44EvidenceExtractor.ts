@@ -18,10 +18,10 @@ const axiosMethods = new Set(["request", "get", "post", "put", "patch", "delete"
 export async function extractBase44Facts(manifest: ScanManifest, inventory: readonly FileInventoryItem[]): Promise<CodeFact[]> {
   const facts: CodeFact[] = [];
   const sourceItems = inventory.filter((file) => !file.skipped && /\.[jt]sx?$/.test(file.relativePath) && !file.relativePath.endsWith(".d.ts"));
+  const migrationItems = inventory.filter((file) => !file.skipped && file.relativePath.endsWith(".sql") && isMigrationPath(file.relativePath));
   const aliasMaps = await buildAliasMaps(sourceItems);
   for (const item of inventory.filter((file) => !file.skipped)) {
     if (item.relativePath.endsWith(".sql")) {
-      if (isMigrationPath(item.relativePath)) facts.push(await sqlFact(manifest, item));
       continue;
     }
     if (!/\.[jt]sx?$/.test(item.relativePath) || item.relativePath.endsWith(".d.ts")) {
@@ -58,6 +58,12 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
         sourceFileSha256: hash(text, 64)
       }, EvidenceTiers.Tier2Structural));
     }
+  }
+  const hasBase44Signal = facts.some((candidate) => candidate.factType === FactTypes.Base44SdkImport
+    || candidate.factType === FactTypes.Base44FunctionSurface
+    || candidate.factType === FactTypes.Base44CustomerBoundary);
+  if (hasBase44Signal) {
+    for (const item of migrationItems) facts.push(await sqlFact(manifest, item));
   }
   return facts;
 }

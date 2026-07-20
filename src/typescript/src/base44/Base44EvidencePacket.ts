@@ -118,12 +118,14 @@ export async function diffBase44Evidence(beforePath: string, afterPath: string, 
   const afterByKey = new Map(after.facts.map((fact) => [factKey(fact), fact]));
   const added = [...afterByKey.entries()].filter(([key]) => !beforeByKey.has(key)).map(([, fact]) => fact);
   const removed = [...beforeByKey.entries()].filter(([key]) => !afterByKey.has(key)).map(([, fact]) => fact);
-  const coverageReduced = after.coverage.knownGaps.length > before.coverage.knownGaps.length || tierRank(after.coverage.analysisLevel) > tierRank(before.coverage.analysisLevel);
+  const addedKnownGaps = after.coverage.knownGaps.filter((gap) => !before.coverage.knownGaps.includes(gap)).sort();
+  const removedKnownGaps = before.coverage.knownGaps.filter((gap) => !after.coverage.knownGaps.includes(gap)).sort();
+  const coverageReduced = addedKnownGaps.length > 0 || tierRank(after.coverage.analysisLevel) > tierRank(before.coverage.analysisLevel);
   const coverageEvidence = {
     beforeAnalysisLevel: before.coverage.analysisLevel,
     afterAnalysisLevel: after.coverage.analysisLevel,
-    addedKnownGaps: after.coverage.knownGaps.filter((gap) => !before.coverage.knownGaps.includes(gap)).sort(),
-    removedKnownGaps: before.coverage.knownGaps.filter((gap) => !after.coverage.knownGaps.includes(gap)).sort()
+    addedKnownGaps,
+    removedKnownGaps
   };
   const diff: Base44Diff = {
     schemaVersion: "tracemap.base44.static-diff.v1",
