@@ -1,6 +1,6 @@
 # Access Design-Review Composition Implementation State
 
-Status: pr-open-review-fixes-validated-awaiting-fresh-ack
+Status: pr-open-ack-merge-ready
 
 Branch: `codex/access-design-review-composition`
 
@@ -50,7 +50,9 @@ PR #506 ACK review on initial head `cbf80097` found source-selector handling,
 cross-platform path redaction, and per-file gap identity issues. The review
 patch also added evidence-scope metadata to the no-facts gap and applied the
 supported allocation/pool-lifetime cleanups. Focused tests and the full 832-test
-solution run passed again after the patch; a fresh ACK run is pending.
+solution run passed again after the patch. Exact-head ACK then returned
+`merge_ready` with clean checks, zero unresolved threads, zero actionable or
+stale findings, and both Codex and Qodo returned.
 
 ## Deferred
 
