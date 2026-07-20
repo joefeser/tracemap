@@ -339,6 +339,21 @@ Deferred after PR 1:
 - Broad downstream projection/report/export work and runtime ORM/database
   validation.
 
+Initial implementation ACK on PR #499 returned `actionable_findings` at exact
+head `b0c3f08820f54e0121146fea52d88900ea7e135c`:
+
+- Qodo correctly found that the DBML adapter used only the classifier decision
+  and ignored its endpoint-coverage and limitation outputs. The patch now
+  applies classifier endpoint coverage and deterministically maps classifier
+  limitations to the existing DBML compatibility vocabulary, including a
+  focused missing-source-endpoint regression.
+- Codex correctly found that the closed `limitationCodes` catalog registry
+  omitted limitation values already emitted by DBML, EDMX, typed DataSet, and
+  NHibernate relationship facts. The registry and exact-list test now include
+  those existing values plus the classifier values.
+- Post-patch focused validation remained 58 passed; the full solution remained
+  822 passed; private-path and diff checks passed.
+
 ## Oddities And Follow-Ups
 
 - The predecessor ORM mapping completion spec is intentionally broad; this

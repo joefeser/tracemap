@@ -1666,7 +1666,15 @@ rules:
       - full
       - unidirectional
     limitationCodes:
+      - ambiguous-constraint-name
+      - constraint-endpoint-needs-review
+      - duplicate-relationship-name
+      - inherited-endpoint-needs-review
       - missing-endpoint
+      - missing-endpoint-type
+      - missing-relationship-endpoint
+      - missing-source-endpoint
+      - missing-target-endpoint
       - duplicate-relationship-identity
       - ambiguous-endpoint-candidates
       - unsupported-relationship-shape
