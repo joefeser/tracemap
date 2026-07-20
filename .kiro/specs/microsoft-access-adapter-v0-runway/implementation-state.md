@@ -1,10 +1,11 @@
 # Microsoft Access Adapter v0 Runway Implementation State
 
-Status: Phase 0 through Phase 7 merged; Phase 8 count-only module inventory validated on Windows and ready for focused PR review
+Status: Phase 0 through Phase 9.5 implementation, synthetic Windows validation,
+and representative local-only validation are complete; ready for Phase 9 PR
 
 Spec branch: `codex/microsoft-access-adapter-runway`
 
-Implementation branch: `codex/microsoft-access-adapter-v0-foundation`
+Implementation branch: `codex/microsoft-access-adapter-v0-macro-reporting-stacked`
 
 Phase 7 branch: `codex/microsoft-access-adapter-v0-ui-bindings`
 
@@ -32,9 +33,10 @@ credential, private server, query SQL, or local absolute path in the evidence
 bundle.
 
 That feasibility evidence informed the foundation implementation. The product
-adapter now satisfies the Phase 0 through Phase 6 Git, artifact, rule, safety,
-and validation contracts recorded below; forms/reports, VBA, and macros remain
-later slices.
+adapter now satisfies the Phase 0 through Phase 9 Git, artifact, rule, safety,
+count-only UI/VBA/macro, consumer-gap, and synthetic validation contracts
+recorded below. Representative validation remains pending; UI/VBA/macro
+identities and bodies remain explicitly unavailable rather than inferred.
 
 ## Recorded Decisions
 
@@ -425,6 +427,265 @@ terminator during argument parsing. The regression test proves a colon-separated
 literal `OpenForm` remains complete while a query-only catalog match for
 `OpenForm` stays partial with an explicit unresolved gap.
 
+## Phase 9 Platform-Neutral Work
+
+Branch: `codex/microsoft-access-adapter-v0-macro-reporting-stacked`, synchronized
+with Phase 8 merge commit `71cfd901` through branch merge `99fdbb14`.
+
+Before the next PR loop, the repo-local ACK lane adopted the one-pass Qodo
+posture enabled by agent-control-kit PR #281: Qodo remains required and
+`explicit_only`, but `waitUntilReturnedBeforeProcessing` is false; exact-head
+required Codex, fast quorum, and every mechanical/risky-file gate remain intact.
+The source checkout was fast-forwarded and built at `d4eeead`, the lane passed
+ACK `doctor`, the consumer config regression passed 2/2, and the three focused
+ACK #281 behavior tests passed. Future TraceMap loops must invoke that built
+`dist/cli.js` (or a verified descendant), not installed stable build `eeb217a`.
+
+The Phase 9 threat decision is to inventory macro declarations and startup/data
+macro categories only. No macro command semantic or body inspection is approved
+for v0: command names, arguments, conditions, expressions, embedded macro text,
+and action bodies remain protected and omitted. Any future command-level
+projection requires a new threat review, rule contract, Windows canary, and
+artifact/IPC leak proof; this branch must not infer semantics from names.
+
+Platform-neutral scope may add safe/hash macro identities, kind/startup-role
+classifications, rule-backed body-omission gaps, Access-specific report counts
+and non-claims, deterministic evidence-doc family routing at hidden claim level,
+and explicit unsupported-consumer gaps where release-review cannot yet present
+Access facts. Product COM macro inventory remains gated on a Windows-local
+non-invoking collection probe, and no macro execution/export API is allowed.
+
+Implemented platform-neutral Phase 9 pieces:
+
+- `legacy.access.macro-gap.v1`, `AccessMacroDeclared`, safe/hash macro identity,
+  normalized named/UI/data/embedded/unknown categories, exact `AutoExec`
+  classification, and one protected-body omission gap per observed category;
+- exact startup classification is restricted to an ownerless named `AutoExec`;
+  embedded/data macros with the same safe name remain non-startup inventory.
+  Optional safe owner stable keys and occurrence ordinals now preserve distinct
+  embedded instances and emit source-to-macro fact linkage. An invalid owner
+  channel is discarded with `AccessMacroOwnerUnavailable` rather than crossing
+  worker IPC;
+- a human Access design-evidence summary with hidden public claim level,
+  category counts, rule/tier counts, gaps, and repeated non-claims;
+- evidence-doc routing of Access facts to the legacy family while preserving
+  hidden claim level, citations, rule IDs, tiers, spans, commit SHA, extractor
+  provenance, limitations, and supporting IDs;
+- vault verification proving the Access macro rule survives combined-index
+  graph projection at hidden claim level;
+- a structured packet-level `ReleaseReviewGap` named
+  `AccessEvidenceConsumerUnsupported`, using `release.review.section.v1` and
+  `ReleaseReviewClassifications.PartialAnalysis`, whenever Access evidence is
+  present but no dedicated Access comparison section exists. This prevents an
+  ignored fact family from becoming an absence/change conclusion. Single and
+  combined index paths are both covered; their queries use fixed SQL statement
+  shapes rather than formatted table/column identifiers, and combined
+  supporting IDs retain the source-qualified `combined_fact_id`.
+
+Macro bodies remain entirely outside the raw/projection models. The projector
+accepts only a name and catalog kind; it has no field through which a command,
+argument, condition, expression, or body can enter worker IPC or artifacts.
+
+Final Phase 9 validation:
+
+- 9/9 focused macro/reporting tests pass;
+- 815/815 full solution tests pass across the final branch history;
+- solution build passes with only the pre-existing
+  `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory;
+- seven artifact-validator tests, changed-file formatting verification, the
+  two-test ACK lane regression, private-path guard, and `git diff --check` pass.
+- issue #490 synthetic product/consumer validation and issue #491 representative
+  local-only validation both completed with their separate confirmed cleanup
+  acknowledgments.
+
+Phase 9 is ready for PR review. The foundation and Phases 7/8 are merged into
+`dev`.
+
+Issue #491 records the completed final task 9.5 workflow and its Windows-local
+result. It was sequenced after issues #488 through #490 and their reviewed
+product wiring. The workflow used an authorized representative database only
+inside a disposable no-remote local Git repository, reported labels/counts/
+coverage/rule IDs/gaps and boolean safety outcomes only, and deleted the
+database, local commit history, outputs, scratch state, checkpoint family, and
+sanitized temporary result after confirming the issue comment.
+
+The earlier broad Windows capability prompt on issue #490 is obsolete because
+it authorized macro catalog item names and startup properties. Phase 9 now uses
+a conservative documented product boundary: bounded
+`CurrentProject.AllMacros.Count`. It never indexes the collection and never
+reads names, `IsLoaded`, startup properties, macro actions, arguments,
+conditions, expressions, XML/text, or bodies. Product output contains only the
+named catalog count, explicit coverage, zero macro identity/body
+facts, and rule-backed named/embedded/data/startup/body gaps. Issue #490 requires
+a fresh exact-head product-only authorization; issue #491 remained paused at
+that point until it succeeded.
+
+The authorized Windows product smoke at exact head `42cff969b231d88daab61938bc6c209e57226217`
+stopped at the count-only boundary and posted its sanitized result on issue
+#490. The run retained no unsafe detail: fixture-generation and extraction
+canaries stayed false, protected-output matches were zero, the baseline fixture
+was unchanged, processes exited, networking was restored, scratch was removed,
+and the worktree stayed clean. However, no named-macro count was observed, the
+loaded-macro canary was not established, the success coverage label was absent,
+and downstream preservation was not demonstrated. The deterministic runs did
+emit zero macro identity facts and the required rule-backed gaps. This was a
+safe boundary result, not a successful product validation. At that point task
+9.0 remained open, task 9.5 and issue #491 remained paused, and no further
+Windows rerun was authorized until the product/count boundary could be
+investigated without expanding the approved COM reads.
+
+Post-run review found that Microsoft documents `CurrentProject.AllMacros` but
+does not document the `Application.Macros` collection used by the original
+loaded-state canary. The fake product test had modeled that unsupported member.
+The branch therefore removes that read, keeps loaded-macro state explicitly
+unavailable under `legacy.access.macro-gap.v1`, and retains only the documented
+bounded catalog count. A future Windows rerun must validate this corrected
+contract at a new exact head; it must not revive or substitute an item-level
+loaded-state probe.
+
+The corrected Windows run at `c1761a52f6f607dd2c3ef7b56744afeca7b7d34b`
+validated the product boundary: the documented count was observed, the removed
+loaded-state field stayed absent, coverage and required rule-backed gaps were
+correct, identity facts stayed zero, outputs were deterministic, and every
+safety/cleanup assertion passed. The run stopped only at downstream validation.
+Local contract tests then identified two concrete composition defects: the
+Access human report omitted the observed count/coverage, and evidence-doc export
+mistakenly routed the Access database metadata fact through the generic legacy
+data descriptor projector, which discarded its safe Access metadata. The branch
+now renders the count/coverage in the Access report, keeps those fields in the
+hidden legacy evidence-doc chunk, and proves combined-index property retention.
+Vault continues to preserve the Access rule and limitations, while release-review
+continues to emit its documented `AccessEvidenceConsumerUnsupported` structured
+gap; neither consumer is permitted to invent a dedicated Access comparison.
+Issue #491 remains paused until this corrected consumer-specific contract passes
+a fresh exact-head Windows validation.
+
+The first consumer-specific rerun stopped conservatively at `safety-check`
+because its outer Windows orchestration deleted the only sanitized summary with
+the disposable artifacts. No product or consumer failure was established; the
+posted false fields were unavailable placeholders. The smoke harness now accepts
+an out-of-root Phase 9 checkpoint and atomically records only closed status,
+stage, booleans, and the protected-output match count after each gate. It also
+runs the product, report, combine-backed evidence docs, vault, and release-review
+checks directly. Database hashes, names, paths, exception text, and protected
+values never enter the checkpoint. Raw smoke state may be cleaned first; the
+checkpoint remains until its sanitized issue comment is confirmed and is then
+deleted.
+
+The first checkpointed run stopped at generation. Because the checkpoint did
+not yet include a closed failure reason, it could not distinguish an Access
+generator failure from the harness deleting tools staged under its disposable
+root. The harness now preflights that its own script, generator, and both CLI
+executables exist outside the smoke root before deletion, and it checkpoints a
+closed generation failure classification without exception text. This is an
+orchestration correction; it does not widen product extraction or authorize a
+new Access API. The corrected harness contract passed 8 focused reporting tests,
+the 814-test solution, a clean solution build, seven artifact-validator tests,
+the private-path guard, and `git diff --check` on macOS. PowerShell parsing and
+the closed failure classification remain exact-head Windows gates.
+
+The rerun at `b2c8c7e5ee37ff47425fb702b46d473ffe6e17f1` again stopped with
+the initial generation checkpoint (`failureClassification=none`). That outcome
+proves only that the coordinator did not persist a later gate; it cannot
+distinguish in-process host termination from failure of the mutable latest-file
+replacement. It does not establish a product or extraction failure. Fixture
+generation now runs in an output-suppressed child PowerShell process. Every
+checkpoint update also creates an immutable sequenced snapshot before a
+best-effort latest-file replacement. The surviving coordinator records a closed
+classification for generation plus every fixture-provenance operation before
+the product scan. This remains an orchestration-only change with no new Access
+read or extraction permission.
+
+The Windows run at `ca1b5aa680e4355fd57fd430e5e4d8dabd760f62`
+advanced through immutable checkpoint sequence 10. Product, report, combine,
+evidence-doc, determinism, canary,
+baseline, protected-output, process, cleanup, and worktree gates passed; only
+vault validation stopped. Local reproduction showed that the prior vault test
+depended on platform-neutral `AccessMacroDeclared` projector fixtures, while the
+shipped count-only reader correctly emits zero macro identity facts. Vault now
+records a structured `AccessEvidenceConsumerUnsupported` gap under
+`vault-export.gap.access-evidence-consumer-unsupported.v1` with bounded
+supporting combined fact IDs. It does not invent Access identities or flows.
+
+The corrected Windows run at `4d834ab12490354f69f4a8b90f3c1467dd54570c`
+completed through immutable checkpoint sequence 15. Product, report, combine,
+evidence-doc, vault, release-review, determinism, canary, baseline,
+protected-output, process, network, cleanup, and worktree gates all passed. The
+primary result and its separate durable cleanup acknowledgment are recorded on
+issue #490. The run observed the documented named-macro count, emitted zero
+macro identities, and safely generated the approved embedded event marker with
+no body; task 9.0 is complete. Named/data macro creation and every macro body or
+command read remain deferred because no bounded documented generator/extractor
+path was approved.
+
+The first issue #491 attempt recorded explicit authorization for an `.mdb` but
+stopped at `input-authorization` before copying the database or launching
+Access. Repository review found that task 9.5 had only prose authorization and
+no committed executable representative workflow. The branch now includes
+`Invoke-AccessRepresentativeSmoke.ps1`: it requires an explicit authorization
+switch, streams the input to a generic path in a disposable no-remote Git
+repository, runs sequential/concurrent product scans and all downstream
+consumers, enforces count-only/non-execution facts, searches outputs for the
+original path/name, and writes immutable sanitized checkpoints containing only
+the authorized result fields. It also actively monitors every scan for a visible
+Access surface and validates manifest/fact commit, rule, tier, and extractor
+provenance. The harness contract passed 9 focused tests, the full solution test
+run, a zero-error solution build, seven artifact-validator tests, the
+private-path guard, and `git diff --check` on macOS. The known SQLite package
+advisory warnings remain unchanged.
+
+The exact-head Windows run at
+`f3103555baf81995c3ca97c1e2ce3e1d1f9a9de8` completed task 9.5. The primary
+issue #491 result records an explicitly authorized `.mdb`, an unchanged
+original, a disposable no-remote repository, all standard artifacts, sequential
+and concurrent determinism, structural/query/external-boundary evidence, and
+count-only form/report/VBA/macro metadata. It records zero UI, VBA-flow, and
+macro identity facts; `rowDataRead=false`; `executionPerformed=false`; every
+report/combine/docs/vault/release-review contract passing; no visible Access
+surface; and zero protected-output matches. The separate confirmed cleanup
+acknowledgment records deleted checkpoints and sanitized results, restored
+networking, exited processes, and a clean exact-head worktree. These results do
+not claim row contents, execution, runtime reachability, production state,
+release approval, or that the database or any change is safe.
+
+PR #495 review hardening makes the positive nullable macro-count predicate
+explicit, rejects missing or malformed sequential/concurrent job exit results,
+checks the emitted `AccessNavigationCandidate` and
+`AccessEventBindingCandidate` fact types in the zero-flow canary, disposes both
+copy streams across partial-open failures, refuses existing or filesystem-root
+representative scratch paths instead of recursively deleting caller-owned
+contents, and simplifies the synthetic marker-present condition. The review
+delta adds no COM read and does not widen extraction. The successful issue #491
+representative result remains pinned to `f3103555`; another representative run
+is deferred because the reviewed changes affect harness failure detection,
+filesystem safety, and an equivalent positive-count expression rather than the
+approved Access read boundary. The post-review head passes 9 focused tests, the
+full solution build/test, seven artifact-validator tests, the two-test ACK lane
+regression, the private-path guard, and `git diff --check`.
+
+Fresh Codex review on PR #495 required two additional correctness fixes. Every
+post-generation synthetic Phase 9 failure now records a closed classification
+derived from its checkpoint stage before throwing, so the highest immutable
+checkpoint cannot retain `failureClassification=none` after a real gate
+failure. The Access design summary now excludes `AnalysisGap` rows from its
+rule-based evidence counts; coverage gaps remain reported separately and can no
+longer inflate UI/VBA evidence totals.
+
+The next fresh Codex review made missing representative authorization
+checkpointable by leaving the switch optional at parameter binding and relying
+on the existing runtime boundary-stop. It also requires the synthetic Phase 9
+checkpoint path to be neither equal to nor nested beneath the disposable smoke
+root, preserving the checkpoint across cleanup.
+
+The Phase 9 generator layer adds a second form button classified as
+`[Embedded Macro]` with a protected caption marker, but deliberately supplies
+no body. Named and data macro fixture creation remains deferred to the Windows
+probe because no documented, bounded generator path was established locally.
+Task 9.0 is complete at the approved count-only/embedded-marker boundary.
+PowerShell is not installed on the macOS host (`brew info powershell` reports
+“Not installed”); syntax and Access behavior were therefore validated by the
+successful exact-head issue #491 Windows run.
+
 ## Foundation Validation
 
 Platform-neutral validation on the implementation branch:
@@ -539,5 +800,7 @@ PR review-loop follow-up on PR #485 patched four current-head findings:
 - Effective permission evidence.
 - Runtime execution and row/data analysis, which are outside TraceMap's static
   evidence model.
-- Route-flow, property-flow, release-review, vault, and site composition.
+- Dedicated Access route-flow, property-flow, vault, and site projections;
+  vault and release-review currently preserve explicit unsupported-consumer
+  gaps instead of inventing Access comparisons.
 - Public promotion or customer claims.

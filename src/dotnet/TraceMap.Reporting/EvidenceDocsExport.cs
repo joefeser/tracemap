@@ -2362,6 +2362,12 @@ public static class EvidenceDocsExporter
             return "gap";
         }
 
+        if (type.StartsWith("Access", StringComparison.Ordinal)
+            || fact.RuleId.StartsWith("legacy.access.", StringComparison.Ordinal))
+        {
+            return "legacy";
+        }
+
         if (IsPotentialLegacyDataDescriptor(fact) && TryProjectLegacyDataDescriptor(fact) is not null)
         {
             return "data-surface";
@@ -2415,7 +2421,8 @@ public static class EvidenceDocsExporter
 
     private static LegacyDataModelDescriptorProjectionRow? TryProjectLegacyDataDescriptor(DocFact fact)
     {
-        if (!IsPotentialLegacyDataDescriptor(fact)
+        if (fact.RuleId.StartsWith("legacy.access.", StringComparison.Ordinal)
+            || !IsPotentialLegacyDataDescriptor(fact)
             || fact.FilePath is null
             || fact.StartLine is null
             || fact.EndLine is null)
@@ -2599,7 +2606,8 @@ public static class EvidenceDocsExporter
 
         foreach (var pair in fact.Properties
             .Where(pair => !string.Equals(pair.Key, TerminalContextKindMetadataKey, StringComparison.Ordinal))
-            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+            .OrderBy(pair => pair.Key is "namedMacroCount" or "macroCoverage" ? 0 : 1)
+            .ThenBy(pair => pair.Key, StringComparer.Ordinal)
             .Take(4))
         {
             if (IsSafeMetadataKey(pair.Key) && IsSafeMetadataValue(pair.Value))

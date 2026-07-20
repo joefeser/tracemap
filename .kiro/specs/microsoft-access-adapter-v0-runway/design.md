@@ -349,6 +349,17 @@ retained and tested as a future input boundary, but wiring `Application.VBE`,
 `ActiveVBProject`, `VBComponents`, component identity, or `CodeModule` text
 requires a separate security-reviewed execution mechanism.
 
+The Phase 9 v0 product boundary likewise does not enumerate macro catalog
+items. It reads only bounded `CurrentProject.AllMacros.Count`. Access does not
+document an `Application.Macros` collection analogous to `Application.Modules`,
+so loaded-macro state remains explicitly unavailable instead of being inferred.
+The product emits the named-macro count when available, zero macro identity/body
+facts, and rule-backed gaps for unavailable named identity, embedded, data,
+startup, and protected-body evidence. The deterministic macro projector remains
+a tested future input boundary; catalog item names, startup properties, macro
+actions, arguments, conditions, expressions, XML/text, and bodies require a
+separately security-reviewed mechanism.
+
 ## Determinism
 
 COM collection order is not a contract. Materialize bounded safe projections,
@@ -537,6 +548,13 @@ dotnet run --project src/dotnet/TraceMap.Cli -- report <combined-access-index-ar
 ./scripts/check-private-paths.sh
 git diff --check
 ```
+
+The Windows smoke accepts an optional Phase 9 checkpoint path outside its
+disposable root. It atomically persists only a closed-schema sanitized outcome
+after each product/report/combine/docs/vault/release-review gate, so destructive
+cleanup cannot erase the evidence summary. Raw artifacts and databases remain
+disposable; the checkpoint is deleted only after the sanitized issue comment is
+confirmed.
 
 Exact CLI syntax should be updated in implementation-state after the scaffold is
 chosen. Relevant pinned downstream smokes from `docs/VALIDATION.md` must run or

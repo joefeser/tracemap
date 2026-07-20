@@ -184,17 +184,20 @@ remain separate reviewable slices.
 
 ## Phase 9: Macro/External Depth and Reporting (Follow-Up PR)
 
-- [ ] 9.0 Extend the synthetic fixture with the macro inventory shapes approved
+- [x] 9.0 Extend the synthetic fixture with the macro inventory shapes approved
       for this phase while keeping command bodies protected.
-- [ ] 9.1 Inventory named/UI/data/startup macros without command bodies.
-- [ ] 9.2 Decide through a separate threat review whether any macro command
+- [x] 9.1 Bound the v0 product reader to documented `AllMacros.Count`, emit no
+      macro identity or body facts, explicitly gap loaded-state, named identity,
+      embedded, data, startup, and body coverage, and retain the deterministic
+      projector for a separately reviewed future source.
+- [x] 9.2 Decide through a separate threat review whether any macro command
       semantics can be safely projected; keep body inspection deferred unless
       approved by rule and leak tests.
-- [ ] 9.3 Add Access evidence sections to human reports and documentation exports
+- [x] 9.3 Add Access evidence sections to human reports and documentation exports
       with hidden public claim level.
-- [ ] 9.4 Verify vault/release-review consumers preserve provenance or emit an
+- [x] 9.4 Verify vault/release-review consumers preserve provenance or emit an
       unsupported-consumer gap.
-- [ ] 9.5 Add a local-only representative customer/sample validation workflow
+- [x] 9.5 Add a local-only representative customer/sample validation workflow
       using labels, counts, hashes, and gaps only.
 
 ## Deferred Beyond V0

@@ -215,6 +215,11 @@ End Sub
     $vbaFlowButton.Name = "cmdVbaFlow"
     $vbaFlowButton.Caption = "VBA_BUTTON_MARKER_92817"
     $vbaFlowButton.OnClick = "[Event Procedure]"
+    $embeddedMacroButton = $access.CreateControl($customerFormTemporaryName, 104, 0, "", "", 1800, 2900, 2400, 400)
+    $fixtureControls.Add($embeddedMacroButton)
+    $embeddedMacroButton.Name = "cmdEmbeddedMacro"
+    $embeddedMacroButton.Caption = "EMBEDDED_MACRO_CAPTION_MARKER_92817"
+    $embeddedMacroButton.OnClick = "[Embedded Macro]"
     $escapedPhase8CanaryPath = $CanaryPath.Replace('"', '""')
     $customerFormModule = $customerForm.Module
     $customerFormModule.InsertLines(1, @"
@@ -311,11 +316,11 @@ End Sub
         Forms = 2
         Reports = 1
         Phase7Controls = 8
-        Phase8Controls = 1
-        TotalFormReportControls = 9
+        Phase8Controls = 2
+        TotalFormReportControls = 10
         FormReportCoverage = "phase7-design-fixture"
         VbaCoverage = "phase8-form-code-behind-fixture"
-        MacroCoverage = "deferred"
+        MacroCoverage = "phase9-embedded-event-marker-only;named-data-deferred"
     } | ConvertTo-Json -Compress
 }
 finally {
