@@ -14,7 +14,6 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$CheckpointBasePath,
 
-    [Parameter(Mandatory = $true)]
     [switch]$InputExplicitlyAuthorized
 )
 

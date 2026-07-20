@@ -671,6 +671,12 @@ failure. The Access design summary now excludes `AnalysisGap` rows from its
 rule-based evidence counts; coverage gaps remain reported separately and can no
 longer inflate UI/VBA evidence totals.
 
+The next fresh Codex review made missing representative authorization
+checkpointable by leaving the switch optional at parameter binding and relying
+on the existing runtime boundary-stop. It also requires the synthetic Phase 9
+checkpoint path to be neither equal to nor nested beneath the disposable smoke
+root, preserving the checkpoint across cleanup.
+
 The Phase 9 generator layer adds a second form button classified as
 `[Embedded Macro]` with a protected caption marker, but deliberately supplies
 no body. Named and data macro fixture creation remains deferred to the Windows
