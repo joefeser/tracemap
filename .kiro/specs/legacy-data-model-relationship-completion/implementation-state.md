@@ -1,7 +1,7 @@
 # Legacy Data Model Relationship Completion Implementation State
 
-Status: implementation-pr5-validated
-Readiness: ready-for-pr5-delivery
+Status: implementation-pr6-validated
+Readiness: ready-for-pr6-delivery
 Spec branch: `codex/legacy-data-model-relationship-completion`
 Target base: `dev`
 Public claim level: hidden
@@ -107,6 +107,43 @@ Public claim level: hidden
 - Deferred: runtime LINQ to SQL model loading, database/schema validation,
   provider behavior, generated navigation behavior, broad downstream
   workflows, and all non-DBML family follow-ups.
+
+## Implementation PR 6
+
+- Implementation branch:
+  `codex/typed-dataset-relationship-fields-pr6`.
+- Base: `origin/dev` at merged PR #503 commit
+  `36862b58ffbbbcd80a457a7c3a8d178b44a7bb20`.
+- Selected boundary: finish the bounded typed DataSet relationship follow-up by
+  classifying duplicate `xs:key`/`xs:unique` names and key/keyref field-list
+  state. Existing missing-endpoint, schema-indicator, and TableAdapter SQL
+  non-inference behavior is reused rather than redesigned.
+- Equal-arity, non-duplicate, public-safe composite field lists preserve the
+  existing relationship fact. Missing, malformed, duplicate-member, or
+  mismatched field lists emit existing cataloged relationship gaps without a
+  terminal relationship fact. Duplicate constraint names are ambiguous even
+  when their selectors happen to match; the extractor does not choose one.
+- Deferred: arbitrary XPath evaluation, schema validation, generated DataSet
+  execution, database constraints, broad downstream workflows, and runtime
+  adapter/database behavior.
+
+Validation results:
+
+- Focused extractor/classifier/catalog filter: 65 passed, 0 failed.
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with 0 errors and
+  the existing 8 `NU1903` SQLite advisories.
+- `dotnet test src/dotnet/TraceMap.sln --no-restore --no-build`: 829 passed,
+  0 failed.
+- CLI smoke copied the committed typed DataSet sample into a temporary Git
+  repository, committed it as `a5ef67099472dff2683288a01b22ba39caff75c2`,
+  and scanned that exact commit. All five required artifacts were present with
+  `Level3SyntaxAnalysis`, metadata-only `NotRun` build status, deterministic
+  composite relationship evidence, and separate mismatched-field and missing-
+  endpoint gaps.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Broader projection/report/query/export validation remains not applicable
+  because this slice changes only typed DataSet extractor classification.
 
 ## Current Context
 

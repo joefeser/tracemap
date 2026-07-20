@@ -1,7 +1,7 @@
 # Legacy Data Model Relationship Completion Tasks
 
-Current state: implementation PRs 1 through 4 merged; implementation PR 5 is
-validated for bounded DBML key, scope, provider-extension, and unsafe-identity
+Current state: implementation PRs 1 through 5 merged; implementation PR 6 is
+validated for bounded typed DataSet duplicate-constraint and composite-field
 classification.
 
 ## Spec Authoring Tasks
@@ -124,11 +124,11 @@ classification.
         tracking, referential integrity, provider compatibility, or query
         execution.
 
-- [ ] 6. Add typed DataSet relationship follow-ups. Requirements:
+- [x] 6. Add typed DataSet relationship follow-ups. Requirements:
       2, 6, 8, 9.
   - [x] Harden `msdata:Relationship`, `xs:key`, `xs:unique`, and `xs:keyref`
         endpoint decisions.
-  - [ ] Add gaps or reduced evidence for missing parent/child endpoints,
+  - [x] Add gaps or reduced evidence for missing parent/child endpoints,
         duplicate constraints, ambiguous selectors, unsupported composite field
         matching, schema indicators without DataSet content, and SQL-only
         relationship hints.
