@@ -28,6 +28,32 @@ describe("Base44 source-bound static evidence", () => {
       expect.objectContaining({ factType: FactTypes.Base44MigrationSurface })
     ]));
     expect(packet.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.Base44SdkPrimitive, contractElement: "Analytics.track" }));
+    for (const capability of [
+      "analytics.track",
+      "appLogs.logUserInApp",
+      "users.inviteUser",
+      "asServiceRole.integrations.Core.SendEmail",
+      "asServiceRole.entities.Order.filter",
+      "asServiceRole.functions.invoke"
+    ]) {
+      expect(packet.facts).toContainEqual(expect.objectContaining({
+        factType: FactTypes.Base44SdkPrimitive,
+        contractElement: capability
+      }));
+    }
+    expect(packet.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.Base44SdkImport,
+      contractElement: "@base44/sdk/dist/utils/axios-client"
+    }));
+    expect(packet.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.Base44EntityOperation,
+      targetSymbol: "Order",
+      properties: expect.objectContaining({ operationName: "filter" })
+    }));
+    expect(packet.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.Base44FunctionInvocation,
+      targetSymbol: "serviceFunction"
+    }));
     expect(packet.facts[0]).toEqual(expect.objectContaining({
       repo: expect.any(String),
       commitSha: expect.stringMatching(/^[0-9a-f]{40}$/),
@@ -107,6 +133,18 @@ export async function run() {
 }
 `);
   await fs.writeFile(path.join(repo, "src/analytics.jsx"), `import { base44 } from "@base44/sdk";\nexport const send = () => base44.Analytics.track("opened");\n`);
+  await fs.writeFile(path.join(repo, "src/current-sdk-surfaces.ts"), `import { base44 } from "@base44/sdk";
+import sdkAxios from "@base44/sdk/dist/utils/axios-client";
+export async function currentSdkSurfaces() {
+  base44.analytics.track("opened");
+  base44.appLogs.logUserInApp("opened");
+  base44.users.inviteUser("owned@example.invalid");
+  base44.asServiceRole.integrations.Core.SendEmail({ to: "owned@example.invalid" });
+  base44.asServiceRole.entities.Order.filter({ status: "open" });
+  base44.asServiceRole.functions.invoke("serviceFunction");
+  return sdkAxios;
+}
+`);
   await fs.writeFile(path.join(repo, "src/unrelated.ts"), `const base44 = { auth: { me: () => "not-base44" } };\nconst supabase = otherSdk.createClient();\nbase44.auth.me();\nsupabase.auth.getUser();\nsupabase.functions.invoke("not-base44");\n`);
   await fs.writeFile(path.join(repo, "src/wrapper.ts"), `import { createClient as makeBase44 } from "@base44/sdk";\nexport const wrappedClient = makeBase44({ appId: "fixture" });\n`);
   await fs.writeFile(path.join(repo, "src/wrapped-consumer.ts"), `import { wrappedClient as client } from "./wrapper";\nexport const invoke = () => client.functions.invoke("wrappedFunction");\n`);
