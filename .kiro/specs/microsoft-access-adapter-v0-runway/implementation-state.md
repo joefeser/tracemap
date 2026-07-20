@@ -1,11 +1,15 @@
 # Microsoft Access Adapter v0 Runway Implementation State
 
-Status: Phase 0 through Phase 9.5 implementation, synthetic Windows validation,
-and representative local-only validation are complete; ready for Phase 9 PR
+Status: Phase 0 through Phase 9.5 are complete and merged into `dev`; synthetic,
+representative local-only, and exact-merge post-review Windows validation are
+complete
 
 Spec branch: `codex/microsoft-access-adapter-runway`
 
-Implementation branch: `codex/microsoft-access-adapter-v0-macro-reporting-stacked`
+Final implementation branch: `codex/microsoft-access-adapter-v0-macro-reporting-stacked`
+
+Final implementation PR: #495, merged as
+`63424d7b39f69b285899c5ca395661835384e4f0`
 
 Phase 7 branch: `codex/microsoft-access-adapter-v0-ui-bindings`
 
@@ -33,10 +37,10 @@ credential, private server, query SQL, or local absolute path in the evidence
 bundle.
 
 That feasibility evidence informed the foundation implementation. The product
-adapter now satisfies the Phase 0 through Phase 9 Git, artifact, rule, safety,
-count-only UI/VBA/macro, consumer-gap, and synthetic validation contracts
-recorded below. Representative validation remains pending; UI/VBA/macro
-identities and bodies remain explicitly unavailable rather than inferred.
+adapter now satisfies the Phase 0 through Phase 9.5 Git, artifact, rule, safety,
+count-only UI/VBA/macro, consumer-gap, synthetic, representative, and
+exact-merge validation contracts recorded below. UI/VBA/macro identities and
+bodies remain explicitly unavailable rather than inferred.
 
 ## Recorded Decisions
 
@@ -498,8 +502,8 @@ Final Phase 9 validation:
   local-only validation both completed with their separate confirmed cleanup
   acknowledgments.
 
-Phase 9 is ready for PR review. The foundation and Phases 7/8 are merged into
-`dev`.
+Phase 9 merged through PR #495 after the foundation and Phases 7/8 had already
+merged into `dev`.
 
 Issue #491 records the completed final task 9.5 workflow and its Windows-local
 result. It was sequenced after issues #488 through #490 and their reviewed
@@ -677,6 +681,39 @@ on the existing runtime boundary-stop. It also requires the synthetic Phase 9
 checkpoint path to be neither equal to nor nested beneath the disposable smoke
 root, preserving the checkpoint across cleanup.
 
+## Final Merged Closeout
+
+PRs #487, #492, #493, and #495 are merged into `dev`. A final read-only ACK
+audit reports `already_merged / PR_ALREADY_MERGED` for all four PRs with zero
+unresolved threads, failed or pending checks, actionable findings, stale
+findings, or held findings.
+
+Post-review Windows validation ran against the exact PR #495 merge commit
+`63424d7b39f69b285899c5ca395661835384e4f0`. Issue #491 records the confirmed
+primary result in comment `5019088418` and the independently confirmed cleanup
+acknowledgment in comment `5019093072`. Both negative authorization/path
+preflights rejected before Access launch. The representative product,
+sequential/concurrent determinism, provenance, report, combine, evidence-doc,
+vault, release-review, UI visibility, original-integrity, process, network, and
+protected-output gates all passed. The primary checkpoint deliberately remained
+until its result was confirmed; the cleanup acknowledgment then confirmed its
+deletion, sanitized-result deletion, restored networking, exited Access/worker
+processes, and a clean detached worktree.
+
+The merged-head macOS closeout reran 53 focused Access tests and all 815 solution
+tests successfully. The solution build completed with zero errors and only the
+pre-existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory. Seven artifact
+validator tests, two ACK lane regression tests, the private-path guard, and
+`git diff --check` also passed. One full-suite attempt transiently failed the
+unrelated NuGet restore-failure diagnostic; the isolated test and subsequent
+complete suite both passed.
+
+The shipped v0 boundary is therefore count-only for forms/reports, VBA, and
+macros. Item-level UI design reads, live VBA source access, and macro identity or
+body reads remain future capabilities requiring separate threat review and
+Windows authorization. Their absence is represented by rule-backed gaps and
+must not be interpreted as evidence that those objects or flows do not exist.
+
 The Phase 9 generator layer adds a second form button classified as
 `[Embedded Macro]` with a protected caption marker, but deliberately supplies
 no body. Named and data macro fixture creation remains deferred to the Windows
@@ -791,7 +828,7 @@ PR review-loop follow-up on PR #485 patched four current-head findings:
 - required future release-review gaps to use structured `ReleaseReviewGap`
   entries and statuses to use `ReleaseReviewStatuses` only.
 
-## Deferred Work
+## Deferred Beyond the Shipped Count-Only V0
 
 - Form/report/control and binding extraction.
 - VBA declaration/call/event/navigation evidence.
