@@ -529,6 +529,12 @@ public sealed class LegacyDataMetadataExtractorTests
                   <Association Name="DuplicateRelation" ThisKey="CustomerId" OtherKey="CustomerId" />
                 </Type>
               </Table>
+              <Table Name="Anonymous" Member="Anonymous">
+                <Type>
+                  <Association Name="MissingSource" Type="Order" ThisKey="CustomerId" OtherKey="CustomerId" />
+                  <Association Name="MissingBoth" ThisKey="CustomerId" OtherKey="CustomerId" />
+                </Type>
+              </Table>
             </Database>
             """);
 
@@ -562,6 +568,21 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.DoesNotContain(result.Facts, fact => fact.Properties.ContainsKey("referentialIntegrity")
             || fact.Properties.ContainsKey("runtimeRelationshipLoaded")
             || fact.Properties.ContainsKey("tableExists"));
+
+        var missingSource = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataDbml
+            && fact.Properties.GetValueOrDefault("associationName") == "MissingSource");
+        Assert.Equal("reduced", missingSource.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("unidirectional", missingSource.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+        Assert.Equal("missing-source-endpoint", missingSource.Properties.GetValueOrDefault("limitations"));
+        Assert.False(missingSource.Properties.ContainsKey("sourceEndpointName"));
+        Assert.Equal("Order", missingSource.Properties.GetValueOrDefault("targetEndpointName"));
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("associationName") == "MissingBoth");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataModelRelationship
+            && fact.Properties.GetValueOrDefault("classification") == "IncompleteLegacyDataModelRelationship"
+            && fact.Properties.GetValueOrDefault("safeReasonCode") == "missing-endpoint");
 
         var duplicateGap = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataDbml
