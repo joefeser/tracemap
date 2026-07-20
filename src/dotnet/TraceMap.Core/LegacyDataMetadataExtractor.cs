@@ -986,39 +986,47 @@ public static class LegacyDataMetadataExtractor
             {
                 Element = element,
                 Name = LocalQualifiedName(AttributeValue(element, "name")),
-                Table = LastXPathIdentifier(element.Elements().FirstOrDefault(IsXsdSelector) is { } selector ? AttributeValue(selector, "xpath") : null)
+                Table = LastXPathIdentifier(element.Elements().FirstOrDefault(IsXsdSelector) is { } selector ? AttributeValue(selector, "xpath") : null),
+                Fields = TypedDataSetConstraintFields(element)
             })
             .Where(item => !string.IsNullOrWhiteSpace(item.Name) && !string.IsNullOrWhiteSpace(item.Table))
-            .Select(item => new ConstraintDefinition(item.Element, item.Name, item.Table!))
+            .Select(item => new ConstraintDefinition(item.Element, item.Name, item.Table!, item.Fields))
             .ToArray();
         var ambiguousConstraintNames = constraintDefinitions
             .GroupBy(item => item.Name, StringComparer.Ordinal)
-            .Where(group => group.Select(item => item.Table).Distinct(StringComparer.Ordinal).Count() > 1)
+            .Where(group => group.Count() > 1)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         foreach (var ambiguousGroup in ambiguousConstraintNames.Values.SelectMany(group => group).OrderBy(item => GetLine(item.Element)))
         {
-            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataTypedDataSet, "AmbiguousLegacyDataModelIdentity", "Typed DataSet constraint name resolved to multiple selector tables.", ambiguousGroup.Element);
+            AddGap(manifest, facts, relativePath, RuleIds.LegacyDataTypedDataSet, "AmbiguousLegacyDataModelIdentity", "Typed DataSet constraint name resolved to multiple definitions.", ambiguousGroup.Element);
         }
 
-        var keyedTables = constraintDefinitions
+        var keyedConstraints = constraintDefinitions
             .Where(item => !ambiguousConstraintNames.ContainsKey(item.Name))
             .GroupBy(item => item.Name, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First().Table, StringComparer.Ordinal);
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
 
         foreach (var keyref in document.Descendants().Where(IsXsdKeyRef).OrderBy(GetLine))
         {
             var relationName = AttributeValue(keyref, "name") ?? "keyref";
             var referencedKey = LocalQualifiedName(AttributeValue(keyref, "refer"));
             var referencesAmbiguousConstraint = ambiguousConstraintNames.ContainsKey(referencedKey);
-            var parentTableName = keyedTables.GetValueOrDefault(referencedKey);
+            var referencedConstraint = keyedConstraints.GetValueOrDefault(referencedKey);
+            var parentTableName = referencedConstraint?.Table;
             var selector = keyref.Elements().FirstOrDefault(IsXsdSelector);
             var childTableName = LastXPathIdentifier(AttributeValue(selector, "xpath"));
+            var fieldState = referencesAmbiguousConstraint
+                ? LegacyRelationshipJoinOrKeyState.NotApplicable
+                : TypedDataSetConstraintFieldState(
+                    referencedConstraint?.Fields ?? [],
+                    TypedDataSetConstraintFields(keyref));
             var relationshipDecision = ClassifyTypedDataSetRelationship(
                 "keyref",
                 referencesAmbiguousConstraint
                     ? LegacyRelationshipEndpointState.Ambiguous
                     : EndpointState(parentTableName),
-                EndpointState(childTableName));
+                EndpointState(childTableName),
+                fieldState);
             if (relationshipDecision.Decision == LegacyRelationshipDecision.EmitAnalysisGap)
             {
                 AddRelationshipGap(
@@ -1030,10 +1038,13 @@ public static class LegacyDataMetadataExtractor
                     "constraint-relation",
                     referencesAmbiguousConstraint
                         ? "Typed DataSet keyref referenced an ambiguous constraint name."
-                        : "Typed DataSet keyref did not provide a deterministic parent or child endpoint.",
+                        : fieldState is LegacyRelationshipJoinOrKeyState.Missing or LegacyRelationshipJoinOrKeyState.Ambiguous
+                            ? "Typed DataSet keyref fields could not be matched deterministically."
+                            : "Typed DataSet keyref did not provide a deterministic parent or child endpoint.",
                     keyref);
-                if (string.IsNullOrWhiteSpace(parentTableName)
-                    && string.IsNullOrWhiteSpace(childTableName))
+                if (fieldState is LegacyRelationshipJoinOrKeyState.Missing or LegacyRelationshipJoinOrKeyState.Ambiguous
+                    || (string.IsNullOrWhiteSpace(parentTableName)
+                        && string.IsNullOrWhiteSpace(childTableName)))
                 {
                     continue;
                 }
@@ -1995,7 +2006,8 @@ public static class LegacyDataMetadataExtractor
     private static LegacyRelationshipGapDecision ClassifyTypedDataSetRelationship(
         string descriptorKind,
         LegacyRelationshipEndpointState sourceEndpointState,
-        LegacyRelationshipEndpointState targetEndpointState)
+        LegacyRelationshipEndpointState targetEndpointState,
+        LegacyRelationshipJoinOrKeyState joinOrKeyState = LegacyRelationshipJoinOrKeyState.NotApplicable)
     {
         return LegacyDataRelationshipGapClassifier.Classify(new LegacyRelationshipGapInput(
             "typed-dataset",
@@ -2004,10 +2016,41 @@ public static class LegacyDataMetadataExtractor
             IsRelationshipDescriptor: true,
             sourceEndpointState,
             targetEndpointState,
-            LegacyRelationshipJoinOrKeyState.NotApplicable,
+            joinOrKeyState,
             LegacyRelationshipParserCoverageState.Full,
             LegacyRelationshipShapeFlags.None,
             ExistingFamilyAllowsUnidirectional: true));
+    }
+
+    private static IReadOnlyList<string?> TypedDataSetConstraintFields(XElement constraint)
+    {
+        return constraint.Elements()
+            .Where(element => element.Name == Xs + "field")
+            .Select(element => LastXPathIdentifier(AttributeValue(element, "xpath")))
+            .ToArray();
+    }
+
+    private static LegacyRelationshipJoinOrKeyState TypedDataSetConstraintFieldState(
+        IReadOnlyList<string?> keyFields,
+        IReadOnlyList<string?> keyrefFields)
+    {
+        if (keyFields.Count == 0 || keyrefFields.Count == 0)
+        {
+            return LegacyRelationshipJoinOrKeyState.Missing;
+        }
+
+        if (keyFields.Count != keyrefFields.Count
+            || keyFields.Any(string.IsNullOrWhiteSpace)
+            || keyrefFields.Any(string.IsNullOrWhiteSpace)
+            || keyFields.Distinct(StringComparer.Ordinal).Count() != keyFields.Count
+            || keyrefFields.Distinct(StringComparer.Ordinal).Count() != keyrefFields.Count)
+        {
+            return LegacyRelationshipJoinOrKeyState.Ambiguous;
+        }
+
+        return keyFields.Concat(keyrefFields).All(field => IsSafeIdentifier(field!))
+            ? LegacyRelationshipJoinOrKeyState.Deterministic
+            : LegacyRelationshipJoinOrKeyState.UnsafeRedacted;
     }
 
     private static LegacyRelationshipGapDecision ClassifyEdmxRelationship(
@@ -2898,7 +2941,7 @@ public static class LegacyDataMetadataExtractor
 
     private sealed record TypedDataSetIndicatorResult(bool HasIntrinsicIndicator, bool HasDescriptorContent);
 
-    private sealed record ConstraintDefinition(XElement Element, string Name, string Table);
+    private sealed record ConstraintDefinition(XElement Element, string Name, string Table, IReadOnlyList<string?> Fields);
 
     private sealed record GeneratedCandidate(string FilePath, IReadOnlyDictionary<string, IReadOnlyList<int>> TypeLines)
     {
