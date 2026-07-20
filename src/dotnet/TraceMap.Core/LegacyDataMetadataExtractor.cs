@@ -257,7 +257,7 @@ public static class LegacyDataMetadataExtractor
             .ToArray();
         foreach (var relationship in relationshipElements.Take(MaxNHibernateRelationshipsPerClass))
         {
-            AddNHibernateRelationshipFact(manifest, facts, relativePath, metadataHash, sourceMetadataFactId, className, declaredClassName, relationship);
+            AddNHibernateRelationshipFact(manifest, facts, relativePath, metadataHash, sourceMetadataFactId, declaredClassName, relationship);
         }
 
         if (relationshipElements.Length > MaxNHibernateRelationshipsPerClass)
@@ -314,7 +314,6 @@ public static class LegacyDataMetadataExtractor
         string relativePath,
         string metadataHash,
         string sourceMetadataFactId,
-        string className,
         string? declaredClassName,
         XElement relationship)
     {
@@ -371,7 +370,7 @@ public static class LegacyDataMetadataExtractor
                     ? "unidirectional"
                     : "full"),
             limitations);
-        AddModelIdentity(properties, "NHibernateHbm", "relationship", "mapping", relativePath, "nhibernate-relationship", relationshipName, className, sourceMetadataFactId, Parts(("class", className), ("relationship", relationshipName), ("target-class", targetClass), ("descriptor", relationship.Name.LocalName)), coverageLabel);
+        AddModelIdentity(properties, "NHibernateHbm", "relationship", "mapping", relativePath, "nhibernate-relationship", relationshipName, declaredClassName, sourceMetadataFactId, Parts(("class", declaredClassName), ("relationship", relationshipName), ("target-class", targetClass), ("descriptor", relationship.Name.LocalName)), coverageLabel);
         facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyDataOrmNHibernate, relativePath, relationship, TargetFrom(properties, "associationName", "associationHash"), properties));
     }
 
@@ -1708,15 +1707,15 @@ public static class LegacyDataMetadataExtractor
 
     private static int GetDocumentNodeOrdinal(XObject? node)
     {
-        if (node is not XNode xmlNode || xmlNode.Document is null)
+        if (node is not XElement element || element.Document is null)
         {
             return 0;
         }
 
         var ordinal = 0;
-        foreach (var candidate in xmlNode.Document.DescendantNodes())
+        foreach (var candidate in element.Document.Descendants())
         {
-            if (ReferenceEquals(candidate, xmlNode))
+            if (ReferenceEquals(candidate, element))
             {
                 return ordinal;
             }
