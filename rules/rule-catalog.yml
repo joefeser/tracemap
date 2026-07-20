@@ -1556,6 +1556,7 @@ rules:
     limitations:
       - DBML metadata is static design-time evidence and does not prove database existence, LINQ runtime behavior, routine existence, lazy loading, query execution, or provider compatibility.
       - Generated-code linkage is separate evidence and does not upgrade metadata descriptor tier.
+      - AmbiguousLegacyDataModelIdentity owns duplicate or ambiguous DBML descriptor identity gaps; such gaps do not select an authoritative relationship endpoint.
       - Safe reducer-facing properties include entityName, typeName, tableName, storageObjectName, propertyName, fieldName, columnName, mappingKind, and hash variants for unsafe identifiers.
       - Unsafe names, provider metadata, database names, connection names, and routine identifiers are hashed or omitted when required.
 
@@ -1571,6 +1572,7 @@ rules:
       - AnalysisGap
     limitations:
       - EDMX metadata is static design-time evidence and does not prove EF runtime model loading, lazy loading, change tracking, query execution, provider compatibility, migrations, or schema existence.
+      - AmbiguousLegacyDataModelIdentity and UnsupportedLegacyOrmMappingShape own ambiguous and unsupported EDMX descriptor gaps; neither classification proves a runtime model error.
       - Complex, inherited, split, conditional, many-to-many, duplicate-container, and provider-extension mappings are gaps unless a future spec defines deterministic handling.
       - Safe reducer-facing properties include entityName, typeName, tableName, storageObjectName, propertyName, fieldName, columnName, mappingKind, and hash variants for unsafe identifiers.
       - Namespace URIs, provider details, unsafe identifiers, and raw metadata content are hashed or omitted.
@@ -1589,6 +1591,7 @@ rules:
       - AnalysisGap
     limitations:
       - Typed DataSet metadata is static design-time evidence and does not prove adapter execution, stored-procedure existence, command reachability, SQL execution, provider compatibility, or database schema existence.
+      - AmbiguousLegacyDataModelIdentity owns duplicate or ambiguous typed DataSet descriptor identity gaps; such gaps do not infer a relationship from SQL text or generated names.
       - Raw SQL command text is never stored; complete static command text may produce only existing hash/length and safe shape evidence.
       - Safe reducer-facing properties include entityName, typeName, tableName, storageObjectName, propertyName, fieldName, columnName, mappingKind, textHash, textLength, queryShapeHash, and hash variants for unsafe identifiers.
       - Unrelated XSD files, dynamic commands, incomplete schemas, unsupported provider metadata, and stale or missing generated code remain gaps or unsupported evidence.
@@ -1641,8 +1644,46 @@ rules:
     evidenceTier: Tier2Structural
     emits:
       - AnalysisGap
+    gapClassifications:
+      - AmbiguousLegacyDataModelIdentity
+      - IncompleteLegacyDataModelRelationship
+      - ReducedLegacyDataModelRelationshipCoverage
+      - UnsupportedLegacyOrmDescriptor
+      - UnsupportedLegacyOrmMappingShape
+    safeReasonCodes:
+      - deterministic-relationship
+      - missing-endpoint
+      - duplicate-relationship-identity
+      - ambiguous-endpoint-candidates
+      - unsupported-relationship-shape
+      - reduced-parser-coverage
+      - unsafe-redacted-endpoint-identity
+      - not-in-scope
+    coverageLabels:
+      - full
+      - reduced
+    relationshipEndpointCoverageLabels:
+      - full
+      - unidirectional
+    limitationCodes:
+      - missing-endpoint
+      - duplicate-relationship-identity
+      - ambiguous-endpoint-candidates
+      - unsupported-relationship-shape
+      - reduced-parser-coverage
+      - unsafe-redacted-endpoint-identity
+    safeProperties:
+      - classification
+      - coverage
+      - descriptorKind
+      - limitations
+      - modelRelationshipRuleId
+      - relationshipFamily
+      - runtimeProof
+      - safeReasonCode
     limitations:
       - This rule owns derived relationship semantics and availability gaps; source extractors continue to emit LegacyDataMappingDeclared under their source rule IDs.
+      - The closed safeReasonCodes registry is machine-readable classifier vocabulary; reason codes never contain relationship names, endpoint identities, key values, SQL, config, paths, remotes, URLs, or secrets.
       - Relationship evidence is static descriptor metadata and does not prove database constraints, runtime navigation, lazy loading, cascade behavior, query execution, schema existence, deployment, provider compatibility, or production usage.
       - Existing source mappingKind values such as association, relation, entity-storage, property-column, adapter-command, orm-class, and orm-property remain stable; model relationship semantics are additive.
       - Bidirectional relationships require deterministic endpoints; unidirectional, ambiguous, duplicate, inherited, split, conditional, many-to-many, provider-specific, or unsupported shapes are gaps or needs-review evidence.
@@ -1662,6 +1703,7 @@ rules:
       - AnalysisGap
     limitations:
       - NHibernate mapping evidence is checked-in XML metadata only and does not prove session factory loading, runtime mapping validity, lazy loading, cascade behavior, dirty tracking, query execution, database schema existence, provider compatibility, deployment, or production usage.
+      - UnsupportedLegacyOrmMappingShape owns recognized NHibernate relationship constructs outside deterministic handling; it is a static coverage gap, not a runtime mapping failure.
       - XML parsing uses the legacy data safe parser bounds and rejects DTDs, external entities, malformed input, oversized input, excessive node count, and excessive depth as reduced-coverage gaps.
       - Safe properties include metadataFormat, modelKind, descriptorRole, stableModelKey, mappingKind, modelRelationshipKind when deterministic, safe display labels or hashes, supportingFactIds, coverageLabel, and limitation codes.
       - Schema, catalog, formula, filter, SQL, query, dialect, connection, provider-specific values, raw mapping content, URLs, remotes, local absolute paths, private labels, and secrets are hashed or omitted.
@@ -1676,6 +1718,7 @@ rules:
       - AnalysisGap
     limitations:
       - Unsupported ORM evidence is a static coverage gap and does not prove data access, runtime mapping validity, query execution, database schema existence, provider compatibility, deployment, or production usage.
+      - UnsupportedLegacyOrmDescriptor is the closed classification for a recognized legacy ORM descriptor family outside the deterministic parser scope.
       - Recognized family labels are public-safe descriptors only; raw mapping content, SQL, config values, connection strings, URLs, remotes, local absolute paths, private labels, and secrets are hashed or omitted.
       - LLBLGen, SubSonic, iBATIS.NET/MyBatis.NET, Castle ActiveRecord, Fluent-only mappings, and project-local mapping DSLs remain unsupported unless a future rule defines deterministic parser behavior.
       - Project-local mapping DSLs are not detected unless they use recognized public family signals; absence of this gap is not absence of ORM metadata.

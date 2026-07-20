@@ -1,7 +1,7 @@
 # Legacy Data Model Relationship Completion Tasks
 
-Current state: spec-only PR open; ACK review-loop patch pass in progress. No
-product code is implemented in this PR.
+Current state: implementation PR 1 in progress on the shared relationship gap
+classifier plus narrow DBML integration.
 
 ## Spec Authoring Tasks
 
@@ -27,51 +27,51 @@ product code is implemented in this PR.
       check confirming changes are limited to this assigned spec folder.
 - [x] 0.10 Commit, push, open PR to `dev`, run initial ACK, and update this
       file plus `implementation-state.md` with the current ACK state.
-- [ ] 0.11 Follow ACK to terminal merge-ready, merged, or handoff state, and
+- [x] 0.11 Follow ACK to terminal merge-ready, merged, or handoff state, and
       update this file plus `implementation-state.md` with final readiness.
 
 ## Implementation Tasks
 
-- [ ] 1. Confirm and repair rule catalog ownership before relationship gap
+- [x] 1. Confirm and repair rule catalog ownership before relationship gap
       emissions.
       Requirements: 1, 8, 9.
-  - [ ] Treat these currently emitted but not literally cataloged strings as
+  - [x] Treat these currently emitted but not literally cataloged strings as
         catalog repair work before any relationship follow-up code reuses or
         expands them: `AmbiguousLegacyDataModelIdentity`,
         `UnsupportedLegacyOrmMappingShape`, and
         `UnsupportedLegacyOrmDescriptor`.
-  - [ ] Confirm or add documentation under the owning rule for:
+  - [x] Confirm or add documentation under the owning rule for:
         `AmbiguousLegacyDataModelIdentity`,
         `UnsupportedLegacyOrmMappingShape`,
         `UnsupportedLegacyOrmDescriptor`, and
         `AmbiguousLegacyDataModelSelector`.
-  - [ ] Use the existing projection vocabulary `DuplicateIdentity` with reason
+  - [x] Use the existing projection vocabulary `DuplicateIdentity` with reason
         `duplicate-surface`, or add catalog coverage before any projection or
         report code emits a new `DuplicateLegacyDataModelSurface` string.
-  - [ ] Add or confirm a machine-readable reason-code registry, or equivalent
+  - [x] Add or confirm a machine-readable reason-code registry, or equivalent
         testable catalog mechanism, so tests can prove reason-code-to-rule
         ownership without brittle prose-only substring checks.
-  - [ ] Catalog the closed `safeReasonCode` set for the relationship classifier
+  - [x] Catalog the closed `safeReasonCode` set for the relationship classifier
         under `legacy.data.model.relationship.v1` before code emits it.
-  - [ ] Add or amend catalog entries before emitting any new gap string,
+  - [x] Add or amend catalog entries before emitting any new gap string,
         relationship classifier, needs-review caveat, coverage label, or
         limitation.
-  - [ ] Add rule-catalog tests for every new or newly reused relationship gap
+  - [x] Add rule-catalog tests for every new or newly reused relationship gap
         string before extractor code emits it.
-  - [ ] Ensure catalog limitations state no runtime ORM/database behavior,
+  - [x] Ensure catalog limitations state no runtime ORM/database behavior,
         referential integrity, query execution, or impact proof.
 
-- [ ] 2. Add a shared relationship gap classifier or equivalent decision helper
+- [x] 2. Add a shared relationship gap classifier or equivalent decision helper
       when PR 1 takes the preferred shared-helper path.
       Requirements: 1, 2, 3, 9.
-  - [ ] Define deterministic inputs for relationship family, descriptor kind,
+  - [x] Define deterministic inputs for relationship family, descriptor kind,
         endpoint state, join/key state, unsafe value state, parser coverage, and
         unsupported-shape flags.
-  - [ ] Return deterministic decisions for full relationship evidence, reduced
+  - [x] Return deterministic decisions for full relationship evidence, reduced
         relationship evidence, `AnalysisGap` only, or no in-scope relationship.
-  - [ ] Normalize classification, coverage label, endpoint coverage,
+  - [x] Normalize classification, coverage label, endpoint coverage,
         limitations, evidence tier, rule ID, and safe reason code.
-  - [ ] Add focused unit tests for missing endpoint, duplicate identity,
+  - [x] Add focused unit tests for missing endpoint, duplicate identity,
         ambiguous endpoint candidates, unsupported shape, reduced parser
         coverage, unsafe endpoint identity, and the no-relationship/no-gap
         `not-in-scope` decision.
@@ -79,39 +79,37 @@ product code is implemented in this PR.
         extractor bug through a return value, debug-only trace, or focused unit
         assertion; production outputs must still emit no gap for unrelated
         descriptors.
-  - [ ] Add an overlapping-condition determinism test proving precedence,
+  - [x] Add an overlapping-condition determinism test proving precedence,
         classification, limitations, fact order, and fact IDs stay stable.
-  - [ ] Prove the helper does not use runtime providers, SQL execution, external
+  - [x] Prove the helper does not use runtime providers, SQL execution, external
         resources, LLM calls, embeddings, fuzzy matching, or prompt logic.
 
-- [ ] 3. Wire PR 1 to one narrow relationship family. Requirements:
+- [x] 3. Wire PR 1 to one narrow relationship family. Requirements:
       2, 3, 4, 6, 9, 10.
-  - [ ] Select one family for PR 1 after code inspection, preferably DBML
+  - [x] Select one family for PR 1 after code inspection, preferably DBML
         association ambiguity or typed DataSet constraint ambiguity.
-  - [ ] Preserve existing deterministic facts and `mappingKind` values for
+  - [x] Preserve existing deterministic facts and `mappingKind` values for
         already-supported relationship shapes.
-  - [ ] Add one or more ambiguity/unsupported-shape fixtures that produce
+  - [x] Add one or more ambiguity/unsupported-shape fixtures that produce
         `AnalysisGap` or reduced needs-review relationship evidence.
-  - [ ] Add or extend a synthetic committed smoke fixture for the touched family
+  - [x] Add or extend a synthetic committed smoke fixture for the touched family
         so the CLI smoke exercises at least one new relationship gap or
         needs-review shape.
-  - [ ] Assert ambiguous or unsupported shapes do not produce invented endpoint
+  - [x] Assert ambiguous or unsupported shapes do not produce invented endpoint
         surfaces.
-  - [ ] Add privacy assertions for unsafe relationship, endpoint, key, storage,
+  - [x] Add privacy assertions for unsafe relationship, endpoint, key, storage,
         provider, path, URL, remote, SQL/config-like, and secret-looking values
         in the touched family.
-  - [ ] If no shared helper is added in PR 1, record the reason in
-        `implementation-state.md`, keep follow-up tasks explicit, and make PR 2
-        either add/wire the shared helper or justify permanent per-family
-        divergence with cataloged reason-code tests.
+  - [x] Shared helper added in PR 1; no alternate-path deferral rationale is
+        required. Remaining family wiring stays explicit for later PRs.
 
 - [ ] 4. Add DBML relationship follow-ups. Requirements: 2, 4, 8, 9.
-  - [ ] Harden duplicate association name handling without choosing a winner.
+  - [x] Harden duplicate association name handling without choosing a winner.
   - [ ] Add gaps or reduced evidence for missing/ambiguous `Type`, `ThisKey`,
         `OtherKey`, duplicate table/type scopes, provider extensions, and unsafe
         endpoint identity.
-  - [ ] Prove deterministic association evidence remains stable.
-  - [ ] Prove DBML relationship gaps do not infer referential integrity,
+  - [x] Prove deterministic association evidence remains stable.
+  - [x] Prove DBML relationship gaps do not infer referential integrity,
         generated runtime relationship behavior, or table existence.
 
 - [ ] 5. Add EDMX relationship follow-ups. Requirements: 2, 5, 8, 9.
@@ -160,17 +158,17 @@ product code is implemented in this PR.
   - [ ] Keep broad combined/path/reverse/diff/impact/release-review/portfolio/
         vault/RAG/static HTML expansion deferred unless directly touched.
 
-- [ ] 9. Validate implementation. Requirements: 10.
-  - [ ] Run focused tests for touched extractor family, classifier/helper, rule
+- [x] 9. Validate implementation. Requirements: 10.
+  - [x] Run focused tests for touched extractor family, classifier/helper, rule
         catalog, privacy, and touched downstream workflows.
-  - [ ] Run `dotnet build src/dotnet/TraceMap.sln`.
-  - [ ] Run `dotnet test src/dotnet/TraceMap.sln`.
-  - [ ] Run CLI scan smoke against a synthetic committed fixture repository or
+  - [x] Run `dotnet build src/dotnet/TraceMap.sln`.
+  - [x] Run `dotnet test src/dotnet/TraceMap.sln`.
+  - [x] Run CLI scan smoke against a synthetic committed fixture repository or
         existing public-safe committed fixture and verify:
         `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and
         `logs/analyzer.log`.
-  - [ ] Record the scanned fixture commit SHA and coverage labels.
-  - [ ] Run relevant pinned checks from `docs/VALIDATION.md` when implementation
+  - [x] Record the scanned fixture commit SHA and coverage labels.
+  - [x] Run relevant pinned checks from `docs/VALIDATION.md` when implementation
         touches language adapters, shared graph/report behavior, vault/RAG
         export, portfolio, impact, release-review, or static HTML; otherwise
         explicitly defer with rationale.
@@ -180,8 +178,8 @@ product code is implemented in this PR.
         full .NET test suite, private-path guard, and diff check. If model
         surface projection or `surfaceSubtype` reporting changes, also run the
         documented focused projection/report/query/export test filter.
-  - [ ] Run `./scripts/check-private-paths.sh`.
-  - [ ] Run `git diff --check`.
+  - [x] Run `./scripts/check-private-paths.sh`.
+  - [x] Run `git diff --check`.
 
 ## Deferred Follow-Ups
 
