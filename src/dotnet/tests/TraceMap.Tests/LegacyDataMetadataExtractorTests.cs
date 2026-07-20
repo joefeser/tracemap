@@ -1138,6 +1138,82 @@ public sealed class LegacyDataMetadataExtractorTests
     }
 
     [Fact]
+    public void Scan_classifies_typed_dataset_duplicate_constraints_and_composite_field_mismatches_without_invented_relationships()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "CompositeConstraints.xsd"), """
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                       xmlns:msdata="urn:schemas-microsoft-com:xml-msdata"
+                       xmlns:msprop="urn:schemas-microsoft-com:xml-msprop"
+                       xmlns:mstns="urn:store">
+              <xs:element name="StoreDataSet" msdata:IsDataSet="true" msprop:Generator_DataSetName="StoreDataSet" />
+              <xs:key name="CompositeKey">
+                <xs:selector xpath=".//mstns:Customers" />
+                <xs:field xpath="mstns:CustomerId" />
+                <xs:field xpath="mstns:TenantId" />
+              </xs:key>
+              <xs:key name="DuplicateKey"><xs:selector xpath=".//mstns:Customers" /><xs:field xpath="mstns:CustomerId" /></xs:key>
+              <xs:unique name="DuplicateKey"><xs:selector xpath=".//mstns:Customers" /><xs:field xpath="mstns:CustomerId" /></xs:unique>
+              <xs:key name="MalformedDuplicate"><xs:selector xpath=".//mstns:Customers" /><xs:field xpath="mstns:CustomerId" /></xs:key>
+              <xs:unique name="MalformedDuplicate"><xs:field xpath="mstns:CustomerId" /></xs:unique>
+              <xs:keyref name="CompositeMatch" refer="mstns:CompositeKey">
+                <xs:selector xpath=".//mstns:Orders" />
+                <xs:field xpath="mstns:CustomerId" />
+                <xs:field xpath="mstns:TenantId" />
+              </xs:keyref>
+              <xs:keyref name="CompositeMismatch" refer="mstns:CompositeKey">
+                <xs:selector xpath=".//mstns:Orders" />
+                <xs:field xpath="mstns:CustomerId" />
+              </xs:keyref>
+              <xs:keyref name="MissingFields" refer="mstns:CompositeKey"><xs:selector xpath=".//mstns:Orders" /></xs:keyref>
+              <xs:keyref name="DuplicateReference" refer="mstns:DuplicateKey"><xs:selector xpath=".//mstns:Orders" /><xs:field xpath="mstns:CustomerId" /></xs:keyref>
+              <xs:keyref name="MalformedDuplicateReference" refer="mstns:MalformedDuplicate"><xs:selector xpath=".//mstns:Orders" /><xs:field xpath="mstns:CustomerId" /></xs:keyref>
+              <xs:keyref name="UnknownParent" refer="mstns:UnknownKey"><xs:selector xpath=".//mstns:Orders" /><xs:field xpath="mstns:CustomerId" /></xs:keyref>
+            </xs:schema>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var repeated = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out-repeat")));
+
+        var composite = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataTypedDataSet
+            && fact.Properties.GetValueOrDefault("relationName") == "CompositeMatch");
+        Assert.Equal("full", composite.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("full", composite.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+
+        foreach (var rejectedName in new[] { "CompositeMismatch", "MissingFields" })
+        {
+            Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+                && fact.Properties.GetValueOrDefault("relationName") == rejectedName);
+        }
+
+        var duplicateReference = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("relationName") == "DuplicateReference");
+        Assert.Equal("reduced", duplicateReference.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("unidirectional", duplicateReference.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+        Assert.False(duplicateReference.Properties.ContainsKey("sourceEndpointName"));
+        var malformedDuplicateReference = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("relationName") == "MalformedDuplicateReference");
+        Assert.Equal("reduced", malformedDuplicateReference.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.False(malformedDuplicateReference.Properties.ContainsKey("sourceEndpointName"));
+        var unknownParent = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("relationName") == "UnknownParent");
+        Assert.Equal("reduced", unknownParent.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("Orders", unknownParent.Properties.GetValueOrDefault("targetEndpointName"));
+
+        Assert.Equal(7, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataTypedDataSet
+            && fact.Properties.GetValueOrDefault("classification") == "AmbiguousLegacyDataModelIdentity"));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataModelRelationship
+            && fact.Properties.GetValueOrDefault("classification") == "IncompleteLegacyDataModelRelationship"
+            && fact.Properties.GetValueOrDefault("safeReasonCode") == "missing-endpoint");
+        Assert.Equal(
+            result.Facts.Where(IsTypedDataSetRelationshipEvidence).Select(fact => fact.FactId),
+            repeated.Facts.Where(IsTypedDataSetRelationshipEvidence).Select(fact => fact.FactId));
+    }
+
+    [Fact]
     public void Scan_keeps_relationship_gap_descriptor_ordinals_stable_across_xml_formatting()
     {
         using var temp = new TempDirectory();
