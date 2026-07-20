@@ -183,9 +183,9 @@ stage, failure classification, booleans, and protected-output match count. It
 also updates the unnumbered latest-file pointer on a best-effort basis. Consumers
 must select the valid snapshot with the highest `checkpointSequence` rather than
 trusting an older unnumbered file. Checkpoints never store database hashes,
-names, paths, exception text, or protected values. The harness
-also validates the Access report, combined-index evidence-doc projection, vault
-rule preservation, and release-review unsupported-consumer gap. Cleanup may
+names, paths, exception text, or protected values. The harness also validates
+the Access report, combined-index evidence-doc projection, and structured
+vault/release-review unsupported-consumer gaps. Cleanup may
 remove the smoke root while retaining this sanitized checkpoint. Delete the
 checkpoint family only after its issue comment is confirmed posted.
 

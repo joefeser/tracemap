@@ -937,6 +937,17 @@ rules:
       - An omission gap describes vault packaging limits and does not prove terminal context, runtime behavior, or source evidence is absent.
       - Diagnostics remain category-based and do not echo unsafe metadata, raw local paths, report internals, snippets, SQL/config values, remotes, or secrets.
 
+  - id: vault-export.gap.access-evidence-consumer-unsupported.v1
+    name: Vault export Access evidence consumer gap
+    description: Records when Microsoft Access facts are present in a combined index but vault export has no dedicated Access count, identity, or flow projection.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AccessEvidenceConsumerUnsupported
+    limitations:
+      - The gap preserves bounded supporting Access fact IDs but does not convert catalog counts or coverage gaps into Access identity, navigation, flow, runtime, or impact conclusions.
+      - It does not prove Access evidence is absent, that a database object exists or executes, or that a change is safe or approved.
+      - Supporting IDs are stable TraceMap identifiers; raw database names, paths, SQL, connections, VBA, macro bodies, expressions, and protected material are not rendered.
+
   - id: public.demo.summary.v1
     name: Public demo summary section
     description: Records public demo workflow section status, coverage labels, artifact references, and deterministic counts produced by checked-in validation scripts.

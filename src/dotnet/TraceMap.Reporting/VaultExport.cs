@@ -130,7 +130,8 @@ public sealed record VaultGraphGap(
     string EvidenceTier,
     string Message,
     string? SourceScope,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations,
+    IReadOnlyList<string>? SupportingFactIds = null);
 
 public sealed record VaultGraphLimitation(
     string Id,
@@ -163,6 +164,7 @@ public static class VaultExporter
     private const string UnsafeIdComponentRuleId = "vault-export.gap.unsafe-id-component-omitted.v1";
     private const string PropertyFlowTerminalContextRuleId = "vault-export.graph.property-flow-terminal-context.v1";
     private const string TerminalContextOmittedRuleId = "vault-export.gap.terminal-context-omitted.v1";
+    private const string AccessEvidenceConsumerUnsupportedRuleId = "vault-export.gap.access-evidence-consumer-unsupported.v1";
     private const string GeneratedFileStaleRuleId = "vault-export.validation.generated-file-stale.v1";
     private const string UserFileCollisionRuleId = "vault-export.validation.user-file-collision.v1";
     private const string UnsafeRejectedRuleId = "vault-export.validation.unsafe-value-rejected.v1";
@@ -565,6 +567,24 @@ public static class VaultExporter
                     string.IsNullOrWhiteSpace(gap.EvidenceTier) ? EvidenceTiers.Tier4Unknown : gap.EvidenceTier,
                     SafeDiagnosticMessage(gap.Message),
                     gap.SourceIndexId));
+            }
+
+            var accessEvidence = await ReleaseReviewReporter.ReadAccessEvidencePresenceAsync(
+                options.CombinedIndexPath,
+                "combined",
+                cancellationToken);
+            if (accessEvidence.FactCount > 0)
+            {
+                gaps.Add(new VaultGraphGap(
+                    $"gap:{Hash(string.Join('\u001f', ["gap/v1", "access-evidence-consumer", "hidden", "AccessEvidenceConsumerUnsupported", AccessEvidenceConsumerUnsupportedRuleId, EvidenceTiers.Tier4Unknown]), IdHashLength)}",
+                    "hidden",
+                    "AccessEvidenceConsumerUnsupported",
+                    AccessEvidenceConsumerUnsupportedRuleId,
+                    EvidenceTiers.Tier4Unknown,
+                    "Microsoft Access facts are present, but vault export has no dedicated Access evidence projection; source provenance remains available and no Access absence or behavior conclusion is made.",
+                    null,
+                    ["Count-only and gap evidence is not converted into Access identity or flow nodes."],
+                    accessEvidence.SupportingFactIds));
             }
         }
 
@@ -1482,7 +1502,7 @@ public static class VaultExporter
                 continue;
             }
 
-            nodes.Add(new VaultGraphNode(id, "gap", gap.ClaimLevel, gap.Classification, null, null, gap.SourceScope, null, null, null, null, null, [], [gap.RuleId], [gap.EvidenceTier], [], [], gap.Limitations, $"gaps/{Slug(id)}.md"));
+            nodes.Add(new VaultGraphNode(id, "gap", gap.ClaimLevel, gap.Classification, null, null, gap.SourceScope, null, null, null, null, null, [], [gap.RuleId], [gap.EvidenceTier], gap.SupportingFactIds ?? [], [], gap.Limitations, $"gaps/{Slug(id)}.md"));
         }
 
         foreach (var limitation in limitations)
