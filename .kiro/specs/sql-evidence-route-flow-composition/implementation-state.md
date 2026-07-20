@@ -1,6 +1,6 @@
 # SQL Evidence Route-Flow Composition Implementation State
 
-Status: targets-a-b-merged-closeout-complete-awaiting-pr-review
+Status: implemented-merged-and-promoted-to-main
 Implementation branch: `codex/sql-runway-acceptance-status-closeout`
 Target base: `dev`
 Public claim level: static evidence packet

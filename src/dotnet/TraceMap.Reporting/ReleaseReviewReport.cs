@@ -55,6 +55,7 @@ public sealed record ReleaseReviewDocument(
     ReleaseReviewSection ApiDtoChanges,
     ReleaseReviewSection SqlSchemaImpact,
     ReleaseReviewSection SqlEvidence,
+    ReleaseReviewSection AccessEvidence,
     ReleaseReviewSection PackageImpact,
     ReleaseReviewSection PathContext,
     ReleaseReviewSection ReverseContext,
@@ -121,6 +122,7 @@ public sealed record ReleaseReviewSummary(
     int ApiDtoFindingCount,
     int SqlSchemaFindingCount,
     int SqlEvidenceFindingCount,
+    int AccessEvidenceFindingCount,
     int PackageFindingCount,
     int PathFindingCount,
     int ReverseFindingCount,
@@ -229,7 +231,7 @@ public static class ReleaseReviewClassifications
 public static class ReleaseReviewReporter
 {
     private const string ReportType = "release-review";
-    private const string Version = "1.0";
+    private const string Version = "1.1";
     private const string Algorithm = "release-review-composition";
     private const string AlgorithmVersion = "1.0";
     private const string RollupRuleId = "release.review.rollup.v1";
@@ -266,6 +268,7 @@ public static class ReleaseReviewReporter
         "api-dto",
         "sql-schema",
         "sql-evidence",
+        "access-evidence",
         "packages",
         "paths",
         "reverse",
@@ -392,24 +395,6 @@ public static class ReleaseReviewReporter
         var mode = beforeInfo.Kind == "combined" ? "ReleaseReviewCombinedV1" : "ReleaseReviewSingleV1";
         var gaps = new List<ReleaseReviewGap>();
         gaps.AddRange(SourceIdentityAndCoverageGaps(beforeInfo.Snapshot, afterInfo.Snapshot));
-        var beforeAccess = await ReadAccessEvidencePresenceAsync(options.BeforePath, beforeInfo.Kind, cancellationToken);
-        var afterAccess = await ReadAccessEvidencePresenceAsync(options.AfterPath, afterInfo.Kind, cancellationToken);
-        if (beforeAccess.FactCount > 0 || afterAccess.FactCount > 0)
-        {
-            gaps.Add(Gap(
-                "access-evidence-consumer",
-                "AccessEvidenceConsumerUnsupported",
-                "accessEvidence",
-                null,
-                SectionRuleId,
-                ReleaseReviewClassifications.PartialAnalysis,
-                "Microsoft Access facts are present, but release-review has no dedicated Access comparison section; source provenance remains available and no Access absence or change conclusion is made.",
-                supportingFactIds: beforeAccess.SupportingFactIds.Concat(afterAccess.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).Take(24).ToArray(),
-                metadata: CombinedReportHelpers.SortedMetadata([
-                    Pair("beforeAccessFactCount", beforeAccess.FactCount.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                    Pair("afterAccessFactCount", afterAccess.FactCount.ToString(System.Globalization.CultureInfo.InvariantCulture))
-                ])));
-        }
         gaps.AddRange(ignoredSelectors.Select((message, index) => Gap(
             "selector",
             "SelectorIgnored",
@@ -460,11 +445,18 @@ public static class ReleaseReviewReporter
             requested: scopes.Contains("api-dto", StringComparer.Ordinal));
         var sqlSchemaImpact = BuildSqlSchemaSection(options, scopes);
         var sqlEvidence = await BuildSqlEvidenceSectionAsync(options, scopes, afterInfo.Kind, cancellationToken);
+        var accessEvidence = await AccessDesignReviewComposer.BuildSectionAsync(
+            options.AfterPath,
+            afterInfo.Kind,
+            ScopeEnabled(scopes, "access-evidence"),
+            options.Source,
+            cancellationToken);
         var packageImpact = BuildPackageSection(options, scopes, topChangedSurfaces);
         gaps.AddRange(contractImpact.Gaps);
         gaps.AddRange(apiDtoChanges.Gaps);
         gaps.AddRange(sqlSchemaImpact.Gaps);
         gaps.AddRange(sqlEvidence.Gaps);
+        gaps.AddRange(accessEvidence.Gaps);
         gaps.AddRange(packageImpact.Gaps);
 
         var allFindings = new[]
@@ -474,6 +466,7 @@ public static class ReleaseReviewReporter
                 apiDtoChanges,
                 sqlSchemaImpact,
                 sqlEvidence,
+                accessEvidence,
                 packageImpact,
                 pathContext,
                 reverseContext
@@ -491,6 +484,7 @@ public static class ReleaseReviewReporter
         apiDtoChanges = FilterSectionFindings(apiDtoChanges, cappedFindings);
         sqlSchemaImpact = FilterSectionFindings(sqlSchemaImpact, cappedFindings);
         sqlEvidence = FilterSectionFindings(sqlEvidence, cappedFindings);
+        accessEvidence = FilterSectionFindings(accessEvidence, cappedFindings);
         packageImpact = FilterSectionFindings(packageImpact, cappedFindings);
         pathContext = FilterSectionFindings(pathContext, cappedFindings);
         reverseContext = FilterSectionFindings(reverseContext, cappedFindings);
@@ -505,6 +499,7 @@ public static class ReleaseReviewReporter
         apiDtoChanges = FilterSectionGaps(apiDtoChanges, cappedGaps);
         sqlSchemaImpact = FilterSectionGaps(sqlSchemaImpact, cappedGaps);
         sqlEvidence = FilterSectionGaps(sqlEvidence, cappedGaps);
+        accessEvidence = FilterSectionGaps(accessEvidence, cappedGaps);
         packageImpact = FilterSectionGaps(packageImpact, cappedGaps);
         pathContext = FilterSectionGaps(pathContext, cappedGaps);
         reverseContext = FilterSectionGaps(reverseContext, cappedGaps);
@@ -516,6 +511,7 @@ public static class ReleaseReviewReporter
             apiDtoChanges,
             sqlSchemaImpact,
             sqlEvidence,
+            accessEvidence,
             packageImpact,
             pathContext,
             reverseContext,
@@ -555,6 +551,7 @@ public static class ReleaseReviewReporter
             apiDtoChanges,
             sqlSchemaImpact,
             sqlEvidence,
+            accessEvidence,
             packageImpact,
             pathContext,
             reverseContext,
@@ -1030,6 +1027,7 @@ public static class ReleaseReviewReporter
         ReleaseReviewSection apiDtoChanges,
         ReleaseReviewSection sqlSchemaImpact,
         ReleaseReviewSection sqlEvidence,
+        ReleaseReviewSection accessEvidence,
         ReleaseReviewSection packageImpact,
         ReleaseReviewSection pathContext,
         ReleaseReviewSection reverseContext,
@@ -1043,6 +1041,7 @@ public static class ReleaseReviewReporter
                 apiDtoChanges,
                 sqlSchemaImpact,
                 sqlEvidence,
+                accessEvidence,
                 packageImpact,
                 pathContext,
                 reverseContext
@@ -1076,6 +1075,7 @@ public static class ReleaseReviewReporter
             apiDtoChanges.Findings.Count,
             sqlSchemaImpact.Findings.Count,
             sqlEvidence.Findings.Count,
+            accessEvidence.Findings.Count,
             packageImpact.Findings.Count,
             pathContext.Findings.Count,
             reverseContext.Findings.Count,
@@ -1990,22 +1990,23 @@ public static class ReleaseReviewReporter
     private static void AddChecklistTruncationGapIfNeeded(List<ReleaseReviewGap> gaps, IReadOnlyList<ReleaseReviewFinding> findings, int maxChecklistItems)
     {
         var provisionalSummary = new ReleaseReviewSummary(
-            ReleaseReviewClassifications.NoActionableEvidence,
-            RollupRuleId,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            gaps.Count,
-            false,
-            "Checklist truncation preflight.");
+            RollupClassification: ReleaseReviewClassifications.NoActionableEvidence,
+            RuleId: RollupRuleId,
+            SourceCount: 0,
+            TopChangedSurfaceCount: 0,
+            ContractFindingCount: 0,
+            ApiDtoFindingCount: 0,
+            SqlSchemaFindingCount: 0,
+            SqlEvidenceFindingCount: 0,
+            AccessEvidenceFindingCount: 0,
+            PackageFindingCount: 0,
+            PathFindingCount: 0,
+            ReverseFindingCount: 0,
+            ActionableFindingCount: 0,
+            ReviewFindingCount: 0,
+            GapCount: gaps.Count,
+            Truncated: false,
+            Message: "Checklist truncation preflight.");
         var checklistCount = BuildChecklistItems(provisionalSummary, findings, SortGaps(gaps)).Count;
         if (checklistCount <= maxChecklistItems)
         {
@@ -2356,6 +2357,7 @@ public static class ReleaseReviewReporter
         RenderSection(builder, "API and DTO Changes", report.ApiDtoChanges);
         RenderSection(builder, "SQL and Schema Impact", report.SqlSchemaImpact);
         RenderSection(builder, "SQL Runway Evidence", report.SqlEvidence);
+        RenderSection(builder, "Access Design Evidence", report.AccessEvidence);
         RenderSection(builder, "Package Impact", report.PackageImpact);
         builder.AppendLine("## Path and Reverse Context");
         builder.AppendLine();
