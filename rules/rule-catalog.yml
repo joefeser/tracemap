@@ -1684,6 +1684,7 @@ rules:
       - classification
       - coverage
       - descriptorKind
+      - descriptorOrdinal
       - limitations
       - modelRelationshipRuleId
       - relationshipFamily
@@ -1711,6 +1712,7 @@ rules:
       - AnalysisGap
     limitations:
       - NHibernate mapping evidence is checked-in XML metadata only and does not prove session factory loading, runtime mapping validity, lazy loading, cascade behavior, dirty tracking, query execution, database schema existence, provider compatibility, deployment, or production usage.
+      - AmbiguousLegacyDataModelIdentity owns NHibernate relationship descriptors with multiple deterministic endpoint candidates; no candidate is selected and no relationship fact is emitted for that descriptor.
       - UnsupportedLegacyOrmMappingShape owns recognized NHibernate relationship constructs outside deterministic handling; it is a static coverage gap, not a runtime mapping failure.
       - XML parsing uses the legacy data safe parser bounds and rejects DTDs, external entities, malformed input, oversized input, excessive node count, and excessive depth as reduced-coverage gaps.
       - Safe properties include metadataFormat, modelKind, descriptorRole, stableModelKey, mappingKind, modelRelationshipKind when deterministic, safe display labels or hashes, supportingFactIds, coverageLabel, and limitation codes.

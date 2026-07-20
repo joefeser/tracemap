@@ -113,9 +113,11 @@ public sealed class LegacyDataModelRuleCatalogTests
             "reduced-parser-coverage",
             "unsafe-redacted-endpoint-identity"
         ]);
+        Assert.Contains("      - descriptorOrdinal", relationship, StringComparison.Ordinal);
         Assert.Contains("AmbiguousLegacyDataModelIdentity", RuleBlock(catalog, RuleIds.LegacyDataDbml), StringComparison.Ordinal);
         Assert.Contains("AmbiguousLegacyDataModelIdentity", RuleBlock(catalog, RuleIds.LegacyDataEdmx), StringComparison.Ordinal);
         Assert.Contains("AmbiguousLegacyDataModelIdentity", RuleBlock(catalog, RuleIds.LegacyDataTypedDataSet), StringComparison.Ordinal);
+        Assert.Contains("AmbiguousLegacyDataModelIdentity", RuleBlock(catalog, RuleIds.LegacyDataOrmNHibernate), StringComparison.Ordinal);
         Assert.Contains("UnsupportedLegacyOrmMappingShape", RuleBlock(catalog, RuleIds.LegacyDataOrmNHibernate), StringComparison.Ordinal);
         Assert.Contains("UnsupportedLegacyOrmDescriptor", RuleBlock(catalog, RuleIds.LegacyDataOrmUnsupported), StringComparison.Ordinal);
     }
