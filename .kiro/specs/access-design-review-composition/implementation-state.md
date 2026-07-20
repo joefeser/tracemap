@@ -1,6 +1,6 @@
 # Access Design-Review Composition Implementation State
 
-Status: implemented-reviewed-and-merged-to-dev
+Status: implemented
 
 Branch: `codex/access-design-review-composition`
 
