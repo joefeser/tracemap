@@ -205,6 +205,31 @@ initialization/configuration/staging/commit,
 the bounded incompatible-input fixture, baseline hashing, and boundary cleanup
 each use a closed `fixture-*` failure classification before product scanning.
 
+For an explicitly authorized representative `.accdb` or `.mdb`, use the
+separate committed workflow; never substitute the synthetic harness or an
+agent-authored probe:
+
+```powershell
+.\scripts\access-validation\Invoke-AccessRepresentativeSmoke.ps1 `
+  -AccessCli <durable-tool-root>\tracemap-access.exe `
+  -TraceMapCli <durable-tool-root>\tracemap.exe `
+  -DatabasePath <authorized-local-database> `
+  -ScratchRoot <restricted-disposable-root> `
+  -CheckpointBasePath <durable-sanitized-checkpoint-base> `
+  -InputExplicitlyAuthorized
+```
+
+The representative workflow hashes the original in memory, stream-copies it
+under a generic name into a disposable no-remote Git repository, scans two
+sequential and two concurrent working copies, validates standard artifacts and
+the report/combine/docs/vault/release-review contracts, actively observes the
+Access process for any visible surface during every scan, validates manifest
+and per-fact rule/evidence/commit/extractor provenance, and persists only
+allowlisted booleans, counts, labels, and gaps. It never records the input path,
+name, hash, object identities, SQL, VBA, macro bodies, expressions, connections,
+or exception text in its checkpoint. Raw scratch remains disposable; retain the
+sanitized checkpoint family until its issue result is confirmed posted.
+
 The repository CI runs the existing .NET, TypeScript, Python, JVM, and Swift
 test suites, validates one real output per adapter, and combines all five
 indexes. Local environments with only Apple Command Line Tools may build and

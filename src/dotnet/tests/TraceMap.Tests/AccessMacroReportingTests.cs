@@ -269,6 +269,36 @@ public sealed class AccessMacroReportingTests
         Assert.Contains("OriginalUnchanged = $true", script, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Representative_smoke_is_local_only_count_only_and_durably_checkpointed()
+    {
+        var script = File.ReadAllText(Path.Combine(
+            FindRepoRoot(), "scripts", "access-validation", "Invoke-AccessRepresentativeSmoke.ps1"));
+
+        Assert.Contains("[switch]$InputExplicitlyAuthorized", script, StringComparison.Ordinal);
+        Assert.Contains("tracemap.access-phase9-representative-checkpoint.v1", script, StringComparison.Ordinal);
+        Assert.Contains("$sequencePath = \"$CheckpointBasePath.$($checkpoint.checkpointSequence)\"", script, StringComparison.Ordinal);
+        Assert.Contains("Wait-AccessScanJobs", script, StringComparison.Ordinal);
+        Assert.Contains("Test-AccessSurfaceVisible", script, StringComparison.Ordinal);
+        Assert.Contains("$manifest.commitSha -ne $disposableCommit", script, StringComparison.Ordinal);
+        Assert.Contains("$_.evidence.extractorVersion", script, StringComparison.Ordinal);
+        Assert.Contains("git init -b access-representative", script, StringComparison.Ordinal);
+        Assert.Contains("if (@(& git remote).Count -ne 0)", script, StringComparison.Ordinal);
+        Assert.Contains("rowDataReadFalse", script, StringComparison.Ordinal);
+        Assert.Contains("executionPerformedFalse", script, StringComparison.Ordinal);
+        Assert.Contains("uiIdentityFactsZero", script, StringComparison.Ordinal);
+        Assert.Contains("vbaIdentityFlowFactsZero", script, StringComparison.Ordinal);
+        Assert.Contains("macroIdentityFactsZero", script, StringComparison.Ordinal);
+        Assert.Contains("AccessEvidenceConsumerUnsupported", script, StringComparison.Ordinal);
+        Assert.Contains("protectedOutputMatchCount", script, StringComparison.Ordinal);
+        Assert.Contains("originalUnchanged", script, StringComparison.Ordinal);
+        Assert.Contains("phase95Representative = \"completed\"", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("RunMacro", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("OpenRecordset", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("OpenQuery", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("SaveAsText", script, StringComparison.Ordinal);
+    }
+
     private static async Task<(ScanResult Scan, string Output)> BuildScanAsync(string root)
     {
         var databasePath = Path.Combine(root, "fixture.accdb");

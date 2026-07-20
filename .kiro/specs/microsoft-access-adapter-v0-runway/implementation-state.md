@@ -1,11 +1,12 @@
 # Microsoft Access Adapter v0 Runway Implementation State
 
-Status: Phase 0 through Phase 8 merged; Phase 9 platform-neutral work is pushed,
-but its Windows product gate stopped at the authorized count-only boundary
+Status: Phase 0 through Phase 9 implementation and synthetic Windows validation
+are complete; Phase 9.5 representative validation awaits one committed-harness
+rerun
 
 Spec branch: `codex/microsoft-access-adapter-runway`
 
-Implementation branch: `codex/microsoft-access-adapter-v0-foundation`
+Implementation branch: `codex/microsoft-access-adapter-v0-macro-reporting-stacked`
 
 Phase 7 branch: `codex/microsoft-access-adapter-v0-ui-bindings`
 
@@ -33,9 +34,10 @@ credential, private server, query SQL, or local absolute path in the evidence
 bundle.
 
 That feasibility evidence informed the foundation implementation. The product
-adapter now satisfies the Phase 0 through Phase 6 Git, artifact, rule, safety,
-and validation contracts recorded below; forms/reports, VBA, and macros remain
-later slices.
+adapter now satisfies the Phase 0 through Phase 9 Git, artifact, rule, safety,
+count-only UI/VBA/macro, consumer-gap, and synthetic validation contracts
+recorded below. Representative validation remains pending; UI/VBA/macro
+identities and bodies remain explicitly unavailable rather than inferred.
 
 ## Recorded Decisions
 
@@ -605,14 +607,42 @@ records a structured `AccessEvidenceConsumerUnsupported` gap under
 `vault-export.gap.access-evidence-consumer-unsupported.v1` with bounded
 supporting combined fact IDs. It does not invent Access identities or flows.
 
+The corrected Windows run at `4d834ab12490354f69f4a8b90f3c1467dd54570c`
+completed through immutable checkpoint sequence 15. Product, report, combine,
+evidence-doc, vault, release-review, determinism, canary, baseline,
+protected-output, process, network, cleanup, and worktree gates all passed. The
+primary result and its separate durable cleanup acknowledgment are recorded on
+issue #490. The run observed the documented named-macro count, emitted zero
+macro identities, and safely generated the approved embedded event marker with
+no body; task 9.0 is complete. Named/data macro creation and every macro body or
+command read remain deferred because no bounded documented generator/extractor
+path was approved.
+
+The first issue #491 attempt recorded explicit authorization for an `.mdb` but
+stopped at `input-authorization` before copying the database or launching
+Access. Repository review found that task 9.5 had only prose authorization and
+no committed executable representative workflow. The branch now includes
+`Invoke-AccessRepresentativeSmoke.ps1`: it requires an explicit authorization
+switch, streams the input to a generic path in a disposable no-remote Git
+repository, runs sequential/concurrent product scans and all downstream
+consumers, enforces count-only/non-execution facts, searches outputs for the
+original path/name, and writes immutable sanitized checkpoints containing only
+the authorized result fields. It also actively monitors every scan for a visible
+Access surface and validates manifest/fact commit, rule, tier, and extractor
+provenance. The harness contract passed 9 focused tests, the full solution test
+run, a zero-error solution build, seven artifact-validator tests, the
+private-path guard, and `git diff --check` on macOS. The known SQLite package
+advisory warnings remain unchanged. Task 9.5 remains unchecked until this
+committed workflow produces a sanitized Windows result.
+
 The Phase 9 generator layer adds a second form button classified as
 `[Embedded Macro]` with a protected caption marker, but deliberately supplies
 no body. Named and data macro fixture creation remains deferred to the Windows
 probe because no documented, bounded generator path was established locally.
-Task 9.0 therefore remains unchecked. PowerShell is not installed on the macOS
-host (`brew info powershell` reports “Not installed”), so script parsing and
-Access behavior must be validated in issue #490 before this fixture claim can
-advance.
+Task 9.0 is complete at the approved count-only/embedded-marker boundary.
+PowerShell is not installed on the macOS host (`brew info powershell` reports
+“Not installed”), so the new representative script still requires syntax and
+Access behavior validation on issue #491.
 
 ## Foundation Validation
 
@@ -728,5 +758,7 @@ PR review-loop follow-up on PR #485 patched four current-head findings:
 - Effective permission evidence.
 - Runtime execution and row/data analysis, which are outside TraceMap's static
   evidence model.
-- Route-flow, property-flow, release-review, vault, and site composition.
+- Dedicated Access route-flow, property-flow, vault, and site projections;
+  vault and release-review currently preserve explicit unsupported-consumer
+  gaps instead of inventing Access comparisons.
 - Public promotion or customer claims.
