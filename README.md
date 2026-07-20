@@ -119,6 +119,38 @@ dotnet run --project src/dotnet/TraceMap.Cli -- export --index .tracemap-combine
 
 `tracemap route-flow` writes `route-flow-report.md` and `route-flow-report.json` for directory outputs. It is a route-centered static evidence view over a combined index: it preserves rule IDs, evidence tiers, source labels, commit SHAs, file spans, supporting fact/edge IDs, coverage labels, gaps, and limitations. The report includes additive context groups that summarize already-selected method, service, repository, query, data-surface, dependency, value-origin, and gap rows without creating new runtime conclusions. It does not prove runtime execution, dependency-injection target selection, SQL execution, traffic, auth behavior, deployment, or production use.
 
+### SQL evidence runway
+
+The .NET scanner includes a PostgreSQL-first static SQL evidence runway for
+execution-context declarations and transitions, protected-material candidates,
+permission prerequisites, archive-link boundaries, and explicit coverage gaps.
+Supported scans also write `sql-runbook.md` and `sql-runbook.json`, which
+project only allowlisted categorical evidence and provenance:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- scan \
+  --repo samples/sql-operator-runbook \
+  --out .tracemap-sql-runbook
+```
+
+Release review can compose the same evidence into its separate `SQL Runway
+Evidence` section. Route flow can add a source-scoped `sql-context`
+group only when the selected static route already reaches a SQL-facing surface.
+Both paths preserve rule IDs, evidence tiers, coverage labels, file spans,
+commit SHA, extractor provenance, supporting fact IDs, limitations, and
+structured gaps.
+
+This evidence does not execute SQL, connect to a database, prove runtime
+reachability, observe production database state, establish effective
+permissions, validate rollback, approve a release, or conclude that a script is
+safe to run. Raw SQL, credentials, connection strings, private infrastructure
+identities, local paths, and scheduled command bodies are not rendered. See
+[SQL execution context](docs/SQL_EXECUTION_CONTEXT.md), [SQL secret
+safety](docs/SQL_SECRET_SAFETY.md), [PostgreSQL permission
+evidence](docs/POSTGRES_PERMISSION_EVIDENCE.md), [PostgreSQL archive-link
+evidence](docs/POSTGRES_ARCHIVE_LINK_EVIDENCE.md), and the [SQL operator
+runbook packet](docs/SQL_OPERATOR_RUNBOOK_PACKET.md).
+
 The combined dependency report writes `dependency-report.md` and `dependency-report.json` when `--out` is a directory. It summarizes source coverage, endpoint alignment, HTTP/SQL/package/config surfaces, dependency edges, needs-review rows, known gaps, and static-analysis limitations without mutating the combined database.
 
 Summarize a portfolio of single-language and/or combined indexes:
