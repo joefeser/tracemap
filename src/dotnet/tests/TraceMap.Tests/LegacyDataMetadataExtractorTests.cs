@@ -1514,12 +1514,17 @@ public sealed class LegacyDataMetadataExtractorTests
                 <property name="Status" column="Status" not-null="true" />
                 <property name="Nickname" column="Nickname" not-null="FALSE" />
                 <many-to-one name="Account" class="Account" column="AccountId" />
+                <one-to-one name="Profile" class="CustomerProfile" />
                 <set name="Orders">
                   <key>
                     <column name="CustomerId" />
                   </key>
                   <one-to-many class="Order" />
                 </set>
+                <bag name="Tags">
+                  <key column="CustomerId" />
+                  <many-to-many class="Tag" />
+                </bag>
               </class>
             </hibernate-mapping>
             """);
@@ -1573,9 +1578,82 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.Equal("Order", orders.Properties.GetValueOrDefault("targetEndpointName"));
         Assert.Equal("CustomerId", orders.Properties.GetValueOrDefault("columnName"));
 
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("mappingKind") == "one-to-one"
+            && fact.Properties.GetValueOrDefault("targetEndpointName") == "CustomerProfile"
+            && fact.Properties.GetValueOrDefault("relationshipEndpointCoverage") == "full");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("mappingKind") == "bag"
+            && fact.Properties.GetValueOrDefault("targetEndpointName") == "Tag"
+            && fact.Properties.GetValueOrDefault("columnName") == "CustomerId"
+            && fact.Properties.GetValueOrDefault("relationshipEndpointCoverage") == "full");
+
         Assert.Equal(
             result.Facts.Where(fact => fact.RuleId == RuleIds.LegacyDataOrmNHibernate).Select(fact => fact.FactId).Order(StringComparer.Ordinal),
             second.Facts.Where(fact => fact.RuleId == RuleIds.LegacyDataOrmNHibernate).Select(fact => fact.FactId).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Scan_classifies_nhibernate_missing_and_ambiguous_relationship_endpoints_without_invention()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Relationships.hbm.xml"), """
+            <hibernate-mapping xmlns="urn:nhibernate-mapping-2.2">
+              <class name="Customer" table="Customers">
+                <many-to-one name="MissingTarget" />
+                <set name="AmbiguousCollection">
+                  <one-to-many class="Order" />
+                  <many-to-many class="Tag" />
+                </set>
+              </class>
+              <class table="Unidentified">
+                <many-to-one name="KnownTarget" class="Account" />
+                <one-to-one name="MissingBoth" />
+              </class>
+            </hibernate-mapping>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var repeated = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out-repeat")));
+
+        var missingTarget = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("associationName") == "MissingTarget");
+        Assert.Equal("reduced", missingTarget.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("unidirectional", missingTarget.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+        Assert.Equal("missing-target-endpoint", missingTarget.Properties.GetValueOrDefault("limitations"));
+        Assert.Equal("Customer", missingTarget.Properties.GetValueOrDefault("sourceEndpointName"));
+        Assert.False(missingTarget.Properties.ContainsKey("targetEndpointName"));
+
+        var missingSource = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("associationName") == "KnownTarget");
+        Assert.Equal("reduced", missingSource.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("unidirectional", missingSource.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+        Assert.Equal("missing-source-endpoint", missingSource.Properties.GetValueOrDefault("limitations"));
+        Assert.False(missingSource.Properties.ContainsKey("sourceEndpointName"));
+        Assert.Equal("Account", missingSource.Properties.GetValueOrDefault("targetEndpointName"));
+
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("associationName") is "AmbiguousCollection" or "MissingBoth");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("classification") == "AmbiguousLegacyDataModelIdentity"
+            && fact.Properties.GetValueOrDefault("relationshipFamily") == "nhibernate-hbm"
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "set"
+            && fact.Properties.GetValueOrDefault("safeReasonCode") == "ambiguous-endpoint-candidates");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataModelRelationship
+            && fact.Properties.GetValueOrDefault("classification") == "IncompleteLegacyDataModelRelationship"
+            && fact.Properties.GetValueOrDefault("relationshipFamily") == "nhibernate-hbm"
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "one-to-one"
+            && fact.Properties.GetValueOrDefault("safeReasonCode") == "missing-endpoint");
+
+        Assert.Equal(
+            result.Facts.Where(IsNHibernateRelationshipEvidence).Select(fact => fact.FactId),
+            repeated.Facts.Where(IsNHibernateRelationshipEvidence).Select(fact => fact.FactId));
     }
 
     [Fact]
@@ -1875,6 +1953,7 @@ public sealed class LegacyDataMetadataExtractorTests
             <hibernate-mapping xmlns="urn:nhibernate-mapping-2.2">
               <class name="Server=prod;Password=secret" table="Customers;DROP" catalog="SensitiveCatalog">
                 <id name="Id" column="CustomerId" />
+                <many-to-one name="https://private.example/relation?token=secret" class="Server=remote;Password=secret" column="C:\private\CustomerId" />
                 <property name="TokenSecret" formula="SELECT ApiSecret FROM Customers" />
                 <component name="Address" />
                 <filter name="tenant">TenantSecret = :tenant</filter>
@@ -1900,6 +1979,17 @@ public sealed class LegacyDataMetadataExtractorTests
             && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
             && fact.Properties.GetValueOrDefault("descriptorSource") == "property");
 
+        var relationship = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+            && fact.Properties.GetValueOrDefault("mappingKind") == "many-to-one");
+        Assert.Equal("reduced", relationship.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("full", relationship.Properties.GetValueOrDefault("relationshipEndpointCoverage"));
+        Assert.Equal("unsafe-redacted-endpoint-identity", relationship.Properties.GetValueOrDefault("limitations"));
+        Assert.True(relationship.Properties.ContainsKey("associationHash"));
+        Assert.True(relationship.Properties.ContainsKey("sourceEndpointHash"));
+        Assert.True(relationship.Properties.ContainsKey("targetEndpointHash"));
+        Assert.True(relationship.Properties.ContainsKey("columnHash"));
+
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataOrmNHibernate
             && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmMappingShape");
@@ -1913,6 +2003,10 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.DoesNotContain("ApiSecret", allProperties);
         Assert.DoesNotContain("TenantSecret", allProperties);
         Assert.DoesNotContain("Password=secret", allProperties);
+        Assert.DoesNotContain("private.example", report);
+        Assert.DoesNotContain("private.example", allProperties);
+        Assert.DoesNotContain("C:\\private", report);
+        Assert.DoesNotContain("C:\\private", allProperties);
     }
 
     [Fact]
@@ -1944,6 +2038,14 @@ public sealed class LegacyDataMetadataExtractorTests
                 || fact.RuleId == RuleIds.LegacyDataModelRelationship)
             && (fact.Properties.GetValueOrDefault("modelRelationshipKind") == "relationship"
                 || fact.Properties.GetValueOrDefault("relationshipFamily") == "typed-dataset");
+    }
+
+    private static bool IsNHibernateRelationshipEvidence(CodeFact fact)
+    {
+        return (fact.RuleId == RuleIds.LegacyDataOrmNHibernate
+                || fact.RuleId == RuleIds.LegacyDataModelRelationship)
+            && (fact.Properties.GetValueOrDefault("modelRelationshipKind") == "relationship"
+                || fact.Properties.GetValueOrDefault("relationshipFamily") == "nhibernate-hbm");
     }
 
     private static async Task<string> ReadAllPropertiesAsync(string sqlitePath)
