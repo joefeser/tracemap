@@ -57,6 +57,7 @@ if (-not [string]::IsNullOrWhiteSpace($Phase9CheckpointPath)) {
         phase9ConsumerContracts = "boundary-stop"
         stopStage = "generation"
         failureClassification = "none"
+        checkpointSequence = 0
         namedFixtureShapeAvailable = $false
         namedMacroCountObserved = $false
         productContractCorrect = $false
@@ -76,16 +77,32 @@ if (-not [string]::IsNullOrWhiteSpace($Phase9CheckpointPath)) {
 
 function Save-Phase9Checkpoint {
     if ($null -eq $phase9Checkpoint) { return }
+    $phase9Checkpoint.checkpointSequence++
     $directory = Split-Path -Parent $Phase9CheckpointPath
     New-Item -ItemType Directory -Path $directory -Force | Out-Null
-    $temporary = "$Phase9CheckpointPath.tmp"
     $checkpointJson = $phase9Checkpoint | ConvertTo-Json -Compress
-    [IO.File]::WriteAllText($temporary, $checkpointJson + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
-    if (Test-Path $Phase9CheckpointPath -PathType Leaf) {
-        [IO.File]::Replace($temporary, $Phase9CheckpointPath, $null)
+    $encoding = New-Object Text.UTF8Encoding($false)
+
+    # Immutable sequence snapshots are authoritative. A best-effort latest-file
+    # replacement cannot erase the last proven gate on filesystems where
+    # File.Replace is unavailable or transiently blocked.
+    $sequencePath = "$Phase9CheckpointPath.$($phase9Checkpoint.checkpointSequence)"
+    $sequenceTemporary = "$sequencePath.tmp"
+    [IO.File]::WriteAllText($sequenceTemporary, $checkpointJson + [Environment]::NewLine, $encoding)
+    [IO.File]::Move($sequenceTemporary, $sequencePath)
+
+    $latestTemporary = "$Phase9CheckpointPath.tmp"
+    [IO.File]::WriteAllText($latestTemporary, $checkpointJson + [Environment]::NewLine, $encoding)
+    try {
+        if (Test-Path $Phase9CheckpointPath -PathType Leaf) {
+            [IO.File]::Replace($latestTemporary, $Phase9CheckpointPath, $null)
+        }
+        else {
+            [IO.File]::Move($latestTemporary, $Phase9CheckpointPath)
+        }
     }
-    else {
-        [IO.File]::Move($temporary, $Phase9CheckpointPath)
+    catch {
+        Remove-Item $latestTemporary -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -97,7 +114,7 @@ function Set-Phase9Stage([string]$Stage) {
 
 Save-Phase9Checkpoint
 
-function Stop-Phase9Preflight([string]$Classification, [string]$Message) {
+function Stop-Phase9([string]$Classification, [string]$Message) {
     if ($null -ne $phase9Checkpoint) {
         $phase9Checkpoint.failureClassification = $Classification
         Save-Phase9Checkpoint
@@ -110,13 +127,14 @@ $toolPaths = [ordered]@{
     traceMapCli = [IO.Path]::GetFullPath($TraceMapCli)
     generator = [IO.Path]::GetFullPath($Generator)
     harness = [IO.Path]::GetFullPath($PSCommandPath)
+    powerShellHost = [IO.Path]::GetFullPath((Get-Process -Id $PID).Path)
 }
 foreach ($tool in $toolPaths.GetEnumerator()) {
     if (-not (Test-Path $tool.Value -PathType Leaf)) {
-        Stop-Phase9Preflight "tool-missing" "required validation tool is missing"
+        Stop-Phase9 "tool-missing" "required validation tool is missing"
     }
     if ($tool.Value.StartsWith($SmokeRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-        Stop-Phase9Preflight "tool-inside-disposable-root" "validation tools must be staged outside the disposable smoke root"
+        Stop-Phase9 "tool-inside-disposable-root" "validation tools must be staged outside the disposable smoke root"
     }
 }
 $AccessCli = $toolPaths.accessCli
@@ -148,43 +166,89 @@ $releaseReviewOutput = Join-Path $SmokeRoot "release-review"
 Remove-Item $SmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path (Split-Path -Parent $database) -Force | Out-Null
 try {
-    & $Generator -DatabasePath $database -CanaryPath $canary
+    $generatorArguments = @(
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy", "Bypass",
+        "-Command",
+        '& $env:TRACEMAP_ACCESS_GENERATOR -DatabasePath $env:TRACEMAP_ACCESS_DATABASE -CanaryPath $env:TRACEMAP_ACCESS_CANARY'
+    )
+    $previousGenerator = $env:TRACEMAP_ACCESS_GENERATOR
+    $previousDatabase = $env:TRACEMAP_ACCESS_DATABASE
+    $previousCanary = $env:TRACEMAP_ACCESS_CANARY
+    try {
+        $env:TRACEMAP_ACCESS_GENERATOR = $Generator
+        $env:TRACEMAP_ACCESS_DATABASE = $database
+        $env:TRACEMAP_ACCESS_CANARY = $canary
+        & $toolPaths.powerShellHost @generatorArguments *> $null
+        if ($LASTEXITCODE -ne 0) {
+            Stop-Phase9 "generator-process-failed" "synthetic fixture generator returned a failure"
+        }
+    }
+    finally {
+        $env:TRACEMAP_ACCESS_GENERATOR = $previousGenerator
+        $env:TRACEMAP_ACCESS_DATABASE = $previousDatabase
+        $env:TRACEMAP_ACCESS_CANARY = $previousCanary
+    }
 }
 catch {
-    if ($null -ne $phase9Checkpoint) {
-        $phase9Checkpoint.failureClassification = "generator-process-failed"
-        Save-Phase9Checkpoint
+    if ($null -eq $phase9Checkpoint -or $phase9Checkpoint.failureClassification -eq "none") {
+        Stop-Phase9 "generator-process-failed" "synthetic fixture generation failed"
     }
     throw "synthetic fixture generation failed"
 }
 if (-not (Test-Path $database -PathType Leaf)) {
-    Stop-Phase9Preflight "fixture-database-missing" "synthetic fixture generator produced no database"
+    Stop-Phase9 "fixture-database-missing" "synthetic fixture generator produced no database"
 }
 if (Test-Path $canary) {
-    Stop-Phase9Preflight "generation-canary-fired" "startup canary fired during fixture generation cleanup"
+    Stop-Phase9 "generation-canary-fired" "startup canary fired during fixture generation cleanup"
 }
 if ($null -ne $phase9Checkpoint) {
     $phase9Checkpoint.generationCanariesFalse = $true
+    $phase9Checkpoint.stopStage = "fixture-provenance"
     Save-Phase9Checkpoint
 }
 
 Push-Location $repo
 try {
-    & git init -b access-smoke | Out-Null
-    & git config user.email "access-smoke@example.invalid"
-    & git config user.name "TraceMap Access Smoke"
-    & git add -- $databaseRelative
-    if (Test-Path $mdb) { & git add -- $mdbRelative }
-    [IO.File]::WriteAllBytes($invalidMdb, [byte[]](1..128))
-    & git add -- $invalidMdbRelative
-    & git commit -m "synthetic Access fixture" | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "fixture Git commit failed" }
+    & git init -b access-smoke *> $null
+    if ($LASTEXITCODE -ne 0) { Stop-Phase9 "fixture-git-init-failed" "fixture provenance initialization failed" }
+    & git config user.email "access-smoke@example.invalid" *> $null
+    if ($LASTEXITCODE -ne 0) { Stop-Phase9 "fixture-git-config-failed" "fixture provenance configuration failed" }
+    & git config user.name "TraceMap Access Smoke" *> $null
+    if ($LASTEXITCODE -ne 0) { Stop-Phase9 "fixture-git-config-failed" "fixture provenance configuration failed" }
+    & git add -- $databaseRelative *> $null
+    if ($LASTEXITCODE -ne 0) { Stop-Phase9 "fixture-git-stage-failed" "fixture provenance staging failed" }
+    if (Test-Path $mdb) {
+        & git add -- $mdbRelative *> $null
+        if ($LASTEXITCODE -ne 0) { Stop-Phase9 "fixture-git-stage-failed" "fixture provenance staging failed" }
+    }
+    try {
+        [IO.File]::WriteAllBytes($invalidMdb, [byte[]](1..128))
+    }
+    catch {
+        Stop-Phase9 "fixture-incompatible-input-failed" "bounded incompatible fixture creation failed"
+    }
+    & git add -- $invalidMdbRelative *> $null
+    if ($LASTEXITCODE -ne 0) { Stop-Phase9 "fixture-git-stage-failed" "fixture provenance staging failed" }
+    & git commit -m "synthetic Access fixture" *> $null
+    if ($LASTEXITCODE -ne 0) { Stop-Phase9 "fixture-git-commit-failed" "fixture provenance commit failed" }
 }
 finally { Pop-Location }
 
-$originalHash = (Get-FileHash $database -Algorithm SHA256).Hash.ToLowerInvariant()
-Remove-Item $external -Force
-Remove-Item $canary -Force -ErrorAction SilentlyContinue
+try {
+    $originalHash = (Get-FileHash $database -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+catch {
+    Stop-Phase9 "fixture-hash-failed" "fixture baseline hash failed"
+}
+try {
+    Remove-Item $external -Force -ErrorAction Stop
+    Remove-Item $canary -Force -ErrorAction SilentlyContinue
+}
+catch {
+    Stop-Phase9 "fixture-boundary-cleanup-failed" "fixture boundary cleanup failed"
+}
 
 Set-Phase9Stage "product-scan"
 & $AccessCli scan --repo $repo --database ($databaseRelative.Replace('\', '/')) --out $outA --timeout-seconds 120
