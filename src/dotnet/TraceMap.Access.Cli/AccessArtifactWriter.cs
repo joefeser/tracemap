@@ -82,10 +82,10 @@ public static class AccessArtifactWriter
         lines.Add("## Access Design Evidence Summary");
         lines.Add("");
         lines.Add("- Public claim level: `hidden` (promotion requires a separate public-safe fixture and claim review).");
-        lines.Add($"- Schema/relationship facts: {CountByRules(result, RuleIds.LegacyAccessSchema)}");
-        lines.Add($"- Saved-query/external-boundary facts: {CountByRules(result, RuleIds.LegacyAccessQuery, RuleIds.LegacyAccessExternalLink)}");
-        lines.Add($"- Form/report/control/binding facts: {CountByRules(result, RuleIds.LegacyAccessUiSurface, RuleIds.LegacyAccessBinding)}");
-        lines.Add($"- VBA/event/navigation facts: {CountByRules(result, RuleIds.LegacyAccessVba, RuleIds.LegacyAccessEventBinding)}");
+        lines.Add($"- Schema/relationship facts: {CountEvidenceByRules(result, RuleIds.LegacyAccessSchema)}");
+        lines.Add($"- Saved-query/external-boundary facts: {CountEvidenceByRules(result, RuleIds.LegacyAccessQuery, RuleIds.LegacyAccessExternalLink)}");
+        lines.Add($"- Form/report/control/binding facts: {CountEvidenceByRules(result, RuleIds.LegacyAccessUiSurface, RuleIds.LegacyAccessBinding)}");
+        lines.Add($"- VBA/event/navigation facts: {CountEvidenceByRules(result, RuleIds.LegacyAccessVba, RuleIds.LegacyAccessEventBinding)}");
         lines.Add($"- Macro inventory facts: {result.Facts.Count(fact => fact.FactType == FactTypes.AccessMacroDeclared)}");
         lines.Add($"- Named macro catalog count: `{Inline(accessMetadata?.Properties.GetValueOrDefault("namedMacroCount") ?? "unavailable")}`");
         lines.Add($"- Macro coverage: `{Inline(accessMetadata?.Properties.GetValueOrDefault("macroCoverage") ?? "unavailable")}`");
@@ -135,7 +135,7 @@ public static class AccessArtifactWriter
 
     private static string Inline(string value) => value.Replace("`", "'", StringComparison.Ordinal).Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
 
-    private static int CountByRules(ScanResult result, params string[] ruleIds) =>
+    private static int CountEvidenceByRules(ScanResult result, params string[] ruleIds) =>
         result.Facts.Count(fact => fact.FactType != FactTypes.AnalysisGap
             && ruleIds.Contains(fact.RuleId, StringComparer.Ordinal));
 }
