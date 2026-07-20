@@ -48,12 +48,22 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["factId", "factType", "ruleId", "evidenceTier", "evidence", "properties"],
+        "required": ["factId", "repo", "commitSha", "factType", "ruleId", "evidenceTier", "lineSpan", "evidence", "properties"],
         "properties": {
           "factId": { "type": "string" },
+          "repo": { "type": "string", "minLength": 1 },
+          "commitSha": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
           "factType": { "type": "string", "pattern": "^Base44" },
           "ruleId": { "type": "string", "pattern": "^base44\\." },
           "evidenceTier": { "enum": ["Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual", "Tier4Unknown"] },
+          "lineSpan": {
+            "type": "object",
+            "required": ["startLine", "endLine"],
+            "properties": {
+              "startLine": { "type": "integer", "minimum": 1 },
+              "endLine": { "type": "integer", "minimum": 1 }
+            }
+          },
           "evidence": {
             "type": "object",
             "required": ["filePath", "startLine", "endLine", "extractorId", "extractorVersion"],

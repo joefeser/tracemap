@@ -32,7 +32,7 @@ The additive JavaScript/JSX/TypeScript/TSX `base44.*.v1` rules cover:
 - SQL migration surface hashes and statement kinds; and
 - customer-authored function/entity boundaries.
 
-Facts contain rule, evidence tier, extractor identity/version, relative path, line span, source-file digest, and snippet digest. They never store source snippets, environment values, URL paths/query strings, tokens, or cookies.
+Facts contain repository and commit identity, rule, evidence tier, extractor identity/version, relative path, a first-class line span, source-file digest, and snippet digest. They never store source snippets, environment values, URL paths/query strings, tokens, or cookies.
 
 ## Consumer contract
 

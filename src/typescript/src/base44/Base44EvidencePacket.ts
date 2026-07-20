@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { CodeFact, ScanOptions, ScanResult } from "../facts/Models";
 import { scan } from "../scan/ScanEngine";
 
@@ -38,11 +39,14 @@ export interface Base44EvidencePacket {
 
 export interface Base44PacketFact {
   factId: string;
+  repo: string;
+  commitSha: string;
   factType: string;
   ruleId: string;
   evidenceTier: string;
   targetSymbol: string | null;
   contractElement: string | null;
+  lineSpan: { startLine: number; endLine: number };
   evidence: CodeFact["evidence"];
   properties: Record<string, string>;
 }
@@ -52,6 +56,12 @@ export interface Base44Diff {
   before: Base44EvidencePacket["source"] & { coverageLabel: string };
   after: Base44EvidencePacket["source"] & { coverageLabel: string };
   coverageReduced: boolean;
+  coverageEvidence: {
+    beforeAnalysisLevel: string;
+    afterAnalysisLevel: string;
+    addedKnownGaps: string[];
+    removedKnownGaps: string[];
+  };
   added: Base44PacketFact[];
   removed: Base44PacketFact[];
   unchangedCount: number;
@@ -109,11 +119,18 @@ export async function diffBase44Evidence(beforePath: string, afterPath: string, 
   const added = [...afterByKey.entries()].filter(([key]) => !beforeByKey.has(key)).map(([, fact]) => fact);
   const removed = [...beforeByKey.entries()].filter(([key]) => !afterByKey.has(key)).map(([, fact]) => fact);
   const coverageReduced = after.coverage.knownGaps.length > before.coverage.knownGaps.length || tierRank(after.coverage.analysisLevel) > tierRank(before.coverage.analysisLevel);
+  const coverageEvidence = {
+    beforeAnalysisLevel: before.coverage.analysisLevel,
+    afterAnalysisLevel: after.coverage.analysisLevel,
+    addedKnownGaps: after.coverage.knownGaps.filter((gap) => !before.coverage.knownGaps.includes(gap)).sort(),
+    removedKnownGaps: before.coverage.knownGaps.filter((gap) => !after.coverage.knownGaps.includes(gap)).sort()
+  };
   const diff: Base44Diff = {
     schemaVersion: "tracemap.base44.static-diff.v1",
     before: { ...before.source, coverageLabel: before.coverage.label },
     after: { ...after.source, coverageLabel: after.coverage.label },
     coverageReduced,
+    coverageEvidence,
     added,
     removed,
     unchangedCount: [...afterByKey.keys()].filter((key) => beforeByKey.has(key)).length,
@@ -124,18 +141,22 @@ export async function diffBase44Evidence(beforePath: string, afterPath: string, 
   };
   await fs.mkdir(path.dirname(path.resolve(outputPath)), { recursive: true });
   await fs.writeFile(outputPath, stableJson(diff), "utf8");
-  await fs.writeFile(outputPath.replace(/\.json$/i, ".md"), diffMarkdown(diff), "utf8");
+  const markdownPath = outputPath.toLowerCase().endsWith(".json") ? outputPath.replace(/\.json$/i, ".md") : `${outputPath}.md`;
+  await fs.writeFile(markdownPath, diffMarkdown(diff), "utf8");
   return diff;
 }
 
 function packetFact(fact: CodeFact): Base44PacketFact {
   return {
     factId: fact.factId,
+    repo: fact.repo,
+    commitSha: fact.commitSha,
     factType: fact.factType,
     ruleId: fact.ruleId,
     evidenceTier: fact.evidenceTier,
     targetSymbol: fact.targetSymbol,
     contractElement: fact.contractElement,
+    lineSpan: { startLine: fact.evidence.startLine, endLine: fact.evidence.endLine },
     evidence: fact.evidence,
     properties: fact.properties
   };
@@ -148,7 +169,8 @@ async function readPacket(filePath: string): Promise<Base44EvidencePacket> {
 }
 
 function factKey(fact: Base44PacketFact): string {
-  return JSON.stringify([fact.factType, fact.ruleId, fact.evidenceTier, fact.targetSymbol, fact.contractElement, fact.evidence.filePath, fact.evidence.startLine, fact.evidence.endLine, fact.properties]);
+  const sortedProperties = Object.fromEntries(Object.entries(fact.properties).sort(([left], [right]) => left.localeCompare(right)));
+  return JSON.stringify([fact.factType, fact.ruleId, fact.evidenceTier, fact.targetSymbol, fact.contractElement, fact.evidence.filePath, fact.evidence.startLine, fact.evidence.endLine, sortedProperties]);
 }
 
 function packetMarkdown(packet: Base44EvidencePacket): string {
@@ -186,7 +208,7 @@ function packetHtml(packet: Base44EvidencePacket): string {
 }
 
 function diffMarkdown(diff: Base44Diff): string {
-  return `${["# TraceMap Base44 Static Diff", "", `- Before commit: \`${diff.before.commitSha}\``, `- After commit: \`${diff.after.commitSha}\``, `- Coverage reduced: \`${diff.coverageReduced}\``, `- Added facts: ${diff.added.length}`, `- Removed facts: ${diff.removed.length}`, `- Unchanged facts: ${diff.unchangedCount}`, "", ...diff.limitations.map((item) => `- ${item}`), ""].join("\n")}`;
+  return `${["# TraceMap Base44 Static Diff", "", `- Before commit: \`${diff.before.commitSha}\``, `- After commit: \`${diff.after.commitSha}\``, `- Coverage reduced: \`${diff.coverageReduced}\``, `- Before analysis: \`${diff.coverageEvidence.beforeAnalysisLevel}\``, `- After analysis: \`${diff.coverageEvidence.afterAnalysisLevel}\``, `- Added known gaps: ${diff.coverageEvidence.addedKnownGaps.length}`, `- Removed known gaps: ${diff.coverageEvidence.removedKnownGaps.length}`, `- Added facts: ${diff.added.length}`, `- Removed facts: ${diff.removed.length}`, `- Unchanged facts: ${diff.unchangedCount}`, "", ...diff.limitations.map((item) => `- ${item}`), ""].join("\n")}`;
 }
 
 function countFacts(facts: Base44PacketFact[]): Record<string, number> {
@@ -203,4 +225,12 @@ function unique(values: string[]): string[] { return [...new Set(values)].sort()
 function requireSha(value: string, option: string): void { if (!/^[0-9a-f]{64}$/i.test(value)) throw new Error(`${option} must be a 64-character SHA-256`); }
 function tierRank(value: string): number { return value === "Level1SemanticAnalysis" ? 0 : value === "Level1SemanticAnalysisReduced" ? 1 : 2; }
 function escapeHtml(value: string): string { return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char); }
-async function sha256File(filePath: string): Promise<string> { return createHash("sha256").update(await fs.readFile(filePath)).digest("hex"); }
+async function sha256File(filePath: string): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const digest = createHash("sha256");
+    const stream = createReadStream(filePath);
+    stream.on("data", (chunk) => digest.update(chunk));
+    stream.on("end", () => resolve(digest.digest("hex")));
+    stream.on("error", reject);
+  });
+}
