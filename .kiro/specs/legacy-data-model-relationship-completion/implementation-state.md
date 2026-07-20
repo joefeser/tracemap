@@ -1,6 +1,7 @@
 # Legacy Data Model Relationship Completion Implementation State
 
-Status: pr-open-ack-patch-pass
+Status: spec-merged-implementation-ready
+Readiness: first-product-slice-not-started
 Spec branch: `codex/legacy-data-model-relationship-completion`
 Target base: `dev`
 Public claim level: hidden
@@ -261,6 +262,10 @@ Spec delivery validation after rebasing onto refreshed `origin/dev`:
     Gemini review thread.
   - Updated `tasks.md` current state and spec authoring checklist so the PR-open
     and initial ACK state are no longer stale.
+- Final state: PR #398 merged into `dev` as
+  `3d52856e7999014e67972e4b5def48fccdae5255` from exact reviewed head
+  `e10241a6cbee0f35b1f6fd0e81e33909324026c6`. This merged the reviewed spec;
+  it did not implement the first product slice.
 
 ## Oddities And Follow-Ups
 

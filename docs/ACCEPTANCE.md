@@ -317,6 +317,70 @@ For every successful `tracemap release-review --before <before.sqlite> --after <
 - caps such as `--max-findings`, `--max-surface-rows`, `--max-paths`, `--max-gaps`, and `--max-checklist-items` apply deterministically and emit truncation gaps when rows are omitted.
 - Markdown and JSON do not include raw SQL text, raw URLs, config values, source snippets, connection strings, repository remotes, or local absolute paths.
 
+## SQL Evidence Runway Acceptance
+
+For a successful scan containing supported PostgreSQL SQL evidence, verify:
+
+- execution-context declarations/candidates, protected-material outcomes,
+  permission prerequisites, archive-link boundaries, and analysis gaps use the
+  cataloged `database.sql.*` and `database.postgres.*` rule families;
+- every emitted fact preserves repository-relative span, commit SHA, evidence
+  tier, coverage label, extractor ID/version, supporting fact IDs where
+  applicable, and documented limitations;
+- `sql-runbook.md` and `sql-runbook.json` are emitted when compatible evidence
+  exists and contain only allowlisted categorical context, milestones,
+  prerequisite statuses, stop-condition codes, owner questions, safe hashes,
+  and provenance;
+- ordered context transitions remain explicit when engine, server role,
+  database role, schema role, or execution mode changes;
+- permission evidence distinguishes `present-in-scripts`, `missing-evidence`,
+  `conflicting-evidence`, `unknown`, and `needs-owner-review` without treating a
+  declaration as effective authorization;
+- archive-link evidence remains static configuration/declaration evidence and
+  does not establish connectivity, replication health, data freshness, remote
+  object existence, credentials, or production state;
+- protected-material evidence uses
+  `database.sql.secret-bearing-step.v1`,
+  `database.sql.secret-text-candidate.v1`, or
+  `database.sql.secret-safety-gap.v1` and never renders the protected value,
+  raw SQL, raw connection material, credential fragments, private server names,
+  local paths, or scheduled command bodies; protected steps remain span-only
+  and do not persist a content hash;
+- missing schema, extractor provenance, unsupported engine/shape, ambiguous
+  context, truncation, or protected projection produces an explicit rule-backed
+  gap and partial/unavailable coverage rather than a clean conclusion; and
+- repeated scans of the same repository commit produce deterministic fact and
+  runbook ordering apart from documented non-evidence timestamps.
+
+For SQL runway composition into `release-review` and `route-flow`, verify:
+
+- release review renders a separate `SQL Runway Evidence` section using only
+  `ReleaseReviewStatuses` for section status; context, permission,
+  archive-link, protected-material, compatibility, and truncation gaps remain
+  structured `ReleaseReviewGap` entries in the packet-level gap collection;
+- release-review findings preserve upstream rule ID, evidence tier, coverage,
+  safe file span, commit SHA, extractor ID/version, supporting fact IDs, and
+  limitations, including for single and combined indexes;
+- route flow emits `sql-context` only for a selected static route with an
+  already-reached `sql-query` or `sql-persistence` surface, scopes inputs to the
+  selected source, orders the group between query and data-surface context, and
+  preserves categorical transitions, prerequisite statuses, stop codes, and
+  upstream provenance;
+- a data-facing selected route without compatible context emits a cataloged
+  SQL-context gap instead of silently omitting the missing evidence;
+- old or incompatible indexes missing required extractor provenance remain
+  readable but are labeled unavailable/partial for SQL composition rather than
+  receiving invented provenance; and
+- Markdown/JSON sentinel checks prove raw SQL, credentials, connection strings,
+  private infrastructure identities, local paths, scheduled command bodies,
+  and the phrase `safe to run` are absent.
+
+SQL runway evidence is static and coverage-relative. It does not execute SQL,
+connect to a database, prove runtime reachability, observe validation results or
+production database state, establish effective permissions, certify rollback,
+approve a release, replace operator/DBA judgment, or conclude that a script or
+change is safe.
+
 ## Language Adapter Acceptance
 
 New language adapters should satisfy [Language adapter contract](LANGUAGE_ADAPTER_CONTRACT.md) before language-specific depth is considered complete.
