@@ -1,7 +1,7 @@
 # Legacy Data Model Relationship Completion Implementation State
 
-Status: implementation-pr1-validated
-Readiness: ready-for-pr-delivery
+Status: implementation-pr2-validated
+Readiness: ready-for-pr2-delivery
 Spec branch: `codex/legacy-data-model-relationship-completion`
 Target base: `dev`
 Public claim level: hidden
@@ -27,6 +27,24 @@ Public claim level: hidden
   classifier-driven output is emitted.
 - Product non-scope: no new XML extraction, runtime ORM or database access,
   projection/report changes, or broad downstream expansion.
+
+## Implementation PR 2
+
+- Implementation branch:
+  `codex/typed-dataset-relationship-classifier-pr2`.
+- Base: `origin/dev` at merged PR #499 commit
+  `15510f5f454da7de83b3778a722b09f90a71d5c5`.
+- Selected boundary: wire the shared classifier to existing typed DataSet
+  `msdata:Relationship` and `xs:keyref` endpoint decisions. Preserve existing
+  full and unidirectional facts, preserve ambiguous-keyref reduced facts plus
+  their existing gaps, and emit a relationship-rule gap instead of a terminal
+  relationship fact only when neither endpoint is deterministic.
+- Add a focused TableAdapter SQL non-inference regression and typed DataSet
+  relationship privacy/determinism coverage. Extend the committed public-safe
+  smoke fixtures for this family.
+- Deferred: composite key/keyref field matching, broader duplicate-constraint
+  redesign, schema-indicator behavior outside the existing gate, EDMX,
+  NHibernate, projections/reports/exports, and all runtime database behavior.
 
 ## Current Context
 
@@ -353,6 +371,68 @@ head `b0c3f08820f54e0121146fea52d88900ea7e135c`:
   those existing values plus the classifier values.
 - Post-patch focused validation remained 58 passed; the full solution remained
   822 passed; private-path and diff checks passed.
+- Final ACK returned `merge_ready` for exact head
+  `03c9e33a6cf7db19419a6c5002af342ce4d911d1`; the ACK executor merged PR #499
+  to `dev` as `15510f5f454da7de83b3778a722b09f90a71d5c5`.
+
+## Implementation PR 2 Validation
+
+Implemented scope:
+
+- Routed existing typed DataSet `msdata:Relationship` and `xs:keyref` endpoint
+  decisions through the shared relationship classifier.
+- Preserved deterministic full facts, existing reduced unidirectional facts,
+  `mappingKind=relation`, source rule IDs, ambiguous-keyref reduced facts, and
+  the existing ambiguous constraint gaps.
+- Descriptors with neither endpoint now emit cataloged
+  `IncompleteLegacyDataModelRelationship` gaps under
+  `legacy.data.model.relationship.v1` and do not emit invented terminal
+  relationship facts.
+- Added focused missing-parent, missing-both, ambiguous-keyref, deterministic
+  fact-order/ID, unsafe-name default-artifact privacy, and TableAdapter SQL
+  non-inference regressions.
+- Added a committed public-safe typed DataSet relationship smoke fixture.
+
+Validation results:
+
+- Focused extractor/classifier/catalog filter: 59 passed, 0 failed.
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with 0 errors and
+  the existing 8 `NU1903` SQLite advisories.
+- `dotnet test src/dotnet/TraceMap.sln --no-restore --no-build`: 823 passed,
+  0 failed.
+- CLI smoke copied the committed sample into a temporary Git repository,
+  committed it as `301e6fa6092c5a387388181174b7d079f34e847d`, and scanned that exact commit.
+  The scan emitted all five required artifacts with
+  `Level3SyntaxAnalysis`, metadata-only `NotRun` build status, full and reduced
+  endpoint coverage, and two `IncompleteLegacyDataModelRelationship` gaps
+  carrying `safeReasonCode=missing-endpoint` for the empty relation and keyref
+  descriptors.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- The pinned legacy-data metadata guidance in `docs/VALIDATION.md` was run;
+  broader surface/report/query/export filters remain not applicable because
+  those code paths are unchanged.
+
+Review follow-up on PR #500:
+
+- Qodo identified that multiple relationship descriptors on the same XML line
+  could produce duplicate analysis-gap fact IDs. Relationship gaps now include
+  the descriptor's deterministic document-node ordinal in their evidence seed
+  and public-safe properties. A minified-XSD regression proves four same-line
+  typed DataSet gaps retain distinct IDs and write successfully to SQLite.
+- Gemini requested consistent endpoint-coverage fallback behavior between the
+  two typed DataSet relationship paths. The `msdata:Relationship` path now uses
+  the same endpoint-aware fallback as `xs:keyref`.
+- Post-patch focused validation passed 3 tests; the build passed with 0 errors
+  and the existing 8 `NU1903` advisories; the full solution passed 824 tests.
+
+Deferred after PR 2:
+
+- Composite key/keyref field-count and field-identity matching.
+- Broader duplicate constraint and ambiguous selector classification beyond the
+  existing deterministic resolver.
+- Schema-indicator behavior outside the existing typed DataSet gate.
+- EDMX, NHibernate, broad downstream expansion, and runtime database behavior.
 
 ## Oddities And Follow-Ups
 
