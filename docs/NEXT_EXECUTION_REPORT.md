@@ -40,11 +40,11 @@ vulnerability, release approval, or that a change is safe.
 
 `dev` additionally contains:
 
-- route-flow SQL-context composition for already-selected SQL-facing static
+- Route-flow SQL-context composition for already-selected SQL-facing static
   paths (PR #483);
-- the public-safe SQL operator proof page and generated-site guard hardening
+- The public-safe SQL operator proof page and generated-site guard hardening
   (PR #486);
-- the source/tree/commit-bound Base44 static evidence adapter and its
+- The source/tree/commit-bound Base44 static evidence adapter and its
   service-role/SDK follow-up (PRs #494 and #496);
 - Microsoft Access adapter v0 foundation, bounded form/report counts,
   conservative VBA/module counts, macro counts, downstream gaps, and local-only

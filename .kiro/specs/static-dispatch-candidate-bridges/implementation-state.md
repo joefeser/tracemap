@@ -2,8 +2,8 @@
 
 Status: implementation-task-6-merged-with-follow-ups
 Readiness: follow-up-tasks-available
-Merged PRs: #331 (`086ad376e387ea8d87e430175ef2673cbc74c0f1`) and
-#333 (`84f72e0faa9dd6c106c625de175a194d9c1515ff`)
+Merged PR 1: #331 (`086ad376e387ea8d87e430175ef2673cbc74c0f1`)
+Merged PR 2: #333 (`84f72e0faa9dd6c106c625de175a194d9c1515ff`)
 
 ## Branch
 
