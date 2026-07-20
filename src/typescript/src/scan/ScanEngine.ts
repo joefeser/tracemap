@@ -14,6 +14,7 @@ import { extractSyntaxFacts } from "../extractors/TypeScriptSyntaxExtractor";
 import { extractSemanticFacts } from "../extractors/TypeScriptSemanticExtractor";
 import { extractIntegrationFacts } from "../extractors/IntegrationExtractor";
 import { extractAngularTemplateFacts } from "../extractors/AngularTemplateBindingExtractor";
+import { extractBase44Facts } from "../extractors/Base44EvidenceExtractor";
 import { writeFactsJsonl } from "../storage/JsonlFactWriter";
 import { writeManifest } from "../storage/ManifestWriter";
 import { writeSqliteIndex } from "../storage/SqliteIndexWriter";
@@ -64,6 +65,7 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
   }
   facts.push(...await extractPackageFacts(manifest, repoPath, inventory));
   facts.push(...await extractConfigFacts(manifest, inventory));
+  facts.push(...await extractBase44Facts(manifest, inventory));
 
   const projects = options.semantic ? await loadTypeScriptProjects(repoPath, options, inventory) : [];
   manifest.projects = projects.map((project) => project.projectPath).sort();

@@ -208,7 +208,12 @@ async function createManagedEvidencePacketExamplesFixture(t, options = {}) {
 }
 
 async function createEvidencePacketExamplesFixture({
-  discoveryRoutes = [evidencePacketExamplesRoute, ...evidencePacketExamplesRequiredLinks, claimReviewDrillRoute],
+  discoveryRoutes = [
+    evidencePacketExamplesRoute,
+    ...evidencePacketExamplesRequiredLinks,
+    claimReviewDrillRoute,
+    "/sql/operator-handoff/proof-packet/"
+  ],
   examplesHtml = null,
   includeInboundLinks = true,
   sitemapRoutes = [evidencePacketExamplesRoute]
@@ -219,7 +224,8 @@ async function createEvidencePacketExamplesFixture({
     evidencePacketExamplesRoute,
     ...evidencePacketExamplesRequiredLinks,
     claimReviewDrillRoute,
-    "/packets/assembly/"
+    "/packets/assembly/",
+    "/sql/operator-handoff/proof-packet/"
   ]);
 
   for (const route of routes) {

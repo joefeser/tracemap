@@ -1,5 +1,9 @@
 # Evidence Export Usability Polish Implementation State
 
+Status: implementation-slice-1-merged-with-follow-ups
+Readiness: follow-up-slices-available
+Merged PR: #193 (`3291fe25183f8caa93331084b5bfd50e5697a619`)
+
 ## Branch
 
 `codex/implement-evidence-export-usability-polish`

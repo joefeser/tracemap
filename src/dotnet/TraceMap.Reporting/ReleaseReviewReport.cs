@@ -196,6 +196,8 @@ public sealed record ReleaseReviewChecklistItem(
 
 internal sealed record ReleaseIndexInfo(string Kind, ReleaseReviewSnapshot Snapshot);
 
+internal sealed record AccessEvidencePresence(long FactCount, IReadOnlyList<string> SupportingFactIds);
+
 internal sealed record SingleComparableFact(
     string StableKey,
     string EvidenceHash,
@@ -390,6 +392,24 @@ public static class ReleaseReviewReporter
         var mode = beforeInfo.Kind == "combined" ? "ReleaseReviewCombinedV1" : "ReleaseReviewSingleV1";
         var gaps = new List<ReleaseReviewGap>();
         gaps.AddRange(SourceIdentityAndCoverageGaps(beforeInfo.Snapshot, afterInfo.Snapshot));
+        var beforeAccess = await ReadAccessEvidencePresenceAsync(options.BeforePath, beforeInfo.Kind, cancellationToken);
+        var afterAccess = await ReadAccessEvidencePresenceAsync(options.AfterPath, afterInfo.Kind, cancellationToken);
+        if (beforeAccess.FactCount > 0 || afterAccess.FactCount > 0)
+        {
+            gaps.Add(Gap(
+                "access-evidence-consumer",
+                "AccessEvidenceConsumerUnsupported",
+                "accessEvidence",
+                null,
+                SectionRuleId,
+                ReleaseReviewClassifications.PartialAnalysis,
+                "Microsoft Access facts are present, but release-review has no dedicated Access comparison section; source provenance remains available and no Access absence or change conclusion is made.",
+                supportingFactIds: beforeAccess.SupportingFactIds.Concat(afterAccess.SupportingFactIds).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).Take(24).ToArray(),
+                metadata: CombinedReportHelpers.SortedMetadata([
+                    Pair("beforeAccessFactCount", beforeAccess.FactCount.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    Pair("afterAccessFactCount", afterAccess.FactCount.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                ])));
+        }
         gaps.AddRange(ignoredSelectors.Select((message, index) => Gap(
             "selector",
             "SelectorIgnored",
@@ -843,9 +863,9 @@ public static class ReleaseReviewReporter
         {
             var packet = SqlRunbookPacketBuilder.Build(input.Result);
             foreach (var group in packet.StepGroups)
-            foreach (var step in group.Steps)
-                findings.Add(SqlEvidenceFinding(input.SourceLabel, "context-step", step.StepKind, ReleaseReviewClassifications.NoActionableEvidence, step.Evidence,
-                    [Pair("engine", group.Engine), Pair("serverRole", group.ServerRole), Pair("databaseRole", group.DatabaseRole), Pair("schemaRole", group.SchemaRole), Pair("executionMode", group.ExecutionMode), Pair("contextClassification", step.ContextClassification), Pair("stopConditions", string.Join(',', step.StopConditions))]));
+                foreach (var step in group.Steps)
+                    findings.Add(SqlEvidenceFinding(input.SourceLabel, "context-step", step.StepKind, ReleaseReviewClassifications.NoActionableEvidence, step.Evidence,
+                        [Pair("engine", group.Engine), Pair("serverRole", group.ServerRole), Pair("databaseRole", group.DatabaseRole), Pair("schemaRole", group.SchemaRole), Pair("executionMode", group.ExecutionMode), Pair("contextClassification", step.ContextClassification), Pair("stopConditions", string.Join(',', step.StopConditions))]));
             foreach (var milestone in packet.Milestones)
                 findings.Add(SqlEvidenceFinding(input.SourceLabel, "milestone", milestone.Kind, ReleaseReviewClassifications.NoActionableEvidence, milestone.Evidence,
                     [Pair("state", milestone.State), Pair("validationState", milestone.ValidationState)]));
@@ -1350,7 +1370,7 @@ public static class ReleaseReviewReporter
             ]));
     }
 
-    private static async Task<IReadOnlyList<SqlEvidenceInput>> ReadSqlEvidenceInputsAsync(
+    internal static async Task<IReadOnlyList<SqlEvidenceInput>> ReadSqlEvidenceInputsAsync(
         string path,
         string indexKind,
         CancellationToken cancellationToken)
@@ -1433,6 +1453,30 @@ public static class ReleaseReviewReporter
                 new ScanResult(group.First().Manifest, group.Select(row => row.Fact).ToArray(), []),
                 group.All(row => row.ProvenanceCompatible)))
             .ToArray();
+    }
+
+    internal static async Task<AccessEvidencePresence> ReadAccessEvidencePresenceAsync(
+        string path,
+        string indexKind,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = new SqliteConnection(ReadOnlyConnectionString(path));
+        await connection.OpenAsync(cancellationToken);
+        await using var countCommand = connection.CreateCommand();
+        countCommand.CommandText = indexKind == "combined"
+            ? "select count(*) from combined_facts where fact_type like 'Access%' or rule_id like 'legacy.access.%';"
+            : "select count(*) from facts where fact_type like 'Access%' or rule_id like 'legacy.access.%';";
+        var count = Convert.ToInt64(await countCommand.ExecuteScalarAsync(cancellationToken), System.Globalization.CultureInfo.InvariantCulture);
+
+        var ids = new List<string>();
+        await using var idCommand = connection.CreateCommand();
+        idCommand.CommandText = indexKind == "combined"
+            ? "select combined_fact_id from combined_facts where fact_type like 'Access%' or rule_id like 'legacy.access.%' order by combined_fact_id limit 12;"
+            : "select fact_id from facts where fact_type like 'Access%' or rule_id like 'legacy.access.%' order by fact_id limit 12;";
+        await using var reader = await idCommand.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+            ids.Add(StringOrDefault(reader, 0, "unknown"));
+        return new AccessEvidencePresence(count, ids);
     }
 
     private static async Task<ReleaseIndexInfo> ReadIndexInfoAsync(string path, string side, CancellationToken cancellationToken)

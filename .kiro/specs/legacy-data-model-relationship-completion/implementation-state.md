@@ -1,9 +1,164 @@
 # Legacy Data Model Relationship Completion Implementation State
 
-Status: pr-open-ack-patch-pass
+Status: implementation-pr6-validated
+Readiness: ready-for-pr6-delivery
 Spec branch: `codex/legacy-data-model-relationship-completion`
 Target base: `dev`
 Public claim level: hidden
+
+## Implementation PR 1
+
+- Implementation branch:
+  `codex/legacy-relationship-gap-classifier-pr1`.
+- Base: `origin/dev` at
+  `31cd8f0415fc691aede8ba3b12e201b164c599db`.
+- Selected boundary: add the preferred shared deterministic relationship gap
+  classifier and focused harness, then wire only the existing DBML duplicate
+  association and missing-target decisions through it.
+- Rationale: DBML already emits a duplicate-name `AnalysisGap` and preserves a
+  missing-target association as reduced unidirectional evidence. Centralizing
+  those live decisions exercises both gap and reduced-relationship outcomes
+  without changing an existing fact type, `mappingKind`, endpoint policy, or
+  downstream projection. EDMX, typed DataSet, and NHibernate wiring would make
+  this first PR materially broader and remains deferred.
+- Catalog gate: add a machine-readable closed reason-code list under
+  `legacy.data.model.relationship.v1`, repair ownership text for the three
+  already-emitted extractor classifications, and test catalog ownership before
+  classifier-driven output is emitted.
+- Product non-scope: no new XML extraction, runtime ORM or database access,
+  projection/report changes, or broad downstream expansion.
+
+## Implementation PR 2
+
+- Implementation branch:
+  `codex/typed-dataset-relationship-classifier-pr2`.
+- Base: `origin/dev` at merged PR #499 commit
+  `15510f5f454da7de83b3778a722b09f90a71d5c5`.
+- Selected boundary: wire the shared classifier to existing typed DataSet
+  `msdata:Relationship` and `xs:keyref` endpoint decisions. Preserve existing
+  full and unidirectional facts, preserve ambiguous-keyref reduced facts plus
+  their existing gaps, and emit a relationship-rule gap instead of a terminal
+  relationship fact only when neither endpoint is deterministic.
+- Add a focused TableAdapter SQL non-inference regression and typed DataSet
+  relationship privacy/determinism coverage. Extend the committed public-safe
+  smoke fixtures for this family.
+- Deferred: composite key/keyref field matching, broader duplicate-constraint
+  redesign, schema-indicator behavior outside the existing gate, EDMX,
+  NHibernate, projections/reports/exports, and all runtime database behavior.
+
+## Implementation PR 3
+
+- Implementation branch:
+  `codex/nhibernate-relationship-classifier-pr3`.
+- Base: `origin/dev` at merged PR #500 commit
+  `b561b765b4d823fc844f7a9a366d8af1ec2b4e60`.
+- Selected boundary: route existing NHibernate `.hbm.xml` relationship endpoint
+  decisions through the shared classifier for `many-to-one`, `one-to-one`,
+  `set`, `list`, `bag`, and `map` descriptors. Preserve deterministic facts and
+  existing one-missing-endpoint unidirectional evidence; emit a cataloged gap
+  and no relationship fact when neither endpoint is deterministic.
+- Harden collection target selection by treating multiple `one-to-many` or
+  `many-to-many` child candidates as ambiguous instead of selecting the first.
+  Unsafe endpoint identities remain hash-only and classifier-labeled reduced
+  evidence. Add focused determinism, privacy, no-invented-endpoint, and
+  committed public-safe smoke coverage.
+- Deferred: composite IDs/keys, formula-only joins, filters, custom SQL,
+  dynamic components, inheritance shapes, custom types/provider extensions,
+  relationship-cap redesign, runtime-loaded config, EDMX, broad downstream
+  workflows, and all runtime NHibernate/database behavior. Existing cataloged
+  gaps and safe XML bounds for those shapes remain unchanged.
+
+## Implementation PR 4
+
+- Implementation branch:
+  `codex/edmx-relationship-classifier-pr4`.
+- Base: `origin/dev` at merged PR #501 commit
+  `704f64fdf8209dfde9362076d5e2f8057669e44e`.
+- Selected boundary: route existing CSDL `Association` and MSL
+  `AssociationSetMapping` endpoint decisions through the shared classifier.
+  Preserve deterministic facts, inherited-endpoint review labels, CSDL
+  one-missing-type unidirectional evidence, source rule IDs, and
+  `mappingKind=association`.
+- Associations with neither deterministic CSDL type emit a cataloged gap and
+  no relationship fact. Missing or duplicate MSL end roles remain gaps instead
+  of producing endpoint surfaces. Unsafe endpoint identities remain hash-only
+  and classifier-labeled reduced evidence. Add focused determinism, privacy,
+  no-invented-endpoint, and committed public-safe smoke coverage.
+- Deferred: multiple containers, split/conditional/complex mappings,
+  many-to-many join proof, provider extensions, missing broader MSL metadata,
+  EDMX runtime loading, broad downstream workflows, and all database/runtime
+  behavior.
+
+## Implementation PR 5
+
+- Implementation branch:
+  `codex/dbml-relationship-key-state-pr5`.
+- Base: `origin/dev` at merged PR #502 commit
+  `54f1733207069fc9e66ceaad921cc4d712039d06`.
+- Selected boundary: complete the remaining bounded DBML relationship follow-up
+  by routing existing association key and scope evidence through the shared
+  classifier. No new XML extraction or downstream projection is required.
+- Missing `ThisKey` or `OtherKey`, malformed or mismatched composite key lists,
+  duplicate table/type endpoint scopes, and foreign-namespace association
+  extensions produce cataloged gaps without an invented relationship. Equal-
+  arity deterministic composite keys preserve existing relationship facts.
+  Unsafe endpoint or key identities remain hash-only and reduced. Existing
+  one-missing-`Type` unidirectional evidence remains unchanged.
+- Deferred: runtime LINQ to SQL model loading, database/schema validation,
+  provider behavior, generated navigation behavior, broad downstream
+  workflows, and all non-DBML family follow-ups.
+
+## Implementation PR 6
+
+- Implementation branch:
+  `codex/typed-dataset-relationship-fields-pr6`.
+- Base: `origin/dev` at merged PR #503 commit
+  `36862b58ffbbbcd80a457a7c3a8d178b44a7bb20`.
+- Selected boundary: finish the bounded typed DataSet relationship follow-up by
+  classifying duplicate `xs:key`/`xs:unique` names and key/keyref field-list
+  state. Existing missing-endpoint, schema-indicator, and TableAdapter SQL
+  non-inference behavior is reused rather than redesigned.
+- Equal-arity, non-duplicate, public-safe composite field lists preserve the
+  existing relationship fact. Missing, malformed, duplicate-member, or
+  mismatched field lists emit existing cataloged relationship gaps without a
+  terminal relationship fact. Duplicate constraint names are ambiguous even
+  when their selectors happen to match; the extractor does not choose one.
+- Deferred: arbitrary XPath evaluation, schema validation, generated DataSet
+  execution, database constraints, broad downstream workflows, and runtime
+  adapter/database behavior.
+
+Validation results:
+
+- Focused extractor/classifier/catalog filter: 65 passed, 0 failed.
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with 0 errors and
+  the existing 8 `NU1903` SQLite advisories.
+- `dotnet test src/dotnet/TraceMap.sln --no-restore --no-build`: 829 passed,
+  0 failed.
+- CLI smoke copied the committed typed DataSet sample into a temporary Git
+  repository, committed it as `a5ef67099472dff2683288a01b22ba39caff75c2`,
+  and scanned that exact commit. All five required artifacts were present with
+  `Level3SyntaxAnalysis`, metadata-only `NotRun` build status, deterministic
+  composite relationship evidence, and separate mismatched-field and missing-
+  endpoint gaps.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Broader projection/report/query/export validation remains not applicable
+  because this slice changes only typed DataSet extractor classification.
+
+Initial ACK review follow-up on PR #504:
+
+- Codex identified that duplicate constraint detection ran after malformed
+  selector filtering. Named `xs:key`/`xs:unique` candidates now participate in
+  duplicate detection before selector eligibility, so a malformed same-name
+  definition cannot make another definition appear unique.
+- Codex also identified that an unresolved parent key incorrectly suppressed
+  deterministic child-only selector evidence. Field-list validation now runs
+  only when a unique referenced constraint is available; unknown or ambiguous
+  parent constraints preserve the existing reduced unidirectional child
+  relationship plus the appropriate ambiguity evidence.
+- Regressions cover malformed same-name constraints and unknown-parent child-
+  only evidence. Post-patch validation remained 65 focused and 829 full tests;
+  the private-path guard and diff check passed.
 
 ## Current Context
 
@@ -261,6 +416,336 @@ Spec delivery validation after rebasing onto refreshed `origin/dev`:
     Gemini review thread.
   - Updated `tasks.md` current state and spec authoring checklist so the PR-open
     and initial ACK state are no longer stale.
+- Final state: PR #398 merged into `dev` as
+  `3d52856e7999014e67972e4b5def48fccdae5255` from exact reviewed head
+  `e10241a6cbee0f35b1f6fd0e81e33909324026c6`. This merged the reviewed spec;
+  it did not implement the first product slice.
+
+## Implementation PR 1 Validation
+
+Implemented scope:
+
+- Added a pure closed-state relationship classifier covering deterministic,
+  reduced, gap, and not-in-scope outcomes with explicit precedence.
+- Added machine-readable `gapClassifications`, `safeReasonCodes`, coverage,
+  endpoint-coverage, limitation-code, and safe-property registries under
+  `legacy.data.model.relationship.v1`.
+- Repaired catalog ownership text for
+  `AmbiguousLegacyDataModelIdentity`, `UnsupportedLegacyOrmMappingShape`, and
+  `UnsupportedLegacyOrmDescriptor` under their emitting source rules.
+- Wired DBML duplicate association gaps and the existing missing-target
+  unidirectional policy through the shared classifier. Existing fact types,
+  source rule IDs, `mappingKind`, deterministic relationship properties, and
+  family policy remain unchanged.
+- Added a public-safe committed DBML sample plus focused classifier, catalog,
+  extractor, determinism, no-invented-endpoint, non-claim, and default-artifact
+  privacy tests.
+
+Validation results:
+
+- Focused extractor/classifier/catalog filter: 58 passed, 0 failed.
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with 0 errors and
+  the existing 8 `NU1903` SQLite advisories.
+- `dotnet test src/dotnet/TraceMap.sln --no-restore --no-build`: 822 passed,
+  0 failed.
+- CLI smoke copied the committed synthetic sample into a temporary Git
+  repository, committed it as
+  `58e408f420b4778e813359527292d26a744bf8b7`, and scanned that exact commit.
+  The scan emitted `scan-manifest.json`, `facts.ndjson`, `index.sqlite`,
+  `report.md`, and `logs/analyzer.log`; analysis was
+  `Level3SyntaxAnalysis`, build status was `NotRun` because the fixture is
+  metadata-only, deterministic relationship coverage included `full` and
+  `reduced`, and the expected `AmbiguousLegacyDataModelIdentity` gap carried
+  `safeReasonCode=duplicate-relationship-identity`.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- The pinned legacy-data metadata guidance in `docs/VALIDATION.md` was run.
+  Broader model-surface projection/report/query/export filters were not
+  applicable because this slice does not change those paths.
+
+Deferred after PR 1:
+
+- EDMX, typed DataSet, and NHibernate classifier wiring.
+- Remaining DBML missing/ambiguous keys, duplicate scopes, provider-extension,
+  and unsafe-identity decision integration beyond existing hash behavior.
+- Broad downstream projection/report/export work and runtime ORM/database
+  validation.
+
+Initial implementation ACK on PR #499 returned `actionable_findings` at exact
+head `b0c3f08820f54e0121146fea52d88900ea7e135c`:
+
+- Qodo correctly found that the DBML adapter used only the classifier decision
+  and ignored its endpoint-coverage and limitation outputs. The patch now
+  applies classifier endpoint coverage and deterministically maps classifier
+  limitations to the existing DBML compatibility vocabulary, including a
+  focused missing-source-endpoint regression.
+- Codex correctly found that the closed `limitationCodes` catalog registry
+  omitted limitation values already emitted by DBML, EDMX, typed DataSet, and
+  NHibernate relationship facts. The registry and exact-list test now include
+  those existing values plus the classifier values.
+- Post-patch focused validation remained 58 passed; the full solution remained
+  822 passed; private-path and diff checks passed.
+- Final ACK returned `merge_ready` for exact head
+  `03c9e33a6cf7db19419a6c5002af342ce4d911d1`; the ACK executor merged PR #499
+  to `dev` as `15510f5f454da7de83b3778a722b09f90a71d5c5`.
+
+## Implementation PR 2 Validation
+
+Implemented scope:
+
+- Routed existing typed DataSet `msdata:Relationship` and `xs:keyref` endpoint
+  decisions through the shared relationship classifier.
+- Preserved deterministic full facts, existing reduced unidirectional facts,
+  `mappingKind=relation`, source rule IDs, ambiguous-keyref reduced facts, and
+  the existing ambiguous constraint gaps.
+- Descriptors with neither endpoint now emit cataloged
+  `IncompleteLegacyDataModelRelationship` gaps under
+  `legacy.data.model.relationship.v1` and do not emit invented terminal
+  relationship facts.
+- Added focused missing-parent, missing-both, ambiguous-keyref, deterministic
+  fact-order/ID, unsafe-name default-artifact privacy, and TableAdapter SQL
+  non-inference regressions.
+- Added a committed public-safe typed DataSet relationship smoke fixture.
+
+Validation results:
+
+- Focused extractor/classifier/catalog filter: 59 passed, 0 failed.
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with 0 errors and
+  the existing 8 `NU1903` SQLite advisories.
+- `dotnet test src/dotnet/TraceMap.sln --no-restore --no-build`: 823 passed,
+  0 failed.
+- CLI smoke copied the committed sample into a temporary Git repository,
+  committed it as `301e6fa6092c5a387388181174b7d079f34e847d`, and scanned that exact commit.
+  The scan emitted all five required artifacts with
+  `Level3SyntaxAnalysis`, metadata-only `NotRun` build status, full and reduced
+  endpoint coverage, and two `IncompleteLegacyDataModelRelationship` gaps
+  carrying `safeReasonCode=missing-endpoint` for the empty relation and keyref
+  descriptors.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- The pinned legacy-data metadata guidance in `docs/VALIDATION.md` was run;
+  broader surface/report/query/export filters remain not applicable because
+  those code paths are unchanged.
+
+Review follow-up on PR #500:
+
+- Qodo identified that multiple relationship descriptors on the same XML line
+  could produce duplicate analysis-gap fact IDs. Relationship gaps now include
+  the descriptor's deterministic document-node ordinal in their evidence seed
+  and public-safe properties. A minified-XSD regression proves four same-line
+  typed DataSet gaps retain distinct IDs and write successfully to SQLite.
+- Gemini requested consistent endpoint-coverage fallback behavior between the
+  two typed DataSet relationship paths. The `msdata:Relationship` path now uses
+  the same endpoint-aware fallback as `xs:keyref`.
+- Post-patch focused validation passed 3 tests; the build passed with 0 errors
+  and the existing 8 `NU1903` advisories; the full solution passed 824 tests.
+
+Deferred after PR 2:
+
+- Composite key/keyref field-count and field-identity matching.
+- Broader duplicate constraint and ambiguous selector classification beyond the
+  existing deterministic resolver.
+- Schema-indicator behavior outside the existing typed DataSet gate.
+- EDMX, NHibernate, broad downstream expansion, and runtime database behavior.
+
+## Implementation PR 3 Validation
+
+Implemented scope:
+
+- Routed existing NHibernate `many-to-one`, `one-to-one`, `set`, `list`, `bag`,
+  and `map` endpoint decisions through the shared relationship classifier.
+- Preserved deterministic full facts and existing one-missing-target reduced
+  facts, and added the symmetric missing-source reduced case without inventing
+  a placeholder source endpoint.
+- Multiple collection target children now emit an
+  `AmbiguousLegacyDataModelIdentity` gap instead of selecting the first child.
+  Relationships with neither endpoint emit
+  `IncompleteLegacyDataModelRelationship` and no terminal relationship fact.
+- Unsafe endpoint identities remain hash-only and now carry reduced coverage
+  plus `unsafe-redacted-endpoint-identity`; deterministic one-to-one,
+  one-to-many, and many-to-many shapes retain full endpoint coverage.
+- Added `descriptorOrdinal` to the relationship rule's public-safe property
+  registry, closing the catalog documentation gap from PR #500's collision
+  fix, and added a committed public-safe NHibernate smoke fixture.
+
+Validation results:
+
+- Focused extractor/classifier/catalog filter: 61 passed, 0 failed.
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with 0 errors and
+  the existing 8 `NU1903` SQLite advisories.
+- `dotnet test src/dotnet/TraceMap.sln --no-restore --no-build`: 825 passed,
+  0 failed.
+- CLI smoke copied the committed sample into a temporary Git repository,
+  committed it as `bbddbc69cfdff47c8335ea3509c520c8726fa065`, and scanned that exact
+  commit. The scan emitted all five required artifacts with
+  `Level3SyntaxAnalysis`, metadata-only `NotRun` build status, deterministic
+  full and unidirectional NHibernate relationship evidence, one ambiguous
+  collection gap, and one missing-both endpoint gap.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- The pinned legacy-data metadata guidance in `docs/VALIDATION.md` was run;
+  broader model-surface/report/query/export filters remain not applicable
+  because those code paths are unchanged.
+
+Deferred after PR 3:
+
+- Composite IDs/keys, formula-only joins, filters, custom SQL, dynamic
+  components, inheritance shapes, custom types/provider extensions,
+  relationship-cap redesign, and runtime-loaded configuration.
+- EDMX classifier wiring, broad downstream expansion, and all runtime
+  NHibernate/database behavior.
+
+## Implementation PR 4 Validation
+
+Implemented scope:
+
+- Routed existing EDMX CSDL `Association` and MSL `AssociationSetMapping`
+  endpoint decisions through the shared relationship classifier.
+- Preserved deterministic full facts, `mappingKind=association`, source rule
+  IDs, inherited-endpoint review limitations, file-level reduced coverage, and
+  CSDL one-missing-type unidirectional evidence.
+- CSDL associations with neither conceptual type and MSL mappings with missing
+  endpoint roles now emit `IncompleteLegacyDataModelRelationship` and no
+  terminal relationship fact. Duplicate or wrong-count endpoint shapes retain
+  cataloged `AmbiguousLegacyDataModelIdentity` gaps without selecting a winner.
+- Unsafe association and endpoint identities remain hash-only and now carry
+  reduced coverage plus `unsafe-redacted-endpoint-identity`.
+- Added repeated-scan determinism, default-artifact privacy, no-invented-
+  endpoint regressions, and a committed public-safe EDMX smoke fixture.
+
+Validation results:
+
+- Focused extractor/classifier/catalog filter: 63 passed, 0 failed.
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with 0 errors and
+  the existing 8 `NU1903` SQLite advisories.
+- `dotnet test src/dotnet/TraceMap.sln --no-restore --no-build`: 827 passed,
+  0 failed.
+- CLI smoke copied the committed sample into a temporary Git repository,
+  committed it as `ae20fb3549c00ee2a460c22672321d83a9492b92`, and scanned that exact
+  commit. The scan emitted all five required artifacts with
+  `Level3SyntaxAnalysis`, metadata-only `NotRun` build status, full and
+  unidirectional CSDL evidence, full MSL evidence, and separate missing-both
+  CSDL and missing-role MSL relationship gaps.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- The pinned legacy-data metadata guidance in `docs/VALIDATION.md` was run;
+  broader model-surface/report/query/export filters remain not applicable
+  because those code paths are unchanged.
+
+Deferred after PR 4:
+
+- Multiple containers, split/conditional/complex mappings, deterministic
+  many-to-many join proof, provider extensions, and missing broader MSL
+  metadata.
+- Broad downstream expansion and all EF/runtime/database behavior.
+
+## Implementation PR 5 Validation
+
+Implemented scope:
+
+- Routed DBML `ThisKey`/`OtherKey` state, endpoint safety, duplicate type/table
+  scopes, and foreign-namespace association extensions through the shared
+  relationship classifier.
+- Missing keys now emit `IncompleteLegacyDataModelRelationship`; malformed,
+  duplicate-member, mismatched composite keys and duplicate endpoint scopes
+  emit `AmbiguousLegacyDataModelIdentity`; provider extensions emit
+  `UnsupportedLegacyOrmMappingShape`. These gap-only shapes do not emit a
+  terminal relationship fact.
+- Equal-arity deterministic composite keys preserve full relationship evidence.
+  Unsafe endpoint/key values remain hash-only with reduced coverage and
+  `unsafe-redacted-endpoint-identity`. Existing missing-`Type` unidirectional
+  evidence and duplicate-association behavior remain stable.
+- Cataloged DBML ownership for provider-extension relationship gaps and added a
+  public-safe smoke fixture plus determinism, privacy, composite-key, duplicate-
+  scope, unsupported-extension, and no-invented-endpoint regressions.
+
+Validation results:
+
+- Focused extractor/classifier/catalog filter: 64 passed, 0 failed.
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with 0 errors and
+  the existing 8 `NU1903` SQLite advisories.
+- `dotnet test src/dotnet/TraceMap.sln --no-restore --no-build`: 828 passed,
+  0 failed.
+- CLI smoke copied the committed sample into a temporary Git repository,
+  committed it as `5aaabce1295e05a10a867f169ba8cdb49a8fd570`, and scanned that exact
+  commit. The scan emitted all five required artifacts with
+  `Level3SyntaxAnalysis`, metadata-only `NotRun` build status, full deterministic
+  composite evidence, reduced duplicate/unidirectional evidence, and separate
+  missing-key, ambiguous-composite, and provider-extension gaps.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- The pinned legacy-data metadata guidance in `docs/VALIDATION.md` was run;
+  broader model-surface/report/query/export filters remain not applicable
+  because those code paths are unchanged.
+
+Initial ACK review follow-up on PR #503:
+
+- Gemini identified an unnecessary descendant traversal for DBML tables. Table
+  discovery now uses direct `Database` children in the DBML namespace.
+- Qodo identified two correctness gaps. Blank `Table@Name` values now use the
+  whitespace-aware `Member` fallback for duplicate-scope classification, and
+  deterministic composite key lists are normalized and emitted in clear form
+  only when every member is a public-safe identifier. Unsafe lists remain
+  hash-only.
+- Codex identified that a foreign-namespace element named `Association` could
+  treat its own namespace as DBML. Provider-extension detection is now anchored
+  to the enclosing DBML `Database` namespace; foreign associations emit the
+  cataloged unsupported-shape gap and no relationship fact.
+- Regression coverage includes blank-name duplicate table scopes, normalized
+  composite members, foreign association elements, repeated-scan determinism,
+  and default-artifact privacy. Post-patch validation passed 64 focused and 828
+  full .NET tests, the pinned JVM integration test, a five-artifact CLI smoke at
+  fixture commit `dc3ce949ff0f128bdc4291d7133956f9080b6de1`, the private-path guard,
+  and `git diff --check`. The build remained clean apart from the existing eight
+  `NU1903` SQLite advisories.
+
+Deferred after PR 5:
+
+- Non-DBML family follow-ups, broader downstream expansion, runtime LINQ to SQL
+  model loading, database/schema/provider validation, generated navigation
+  behavior, and all query/runtime behavior.
+
+Initial ACK review follow-up on PR #502:
+
+- Codex identified that an MSL `AssociationSetMapping` with fewer than two
+  `EndProperty` elements was incorrectly sent through the ambiguous-candidate
+  classifier path. Fewer-than-two descriptors now produce
+  `IncompleteLegacyDataModelRelationship` with `missing-endpoint`; more than
+  two remain ambiguous. The focused fixture asserts both one-child and
+  exactly-two-with-one-blank cases use the incomplete relationship gap path.
+- Gemini suggested null/empty guards around `decision.Limitations`. No code
+  change was made: `LegacyRelationshipGapDecision` is an internal non-nullable
+  record, every classifier return constructs a non-null closed list, and
+  silently dropping invalid limitation vocabulary would mask a classifier
+  contract defect rather than harden an external input boundary.
+- Post-patch validation remained 63 focused and 827 full tests passed; the
+  build, private-path guard, and diff check remained clean apart from the
+  existing 8 `NU1903` advisories.
+
+Initial ACK review follow-up on PR #501:
+
+- Codex identified that the new NHibernate ambiguity gap used
+  `AmbiguousLegacyDataModelIdentity` under the NHibernate rule without literal
+  ownership text in that rule block. The catalog and catalog regression now
+  document the classification before emission.
+- Gemini requested explicit ordering in the repeated-scan fact-ID assertion;
+  both sequences are now ordered ordinally. Its endpoint-aware fallback thread
+  described the implementation already present at the reviewed lines: when the
+  classifier omits coverage, either missing endpoint yields `unidirectional`
+  and two present endpoints yield `full`; no code change was required there.
+- Post-patch validation remained 61 focused and 825 full tests passed; the
+  build, private-path guard, and diff check remained clean apart from the
+  existing 8 `NU1903` advisories.
+- Qodo's later return identified two additional correctness issues. NHibernate
+  relationship model identities now omit the generic `mapped-class` placeholder
+  when the source endpoint is absent, matching the emitted
+  `missing-source-endpoint` limitation. Relationship gap ordinals now count
+  structural XML elements only, so indentation, comments, and whitespace text
+  do not change the public-safe discriminator; a formatting-equivalence
+  regression covers that invariant.
+- Final batched review validation passed 62 focused and 826 full tests; the
+  build, private-path guard, and diff check remained clean apart from the
+  existing 8 `NU1903` advisories.
 
 ## Oddities And Follow-Ups
 
