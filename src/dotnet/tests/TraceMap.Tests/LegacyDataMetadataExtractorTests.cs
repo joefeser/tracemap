@@ -773,12 +773,12 @@ public sealed class LegacyDataMetadataExtractorTests
             && fact.Properties.GetValueOrDefault("relationshipFamily") == "edmx"
             && fact.Properties.GetValueOrDefault("descriptorKind") == "csdl-association"
             && fact.Properties.GetValueOrDefault("safeReasonCode") == "missing-endpoint");
-        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+        Assert.Equal(2, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataModelRelationship
             && fact.Properties.GetValueOrDefault("classification") == "IncompleteLegacyDataModelRelationship"
             && fact.Properties.GetValueOrDefault("relationshipFamily") == "edmx"
             && fact.Properties.GetValueOrDefault("descriptorKind") == "msl-association"
-            && fact.Properties.GetValueOrDefault("safeReasonCode") == "missing-endpoint");
+            && fact.Properties.GetValueOrDefault("safeReasonCode") == "missing-endpoint"));
 
         var mslAssociation = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
             && fact.RuleId == RuleIds.LegacyDataEdmx
@@ -788,7 +788,7 @@ public sealed class LegacyDataMetadataExtractorTests
         Assert.Equal("relationship", mslAssociation.Properties.GetValueOrDefault("modelRelationshipKind"));
         Assert.Equal("FK_CustomerOrders", mslAssociation.Properties.GetValueOrDefault("containerName"));
 
-        Assert.Equal(3, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
+        Assert.Equal(2, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataEdmx
             && fact.Properties.GetValueOrDefault("classification") == "AmbiguousLegacyDataModelIdentity"));
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap

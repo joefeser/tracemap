@@ -568,6 +568,23 @@ Deferred after PR 4:
   metadata.
 - Broad downstream expansion and all EF/runtime/database behavior.
 
+Initial ACK review follow-up on PR #502:
+
+- Codex identified that an MSL `AssociationSetMapping` with fewer than two
+  `EndProperty` elements was incorrectly sent through the ambiguous-candidate
+  classifier path. Fewer-than-two descriptors now produce
+  `IncompleteLegacyDataModelRelationship` with `missing-endpoint`; more than
+  two remain ambiguous. The focused fixture asserts both one-child and
+  exactly-two-with-one-blank cases use the incomplete relationship gap path.
+- Gemini suggested null/empty guards around `decision.Limitations`. No code
+  change was made: `LegacyRelationshipGapDecision` is an internal non-nullable
+  record, every classifier return constructs a non-null closed list, and
+  silently dropping invalid limitation vocabulary would mask a classifier
+  contract defect rather than harden an external input boundary.
+- Post-patch validation remained 63 focused and 827 full tests passed; the
+  build, private-path guard, and diff check remained clean apart from the
+  existing 8 `NU1903` advisories.
+
 Initial ACK review follow-up on PR #501:
 
 - Codex identified that the new NHibernate ambiguity gap used
