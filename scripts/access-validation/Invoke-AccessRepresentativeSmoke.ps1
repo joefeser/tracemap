@@ -120,7 +120,10 @@ function Invoke-AccessScan([string[]]$Arguments) {
     try {
         Wait-AccessScanJobs @($job)
         $result = @(Receive-Job $job -Wait)
-        return [int]$result[-1]
+        if ($job.State -ne "Completed" -or $result.Count -ne 1 -or -not ($result[0] -is [int])) {
+            return 1
+        }
+        return [int]$result[0]
     }
     finally {
         Remove-Job $job -Force -ErrorAction SilentlyContinue
@@ -194,6 +197,11 @@ if ($DatabasePath.StartsWith($ScratchRoot + [IO.Path]::DirectorySeparatorChar, [
 if ($CheckpointBasePath.StartsWith($ScratchRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
     Stop-Representative "input-authorization" "representative checkpoint must be outside scratch"
 }
+$scratchFilesystemRoot = [IO.Path]::GetPathRoot($ScratchRoot)
+if ([string]::Equals($ScratchRoot, $scratchFilesystemRoot, [StringComparison]::OrdinalIgnoreCase) -or
+    (Test-Path $ScratchRoot)) {
+    Stop-Representative "input-authorization" "representative scratch must be a new non-root path"
+}
 
 $repo = Join-Path $ScratchRoot "repo"
 $databaseRelative = "representative$extension"
@@ -211,17 +219,18 @@ $releaseReviewOutput = Join-Path $ScratchRoot "release-review"
 
 Set-RepresentativeStage "copy-provenance"
 $originalHash = (Get-FileHash $DatabasePath -Algorithm SHA256).Hash.ToLowerInvariant()
-Remove-Item $ScratchRoot -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $repo -Force | Out-Null
-$source = [IO.File]::Open($DatabasePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
-$destination = [IO.File]::Open($databaseCopy, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+$source = $null
+$destination = $null
 try {
+    $source = [IO.File]::Open($DatabasePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $destination = [IO.File]::Open($databaseCopy, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
     $source.CopyTo($destination)
     $destination.Flush($true)
 }
 finally {
-    $destination.Dispose()
-    $source.Dispose()
+    if ($null -ne $destination) { $destination.Dispose() }
+    if ($null -ne $source) { $source.Dispose() }
 }
 if ((Get-FileHash $databaseCopy -Algorithm SHA256).Hash.ToLowerInvariant() -ne $originalHash) {
     Stop-Representative "copy-provenance" "representative working copy verification failed"
@@ -287,10 +296,15 @@ $concurrentScript = { param($Executable, $Arguments, $InheritedPath) $env:PATH =
 $concurrentA = Start-Job -ScriptBlock $concurrentScript -ArgumentList $AccessCli, (, $concurrentArgumentsA), $env:PATH
 $concurrentB = Start-Job -ScriptBlock $concurrentScript -ArgumentList $AccessCli, (, $concurrentArgumentsB), $env:PATH
 Wait-AccessScanJobs @($concurrentA, $concurrentB)
+$concurrentStateA = $concurrentA.State
+$concurrentStateB = $concurrentB.State
 $concurrentResultA = @(Receive-Job $concurrentA)
 $concurrentResultB = @(Receive-Job $concurrentB)
 Remove-Job $concurrentA, $concurrentB -Force
-if ($concurrentResultA[-1] -ne 0 -or $concurrentResultB[-1] -ne 0) {
+if ($concurrentStateA -ne "Completed" -or $concurrentStateB -ne "Completed" -or
+    $concurrentResultA.Count -ne 1 -or $concurrentResultB.Count -ne 1 -or
+    -not ($concurrentResultA[0] -is [int]) -or -not ($concurrentResultB[0] -is [int]) -or
+    $concurrentResultA[0] -ne 0 -or $concurrentResultB[0] -ne 0) {
     Stop-Representative "product-scan" "representative concurrent scan failed"
 }
 foreach ($output in @($outB, $outConcurrentA, $outConcurrentB)) {
@@ -335,7 +349,7 @@ $checkpoint.vbaModuleCount = Get-PropertyText $databaseMetadata.properties "vbaM
 $checkpoint.namedMacroCount = Get-PropertyText $databaseMetadata.properties "namedMacroCount"
 $checkpoint.gapCount = @($facts | Where-Object { $_.factType -eq "AnalysisGap" }).Count
 $checkpoint.uiIdentityFactsZero = @($facts | Where-Object { $_.factType -in @("AccessFormDeclared", "AccessReportDeclared", "AccessControlDeclared", "AccessBindingDeclared") }).Count -eq 0
-$checkpoint.vbaIdentityFlowFactsZero = @($facts | Where-Object { $_.factType -in @("AccessVbaModuleDeclared", "AccessVbaProcedureDeclared", "AccessVbaCallDeclared", "AccessEventBindingDeclared") }).Count -eq 0
+$checkpoint.vbaIdentityFlowFactsZero = @($facts | Where-Object { $_.factType -in @("AccessVbaModuleDeclared", "AccessVbaProcedureDeclared", "AccessNavigationCandidate", "AccessEventBindingCandidate") }).Count -eq 0
 $checkpoint.macroIdentityFactsZero = @($facts | Where-Object { $_.factType -eq "AccessMacroDeclared" }).Count -eq 0
 $rowCapability = @($facts | Where-Object { $_.factType -eq "AnalyzerCapabilityDiagnostic" -and $_.properties.capability -eq "rowDataRead" })
 $executionCapability = @($facts | Where-Object { $_.factType -eq "AnalyzerCapabilityDiagnostic" -and $_.properties.capability -eq "executionPerformed" })

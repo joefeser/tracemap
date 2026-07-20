@@ -115,7 +115,7 @@ public sealed class AccessComReader
         gaps.Add(new("AccessMacroEmbeddedInventoryUnavailable", "macro-embedded", null, RuleIds.LegacyAccessMacroGap));
         gaps.Add(new("AccessMacroDataInventoryUnavailable", "macro-data", null, RuleIds.LegacyAccessMacroGap));
         gaps.Add(new("AccessMacroStartupInventoryUnavailable", "macro-startup", null, RuleIds.LegacyAccessMacroGap));
-        if (namedMacroCount > 0)
+        if (namedMacroCount is > 0)
             gaps.Add(new("AccessMacroBodyOmitted", "macro-named", null, RuleIds.LegacyAccessMacroGap));
         var coverage = namedMacroCount.HasValue
             ? "named-count-observed-loaded-state-unavailable-other-categories-identities-bodies-unavailable"

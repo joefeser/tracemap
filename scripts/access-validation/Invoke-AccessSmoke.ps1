@@ -474,7 +474,7 @@ foreach ($outputItem in $protectedOutputs) {
     $files = if (Test-Path $outputItem -PathType Container) { Get-ChildItem $outputItem -File -Recurse } else { Get-Item $outputItem }
     foreach ($file in $files) {
         $foundMarker = Find-ProtectedMarker -Path $file.FullName -Markers $markers
-        if ($null -ne $foundMarker) { throw "protected marker leaked into downstream output" }
+        if ($foundMarker) { throw "protected marker leaked into downstream output" }
     }
 }
 if (Test-Path $canary) { throw "Access canary fired during downstream validation" }

@@ -266,6 +266,7 @@ public sealed class AccessMacroReportingTests
         Assert.Contains("vault-export.gap.access-evidence-consumer-unsupported.v1", script, StringComparison.Ordinal);
         Assert.Contains("Phase 9 checkpoint must be outside the disposable smoke root", script, StringComparison.Ordinal);
         Assert.DoesNotContain("DatabaseHash = $originalHash", script, StringComparison.Ordinal);
+        Assert.Contains("if ($foundMarker) { throw \"protected marker leaked into downstream output\" }", script, StringComparison.Ordinal);
         Assert.Contains("OriginalUnchanged = $true", script, StringComparison.Ordinal);
     }
 
@@ -280,6 +281,8 @@ public sealed class AccessMacroReportingTests
         Assert.Contains("$sequencePath = \"$CheckpointBasePath.$($checkpoint.checkpointSequence)\"", script, StringComparison.Ordinal);
         Assert.Contains("Wait-AccessScanJobs", script, StringComparison.Ordinal);
         Assert.Contains("Test-AccessSurfaceVisible", script, StringComparison.Ordinal);
+        Assert.Contains("$job.State -ne \"Completed\"", script, StringComparison.Ordinal);
+        Assert.Contains("$concurrentResultA.Count -ne 1", script, StringComparison.Ordinal);
         Assert.Contains("$manifest.commitSha -ne $disposableCommit", script, StringComparison.Ordinal);
         Assert.Contains("$_.evidence.extractorVersion", script, StringComparison.Ordinal);
         Assert.Contains("git init -b access-representative", script, StringComparison.Ordinal);
@@ -288,11 +291,16 @@ public sealed class AccessMacroReportingTests
         Assert.Contains("executionPerformedFalse", script, StringComparison.Ordinal);
         Assert.Contains("uiIdentityFactsZero", script, StringComparison.Ordinal);
         Assert.Contains("vbaIdentityFlowFactsZero", script, StringComparison.Ordinal);
+        Assert.Contains("AccessNavigationCandidate", script, StringComparison.Ordinal);
+        Assert.Contains("AccessEventBindingCandidate", script, StringComparison.Ordinal);
         Assert.Contains("macroIdentityFactsZero", script, StringComparison.Ordinal);
         Assert.Contains("AccessEvidenceConsumerUnsupported", script, StringComparison.Ordinal);
         Assert.Contains("protectedOutputMatchCount", script, StringComparison.Ordinal);
         Assert.Contains("originalUnchanged", script, StringComparison.Ordinal);
         Assert.Contains("phase95Representative = \"completed\"", script, StringComparison.Ordinal);
+        Assert.Contains("representative scratch must be a new non-root path", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Remove-Item $ScratchRoot", script, StringComparison.Ordinal);
+        Assert.Contains("if ($null -ne $destination) { $destination.Dispose() }", script, StringComparison.Ordinal);
         Assert.DoesNotContain("RunMacro", script, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenRecordset", script, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenQuery", script, StringComparison.Ordinal);
