@@ -1,7 +1,7 @@
 # Legacy Data Model Relationship Completion Implementation State
 
-Status: implementation-pr3-validated
-Readiness: ready-for-pr3-delivery
+Status: implementation-pr4-validated
+Readiness: ready-for-pr4-delivery
 Spec branch: `codex/legacy-data-model-relationship-completion`
 Target base: `dev`
 Public claim level: hidden
@@ -67,6 +67,27 @@ Public claim level: hidden
   relationship-cap redesign, runtime-loaded config, EDMX, broad downstream
   workflows, and all runtime NHibernate/database behavior. Existing cataloged
   gaps and safe XML bounds for those shapes remain unchanged.
+
+## Implementation PR 4
+
+- Implementation branch:
+  `codex/edmx-relationship-classifier-pr4`.
+- Base: `origin/dev` at merged PR #501 commit
+  `704f64fdf8209dfde9362076d5e2f8057669e44e`.
+- Selected boundary: route existing CSDL `Association` and MSL
+  `AssociationSetMapping` endpoint decisions through the shared classifier.
+  Preserve deterministic facts, inherited-endpoint review labels, CSDL
+  one-missing-type unidirectional evidence, source rule IDs, and
+  `mappingKind=association`.
+- Associations with neither deterministic CSDL type emit a cataloged gap and
+  no relationship fact. Missing or duplicate MSL end roles remain gaps instead
+  of producing endpoint surfaces. Unsafe endpoint identities remain hash-only
+  and classifier-labeled reduced evidence. Add focused determinism, privacy,
+  no-invented-endpoint, and committed public-safe smoke coverage.
+- Deferred: multiple containers, split/conditional/complex mappings,
+  many-to-many join proof, provider extensions, missing broader MSL metadata,
+  EDMX runtime loading, broad downstream workflows, and all database/runtime
+  behavior.
 
 ## Current Context
 
@@ -502,6 +523,50 @@ Deferred after PR 3:
   relationship-cap redesign, and runtime-loaded configuration.
 - EDMX classifier wiring, broad downstream expansion, and all runtime
   NHibernate/database behavior.
+
+## Implementation PR 4 Validation
+
+Implemented scope:
+
+- Routed existing EDMX CSDL `Association` and MSL `AssociationSetMapping`
+  endpoint decisions through the shared relationship classifier.
+- Preserved deterministic full facts, `mappingKind=association`, source rule
+  IDs, inherited-endpoint review limitations, file-level reduced coverage, and
+  CSDL one-missing-type unidirectional evidence.
+- CSDL associations with neither conceptual type and MSL mappings with missing
+  endpoint roles now emit `IncompleteLegacyDataModelRelationship` and no
+  terminal relationship fact. Duplicate or wrong-count endpoint shapes retain
+  cataloged `AmbiguousLegacyDataModelIdentity` gaps without selecting a winner.
+- Unsafe association and endpoint identities remain hash-only and now carry
+  reduced coverage plus `unsafe-redacted-endpoint-identity`.
+- Added repeated-scan determinism, default-artifact privacy, no-invented-
+  endpoint regressions, and a committed public-safe EDMX smoke fixture.
+
+Validation results:
+
+- Focused extractor/classifier/catalog filter: 63 passed, 0 failed.
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with 0 errors and
+  the existing 8 `NU1903` SQLite advisories.
+- `dotnet test src/dotnet/TraceMap.sln --no-restore --no-build`: 827 passed,
+  0 failed.
+- CLI smoke copied the committed sample into a temporary Git repository,
+  committed it as `ae20fb3549c00ee2a460c22672321d83a9492b92`, and scanned that exact
+  commit. The scan emitted all five required artifacts with
+  `Level3SyntaxAnalysis`, metadata-only `NotRun` build status, full and
+  unidirectional CSDL evidence, full MSL evidence, and separate missing-both
+  CSDL and missing-role MSL relationship gaps.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- The pinned legacy-data metadata guidance in `docs/VALIDATION.md` was run;
+  broader model-surface/report/query/export filters remain not applicable
+  because those code paths are unchanged.
+
+Deferred after PR 4:
+
+- Multiple containers, split/conditional/complex mappings, deterministic
+  many-to-many join proof, provider extensions, and missing broader MSL
+  metadata.
+- Broad downstream expansion and all EF/runtime/database behavior.
 
 Initial ACK review follow-up on PR #501:
 
