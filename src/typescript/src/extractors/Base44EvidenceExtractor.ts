@@ -30,6 +30,11 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
     const text = await fs.readFile(item.absolutePath, "utf8");
     const source = ts.createSourceFile(item.absolutePath, text, ts.ScriptTarget.Latest, true, scriptKind(item.relativePath));
     const aliases = aliasMaps.get(item.relativePath) ?? new Map<string, string[]>();
+    const base44Context = aliases.size > 0
+      || source.statements.some((statement) => ts.isImportDeclaration(statement)
+        && ts.isStringLiteral(statement.moduleSpecifier)
+        && isBase44SdkPackageImport(statement.moduleSpecifier.text))
+      || /(^|\/)base44\/(functions|entities)\//.test(item.relativePath);
     for (const statement of source.statements) {
       if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
       const requested = statement.moduleSpecifier.text;
@@ -42,7 +47,7 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
         sourceFileSha256: hash(text, 64)
       }));
     }
-    visit(source, source, item.relativePath, text, aliases, manifest, facts);
+    visit(source, source, item.relativePath, text, aliases, base44Context, manifest, facts);
     if (isFunctionEntry(item.relativePath)) {
       const name = functionName(item.relativePath);
       facts.push(fact(manifest, FactTypes.Base44FunctionSurface, RuleIds.Base44FunctionSurface, source, source, item.relativePath, name, {
@@ -68,12 +73,12 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
   return facts;
 }
 
-function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: string, aliases: Map<string, string[]>, manifest: ScanManifest, facts: CodeFact[]): void {
+function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: string, aliases: Map<string, string[]>, base44Context: boolean, manifest: ScanManifest, facts: CodeFact[]): void {
   if (ts.isCallExpression(node)) {
     const chain = expressionChain(node.expression);
     const prefix = chain ? aliases.get(chain[0]) : undefined;
     if (chain && prefix) addSdkCall([...prefix, ...chain.slice(1)], node, source, filePath, text, manifest, facts);
-    if (chain?.join(".") === "Deno.env.get") {
+    if (base44Context && chain?.join(".") === "Deno.env.get") {
       const name = stringArgument(node.arguments[0]);
       facts.push(fact(manifest, FactTypes.Base44EnvironmentAccess, RuleIds.Base44EnvironmentAccess, node, source, filePath, name ?? "dynamic", {
         environmentName: name ?? "dynamic",
@@ -81,7 +86,7 @@ function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: str
         sourceFileSha256: hash(text, 64)
       }, name ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown));
     }
-    if (chain?.at(-1) === "fetch" || (chain?.[0] === "axios" && chain.length === 2 && axiosMethods.has(chain[1]))) {
+    if (base44Context && (chain?.at(-1) === "fetch" || (chain?.[0] === "axios" && chain.length === 2 && axiosMethods.has(chain[1])))) {
       const literal = stringArgument(node.arguments[0]);
       const origin = literal ? safeOrigin(literal) : null;
       facts.push(fact(manifest, FactTypes.Base44HttpTarget, RuleIds.Base44HttpTarget, node, source, filePath, origin ? `origin-${hash(origin, 20)}` : "dynamic", {
@@ -92,7 +97,7 @@ function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: str
       }, origin ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown));
     }
   }
-  ts.forEachChild(node, (child) => visit(child, source, filePath, text, aliases, manifest, facts));
+  ts.forEachChild(node, (child) => visit(child, source, filePath, text, aliases, base44Context, manifest, facts));
 }
 
 function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceFile, filePath: string, text: string, manifest: ScanManifest, facts: CodeFact[]): void {
