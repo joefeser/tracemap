@@ -109,14 +109,14 @@ function Wait-AccessScanJobs([object[]]$Jobs) {
     if (Test-AccessSurfaceVisible) { $script:accessSurfaceObserved = $true }
 }
 
-function Invoke-AccessScan([string[]]$Arguments) {
+function Invoke-AccessScan([string[]]$ScanArguments) {
     $scanScript = {
         param($Executable, $ScanArguments, $InheritedPath)
         $env:PATH = $InheritedPath
         & $Executable @ScanArguments *> $null
         $LASTEXITCODE
     }
-    $job = Start-Job -ScriptBlock $scanScript -ArgumentList $AccessCli, (, $Arguments), $env:PATH
+    $job = Start-Job -ScriptBlock $scanScript -ArgumentList $AccessCli, (, $ScanArguments), $env:PATH
     try {
         Wait-AccessScanJobs @($job)
         $result = @(Receive-Job $job -Wait)
