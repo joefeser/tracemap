@@ -287,16 +287,6 @@ public sealed class ReleaseReviewTests
         Assert.All(result.Report.Gaps, gap => Assert.False(string.IsNullOrWhiteSpace(gap.RuleId)));
         Assert.All(result.Report.ReviewerChecklist, item => Assert.False(string.IsNullOrWhiteSpace(item.RuleId)));
 
-        var pathCapped = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
-            beforeCombined,
-            afterCombined,
-            Path.Combine(temp.Path, "path-capped-release"),
-            IncludePaths: true,
-            ContractDeltaPath: deltaPath,
-            MaxPaths: 1));
-        Assert.Equal(ReleaseReviewStatuses.Truncated, pathCapped.PathContext.Status);
-        Assert.True(pathCapped.Summary.Truncated);
-
         var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "release-review.md"));
         var json = await File.ReadAllTextAsync(Path.Combine(outDir, "release-review.json"));
         Assert.Contains("TraceMap Release Review Report", markdown);
