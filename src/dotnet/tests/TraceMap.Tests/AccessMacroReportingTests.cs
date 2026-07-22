@@ -224,10 +224,19 @@ public sealed class AccessMacroReportingTests
         Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "external-boundary"));
         Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "sourceDesignKey")
             && item.Metadata.Any(pair => pair.Key == "targetDesignKey"));
+        Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "mapping")
+            && item.Metadata.Any(pair => pair.Key == "mappingKind" && pair.Value == "declared-relationship")
+            && item.Metadata.Any(pair => pair.Key == "mappingDesignKey" && pair.Value.StartsWith("access-", StringComparison.Ordinal)));
+        Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "external-boundary")
+            && item.Metadata.Any(pair => pair.Key == "designKey" && pair.Value.StartsWith("access-", StringComparison.Ordinal))
+            && item.Metadata.All(pair => pair.Key != "parentDesignKey"));
         Assert.All(review.AccessEvidence.Findings.SelectMany(item => item.Metadata)
             .Where(pair => pair.Key.EndsWith("DesignKey", StringComparison.Ordinal)),
             pair => Assert.StartsWith("access-", pair.Value, StringComparison.Ordinal));
         Assert.DoesNotContain(review.AccessEvidence.Findings.SelectMany(item => item.Metadata), pair => pair.Key == "objectName");
+        Assert.All(review.AccessEvidence.Findings.Where(item =>
+                item.Metadata.Any(pair => pair.Key == "capability" && pair.Value is "rowDataRead" or "executionPerformed" or "startupSuppression")),
+            item => Assert.Equal(ReleaseReviewClassifications.NoActionableEvidence, item.Classification));
         Assert.Contains(review.AccessEvidence.Gaps, item => item.GapKind == "AccessMacroIdentityUnavailable");
         Assert.DoesNotContain(review.Gaps, item => item.GapKind == "AccessEvidenceConsumerUnsupported");
         Assert.All(review.AccessEvidence.Findings, finding =>
@@ -310,6 +319,27 @@ public sealed class AccessMacroReportingTests
         Assert.Equal(ReleaseReviewStatuses.Available, scopedReview.AccessEvidence.Status);
         Assert.Equal(ReleaseReviewStatuses.NotRequested, scopedReview.SqlEvidence.Status);
 
+        var cappedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            index,
+            index,
+            Path.Combine(temp.Path, "capped-release-review.md"),
+            Scope: "access-evidence",
+            MaxFindings: 1));
+        Assert.Equal(ReleaseReviewStatuses.Truncated, cappedReview.AccessEvidence.Status);
+        Assert.Single(cappedReview.AccessEvidence.Findings);
+        Assert.Equal(review.AccessEvidence.Findings.Count - 1, cappedReview.AccessEvidence.OmittedCount);
+
+        var gapCappedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            index,
+            index,
+            Path.Combine(temp.Path, "gap-capped-release-review.md"),
+            Scope: "access-evidence",
+            MaxGaps: 1));
+        Assert.Equal(ReleaseReviewStatuses.Truncated, gapCappedReview.AccessEvidence.Status);
+        Assert.Empty(gapCappedReview.AccessEvidence.Gaps);
+        Assert.Equal(review.AccessEvidence.Gaps.Count, gapCappedReview.AccessEvidence.OmittedCount);
+        Assert.True(gapCappedReview.Summary.Truncated);
+
         SqliteConnection.ClearAllPools();
         var unsafePathIndex = Path.Combine(temp.Path, "unsafe-path.sqlite");
         File.Copy(index, unsafePathIndex);
@@ -366,6 +396,39 @@ public sealed class AccessMacroReportingTests
         Assert.Equal(2, identityGaps.Select(gap => gap.GapId).Distinct(StringComparer.Ordinal).Count());
         Assert.Contains(identityGaps, gap => gap.Metadata.Any(pair => pair.Key == "filePath" && pair.Value == "fixture.accdb"));
         Assert.Contains(identityGaps, gap => gap.Metadata.Any(pair => pair.Key == "filePath" && pair.Value == "second.accdb"));
+
+        var truncatedIndex = Path.Combine(temp.Path, "truncated.sqlite");
+        File.Copy(index, truncatedIndex);
+        await using (var connection = new SqliteConnection($"Data Source={truncatedIndex}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                insert into facts (
+                    fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
+                    source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
+                    snippet_hash, extractor_id, extractor_version, properties_json)
+                select fact_id || '-fact-limit', scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
+                    source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
+                    snippet_hash, extractor_id, extractor_version,
+                    json_set(properties_json, '$.classification', 'AccessFactLimitReached')
+                from facts
+                where fact_type = 'AnalysisGap'
+                limit 1;
+                """;
+            Assert.Equal(1, await command.ExecuteNonQueryAsync());
+        }
+        SqliteConnection.ClearAllPools();
+
+        var truncatedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            truncatedIndex,
+            truncatedIndex,
+            Path.Combine(temp.Path, "truncated-release-review.md"),
+            Scope: "access-evidence"));
+        Assert.Equal(ReleaseReviewStatuses.Truncated, truncatedReview.AccessEvidence.Status);
+        Assert.True(truncatedReview.Summary.Truncated);
+        Assert.Contains(truncatedReview.AccessEvidence.Gaps, item => item.GapKind == "AccessFactLimitReached"
+            && item.Classification == ReleaseReviewClassifications.TruncatedByLimit);
 
         await using (var connection = new SqliteConnection($"Data Source={index}"))
         {
@@ -467,6 +530,7 @@ public sealed class AccessMacroReportingTests
         Assert.Contains("AccessNavigationCandidate", script, StringComparison.Ordinal);
         Assert.Contains("AccessEventBindingCandidate", script, StringComparison.Ordinal);
         Assert.Contains("macroIdentityFactsZero", script, StringComparison.Ordinal);
+        Assert.Contains("release-review --before $combined --after $combined --out $releaseReviewOutput --format json --max-findings 10000", script, StringComparison.Ordinal);
         Assert.Contains("$releaseReview.accessEvidence.status -ne \"available\"", script, StringComparison.Ordinal);
         Assert.Contains("representative release-review contract failed", script, StringComparison.Ordinal);
         Assert.Contains("protectedOutputMatchCount", script, StringComparison.Ordinal);
@@ -539,7 +603,12 @@ public sealed class AccessMacroReportingTests
                 new("AccessUiSurfaceUnavailable", "ui-surface", null, RuleIds.LegacyAccessUiSurface),
                 new("AccessVbaProjectUnavailable", "vba-project", null, RuleIds.LegacyAccessVba)
             ],
-            [new("macros", macroCoverage)],
+            [
+                new("macros", macroCoverage),
+                new("rowDataRead", "false"),
+                new("executionPerformed", "false"),
+                new("startupSuppression", "force-disable-requested")
+            ],
             Macros: macro.Macros,
             MacroInventory: new(3, null, macroCoverage));
         return (AccessFactBuilder.Build(input, projection, new(root, "fixture.accdb", output)), output);

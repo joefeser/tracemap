@@ -184,7 +184,10 @@ internal static class AccessDesignReviewComposer
             .ThenBy(gap => gap.GapKind, StringComparer.Ordinal)
             .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
             .ToArray();
-        return new ReleaseReviewSection(ReleaseReviewStatuses.Available, orderedFindings, orderedGaps, Limitations);
+        var status = orderedGaps.Any(gap => gap.Classification == ReleaseReviewClassifications.TruncatedByLimit)
+            ? ReleaseReviewStatuses.Truncated
+            : ReleaseReviewStatuses.Available;
+        return new ReleaseReviewSection(status, orderedFindings, orderedGaps, Limitations);
     }
 
     private static ReleaseReviewFinding? FromFact(AccessDesignFactRow row)
@@ -312,6 +315,8 @@ internal static class AccessDesignReviewComposer
     private static IReadOnlyList<KeyValuePair<string, string>> MappingMetadata(IReadOnlyDictionary<string, string> properties)
     {
         var values = Select(properties, "mappingKind", "indexPrimary", "indexUnique").ToList();
+        if (SafeOpaqueKey(properties.GetValueOrDefault("stableModelKey")) is { } mappingDesignKey)
+            values.Add(Pair("mappingDesignKey", mappingDesignKey));
         if (properties.TryGetValue("fieldStableKeys", out var fields))
             values.Add(Pair("fieldCount", CountList(fields).ToString(System.Globalization.CultureInfo.InvariantCulture)));
         if (properties.TryGetValue("fieldPairs", out var pairs))
@@ -328,7 +333,12 @@ internal static class AccessDesignReviewComposer
         if (SafeOpaqueKey(fact.TargetSymbol) is { } target)
             values.Add(Pair(kind is "mapping" or "query-dependency" ? "targetDesignKey" : "designKey", target));
         if (SafeOpaqueKey(fact.SourceSymbol) is { } source)
-            values.Add(Pair(kind is "mapping" or "query-dependency" ? "sourceDesignKey" : "parentDesignKey", source));
+            values.Add(Pair(kind switch
+            {
+                "mapping" or "query-dependency" => "sourceDesignKey",
+                "external-boundary" => "designKey",
+                _ => "parentDesignKey"
+            }, source));
         return Sorted(values);
     }
 
@@ -340,10 +350,16 @@ internal static class AccessDesignReviewComposer
             ? value
             : null;
 
-    private static string CapabilityClassification(IReadOnlyDictionary<string, string> properties) =>
-        properties.GetValueOrDefault("status") is "available" or "observed"
-            ? ReleaseReviewClassifications.NoActionableEvidence
-            : ReleaseReviewClassifications.ReviewRecommended;
+    private static string CapabilityClassification(IReadOnlyDictionary<string, string> properties)
+    {
+        var capability = properties.GetValueOrDefault("capability");
+        var status = properties.GetValueOrDefault("status");
+        return status is "available" or "observed"
+            || (capability is "rowDataRead" or "executionPerformed" && status == "false")
+            || (capability == "startupSuppression" && status == "force-disable-requested")
+                ? ReleaseReviewClassifications.NoActionableEvidence
+                : ReleaseReviewClassifications.ReviewRecommended;
+    }
 
     private static string QueryClassification(IReadOnlyDictionary<string, string> properties) =>
         string.Equals(properties.GetValueOrDefault("isPassThrough"), "true", StringComparison.Ordinal)

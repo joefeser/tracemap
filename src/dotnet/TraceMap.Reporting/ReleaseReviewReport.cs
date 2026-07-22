@@ -493,6 +493,7 @@ public static class ReleaseReviewReporter
         var cappedGaps = CapGaps(gaps, options.MaxGaps);
         var truncated = gaps.DistinctBy(gap => gap.GapId).Count() > cappedGaps.Length
             || topChangedSurfaces.Status == ReleaseReviewStatuses.Truncated
+            || accessEvidence.Status == ReleaseReviewStatuses.Truncated
             || cappedFindings.Length < allFindings.Length;
         topChangedSurfaces = FilterSectionGaps(topChangedSurfaces, cappedGaps);
         contractImpact = FilterSectionGaps(contractImpact, cappedGaps);
@@ -2064,14 +2065,26 @@ public static class ReleaseReviewReporter
     {
         var allowedIds = allowed.Select(finding => finding.FindingId).ToHashSet(StringComparer.Ordinal);
         var findings = section.Findings.Where(finding => allowedIds.Contains(finding.FindingId)).ToArray();
-        return section with { Findings = findings };
+        var omitted = section.Findings.Count - findings.Length;
+        return section with
+        {
+            Status = omitted > 0 ? ReleaseReviewStatuses.Truncated : section.Status,
+            Findings = findings,
+            OmittedCount = section.OmittedCount + omitted
+        };
     }
 
     private static ReleaseReviewSection FilterSectionGaps(ReleaseReviewSection section, IReadOnlyList<ReleaseReviewGap> allowed)
     {
         var allowedIds = allowed.Select(gap => gap.GapId).ToHashSet(StringComparer.Ordinal);
         var gaps = section.Gaps.Where(gap => allowedIds.Contains(gap.GapId)).ToArray();
-        return section with { Gaps = gaps };
+        var omitted = section.Gaps.Count - gaps.Length;
+        return section with
+        {
+            Status = omitted > 0 ? ReleaseReviewStatuses.Truncated : section.Status,
+            Gaps = gaps,
+            OmittedCount = section.OmittedCount + omitted
+        };
     }
 
     private static string SelectRollup(IReadOnlyList<ReleaseReviewGap> gaps, IReadOnlyList<ReleaseReviewFinding> findings, bool truncated)
