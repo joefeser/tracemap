@@ -973,3 +973,24 @@ dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
 The focused tests cover deterministic ordering, schema fields, context
 transitions, scheduled and validation groups, permission/protected projections,
 partial gaps, planted-value leakage, forbidden runnable SQL, and CLI artifacts.
+
+## SQL validation-summary ingestion smoke
+
+Run the focused offline ingestion and composition tests:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~SqlValidationSummaryTests
+```
+
+The suite generates only synthetic categorical summaries and covers valid,
+expired, source/commit mismatch, context mismatch, unsupported validator,
+unsupported assertion, exact duplicate, conflict, digest tamper, malformed, and
+planted-secret cases. It also runs `scan --sql-validation-summary` and release
+review composition, proves static evidence tiers remain unchanged, and verifies
+that rejected summaries flow into rule-backed packet gaps.
+
+Do not substitute terminal output, screenshots, SQL text, connection material,
+target names, ticket notes, or human-authored pass/fail prose for the versioned
+summary. TraceMap does not run the validator or connect to PostgreSQL during
+this smoke.

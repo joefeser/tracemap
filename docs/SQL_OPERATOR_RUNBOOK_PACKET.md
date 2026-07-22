@@ -3,7 +3,7 @@
 TraceMap scans that contain supported SQL evidence emit two additional artifacts:
 
 - `sql-runbook.md` — a human-safe operator handoff packet.
-- `sql-runbook.json` — the allowlisted `sql-operator-runbook-packet/v2` summary.
+- `sql-runbook.json` — the allowlisted `sql-operator-runbook-packet/v3` summary.
 
 The packet projects cataloged execution-context, archive-link, protected-material,
 permission-prerequisite, validation-step, cleanup-candidate, and gap evidence. It
@@ -38,17 +38,31 @@ certify safety, approve changes, prove permissions, validate rollback, or replac
 DBA/operator judgment. Missing or conflicting evidence remains a stop condition
 or owner question rather than a clean-state conclusion.
 
-## Future Validation Boundary
+## Observed Validation Boundary
 
-V0 accepts no live database connection or raw validation output. A future
-`sql-validation-summary/v1` artifact is tracked by
-[issue #508](https://github.com/joefeser/tracemap/issues/508) and requires a
-separate specification with
-explicit provenance, observation time, categorical target context, validator
-identity/version, safe assertion codes, result status, freshness checks, and
-limitations. It must remain separate from static fact tiers and must not contain
-credentials, connection data, raw SQL, private infrastructure names, or raw
-database output.
+Version 3 can ingest an explicit validator-produced `sql-validation-summary/v1`
+artifact. Pass `--sql-validation-summary <path>` to `scan` or
+`release-review`; the option is repeatable. Pair it with
+`--sql-validation-as-of <RFC3339 timestamp>` so expiry decisions are explicit
+and deterministic. TraceMap reads the artifact as data and never executes it.
+
+The strict contract is documented at
+`contracts/artifacts/sql-validation-summary.v1.schema.json`. It binds the
+summary to repository, commit, categorical target context, observation/expiry
+timestamps, approved validator/version, closed assertion/status values, and a
+canonical SHA-256 digest. Freshness is evaluated against the explicit
+`--sql-validation-as-of` instant, making repeated composition deterministic
+while allowing validation to occur after the static scan.
+
+Accepted observations appear under `observedValidation`, separate from static
+milestones and their evidence tiers. Malformed, tampered, expired, unsupported,
+mismatched, duplicate, ambiguous, and conflicting summaries become rule-backed
+gaps. No input path, raw JSON, raw output, target name, SQL, credential,
+connection detail, or private infrastructure identity is rendered.
+
+An `observed-pass` value remains point-in-time and assertion-specific. It does
+not establish continuing state, safe execution, complete procedure success,
+release approval, or DBA attestation.
 
 ## Synthetic Smoke Test
 

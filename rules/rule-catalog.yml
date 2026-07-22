@@ -3441,6 +3441,31 @@ rules:
       - The allowlisted projection omits raw SQL, snippets, credentials, connection data, scheduled command bodies, private infrastructure identities, raw validation output, and local absolute paths.
       - Cross-file order and all missing, conflicting, unsupported, or reduced upstream evidence remain explicit gaps or stop conditions.
 
+  - id: database.sql.validation-summary.observation.v1
+    name: SQL validation summary observation projection
+    description: Projects an assertion-specific categorical observation from a digest-verified, provenance-bound sql-validation-summary/v1 artifact separately from static SQL evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - sql-runbook.json observedValidation row
+      - sql-runbook.md observed validation row
+      - release-review SQL validation observation finding
+    limitations:
+      - The observation is point-in-time, assertion-specific, and bounded by the supplied expiry; it does not establish continuing database state.
+      - Tier4Unknown is used as the normalized release-review transport tier; metadata labels the row observed-validation and staticEvidenceTier not-applicable, so it must not be interpreted as a static fact tier.
+      - Validator identity and canonical digest checks establish compatibility and content integrity only; they do not provide cryptographic producer authentication or DBA attestation.
+      - An observed-pass status does not certify safety, approve a release, prove the whole procedure succeeded, or replace operator judgment.
+
+  - id: database.sql.validation-summary.gap.v1
+    name: SQL validation summary ingestion gap
+    description: Records malformed, tampered, expired, unsupported, mismatched, duplicate, ambiguous, or conflicting sql-validation-summary/v1 input without exposing raw content or target identity.
+    evidenceTier: Tier4Unknown
+    emits:
+      - sql-runbook gap
+      - ReleaseReviewGap
+    limitations:
+      - A gap describes why supplied observed evidence was not accepted; it does not establish that the underlying database check failed or that runtime state is unsafe.
+      - Gap output uses closed reason codes and safe artifact IDs only; input paths, raw JSON, SQL, results, credentials, and private target names are omitted.
+
   - id: config.key.v1
     name: Configuration key extraction
     description: Parses appsettings*.json, Web.config, App.config, packages.config, and connection string entries.
