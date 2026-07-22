@@ -22,10 +22,15 @@ Validation:
 - Bash syntax, private-path guard, and `git diff --check`: passed.
 
 PR state: [#519](https://github.com/joefeser/tracemap/pull/519) is open at
-`f8a9e0cf`. ACK stopped before GitHub review processing with
+the current branch head. ACK stopped before GitHub review processing with
 `environment_blocked / LOCAL_BUILD_STALE`: installed ACK `0.3.0-rc.1`
 reported stale compiled output, while the trusted TraceMap lane requires a
 stable build. No review bot was requested and no merge authority was inferred.
+
+Review follow-up: current Qodo findings were addressed by making EXIT-trap
+scratch deletion best-effort and expanding the public-safe assertion to cover
+common connection-string key forms. The disposable PostgreSQL smoke passed
+again after both changes.
 
 Deferred: reusable archive/source plan templates and operator packet; public
 static-versus-observed story; PostgreSQL schema/migration adapter work; live
