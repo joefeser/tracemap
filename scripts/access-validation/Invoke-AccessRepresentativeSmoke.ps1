@@ -403,15 +403,25 @@ if ($vaultGaps.Count -ne 1) { Stop-Representative "downstream-validation" "repre
 $checkpoint.vaultContractCorrect = $true
 Write-RepresentativeCheckpoint
 
-& $TraceMapCli release-review --before $combined --after $combined --out $releaseReviewOutput --format json *> $null
+& $TraceMapCli release-review --before $combined --after $combined --out $releaseReviewOutput --format json --max-findings 10000 *> $null
 if ($LASTEXITCODE -ne 0) { Stop-Representative "downstream-validation" "representative release review failed" }
 $releaseReview = Get-Content (Join-Path $releaseReviewOutput "release-review.json") -Raw | ConvertFrom-Json
-$releaseGaps = @($releaseReview.gaps | Where-Object {
-    $_.gapKind -eq "AccessEvidenceConsumerUnsupported" -and
-    $_.ruleId -eq "release.review.section.v1" -and
+$releaseFindings = @($releaseReview.accessEvidence.findings | Where-Object {
+    $_.section -eq "accessEvidence" -and
+    $_.ruleId -like "legacy.access.*" -and
+    -not [string]::IsNullOrWhiteSpace([string]$_.extractorId) -and
+    -not [string]::IsNullOrWhiteSpace([string]$_.extractorVersion) -and
+    -not [string]::IsNullOrWhiteSpace([string]$_.coverageLabel) -and
     @($_.supportingFactIds).Count -gt 0
 })
-if ($releaseGaps.Count -ne 1) { Stop-Representative "downstream-validation" "representative release-review contract failed" }
+$releaseGaps = @($releaseReview.accessEvidence.gaps | Where-Object {
+    $_.section -eq "accessEvidence" -and
+    $_.ruleId -like "legacy.access.*" -and
+    @($_.supportingFactIds).Count -gt 0
+})
+if ($releaseReview.accessEvidence.status -ne "available" -or $releaseFindings.Count -eq 0 -or $releaseGaps.Count -eq 0) {
+    Stop-Representative "downstream-validation" "representative release-review contract failed"
+}
 $checkpoint.releaseReviewContractCorrect = $true
 Write-RepresentativeCheckpoint
 

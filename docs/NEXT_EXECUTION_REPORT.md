@@ -4,10 +4,10 @@ Date: 2026-07-20
 
 ## Branch State
 
-- `main` is the human-mediated release branch at
-  `3dd7e455503e5bad5028323254c59976ffa75a10`.
-- `dev` is the active integration branch at
-  `da7f4f2c56dcd4b88c2abd82bdff04a9a7687309` before this closeout slice.
+- Live `origin/main`, verified on 2026-07-20, remains at promotion PR #505
+  commit `81033b4fee9abc6b3dbed63234570e9bb7cb66ca`.
+- `dev` contains Access design-review composition PR #506 and its normalized
+  closeout PR #507 at `51cc0847c411dd0a6742797f17f03d8d8cc4f398`.
 - Main promotions remain owner-mediated. ACK `merge_ready` on a feature-to-dev
   PR does not authorize an automatic dev-to-main promotion.
 - The public site lane remains separate from core implementation unless it is
@@ -29,6 +29,11 @@ SQL evidence runway:
   archive-link, and operator-runbook evidence;
 - release-review SQL runway composition with structured gaps and preserved
   upstream provenance;
+- route-flow SQL-context composition and the public-safe SQL operator proof
+  packet;
+- the Microsoft Access adapter v0 foundation, count-only form/report/VBA/macro
+  boundaries, downstream gaps, and completed Windows validation;
+- the Base44 adapter and typed DataSet relationship-field completion;
 - hidden terminal-context vault navigation and the static
   `tracemap.tools` site.
 
@@ -36,23 +41,14 @@ These are static, coverage-relative evidence lanes. They do not establish
 runtime execution, production traffic/state, deployment, authorization,
 vulnerability, release approval, or that a change is safe.
 
-## Additional Product Shape On Dev
+## Most Recently Completed Product Slice
 
-`dev` additionally contains:
-
-- Route-flow SQL-context composition for already-selected SQL-facing static
-  paths (PR #483);
-- The public-safe SQL operator proof page and generated-site guard hardening
-  (PR #486);
-- The source/tree/commit-bound Base44 static evidence adapter and its
-  service-role/SDK follow-up (PRs #494 and #496);
-- Microsoft Access adapter v0 foundation, bounded form/report counts,
-  conservative VBA/module counts, macro counts, downstream gaps, and local-only
-  Windows validation (PRs #487, #492, #493, #495, and closeout #497).
-
-Access UI/VBA/macro item identities and bodies remain deliberately unavailable
-in the shipped count-only v0. Their absence is rule-backed reduced coverage, not
-evidence that those objects or flows do not exist.
+Access design-review composition is implemented on `dev` through PR #506.
+Release review now composes already persisted Access inventory, schema,
+relationship, saved-query, external-boundary, count-only metadata, and coverage
+gaps. It added no COM reads and did not reopen UI, VBA, macro, row-data,
+execution, or Windows probe boundaries. PR #507 records the normalized merged
+state.
 
 ## Runway Interpretation Rules
 
@@ -81,8 +77,8 @@ evidence that those objects or flows do not exist.
 - Static dispatch candidate bridges: PRs #331 and #333 merged the shared
   builder and bounded override traversal; DI annotations and broader consumer
   composition remain follow-ups.
-- Legacy data model relationship completion: PR #398 merged only the reviewed
-  spec. Its shared relationship gap classifier/harness is not implemented.
+- Legacy data model relationship completion is implemented through PR #504,
+  including the typed DataSet relationship-field classification follow-up.
 - Route-flow service/data composition final reports Task 10 public-safe
   validation complete. Issues #159, #179, and #201 should be closed or narrowed
   from merged evidence before being treated as new implementation queues.
@@ -92,37 +88,49 @@ evidence that those objects or flows do not exist.
 
 ## Recommended Next Product Story
 
-Implement PR 1 from
-`.kiro/specs/legacy-data-model-relationship-completion/`:
+Specify and implement the first bounded slice of
+[`sql-validation-summary/v1` ingestion (#508)](https://github.com/joefeser/tracemap/issues/508).
 
-1. Re-audit current `origin/dev` and the live rule catalog/extractors.
-2. Add the small shared deterministic relationship-gap classifier/harness
-   described by the reviewed spec.
-3. Wire at most one descriptor family if the shared harness alone is not a
-   useful reviewable slice.
-4. Preserve existing DBML, EDMX, typed DataSet, and NHibernate family behavior;
-   do not invent endpoints, runtime mappings, database access, or provider
-   compatibility.
-5. Add rule-catalog coverage before any new reason/gap string, focused
-   determinism and ambiguity tests, full .NET validation, private-path checking,
-   and ACK review-loop evidence.
+1. Define the versioned public-safe schema, repository/commit binding,
+   categorical target context, observation/expiry times, validator
+   identity/version, artifact identity, closed assertion codes/statuses, and
+   limitations.
+2. Define an explicit producer/trust policy. Prefer validator-generated
+   assertions; do not treat a free-form DBA/operator statement such as
+   `passed` as evidence merely because a person supplied it.
+3. Accept only an opt-in checked-in or explicitly supplied summary. TraceMap
+   must not connect to a database or execute SQL.
+4. Reject expired, malformed, unsupported-validator/assertion,
+   mismatched-commit/context, duplicate, conflicting, or unsafe artifacts as
+   structured `ReleaseReviewGap` entries flowed into the packet-level `gaps`
+   collection; gaps are not status values.
+5. Render static intent and observed evidence separately in the SQL runbook and
+   release review. Observations never rewrite the upstream static evidence tier.
+6. Prove the boundary with synthetic success/failure fixtures, deterministic
+   IDs/order, planted-secret/output/path checks, full .NET validation, and ACK.
 
-This is the next authoritative product story because its spec is merged and
-reviewed, its first product slice is explicitly unstarted, it deepens an
-existing buyer-relevant data-design lane, and it requires no private customer
-artifact or Windows-only capability.
+This is next because the shipped runbook currently proves only that a
+validation step exists; its observation state remains
+`validation-evidence-not-provided`. The new boundary provides provenance,
+freshness, and narrow machine-readable observations without importing raw SQL,
+database output, screenshots, tickets, private target names, or operator prose.
+
+Richer Access UI/VBA/macro identity or body extraction is not the default next
+story. It requires a separate threat review and Windows authorization because
+the v0 probes proved that apparently simple item access can load surfaces.
 
 ## Subsequent Choices
 
-After the relationship classifier slice:
+After the SQL validation-summary slice:
 
-1. choose one static-dispatch follow-up (DI context or one downstream consumer),
-   not the entire remaining task list;
-2. choose one event/message follow-up such as release-review context or
-   route-flow async-boundary rendering;
-3. reconcile and close the already-delivered route/property-flow issues before
+1. decide whether an approved external validator/harness can produce the v1
+   artifact; do not move SQL execution into TraceMap to manufacture evidence;
+2. consider one additional Access downstream consumer while preserving the
+   count-only gaps;
+3. choose one static-dispatch or event/message follow-up;
+4. reconcile and close the already-delivered route/property-flow issues before
    reopening them as product work;
-4. promote `dev` to `main` only as a separate owner-mediated release PR.
+5. promote `dev` to `main` only as a separate owner-mediated release PR.
 
 ## Site Lane
 
@@ -139,6 +147,9 @@ After the relationship classifier slice:
 - Do not describe `dev`-only features as already on `main`.
 - Do not turn stale open issues into duplicate implementations without checking
   merged PRs and current spec authority.
+- Do not accept free-form SQL validation claims, pasted command output, or
+  screenshots as `sql-validation-summary/v1`; require the versioned producer,
+  provenance, context, assertion-code, freshness, and limitation contract.
 - Do not add LLMs, embeddings, vector databases, prompt classification, or
   runtime systems to the scanner/reducer.
 - If a required tool is missing, follow `AGENTS.md`: check Homebrew and known
