@@ -46,9 +46,11 @@ bound to exactly one compatible source is rejected with a gap.
 
 Inputs are parsed and sorted by safe artifact identity. Exact repeated artifacts
 yield one accepted copy and `DuplicateSummary`. Reused IDs with different
-digests yield `ConflictingSummary` and no accepted copy. Multiple artifacts for
-the same source/context/assertion with different status yield
-`ConflictingAssertion` and remove that assertion from accepted output.
+digests yield `ConflictingSummary` and no accepted copy. Multiple distinct
+artifacts for the same source/context/assertion identity yield
+`ConflictingAssertion` and remove that assertion from accepted output even when
+their status strings agree, preventing redundant artifacts from overstating the
+amount of observed evidence.
 
 ## Output model
 

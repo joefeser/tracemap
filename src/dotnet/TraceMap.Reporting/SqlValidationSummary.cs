@@ -102,19 +102,21 @@ public static partial class SqlValidationSummaryReader
 
         var candidates = new List<Candidate>();
         var gaps = new List<SqlValidationIngestionGap>();
-        foreach (var path in paths.OrderBy(value => value, StringComparer.Ordinal))
+        foreach (var input in paths.Select((path, index) => (Path: path, Ordinal: index)))
         {
+            var inputKey = $"input-{input.Ordinal:D4}";
             try
             {
-                var json = await File.ReadAllTextAsync(path, cancellationToken);
+                var json = await File.ReadAllTextAsync(input.Path, cancellationToken);
                 var parsed = Parse(json);
                 if (parsed.Candidate is not null)
                     candidates.Add(parsed.Candidate);
-                gaps.AddRange(parsed.Gaps);
+                gaps.AddRange(parsed.Gaps.Select(gap => DiscriminateGap(gap, inputKey, input.Ordinal)));
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
             {
-                gaps.Add(Gap("MalformedSummary", "unidentified", "The supplied SQL validation summary could not be read as the strict v1 contract."));
+                gaps.Add(Gap("MalformedSummary", "unidentified", "The supplied SQL validation summary could not be read as the strict v1 contract.", inputKey,
+                    [new KeyValuePair<string, string>("inputOrdinal", input.Ordinal.ToString("D4"))]));
             }
         }
 
@@ -194,14 +196,17 @@ public static partial class SqlValidationSummaryReader
         var conflicted = observations
             .GroupBy(observation => string.Join('\u001f', observation.Repository, observation.CommitSha,
                 ContextKey(observation.TargetContext), observation.AssertionCode), StringComparer.Ordinal)
-            .Where(group => group.Select(observation => observation.Status).Distinct(StringComparer.Ordinal).Skip(1).Any())
+            .Where(group => group.Select(observation => observation.ArtifactId).Distinct(StringComparer.Ordinal).Skip(1).Any())
             .Select(group => group.Key)
             .ToHashSet(StringComparer.Ordinal);
         foreach (var key in conflicted.Order(StringComparer.Ordinal))
         {
-            var artifactId = observations.Where(observation => ObservationKey(observation) == key)
-                .Select(observation => observation.ArtifactId).Order(StringComparer.Ordinal).First();
-            gaps.Add(Gap("ConflictingAssertion", artifactId, "Conflicting statuses were supplied for the same source, context, and assertion; none were accepted."));
+            var matching = observations.Where(observation => ObservationKey(observation) == key).OrderBy(observation => observation.ArtifactId, StringComparer.Ordinal).ToArray();
+            var artifactId = matching[0].ArtifactId;
+            gaps.Add(Gap("ConflictingAssertion", artifactId,
+                "Multiple artifacts supplied the same source, context, and assertion identity; none were accepted.",
+                StableId("assertion-identity", key),
+                [new KeyValuePair<string, string>("assertionCode", matching[0].AssertionCode)]));
         }
         observations.RemoveAll(observation => conflicted.Contains(ObservationKey(observation)));
 
@@ -311,9 +316,21 @@ public static partial class SqlValidationSummaryReader
     }
 
     private static ParseResult Reject(string code, string artifactId, string message) => new(null, [Gap(code, artifactId, message)]);
-    private static SqlValidationIngestionGap Gap(string code, string artifactId, string message) => new(
-        StableId("gap", code, artifactId), code, RuleIds.DatabaseSqlValidationSummaryGap, artifactId, message,
-        [new KeyValuePair<string, string>("artifactId", artifactId)]);
+    private static SqlValidationIngestionGap Gap(
+        string code,
+        string artifactId,
+        string message,
+        string discriminator = "default",
+        IReadOnlyList<KeyValuePair<string, string>>? metadata = null) => new(
+        StableId("gap", code, artifactId, discriminator), code, RuleIds.DatabaseSqlValidationSummaryGap, artifactId, message,
+        new[] { new KeyValuePair<string, string>("artifactId", artifactId) }
+            .Concat(metadata ?? []).OrderBy(pair => pair.Key, StringComparer.Ordinal).ThenBy(pair => pair.Value, StringComparer.Ordinal).ToArray());
+    private static SqlValidationIngestionGap DiscriminateGap(SqlValidationIngestionGap gap, string discriminator, int inputOrdinal) => gap with
+    {
+        GapId = StableId("gap", gap.Code, gap.ArtifactId, discriminator),
+        Metadata = gap.Metadata.Append(new KeyValuePair<string, string>("inputOrdinal", inputOrdinal.ToString("D4")))
+            .OrderBy(pair => pair.Key, StringComparer.Ordinal).ThenBy(pair => pair.Value, StringComparer.Ordinal).ToArray()
+    };
     private static string StableId(params string[] parts) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\u001f', parts)))).ToLowerInvariant()[..24];
     private static string ContextKey(SqlValidationTargetContext context) => string.Join('|', context.Engine, context.ServerRole, context.DatabaseRole, context.SchemaRole, context.ExecutionMode);
     private static string ObservationKey(SqlValidationObservation observation) => string.Join('\u001f', observation.Repository, observation.CommitSha, ContextKey(observation.TargetContext), observation.AssertionCode);
