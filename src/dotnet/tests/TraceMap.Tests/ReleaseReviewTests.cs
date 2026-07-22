@@ -843,6 +843,12 @@ public sealed class ReleaseReviewTests
         Assert.Empty(gapCapped.Report.ApiDtoChanges.Gaps);
         Assert.Empty(gapCapped.Report.SqlSchemaImpact.Gaps);
         Assert.Empty(gapCapped.Report.PackageImpact.Gaps);
+        Assert.Equal(ReleaseReviewStatuses.Unavailable, gapCapped.Report.ApiDtoChanges.Status);
+        Assert.Equal(ReleaseReviewStatuses.Unavailable, gapCapped.Report.SqlSchemaImpact.Status);
+        Assert.Equal(ReleaseReviewStatuses.Deferred, gapCapped.Report.PackageImpact.Status);
+        Assert.Equal(1, gapCapped.Report.ApiDtoChanges.OmittedCount);
+        Assert.Equal(1, gapCapped.Report.SqlSchemaImpact.OmittedCount);
+        Assert.Equal(1, gapCapped.Report.PackageImpact.OmittedCount);
 
         var checklistCapped = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
             beforeCombined,
