@@ -325,6 +325,8 @@ public static class RuleIds
     public const string DatabasePostgresPermissionCoverage = "database.postgres.permission.coverage.v1";
     public const string DatabasePostgresPermissionGap = "database.postgres.permission.gap.v1";
     public const string DatabaseSqlOperatorRunbookPacket = "database.sql.operator-runbook-packet.v1";
+    public const string DatabaseSqlValidationSummaryObservation = "database.sql.validation-summary.observation.v1";
+    public const string DatabaseSqlValidationSummaryGap = "database.sql.validation-summary.gap.v1";
     public const string ConfigKey = "config.key.v1";
     public const string LegacyWcfConfig = "legacy.wcf.config.v1";
     public const string LegacyWcfContract = "legacy.wcf.contract.v1";

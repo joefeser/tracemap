@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tracemap.tools/contracts/sql-validation-summary.v1.schema.json",
+  "title": "TraceMap SQL validation summary v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "artifactId", "repository", "commitSha", "observedAt", "expiresAt", "targetContext", "validator", "artifact", "publicClaimLevel", "assertions", "limitations"],
+  "properties": {
+    "schemaVersion": { "const": "sql-validation-summary/v1" },
+    "artifactId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,95}$" },
+    "repository": { "type": "string", "pattern": "^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)?$" },
+    "commitSha": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "targetContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engine", "serverRole", "databaseRole", "schemaRole", "executionMode"],
+      "properties": {
+        "engine": { "const": "postgresql" },
+        "serverRole": { "enum": ["admin", "source", "archive-target", "application-primary", "co-located", "validation"] },
+        "databaseRole": { "enum": ["admin", "source-data", "archive-data", "application-data", "validation-only"] },
+        "schemaRole": { "enum": ["extension", "application", "archive", "validation", "unspecified"] },
+        "executionMode": { "enum": ["manual", "scheduled", "validation-only", "migration-runner"] }
+      }
+    },
+    "validator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "const": "tracemap.sql-validation-harness" },
+        "version": { "const": "1.0.0" }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "digest"],
+      "properties": {
+        "algorithm": { "const": "sha256-canonical-json-v1" },
+        "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "publicClaimLevel": { "const": "public-safe" },
+    "assertions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "status"],
+        "properties": {
+          "code": { "enum": ["postgres.server-version-compatible", "postgres.required-extension-available", "postgres.target-schema-compatible", "postgres.migration-schema-present", "postgres.archive-link-connectivity", "postgres.permission-probe-authorized", "postgres.archive-function-callable", "postgres.scheduled-job-registered", "postgres.validation-query-expected-shape", "postgres.cleanup-probe-observed"] },
+          "status": { "enum": ["observed-pass", "observed-fail", "observed-indeterminate", "not-run"] }
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": { "enum": ["point-in-time-observation", "does-not-establish-continuing-state", "does-not-approve-release", "does-not-establish-safe-to-run"] }
+    }
+  }
+}

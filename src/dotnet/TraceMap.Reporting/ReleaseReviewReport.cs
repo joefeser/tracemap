@@ -29,7 +29,9 @@ public sealed record ReleaseReviewOptions(
     int MaxPaths = 25,
     int MaxGaps = 1000,
     int MaxChecklistItems = 50,
-    bool IncludePriority = false);
+    bool IncludePriority = false,
+    IReadOnlyList<string>? SqlValidationSummaryPaths = null,
+    DateTimeOffset? SqlValidationAsOf = null);
 
 public sealed record ReleaseReviewResult(
     ReleaseReviewDocument Report,
@@ -55,6 +57,7 @@ public sealed record ReleaseReviewDocument(
     ReleaseReviewSection ApiDtoChanges,
     ReleaseReviewSection SqlSchemaImpact,
     ReleaseReviewSection SqlEvidence,
+    ReleaseReviewSection SqlValidationObservations,
     ReleaseReviewSection AccessEvidence,
     ReleaseReviewSection PackageImpact,
     ReleaseReviewSection PathContext,
@@ -74,6 +77,7 @@ public sealed record ReleaseReviewQuery(
     bool ContractDeltaProvided,
     bool SqlSchemaDeltaProvided,
     bool PackageDeltaProvided,
+    bool SqlValidationSummaryProvided,
     int MaxFindings,
     int MaxSurfaceRows,
     int MaxPaths,
@@ -122,6 +126,7 @@ public sealed record ReleaseReviewSummary(
     int ApiDtoFindingCount,
     int SqlSchemaFindingCount,
     int SqlEvidenceFindingCount,
+    int SqlValidationObservationFindingCount,
     int AccessEvidenceFindingCount,
     int PackageFindingCount,
     int PathFindingCount,
@@ -231,7 +236,7 @@ public static class ReleaseReviewClassifications
 public static class ReleaseReviewReporter
 {
     private const string ReportType = "release-review";
-    private const string Version = "1.1";
+    private const string Version = "1.2";
     private const string Algorithm = "release-review-composition";
     private const string AlgorithmVersion = "1.0";
     private const string RollupRuleId = "release.review.rollup.v1";
@@ -445,6 +450,7 @@ public static class ReleaseReviewReporter
             requested: scopes.Contains("api-dto", StringComparer.Ordinal));
         var sqlSchemaImpact = BuildSqlSchemaSection(options, scopes);
         var sqlEvidence = await BuildSqlEvidenceSectionAsync(options, scopes, afterInfo.Kind, cancellationToken);
+        var sqlValidationObservations = await BuildSqlValidationObservationSectionAsync(options, scopes, afterInfo.Kind, cancellationToken);
         var accessEvidence = await AccessDesignReviewComposer.BuildSectionAsync(
             options.AfterPath,
             afterInfo.Kind,
@@ -456,6 +462,7 @@ public static class ReleaseReviewReporter
         gaps.AddRange(apiDtoChanges.Gaps);
         gaps.AddRange(sqlSchemaImpact.Gaps);
         gaps.AddRange(sqlEvidence.Gaps);
+        gaps.AddRange(sqlValidationObservations.Gaps);
         gaps.AddRange(accessEvidence.Gaps);
         gaps.AddRange(packageImpact.Gaps);
 
@@ -466,6 +473,7 @@ public static class ReleaseReviewReporter
                 apiDtoChanges,
                 sqlSchemaImpact,
                 sqlEvidence,
+                sqlValidationObservations,
                 accessEvidence,
                 packageImpact,
                 pathContext,
@@ -484,6 +492,7 @@ public static class ReleaseReviewReporter
         apiDtoChanges = FilterSectionFindings(apiDtoChanges, cappedFindings);
         sqlSchemaImpact = FilterSectionFindings(sqlSchemaImpact, cappedFindings);
         sqlEvidence = FilterSectionFindings(sqlEvidence, cappedFindings);
+        sqlValidationObservations = FilterSectionFindings(sqlValidationObservations, cappedFindings);
         accessEvidence = FilterSectionFindings(accessEvidence, cappedFindings);
         packageImpact = FilterSectionFindings(packageImpact, cappedFindings);
         pathContext = FilterSectionFindings(pathContext, cappedFindings);
@@ -499,6 +508,7 @@ public static class ReleaseReviewReporter
                 apiDtoChanges,
                 sqlSchemaImpact,
                 sqlEvidence,
+                sqlValidationObservations,
                 accessEvidence,
                 packageImpact,
                 pathContext,
@@ -510,6 +520,7 @@ public static class ReleaseReviewReporter
         apiDtoChanges = FilterSectionGaps(apiDtoChanges, cappedGaps);
         sqlSchemaImpact = FilterSectionGaps(sqlSchemaImpact, cappedGaps);
         sqlEvidence = FilterSectionGaps(sqlEvidence, cappedGaps);
+        sqlValidationObservations = FilterSectionGaps(sqlValidationObservations, cappedGaps);
         accessEvidence = FilterSectionGaps(accessEvidence, cappedGaps);
         packageImpact = FilterSectionGaps(packageImpact, cappedGaps);
         pathContext = FilterSectionGaps(pathContext, cappedGaps);
@@ -522,6 +533,7 @@ public static class ReleaseReviewReporter
             apiDtoChanges,
             sqlSchemaImpact,
             sqlEvidence,
+            sqlValidationObservations,
             accessEvidence,
             packageImpact,
             pathContext,
@@ -545,6 +557,7 @@ public static class ReleaseReviewReporter
                 !string.IsNullOrWhiteSpace(options.ContractDeltaPath),
                 !string.IsNullOrWhiteSpace(options.SqlSchemaDeltaPath),
                 !string.IsNullOrWhiteSpace(options.PackageDeltaPath),
+                options.SqlValidationSummaryPaths is { Count: > 0 },
                 options.MaxFindings,
                 options.MaxSurfaceRows,
                 options.MaxPaths,
@@ -562,6 +575,7 @@ public static class ReleaseReviewReporter
             apiDtoChanges,
             sqlSchemaImpact,
             sqlEvidence,
+            sqlValidationObservations,
             accessEvidence,
             packageImpact,
             pathContext,
@@ -897,6 +911,100 @@ public static class ReleaseReviewReporter
         return new ReleaseReviewSection(ReleaseReviewStatuses.Available, orderedFindings, orderedGaps, SqlEvidenceLimitations());
     }
 
+    private static async Task<ReleaseReviewSection> BuildSqlValidationObservationSectionAsync(
+        ReleaseReviewOptions options,
+        IReadOnlyList<string> scopes,
+        string indexKind,
+        CancellationToken cancellationToken)
+    {
+        var paths = options.SqlValidationSummaryPaths ?? [];
+        if (!ScopeEnabled(scopes, "sql-evidence") || paths.Count == 0)
+        {
+            return new ReleaseReviewSection(ReleaseReviewStatuses.NotRequested, [], [],
+                ["Observed SQL validation is included only when --sql-validation-summary is explicitly supplied within SQL evidence scope."]);
+        }
+
+        var inputs = await ReadSqlEvidenceInputsAsync(options.AfterPath, indexKind, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(options.Source))
+            inputs = inputs.Where(input => string.Equals(input.SourceLabel, options.Source, StringComparison.Ordinal)).ToArray();
+
+        var compatible = inputs.Where(input => input.ProvenanceCompatible).OrderBy(input => input.SourceLabel, StringComparer.Ordinal).ToArray();
+        var expected = compatible.Select(input =>
+        {
+            var packet = SqlRunbookPacketBuilder.Build(input.Result);
+            return SqlRunbookPacketBuilder.ValidationExpectedSource(input.Result, packet, input.SourceLabel, options.SqlValidationAsOf);
+        }).ToArray();
+        var composition = await SqlValidationSummaryReader.ReadAsync(paths, expected, cancellationToken);
+
+        var labels = compatible
+            .GroupBy(input => $"{input.Result.Manifest.RepoName}\u001f{input.Result.Manifest.CommitSha}", StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.OrderBy(input => input.SourceLabel, StringComparer.Ordinal).First().SourceLabel, StringComparer.Ordinal);
+        var findings = composition.Observations.Select(observation => new ReleaseReviewFinding(
+                StableId("finding", "sqlValidationObservations", observation.ObservationId),
+                "sqlValidationObservations",
+                labels.GetValueOrDefault($"{observation.Repository}\u001f{observation.CommitSha}"),
+                ReleaseReviewClassifications.ReviewRecommended,
+                observation.RuleId,
+                EvidenceTiers.Tier4Unknown,
+                observation.CommitSha,
+                observation.AssertionCode,
+                null,
+                null,
+                null,
+                CombinedReportHelpers.SortedMetadata([
+                    Pair("evidenceKind", "observed-validation"),
+                    Pair("staticEvidenceTier", "not-applicable"),
+                    Pair("status", observation.Status),
+                    Pair("artifactId", observation.ArtifactId),
+                    Pair("artifactDigest", observation.ArtifactDigest),
+                    Pair("observedAt", observation.ObservedAt.ToString("O")),
+                    Pair("expiresAt", observation.ExpiresAt.ToString("O")),
+                    Pair("evaluatedAt", observation.EvaluatedAt.ToString("O")),
+                    Pair("validatorId", observation.ValidatorId),
+                    Pair("validatorVersion", observation.ValidatorVersion),
+                    Pair("engine", observation.TargetContext.Engine),
+                    Pair("serverRole", observation.TargetContext.ServerRole),
+                    Pair("databaseRole", observation.TargetContext.DatabaseRole),
+                    Pair("schemaRole", observation.TargetContext.SchemaRole),
+                    Pair("executionMode", observation.TargetContext.ExecutionMode)
+                ]),
+                [],
+                [],
+                observation.Limitations.Concat(SqlValidationObservationLimitations()).Distinct(StringComparer.Ordinal).ToArray(),
+                nameof(SqlValidationSummaryReader),
+                SqlValidationSummaryReader.SchemaVersion,
+                "observed-validation"))
+            .OrderBy(finding => finding.FindingId, StringComparer.Ordinal)
+            .ToArray();
+        var gaps = composition.Gaps.Select(gap => new ReleaseReviewGap(
+                StableId("gap", "sqlValidationObservations", gap.GapId),
+                gap.Code,
+                "sqlValidationObservations",
+                null,
+                gap.RuleId,
+                EvidenceTiers.Tier4Unknown,
+                ReleaseReviewClassifications.PartialAnalysis,
+                gap.Message,
+                [],
+                [],
+                [],
+                CombinedReportHelpers.SortedMetadata(gap.Metadata
+                    .Select(pair => new KeyValuePair<string, string?>(pair.Key, pair.Value))
+                    .Append(Pair("evidenceKind", "observed-validation-gap")))))
+            .OrderBy(gap => gap.GapId, StringComparer.Ordinal)
+            .ToArray();
+
+        var status = findings.Length > 0 ? ReleaseReviewStatuses.Available : ReleaseReviewStatuses.Unavailable;
+        return new ReleaseReviewSection(status, findings, gaps, SqlValidationObservationLimitations());
+    }
+
+    private static IReadOnlyList<string> SqlValidationObservationLimitations() =>
+    [
+        "Observed SQL validation is point-in-time, assertion-specific validator evidence and is not a static evidence tier.",
+        "Observed-pass does not establish continuing state, safe execution, complete procedure success, release approval, or DBA attestation.",
+        "TraceMap does not connect to a database, execute SQL, or ingest raw validation output."
+    ];
+
     private static ReleaseReviewFinding SqlEvidenceFinding(
         string sourceLabel,
         string kind,
@@ -1038,6 +1146,7 @@ public static class ReleaseReviewReporter
         ReleaseReviewSection apiDtoChanges,
         ReleaseReviewSection sqlSchemaImpact,
         ReleaseReviewSection sqlEvidence,
+        ReleaseReviewSection sqlValidationObservations,
         ReleaseReviewSection accessEvidence,
         ReleaseReviewSection packageImpact,
         ReleaseReviewSection pathContext,
@@ -1052,6 +1161,7 @@ public static class ReleaseReviewReporter
                 apiDtoChanges,
                 sqlSchemaImpact,
                 sqlEvidence,
+                sqlValidationObservations,
                 accessEvidence,
                 packageImpact,
                 pathContext,
@@ -1069,7 +1179,7 @@ public static class ReleaseReviewReporter
         var message = rollup switch
         {
             ReleaseReviewClassifications.ActionableStaticEvidence => "Actionable static evidence is present; review the cited findings and limitations.",
-            ReleaseReviewClassifications.ReviewRecommended => "Review-tier static evidence is present; no stronger conclusion is made.",
+            ReleaseReviewClassifications.ReviewRecommended => "Review-tier evidence is present; inspect whether each cited row is static or separately observed and apply its limitations.",
             ReleaseReviewClassifications.NoActionableEvidence => "No actionable static findings under requested scope.",
             ReleaseReviewClassifications.PartialAnalysis => "No actionable static findings under requested scope; gaps remain.",
             ReleaseReviewClassifications.SelectorNoMatch => "Selectors matched no static evidence under requested scope.",
@@ -1086,6 +1196,7 @@ public static class ReleaseReviewReporter
             apiDtoChanges.Findings.Count,
             sqlSchemaImpact.Findings.Count,
             sqlEvidence.Findings.Count,
+            sqlValidationObservations.Findings.Count,
             accessEvidence.Findings.Count,
             packageImpact.Findings.Count,
             pathContext.Findings.Count,
@@ -2009,6 +2120,7 @@ public static class ReleaseReviewReporter
             ApiDtoFindingCount: 0,
             SqlSchemaFindingCount: 0,
             SqlEvidenceFindingCount: 0,
+            SqlValidationObservationFindingCount: 0,
             AccessEvidenceFindingCount: 0,
             PackageFindingCount: 0,
             PathFindingCount: 0,
@@ -2382,6 +2494,7 @@ public static class ReleaseReviewReporter
         RenderSection(builder, "API and DTO Changes", report.ApiDtoChanges);
         RenderSection(builder, "SQL and Schema Impact", report.SqlSchemaImpact);
         RenderSection(builder, "SQL Runway Evidence", report.SqlEvidence);
+        RenderSection(builder, "SQL Validation Observations", report.SqlValidationObservations);
         RenderSection(builder, "Access Design Evidence", report.AccessEvidence);
         RenderSection(builder, "Package Impact", report.PackageImpact);
         builder.AppendLine("## Path and Reverse Context");
@@ -2909,6 +3022,16 @@ public static class ReleaseReviewReporter
         if (options.MaxFindings <= 0 || options.MaxSurfaceRows <= 0 || options.MaxPaths <= 0 || options.MaxGaps <= 0 || options.MaxChecklistItems <= 0)
         {
             throw new ArgumentException("release-review caps must be positive integers.");
+        }
+
+        if (options.SqlValidationSummaryPaths is { Count: > 0 } && options.SqlValidationAsOf is null)
+        {
+            throw new ArgumentException("release-review SQL validation summaries require an explicit deterministic as-of instant.");
+        }
+
+        if (options.SqlValidationSummaryPaths is not { Count: > 0 } && options.SqlValidationAsOf is not null)
+        {
+            throw new ArgumentException("release-review SQL validation as-of requires at least one summary.");
         }
     }
 

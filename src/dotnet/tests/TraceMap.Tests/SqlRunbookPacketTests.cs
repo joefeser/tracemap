@@ -19,7 +19,7 @@ public sealed class SqlRunbookPacketTests
         var markdown = SqlRunbookPacketWriter.RenderMarkdown(first);
 
         Assert.Equal(SqlRunbookPacketBuilder.SchemaVersion, first.SchemaVersion);
-        Assert.Equal("sql-operator-runbook-packet/v2", first.SchemaVersion);
+        Assert.Equal("sql-operator-runbook-packet/v3", first.SchemaVersion);
         Assert.Equal(json, JsonSerializer.Serialize(second, SqlRunbookPacketWriter.JsonOptions));
         Assert.NotEmpty(first.StepGroups);
         Assert.Contains(first.StepGroups, group => group.ExecutionMode == "scheduled");
