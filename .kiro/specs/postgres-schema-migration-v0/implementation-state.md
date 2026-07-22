@@ -14,8 +14,8 @@ Validation:
 - `./scripts/check-private-paths.sh`: passed
 - `git diff --check`: passed
 
-PR/ACK: PR pending. ACK must run on the final pushed head; no review or merge
-authority is inferred until it returns an authorized decision.
+PR/ACK: PR #524 targets `dev`. ACK is pending its final-head run; no review or
+merge authority is inferred until it returns an authorized decision.
 
 Deferred: quoted identifiers; indexes; constraints; enums; routines;
 checked-in snapshots; EF Core/Npgsql migration APIs; execution/order graphs;
