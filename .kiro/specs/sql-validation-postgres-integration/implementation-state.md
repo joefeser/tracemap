@@ -21,7 +21,11 @@ Validation:
 - `dotnet test src/dotnet/TraceMap.sln --no-build --nologo`: 861/861 passed.
 - Bash syntax, private-path guard, and `git diff --check`: passed.
 
-PR state: implementation complete locally; commit, push, PR, and ACK pending.
+PR state: [#519](https://github.com/joefeser/tracemap/pull/519) is open at
+`f8a9e0cf`. ACK stopped before GitHub review processing with
+`environment_blocked / LOCAL_BUILD_STALE`: installed ACK `0.3.0-rc.1`
+reported stale compiled output, while the trusted TraceMap lane requires a
+stable build. No review bot was requested and no merge authority was inferred.
 
 Deferred: reusable archive/source plan templates and operator packet; public
 static-versus-observed story; PostgreSQL schema/migration adapter work; live
