@@ -493,6 +493,7 @@ public static class ReleaseReviewReporter
         var cappedGaps = CapGaps(gaps, options.MaxGaps);
         var truncated = gaps.DistinctBy(gap => gap.GapId).Count() > cappedGaps.Length
             || topChangedSurfaces.Status == ReleaseReviewStatuses.Truncated
+            || accessEvidence.Status == ReleaseReviewStatuses.Truncated
             || cappedFindings.Length < allFindings.Length;
         topChangedSurfaces = FilterSectionGaps(topChangedSurfaces, cappedGaps);
         contractImpact = FilterSectionGaps(contractImpact, cappedGaps);

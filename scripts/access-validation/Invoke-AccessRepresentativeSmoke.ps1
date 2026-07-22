@@ -403,7 +403,7 @@ if ($vaultGaps.Count -ne 1) { Stop-Representative "downstream-validation" "repre
 $checkpoint.vaultContractCorrect = $true
 Write-RepresentativeCheckpoint
 
-& $TraceMapCli release-review --before $combined --after $combined --out $releaseReviewOutput --format json *> $null
+& $TraceMapCli release-review --before $combined --after $combined --out $releaseReviewOutput --format json --max-findings 10000 *> $null
 if ($LASTEXITCODE -ne 0) { Stop-Representative "downstream-validation" "representative release review failed" }
 $releaseReview = Get-Content (Join-Path $releaseReviewOutput "release-review.json") -Raw | ConvertFrom-Json
 $releaseFindings = @($releaseReview.accessEvidence.findings | Where-Object {
