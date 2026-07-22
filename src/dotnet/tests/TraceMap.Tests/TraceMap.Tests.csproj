@@ -28,6 +28,8 @@
     <ProjectReference Include="..\..\TraceMap.Combine\TraceMap.Combine.csproj" />
     <ProjectReference Include="..\..\TraceMap.Access\TraceMap.Access.csproj" />
     <ProjectReference Include="..\..\TraceMap.Access.Cli\TraceMap.Access.Cli.csproj" />
+    <ProjectReference Include="..\..\TraceMap.SqlValidation\TraceMap.SqlValidation.csproj" />
+    <ProjectReference Include="..\..\TraceMap.SqlValidation.Cli\TraceMap.SqlValidation.Cli.csproj" />
   </ItemGroup>
 
 </Project>
