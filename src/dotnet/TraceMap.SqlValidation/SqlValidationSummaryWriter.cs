@@ -5,10 +5,23 @@ using System.Text.Json.Nodes;
 
 namespace TraceMap.SqlValidation;
 
-public static class SqlValidationSummaryWriter
+internal static class SqlValidationSummaryWriter
 {
-    public static async Task<(string Digest, string Json)> WriteAsync(
-        string outputPath,
+    internal static SqlValidationOutputReservation Reserve(string outputPath)
+    {
+        try
+        {
+            return new SqlValidationOutputReservation(outputPath,
+                new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.Asynchronous));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            throw new SqlValidationHarnessException("SqlValidationOutputWriteFailed");
+        }
+    }
+
+    internal static async Task<(string Digest, string Json)> WriteAsync(
+        SqlValidationOutputReservation reservation,
         SqlValidationPlan plan,
         IReadOnlyList<SqlValidationAssertion> assertions,
         CancellationToken cancellationToken)
@@ -20,9 +33,7 @@ public static class SqlValidationSummaryWriter
 
         try
         {
-            await using var stream = new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.Asynchronous);
-            await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
-            await writer.WriteAsync(json.AsMemory(), cancellationToken);
+            await reservation.WriteAsync(json, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
@@ -87,4 +98,26 @@ public static class SqlValidationSummaryWriter
     }
 
     private static string FormatTimestamp(DateTimeOffset value) => value.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", System.Globalization.CultureInfo.InvariantCulture);
+}
+
+internal sealed class SqlValidationOutputReservation(string path, FileStream stream) : IAsyncDisposable
+{
+    private bool _completed;
+
+    internal async Task WriteAsync(string json, CancellationToken cancellationToken)
+    {
+        await using var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true);
+        await writer.WriteAsync(json.AsMemory(), cancellationToken);
+        await writer.FlushAsync(cancellationToken);
+        await stream.FlushAsync(cancellationToken);
+        _completed = true;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await stream.DisposeAsync();
+        if (_completed) return;
+        try { File.Delete(path); }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
+    }
 }

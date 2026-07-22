@@ -22,9 +22,9 @@ mutation, and job execution as `not-run`.
 
 ## Validation
 
-- Harness tests: 13 passed, 0 failed.
-- Harness plus ingestion compatibility tests: 26 passed, 0 failed.
-- Full .NET solution: 858 passed, 0 failed.
+- Harness tests: 16 passed, 0 failed.
+- Harness plus ingestion compatibility tests: 29 passed, 0 failed.
+- Full .NET solution: 861 passed, 0 failed.
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with only the
   pre-existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisories.
 - No-connection CLI dry run: completed with 10 `not-run` assertions.
@@ -37,6 +37,16 @@ mutation, and job execution as `not-run`.
 
 No live PostgreSQL target was used. Live validation remains an explicit,
 least-privilege operator action outside routine CI.
+
+## Review disposition
+
+- Qodo's low-severity suggestion to add per-assertion evidence fields is not
+  applied to the strict `sql-validation-summary/v1` transport schema. Adding a
+  field would make the producer incompatible with the shipped closed ingestion
+  contract. The artifact-level digest, repository/commit/context provenance,
+  validator identity, timestamps, and limitations bind the transport; the
+  ingestion step assigns the documented observation or gap rule ID before the
+  assertion becomes TraceMap evidence.
 
 ## Deferred
 

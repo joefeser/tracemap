@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using TraceMap.Reporting;
 using TraceMap.SqlValidation;
 using TraceMap.SqlValidation.Cli;
@@ -24,6 +25,27 @@ public sealed class SqlValidationHarnessTests
         Assert.Equal(6, plan.Checks.Count);
         Assert.Equal(plan.Checks.OrderBy(check => check.Code, StringComparer.Ordinal), plan.Checks);
         Assert.Equal(["dblink", "pg_cron"], plan.Checks.Single(check => check.Code == "postgres.required-extension-available").Identifiers);
+    }
+
+    [Fact]
+    public void Published_schema_uses_the_same_code_specific_identifier_boundaries()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(FindRepoRoot(), "contracts", "artifacts", "sql-validation-plan.v1.schema.json")));
+        var options = document.RootElement.GetProperty("properties").GetProperty("checks").GetProperty("items").GetProperty("oneOf").EnumerateArray();
+        var patterns = options
+            .Where(option => option.GetProperty("properties").GetProperty("code").TryGetProperty("const", out var code) && code.GetString() != "postgres.server-version-compatible")
+            .ToDictionary(
+                option => option.GetProperty("properties").GetProperty("code").GetProperty("const").GetString()!,
+                option => option.GetProperty("properties").GetProperty("identifiers").GetProperty("items").GetProperty("pattern").GetString()!,
+                StringComparer.Ordinal);
+
+        Assert.Equal(5, patterns.Count);
+        Assert.Matches(new Regex(patterns["postgres.required-extension-available"], RegexOptions.CultureInvariant), "pg_cron");
+        Assert.Matches(new Regex(patterns["postgres.migration-schema-present"], RegexOptions.CultureInvariant), "archive.audit_log");
+        Assert.Matches(new Regex(patterns["postgres.permission-probe-authorized"], RegexOptions.CultureInvariant), "archive");
+        Assert.Matches(new Regex(patterns["postgres.archive-function-callable"], RegexOptions.CultureInvariant), "archive.move_batch(integer)");
+        Assert.Matches(new Regex(patterns["postgres.scheduled-job-registered"], RegexOptions.CultureInvariant), "archive batch");
+        Assert.DoesNotMatch(new Regex(patterns["postgres.migration-schema-present"], RegexOptions.CultureInvariant), "archive.audit_log;drop table x");
     }
 
     [Theory]
@@ -119,6 +141,13 @@ public sealed class SqlValidationHarnessTests
     }
 
     [Fact]
+    public void Timeout_is_classified_as_a_per_probe_failure()
+    {
+        Assert.True(NpgsqlValidationProbeExecutor.IsPerProbeFailure(new TimeoutException()));
+        Assert.False(NpgsqlValidationProbeExecutor.IsPerProbeFailure(new InvalidOperationException()));
+    }
+
+    [Fact]
     public async Task Dry_run_never_reads_connection_environment_and_emits_only_not_run()
     {
         using var temp = new TempDirectory();
@@ -183,6 +212,22 @@ public sealed class SqlValidationHarnessTests
         Assert.Equal("sentinel", await File.ReadAllTextAsync(outputPath));
     }
 
+    [Fact]
+    public async Task Live_run_reserves_output_before_invoking_executor()
+    {
+        using var temp = new TempDirectory();
+        var outputPath = Path.Combine(temp.Path, "summary.json");
+        await File.WriteAllTextAsync(outputPath, "sentinel");
+        var executor = new RecordingExecutor(new Dictionary<string, bool>());
+
+        var exception = await Assert.ThrowsAsync<SqlValidationHarnessException>(() => new SqlValidationHarnessRunner().RunAsync(
+            SqlValidationPlanReader.Parse(PlanJson()), outputPath, executor, dryRun: false));
+
+        Assert.Equal("SqlValidationOutputWriteFailed", exception.Classification);
+        Assert.Empty(executor.Received);
+        Assert.Equal("sentinel", await File.ReadAllTextAsync(outputPath));
+    }
+
     private static string PlanJson() => $$"""
         {
           "schemaVersion":"sql-validation-plan/v1",
@@ -202,6 +247,17 @@ public sealed class SqlValidationHarnessTests
           ]
         }
         """;
+
+    private static string FindRepoRoot()
+    {
+        var current = AppContext.BaseDirectory;
+        while (!string.IsNullOrWhiteSpace(current))
+        {
+            if (File.Exists(Path.Combine(current, "rules", "rule-catalog.yml"))) return current;
+            current = Directory.GetParent(current)?.FullName;
+        }
+        throw new DirectoryNotFoundException("Unable to find TraceMap repo root.");
+    }
 
     private sealed class RecordingExecutor(IReadOnlyDictionary<string, bool> outcomes) : ISqlValidationProbeExecutor
     {

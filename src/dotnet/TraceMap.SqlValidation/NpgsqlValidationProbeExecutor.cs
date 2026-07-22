@@ -29,7 +29,7 @@ public sealed class NpgsqlValidationProbeExecutor(string connectionString) : ISq
                     results[check.Code] = result;
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-                catch (NpgsqlException)
+                catch (Exception exception) when (IsPerProbeFailure(exception))
                 {
                     // Omission is the internal categorical signal for one indeterminate probe.
                     // Provider details never leave this process.
@@ -44,6 +44,8 @@ public sealed class NpgsqlValidationProbeExecutor(string connectionString) : ISq
             throw new SqlValidationProbeException();
         }
     }
+
+    internal static bool IsPerProbeFailure(Exception exception) => exception is NpgsqlException or TimeoutException;
 
     private static NpgsqlConnectionStringBuilder BuildConnectionString(string value)
     {
