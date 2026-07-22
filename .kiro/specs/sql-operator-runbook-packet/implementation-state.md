@@ -38,6 +38,7 @@ Implemented scope:
 - [#455 Secret-bearing SQL step detection](https://github.com/joefeser/tracemap/issues/455)
 - [#456 SQL permission prerequisite evidence](https://github.com/joefeser/tracemap/issues/456)
 - [#438 Database surface and operation evidence reports](https://github.com/joefeser/tracemap/issues/438)
+- [#508 SQL validation-summary ingestion and provenance boundary](https://github.com/joefeser/tracemap/issues/508)
 
 ## Ordering Recommendation
 
@@ -79,7 +80,7 @@ Recommended runway:
 
 ## Remaining Follow-Ups
 
-- Future validation-summary ingestion requires a separate spec and provenance
-  contract.
+- Validation-summary ingestion and its separate provenance contract are tracked
+  by issue #508 as the recommended next SQL story.
 - Additional SQL engines may populate the shared packet only after their own
   cataloged evidence contracts exist.

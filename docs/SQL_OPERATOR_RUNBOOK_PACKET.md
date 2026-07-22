@@ -41,7 +41,9 @@ or owner question rather than a clean-state conclusion.
 ## Future Validation Boundary
 
 V0 accepts no live database connection or raw validation output. A future
-`sql-validation-summary/v1` artifact requires a separate specification with
+`sql-validation-summary/v1` artifact is tracked by
+[issue #508](https://github.com/joefeser/tracemap/issues/508) and requires a
+separate specification with
 explicit provenance, observation time, categorical target context, validator
 identity/version, safe assertion codes, result status, freshness checks, and
 limitations. It must remain separate from static fact tiers and must not contain
