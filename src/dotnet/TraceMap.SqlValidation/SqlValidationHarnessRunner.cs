@@ -9,6 +9,7 @@ public sealed class SqlValidationHarnessRunner
         bool dryRun,
         CancellationToken cancellationToken = default)
     {
+        await using var outputReservation = SqlValidationSummaryWriter.Reserve(outputPath);
         IReadOnlyDictionary<string, bool> outcomes = new Dictionary<string, bool>(StringComparer.Ordinal);
         var executionFailed = false;
         if (!dryRun)
@@ -34,7 +35,7 @@ public sealed class SqlValidationHarnessRunner
                     : passed ? "observed-pass" : "observed-fail")).ToArray();
         var hasIndeterminate = assertions.Any(assertion => assertion.Status == "observed-indeterminate");
 
-        var (digest, _) = await SqlValidationSummaryWriter.WriteAsync(outputPath, plan, assertions, cancellationToken);
+        var (digest, _) = await SqlValidationSummaryWriter.WriteAsync(outputReservation, plan, assertions, cancellationToken);
         return new SqlValidationHarnessResult(plan.ArtifactId, digest, assertions,
             dryRun ? "dry-run-completed" : executionFailed || hasIndeterminate ? "completed-with-indeterminate-observations" : "completed");
     }
