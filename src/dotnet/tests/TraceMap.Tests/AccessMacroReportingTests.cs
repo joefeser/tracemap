@@ -234,6 +234,9 @@ public sealed class AccessMacroReportingTests
             .Where(pair => pair.Key.EndsWith("DesignKey", StringComparison.Ordinal)),
             pair => Assert.StartsWith("access-", pair.Value, StringComparison.Ordinal));
         Assert.DoesNotContain(review.AccessEvidence.Findings.SelectMany(item => item.Metadata), pair => pair.Key == "objectName");
+        Assert.All(review.AccessEvidence.Findings.Where(item =>
+                item.Metadata.Any(pair => pair.Key == "capability" && pair.Value is "rowDataRead" or "executionPerformed" or "startupSuppression")),
+            item => Assert.Equal(ReleaseReviewClassifications.NoActionableEvidence, item.Classification));
         Assert.Contains(review.AccessEvidence.Gaps, item => item.GapKind == "AccessMacroIdentityUnavailable");
         Assert.DoesNotContain(review.Gaps, item => item.GapKind == "AccessEvidenceConsumerUnsupported");
         Assert.All(review.AccessEvidence.Findings, finding =>
@@ -412,6 +415,7 @@ public sealed class AccessMacroReportingTests
             Path.Combine(temp.Path, "truncated-release-review.md"),
             Scope: "access-evidence"));
         Assert.Equal(ReleaseReviewStatuses.Truncated, truncatedReview.AccessEvidence.Status);
+        Assert.True(truncatedReview.Summary.Truncated);
         Assert.Contains(truncatedReview.AccessEvidence.Gaps, item => item.GapKind == "AccessFactLimitReached"
             && item.Classification == ReleaseReviewClassifications.TruncatedByLimit);
 
@@ -515,6 +519,7 @@ public sealed class AccessMacroReportingTests
         Assert.Contains("AccessNavigationCandidate", script, StringComparison.Ordinal);
         Assert.Contains("AccessEventBindingCandidate", script, StringComparison.Ordinal);
         Assert.Contains("macroIdentityFactsZero", script, StringComparison.Ordinal);
+        Assert.Contains("release-review --before $combined --after $combined --out $releaseReviewOutput --format json --max-findings 10000", script, StringComparison.Ordinal);
         Assert.Contains("$releaseReview.accessEvidence.status -ne \"available\"", script, StringComparison.Ordinal);
         Assert.Contains("representative release-review contract failed", script, StringComparison.Ordinal);
         Assert.Contains("protectedOutputMatchCount", script, StringComparison.Ordinal);
@@ -587,7 +592,12 @@ public sealed class AccessMacroReportingTests
                 new("AccessUiSurfaceUnavailable", "ui-surface", null, RuleIds.LegacyAccessUiSurface),
                 new("AccessVbaProjectUnavailable", "vba-project", null, RuleIds.LegacyAccessVba)
             ],
-            [new("macros", macroCoverage)],
+            [
+                new("macros", macroCoverage),
+                new("rowDataRead", "false"),
+                new("executionPerformed", "false"),
+                new("startupSuppression", "force-disable-requested")
+            ],
             Macros: macro.Macros,
             MacroInventory: new(3, null, macroCoverage));
         return (AccessFactBuilder.Build(input, projection, new(root, "fixture.accdb", output)), output);

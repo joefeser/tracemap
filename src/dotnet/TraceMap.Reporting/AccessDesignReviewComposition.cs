@@ -350,10 +350,16 @@ internal static class AccessDesignReviewComposer
             ? value
             : null;
 
-    private static string CapabilityClassification(IReadOnlyDictionary<string, string> properties) =>
-        properties.GetValueOrDefault("status") is "available" or "observed"
-            ? ReleaseReviewClassifications.NoActionableEvidence
-            : ReleaseReviewClassifications.ReviewRecommended;
+    private static string CapabilityClassification(IReadOnlyDictionary<string, string> properties)
+    {
+        var capability = properties.GetValueOrDefault("capability");
+        var status = properties.GetValueOrDefault("status");
+        return status is "available" or "observed"
+            || (capability is "rowDataRead" or "executionPerformed" && status == "false")
+            || (capability == "startupSuppression" && status == "force-disable-requested")
+                ? ReleaseReviewClassifications.NoActionableEvidence
+                : ReleaseReviewClassifications.ReviewRecommended;
+    }
 
     private static string QueryClassification(IReadOnlyDictionary<string, string> properties) =>
         string.Equals(properties.GetValueOrDefault("isPassThrough"), "true", StringComparison.Ordinal)
