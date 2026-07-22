@@ -2078,7 +2078,13 @@ public static class ReleaseReviewReporter
     {
         var allowedIds = allowed.Select(gap => gap.GapId).ToHashSet(StringComparer.Ordinal);
         var gaps = section.Gaps.Where(gap => allowedIds.Contains(gap.GapId)).ToArray();
-        return section with { Gaps = gaps };
+        var omitted = section.Gaps.Count - gaps.Length;
+        return section with
+        {
+            Status = omitted > 0 ? ReleaseReviewStatuses.Truncated : section.Status,
+            Gaps = gaps,
+            OmittedCount = section.OmittedCount + omitted
+        };
     }
 
     private static string SelectRollup(IReadOnlyList<ReleaseReviewGap> gaps, IReadOnlyList<ReleaseReviewFinding> findings, bool truncated)
