@@ -13,7 +13,7 @@ cleanup() {
     docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
   fi
   if [[ -n "$SCRATCH_ROOT" && -d "$SCRATCH_ROOT" && "$SCRATCH_ROOT" == "${TMPDIR:-/tmp}"/tracemap-sql-validation-postgres.* ]]; then
-    find "$SCRATCH_ROOT" -depth -delete
+    find "$SCRATCH_ROOT" -depth -delete >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
@@ -162,7 +162,11 @@ for path, expected, artifact_id in (
     require(document["publicClaimLevel"] == "public-safe", "unexpected public claim level")
     require(re.fullmatch(r"[0-9a-f]{64}", document["artifact"]["digest"]) is not None, "invalid artifact digest")
     serialized = json.dumps(document, sort_keys=True).lower()
-    for forbidden in ("schema_migrations", "move_batch", "missing_relation", "synthetic archive job", "127.0.0.1", "validation_fixture", "password"):
+    for forbidden in (
+        "schema_migrations", "move_batch", "missing_relation", "synthetic archive job",
+        "127.0.0.1", "localhost", "validation_fixture", "password", "server=",
+        "user id=", "username=", "host=", "port=", "database=", "connectionstring",
+    ):
         require(forbidden not in serialized, "public-safe projection leak")
 PY
 
