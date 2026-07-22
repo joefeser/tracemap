@@ -14,8 +14,12 @@ Validation:
 - `./scripts/check-private-paths.sh`: passed
 - `git diff --check`: passed
 
-PR/ACK: PR #524 targets `dev`. ACK is pending its final-head run; no review or
-merge authority is inferred until it returns an authorized decision.
+PR/ACK: PR #524 targets `dev`. ACK stopped before GitHub review processing with
+`environment_blocked / LOCAL_BUILD_STALE / owner_decision_required`; the
+resolved CLI reports 0.2.0 while its installed package metadata is
+0.3.0-rc.1, and the lane requires a non-prerelease stable build. No reviewer
+request or merge authority was produced. Rerun ACK on the final pushed head
+after the local stable build is repaired.
 
 Deferred: quoted identifiers; indexes; constraints; enums; routines;
 checked-in snapshots; EF Core/Npgsql migration APIs; execution/order graphs;
