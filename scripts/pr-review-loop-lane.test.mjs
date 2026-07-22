@@ -20,6 +20,8 @@ function blockAfter(pattern, indentation) {
 const quorum = blockAfter(/^      trustedCodeReview:\s*$/m, 8)
 const qodo = blockAfter(/^    qodo:\s*$/m, 6)
 const codex = blockAfter(/^    codex:\s*$/m, 6)
+const claudeLocal = blockAfter(/^    claude-local:\s*$/m, 6)
+const localReviewFallback = blockAfter(/^  localReviewFallback:\s*$/m, 4)
 
 function onePassQodoEligible({ codexCurrent, qodoPriorClean, qodoCountersZero }) {
   const fastQuorum = /minimumReturned:\s*1\b/.test(quorum)
@@ -44,4 +46,26 @@ test('TraceMap selects ACK PR #281 one-pass Qodo policy without weakening Codex'
 test('stale Codex plus stale Qodo cannot satisfy the consumer lane contract', () => {
   assert.equal(onePassQodoEligible({ codexCurrent: false, qodoPriorClean: true, qodoCountersZero: true }), false)
   assert.equal(onePassQodoEligible({ codexCurrent: true, qodoPriorClean: true, qodoCountersZero: false }), false)
+})
+
+test('TraceMap authorizes only the bounded exact-head Opus fallback contract', () => {
+  assert.match(lane, /- externalReviewReceipts/)
+  assert.match(lane, /- boundedLocalReviewFallback/)
+  assert.match(claudeLocal, /enabled:\s*true\b/)
+  assert.match(claudeLocal, /provider:\s*claude-code\b/)
+  assert.match(claudeLocal, /authority:\s*owner_authorized_receipt\b/)
+  assert.match(claudeLocal, /requirement:\s*try\b/)
+  assert.match(claudeLocal, /- trustedCodeReview\b/)
+  assert.match(claudeLocal, /- joefeser\b/)
+  assert.match(claudeLocal, /model:\s*claude-opus-4-8\b/)
+  assert.match(claudeLocal, /modelFamily:\s*claude-opus-4\.8\b/)
+  assert.match(claudeLocal, /timeoutSeconds:\s*1800\b/)
+  assert.match(claudeLocal, /maxBudgetUsd:\s*4\b/)
+  assert.match(claudeLocal, /allowDirty:\s*false\b/)
+  assert.match(localReviewFallback, /enabled:\s*true\b/)
+  assert.match(localReviewFallback, /trigger:\s*fresh_review_fix_cycle_ceiling\b/)
+  assert.match(localReviewFallback, /reviewer:\s*claude-local\b/)
+  assert.match(localReviewFallback, /maxAttempts:\s*2\b/)
+  assert.match(localReviewFallback, /maxFixCycles:\s*2\b/)
+  assert.match(localReviewFallback, /postTerminalComment:\s*true\b/)
 })
