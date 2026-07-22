@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { decodeHtmlEntities, fileExists, normalizeRenderedText, readSitemapLocSet } from "./validate-utils.mjs";
+import { decodeHtmlEntities, escapeRegExp, fileExists, normalizeRenderedText, readSitemapLocSet, stripTagsQuoteAware } from "./validate-utils.mjs";
 
 export const sqlStaticObservedValidationRoute = "/sql/operator-handoff/validation/";
 
@@ -37,7 +37,7 @@ export async function validateSqlStaticObservedValidationDist({ baseUrl = "https
   const html = await readFile(pagePath, "utf8");
   const decoded = decodeHtmlEntities(html);
   const text = normalizeRenderedText(html);
-  const collapsed = decoded.replace(/<[^>]*>/g, "");
+  const collapsed = decodeHtmlEntities(stripTagsQuoteAware(html)).replace(/\s+/g, "");
   for (const phrase of requiredText) {
     if (!text.includes(phrase) && !decoded.includes(phrase)) errors.push(`SQL static/observed validation page is missing required text: ${phrase}`);
   }
@@ -49,7 +49,7 @@ export async function validateSqlStaticObservedValidationDist({ baseUrl = "https
   }
   for (const relative of ["sql/operator-handoff/index.html", "sql/operator-handoff/proof-packet/index.html"]) {
     const inbound = resolve(dist, relative);
-    if (!(await fileExists(inbound)) || !(await readFile(inbound, "utf8")).includes(`href="${sqlStaticObservedValidationRoute}"`)) {
+    if (!(await fileExists(inbound)) || !hasHref(await readFile(inbound, "utf8"), sqlStaticObservedValidationRoute)) {
       errors.push(`Required inbound page ${relative} does not link to ${sqlStaticObservedValidationRoute}.`);
     }
   }
@@ -66,4 +66,9 @@ export async function validateSqlStaticObservedValidationDist({ baseUrl = "https
   } catch (error) {
     errors.push(`SQL static/observed validation could not parse routes-index.json: ${error.message}`);
   }
+}
+
+function hasHref(html, href) {
+  const escaped = escapeRegExp(href);
+  return new RegExp(`<a\\b[^>]*\\bhref\\s*=\\s*["']${escaped}["']`, "i").test(html);
 }

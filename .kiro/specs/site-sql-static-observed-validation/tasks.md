@@ -5,4 +5,4 @@
 - [x] Add discovery and sitemap metadata.
 - [x] Add focused validation and negative safety tests.
 - [x] Run site and browser validation.
-- [x] Record final PR and ACK state.
+- [x] Record the PR and current ACK state.
