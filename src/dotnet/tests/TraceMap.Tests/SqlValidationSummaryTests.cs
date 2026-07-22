@@ -59,11 +59,40 @@ public sealed class SqlValidationSummaryTests
         var assertionConflict = await WriteSummaryAsync(temp.Path, "assertion-conflict.json", root =>
         {
             root["artifactId"] = "validation-fixture-002";
-            root["assertions"]![0]!["status"] = "observed-fail";
         });
         var assertionConflicting = await ReadAsync([first, assertionConflict]);
         Assert.Empty(assertionConflicting.Observations);
         Assert.Contains(assertionConflicting.Gaps, gap => gap.Code == "ConflictingAssertion");
+
+        var twoAssertions = await WriteSummaryAsync(temp.Path, "two-assertions.json", root =>
+            ((JsonArray)root["assertions"]!).Add(new JsonObject { ["code"] = "postgres.target-schema-compatible", ["status"] = "observed-pass" }));
+        var twoAssertionConflicts = await WriteSummaryAsync(temp.Path, "two-assertion-conflicts.json", root =>
+        {
+            root["artifactId"] = "validation-fixture-003";
+            root["assertions"]![0]!["status"] = "observed-fail";
+            ((JsonArray)root["assertions"]!).Add(new JsonObject { ["code"] = "postgres.target-schema-compatible", ["status"] = "observed-fail" });
+        });
+        var multipleConflicts = await ReadAsync([twoAssertions, twoAssertionConflicts]);
+        Assert.Empty(multipleConflicts.Observations);
+        Assert.Equal(2, multipleConflicts.Gaps.Count(gap => gap.Code == "ConflictingAssertion"));
+    }
+
+    [Fact]
+    public async Task Multiple_unreadable_inputs_preserve_distinct_non_leaking_gaps()
+    {
+        using var temp = new TempDirectory();
+        var result = await ReadAsync([
+            Path.Combine(temp.Path, "missing-one.json"),
+            Path.Combine(temp.Path, "missing-two.json")
+        ]);
+
+        Assert.Equal(2, result.Gaps.Count);
+        Assert.Equal(2, result.Gaps.Select(gap => gap.GapId).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(result.Gaps, gap => Assert.Equal("MalformedSummary", gap.Code));
+        var safe = JsonSerializer.Serialize(result);
+        Assert.DoesNotContain(temp.Path, safe, StringComparison.Ordinal);
+        Assert.DoesNotContain("missing-one", safe, StringComparison.Ordinal);
+        Assert.DoesNotContain("missing-two", safe, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -139,6 +168,9 @@ public sealed class SqlValidationSummaryTests
         Assert.Equal("sqlValidationObservations", finding.Section);
         Assert.Equal("observed-validation", finding.CoverageLabel);
         Assert.Equal(EvidenceTiers.Tier4Unknown, finding.EvidenceTier);
+        Assert.Equal("validation-summary/validation-fixture-001.json", finding.FilePath);
+        Assert.Equal(0, finding.StartLine);
+        Assert.Equal(0, finding.EndLine);
         Assert.NotEmpty(review.SqlEvidence.Findings);
         Assert.True(review.Query.SqlValidationSummaryProvided);
 

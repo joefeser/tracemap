@@ -26,9 +26,9 @@ DBA attestation, Access extraction, site work, or runtime safety conclusions.
 
 ## Validation
 
-- Focused SQL validation/runbook/release-review/Access regression suite: 58
+- Focused SQL validation/runbook/release-review/Access regression suite: 59
   passed, 0 failed.
-- Full .NET solution suite: 844 passed, 0 failed.
+- Full .NET solution suite: 845 passed, 0 failed.
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: succeeded with only the
   existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisories.
 - `./scripts/check-private-paths.sh`: passed.
@@ -37,6 +37,18 @@ DBA attestation, Access extraction, site work, or runtime safety conclusions.
 - Repository-wide `dotnet format --verify-no-changes` remains unsuitable as a
   gate because it reports pre-existing whitespace findings in unrelated files;
   no formatting mutation was applied.
+
+## Review fixes
+
+ACK-authorized PR review findings were addressed together:
+
+- normalized the observation catalog tier to `Tier4Unknown` while retaining
+  explicit observed-validation/static-tier-not-applicable metadata;
+- added a deterministic safe artifact placeholder span to observation findings;
+- preserved distinct non-leaking gaps for multiple malformed inputs and
+  multiple assertion conflicts;
+- treated repeated assertion identities from distinct artifacts as conflicts
+  regardless of whether their status strings agree.
 
 ## Deferred
 

@@ -3444,13 +3444,14 @@ rules:
   - id: database.sql.validation-summary.observation.v1
     name: SQL validation summary observation projection
     description: Projects an assertion-specific categorical observation from a digest-verified, provenance-bound sql-validation-summary/v1 artifact separately from static SQL evidence.
-    evidenceTier: Observed validator evidence; not a static evidence tier
+    evidenceTier: Tier4Unknown
     emits:
       - sql-runbook.json observedValidation row
       - sql-runbook.md observed validation row
       - release-review SQL validation observation finding
     limitations:
       - The observation is point-in-time, assertion-specific, and bounded by the supplied expiry; it does not establish continuing database state.
+      - Tier4Unknown is used as the normalized release-review transport tier; metadata labels the row observed-validation and staticEvidenceTier not-applicable, so it must not be interpreted as a static fact tier.
       - Validator identity and canonical digest checks establish compatibility and content integrity only; they do not provide cryptographic producer authentication or DBA attestation.
       - An observed-pass status does not certify safety, approve a release, prove the whole procedure succeeded, or replace operator judgment.
 
