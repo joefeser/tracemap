@@ -492,8 +492,18 @@ public static class ReleaseReviewReporter
         AddChecklistTruncationGapIfNeeded(gaps, cappedFindings, options.MaxChecklistItems);
         var cappedGaps = CapGaps(gaps, options.MaxGaps);
         var truncated = gaps.DistinctBy(gap => gap.GapId).Count() > cappedGaps.Length
-            || topChangedSurfaces.Status == ReleaseReviewStatuses.Truncated
-            || accessEvidence.Status == ReleaseReviewStatuses.Truncated
+            || new[]
+            {
+                topChangedSurfaces,
+                contractImpact,
+                apiDtoChanges,
+                sqlSchemaImpact,
+                sqlEvidence,
+                accessEvidence,
+                packageImpact,
+                pathContext,
+                reverseContext
+            }.Any(section => section.Status == ReleaseReviewStatuses.Truncated)
             || cappedFindings.Length < allFindings.Length;
         topChangedSurfaces = FilterSectionGaps(topChangedSurfaces, cappedGaps);
         contractImpact = FilterSectionGaps(contractImpact, cappedGaps);
@@ -2081,7 +2091,9 @@ public static class ReleaseReviewReporter
         var omitted = section.Gaps.Count - gaps.Length;
         return section with
         {
-            Status = omitted > 0 ? ReleaseReviewStatuses.Truncated : section.Status,
+            Status = omitted > 0 && section.Status == ReleaseReviewStatuses.Available
+                ? ReleaseReviewStatuses.Truncated
+                : section.Status,
             Gaps = gaps,
             OmittedCount = section.OmittedCount + omitted
         };
