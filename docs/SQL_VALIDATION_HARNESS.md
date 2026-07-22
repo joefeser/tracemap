@@ -69,6 +69,26 @@ dotnet run --project src/dotnet/TraceMap.SqlValidation.Cli -- validate \
 Dry run never reads a connection environment variable and emits every assertion
 as `not-run`.
 
+## Disposable PostgreSQL integration smoke
+
+For an explicit local integration check against a synthetic PostgreSQL 16.8
+server, run:
+
+```bash
+./scripts/smoke-sql-validation-postgres.sh
+```
+
+The script uses the official PostgreSQL 16.8 Alpine image pinned by digest, a
+random loopback-only port, no host volume, and a disposable synthetic role and
+fixture. It checks deterministic `observed-pass`, `observed-fail`, and `not-run`
+outcomes, verifies public-safe projection boundaries, and removes the container
+and scratch artifacts on exit. Its trust authentication setting is acceptable
+only inside that isolated disposable container and must not be copied to a
+persistent or externally reachable server.
+
+This smoke does not exercise RDS, `pg_cron`, `dblink` connectivity, function or
+job execution, migrations, data movement, rollback, or private infrastructure.
+
 ## Compose
 
 Supply the generated summary explicitly to a scan or release review and use an
