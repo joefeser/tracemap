@@ -149,7 +149,12 @@ identities, local paths, and scheduled command bodies are not rendered. See
 safety](docs/SQL_SECRET_SAFETY.md), [PostgreSQL permission
 evidence](docs/POSTGRES_PERMISSION_EVIDENCE.md), [PostgreSQL archive-link
 evidence](docs/POSTGRES_ARCHIVE_LINK_EVIDENCE.md), and the [SQL operator
-runbook packet](docs/SQL_OPERATOR_RUNBOOK_PACKET.md).
+runbook packet](docs/SQL_OPERATOR_RUNBOOK_PACKET.md). A separately invoked
+[SQL validation harness](docs/SQL_VALIDATION_HARNESS.md) can perform bounded,
+parameterized, read-only PostgreSQL catalog probes and emit the strict
+public-safe summary consumed by the runbook and release review. It is not part
+of scanning and does not execute migrations, functions, jobs, dblink probes, or
+arbitrary SQL.
 
 The combined dependency report writes `dependency-report.md` and `dependency-report.json` when `--out` is a directory. It summarizes source coverage, endpoint alignment, HTTP/SQL/package/config surfaces, dependency edges, needs-review rows, known gaps, and static-analysis limitations without mutating the combined database.
 

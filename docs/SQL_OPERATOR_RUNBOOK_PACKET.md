@@ -64,6 +64,11 @@ An `observed-pass` value remains point-in-time and assertion-specific. It does
 not establish continuing state, safe execution, complete procedure success,
 release approval, or DBA attestation.
 
+The separately invoked producer is documented in
+[`SQL_VALIDATION_HARNESS.md`](SQL_VALIDATION_HARNESS.md). Its v1 execution
+boundary is limited to fixed, parameterized, read-only PostgreSQL catalog
+probes. The scanner and report composers remain offline consumers.
+
 ## Synthetic Smoke Test
 
 ```bash

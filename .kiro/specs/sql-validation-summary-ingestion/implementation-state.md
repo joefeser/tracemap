@@ -1,9 +1,11 @@
 # SQL Validation Summary Ingestion Implementation State
 
-Status: implementation-complete-awaiting-review
+Status: merged-to-dev
 Branch: `codex/sql-validation-summary-ingestion`
 Base: `dev` at `721e79a746883ec4afa06e653d3cc1aae0c64b14`
 Issue: [#508](https://github.com/joefeser/tracemap/issues/508)
+PR: [#514](https://github.com/joefeser/tracemap/pull/514)
+Merge commit: `43c422e836c4885ef1521c12275e9ee4ec7519d7`
 
 ## Scope decision
 
