@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const lane = readFileSync(new URL('../.agent-control/lanes/pr-review-loop.yaml', import.meta.url), 'utf8')
+const runbook = readFileSync(new URL('../docs/PR_REVIEW_LOOP.md', import.meta.url), 'utf8')
 
 function blockAfter(pattern, indentation) {
   const match = lane.match(pattern)
@@ -68,4 +69,9 @@ test('TraceMap authorizes only the bounded exact-head Opus fallback contract', (
   assert.match(localReviewFallback, /maxAttempts:\s*2\b/)
   assert.match(localReviewFallback, /maxFixCycles:\s*2\b/)
   assert.match(localReviewFallback, /postTerminalComment:\s*true\b/)
+  assert.match(runbook, /FRESH_REVIEW_FIX_CYCLE_CEILING_REACHED/)
+  assert.match(runbook, /owner_authorized_receipt/)
+  assert.match(runbook, /aggregate\s+authorized spend is at most \$8/)
+  assert.match(runbook, /A PR cannot\s+authorize its own fallback from head-only configuration/)
+  assert.match(runbook, /--owner-authorized-local-review/)
 })
