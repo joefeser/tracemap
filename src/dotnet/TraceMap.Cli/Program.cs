@@ -2125,7 +2125,7 @@ public static class TraceMapCommand
 
             Optional:
               --format <value>           markdown or json. File outputs default to markdown; directory outputs write both.
-              --scope <value>            all, sources, coverage, surfaces, contracts, api-dto, sql-schema, packages, paths, reverse, gaps, or checklist.
+              --scope <value>            all, sources, coverage, surfaces, contracts, api-dto, sql-schema, sql-evidence, access-evidence, packages, paths, reverse, gaps, or checklist.
               --contract-delta <path>    Include contract delta impact context.
               --sql-schema-delta <path>  Validate SQL/schema delta input and report workflow status.
               --package-delta <path>     Validate package delta input and report deferred package-upgrade status.

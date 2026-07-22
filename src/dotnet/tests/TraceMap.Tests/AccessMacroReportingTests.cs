@@ -170,7 +170,7 @@ public sealed class AccessMacroReportingTests
     }
 
     [Fact]
-    public async Task Vault_preserves_Access_macro_rule_and_release_review_emits_structured_unsupported_consumer_gap()
+    public async Task Vault_preserves_Access_macro_rule_and_release_review_composes_safe_Access_design_evidence()
     {
         using var temp = new TempDirectory();
         var (scan, output) = await BuildScanAsync(temp.Path);
@@ -213,21 +213,239 @@ public sealed class AccessMacroReportingTests
             index,
             index,
             Path.Combine(temp.Path, "release-review.md")));
-        var gap = Assert.Single(review.Gaps, item => item.GapKind == "AccessEvidenceConsumerUnsupported");
-        Assert.Equal("accessEvidence", gap.Section);
-        Assert.Equal("release.review.section.v1", gap.RuleId);
-        Assert.Equal(ReleaseReviewClassifications.PartialAnalysis, gap.Classification);
-        Assert.NotEmpty(gap.SupportingFactIds);
+        Assert.Equal("1.1", review.Version);
+        Assert.Equal(ReleaseReviewStatuses.Available, review.AccessEvidence.Status);
+        Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "database-inventory"));
+        Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "table"));
+        Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "field"));
+        Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "mapping"));
+        Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "saved-query"));
+        Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "query-dependency"));
+        Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "external-boundary"));
+        Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "sourceDesignKey")
+            && item.Metadata.Any(pair => pair.Key == "targetDesignKey"));
+        Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "mapping")
+            && item.Metadata.Any(pair => pair.Key == "mappingKind" && pair.Value == "declared-relationship")
+            && item.Metadata.Any(pair => pair.Key == "mappingDesignKey" && pair.Value.StartsWith("access-", StringComparison.Ordinal)));
+        Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "external-boundary")
+            && item.Metadata.Any(pair => pair.Key == "designKey" && pair.Value.StartsWith("access-", StringComparison.Ordinal))
+            && item.Metadata.All(pair => pair.Key != "parentDesignKey"));
+        Assert.All(review.AccessEvidence.Findings.SelectMany(item => item.Metadata)
+            .Where(pair => pair.Key.EndsWith("DesignKey", StringComparison.Ordinal)),
+            pair => Assert.StartsWith("access-", pair.Value, StringComparison.Ordinal));
+        Assert.DoesNotContain(review.AccessEvidence.Findings.SelectMany(item => item.Metadata), pair => pair.Key == "objectName");
+        Assert.All(review.AccessEvidence.Findings.Where(item =>
+                item.Metadata.Any(pair => pair.Key == "capability" && pair.Value is "rowDataRead" or "executionPerformed" or "startupSuppression")),
+            item => Assert.Equal(ReleaseReviewClassifications.NoActionableEvidence, item.Classification));
+        Assert.Contains(review.AccessEvidence.Gaps, item => item.GapKind == "AccessMacroIdentityUnavailable");
+        Assert.DoesNotContain(review.Gaps, item => item.GapKind == "AccessEvidenceConsumerUnsupported");
+        Assert.All(review.AccessEvidence.Findings, finding =>
+        {
+            Assert.Equal("accessEvidence", finding.Section);
+            Assert.Equal(scan.Manifest.CommitSha, finding.CommitSha);
+            Assert.Equal("AccessCatalogExtractor", finding.ExtractorId);
+            Assert.False(string.IsNullOrWhiteSpace(finding.ExtractorVersion));
+            Assert.NotEmpty(finding.SupportingFactIds);
+            Assert.Equal("fixture.accdb", finding.FilePath);
+            Assert.Equal(1, finding.StartLine);
+            Assert.Equal(1, finding.EndLine);
+        });
         Assert.DoesNotContain(ProtectedMacroName, JsonSerializer.Serialize(review), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("OrdersPrivate", JsonSerializer.Serialize(review.AccessEvidence), StringComparison.Ordinal);
+        Assert.DoesNotContain("SELECT * FROM OrdersPrivate", JsonSerializer.Serialize(review.AccessEvidence), StringComparison.Ordinal);
+        Assert.DoesNotContain("PrivateServer", JsonSerializer.Serialize(review.AccessEvidence), StringComparison.Ordinal);
+
+        var repeatedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            index,
+            index,
+            Path.Combine(temp.Path, "repeated-release-review.md")));
+        Assert.Equal(JsonSerializer.Serialize(review.AccessEvidence), JsonSerializer.Serialize(repeatedReview.AccessEvidence));
+
+        var written = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
+            index,
+            index,
+            Path.Combine(temp.Path, "written-release-review"),
+            Format: "markdown"));
+        var writtenText = await File.ReadAllTextAsync(written.MarkdownPath!) + await File.ReadAllTextAsync(written.JsonPath!);
+        Assert.Contains("Access Design Evidence", writtenText, StringComparison.Ordinal);
+        Assert.DoesNotContain(ProtectedMacroName, writtenText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("OrdersPrivate", writtenText, StringComparison.Ordinal);
+        Assert.DoesNotContain("PrivateServer", writtenText, StringComparison.Ordinal);
+
+        var itemOutput = Path.Combine(temp.Path, "access-item-output");
+        await AccessArtifactWriter.WriteAsync(itemOutput, scan, AccessLimits.Default);
+        var itemReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            Path.Combine(itemOutput, "index.sqlite"),
+            Path.Combine(itemOutput, "index.sqlite"),
+            Path.Combine(temp.Path, "item-release-review.md"),
+            Scope: "access-evidence"));
+        Assert.Contains(itemReview.AccessEvidence.Gaps, item => item.GapKind == "AccessItemEvidenceOutsideCountOnlyBoundary");
+        Assert.DoesNotContain(itemReview.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Value == "macro"));
 
         var combinedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
             combined,
             combined,
             Path.Combine(temp.Path, "combined-release-review.md")));
-        var combinedGap = Assert.Single(combinedReview.Gaps, item => item.GapKind == "AccessEvidenceConsumerUnsupported");
-        Assert.NotEmpty(combinedGap.SupportingFactIds);
-        Assert.All(combinedGap.SupportingFactIds, factId => Assert.Contains(':', factId));
+        Assert.Equal(ReleaseReviewStatuses.Available, combinedReview.AccessEvidence.Status);
+        Assert.NotEmpty(combinedReview.AccessEvidence.Findings);
+        Assert.All(combinedReview.AccessEvidence.Findings.SelectMany(item => item.SupportingFactIds), factId => Assert.Contains(':', factId));
+        Assert.All(combinedReview.AccessEvidence.Findings, finding => Assert.Equal("access", finding.SourceLabel));
         Assert.DoesNotContain(ProtectedMacroName, JsonSerializer.Serialize(combinedReview), StringComparison.OrdinalIgnoreCase);
+
+        var selectedCombinedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            combined,
+            combined,
+            Path.Combine(temp.Path, "selected-combined-release-review.md"),
+            Scope: "access-evidence",
+            Source: "access"));
+        Assert.Equal(ReleaseReviewStatuses.Available, selectedCombinedReview.AccessEvidence.Status);
+        Assert.All(selectedCombinedReview.AccessEvidence.Findings, finding => Assert.Equal("access", finding.SourceLabel));
+
+        var excludedCombinedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            combined,
+            combined,
+            Path.Combine(temp.Path, "excluded-combined-release-review.md"),
+            Scope: "access-evidence",
+            Source: "other"));
+        Assert.Equal(ReleaseReviewStatuses.Deferred, excludedCombinedReview.AccessEvidence.Status);
+        var excludedGap = Assert.Single(excludedCombinedReview.AccessEvidence.Gaps);
+        Assert.Contains(excludedGap.Metadata, pair => pair.Key == "sourceSelector" && pair.Value == "other");
+
+        var scopedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            index,
+            index,
+            Path.Combine(temp.Path, "scoped-release-review.md"),
+            Scope: "access-evidence"));
+        Assert.Equal(ReleaseReviewStatuses.Available, scopedReview.AccessEvidence.Status);
+        Assert.Equal(ReleaseReviewStatuses.NotRequested, scopedReview.SqlEvidence.Status);
+
+        var cappedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            index,
+            index,
+            Path.Combine(temp.Path, "capped-release-review.md"),
+            Scope: "access-evidence",
+            MaxFindings: 1));
+        Assert.Equal(ReleaseReviewStatuses.Truncated, cappedReview.AccessEvidence.Status);
+        Assert.Single(cappedReview.AccessEvidence.Findings);
+        Assert.Equal(review.AccessEvidence.Findings.Count - 1, cappedReview.AccessEvidence.OmittedCount);
+
+        var gapCappedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            index,
+            index,
+            Path.Combine(temp.Path, "gap-capped-release-review.md"),
+            Scope: "access-evidence",
+            MaxGaps: 1));
+        Assert.Equal(ReleaseReviewStatuses.Truncated, gapCappedReview.AccessEvidence.Status);
+        Assert.Empty(gapCappedReview.AccessEvidence.Gaps);
+        Assert.Equal(review.AccessEvidence.Gaps.Count, gapCappedReview.AccessEvidence.OmittedCount);
+        Assert.True(gapCappedReview.Summary.Truncated);
+
+        SqliteConnection.ClearAllPools();
+        var unsafePathIndex = Path.Combine(temp.Path, "unsafe-path.sqlite");
+        File.Copy(index, unsafePathIndex);
+        await using (var connection = new SqliteConnection($"Data Source={unsafePathIndex}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "update facts set file_path = 'C:\\private\\customer\\fixture.accdb';";
+            await command.ExecuteNonQueryAsync();
+        }
+        SqliteConnection.ClearAllPools();
+
+        var unsafePathReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            unsafePathIndex,
+            unsafePathIndex,
+            Path.Combine(temp.Path, "unsafe-path-release-review.md"),
+            Scope: "access-evidence"));
+        var unsafePathSerialized = JsonSerializer.Serialize(unsafePathReview.AccessEvidence);
+        Assert.DoesNotContain("C:\\private", unsafePathSerialized, StringComparison.OrdinalIgnoreCase);
+        Assert.All(unsafePathReview.AccessEvidence.Findings, finding => Assert.StartsWith("absolute-path-hash:", finding.FilePath, StringComparison.Ordinal));
+
+        var collisionIndex = Path.Combine(temp.Path, "gap-collision.sqlite");
+        File.Copy(index, collisionIndex);
+        await using (var connection = new SqliteConnection($"Data Source={collisionIndex}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                insert into facts (
+                    fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
+                    source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
+                    snippet_hash, extractor_id, extractor_version, properties_json)
+                select fact_id || '-second-file', scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
+                    source_symbol, target_symbol, contract_element, 'second.accdb', start_line, end_line,
+                    snippet_hash, extractor_id, extractor_version, properties_json
+                from facts
+                where fact_type = 'AnalysisGap'
+                  and json_extract(properties_json, '$.classification') = 'AccessMacroIdentityUnavailable'
+                limit 1;
+                """;
+            Assert.Equal(1, await command.ExecuteNonQueryAsync());
+        }
+        SqliteConnection.ClearAllPools();
+
+        var collisionReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            collisionIndex,
+            collisionIndex,
+            Path.Combine(temp.Path, "gap-collision-release-review.md"),
+            Scope: "access-evidence"));
+        var identityGaps = collisionReview.AccessEvidence.Gaps
+            .Where(gap => gap.GapKind == "AccessMacroIdentityUnavailable")
+            .ToArray();
+        Assert.Equal(2, identityGaps.Length);
+        Assert.Equal(2, identityGaps.Select(gap => gap.GapId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(identityGaps, gap => gap.Metadata.Any(pair => pair.Key == "filePath" && pair.Value == "fixture.accdb"));
+        Assert.Contains(identityGaps, gap => gap.Metadata.Any(pair => pair.Key == "filePath" && pair.Value == "second.accdb"));
+
+        var truncatedIndex = Path.Combine(temp.Path, "truncated.sqlite");
+        File.Copy(index, truncatedIndex);
+        await using (var connection = new SqliteConnection($"Data Source={truncatedIndex}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                insert into facts (
+                    fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
+                    source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
+                    snippet_hash, extractor_id, extractor_version, properties_json)
+                select fact_id || '-fact-limit', scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
+                    source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
+                    snippet_hash, extractor_id, extractor_version,
+                    json_set(properties_json, '$.classification', 'AccessFactLimitReached')
+                from facts
+                where fact_type = 'AnalysisGap'
+                limit 1;
+                """;
+            Assert.Equal(1, await command.ExecuteNonQueryAsync());
+        }
+        SqliteConnection.ClearAllPools();
+
+        var truncatedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            truncatedIndex,
+            truncatedIndex,
+            Path.Combine(temp.Path, "truncated-release-review.md"),
+            Scope: "access-evidence"));
+        Assert.Equal(ReleaseReviewStatuses.Truncated, truncatedReview.AccessEvidence.Status);
+        Assert.True(truncatedReview.Summary.Truncated);
+        Assert.Contains(truncatedReview.AccessEvidence.Gaps, item => item.GapKind == "AccessFactLimitReached"
+            && item.Classification == ReleaseReviewClassifications.TruncatedByLimit);
+
+        await using (var connection = new SqliteConnection($"Data Source={index}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "update facts set extractor_version = '' where rule_id like 'legacy.access.%';";
+            await command.ExecuteNonQueryAsync();
+        }
+        SqliteConnection.ClearAllPools();
+
+        var incompatible = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            index,
+            index,
+            Path.Combine(temp.Path, "incompatible-release-review.md"),
+            Scope: "access-evidence"));
+        Assert.Equal(ReleaseReviewStatuses.Unavailable, incompatible.AccessEvidence.Status);
+        Assert.Contains(incompatible.AccessEvidence.Gaps, item => item.GapKind == "AccessEvidenceProvenanceUnavailable");
     }
 
     [Fact]
@@ -272,7 +490,8 @@ public sealed class AccessMacroReportingTests
         Assert.Contains("docs-export --index $combined", script, StringComparison.Ordinal);
         Assert.Contains("vault export --combined-index $combined", script, StringComparison.Ordinal);
         Assert.Contains("release-review --before $combined --after $combined", script, StringComparison.Ordinal);
-        Assert.Contains("AccessEvidenceConsumerUnsupported", script, StringComparison.Ordinal);
+        Assert.Contains("$releaseReview.accessEvidence.status -ne \"available\"", script, StringComparison.Ordinal);
+        Assert.Contains("Access release review omitted composed design evidence", script, StringComparison.Ordinal);
         Assert.Contains("vault-export.gap.access-evidence-consumer-unsupported.v1", script, StringComparison.Ordinal);
         Assert.Contains("Phase 9 checkpoint must be outside the disposable smoke root", script, StringComparison.Ordinal);
         Assert.Contains("[string]::Equals($Phase9CheckpointPath, $SmokeRoot", script, StringComparison.Ordinal);
@@ -311,7 +530,9 @@ public sealed class AccessMacroReportingTests
         Assert.Contains("AccessNavigationCandidate", script, StringComparison.Ordinal);
         Assert.Contains("AccessEventBindingCandidate", script, StringComparison.Ordinal);
         Assert.Contains("macroIdentityFactsZero", script, StringComparison.Ordinal);
-        Assert.Contains("AccessEvidenceConsumerUnsupported", script, StringComparison.Ordinal);
+        Assert.Contains("release-review --before $combined --after $combined --out $releaseReviewOutput --format json --max-findings 10000", script, StringComparison.Ordinal);
+        Assert.Contains("$releaseReview.accessEvidence.status -ne \"available\"", script, StringComparison.Ordinal);
+        Assert.Contains("representative release-review contract failed", script, StringComparison.Ordinal);
         Assert.Contains("protectedOutputMatchCount", script, StringComparison.Ordinal);
         Assert.Contains("originalUnchanged", script, StringComparison.Ordinal);
         Assert.Contains("phase95Representative = \"completed\"", script, StringComparison.Ordinal);
@@ -345,6 +566,12 @@ public sealed class AccessMacroReportingTests
             false);
         var seed = AccessSafeValues.DatabaseIdentitySeed(input.RepositoryIdentityHash, input.CommitSha, input.DatabaseRelativePath, input.DatabaseHash);
         var embeddedOwner = AccessSafeValues.Identity(seed, "control", "MacroButton").StableKey;
+        var table = AccessSafeValues.Identity(seed, "table", "OrdersPrivate");
+        var field = AccessSafeValues.Identity(seed, $"field-{table.StableKey}", "CustomerSecretField");
+        var indexIdentity = AccessSafeValues.Identity(seed, $"index-{table.StableKey}", "PrivateIndex");
+        var relationshipIdentity = AccessSafeValues.Identity(seed, "relationship", "PrivateRelationship");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "PrivateQuery");
+        var externalIdentity = AccessSafeValues.Identity(seed, "table", "PrivateServer");
         var macro = AccessMacroProjector.Project(seed,
             [new("AutoExec", "named"), new(ProtectedMacroName, "data"), new("ButtonMacro", "embedded", embeddedOwner)]);
         const string macroCoverage = "named-count-observed-loaded-state-unavailable-other-categories-identities-bodies-unavailable";
@@ -366,17 +593,22 @@ public sealed class AccessMacroReportingTests
             false,
             false,
             0,
-            [],
-            [],
-            [],
-            [],
+            [new(table, [new(field, 0, "long", 4, true)], [new(indexIdentity, true, true, [field.StableKey])])],
+            [new(relationshipIdentity, table.StableKey, table.StableKey, 0, [new(field.StableKey, field.StableKey, 0)])],
+            [new(queryIdentity, "select", AccessSafeValues.RoleHash("access-query-sql", "SELECT * FROM OrdersPrivate"), 27, "complete", [], [new(table.StableKey, "table", "direct-static-reference")], false, null, null)],
+            [new(externalIdentity, "odbc", AccessSafeValues.RoleHash("access-linked-source", "PrivateServer"), "linked-table")],
             [
                 .. macro.Gaps,
                 .. productMacroGaps,
                 new("AccessUiSurfaceUnavailable", "ui-surface", null, RuleIds.LegacyAccessUiSurface),
                 new("AccessVbaProjectUnavailable", "vba-project", null, RuleIds.LegacyAccessVba)
             ],
-            [new("macros", macroCoverage)],
+            [
+                new("macros", macroCoverage),
+                new("rowDataRead", "false"),
+                new("executionPerformed", "false"),
+                new("startupSuppression", "force-disable-requested")
+            ],
             Macros: macro.Macros,
             MacroInventory: new(3, null, macroCoverage));
         return (AccessFactBuilder.Build(input, projection, new(root, "fixture.accdb", output)), output);
