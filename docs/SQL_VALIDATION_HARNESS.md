@@ -40,6 +40,13 @@ Copy and edit the local example plan. Bind its repository and commit to the
 static scan that will consume the result, and supply explicit observation and
 expiry timestamps.
 
+For a two-database archive rollout, start with the separate parser-valid
+`source-plan.template.json` and `archive-target-plan.template.json` files under
+`samples/sql-validation-harness/`. Copy them to private operator storage before
+adding real identifiers. The ordered ownership, target-selection, stop, and
+interpretation workflow is in
+[`SQL_VALIDATION_OPERATOR_PACKET.md`](SQL_VALIDATION_OPERATOR_PACKET.md).
+
 ```bash
 export TRACEMAP_SQL_VALIDATION_CONNECTION='<operator-supplied PostgreSQL connection string>'
 
