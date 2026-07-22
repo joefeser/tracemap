@@ -994,3 +994,28 @@ Do not substitute terminal output, screenshots, SQL text, connection material,
 target names, ticket notes, or human-authored pass/fail prose for the versioned
 summary. TraceMap does not run the validator or connect to PostgreSQL during
 this smoke.
+
+## SQL validation harness smoke
+
+Run the standalone producer tests and the no-connection dry run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~SqlValidationHarnessTests
+rm -f /tmp/tracemap-sql-validation-summary.json
+dotnet run --project src/dotnet/TraceMap.SqlValidation.Cli -- validate \
+  --plan samples/sql-validation-harness/plan.example.json \
+  --out /tmp/tracemap-sql-validation-summary.json \
+  --dry-run
+```
+
+The tests use a synthetic executor and make no network connection. They cover
+strict local-plan parsing, deterministic summary generation, categorical pass,
+fail, indeterminate, and not-run behavior, canonical-digest compatibility with
+the ingestion reader, CLI error classification, create-new output semantics,
+and planted private-value non-disclosure.
+
+Do not use a live PostgreSQL target as a routine CI smoke. Live use is an
+explicit operator action under [`SQL_VALIDATION_HARNESS.md`](SQL_VALIDATION_HARNESS.md)
+and requires a least-privilege connection appropriate for the selected catalog
+checks.
