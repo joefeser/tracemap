@@ -2064,7 +2064,13 @@ public static class ReleaseReviewReporter
     {
         var allowedIds = allowed.Select(finding => finding.FindingId).ToHashSet(StringComparer.Ordinal);
         var findings = section.Findings.Where(finding => allowedIds.Contains(finding.FindingId)).ToArray();
-        return section with { Findings = findings };
+        var omitted = section.Findings.Count - findings.Length;
+        return section with
+        {
+            Status = omitted > 0 ? ReleaseReviewStatuses.Truncated : section.Status,
+            Findings = findings,
+            OmittedCount = section.OmittedCount + omitted
+        };
     }
 
     private static ReleaseReviewSection FilterSectionGaps(ReleaseReviewSection section, IReadOnlyList<ReleaseReviewGap> allowed)

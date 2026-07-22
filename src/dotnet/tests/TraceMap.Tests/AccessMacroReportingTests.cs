@@ -316,6 +316,16 @@ public sealed class AccessMacroReportingTests
         Assert.Equal(ReleaseReviewStatuses.Available, scopedReview.AccessEvidence.Status);
         Assert.Equal(ReleaseReviewStatuses.NotRequested, scopedReview.SqlEvidence.Status);
 
+        var cappedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            index,
+            index,
+            Path.Combine(temp.Path, "capped-release-review.md"),
+            Scope: "access-evidence",
+            MaxFindings: 1));
+        Assert.Equal(ReleaseReviewStatuses.Truncated, cappedReview.AccessEvidence.Status);
+        Assert.Single(cappedReview.AccessEvidence.Findings);
+        Assert.Equal(review.AccessEvidence.Findings.Count - 1, cappedReview.AccessEvidence.OmittedCount);
+
         SqliteConnection.ClearAllPools();
         var unsafePathIndex = Path.Combine(temp.Path, "unsafe-path.sqlite");
         File.Copy(index, unsafePathIndex);
