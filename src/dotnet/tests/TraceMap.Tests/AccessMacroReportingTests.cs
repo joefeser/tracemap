@@ -224,6 +224,12 @@ public sealed class AccessMacroReportingTests
         Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "external-boundary"));
         Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "sourceDesignKey")
             && item.Metadata.Any(pair => pair.Key == "targetDesignKey"));
+        Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "mapping")
+            && item.Metadata.Any(pair => pair.Key == "mappingKind" && pair.Value == "declared-relationship")
+            && item.Metadata.Any(pair => pair.Key == "mappingDesignKey" && pair.Value.StartsWith("access-", StringComparison.Ordinal)));
+        Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "external-boundary")
+            && item.Metadata.Any(pair => pair.Key == "designKey" && pair.Value.StartsWith("access-", StringComparison.Ordinal))
+            && item.Metadata.All(pair => pair.Key != "parentDesignKey"));
         Assert.All(review.AccessEvidence.Findings.SelectMany(item => item.Metadata)
             .Where(pair => pair.Key.EndsWith("DesignKey", StringComparison.Ordinal)),
             pair => Assert.StartsWith("access-", pair.Value, StringComparison.Ordinal));

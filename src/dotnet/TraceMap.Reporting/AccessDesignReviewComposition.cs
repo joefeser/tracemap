@@ -315,6 +315,8 @@ internal static class AccessDesignReviewComposer
     private static IReadOnlyList<KeyValuePair<string, string>> MappingMetadata(IReadOnlyDictionary<string, string> properties)
     {
         var values = Select(properties, "mappingKind", "indexPrimary", "indexUnique").ToList();
+        if (SafeOpaqueKey(properties.GetValueOrDefault("stableModelKey")) is { } mappingDesignKey)
+            values.Add(Pair("mappingDesignKey", mappingDesignKey));
         if (properties.TryGetValue("fieldStableKeys", out var fields))
             values.Add(Pair("fieldCount", CountList(fields).ToString(System.Globalization.CultureInfo.InvariantCulture)));
         if (properties.TryGetValue("fieldPairs", out var pairs))
@@ -331,7 +333,12 @@ internal static class AccessDesignReviewComposer
         if (SafeOpaqueKey(fact.TargetSymbol) is { } target)
             values.Add(Pair(kind is "mapping" or "query-dependency" ? "targetDesignKey" : "designKey", target));
         if (SafeOpaqueKey(fact.SourceSymbol) is { } source)
-            values.Add(Pair(kind is "mapping" or "query-dependency" ? "sourceDesignKey" : "parentDesignKey", source));
+            values.Add(Pair(kind switch
+            {
+                "mapping" or "query-dependency" => "sourceDesignKey",
+                "external-boundary" => "designKey",
+                _ => "parentDesignKey"
+            }, source));
         return Sorted(values);
     }
 
