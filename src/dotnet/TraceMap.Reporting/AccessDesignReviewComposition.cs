@@ -184,7 +184,10 @@ internal static class AccessDesignReviewComposer
             .ThenBy(gap => gap.GapKind, StringComparer.Ordinal)
             .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
             .ToArray();
-        return new ReleaseReviewSection(ReleaseReviewStatuses.Available, orderedFindings, orderedGaps, Limitations);
+        var status = orderedGaps.Any(gap => gap.Classification == ReleaseReviewClassifications.TruncatedByLimit)
+            ? ReleaseReviewStatuses.Truncated
+            : ReleaseReviewStatuses.Available;
+        return new ReleaseReviewSection(status, orderedFindings, orderedGaps, Limitations);
     }
 
     private static ReleaseReviewFinding? FromFact(AccessDesignFactRow row)

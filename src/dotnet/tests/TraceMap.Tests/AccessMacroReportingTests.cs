@@ -367,6 +367,38 @@ public sealed class AccessMacroReportingTests
         Assert.Contains(identityGaps, gap => gap.Metadata.Any(pair => pair.Key == "filePath" && pair.Value == "fixture.accdb"));
         Assert.Contains(identityGaps, gap => gap.Metadata.Any(pair => pair.Key == "filePath" && pair.Value == "second.accdb"));
 
+        var truncatedIndex = Path.Combine(temp.Path, "truncated.sqlite");
+        File.Copy(index, truncatedIndex);
+        await using (var connection = new SqliteConnection($"Data Source={truncatedIndex}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                insert into facts (
+                    fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
+                    source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
+                    snippet_hash, extractor_id, extractor_version, properties_json)
+                select fact_id || '-fact-limit', scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
+                    source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
+                    snippet_hash, extractor_id, extractor_version,
+                    json_set(properties_json, '$.classification', 'AccessFactLimitReached')
+                from facts
+                where fact_type = 'AnalysisGap'
+                limit 1;
+                """;
+            Assert.Equal(1, await command.ExecuteNonQueryAsync());
+        }
+        SqliteConnection.ClearAllPools();
+
+        var truncatedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            truncatedIndex,
+            truncatedIndex,
+            Path.Combine(temp.Path, "truncated-release-review.md"),
+            Scope: "access-evidence"));
+        Assert.Equal(ReleaseReviewStatuses.Truncated, truncatedReview.AccessEvidence.Status);
+        Assert.Contains(truncatedReview.AccessEvidence.Gaps, item => item.GapKind == "AccessFactLimitReached"
+            && item.Classification == ReleaseReviewClassifications.TruncatedByLimit);
+
         await using (var connection = new SqliteConnection($"Data Source={index}"))
         {
             await connection.OpenAsync();
