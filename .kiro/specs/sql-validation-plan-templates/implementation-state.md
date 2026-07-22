@@ -16,7 +16,14 @@ Validation:
 - `dotnet test src/dotnet/TraceMap.sln --no-build --nologo`: 863/863 passed.
 - Private-path guard and `git diff --check`: passed.
 
-PR state: implementation complete locally; commit, push, PR, and ACK pending.
+PR state: [#521](https://github.com/joefeser/tracemap/pull/521) is open. ACK
+stopped before GitHub review processing with
+`environment_blocked / LOCAL_BUILD_STALE`; no merge authority was inferred.
+
+Review follow-up: the checked-in template contract test now pins each public
+sample's synthetic artifact ID, repository, commit SHA, observation window,
+and connection-material denylist. This prevents parser-valid real target
+identity from silently replacing the published synthetic values.
 
 Deferred: disposable PostgreSQL validation remains in #519; public site story,
 target-specific private plans, live RDS validation, execution checks, and the
