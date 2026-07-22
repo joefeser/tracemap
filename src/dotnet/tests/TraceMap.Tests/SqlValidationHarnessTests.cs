@@ -49,10 +49,11 @@ public sealed class SqlValidationHarnessTests
     }
 
     [Theory]
-    [InlineData("source-plan.template.json", "source", "source-data", 5)]
-    [InlineData("archive-target-plan.template.json", "archive-target", "archive-data", 4)]
+    [InlineData("source-plan.template.json", "source-archive-validation-template", "source", "source-data", 5)]
+    [InlineData("archive-target-plan.template.json", "archive-target-validation-template", "archive-target", "archive-data", 4)]
     public void Published_operator_templates_are_parser_valid_and_context_specific(
         string fileName,
+        string artifactId,
         string serverRole,
         string databaseRole,
         int expectedCheckCount)
@@ -62,6 +63,12 @@ public sealed class SqlValidationHarnessTests
 
         var plan = SqlValidationPlanReader.Parse(json);
 
+        Assert.Equal(artifactId, plan.ArtifactId);
+        Assert.EndsWith("-template", plan.ArtifactId, StringComparison.Ordinal);
+        Assert.Equal("example/archive-service", plan.Repository);
+        Assert.Equal(Commit, plan.CommitSha);
+        Assert.Equal(ObservedAt, plan.ObservedAt);
+        Assert.Equal(ExpiresAt, plan.ExpiresAt);
         Assert.Equal(serverRole, plan.TargetContext.ServerRole);
         Assert.Equal(databaseRole, plan.TargetContext.DatabaseRole);
         Assert.Equal("archive", plan.TargetContext.SchemaRole);
@@ -70,9 +77,8 @@ public sealed class SqlValidationHarnessTests
         Assert.Contains(plan.Checks, check => check.Code == "postgres.server-version-compatible");
         Assert.Contains(plan.Checks, check => check.Code == "postgres.required-extension-available");
         Assert.Contains(plan.Checks, check => check.Code == "postgres.permission-probe-authorized");
-        Assert.DoesNotContain("password", json, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("connectionString", json, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("host", json, StringComparison.OrdinalIgnoreCase);
+        Assert.All(new[] { "password", "connectionstring", "server=", "user id=", "username=", "host=", "port=", "database=" },
+            marker => Assert.DoesNotContain(marker, json, StringComparison.OrdinalIgnoreCase));
 
         if (serverRole == "source")
         {
