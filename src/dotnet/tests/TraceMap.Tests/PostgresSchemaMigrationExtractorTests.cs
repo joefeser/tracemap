@@ -55,6 +55,22 @@ public sealed class PostgresSchemaMigrationExtractorTests
         Assert.DoesNotContain("private_table", json, StringComparison.Ordinal);
         Assert.DoesNotContain("secret_column", json, StringComparison.Ordinal);
         Assert.Contains(facts, fact => fact.Properties.GetValueOrDefault("classification") == "IncompleteDdlStatement");
+        Assert.All(facts.Where(fact => fact.RuleId == RuleIds.DatabasePostgresSchemaMigrationGap), fact => Assert.NotNull(fact.Evidence.SnippetHash));
+    }
+
+    [Fact]
+    public void Extract_rejects_multi_subcommand_alter_table_without_partial_column_facts()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "multi.sql"),
+            "ALTER TABLE archive.records ADD COLUMN first_value numeric(10, 2), ADD COLUMN second_value text;\n");
+
+        var facts = Extract(temp.Path);
+
+        Assert.DoesNotContain(facts, fact => fact.FactType is FactTypes.PostgresMigrationOperation or FactTypes.PostgresSchemaColumnDeclared);
+        var gap = Assert.Single(facts, fact => fact.RuleId == RuleIds.DatabasePostgresSchemaMigrationGap);
+        Assert.Equal("AlterTableMultipleSubcommandsUnsupported", gap.Properties["classification"]);
+        Assert.NotNull(gap.Evidence.SnippetHash);
     }
 
     [Fact]

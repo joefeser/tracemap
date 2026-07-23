@@ -18,15 +18,19 @@ public static partial class PostgresSchemaMigrationExtractor
                 facts.Add(Gap(manifest, file.RelativePath, 1, 1, 0, "SqlFileUnavailable"));
                 continue;
             }
+            if (!MightContainSupportedFamily(text)) continue;
 
             var fileFacts = new List<CodeFact>();
+            var recognizedStatementHashes = new List<string>();
             foreach (var statement in SqlExecutionContextExtractor.SplitStatements(text))
             {
                 var structural = statement.StructuralText;
                 if (!StartsSupportedFamily(structural)) continue;
+                var statementHash = FactFactory.Hash(structural, 32);
+                recognizedStatementHashes.Add(statementHash);
                 if (!statement.LexicallyComplete || !HasBalancedParentheses(structural))
                 {
-                    fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "IncompleteDdlStatement"));
+                    fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "IncompleteDdlStatement", statementHash));
                     continue;
                 }
 
@@ -37,7 +41,13 @@ public static partial class PostgresSchemaMigrationExtractor
                     foreach (var declaredColumn in columns)
                         fileFacts.Add(Surface(manifest, FactTypes.PostgresSchemaColumnDeclared, file.RelativePath, statement, schema, table, declaredColumn, "create-table", "column"));
                     if (columns.Count == 0)
-                        fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "CreateTableColumnsUnavailable"));
+                        fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "CreateTableColumnsUnavailable", statementHash));
+                    continue;
+                }
+
+                if (AlterTablePrefix().IsMatch(structural) && HasTopLevelComma(structural))
+                {
+                    fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "AlterTableMultipleSubcommandsUnsupported", statementHash));
                     continue;
                 }
 
@@ -48,13 +58,13 @@ public static partial class PostgresSchemaMigrationExtractor
                     continue;
                 }
 
-                fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "UnsupportedSchemaDdlShape"));
+                fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "UnsupportedSchemaDdlShape", statementHash));
             }
 
             if (fileFacts.Count == 0) continue;
             facts.Add(FactFactory.Create(manifest, FactTypes.PostgresMigrationFileDeclared, RuleIds.DatabasePostgresSchemaMigration,
                 EvidenceTiers.Tier2Structural,
-                new EvidenceSpan(file.RelativePath, 1, CountLines(text), null, nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
+                new EvidenceSpan(file.RelativePath, 1, CountLines(text), FactFactory.Hash(string.Join(";", recognizedStatementHashes), 32), nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
                 targetSymbol: Path.GetFileName(file.RelativePath),
                 properties: Properties(("objectKind", "migration-file"), ("coverageLabel", "bounded-static-evidence"), ("limitations", Limitation))));
             facts.AddRange(fileFacts);
@@ -63,6 +73,10 @@ public static partial class PostgresSchemaMigrationExtractor
     }
 
     private static bool StartsSupportedFamily(string sql) => CreateTablePrefix().IsMatch(sql) || AlterTablePrefix().IsMatch(sql);
+
+    private static bool MightContainSupportedFamily(string sql) =>
+        sql.Contains("TABLE", StringComparison.OrdinalIgnoreCase)
+        && (sql.Contains("CREATE", StringComparison.OrdinalIgnoreCase) || sql.Contains("ALTER", StringComparison.OrdinalIgnoreCase));
 
     private static bool TryCreateTable(string sql, out string schema, out string table, out IReadOnlyList<string> columns)
     {
@@ -103,6 +117,18 @@ public static partial class PostgresSchemaMigrationExtractor
         return depth == 0;
     }
 
+    private static bool HasTopLevelComma(string value)
+    {
+        var depth = 0;
+        foreach (var character in value)
+        {
+            if (character == '(') depth++;
+            else if (character == ')' && depth > 0) depth--;
+            else if (character == ',' && depth == 0) return true;
+        }
+        return false;
+    }
+
     private static IReadOnlyList<string> SplitTopLevel(string value)
     {
         var parts = new List<string>();
@@ -133,9 +159,9 @@ public static partial class PostgresSchemaMigrationExtractor
             targetSymbol: target, contractElement: target, properties: properties);
     }
 
-    private static CodeFact Gap(ScanManifest manifest, string path, int start, int end, int ordinal, string classification) =>
+    private static CodeFact Gap(ScanManifest manifest, string path, int start, int end, int ordinal, string classification, string? snippetHash = null) =>
         FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.DatabasePostgresSchemaMigrationGap, EvidenceTiers.Tier4Unknown,
-            new EvidenceSpan(path, start, end, null, nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
+            new EvidenceSpan(path, start, end, snippetHash, nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
             properties: Properties(("classification", classification), ("statementOrdinal", ordinal.ToString()), ("coverageLabel", "reduced-static-evidence"), ("limitations", Limitation)));
 
     private static SortedDictionary<string, string> Properties(params (string Key, string Value)[] values) =>
