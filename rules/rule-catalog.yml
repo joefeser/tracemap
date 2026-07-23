@@ -3293,7 +3293,7 @@ rules:
       - PostgresSchemaColumnDeclared
       - PostgresMigrationOperation
     limitations:
-      - V0 recognizes unquoted identifiers in CREATE TABLE and ALTER TABLE ADD COLUMN only; quoted identifiers, indexes, constraints, enums, routines, snapshots, EF/Npgsql migrations, and other dialect shapes are deferred.
+      - V0 recognizes unquoted identifiers in CREATE TABLE and single-subcommand ALTER TABLE ADD COLUMN only; quoted identifiers, multi-subcommand ALTER TABLE, indexes, constraints, enums, routines, snapshots, EF/Npgsql migrations, and other dialect shapes are deferred.
       - Column facts identify explicit declaration names but do not model types, defaults, generated expressions, constraints, ordering semantics, or compatibility.
       - Static DDL evidence does not prove migration execution, execution order, live schema existence, database state, data correctness, permissions, rollback, production use, or release safety.
       - Raw SQL, source snippets, literals, connection material, local paths, and unsupported identifiers are not stored in fact properties.

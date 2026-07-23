@@ -8,9 +8,9 @@ facts and supported-family gaps.
 
 Validation:
 
-- focused PostgreSQL schema/migration tests: 4/4 passed
+- focused PostgreSQL schema/migration tests: 5/5 passed
 - `dotnet build src/dotnet/TraceMap.sln`: passed (known NU1903 warnings)
-- `dotnet test src/dotnet/TraceMap.sln --no-build`: 865/865 passed
+- `dotnet test src/dotnet/TraceMap.sln --no-build`: 866/866 passed
 - `./scripts/check-private-paths.sh`: passed
 - `git diff --check`: passed
 
@@ -21,6 +21,14 @@ resolved CLI reports 0.2.0 while its installed package metadata is
 request or merge authority was produced. Rerun ACK on the final pushed head
 after the local stable build is repaired.
 
+Review follow-up: current Qodo findings were addressed by rejecting
+multi-subcommand `ALTER TABLE` statements with a categorical gap, retaining
+masked structural hashes for readable statement gaps plus a file-level
+hash-of-hashes, and avoiding statement lexing when a conservative raw-text
+prefilter cannot contain either supported DDL family. Shared SQL read/parse
+caching remains a broader cross-extractor follow-up.
+
 Deferred: quoted identifiers; indexes; constraints; enums; routines;
 checked-in snapshots; EF Core/Npgsql migration APIs; execution/order graphs;
-live introspection; and all runtime/production claims.
+live introspection; shared cross-extractor SQL read/statement caching; and all
+runtime/production claims.
