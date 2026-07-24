@@ -1,7 +1,8 @@
 # PostgreSQL Schema and Migration Evidence
 
 TraceMap's bounded PostgreSQL schema/migration extractor recognizes explicit
-`CREATE TABLE`, single-subcommand `ALTER TABLE ... ADD COLUMN`, supported named
+`CREATE TABLE`, single-subcommand `ALTER TABLE ... ADD/DROP/RENAME COLUMN`,
+`ALTER TABLE ... RENAME TO`, single-object `DROP TABLE`, supported named
 constraint, simple `CREATE [UNIQUE] INDEX`, `CREATE TYPE ... AS ENUM`, and
 `CREATE [OR REPLACE] FUNCTION/PROCEDURE` statements in checked-in `.sql`
 files. It emits deterministic migration-file, migration-operation, table,
@@ -25,6 +26,12 @@ Multi-subcommand `ALTER TABLE` statements are therefore gaps instead of
 partially reported first-column evidence. A `CREATE TABLE` statement containing
 both supported and deferred top-level clauses retains its supported table and
 column facts while also emitting an explicit reduced-coverage gap.
+
+Drop and rename coverage retains only safe unquoted source identity, safe new
+identity for renames, and categorical `cascade`, `restrict`, or `unspecified`
+drop behavior. Multi-object drops, quoted identifiers, and broader destructive
+DDL forms emit gaps. These facts do not establish dependency effects, data loss,
+rollback behavior, or that any operation ran.
 
 Raw SQL, snippets, literals, connection material, and unsupported identifiers
 are not stored on these facts. Enum values and routine bodies are always

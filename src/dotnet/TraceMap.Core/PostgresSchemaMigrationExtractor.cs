@@ -69,6 +69,30 @@ public static partial class PostgresSchemaMigrationExtractor
                     continue;
                 }
 
+                if (TryAlterDropColumn(structural, out schema, out table, out column, out var dropBehavior))
+                {
+                    fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, column, null, "drop-column", dropBehavior));
+                    continue;
+                }
+
+                if (TryAlterRenameColumn(structural, out schema, out table, out column, out var newColumn))
+                {
+                    fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, column, newColumn, "rename-column"));
+                    continue;
+                }
+
+                if (TryAlterRenameTable(structural, out schema, out table, out var newTable))
+                {
+                    fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, null, newTable, "rename-table"));
+                    continue;
+                }
+
+                if (TryDropTable(structural, out schema, out table, out dropBehavior))
+                {
+                    fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, null, null, "drop-table", dropBehavior));
+                    continue;
+                }
+
                 if (TryCreateIndex(structural, out schema, out table, out var index))
                 {
                     fileFacts.Add(IndexSurface(manifest, FactTypes.PostgresMigrationOperation, file.RelativePath, statement, schema, table, index, "migration-operation"));
@@ -113,18 +137,24 @@ public static partial class PostgresSchemaMigrationExtractor
     private static bool StartsSupportedFamily(string sql) =>
         CreateTablePrefix().IsMatch(sql)
         || AlterTablePrefix().IsMatch(sql)
+        || DropTablePrefix().IsMatch(sql)
+        || UnsupportedDestructiveDdlPrefix().IsMatch(sql)
         || CreateIndexPrefix().IsMatch(sql)
         || CreateEnumPrefix().IsMatch(sql)
         || CreateRoutinePrefix().IsMatch(sql);
 
     private static bool MightContainSupportedFamily(string sql) =>
         (sql.Contains("TABLE", StringComparison.OrdinalIgnoreCase)
-            && (sql.Contains("CREATE", StringComparison.OrdinalIgnoreCase) || sql.Contains("ALTER", StringComparison.OrdinalIgnoreCase)))
+            && (sql.Contains("CREATE", StringComparison.OrdinalIgnoreCase)
+                || sql.Contains("ALTER", StringComparison.OrdinalIgnoreCase)
+                || sql.Contains("DROP", StringComparison.OrdinalIgnoreCase)))
         || (sql.Contains("CREATE", StringComparison.OrdinalIgnoreCase)
             && (sql.Contains("INDEX", StringComparison.OrdinalIgnoreCase)
                 || sql.Contains("TYPE", StringComparison.OrdinalIgnoreCase)
                 || sql.Contains("FUNCTION", StringComparison.OrdinalIgnoreCase)
-                || sql.Contains("PROCEDURE", StringComparison.OrdinalIgnoreCase)));
+                || sql.Contains("PROCEDURE", StringComparison.OrdinalIgnoreCase)))
+        || sql.Contains("DROP", StringComparison.OrdinalIgnoreCase)
+        || sql.Contains("TRUNCATE", StringComparison.OrdinalIgnoreCase);
 
     private static bool TryCreateTable(
         string sql,
@@ -194,6 +224,77 @@ public static partial class PostgresSchemaMigrationExtractor
         table = match.Groups["table"].Value;
         return true;
     }
+
+    private static bool TryAlterDropColumn(
+        string sql,
+        out string schema,
+        out string table,
+        out string column,
+        out string dropBehavior)
+    {
+        schema = table = column = dropBehavior = string.Empty;
+        var match = AlterDropColumn().Match(sql);
+        if (!match.Success) return false;
+        schema = match.Groups["schema"].Success ? match.Groups["schema"].Value : string.Empty;
+        table = match.Groups["table"].Value;
+        column = match.Groups["column"].Value;
+        dropBehavior = DropBehavior(match);
+        return true;
+    }
+
+    private static bool TryAlterRenameColumn(
+        string sql,
+        out string schema,
+        out string table,
+        out string column,
+        out string newColumn)
+    {
+        schema = table = column = newColumn = string.Empty;
+        var match = AlterRenameColumn().Match(sql);
+        if (!match.Success) return false;
+        schema = match.Groups["schema"].Success ? match.Groups["schema"].Value : string.Empty;
+        table = match.Groups["table"].Value;
+        column = match.Groups["column"].Value;
+        newColumn = match.Groups["newColumn"].Value;
+        return true;
+    }
+
+    private static bool TryAlterRenameTable(
+        string sql,
+        out string schema,
+        out string table,
+        out string newTable)
+    {
+        schema = table = newTable = string.Empty;
+        var match = AlterRenameTable().Match(sql);
+        if (!match.Success) return false;
+        schema = match.Groups["schema"].Success ? match.Groups["schema"].Value : string.Empty;
+        table = match.Groups["table"].Value;
+        newTable = match.Groups["newTable"].Value;
+        return true;
+    }
+
+    private static bool TryDropTable(
+        string sql,
+        out string schema,
+        out string table,
+        out string dropBehavior)
+    {
+        schema = table = dropBehavior = string.Empty;
+        var match = DropTable().Match(sql);
+        if (!match.Success) return false;
+        schema = match.Groups["schema"].Success ? match.Groups["schema"].Value : string.Empty;
+        table = match.Groups["table"].Value;
+        dropBehavior = DropBehavior(match);
+        return true;
+    }
+
+    private static string DropBehavior(Match match) =>
+        match.Groups["cascade"].Success
+            ? "cascade"
+            : match.Groups["restrict"].Success
+                ? "restrict"
+                : "unspecified";
 
     private static bool TryCreateIndex(string sql, out string schema, out string table, out IndexProjection index)
     {
@@ -407,6 +508,36 @@ public static partial class PostgresSchemaMigrationExtractor
             targetSymbol: target, contractElement: target, properties: properties);
     }
 
+    private static CodeFact ChangeSurface(
+        ScanManifest manifest,
+        string path,
+        SqlExecutionContextExtractor.SqlStatement statement,
+        string schema,
+        string table,
+        string? column,
+        string? newName,
+        string operation,
+        string? dropBehavior = null)
+    {
+        var target = string.IsNullOrEmpty(schema) ? table : $"{schema}.{table}";
+        if (!string.IsNullOrEmpty(column)) target += $".{column}";
+        var properties = Properties(
+            ("objectKind", "migration-operation"),
+            ("operationKind", operation),
+            ("tableName", table),
+            ("statementOrdinal", statement.Ordinal.ToString()),
+            ("coverageLabel", "bounded-static-evidence"),
+            ("limitations", Limitation));
+        if (!string.IsNullOrEmpty(schema)) properties["schemaName"] = schema;
+        if (!string.IsNullOrEmpty(column)) properties["columnName"] = column;
+        if (!string.IsNullOrEmpty(newName))
+            properties[operation == "rename-column" ? "newColumnName" : "newTableName"] = newName;
+        if (!string.IsNullOrEmpty(dropBehavior)) properties["dropBehavior"] = dropBehavior;
+        return FactFactory.Create(manifest, FactTypes.PostgresMigrationOperation, RuleIds.DatabasePostgresSchemaMigration, EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(path, statement.StartLine, statement.EndLine, FactFactory.Hash(statement.StructuralText, 32), nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
+            targetSymbol: target, contractElement: target, properties: properties);
+    }
+
     private static CodeFact EnumSurface(
         ScanManifest manifest,
         string factType,
@@ -486,12 +617,18 @@ public static partial class PostgresSchemaMigrationExtractor
 
     [GeneratedRegex(@"^CREATE\s+(?:UNLOGGED\s+|TEMP(?:ORARY)?\s+)?TABLE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateTablePrefix();
     [GeneratedRegex(@"^ALTER\s+TABLE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex AlterTablePrefix();
+    [GeneratedRegex(@"^DROP\s+TABLE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex DropTablePrefix();
+    [GeneratedRegex(@"^(?:DROP\b|TRUNCATE\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex UnsupportedDestructiveDdlPrefix();
     [GeneratedRegex(@"^CREATE\s+(?:UNIQUE\s+)?INDEX\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateIndexPrefix();
     [GeneratedRegex(@"^CREATE\s+TYPE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateEnumPrefix();
     [GeneratedRegex(@"^CREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateRoutinePrefix();
     [GeneratedRegex(@"^CREATE\s+(?:UNLOGGED\s+|TEMP(?:ORARY)?\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)\s*\((?<body>.*)\)\s*;?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)] private static partial Regex CreateTable();
     [GeneratedRegex(@"^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)\s+ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(?!(?:CONSTRAINT|PRIMARY|FOREIGN|UNIQUE|CHECK|EXCLUDE)\b)(?<column>[A-Za-z_][A-Za-z0-9_$]*)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex AlterAddColumn();
     [GeneratedRegex(@"^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)\s+ADD\s+(?<constraint>CONSTRAINT\s+.*)\s*;?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)] private static partial Regex AlterAddConstraint();
+    [GeneratedRegex(@"^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)\s+DROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?(?<column>[A-Za-z_][A-Za-z0-9_$]*)(?:\s+(?:(?<cascade>CASCADE)|(?<restrict>RESTRICT)))?\s*;?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex AlterDropColumn();
+    [GeneratedRegex(@"^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)\s+RENAME\s+(?:COLUMN\s+)?(?<column>[A-Za-z_][A-Za-z0-9_$]*)\s+TO\s+(?<newColumn>[A-Za-z_][A-Za-z0-9_$]*)\s*;?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex AlterRenameColumn();
+    [GeneratedRegex(@"^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)\s+RENAME\s+TO\s+(?<newTable>[A-Za-z_][A-Za-z0-9_$]*)\s*;?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex AlterRenameTable();
+    [GeneratedRegex(@"^DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)(?:\s+(?:(?<cascade>CASCADE)|(?<restrict>RESTRICT)))?\s*;?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex DropTable();
     [GeneratedRegex(@"^CONSTRAINT\s+(?<name>[A-Za-z_][A-Za-z0-9_$]*)\s+(?:(?<primary>PRIMARY\s+KEY)\s*\((?<columns>[^()]*)\)|(?<unique>UNIQUE)\s*\((?<columns>[^()]*)\)|(?<foreign>FOREIGN\s+KEY)\s*\((?<columns>[^()]*)\)\s+REFERENCES\s+(?:(?<referencedSchema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<referencedTable>[A-Za-z_][A-Za-z0-9_$]*)\s*\((?<referencedColumns>[^()]*)\))\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)] private static partial Regex NamedConstraint();
     [GeneratedRegex(@"^CREATE\s+(?<unique>UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(?<index>[A-Za-z_][A-Za-z0-9_$]*)\s+ON\s+(?:ONLY\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)(?:\s+USING\s+(?<method>[A-Za-z_][A-Za-z0-9_$]*))?\s*\((?<columns>[^()]*)\)\s*;?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)] private static partial Regex CreateIndex();
     [GeneratedRegex(@"^CREATE\s+TYPE\s+(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<enum>[A-Za-z_][A-Za-z0-9_$]*)\s+AS\s+ENUM\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)] private static partial Regex CreateEnum();
