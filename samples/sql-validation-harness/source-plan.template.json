@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "sql-validation-plan/v1",
+  "artifactId": "source-archive-validation-template",
+  "repository": "example/archive-service",
+  "commitSha": "0123456789abcdef0123456789abcdef01234567",
+  "observedAt": "2026-07-22T10:00:00Z",
+  "expiresAt": "2026-07-22T18:00:00Z",
+  "targetContext": {
+    "engine": "postgresql",
+    "serverRole": "source",
+    "databaseRole": "source-data",
+    "schemaRole": "archive",
+    "executionMode": "validation-only"
+  },
+  "checks": [
+    {
+      "code": "postgres.server-version-compatible",
+      "expectedMajor": 16
+    },
+    {
+      "code": "postgres.required-extension-available",
+      "identifiers": ["dblink", "pg_cron"]
+    },
+    {
+      "code": "postgres.permission-probe-authorized",
+      "identifiers": ["archive"]
+    },
+    {
+      "code": "postgres.archive-function-callable",
+      "identifiers": ["archive.move_batch(integer)"]
+    },
+    {
+      "code": "postgres.scheduled-job-registered",
+      "identifiers": ["archive batch"]
+    }
+  ]
+}

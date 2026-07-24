@@ -49,6 +49,52 @@ public sealed class SqlValidationHarnessTests
     }
 
     [Theory]
+    [InlineData("source-plan.template.json", "source-archive-validation-template", "source", "source-data", 5)]
+    [InlineData("archive-target-plan.template.json", "archive-target-validation-template", "archive-target", "archive-data", 4)]
+    public void Published_operator_templates_are_parser_valid_and_context_specific(
+        string fileName,
+        string artifactId,
+        string serverRole,
+        string databaseRole,
+        int expectedCheckCount)
+    {
+        var path = Path.Combine(FindRepoRoot(), "samples", "sql-validation-harness", fileName);
+        var json = File.ReadAllText(path);
+
+        var plan = SqlValidationPlanReader.Parse(json);
+
+        Assert.Equal(artifactId, plan.ArtifactId);
+        Assert.EndsWith("-template", plan.ArtifactId, StringComparison.Ordinal);
+        Assert.Equal("example/archive-service", plan.Repository);
+        Assert.Equal(Commit, plan.CommitSha);
+        Assert.Equal(ObservedAt, plan.ObservedAt);
+        Assert.Equal(ExpiresAt, plan.ExpiresAt);
+        Assert.Equal(serverRole, plan.TargetContext.ServerRole);
+        Assert.Equal(databaseRole, plan.TargetContext.DatabaseRole);
+        Assert.Equal("archive", plan.TargetContext.SchemaRole);
+        Assert.Equal("validation-only", plan.TargetContext.ExecutionMode);
+        Assert.Equal(expectedCheckCount, plan.Checks.Count);
+        Assert.Contains(plan.Checks, check => check.Code == "postgres.server-version-compatible");
+        Assert.Contains(plan.Checks, check => check.Code == "postgres.required-extension-available");
+        Assert.Contains(plan.Checks, check => check.Code == "postgres.permission-probe-authorized");
+        Assert.All(new[] { "password", "connectionstring", "server=", "user id=", "username=", "host=", "port=", "database=" },
+            marker => Assert.DoesNotContain(marker, json, StringComparison.OrdinalIgnoreCase));
+
+        if (serverRole == "source")
+        {
+            Assert.Contains(plan.Checks, check => check.Code == "postgres.archive-function-callable");
+            Assert.Contains(plan.Checks, check => check.Code == "postgres.scheduled-job-registered");
+            Assert.DoesNotContain(plan.Checks, check => check.Code == "postgres.migration-schema-present");
+        }
+        else
+        {
+            Assert.Contains(plan.Checks, check => check.Code == "postgres.migration-schema-present");
+            Assert.DoesNotContain(plan.Checks, check => check.Code == "postgres.archive-function-callable");
+            Assert.DoesNotContain(plan.Checks, check => check.Code == "postgres.scheduled-job-registered");
+        }
+    }
+
+    [Theory]
     [InlineData("unknown-property", "SqlValidationPlanUnexpectedProperty")]
     [InlineData("duplicate-check", "SqlValidationPlanDuplicateCheck")]
     [InlineData("raw-sql", "SqlValidationPlanUnexpectedProperty")]

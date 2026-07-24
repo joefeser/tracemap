@@ -69,6 +69,12 @@ The separately invoked producer is documented in
 boundary is limited to fixed, parameterized, read-only PostgreSQL catalog
 probes. The scanner and report composers remain offline consumers.
 
+For a two-database source/archive rollout, the reusable plan templates and
+responsibility checkpoints are documented in
+[`SQL_VALIDATION_OPERATOR_PACKET.md`](SQL_VALIDATION_OPERATOR_PACKET.md). The
+two targets remain separate validation artifacts and neither result grants
+permission to modify the other target.
+
 ## Synthetic Smoke Test
 
 ```bash
