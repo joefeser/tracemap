@@ -954,6 +954,27 @@ IDs, safe spans, rule/tier, coverage, and limitations. Raw SQL, role/object/
 infrastructure names, credentials, connection data, and local paths must be
 absent. `present-in-scripts` must be described as checked-in evidence only and
 must never claim effective or sufficient runtime access.
+
+## PostgreSQL Schema/Migration Evidence Smoke
+
+Schema/migration extractor changes should run the focused tests and a
+disposable checked-in-style fixture scan without connecting to PostgreSQL:
+
+```bash
+dotnet test src/dotnet/TraceMap.sln --filter FullyQualifiedName~PostgresSchemaMigrationExtractorTests
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/postgres-schema-migration --out /tmp/tracemap-postgres-schema-smoke
+```
+
+Expected output may include `PostgresMigrationFileDeclared`,
+`PostgresMigrationOperation`, `PostgresSchemaTableDeclared`,
+`PostgresSchemaColumnDeclared`, `PostgresSchemaConstraintDeclared`,
+`PostgresSchemaIndexDeclared`, and cataloged gaps. Inspect generated output for
+rule IDs, tiers, repository-relative spans, commit SHA, extractor version,
+coverage, and limitations. Raw SQL, expressions, predicates, literals, quoted
+or unsupported identifiers, connection material, and local paths must not
+appear. Static facts must not claim migration execution, live objects, index
+selection, uniqueness, referential integrity, compatibility, rollback, or
+release safety.
 # SQL operator runbook packet smoke
 
 Run the deterministic public-safe fixture and verify standard scan artifacts plus
