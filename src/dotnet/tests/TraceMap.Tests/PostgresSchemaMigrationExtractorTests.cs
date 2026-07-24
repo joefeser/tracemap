@@ -314,8 +314,12 @@ public sealed class PostgresSchemaMigrationExtractorTests
         using var repo = new TempDirectory();
         using var output = new TempDirectory();
         var indexPath = Path.Combine(output.Path, "index.sqlite");
-        File.WriteAllText(Path.Combine(repo.Path, "migration.sql"),
-            "CREATE TABLE archive.records (id bigint);\n");
+        File.WriteAllText(Path.Combine(repo.Path, "migration.sql"), """
+            CREATE TABLE archive.records (id bigint);
+            CREATE TYPE archive.retention_state AS ENUM ('sentinel-private-label');
+            CREATE FUNCTION archive.move_batch(private_limit integer)
+            RETURNS integer LANGUAGE sql AS $$ SELECT private_limit $$;
+            """);
         var manifest = Manifest();
         var facts = PostgresSchemaMigrationExtractor.Extract(repo.Path, manifest, FileInventory.Collect(repo.Path));
         SqliteIndexWriter.Write(indexPath, manifest, facts);
@@ -327,6 +331,14 @@ public sealed class PostgresSchemaMigrationExtractorTests
         Assert.Contains(review.SqlEvidence.Findings, finding =>
             finding.RuleId == RuleIds.DatabasePostgresSchemaMigration
             && finding.Metadata.Any(pair => pair.Key == "factType" && pair.Value == FactTypes.PostgresSchemaTableDeclared));
+        Assert.Contains(review.SqlEvidence.Findings, finding =>
+            finding.Metadata.Any(pair => pair.Key == "factType" && pair.Value == FactTypes.PostgresSchemaEnumDeclared)
+            && finding.Metadata.Any(pair => pair.Key == "enumLabelsOmitted" && pair.Value == "true"));
+        Assert.Contains(review.SqlEvidence.Findings, finding =>
+            finding.Metadata.Any(pair => pair.Key == "factType" && pair.Value == FactTypes.PostgresSchemaRoutineDeclared)
+            && finding.Metadata.Any(pair => pair.Key == "routineKind" && pair.Value == "function")
+            && finding.Metadata.Any(pair => pair.Key == "routineSignatureOmitted" && pair.Value == "true")
+            && finding.Metadata.Any(pair => pair.Key == "routineBodyOmitted" && pair.Value == "true"));
         Assert.All(review.SqlEvidence.Findings.Where(finding => finding.RuleId == RuleIds.DatabasePostgresSchemaMigration), finding =>
         {
             Assert.Equal(manifest.CommitSha, finding.CommitSha);
@@ -335,6 +347,8 @@ public sealed class PostgresSchemaMigrationExtractorTests
                 && limitation.Contains("production state", StringComparison.OrdinalIgnoreCase));
         });
         Assert.DoesNotContain(review.SqlEvidence.Gaps, gap => gap.GapKind == "CompatibleEvidenceUnavailable");
+        Assert.DoesNotContain("sentinel-private", JsonSerializer.Serialize(review), StringComparison.Ordinal);
+        Assert.DoesNotContain("private_limit", JsonSerializer.Serialize(review), StringComparison.Ordinal);
     }
 
     [Fact]
