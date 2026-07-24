@@ -27,7 +27,13 @@ Validation:
 - `./scripts/check-private-paths.sh`: passed; and
 - `git diff --check`: passed.
 
-PR/ACK: ready PR #526 targets `dev`; ACK pending on the final pushed head.
+PR/ACK: ready PR #526 targets `dev`. The first exact-head CI run had an
+unrelated JVM integration-test timeout; a failed-job rerun passed the JVM and
+five-adapter combine jobs on the unchanged head. Review follow-up now marks
+inline `NOT NULL` declarations as reduced coverage and requires PostgreSQL
+schema facts to match the requested table (and schema when supplied). The
+repository-wide `EvidenceSpan`/`CodeFact` rule-ID model remains unchanged:
+every emitted fact carries its rule ID and its evidence span.
 
 Deferred: check/exclusion and unnamed constraints; inline column constraints;
 foreign-key actions; expression/partial/include indexes; quoted identifiers;

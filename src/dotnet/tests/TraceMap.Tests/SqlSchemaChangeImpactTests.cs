@@ -149,6 +149,7 @@ public sealed class SqlSchemaChangeImpactTests
               "kind": "table",
               "changeType": "index_changed",
               "reference": {
+                "schemaName": "archive",
                 "tableName": "records"
               }
             },
@@ -174,6 +175,7 @@ public sealed class SqlSchemaChangeImpactTests
                 {
                     ["columnNames"] = "archive_key",
                     ["indexName"] = "records_archive_key_idx",
+                    ["schemaName"] = "archive",
                     ["tableName"] = "records"
                 }),
             FactFactory.Create(
@@ -187,6 +189,19 @@ public sealed class SqlSchemaChangeImpactTests
                     ["columnNames"] = "archive_key",
                     ["constraintName"] = "records_archive_key_unique",
                     ["tableName"] = "records"
+                }),
+            FactFactory.Create(
+                manifest,
+                FactTypes.PostgresSchemaIndexDeclared,
+                RuleIds.DatabasePostgresSchemaMigration,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("sql/schema.sql", 14, 14, null, "postgres-schema-migration", ScannerVersions.PostgresSchemaMigrationExtractor),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["columnNames"] = "archive_key",
+                    ["indexName"] = "customers_archive_key_idx",
+                    ["schemaName"] = "archive",
+                    ["tableName"] = "customers"
                 })
         ]);
 
@@ -204,6 +219,7 @@ public sealed class SqlSchemaChangeImpactTests
         Assert.Contains("\"evidenceKind\": \"sql-schema-metadata\"", json);
         Assert.Equal(2, CountOccurrences(json, "\"classification\": \"NeedsReview\""));
         Assert.DoesNotContain("\"classification\": \"ProbableImpact\"", json);
+        Assert.DoesNotContain("customers_archive_key_idx", json, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -1485,6 +1485,25 @@ public static class ContractDeltaReducer
             return EvidenceMatch.None;
         }
 
+        if (IsPostgresSchemaFact(fact))
+        {
+            var expectedPostgresTables = ReferenceValues(change.Reference, "tableName", "tableNames", "name").ToArray();
+            if (expectedPostgresTables.Length == 0)
+            {
+                return EvidenceMatch.None;
+            }
+
+            var postgresTableMatches = PropertyValues(fact, "tableName", "tableNames", "entityName", "name")
+                .Any(value => expectedPostgresTables.Any(expectedTable => NamesMatch(expectedTable, value)));
+            var expectedSchemas = ReferenceValues(change.Reference, "schemaName").ToArray();
+            var postgresSchemaMatches = expectedSchemas.Length == 0
+                || PropertyValues(fact, "schemaName")
+                    .Any(value => expectedSchemas.Any(expectedSchema => NamesMatch(expectedSchema, value)));
+            return postgresTableMatches && postgresSchemaMatches
+                ? new EvidenceMatch(MatchStrength.Member, true, SqlEvidenceKind(fact, "sql-schema-metadata"))
+                : EvidenceMatch.None;
+        }
+
         var expectedTables = ReferenceValues(change.Reference, "tableName", "tableNames", "schemaName", "name").ToArray();
         if (expectedTables.Length == 0)
         {

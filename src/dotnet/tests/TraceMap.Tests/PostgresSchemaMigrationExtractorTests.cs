@@ -33,6 +33,8 @@ public sealed class PostgresSchemaMigrationExtractorTests
         Assert.Equal(2, facts.Count(fact => fact.FactType == FactTypes.PostgresMigrationOperation));
         Assert.All(facts, fact => Assert.True(fact.RuleId is RuleIds.DatabasePostgresSchemaMigration or RuleIds.DatabasePostgresSchemaMigrationGap));
         Assert.All(facts.Where(fact => fact.RuleId == RuleIds.DatabasePostgresSchemaMigration), fact => Assert.Equal(EvidenceTiers.Tier2Structural, fact.EvidenceTier));
+        var gap = Assert.Single(facts, fact => fact.RuleId == RuleIds.DatabasePostgresSchemaMigrationGap);
+        Assert.Equal("CreateTableClauseUnsupported", gap.Properties["classification"]);
         Assert.DoesNotContain(facts, fact => fact.Properties.Values.Any(value => value.Contains("CHECK", StringComparison.Ordinal)));
     }
 
