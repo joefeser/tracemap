@@ -1019,3 +1019,16 @@ Do not use a live PostgreSQL target as a routine CI smoke. Live use is an
 explicit operator action under [`SQL_VALIDATION_HARNESS.md`](SQL_VALIDATION_HARNESS.md)
 and requires a least-privilege connection appropriate for the selected catalog
 checks.
+
+To validate the same compiled-in probes against a disposable synthetic
+PostgreSQL 16.8 server, with Docker running locally, use:
+
+```bash
+./scripts/smoke-sql-validation-postgres.sh
+```
+
+This opt-in integration smoke pins the official image by digest, exposes a
+random loopback port, uses no host volume, asserts pass/fail/not-run behavior
+and deterministic summaries, checks identifier and connection-data exclusion,
+and cleans all container and scratch state. It is not a substitute for an
+authorized target-specific operator validation.
