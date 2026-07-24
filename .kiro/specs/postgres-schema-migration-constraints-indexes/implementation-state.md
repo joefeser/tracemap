@@ -1,10 +1,12 @@
 # PostgreSQL Constraint/Index Evidence State
 
-Status: implementation-complete
+Status: ready-for-review
 
 Branch: `codex/postgres-schema-migration-constraints-indexes`
 
 Base: `origin/dev` at `974ea1ed2902941bd7816494f4157794dfeaad9e`
+
+PR: [#526](https://github.com/joefeser/tracemap/pull/526)
 
 Scope: second bounded #435 raw-DDL slice for named primary-key, unique, and
 foreign-key constraints plus simple `CREATE [UNIQUE] INDEX` evidence and
@@ -25,7 +27,7 @@ Validation:
 - `./scripts/check-private-paths.sh`: passed; and
 - `git diff --check`: passed.
 
-PR/ACK: pending commit/push while GitHub API availability is unstable.
+PR/ACK: ready PR #526 targets `dev`; ACK pending on the final pushed head.
 
 Deferred: check/exclusion and unnamed constraints; inline column constraints;
 foreign-key actions; expression/partial/include indexes; quoted identifiers;
