@@ -255,6 +255,7 @@ public sealed class PostgresSchemaMigrationExtractorTests
         Assert.Equal("cascade", operations[3].Properties["dropBehavior"]);
         Assert.All(operations, fact =>
         {
+            Assert.Equal("migration-operation", fact.Properties["objectKind"]);
             Assert.Equal("archive", fact.Properties["schemaName"]);
             Assert.Equal("bounded-static-evidence", fact.Properties["coverageLabel"]);
             Assert.Equal(RuleIds.DatabasePostgresSchemaMigration, fact.RuleId);

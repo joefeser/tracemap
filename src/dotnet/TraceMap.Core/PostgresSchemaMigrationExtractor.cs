@@ -71,25 +71,25 @@ public static partial class PostgresSchemaMigrationExtractor
 
                 if (TryAlterDropColumn(structural, out schema, out table, out column, out var dropBehavior))
                 {
-                    fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, column, null, "drop-column", "column", dropBehavior));
+                    fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, column, null, "drop-column", dropBehavior));
                     continue;
                 }
 
                 if (TryAlterRenameColumn(structural, out schema, out table, out column, out var newColumn))
                 {
-                    fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, column, newColumn, "rename-column", "column"));
+                    fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, column, newColumn, "rename-column"));
                     continue;
                 }
 
                 if (TryAlterRenameTable(structural, out schema, out table, out var newTable))
                 {
-                    fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, null, newTable, "rename-table", "table"));
+                    fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, null, newTable, "rename-table"));
                     continue;
                 }
 
                 if (TryDropTable(structural, out schema, out table, out dropBehavior))
                 {
-                    fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, null, null, "drop-table", "table", dropBehavior));
+                    fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, null, null, "drop-table", dropBehavior));
                     continue;
                 }
 
@@ -517,13 +517,12 @@ public static partial class PostgresSchemaMigrationExtractor
         string? column,
         string? newName,
         string operation,
-        string objectKind,
         string? dropBehavior = null)
     {
         var target = string.IsNullOrEmpty(schema) ? table : $"{schema}.{table}";
         if (!string.IsNullOrEmpty(column)) target += $".{column}";
         var properties = Properties(
-            ("objectKind", objectKind),
+            ("objectKind", "migration-operation"),
             ("operationKind", operation),
             ("tableName", table),
             ("statementOrdinal", statement.Ordinal.ToString()),
@@ -532,7 +531,7 @@ public static partial class PostgresSchemaMigrationExtractor
         if (!string.IsNullOrEmpty(schema)) properties["schemaName"] = schema;
         if (!string.IsNullOrEmpty(column)) properties["columnName"] = column;
         if (!string.IsNullOrEmpty(newName))
-            properties[objectKind == "column" ? "newColumnName" : "newTableName"] = newName;
+            properties[operation == "rename-column" ? "newColumnName" : "newTableName"] = newName;
         if (!string.IsNullOrEmpty(dropBehavior)) properties["dropBehavior"] = dropBehavior;
         return FactFactory.Create(manifest, FactTypes.PostgresMigrationOperation, RuleIds.DatabasePostgresSchemaMigration, EvidenceTiers.Tier2Structural,
             new EvidenceSpan(path, statement.StartLine, statement.EndLine, FactFactory.Hash(statement.StructuralText, 32), nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
