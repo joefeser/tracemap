@@ -52,6 +52,22 @@ ACK-authorized PR review findings were addressed together:
 - treated repeated assertion identities from distinct artifacts as conflicts
   regardless of whether their status strings agree.
 
+During the later `dev`-to-`main` promotion review, additional exact-head fixes:
+
+- require observation expiry to be strictly later than observation time;
+- disambiguate same-repository/same-commit sources by categorical target
+  context before emitting `AmbiguousSource`; and
+- keep rejected observed-validation gaps visible without counting them as
+  static-analysis gaps or reducing otherwise complete static coverage;
+- replace unsafe rejected artifact IDs with the fixed `unidentified` identity
+  before constructing gap IDs or metadata; and
+- preserve the context-matched combined source label in release-review
+  observation findings.
+
+Promotion-focused validation: 18 SQL validation-summary tests and 874 full
+solution tests passed; the private-path guard and `git diff --check` also
+passed.
+
 ## Deferred
 
 - Cryptographic signatures and external trust stores.

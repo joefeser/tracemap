@@ -1,5 +1,7 @@
 using System.Text.Json;
 using TraceMap.Core;
+using TraceMap.Reporting;
+using TraceMap.Storage;
 
 namespace TraceMap.Tests;
 
@@ -231,9 +233,33 @@ public sealed class PostgresSchemaMigrationExtractorTests
         Assert.Contains(first, fact => fact.FactType == FactTypes.PostgresSchemaIndexDeclared);
     }
 
-    private static IReadOnlyList<CodeFact> Extract(string root) => PostgresSchemaMigrationExtractor.Extract(root, new ScanManifest(
+    [Fact]
+    public async Task Release_review_projects_schema_migration_only_evidence()
+    {
+        using var repo = new TempDirectory();
+        using var output = new TempDirectory();
+        var indexPath = Path.Combine(output.Path, "index.sqlite");
+        File.WriteAllText(Path.Combine(repo.Path, "migration.sql"),
+            "CREATE TABLE archive.records (id bigint);\n");
+        var manifest = Manifest();
+        var facts = PostgresSchemaMigrationExtractor.Extract(repo.Path, manifest, FileInventory.Collect(repo.Path));
+        SqliteIndexWriter.Write(indexPath, manifest, facts);
+
+        var review = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            indexPath, indexPath, Path.Combine(output.Path, "review"), Scope: "sql-evidence"));
+
+        Assert.Equal(ReleaseReviewStatuses.Available, review.SqlEvidence.Status);
+        Assert.Contains(review.SqlEvidence.Findings, finding =>
+            finding.RuleId == RuleIds.DatabasePostgresSchemaMigration
+            && finding.Metadata.Any(pair => pair.Key == "factType" && pair.Value == FactTypes.PostgresSchemaTableDeclared));
+        Assert.DoesNotContain(review.SqlEvidence.Gaps, gap => gap.GapKind == "CompatibleEvidenceUnavailable");
+    }
+
+    private static IReadOnlyList<CodeFact> Extract(string root) => PostgresSchemaMigrationExtractor.Extract(root, Manifest(), FileInventory.Collect(root));
+
+    private static ScanManifest Manifest() => new(
         "scan-schema-test", "synthetic-postgres-schema", null, "test", "0123456789abcdef", "test", DateTimeOffset.UnixEpoch,
-        "Level3SyntaxAnalysis", "NotRun", [], [], [], []), FileInventory.Collect(root));
+        "Level3SyntaxAnalysis", "NotRun", [], [], [], []);
 
     private static bool IsSchemaMigrationFact(CodeFact fact) =>
         fact.RuleId is RuleIds.DatabasePostgresSchemaMigration or RuleIds.DatabasePostgresSchemaMigrationGap;
