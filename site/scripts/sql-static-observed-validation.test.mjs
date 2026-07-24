@@ -53,6 +53,15 @@ test("SQL static/observed validation accepts equivalent inbound href formatting"
   assert.deepEqual(errors, []);
 });
 
+test("SQL static/observed validation aggregates a missing sitemap diagnostic", async (t) => {
+  const root = await fixture(t);
+  await buildSite({ root, log() {} });
+  await rm(join(root, "dist", "sitemap.xml"));
+  const errors = [];
+  await validateSqlStaticObservedValidationDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /requires sitemap\.xml/);
+});
+
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), "tracemap-sql-static-observed-"));
   t.after(() => rm(root, { recursive: true, force: true }));

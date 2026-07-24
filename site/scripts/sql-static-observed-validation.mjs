@@ -53,8 +53,12 @@ export async function validateSqlStaticObservedValidationDist({ baseUrl = "https
       errors.push(`Required inbound page ${relative} does not link to ${sqlStaticObservedValidationRoute}.`);
     }
   }
-  const sitemap = await readSitemapLocSet(resolve(dist, "sitemap.xml"));
-  if (!sitemap.has(`${new URL(baseUrl).origin}${sqlStaticObservedValidationRoute}`)) errors.push(`Sitemap is missing ${sqlStaticObservedValidationRoute}.`);
+  const sitemapPath = resolve(dist, "sitemap.xml");
+  if (!(await fileExists(sitemapPath))) errors.push("SQL static/observed validation requires sitemap.xml.");
+  else {
+    const sitemap = await readSitemapLocSet(sitemapPath);
+    if (!sitemap.has(`${new URL(baseUrl).origin}${sqlStaticObservedValidationRoute}`)) errors.push(`Sitemap is missing ${sqlStaticObservedValidationRoute}.`);
+  }
   try {
     const routes = JSON.parse(await readFile(resolve(dist, "routes-index.json"), "utf8"));
     const entry = Array.isArray(routes.entries) ? routes.entries.find((item) => item.path === sqlStaticObservedValidationRoute) : undefined;
