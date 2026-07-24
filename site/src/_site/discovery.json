@@ -1161,6 +1161,23 @@
     ]
   },
   {
+    "path": "/sql/operator-handoff/validation/",
+    "title": "Static and Observed SQL Validation",
+    "summary": "Demo-level public-safe story showing how deterministic static SQL evidence and point-in-time categorical validation summaries compose while preserving provenance, gaps, and operator authority.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/sql/operator-handoff/proof-packet/",
+    "limitations": [
+      "Observed validation remains assertion-specific and point-in-time; static evidence and observed status retain separate provenance and claim strength.",
+      "The v1 harness does not observe connectivity, target-schema compatibility, arbitrary validation queries, cleanup, execution, data movement, or rollback."
+    ],
+    "nonClaims": [
+      "No SQL execution, function or job execution, migration result, effective authorization, connectivity, correct data, replication health, continuing state, production state, safety certification, release approval, or DBA attestation.",
+      "No raw SQL, credentials, connection material, target identities, scheduled command bodies, local paths, private infrastructure names, raw database output, ticket details, LLM analysis, embeddings, vector databases, or prompt-based classification."
+    ]
+  },
+  {
     "path": "/manager-brief/",
     "title": "Manager Problem Brief",
     "summary": "Concept-level manager brief for the coordination problem TraceMap reduces with deterministic static evidence packets and visible limitations.",

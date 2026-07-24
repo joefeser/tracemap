@@ -27,6 +27,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.Access", "TraceMap
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.Access.Cli", "TraceMap.Access.Cli\TraceMap.Access.Cli.csproj", "{D8235D0E-D789-4384-B8B0-243D72DAA952}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.SqlValidation", "TraceMap.SqlValidation\TraceMap.SqlValidation.csproj", "{2204A567-0D99-426A-AAB4-BC3CB5BCAD50}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceMap.SqlValidation.Cli", "TraceMap.SqlValidation.Cli\TraceMap.SqlValidation.Cli.csproj", "{ED957F0B-6A77-44EA-9E63-97487B27010D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -157,6 +161,30 @@ Global
 		{D8235D0E-D789-4384-B8B0-243D72DAA952}.Release|x64.Build.0 = Release|Any CPU
 		{D8235D0E-D789-4384-B8B0-243D72DAA952}.Release|x86.ActiveCfg = Release|Any CPU
 		{D8235D0E-D789-4384-B8B0-243D72DAA952}.Release|x86.Build.0 = Release|Any CPU
+		{2204A567-0D99-426A-AAB4-BC3CB5BCAD50}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2204A567-0D99-426A-AAB4-BC3CB5BCAD50}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2204A567-0D99-426A-AAB4-BC3CB5BCAD50}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2204A567-0D99-426A-AAB4-BC3CB5BCAD50}.Debug|x64.Build.0 = Debug|Any CPU
+		{2204A567-0D99-426A-AAB4-BC3CB5BCAD50}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2204A567-0D99-426A-AAB4-BC3CB5BCAD50}.Debug|x86.Build.0 = Debug|Any CPU
+		{2204A567-0D99-426A-AAB4-BC3CB5BCAD50}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2204A567-0D99-426A-AAB4-BC3CB5BCAD50}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2204A567-0D99-426A-AAB4-BC3CB5BCAD50}.Release|x64.ActiveCfg = Release|Any CPU
+		{2204A567-0D99-426A-AAB4-BC3CB5BCAD50}.Release|x64.Build.0 = Release|Any CPU
+		{2204A567-0D99-426A-AAB4-BC3CB5BCAD50}.Release|x86.ActiveCfg = Release|Any CPU
+		{2204A567-0D99-426A-AAB4-BC3CB5BCAD50}.Release|x86.Build.0 = Release|Any CPU
+		{ED957F0B-6A77-44EA-9E63-97487B27010D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ED957F0B-6A77-44EA-9E63-97487B27010D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ED957F0B-6A77-44EA-9E63-97487B27010D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{ED957F0B-6A77-44EA-9E63-97487B27010D}.Debug|x64.Build.0 = Debug|Any CPU
+		{ED957F0B-6A77-44EA-9E63-97487B27010D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{ED957F0B-6A77-44EA-9E63-97487B27010D}.Debug|x86.Build.0 = Debug|Any CPU
+		{ED957F0B-6A77-44EA-9E63-97487B27010D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ED957F0B-6A77-44EA-9E63-97487B27010D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ED957F0B-6A77-44EA-9E63-97487B27010D}.Release|x64.ActiveCfg = Release|Any CPU
+		{ED957F0B-6A77-44EA-9E63-97487B27010D}.Release|x64.Build.0 = Release|Any CPU
+		{ED957F0B-6A77-44EA-9E63-97487B27010D}.Release|x86.ActiveCfg = Release|Any CPU
+		{ED957F0B-6A77-44EA-9E63-97487B27010D}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
