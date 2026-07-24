@@ -936,13 +936,18 @@ public static class ReleaseReviewReporter
         }).ToArray();
         var composition = await SqlValidationSummaryReader.ReadAsync(paths, expected, cancellationToken);
 
-        var labels = compatible
-            .GroupBy(input => $"{input.Result.Manifest.RepoName}\u001f{input.Result.Manifest.CommitSha}", StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.OrderBy(input => input.SourceLabel, StringComparer.Ordinal).First().SourceLabel, StringComparer.Ordinal);
+        var labels = expected
+            .SelectMany(source => source.Contexts.Select(context => new
+            {
+                Key = SqlValidationSourceKey(source.Repository, source.CommitSha, context),
+                source.SourceLabel
+            }))
+            .GroupBy(item => item.Key, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.OrderBy(item => item.SourceLabel, StringComparer.Ordinal).First().SourceLabel, StringComparer.Ordinal);
         var findings = composition.Observations.Select(observation => new ReleaseReviewFinding(
                 StableId("finding", "sqlValidationObservations", observation.ObservationId),
                 "sqlValidationObservations",
-                labels.GetValueOrDefault($"{observation.Repository}\u001f{observation.CommitSha}"),
+                labels.GetValueOrDefault(SqlValidationSourceKey(observation.Repository, observation.CommitSha, observation.TargetContext)),
                 ReleaseReviewClassifications.ReviewRecommended,
                 observation.RuleId,
                 EvidenceTiers.Tier4Unknown,
@@ -1005,6 +1010,9 @@ public static class ReleaseReviewReporter
         "Observed-pass does not establish continuing state, safe execution, complete procedure success, release approval, or DBA attestation.",
         "TraceMap does not connect to a database, execute SQL, or ingest raw validation output."
     ];
+
+    private static string SqlValidationSourceKey(string repository, string commitSha, SqlValidationTargetContext context) =>
+        string.Join('\u001f', repository, commitSha, context.Engine, context.ServerRole, context.DatabaseRole, context.SchemaRole, context.ExecutionMode);
 
     private static ReleaseReviewFinding SqlEvidenceFinding(
         string sourceLabel,
