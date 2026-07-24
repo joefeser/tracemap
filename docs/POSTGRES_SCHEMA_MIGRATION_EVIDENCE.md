@@ -13,7 +13,9 @@ snapshots, EF Core/Npgsql migration APIs, or execution graphs. Incomplete or
 unsupported shapes inside the two recognized DDL families emit
 `database.postgres.schema-migration.gap.v1` rather than invented objects.
 Multi-subcommand `ALTER TABLE` statements are therefore gaps in v0 instead of
-partially reported first-column evidence.
+partially reported first-column evidence. A `CREATE TABLE` statement containing
+both supported and deferred top-level clauses retains its supported table and
+column facts while also emitting an explicit reduced-coverage gap.
 
 Raw SQL, snippets, literals, connection material, and unsupported identifiers
 are not stored on these facts. The evidence is checked-in design intent only.
