@@ -7,8 +7,8 @@ and adjacent links only. No harness, ingestion, or database capability changes.
 
 Validation:
 
-- Focused route/safety tests: 4/4 passed.
-- Full site tests: 703/703 passed.
+- Focused route/safety tests: 5/5 passed.
+- Full site tests: 704/704 passed.
 - Site build and validation: passed; 94 HTML files, 3,249 internal references,
   and 93 sitemap URLs validated.
 - Desktop 1440x900 and mobile 390x844 browser checks: passed with no
@@ -23,6 +23,11 @@ Review follow-up: current Qodo findings were addressed with quote-aware
 tag-collapsing for forbidden-text checks, formatting-tolerant inbound-link
 validation, regression tests for both cases, and synchronized PR/ACK task
 wording.
+
+Exact-head Codex follow-up: the route validator now checks for `sitemap.xml`
+before reading it, preserving aggregate validation diagnostics for incomplete
+site output. A focused missing-sitemap regression passes without a raw
+`ENOENT`; the full site suite, build, and validation also pass.
 
 Deferred: source/archive operator templates remain in #521; disposable
 PostgreSQL validation remains in #519; production observations and the
