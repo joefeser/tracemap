@@ -246,8 +246,10 @@ public static partial class SqlValidationSummaryReader
             var root = document.RootElement;
             RequireObject(root, "summary");
             RequireProperties(root, "schemaVersion", "artifactId", "repository", "commitSha", "observedAt", "expiresAt", "targetContext", "validator", "artifact", "publicClaimLevel", "assertions", "limitations");
-            artifactId = RequiredString(root, "artifactId");
-            if (!SafeId().IsMatch(artifactId)) return Reject("MalformedSummary", artifactId, "The artifact ID was outside the safe token contract.");
+            var suppliedArtifactId = RequiredString(root, "artifactId");
+            if (!SafeId().IsMatch(suppliedArtifactId))
+                return Reject("MalformedSummary", "unidentified", "The artifact ID was outside the safe token contract.");
+            artifactId = suppliedArtifactId;
             if (RequiredString(root, "schemaVersion") != SchemaVersion) return Reject("UnsupportedSchema", artifactId, "The SQL validation summary schema version is unsupported.");
             var repository = RequiredString(root, "repository");
             if (!SafeRepository().IsMatch(repository)) return Reject("MalformedSummary", artifactId, "The repository identity was outside the safe token contract.");

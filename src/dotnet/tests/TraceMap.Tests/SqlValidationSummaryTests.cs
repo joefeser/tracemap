@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using TraceMap.Cli;
+using TraceMap.Combine;
 using TraceMap.Core;
 using TraceMap.Reporting;
 using TraceMap.Storage;
@@ -127,6 +128,7 @@ public sealed class SqlValidationSummaryTests
     [InlineData("commit", "SourceMismatch")]
     [InlineData("repository", "SourceMismatch")]
     [InlineData("context", "ContextMismatch")]
+    [InlineData("artifact-id", "MalformedSummary")]
     [InlineData("validator", "UnsupportedValidator")]
     [InlineData("assertion", "UnsupportedAssertion")]
     [InlineData("tamper", "DigestMismatch")]
@@ -153,6 +155,9 @@ public sealed class SqlValidationSummaryTests
                 case "context":
                     root["targetContext"]!["databaseRole"] = "source-data";
                     break;
+                case "artifact-id":
+                    root["artifactId"] = "private/password-leak-sentinel";
+                    break;
                 case "validator":
                     root["validator"]!["version"] = "2.0.0";
                     break;
@@ -177,7 +182,10 @@ public sealed class SqlValidationSummaryTests
         Assert.Equal(RuleIds.DatabaseSqlValidationSummaryGap, gap.RuleId);
         var safe = JsonSerializer.Serialize(result);
         Assert.DoesNotContain("private-password-leak-sentinel", safe, StringComparison.Ordinal);
+        Assert.DoesNotContain("private/password-leak-sentinel", safe, StringComparison.Ordinal);
         Assert.DoesNotContain(path, safe, StringComparison.Ordinal);
+        if (variant == "artifact-id")
+            Assert.Equal("unidentified", gap.ArtifactId);
     }
 
     [Fact]
@@ -209,6 +217,34 @@ public sealed class SqlValidationSummaryTests
             before, after, Path.Combine(temp.Path, "rejected"), Scope: "sql-evidence", SqlValidationSummaryPaths: [expired], SqlValidationAsOf: EvaluatedAt));
         Assert.Equal(ReleaseReviewStatuses.Unavailable, rejected.SqlValidationObservations.Status);
         Assert.Contains(rejected.Gaps, gap => gap.GapKind == "ExpiredSummary" && gap.RuleId == RuleIds.DatabaseSqlValidationSummaryGap);
+    }
+
+    [Fact]
+    public async Task Combined_release_review_preserves_context_matched_source_label()
+    {
+        using var temp = new TempDirectory();
+        var archiveIndex = Path.Combine(temp.Path, "archive.sqlite");
+        var sourceIndex = Path.Combine(temp.Path, "source.sqlite");
+        var combinedIndex = Path.Combine(temp.Path, "combined.sqlite");
+        var sourceContext = new SqlValidationTargetContext("postgresql", "source", "source-data", "application", "manual");
+        var archiveResult = ScanResultWithContext(Context, "scan-archive");
+        var sourceResult = ScanResultWithContext(sourceContext, "scan-source");
+        SqliteIndexWriter.Write(archiveIndex, archiveResult.Manifest, archiveResult.Facts);
+        SqliteIndexWriter.Write(sourceIndex, sourceResult.Manifest, sourceResult.Facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [sourceIndex, archiveIndex], combinedIndex, ["aaa-source", "zzz-archive"]));
+        var valid = await WriteSummaryAsync(temp.Path, "valid.json");
+
+        var review = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            combinedIndex,
+            combinedIndex,
+            Path.Combine(temp.Path, "review"),
+            Scope: "sql-evidence",
+            SqlValidationSummaryPaths: [valid],
+            SqlValidationAsOf: EvaluatedAt));
+
+        var finding = Assert.Single(review.SqlValidationObservations.Findings);
+        Assert.Equal("zzz-archive", finding.SourceLabel);
     }
 
     [Fact]
@@ -305,20 +341,21 @@ public sealed class SqlValidationSummaryTests
         return path;
     }
 
-    private static ScanResult ScanResultWithContext()
+    private static ScanResult ScanResultWithContext(SqlValidationTargetContext? targetContext = null, string scanId = "scan-validation")
     {
-        var manifest = new ScanManifest("scan-validation", Repository, null, "dev", Commit, "test", EvaluatedAt,
+        targetContext ??= Context;
+        var manifest = new ScanManifest(scanId, Repository, null, "dev", Commit, "test", EvaluatedAt,
             "Level3SyntaxAnalysis", "Succeeded", [], [], [], []);
         var fact = FactFactory.Create(manifest, FactTypes.SqlExecutionContextDeclared, RuleIds.DatabaseSqlContextDeclaration,
             EvidenceTiers.Tier2Structural, new EvidenceSpan("sql/setup.sql", 1, 1, null, "sql-execution-context", "1.0.0"),
             properties: new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["statementOrdinal"] = "1",
-                ["engineFamily"] = Context.Engine,
-                ["serverRole"] = Context.ServerRole,
-                ["databaseRole"] = Context.DatabaseRole,
-                ["schemaRole"] = Context.SchemaRole,
-                ["executionMode"] = Context.ExecutionMode,
+                ["engineFamily"] = targetContext.Engine,
+                ["serverRole"] = targetContext.ServerRole,
+                ["databaseRole"] = targetContext.DatabaseRole,
+                ["schemaRole"] = targetContext.SchemaRole,
+                ["executionMode"] = targetContext.ExecutionMode,
                 ["stepKind"] = "extension-setup",
                 ["contextClassification"] = "declared",
                 ["stopConditions"] = "verify-active-connection",
