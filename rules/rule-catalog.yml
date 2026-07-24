@@ -3283,6 +3283,31 @@ rules:
       - Static SQL shape evidence does not prove runtime execution, schema existence, dialect validity, generated SQL equivalence, permissions, transaction behavior, or branch feasibility.
       - Raw SQL text, predicate literal values, source snippets, connection strings, raw URLs, and unsafe identifiers are not rendered.
 
+  - id: database.postgres.schema-migration.v1
+    name: PostgreSQL schema and migration surface
+    description: Extracts bounded table, column, migration-operation, and migration-file evidence from explicit checked-in PostgreSQL DDL.
+    evidenceTier: Tier2Structural
+    emits:
+      - PostgresMigrationFileDeclared
+      - PostgresSchemaTableDeclared
+      - PostgresSchemaColumnDeclared
+      - PostgresMigrationOperation
+    limitations:
+      - V0 recognizes unquoted identifiers in CREATE TABLE and single-subcommand ALTER TABLE ADD COLUMN only; quoted identifiers, multi-subcommand ALTER TABLE, indexes, constraints, enums, routines, snapshots, EF/Npgsql migrations, and other dialect shapes are deferred.
+      - Column facts identify explicit declaration names but do not model types, defaults, generated expressions, constraints, ordering semantics, or compatibility.
+      - Static DDL evidence does not prove migration execution, execution order, live schema existence, database state, data correctness, permissions, rollback, production use, or release safety.
+      - Raw SQL, source snippets, literals, connection material, local paths, and unsupported identifiers are not stored in fact properties.
+
+  - id: database.postgres.schema-migration.gap.v1
+    name: PostgreSQL schema and migration gap
+    description: Records unreadable, incomplete, or unsupported shapes within the bounded PostgreSQL schema DDL families.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - A gap reports reduced static coverage for one checked-in surface; it does not establish that a live object or migration is absent, invalid, unapplied, or unsafe.
+      - Gap properties contain categorical classifications and statement ordinals only; raw SQL and unsafe identifiers are omitted.
+
   - id: database.sql.context.declaration.v1
     name: SQL execution-context declaration
     description: Parses the versioned SQL context sidecar or bounded in-file directive into categorical intended execution-context evidence.
