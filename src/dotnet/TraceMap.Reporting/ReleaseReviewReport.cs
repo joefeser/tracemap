@@ -260,7 +260,29 @@ public static class ReleaseReviewReporter
         RuleIds.DatabasePostgresPermissionStatement,
         RuleIds.DatabasePostgresPermissionPrerequisite,
         RuleIds.DatabasePostgresPermissionCoverage,
-        RuleIds.DatabasePostgresPermissionGap
+        RuleIds.DatabasePostgresPermissionGap,
+        RuleIds.DatabasePostgresSchemaMigration,
+        RuleIds.DatabasePostgresSchemaMigrationGap
+    };
+
+    private static readonly HashSet<string> SqlSchemaMigrationMetadataKeys = new(StringComparer.Ordinal)
+    {
+        "objectKind",
+        "operationKind",
+        "schemaName",
+        "tableName",
+        "columnName",
+        "constraintName",
+        "constraintKind",
+        "indexName",
+        "indexKind",
+        "accessMethod",
+        "columnNames",
+        "referencedSchemaName",
+        "referencedTableName",
+        "referencedColumnNames",
+        "statementOrdinal",
+        "coverageLabel"
     };
 
     private static readonly HashSet<string> ValidScopes = new(StringComparer.Ordinal)
@@ -884,6 +906,24 @@ public static class ReleaseReviewReporter
         foreach (var input in inputs.OrderBy(input => input.SourceLabel, StringComparer.Ordinal))
         {
             var packet = SqlRunbookPacketBuilder.Build(input.Result);
+            foreach (var fact in input.Result.Facts
+                .Where(fact => fact.RuleId == RuleIds.DatabasePostgresSchemaMigration && fact.Evidence is not null)
+                .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                .ThenBy(fact => fact.Evidence.StartLine)
+                .ThenBy(fact => fact.FactId, StringComparer.Ordinal))
+            {
+                var displayName = fact.TargetSymbol ?? fact.ContractElement ?? fact.FactType;
+                findings.Add(SqlEvidenceFinding(
+                    input.SourceLabel,
+                    "schema-migration",
+                    displayName,
+                    ReleaseReviewClassifications.NoActionableEvidence,
+                    SqlRunbookPacketBuilder.ProjectFactEvidence(fact, fact.CommitSha),
+                    fact.Properties
+                        .Where(pair => SqlSchemaMigrationMetadataKeys.Contains(pair.Key))
+                        .Select(pair => new KeyValuePair<string, string?>(pair.Key, pair.Value))
+                        .Append(Pair("factType", fact.FactType))));
+            }
             foreach (var group in packet.StepGroups)
                 foreach (var step in group.Steps)
                     findings.Add(SqlEvidenceFinding(input.SourceLabel, "context-step", step.StepKind, ReleaseReviewClassifications.NoActionableEvidence, step.Evidence,
@@ -936,13 +976,18 @@ public static class ReleaseReviewReporter
         }).ToArray();
         var composition = await SqlValidationSummaryReader.ReadAsync(paths, expected, cancellationToken);
 
-        var labels = compatible
-            .GroupBy(input => $"{input.Result.Manifest.RepoName}\u001f{input.Result.Manifest.CommitSha}", StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.OrderBy(input => input.SourceLabel, StringComparer.Ordinal).First().SourceLabel, StringComparer.Ordinal);
+        var labels = expected
+            .SelectMany(source => source.Contexts.Select(context => new
+            {
+                Key = SqlValidationSourceKey(source.Repository, source.CommitSha, context),
+                source.SourceLabel
+            }))
+            .GroupBy(item => item.Key, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.OrderBy(item => item.SourceLabel, StringComparer.Ordinal).First().SourceLabel, StringComparer.Ordinal);
         var findings = composition.Observations.Select(observation => new ReleaseReviewFinding(
                 StableId("finding", "sqlValidationObservations", observation.ObservationId),
                 "sqlValidationObservations",
-                labels.GetValueOrDefault($"{observation.Repository}\u001f{observation.CommitSha}"),
+                labels.GetValueOrDefault(SqlValidationSourceKey(observation.Repository, observation.CommitSha, observation.TargetContext)),
                 ReleaseReviewClassifications.ReviewRecommended,
                 observation.RuleId,
                 EvidenceTiers.Tier4Unknown,
@@ -1005,6 +1050,9 @@ public static class ReleaseReviewReporter
         "Observed-pass does not establish continuing state, safe execution, complete procedure success, release approval, or DBA attestation.",
         "TraceMap does not connect to a database, execute SQL, or ingest raw validation output."
     ];
+
+    private static string SqlValidationSourceKey(string repository, string commitSha, SqlValidationTargetContext context) =>
+        string.Join('\u001f', repository, commitSha, context.Engine, context.ServerRole, context.DatabaseRole, context.SchemaRole, context.ExecutionMode);
 
     private static ReleaseReviewFinding SqlEvidenceFinding(
         string sourceLabel,
@@ -1565,7 +1613,11 @@ public static class ReleaseReviewReporter
             }
             var sourceLabel = indexKind == "single" ? "single" : StringOrDefault(reader, 0, manifest.RepoName);
             rows.Add(new SqlEvidenceFactRow(sourceLabel, manifest, fact,
-                !string.IsNullOrWhiteSpace(extractorId) && !string.IsNullOrWhiteSpace(extractorVersion)));
+                !string.IsNullOrWhiteSpace(extractorId)
+                && !string.IsNullOrWhiteSpace(extractorVersion)
+                && IsKnownCommitSha(manifest.CommitSha)
+                && IsKnownCommitSha(fact.CommitSha)
+                && string.Equals(manifest.CommitSha, fact.CommitSha, StringComparison.Ordinal)));
         }
 
         return rows
@@ -1577,6 +1629,11 @@ public static class ReleaseReviewReporter
                 group.All(row => row.ProvenanceCompatible)))
             .ToArray();
     }
+
+    private static bool IsKnownCommitSha(string? value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && !value.Equals("unknown", StringComparison.OrdinalIgnoreCase)
+        && value.Trim('0').Length > 0;
 
     internal static async Task<AccessEvidencePresence> ReadAccessEvidencePresenceAsync(
         string path,
