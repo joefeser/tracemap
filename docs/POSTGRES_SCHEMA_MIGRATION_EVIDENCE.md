@@ -2,9 +2,10 @@
 
 TraceMap's bounded PostgreSQL schema/migration extractor recognizes explicit
 `CREATE TABLE`, single-subcommand `ALTER TABLE ... ADD COLUMN`, supported named
-constraint, and simple `CREATE [UNIQUE] INDEX` statements in checked-in `.sql`
+constraint, simple `CREATE [UNIQUE] INDEX`, `CREATE TYPE ... AS ENUM`, and
+`CREATE [OR REPLACE] FUNCTION/PROCEDURE` statements in checked-in `.sql`
 files. It emits deterministic migration-file, migration-operation, table,
-column, constraint, and index facts with rule IDs, Tier 2 evidence,
+column, constraint, index, enum, and routine facts with rule IDs, Tier 2 evidence,
 repository-relative statement spans, commit-bound scan provenance, extractor
 version, bounded coverage labels, and limitations.
 
@@ -15,7 +16,8 @@ single-subcommand `ALTER TABLE ... ADD CONSTRAINT` statements. Index coverage
 is limited to simple column lists; sort/null ordering is accepted but not
 modeled. It does not model column types, defaults, generated expressions,
 inline column constraints, check/exclusion expressions, foreign-key actions,
-expression/partial/include indexes, enums, routines, snapshots, EF Core/Npgsql
+expression/partial/include indexes, enum labels, routine signatures,
+parameters, return declarations, languages, bodies, snapshots, EF Core/Npgsql
 migration APIs, or execution graphs. Incomplete or unsupported shapes inside
 the recognized DDL families emit
 `database.postgres.schema-migration.gap.v1` rather than invented objects.
@@ -25,7 +27,8 @@ both supported and deferred top-level clauses retains its supported table and
 column facts while also emitting an explicit reduced-coverage gap.
 
 Raw SQL, snippets, literals, connection material, and unsupported identifiers
-are not stored on these facts. The evidence is checked-in design intent only.
+are not stored on these facts. Enum values and routine bodies are always
+omitted. The evidence is checked-in design intent only.
 Table, column, constraint, and index facts may participate in
 `--sql-schema-delta` matching as `sql-schema-metadata`; those findings remain
 review-tier.

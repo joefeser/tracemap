@@ -3285,7 +3285,7 @@ rules:
 
   - id: database.postgres.schema-migration.v1
     name: PostgreSQL schema and migration surface
-    description: Extracts bounded table, column, named constraint, simple index, migration-operation, and migration-file evidence from explicit checked-in PostgreSQL DDL.
+    description: Extracts bounded table, column, named constraint, simple index, enum, routine, migration-operation, and migration-file evidence from explicit checked-in PostgreSQL DDL.
     evidenceTier: Tier2Structural
     emits:
       - PostgresMigrationFileDeclared
@@ -3293,11 +3293,14 @@ rules:
       - PostgresSchemaColumnDeclared
       - PostgresSchemaConstraintDeclared
       - PostgresSchemaIndexDeclared
+      - PostgresSchemaEnumDeclared
+      - PostgresSchemaRoutineDeclared
       - PostgresMigrationOperation
     limitations:
-      - Current bounded coverage recognizes unquoted identifiers in CREATE TABLE, single-subcommand ALTER TABLE ADD COLUMN, named PRIMARY KEY/UNIQUE/FOREIGN KEY constraints, and simple CREATE INDEX statements; quoted identifiers and broader dialect shapes remain deferred.
+      - Current bounded coverage recognizes unquoted identifiers in CREATE TABLE, single-subcommand ALTER TABLE ADD COLUMN, named PRIMARY KEY/UNIQUE/FOREIGN KEY constraints, simple CREATE INDEX, CREATE TYPE AS ENUM, and CREATE FUNCTION/PROCEDURE statements; quoted identifiers and broader dialect shapes remain deferred.
       - Column facts identify explicit declaration names but do not model types, defaults, generated expressions, constraints, ordering semantics, or compatibility.
       - Constraint and index facts do not model inline column constraints, check/exclusion expressions, foreign-key actions, expression/partial/include indexes, predicate semantics, index selection, uniqueness, or referential integrity.
+      - Enum labels and routine signatures, parameters, returns, languages, bodies, dynamic SQL, overload identity, and runtime reachability are omitted.
       - Static DDL evidence does not prove migration execution, execution order, live schema existence, database state, data correctness, permissions, rollback, production use, or release safety.
       - Raw SQL, source snippets, literals, connection material, local paths, and unsupported identifiers are not stored in fact properties.
 

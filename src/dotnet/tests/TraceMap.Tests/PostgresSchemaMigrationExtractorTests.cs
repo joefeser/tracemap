@@ -137,6 +137,73 @@ public sealed class PostgresSchemaMigrationExtractorTests
     }
 
     [Fact]
+    public void Extract_emits_enum_and_routine_identity_without_labels_signatures_or_bodies()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "routines.sql"), """
+            CREATE TYPE archive.retention_state AS ENUM ('sentinel-private-label', 'ready');
+            CREATE OR REPLACE FUNCTION archive.move_batch(private_limit integer)
+            RETURNS integer
+            LANGUAGE plpgsql
+            AS $body$
+            BEGIN
+              PERFORM dblink_exec('sentinel-private-connection', 'sentinel-private-sql');
+              RETURN private_limit;
+            END
+            $body$;
+            CREATE PROCEDURE archive.refresh_archive(private_token text)
+            LANGUAGE sql
+            AS $$ SELECT 'sentinel-private-body' $$;
+            """);
+
+        var facts = Extract(temp.Path);
+        var json = JsonSerializer.Serialize(facts);
+
+        var enumFact = Assert.Single(facts, fact => fact.FactType == FactTypes.PostgresSchemaEnumDeclared);
+        Assert.Equal("archive", enumFact.Properties["schemaName"]);
+        Assert.Equal("retention_state", enumFact.Properties["enumName"]);
+        Assert.Equal("true", enumFact.Properties["enumLabelsOmitted"]);
+
+        var routines = facts.Where(fact => fact.FactType == FactTypes.PostgresSchemaRoutineDeclared)
+            .OrderBy(fact => fact.Properties["routineName"], StringComparer.Ordinal).ToArray();
+        Assert.Equal(["move_batch", "refresh_archive"], routines.Select(fact => fact.Properties["routineName"]).ToArray());
+        Assert.Equal(["function", "procedure"], routines.Select(fact => fact.Properties["routineKind"]).ToArray());
+        Assert.All(routines, fact =>
+        {
+            Assert.Equal("true", fact.Properties["routineSignatureOmitted"]);
+            Assert.Equal("true", fact.Properties["routineBodyOmitted"]);
+            Assert.Equal(RuleIds.DatabasePostgresSchemaMigration, fact.RuleId);
+            Assert.Equal(EvidenceTiers.Tier2Structural, fact.EvidenceTier);
+            Assert.Equal(ScannerVersions.PostgresSchemaMigrationExtractor, fact.Evidence.ExtractorVersion);
+        });
+        Assert.Equal(3, facts.Count(fact => fact.FactType == FactTypes.PostgresMigrationOperation));
+        Assert.DoesNotContain("sentinel-private", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_limit", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_token", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("RETURNS", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("LANGUAGE", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Extract_gaps_quoted_enum_and_routine_identity_without_leaking_names()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "quoted.sql"), """
+            CREATE TYPE "private_enum" AS ENUM ('sentinel-private-label');
+            CREATE FUNCTION "private_function"() RETURNS text AS $$ SELECT 'sentinel-private-body' $$ LANGUAGE sql;
+            """);
+
+        var facts = Extract(temp.Path);
+        var json = JsonSerializer.Serialize(facts);
+
+        Assert.Equal(2, facts.Count(fact => fact.RuleId == RuleIds.DatabasePostgresSchemaMigrationGap));
+        Assert.DoesNotContain(facts, fact => fact.FactType is FactTypes.PostgresSchemaEnumDeclared or FactTypes.PostgresSchemaRoutineDeclared);
+        Assert.DoesNotContain("private_enum", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_function", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("sentinel-private", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Extract_gaps_unsafe_or_deferred_constraint_and_index_shapes_without_leaking_identity()
     {
         using var temp = new TempDirectory();
@@ -202,6 +269,9 @@ public sealed class PostgresSchemaMigrationExtractorTests
         Assert.Contains("CREATE TABLE", block, StringComparison.Ordinal);
         Assert.Contains("ALTER TABLE", block, StringComparison.Ordinal);
         Assert.Contains("CREATE INDEX", block, StringComparison.Ordinal);
+        Assert.Contains("CREATE TYPE", block, StringComparison.Ordinal);
+        Assert.Contains("CREATE FUNCTION", block, StringComparison.Ordinal);
+        Assert.Contains("routine signatures", block, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("referential integrity", block, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -217,6 +287,9 @@ public sealed class PostgresSchemaMigrationExtractorTests
               CONSTRAINT records_pkey PRIMARY KEY (id)
             );
             CREATE INDEX records_id_idx ON archive.records (id);
+            CREATE TYPE archive.retention_state AS ENUM ('ready', 'archived');
+            CREATE FUNCTION archive.move_batch(batch_size integer)
+            RETURNS integer LANGUAGE sql AS $$ SELECT batch_size $$;
             """);
 
         var first = ScanEngine.Scan(new ScanOptions(repo.Path, firstOutput.Path)).Facts
@@ -229,6 +302,8 @@ public sealed class PostgresSchemaMigrationExtractorTests
         Assert.All(first, fact => Assert.Equal("migration.sql", fact.Evidence.FilePath));
         Assert.Contains(first, fact => fact.FactType == FactTypes.PostgresSchemaConstraintDeclared);
         Assert.Contains(first, fact => fact.FactType == FactTypes.PostgresSchemaIndexDeclared);
+        Assert.Contains(first, fact => fact.FactType == FactTypes.PostgresSchemaEnumDeclared);
+        Assert.Contains(first, fact => fact.FactType == FactTypes.PostgresSchemaRoutineDeclared);
     }
 
     private static IReadOnlyList<CodeFact> Extract(string root) => PostgresSchemaMigrationExtractor.Extract(root, new ScanManifest(
