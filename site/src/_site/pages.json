@@ -380,6 +380,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/sql/operator-handoff/validation/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/manager-brief/",
     "changefreq": "monthly",
     "priority": "0.7"
