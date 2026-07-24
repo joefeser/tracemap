@@ -1053,3 +1053,19 @@ random loopback port, uses no host volume, asserts pass/fail/not-run behavior
 and deterministic summaries, checks identifier and connection-data exclusion,
 and cleans all container and scratch state. It is not a substitute for an
 authorized target-specific operator validation.
+### PostgreSQL enum and routine declaration evidence
+
+For changes to the bounded PostgreSQL enum/routine projector, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~PostgresSchemaMigrationExtractorTests
+```
+
+Use checked-in synthetic SQL containing `CREATE TYPE ... AS ENUM`,
+`CREATE FUNCTION`, and `CREATE PROCEDURE`, including dollar-quoted bodies and
+quoted-identifier negative cases. Confirm facts retain rule ID, Tier 2,
+repository-relative span, commit SHA, extractor version, coverage label, and
+limitations while omitting enum labels, routine signatures, parameters,
+return declarations, languages, bodies, literals, and raw SQL. Unsupported
+recognized-family shapes must emit Tier 4 categorical gaps.
