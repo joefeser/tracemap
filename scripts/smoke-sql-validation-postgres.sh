@@ -10,7 +10,7 @@ CONTAINER_STARTED=false
 cleanup() {
   unset TRACEMAP_SQL_VALIDATION_CONNECTION || true
   if [[ "$CONTAINER_STARTED" == true ]]; then
-    docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+    docker rm -fv "$CONTAINER_NAME" >/dev/null 2>&1 || true
   fi
   if [[ -n "$SCRATCH_ROOT" && -d "$SCRATCH_ROOT" && "$SCRATCH_ROOT" == "${TMPDIR:-/tmp}"/tracemap-sql-validation-postgres.* ]]; then
     find "$SCRATCH_ROOT" -depth -delete >/dev/null 2>&1 || true
@@ -34,12 +34,20 @@ docker run --detach \
 CONTAINER_STARTED=true
 
 for _ in $(seq 1 60); do
-  if docker exec "$CONTAINER_NAME" pg_isready --dbname validation_fixture --username postgres >/dev/null 2>&1; then
+  if docker exec "$CONTAINER_NAME" psql \
+    --host 127.0.0.1 \
+    --username postgres \
+    --dbname validation_fixture \
+    --command "SELECT 1" >/dev/null 2>&1; then
     break
   fi
   sleep 1
 done
-docker exec "$CONTAINER_NAME" pg_isready --dbname validation_fixture --username postgres >/dev/null
+docker exec "$CONTAINER_NAME" psql \
+  --host 127.0.0.1 \
+  --username postgres \
+  --dbname validation_fixture \
+  --command "SELECT 1" >/dev/null
 
 docker exec --interactive "$CONTAINER_NAME" psql --set ON_ERROR_STOP=1 --quiet --username postgres --dbname validation_fixture >/dev/null <<'SQL'
 CREATE SCHEMA archive;
