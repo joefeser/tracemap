@@ -102,9 +102,11 @@ public static class SqlRunbookPacketBuilder
             Ordinal(f), "validation-step-present", "validation-evidence-not-provided", Evidence(f, commitSha))).ToArray();
         var cleanup = contexts.Where(f => Value(f, "stepKind", "") == "destructive-operation")
             .Select(f => new SqlRunbookCleanup(Ordinal(f), "intended-by-script", Evidence(f, commitSha))).ToArray();
-        var gaps = sqlFacts.Where(f => f.FactType == FactTypes.AnalysisGap && f.Evidence is not null)
+        var staticGaps = sqlFacts.Where(f => f.FactType == FactTypes.AnalysisGap && f.Evidence is not null)
             .OrderBy(FactOrder).Select(f => new SqlRunbookGap(
-                Value(f, "gapKind", "unknown-static-gap"), GapCategory(f.RuleId), Evidence(f, commitSha)))
+                Value(f, "gapKind", Value(f, "classification", "unknown-static-gap")), GapCategory(f.RuleId), Evidence(f, commitSha)))
+            .ToArray();
+        var gaps = staticGaps
             .Concat(validationComposition.Gaps.Select(gap => new SqlRunbookGap(
                 gap.Code, "observed-validation", ValidationGapEvidence(gap, commitSha), gap.ArtifactId)))
             .OrderBy(gap => gap.Category, StringComparer.Ordinal)
@@ -144,7 +146,7 @@ public static class SqlRunbookPacketBuilder
         var reduced = new List<string>();
         if (!string.Equals(result.Manifest.BuildStatus, "Succeeded", StringComparison.OrdinalIgnoreCase)) reduced.Add("build");
         if (!commitKnown) reduced.Add("commit-identity");
-        if (gaps.Length > 0) reduced.Add("sql-static-analysis");
+        if (staticGaps.Length > 0) reduced.Add("sql-static-analysis");
         if (contexts.Any(f => Value(f, "coverage", "reduced") != "complete")) reduced.Add("execution-context");
         if (validationFacts.Length == 0 && surfaces.Length > 0) reduced.Add("validation-step-evidence");
         if (multipleSqlFiles) reduced.Add("cross-file-order");
@@ -189,7 +191,18 @@ public static class SqlRunbookPacketBuilder
     private static int Ordinal(CodeFact f) => int.TryParse(Value(f, "statementOrdinal", "0"), out var value) ? value : int.MaxValue;
     private static string FactOrder(CodeFact f) => $"{f.Evidence.FilePath}\u001f{f.Evidence.StartLine:D10}\u001f{f.FactId}";
     private static IReadOnlyList<string> Codes(string value) => value.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Order(StringComparer.Ordinal).ToArray();
-    private static SqlRunbookEvidence Evidence(CodeFact f, string commitSha) => new(f.RuleId, f.EvidenceTier, commitSha, CombinedReportHelpers.SafePath(f.Evidence.FilePath), new SqlRunbookLineSpan(f.Evidence.StartLine, f.Evidence.EndLine), f.Evidence.ExtractorId, f.Evidence.ExtractorVersion, Value(f, "coverage", "reduced"), [f.FactId], FactLimitations(f));
+    internal static SqlRunbookEvidence ProjectFactEvidence(CodeFact fact, string commitSha) => new(
+        fact.RuleId,
+        fact.EvidenceTier,
+        commitSha,
+        CombinedReportHelpers.SafePath(fact.Evidence.FilePath),
+        new SqlRunbookLineSpan(fact.Evidence.StartLine, fact.Evidence.EndLine),
+        fact.Evidence.ExtractorId,
+        fact.Evidence.ExtractorVersion,
+        Value(fact, "coverageLabel", Value(fact, "coverage", "reduced")),
+        [fact.FactId],
+        FactLimitations(fact));
+    private static SqlRunbookEvidence Evidence(CodeFact f, string commitSha) => ProjectFactEvidence(f, commitSha);
     private static SqlRunbookEvidence DerivedEvidence(CodeFact source, string commitSha) => new(RuleIds.DatabaseSqlOperatorRunbookPacket, EvidenceTiers.Tier4Unknown, commitSha, CombinedReportHelpers.SafePath(source.Evidence.FilePath), new SqlRunbookLineSpan(source.Evidence.StartLine, source.Evidence.EndLine), nameof(SqlRunbookPacketBuilder), "sql-runbook-packet/0.1.0", "reduced", [source.FactId], ["Runbook-derived stop and owner-review evidence is bounded by its supporting upstream fact."]);
     private static SqlRunbookEvidence ValidationGapEvidence(SqlValidationIngestionGap gap, string commitSha) => new(
         gap.RuleId, EvidenceTiers.Tier4Unknown, commitSha, string.Empty, new SqlRunbookLineSpan(0, 0),
@@ -219,8 +232,8 @@ public static class SqlRunbookPacketBuilder
         && !value.Equals("unknown", StringComparison.OrdinalIgnoreCase)
         && value.Trim('0').Length > 0;
     private static string MilestoneKind(string kind) => kind switch { "extension" => "extension", "foreign-server" => "foreign-server", "server-grant" => "permission", "user-mapping" => "user-mapping", "schema-import" or "foreign-table" => "schema-import-or-foreign-table", "publication" => "publication", "subscription" => "subscription", "scheduled-operation" => "scheduled-job", _ => "unknown" };
-    private static string GapCategory(string rule) => rule switch { RuleIds.DatabaseSqlContextGap => "context", RuleIds.DatabaseSqlSecretSafetyGap => "protected-material", RuleIds.DatabasePostgresPermissionGap => "permission", RuleIds.DatabasePostgresArchiveLinkGap => "archive-link", _ => "coverage" };
-    private static string Question(string category) => category switch { "context" => "Who will verify the active categorical context before manual execution?", "protected-material" => "Who owns the approved handling process for protected material?", "permission" => "Who owns validation of unresolved permission prerequisite candidates?", "archive-link" => "Who owns review of incomplete archive-link evidence?", "observed-validation" => "Who owns correction or replacement of the rejected validation summary?", _ => "Who owns resolution of reduced static-analysis coverage?" };
+    private static string GapCategory(string rule) => rule switch { RuleIds.DatabaseSqlContextGap => "context", RuleIds.DatabaseSqlSecretSafetyGap => "protected-material", RuleIds.DatabasePostgresPermissionGap => "permission", RuleIds.DatabasePostgresArchiveLinkGap => "archive-link", RuleIds.DatabasePostgresSchemaMigrationGap => "schema-migration", _ => "coverage" };
+    private static string Question(string category) => category switch { "context" => "Who will verify the active categorical context before manual execution?", "protected-material" => "Who owns the approved handling process for protected material?", "permission" => "Who owns validation of unresolved permission prerequisite candidates?", "archive-link" => "Who owns review of incomplete archive-link evidence?", "schema-migration" => "Who owns review of incomplete schema and migration evidence?", "observed-validation" => "Who owns correction or replacement of the rejected validation summary?", _ => "Who owns resolution of reduced static-analysis coverage?" };
 }
 
 public static class SqlRunbookPacketWriter
