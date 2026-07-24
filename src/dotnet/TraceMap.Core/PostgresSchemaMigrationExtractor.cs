@@ -76,6 +76,26 @@ public static partial class PostgresSchemaMigrationExtractor
                     continue;
                 }
 
+                if (TryCreateEnum(structural, out schema, out var enumName))
+                {
+                    fileFacts.Add(EnumSurface(manifest, FactTypes.PostgresMigrationOperation, file.RelativePath, statement, schema, enumName, "migration-operation"));
+                    fileFacts.Add(EnumSurface(manifest, FactTypes.PostgresSchemaEnumDeclared, file.RelativePath, statement, schema, enumName, "enum"));
+                    continue;
+                }
+
+                if (CreateRoutinePrefix().IsMatch(structural) && !HasCompleteRoutineBody(structural))
+                {
+                    fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "IncompleteDdlStatement", statementHash));
+                    continue;
+                }
+
+                if (TryCreateRoutine(structural, out schema, out var routineName, out var routineKind))
+                {
+                    fileFacts.Add(RoutineSurface(manifest, FactTypes.PostgresMigrationOperation, file.RelativePath, statement, schema, routineName, routineKind, "migration-operation"));
+                    fileFacts.Add(RoutineSurface(manifest, FactTypes.PostgresSchemaRoutineDeclared, file.RelativePath, statement, schema, routineName, routineKind, "routine"));
+                    continue;
+                }
+
                 fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "UnsupportedSchemaDdlShape", statementHash));
             }
 
@@ -91,13 +111,20 @@ public static partial class PostgresSchemaMigrationExtractor
     }
 
     private static bool StartsSupportedFamily(string sql) =>
-        CreateTablePrefix().IsMatch(sql) || AlterTablePrefix().IsMatch(sql) || CreateIndexPrefix().IsMatch(sql);
+        CreateTablePrefix().IsMatch(sql)
+        || AlterTablePrefix().IsMatch(sql)
+        || CreateIndexPrefix().IsMatch(sql)
+        || CreateEnumPrefix().IsMatch(sql)
+        || CreateRoutinePrefix().IsMatch(sql);
 
     private static bool MightContainSupportedFamily(string sql) =>
         (sql.Contains("TABLE", StringComparison.OrdinalIgnoreCase)
             && (sql.Contains("CREATE", StringComparison.OrdinalIgnoreCase) || sql.Contains("ALTER", StringComparison.OrdinalIgnoreCase)))
         || (sql.Contains("CREATE", StringComparison.OrdinalIgnoreCase)
-            && sql.Contains("INDEX", StringComparison.OrdinalIgnoreCase));
+            && (sql.Contains("INDEX", StringComparison.OrdinalIgnoreCase)
+                || sql.Contains("TYPE", StringComparison.OrdinalIgnoreCase)
+                || sql.Contains("FUNCTION", StringComparison.OrdinalIgnoreCase)
+                || sql.Contains("PROCEDURE", StringComparison.OrdinalIgnoreCase)));
 
     private static bool TryCreateTable(
         string sql,
@@ -184,6 +211,29 @@ public static partial class PostgresSchemaMigrationExtractor
         return true;
     }
 
+    private static bool TryCreateEnum(string sql, out string schema, out string enumName)
+    {
+        schema = enumName = string.Empty;
+        var match = CreateEnum().Match(sql);
+        if (!match.Success) return false;
+        schema = match.Groups["schema"].Success ? match.Groups["schema"].Value : string.Empty;
+        enumName = match.Groups["enum"].Value;
+        return true;
+    }
+
+    private static bool TryCreateRoutine(string sql, out string schema, out string routineName, out string routineKind)
+    {
+        schema = routineName = routineKind = string.Empty;
+        var match = CreateRoutine().Match(sql);
+        if (!match.Success) return false;
+        schema = match.Groups["schema"].Success ? match.Groups["schema"].Value : string.Empty;
+        routineName = match.Groups["routine"].Value;
+        routineKind = match.Groups["kind"].Value.Equals("PROCEDURE", StringComparison.OrdinalIgnoreCase)
+            ? "procedure"
+            : "function";
+        return true;
+    }
+
     private static bool TryNamedConstraint(string value, out ConstraintProjection constraint)
     {
         constraint = ConstraintProjection.Empty;
@@ -242,6 +292,12 @@ public static partial class PostgresSchemaMigrationExtractor
             else if (character == ')' && --depth < 0) return false;
         }
         return depth == 0;
+    }
+
+    private static bool HasCompleteRoutineBody(string value)
+    {
+        var beginAtomic = value.IndexOf("BEGIN ATOMIC", StringComparison.OrdinalIgnoreCase);
+        return beginAtomic < 0 || value[(beginAtomic + "BEGIN ATOMIC".Length)..].TrimEnd().EndsWith("END", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasTopLevelComma(string value)
@@ -351,6 +407,57 @@ public static partial class PostgresSchemaMigrationExtractor
             targetSymbol: target, contractElement: target, properties: properties);
     }
 
+    private static CodeFact EnumSurface(
+        ScanManifest manifest,
+        string factType,
+        string path,
+        SqlExecutionContextExtractor.SqlStatement statement,
+        string schema,
+        string enumName,
+        string objectKind)
+    {
+        var target = string.IsNullOrEmpty(schema) ? enumName : $"{schema}.{enumName}";
+        var properties = Properties(
+            ("objectKind", objectKind),
+            ("operationKind", "create-enum"),
+            ("enumName", enumName),
+            ("enumLabelsOmitted", "true"),
+            ("statementOrdinal", statement.Ordinal.ToString()),
+            ("coverageLabel", "bounded-static-evidence"),
+            ("limitations", Limitation));
+        if (!string.IsNullOrEmpty(schema)) properties["schemaName"] = schema;
+        return FactFactory.Create(manifest, factType, RuleIds.DatabasePostgresSchemaMigration, EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(path, statement.StartLine, statement.EndLine, FactFactory.Hash(statement.StructuralText, 32), nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
+            targetSymbol: target, contractElement: target, properties: properties);
+    }
+
+    private static CodeFact RoutineSurface(
+        ScanManifest manifest,
+        string factType,
+        string path,
+        SqlExecutionContextExtractor.SqlStatement statement,
+        string schema,
+        string routineName,
+        string routineKind,
+        string objectKind)
+    {
+        var target = string.IsNullOrEmpty(schema) ? routineName : $"{schema}.{routineName}";
+        var properties = Properties(
+            ("objectKind", objectKind),
+            ("operationKind", $"create-{routineKind}"),
+            ("routineName", routineName),
+            ("routineKind", routineKind),
+            ("routineSignatureOmitted", "true"),
+            ("routineBodyOmitted", "true"),
+            ("statementOrdinal", statement.Ordinal.ToString()),
+            ("coverageLabel", "bounded-static-evidence"),
+            ("limitations", Limitation));
+        if (!string.IsNullOrEmpty(schema)) properties["schemaName"] = schema;
+        return FactFactory.Create(manifest, factType, RuleIds.DatabasePostgresSchemaMigration, EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(path, statement.StartLine, statement.EndLine, FactFactory.Hash(statement.StructuralText, 32), nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
+            targetSymbol: target, contractElement: target, properties: properties);
+    }
+
     private static CodeFact Gap(ScanManifest manifest, string path, int start, int end, int ordinal, string classification, string? snippetHash = null) =>
         FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.DatabasePostgresSchemaMigrationGap, EvidenceTiers.Tier4Unknown,
             new EvidenceSpan(path, start, end, snippetHash, nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
@@ -380,11 +487,15 @@ public static partial class PostgresSchemaMigrationExtractor
     [GeneratedRegex(@"^CREATE\s+(?:UNLOGGED\s+|TEMP(?:ORARY)?\s+)?TABLE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateTablePrefix();
     [GeneratedRegex(@"^ALTER\s+TABLE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex AlterTablePrefix();
     [GeneratedRegex(@"^CREATE\s+(?:UNIQUE\s+)?INDEX\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateIndexPrefix();
+    [GeneratedRegex(@"^CREATE\s+TYPE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateEnumPrefix();
+    [GeneratedRegex(@"^CREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateRoutinePrefix();
     [GeneratedRegex(@"^CREATE\s+(?:UNLOGGED\s+|TEMP(?:ORARY)?\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)\s*\((?<body>.*)\)\s*;?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)] private static partial Regex CreateTable();
     [GeneratedRegex(@"^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)\s+ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(?!(?:CONSTRAINT|PRIMARY|FOREIGN|UNIQUE|CHECK|EXCLUDE)\b)(?<column>[A-Za-z_][A-Za-z0-9_$]*)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex AlterAddColumn();
     [GeneratedRegex(@"^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)\s+ADD\s+(?<constraint>CONSTRAINT\s+.*)\s*;?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)] private static partial Regex AlterAddConstraint();
     [GeneratedRegex(@"^CONSTRAINT\s+(?<name>[A-Za-z_][A-Za-z0-9_$]*)\s+(?:(?<primary>PRIMARY\s+KEY)\s*\((?<columns>[^()]*)\)|(?<unique>UNIQUE)\s*\((?<columns>[^()]*)\)|(?<foreign>FOREIGN\s+KEY)\s*\((?<columns>[^()]*)\)\s+REFERENCES\s+(?:(?<referencedSchema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<referencedTable>[A-Za-z_][A-Za-z0-9_$]*)\s*\((?<referencedColumns>[^()]*)\))\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)] private static partial Regex NamedConstraint();
     [GeneratedRegex(@"^CREATE\s+(?<unique>UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(?<index>[A-Za-z_][A-Za-z0-9_$]*)\s+ON\s+(?:ONLY\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)(?:\s+USING\s+(?<method>[A-Za-z_][A-Za-z0-9_$]*))?\s*\((?<columns>[^()]*)\)\s*;?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)] private static partial Regex CreateIndex();
+    [GeneratedRegex(@"^CREATE\s+TYPE\s+(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<enum>[A-Za-z_][A-Za-z0-9_$]*)\s+AS\s+ENUM\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)] private static partial Regex CreateEnum();
+    [GeneratedRegex(@"^CREATE\s+(?:OR\s+REPLACE\s+)?(?<kind>FUNCTION|PROCEDURE)\s+(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<routine>[A-Za-z_][A-Za-z0-9_$]*)\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)] private static partial Regex CreateRoutine();
     [GeneratedRegex(@"\b(?:PRIMARY\s+KEY|UNIQUE|REFERENCES|CHECK|CONSTRAINT|NOT\s+NULL)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex InlineConstraintSignal();
     [GeneratedRegex(@"^(?<identifier>[A-Za-z_][A-Za-z0-9_$]*)$", RegexOptions.CultureInvariant)] private static partial Regex PlainIdentifier();
     [GeneratedRegex(@"^(?<identifier>[A-Za-z_][A-Za-z0-9_$]*)(?:\s+(?:ASC|DESC))?(?:\s+NULLS\s+(?:FIRST|LAST))?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex OrderedIdentifier();
