@@ -918,7 +918,7 @@ public static class ReleaseReviewReporter
                     "schema-migration",
                     displayName,
                     ReleaseReviewClassifications.NoActionableEvidence,
-                    SqlRunbookPacketBuilder.ProjectFactEvidence(fact, input.Result.Manifest.CommitSha ?? "unknown"),
+                    SqlRunbookPacketBuilder.ProjectFactEvidence(fact, fact.CommitSha),
                     fact.Properties
                         .Where(pair => SqlSchemaMigrationMetadataKeys.Contains(pair.Key))
                         .Select(pair => new KeyValuePair<string, string?>(pair.Key, pair.Value))
@@ -1613,7 +1613,11 @@ public static class ReleaseReviewReporter
             }
             var sourceLabel = indexKind == "single" ? "single" : StringOrDefault(reader, 0, manifest.RepoName);
             rows.Add(new SqlEvidenceFactRow(sourceLabel, manifest, fact,
-                !string.IsNullOrWhiteSpace(extractorId) && !string.IsNullOrWhiteSpace(extractorVersion)));
+                !string.IsNullOrWhiteSpace(extractorId)
+                && !string.IsNullOrWhiteSpace(extractorVersion)
+                && IsKnownCommitSha(manifest.CommitSha)
+                && IsKnownCommitSha(fact.CommitSha)
+                && string.Equals(manifest.CommitSha, fact.CommitSha, StringComparison.Ordinal)));
         }
 
         return rows
@@ -1625,6 +1629,11 @@ public static class ReleaseReviewReporter
                 group.All(row => row.ProvenanceCompatible)))
             .ToArray();
     }
+
+    private static bool IsKnownCommitSha(string? value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && !value.Equals("unknown", StringComparison.OrdinalIgnoreCase)
+        && value.Trim('0').Length > 0;
 
     internal static async Task<AccessEvidencePresence> ReadAccessEvidencePresenceAsync(
         string path,
