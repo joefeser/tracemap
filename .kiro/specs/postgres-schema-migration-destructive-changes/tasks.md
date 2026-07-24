@@ -8,4 +8,4 @@
 - [x] Add provenance, determinism, gap, and non-leakage tests.
 - [x] Update the extractor version, rule catalog, documentation, and sample.
 - [x] Run focused and full validation.
-- [ ] Open and review the focused PR.
+- [x] Open and review the focused PR.
