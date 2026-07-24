@@ -3285,16 +3285,19 @@ rules:
 
   - id: database.postgres.schema-migration.v1
     name: PostgreSQL schema and migration surface
-    description: Extracts bounded table, column, migration-operation, and migration-file evidence from explicit checked-in PostgreSQL DDL.
+    description: Extracts bounded table, column, named constraint, simple index, migration-operation, and migration-file evidence from explicit checked-in PostgreSQL DDL.
     evidenceTier: Tier2Structural
     emits:
       - PostgresMigrationFileDeclared
       - PostgresSchemaTableDeclared
       - PostgresSchemaColumnDeclared
+      - PostgresSchemaConstraintDeclared
+      - PostgresSchemaIndexDeclared
       - PostgresMigrationOperation
     limitations:
-      - V0 recognizes unquoted identifiers in CREATE TABLE and single-subcommand ALTER TABLE ADD COLUMN only; quoted identifiers, multi-subcommand ALTER TABLE, indexes, constraints, enums, routines, snapshots, EF/Npgsql migrations, and other dialect shapes are deferred.
+      - Current bounded coverage recognizes unquoted identifiers in CREATE TABLE, single-subcommand ALTER TABLE ADD COLUMN, named PRIMARY KEY/UNIQUE/FOREIGN KEY constraints, and simple CREATE INDEX statements; quoted identifiers and broader dialect shapes remain deferred.
       - Column facts identify explicit declaration names but do not model types, defaults, generated expressions, constraints, ordering semantics, or compatibility.
+      - Constraint and index facts do not model inline column constraints, check/exclusion expressions, foreign-key actions, expression/partial/include indexes, predicate semantics, index selection, uniqueness, or referential integrity.
       - Static DDL evidence does not prove migration execution, execution order, live schema existence, database state, data correctness, permissions, rollback, production use, or release safety.
       - Raw SQL, source snippets, literals, connection material, local paths, and unsupported identifiers are not stored in fact properties.
 
