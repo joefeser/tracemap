@@ -1493,7 +1493,9 @@ public static class ContractDeltaReducer
 
         var tableMatches = PropertyValues(fact, "tableName", "tableNames", "schemaName", "entityName", "name")
             .Any(value => expectedTables.Any(expectedTable => NamesMatch(expectedTable, value)));
-        return tableMatches ? new EvidenceMatch(MatchStrength.Member, false, SqlEvidenceKind(fact, "sql-schema-metadata")) : EvidenceMatch.None;
+        return tableMatches
+            ? new EvidenceMatch(MatchStrength.Member, IsPostgresSchemaFact(fact), SqlEvidenceKind(fact, "sql-schema-metadata"))
+            : EvidenceMatch.None;
     }
 
     private static EvidenceMatch MatchSqlColumn(NormalizedChange change, IndexedFact fact)
@@ -1516,7 +1518,10 @@ public static class ContractDeltaReducer
             || PropertyValues(fact, "tableName", "tableNames", "schemaName", "entityName")
                 .Any(value => expectedTables.Any(expectedTable => NamesMatch(expectedTable, value)));
         return columnMatches && tableMatches
-            ? new EvidenceMatch(expectedTables.Length == 0 ? MatchStrength.Member : MatchStrength.TypeAndMember, expectedTables.Length == 0, SqlEvidenceKind(fact, "sql-schema-metadata"))
+            ? new EvidenceMatch(
+                expectedTables.Length == 0 ? MatchStrength.Member : MatchStrength.TypeAndMember,
+                expectedTables.Length == 0 || IsPostgresSchemaFact(fact),
+                SqlEvidenceKind(fact, "sql-schema-metadata"))
             : EvidenceMatch.None;
     }
 
@@ -1592,6 +1597,10 @@ public static class ContractDeltaReducer
             FactTypes.SqlTextUsed => "sql-text-hash",
             FactTypes.SqlFileDeclared => "sql-resource",
             FactTypes.DatabaseColumnMapping => "sql-persistence-mapping",
+            FactTypes.PostgresSchemaTableDeclared
+                or FactTypes.PostgresSchemaColumnDeclared
+                or FactTypes.PostgresSchemaConstraintDeclared
+                or FactTypes.PostgresSchemaIndexDeclared => "sql-schema-metadata",
             _ => fallback
         };
     }
@@ -1708,10 +1717,20 @@ public static class ContractDeltaReducer
             or FactTypes.SqlCommandDetected
             or FactTypes.SqlTextUsed
             or FactTypes.SqlFileDeclared
+            or FactTypes.PostgresSchemaTableDeclared
+            or FactTypes.PostgresSchemaColumnDeclared
+            or FactTypes.PostgresSchemaConstraintDeclared
+            or FactTypes.PostgresSchemaIndexDeclared
             or FactTypes.DbContextDeclared
             or FactTypes.DbSetDeclared
             or FactTypes.DbChangeSaved;
     }
+
+    private static bool IsPostgresSchemaFact(IndexedFact fact) =>
+        fact.FactType is FactTypes.PostgresSchemaTableDeclared
+            or FactTypes.PostgresSchemaColumnDeclared
+            or FactTypes.PostgresSchemaConstraintDeclared
+            or FactTypes.PostgresSchemaIndexDeclared;
 
     private static string SurfaceKind(IndexedFact fact)
     {

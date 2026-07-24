@@ -138,6 +138,75 @@ public sealed class SqlSchemaChangeImpactTests
     }
 
     [Fact]
+    public async Task Reduce_sql_schema_delta_matches_postgres_constraint_and_index_metadata_as_review_tier()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteSqlSchemaDelta(temp.Path, """
+            {
+              "id": "chg-records-index",
+              "kind": "table",
+              "changeType": "index_changed",
+              "reference": {
+                "tableName": "records"
+              }
+            },
+            {
+              "id": "chg-records-constraint",
+              "kind": "column",
+              "changeType": "constraint_changed",
+              "reference": {
+                "tableName": "records",
+                "columnName": "archive_key"
+              }
+            }
+            """);
+        var manifest = Manifest("schema", ScannerVersions.TraceMap);
+        SqliteIndexWriter.Write(indexPath, manifest, [
+            FactFactory.Create(
+                manifest,
+                FactTypes.PostgresSchemaIndexDeclared,
+                RuleIds.DatabasePostgresSchemaMigration,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("sql/schema.sql", 10, 11, null, "postgres-schema-migration", ScannerVersions.PostgresSchemaMigrationExtractor),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["columnNames"] = "archive_key",
+                    ["indexName"] = "records_archive_key_idx",
+                    ["tableName"] = "records"
+                }),
+            FactFactory.Create(
+                manifest,
+                FactTypes.PostgresSchemaConstraintDeclared,
+                RuleIds.DatabasePostgresSchemaMigration,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan("sql/schema.sql", 4, 4, null, "postgres-schema-migration", ScannerVersions.PostgresSchemaMigrationExtractor),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["columnNames"] = "archive_key",
+                    ["constraintName"] = "records_archive_key_unique",
+                    ["tableName"] = "records"
+                })
+        ]);
+
+        var exitCode = await RunCliAsync([
+            "reduce",
+            "--index", indexPath,
+            "--sql-schema-delta", deltaPath,
+            "--out", outputPath
+        ]);
+
+        Assert.Equal(0, exitCode);
+        var json = await File.ReadAllTextAsync(Path.Combine(outputPath, "sql-impact-report.json"));
+        Assert.Contains("\"factType\": \"PostgresSchemaIndexDeclared\"", json);
+        Assert.Contains("\"factType\": \"PostgresSchemaConstraintDeclared\"", json);
+        Assert.Contains("\"evidenceKind\": \"sql-schema-metadata\"", json);
+        Assert.Equal(2, CountOccurrences(json, "\"classification\": \"NeedsReview\""));
+        Assert.DoesNotContain("\"classification\": \"ProbableImpact\"", json);
+    }
+
+    [Fact]
     public async Task Reduce_sql_schema_delta_rejects_invalid_input_and_mutual_exclusion_without_echoing_unsafe_values()
     {
         using var temp = new TempDirectory();
@@ -745,6 +814,9 @@ public sealed class SqlSchemaChangeImpactTests
         Assert.Equal(string.Empty, error.ToString());
         return exitCode;
     }
+
+    private static int CountOccurrences(string value, string expected) =>
+        value.Split(expected, StringSplitOptions.None).Length - 1;
 
     private static string WriteSqlSchemaDelta(string directory, string changesJson)
     {
