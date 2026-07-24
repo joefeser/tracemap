@@ -15,11 +15,37 @@ fast quorum is met. Stale Codex plus stale Qodo cannot satisfy the lane. Checks,
 threads, findings, merge state, risky-file gates, and `main`/release promotion
 policy remain unchanged.
 
+After `FRESH_REVIEW_FIX_CYCLE_CEILING_REACHED`, the trusted lane may use the
+configured `claude-local` reviewer as a bounded fallback. This is a read-only
+Claude Opus 4.8 review whose artifact must prove the exact head, actual model,
+complete coverage, and a mutation-free worktree. Only `joefeser` may admit the
+result as an `owner_authorized_receipt` in the `trustedCodeReview` quorum. The
+receipt does not bypass checks, unresolved threads, findings, merge state,
+risky-file gates, or branch policy, and it cannot replace a hosted reviewer
+that never returned at least once.
+
+The fallback is bounded to two durable attempts and two fix cycles. Each
+provider invocation has a 30-minute timeout and a $4 ceiling, so the aggregate
+authorized spend is at most $8. A finding-bearing receipt follows the ordinary
+patch/disposition workflow; a changed head requires a new exact-head receipt.
+`main` remains human-mediated even when ACK returns `merge_ready`.
+
+This policy is authorized only when the same effective fallback contract is
+already present at the same lane path on the trusted target base. A PR cannot
+authorize its own fallback from head-only configuration. Therefore the first
+lane-authorization PR must be reviewed and merged manually before later PRs
+can use the fallback.
+
 Operational boundaries:
 
 - Codex review requests are policy-controlled and bounded.
 - Qodo review requests are explicit owner actions; the normal loop must not
   post `@qodo-code-review review`.
+- Automatic local review is Claude-only, read-only, exact-head, and available
+  only after the configured Codex freshness ceiling.
+- During a typed hosted-review failure or non-return, Joe may explicitly invoke
+  the same trusted-base fallback with `--owner-authorized-local-review`; this
+  flag does not retag Codex or Qodo.
 - `main`, `master`, and `release/**` are not overnight auto-merge targets.
 - `dev`, `integration/**`, and `feature/**` may be owner-override eligible only
   when the mechanical gates are clean.

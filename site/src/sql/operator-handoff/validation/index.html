@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A public-safe TraceMap story showing how static SQL evidence and point-in-time categorical validation observations compose without becoming execution approval.">
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Static and Observed SQL Validation | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/sql/operator-handoff/validation/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="Static and Observed SQL Validation | TraceMap">
+    <meta property="og:description" content="Keep checked-in SQL evidence, point-in-time catalog observations, gaps, and operator approval in their proper lanes.">
+    <meta property="og:url" content="https://tracemap.tools/sql/operator-handoff/validation/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home"><span class="brand-mark" aria-hidden="true">T</span><span>TraceMap</span></a>
+      <nav class="top-nav" aria-label="Primary navigation"><a href="/evidence/">Evidence</a><a href="/outputs/">Outputs</a><a href="/workflows/">Workflows</a><a href="/examples/">Examples</a><a href="/blog/">Blog</a><a href="/capabilities/">Capabilities</a><a href="/docs/">Docs</a><a href="/validation/">Validation</a><a href="/limitations/">Limitations</a><a href="/demo/">Demo</a><a href="https://github.com/joefeser/tracemap">GitHub</a></nav>
+    </header>
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Static evidence + bounded observation</p>
+        <h1>A checked-in plan says what should exist. A validator can say what one catalog showed at one time.</h1>
+        <p class="hero-subhead">TraceMap composes those records without turning either one into permission to execute, proof that a procedure worked, or release approval.</p>
+        <p class="hero-note">Public claim level: demo. This page uses synthetic categorical examples. It contains no raw SQL, connection material, target identities, database output, or operator attestation.</p>
+        <nav class="hero-actions" aria-label="SQL validation story links"><a class="button primary" href="#two-lanes">Compare the evidence lanes</a><a class="button secondary" href="/sql/operator-handoff/proof-packet/">Static proof packet</a><a class="button secondary" href="/sql/operator-handoff/">Operator handoff</a><a class="button secondary" href="/limitations/">Limitations</a></nav>
+      </section>
+
+      <section class="section" id="two-lanes">
+        <div class="section-header"><p class="section-kicker">Two evidence lanes</p><h2>Composition keeps provenance and claim strength separate.</h2></div>
+        <div class="workflow-grid">
+          <article><h3>Static repository evidence</h3><p>Rule ID, evidence tier, coverage label, repository-relative span, commit SHA, extractor version, supporting facts, and limitations show what the scanned commit contains.</p><p><code>present-in-scripts</code> means compatible checked-in evidence exists. It does not establish applied or effective state.</p></article>
+          <article><h3>Observed validation summary</h3><p><code>sql-validation-summary/v1</code> binds closed assertion codes to validator identity/version, repository, commit, categorical target context, observation and expiry time, and canonical digest.</p><p>The scanner reads this artifact as data. It does not connect to PostgreSQL or rerun the observation.</p></article>
+          <article><h3>Human decision</h3><p>Database owners resolve target selection, authorization, execution order, failures, and approval. TraceMap preserves gaps and non-claims for that decision.</p><p>Neither a static tier nor an observed status replaces change control or operator judgment.</p></article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div><p class="section-kicker">Acceptance gates</p><h2>Observed evidence is admitted only when its bindings agree.</h2></div>
+        <div class="detail-list">
+          <div><strong>Identity</strong><span>repository and commit must match the static evidence source.</span></div>
+          <div><strong>Context</strong><span>Engine, server role, database role, schema role, and execution mode must match an expected categorical context.</span></div>
+          <div><strong>Freshness</strong><span>Observation and expiry are evaluated against an explicit deterministic <code>as-of</code> instant.</span></div>
+          <div><strong>Integrity</strong><span>Schema, validator/version, closed assertion vocabulary, and canonical digest must verify.</span></div>
+          <div><strong>Conflict handling</strong><span>Malformed, expired, mismatched, ambiguous, duplicate, or conflicting inputs become rule-backed gaps.</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header"><p class="section-kicker">Status language</p><h2>Four categorical outcomes, each deliberately narrow.</h2></div>
+        <div class="workflow-grid">
+          <article><h3><code>observed-pass</code></h3><p>One fixed catalog predicate was true for that login, target context, and recorded time.</p></article>
+          <article><h3><code>observed-fail</code></h3><p>The bounded predicate was false. This is a stop and owner handoff, not a generated repair instruction.</p></article>
+          <article><h3><code>observed-indeterminate</code></h3><p>The harness could not make the bounded observation. Provider prose is not converted into a conclusion.</p></article>
+          <article><h3><code>not-run</code></h3><p>The v1 harness did not perform that assertion. Connectivity, target-schema compatibility, arbitrary validation queries, and cleanup observation remain explicit gaps.</p></article>
+        </div>
+      </section>
+
+      <section class="section boundary-section">
+        <div><p class="section-kicker">What this still cannot say</p><h2>Point-in-time catalog evidence is not procedure evidence.</h2></div>
+        <ul>
+          <li>No function, job, migration, cleanup, rollback, or data movement is executed or observed.</li>
+          <li>No archive-link connectivity, correct data, replication health, continuing state, or production state is established.</li>
+          <li>No result certifies execution safety, rollout success, sufficient permission, or release approval.</li>
+          <li>No credential, connection material, local path, private target name, raw statement, scheduled body, or database output belongs in the public packet.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section">
+        <div><p class="section-kicker">Continue the proof path</p><h2>Review the static packet, then carry categorical observations to the owner.</h2></div>
+        <div class="link-grid"><a href="/sql/operator-handoff/">SQL operator handoff</a><a href="/sql/operator-handoff/proof-packet/">Public SQL proof packet</a><a href="/outputs/">Output artifacts</a><a href="/evidence/">Evidence tiers</a><a href="/validation/">Validation guide</a><a href="/limitations/">Limitations</a><a href="https://github.com/joefeser/tracemap/blob/dev/docs/SQL_VALIDATION_HARNESS.md">Validation harness documentation</a><a href="https://github.com/joefeser/tracemap/blob/dev/docs/SQL_OPERATOR_RUNBOOK_PACKET.md">Runbook packet documentation</a></div>
+      </section>
+    </main>
+    <footer class="site-footer"><p>Static evidence and observed validation remain bounded, attributable, and partial where proof stops.</p><p class="copyright">© 2026 Joe Feser.</p></footer>
+  </body>
+</html>

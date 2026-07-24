@@ -1,0 +1,12 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\TraceMap.SqlValidation\TraceMap.SqlValidation.csproj" />
+  </ItemGroup>
+  <PropertyGroup>
+    <AssemblyName>tracemap-sql-validation</AssemblyName>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "sql-validation-plan/v1",
+  "artifactId": "archive-target-validation-template",
+  "repository": "example/archive-service",
+  "commitSha": "0123456789abcdef0123456789abcdef01234567",
+  "observedAt": "2026-07-22T10:00:00Z",
+  "expiresAt": "2026-07-22T18:00:00Z",
+  "targetContext": {
+    "engine": "postgresql",
+    "serverRole": "archive-target",
+    "databaseRole": "archive-data",
+    "schemaRole": "archive",
+    "executionMode": "validation-only"
+  },
+  "checks": [
+    {
+      "code": "postgres.server-version-compatible",
+      "expectedMajor": 16
+    },
+    {
+      "code": "postgres.required-extension-available",
+      "identifiers": ["plpgsql"]
+    },
+    {
+      "code": "postgres.migration-schema-present",
+      "identifiers": ["archive.schema_migrations"]
+    },
+    {
+      "code": "postgres.permission-probe-authorized",
+      "identifiers": ["archive"]
+    }
+  ]
+}
