@@ -252,7 +252,34 @@ public sealed class PostgresSchemaMigrationExtractorTests
         Assert.Contains(review.SqlEvidence.Findings, finding =>
             finding.RuleId == RuleIds.DatabasePostgresSchemaMigration
             && finding.Metadata.Any(pair => pair.Key == "factType" && pair.Value == FactTypes.PostgresSchemaTableDeclared));
+        Assert.All(review.SqlEvidence.Findings.Where(finding => finding.RuleId == RuleIds.DatabasePostgresSchemaMigration), finding =>
+        {
+            Assert.Equal(manifest.CommitSha, finding.CommitSha);
+            Assert.Contains(finding.Limitations, limitation =>
+                limitation.Contains("dialect validity", StringComparison.OrdinalIgnoreCase)
+                && limitation.Contains("production state", StringComparison.OrdinalIgnoreCase));
+        });
         Assert.DoesNotContain(review.SqlEvidence.Gaps, gap => gap.GapKind == "CompatibleEvidenceUnavailable");
+    }
+
+    [Fact]
+    public async Task Release_review_rejects_schema_migration_evidence_without_a_real_commit_sha()
+    {
+        using var repo = new TempDirectory();
+        using var output = new TempDirectory();
+        var indexPath = Path.Combine(output.Path, "index.sqlite");
+        File.WriteAllText(Path.Combine(repo.Path, "migration.sql"),
+            "CREATE TABLE archive.records (id bigint);\n");
+        var manifest = Manifest() with { CommitSha = "unknown" };
+        var facts = PostgresSchemaMigrationExtractor.Extract(repo.Path, manifest, FileInventory.Collect(repo.Path));
+        SqliteIndexWriter.Write(indexPath, manifest, facts);
+
+        var review = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            indexPath, indexPath, Path.Combine(output.Path, "review"), Scope: "sql-evidence"));
+
+        Assert.Equal(ReleaseReviewStatuses.Unavailable, review.SqlEvidence.Status);
+        Assert.Empty(review.SqlEvidence.Findings);
+        Assert.Contains(review.SqlEvidence.Gaps, gap => gap.GapKind == "ExtractorProvenanceUnavailable");
     }
 
     private static IReadOnlyList<CodeFact> Extract(string root) => PostgresSchemaMigrationExtractor.Extract(root, Manifest(), FileInventory.Collect(root));
