@@ -1,10 +1,11 @@
 # PostgreSQL Enum/Routine Evidence State
 
-Status: implementation-validated-on-pre-sync-base
+Status: ready-for-review
 
 Branch: `codex/postgres-schema-migration-routines-enums`
 
-Base: `origin/dev` at `11f25dae054fde47aea95dc23d373e9c7561b404`
+Base: reconciled `origin/dev` through PR #527 / merge
+`dda039325b802c43466c846f06a6bbe308237d4d`
 
 Scope: third bounded issue #435 raw-DDL slice for enum, function, and procedure
 declaration identity. Enum labels, routine signatures, parameters, return
@@ -25,7 +26,18 @@ Validation:
 - `./scripts/check-private-paths.sh`: passed; and
 - `git diff --check`: passed.
 
-Final validation remains pending after the main-to-dev reconciliation merge.
+After the main-to-dev reconciliation, release review safely allowlists enum and
+routine identity/omission metadata while preserving the rule-specific
+limitations and exact scan commit SHA.
+
+Final validation:
+
+- focused extractor and release-review tests: 14/14 passed;
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with existing
+  NU1903 advisories;
+- `dotnet test src/dotnet/TraceMap.sln --no-build`: 883/883 passed;
+- `./scripts/check-private-paths.sh`: passed; and
+- `git diff --check`: passed.
 
 Deferred: enum labels; routine signatures/bodies; quoted identifiers; aggregate,
 window, trigger, and operator declarations; drop/rename operations; snapshots;

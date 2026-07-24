@@ -7,4 +7,4 @@
 - [x] Emit categorical gaps for unsupported recognized-family shapes.
 - [x] Add determinism, provenance, and non-leakage tests.
 - [x] Update rule catalog, product documentation, and validation state.
-- [ ] Run focused and full validation.
+- [x] Run focused and full validation.
