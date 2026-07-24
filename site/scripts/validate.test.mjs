@@ -82,6 +82,7 @@ import {
   sqlRunbookProofPacketInboundRoutes,
   sqlRunbookProofPacketRoute
 } from "./sql-runbook-proof-packet.mjs";
+import { sqlStaticObservedValidationRoute } from "./sql-static-observed-validation.mjs";
 import { swiftAdapterStoryRoute } from "./swift-adapter-story.mjs";
 import { swiftApiClientWalkthroughRoute } from "./swift-api-client-walkthrough.mjs";
 import { swiftClaimLanguageRoute } from "./swift-claim-language.mjs";
@@ -270,6 +271,7 @@ async function createDistFixture({
       staticVsRuntimeRoute,
       sqlOperatorHandoffRoute,
       sqlRunbookProofPacketRoute,
+      sqlStaticObservedValidationRoute,
       swiftAdapterStoryRoute,
       swiftApiClientWalkthroughRoute,
       swiftClaimLanguageRoute,
@@ -349,6 +351,7 @@ async function createDistFixture({
     staticVsRuntimeRoute,
     sqlOperatorHandoffRoute,
     sqlRunbookProofPacketRoute,
+    sqlStaticObservedValidationRoute,
     swiftAdapterStoryRoute,
     swiftApiClientWalkthroughRoute,
     swiftClaimLanguageRoute,
@@ -577,6 +580,9 @@ async function fixturePageHtml(route, path) {
   }
   if (route === sqlOperatorHandoffRoute) {
     return readFile(new URL("../src/sql/operator-handoff/index.html", import.meta.url), "utf8");
+  }
+  if (route === sqlStaticObservedValidationRoute) {
+    return readFile(new URL("../src/sql/operator-handoff/validation/index.html", import.meta.url), "utf8");
   }
 
   if (route === "/deploy-audit/") {
@@ -1016,6 +1022,17 @@ async function writeDiscoveryFiles(dist) {
         preferredProofPath: sqlOperatorHandoffRoute,
         limitations: ["Static fixture evidence remains reduced and does not establish runtime state."],
         nonClaims: ["No live database access, execution, effective permission proof, or DBA approval."]
+      },
+      {
+        path: sqlStaticObservedValidationRoute,
+        title: "Static and observed SQL validation",
+        summary: "Public-safe composition of static SQL evidence and categorical point-in-time observations.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: sqlRunbookProofPacketRoute,
+        limitations: ["Observed validation remains point-in-time and assertion-specific."],
+        nonClaims: ["No execution, continuing state, release approval, or DBA attestation."]
       },
       ...deployAuditRequiredRoutes.map((route) => ({
         path: route,

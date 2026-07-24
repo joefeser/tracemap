@@ -973,3 +973,62 @@ dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
 The focused tests cover deterministic ordering, schema fields, context
 transitions, scheduled and validation groups, permission/protected projections,
 partial gaps, planted-value leakage, forbidden runnable SQL, and CLI artifacts.
+
+## SQL validation-summary ingestion smoke
+
+Run the focused offline ingestion and composition tests:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~SqlValidationSummaryTests
+```
+
+The suite generates only synthetic categorical summaries and covers valid,
+expired, source/commit mismatch, context mismatch, unsupported validator,
+unsupported assertion, exact duplicate, conflict, digest tamper, malformed, and
+planted-secret cases. It also runs `scan --sql-validation-summary` and release
+review composition, proves static evidence tiers remain unchanged, and verifies
+that rejected summaries flow into rule-backed packet gaps.
+
+Do not substitute terminal output, screenshots, SQL text, connection material,
+target names, ticket notes, or human-authored pass/fail prose for the versioned
+summary. TraceMap does not run the validator or connect to PostgreSQL during
+this smoke.
+
+## SQL validation harness smoke
+
+Run the standalone producer tests and the no-connection dry run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~SqlValidationHarnessTests
+rm -f /tmp/tracemap-sql-validation-summary.json
+dotnet run --project src/dotnet/TraceMap.SqlValidation.Cli -- validate \
+  --plan samples/sql-validation-harness/plan.example.json \
+  --out /tmp/tracemap-sql-validation-summary.json \
+  --dry-run
+```
+
+The tests use a synthetic executor and make no network connection. They cover
+strict local-plan parsing, deterministic summary generation, categorical pass,
+fail, indeterminate, and not-run behavior, canonical-digest compatibility with
+the ingestion reader, CLI error classification, create-new output semantics,
+and planted private-value non-disclosure.
+
+Do not use a live PostgreSQL target as a routine CI smoke. Live use is an
+explicit operator action under [`SQL_VALIDATION_HARNESS.md`](SQL_VALIDATION_HARNESS.md)
+and requires a least-privilege connection appropriate for the selected catalog
+checks.
+
+To validate the same compiled-in probes against a disposable synthetic
+PostgreSQL 16.8 server, with Docker running locally, use:
+
+```bash
+./scripts/smoke-sql-validation-postgres.sh
+```
+
+This opt-in integration smoke pins the official image by digest, exposes a
+random loopback port, uses no host volume, asserts pass/fail/not-run behavior
+and deterministic summaries, checks identifier and connection-data exclusion,
+and cleans all container and scratch state. It is not a substitute for an
+authorized target-specific operator validation.
