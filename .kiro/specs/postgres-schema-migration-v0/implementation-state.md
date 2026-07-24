@@ -8,9 +8,9 @@ facts and supported-family gaps.
 
 Validation:
 
-- focused PostgreSQL schema/migration tests: 5/5 passed
+- focused PostgreSQL schema/migration tests: 6/6 passed
 - `dotnet build src/dotnet/TraceMap.sln`: passed (known NU1903 warnings)
-- `dotnet test src/dotnet/TraceMap.sln --no-build`: 866/866 passed
+- `dotnet test src/dotnet/TraceMap.sln --no-build`: 867/867 passed
 - `./scripts/check-private-paths.sh`: passed
 - `git diff --check`: passed
 
@@ -27,6 +27,12 @@ masked structural hashes for readable statement gaps plus a file-level
 hash-of-hashes, and avoiding statement lexing when a conservative raw-text
 prefilter cannot contain either supported DDL family. Shared SQL read/parse
 caching remains a broader cross-extractor follow-up.
+
+Exact-head Codex follow-up: mixed supported/deferred top-level `CREATE TABLE`
+clauses now retain supported table/column evidence while emitting
+`CreateTableClauseUnsupported` with reduced coverage. A quoted-column
+regression proves the unsupported identity is not rendered; focused and full
+solution validation pass.
 
 Deferred: quoted identifiers; indexes; constraints; enums; routines;
 checked-in snapshots; EF Core/Npgsql migration APIs; execution/order graphs;

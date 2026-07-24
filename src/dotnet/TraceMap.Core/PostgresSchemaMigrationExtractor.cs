@@ -34,13 +34,15 @@ public static partial class PostgresSchemaMigrationExtractor
                     continue;
                 }
 
-                if (TryCreateTable(structural, out var schema, out var table, out var columns))
+                if (TryCreateTable(structural, out var schema, out var table, out var columns, out var hasUnsupportedClauses))
                 {
                     fileFacts.Add(Surface(manifest, FactTypes.PostgresMigrationOperation, file.RelativePath, statement, schema, table, null, "create-table", "migration-operation"));
                     fileFacts.Add(Surface(manifest, FactTypes.PostgresSchemaTableDeclared, file.RelativePath, statement, schema, table, null, "create-table", "table"));
                     foreach (var declaredColumn in columns)
                         fileFacts.Add(Surface(manifest, FactTypes.PostgresSchemaColumnDeclared, file.RelativePath, statement, schema, table, declaredColumn, "create-table", "column"));
-                    if (columns.Count == 0)
+                    if (hasUnsupportedClauses)
+                        fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "CreateTableClauseUnsupported", statementHash));
+                    else if (columns.Count == 0)
                         fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "CreateTableColumnsUnavailable", statementHash));
                     continue;
                 }
@@ -78,18 +80,35 @@ public static partial class PostgresSchemaMigrationExtractor
         sql.Contains("TABLE", StringComparison.OrdinalIgnoreCase)
         && (sql.Contains("CREATE", StringComparison.OrdinalIgnoreCase) || sql.Contains("ALTER", StringComparison.OrdinalIgnoreCase));
 
-    private static bool TryCreateTable(string sql, out string schema, out string table, out IReadOnlyList<string> columns)
+    private static bool TryCreateTable(
+        string sql,
+        out string schema,
+        out string table,
+        out IReadOnlyList<string> columns,
+        out bool hasUnsupportedClauses)
     {
         schema = table = string.Empty;
         columns = [];
+        hasUnsupportedClauses = false;
         var match = CreateTable().Match(sql);
         if (!match.Success) return false;
         schema = match.Groups["schema"].Success ? match.Groups["schema"].Value : string.Empty;
         table = match.Groups["table"].Value;
-        columns = SplitTopLevel(match.Groups["body"].Value)
-            .Select(part => part.Trim().Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty)
-            .Where(value => SafeIdentifier().IsMatch(value) && !ConstraintPrefixes.Contains(value, StringComparer.OrdinalIgnoreCase))
-            .Distinct(StringComparer.Ordinal).ToArray();
+        var declaredColumns = new List<string>();
+        var seenColumns = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var part in SplitTopLevel(match.Groups["body"].Value))
+        {
+            var candidate = part.Trim().Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+            if (SafeIdentifier().IsMatch(candidate) && !ConstraintPrefixes.Contains(candidate, StringComparer.OrdinalIgnoreCase))
+            {
+                if (seenColumns.Add(candidate)) declaredColumns.Add(candidate);
+            }
+            else
+            {
+                hasUnsupportedClauses = true;
+            }
+        }
+        columns = declaredColumns;
         return true;
     }
 

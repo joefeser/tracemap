@@ -74,6 +74,22 @@ public sealed class PostgresSchemaMigrationExtractorTests
     }
 
     [Fact]
+    public void Extract_labels_mixed_supported_and_unsupported_create_table_clauses_as_reduced()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "mixed.sql"),
+            "CREATE TABLE archive.records (visible_column text, \"private_column\" text);\n");
+
+        var facts = Extract(temp.Path);
+        var column = Assert.Single(facts, fact => fact.FactType == FactTypes.PostgresSchemaColumnDeclared);
+        Assert.Equal("visible_column", column.Properties["columnName"]);
+        var gap = Assert.Single(facts, fact => fact.RuleId == RuleIds.DatabasePostgresSchemaMigrationGap);
+        Assert.Equal("CreateTableClauseUnsupported", gap.Properties["classification"]);
+        Assert.Equal("reduced-static-evidence", gap.Properties["coverageLabel"]);
+        Assert.DoesNotContain("private_column", JsonSerializer.Serialize(facts), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Rule_catalog_documents_schema_migration_limitations()
     {
         var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
