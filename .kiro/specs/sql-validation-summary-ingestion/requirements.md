@@ -31,8 +31,9 @@ Related issue: [#508](https://github.com/joefeser/tracemap/issues/508).
 3. Freshness SHALL be evaluated against the explicit consumer-supplied
    `--sql-validation-as-of` instant so the same inputs produce the same result
    regardless of wall-clock time.
-4. Observation time SHALL not be after expiry or after the deterministic
-   evaluation time; expiry before evaluation produces an expired-summary gap.
+4. Observation time SHALL be strictly earlier than expiry and SHALL not be
+   after the deterministic evaluation time; expiry before evaluation produces
+   an expired-summary gap.
 5. The artifact digest SHALL cover canonical JSON with the digest value omitted.
 
 ### 3. Closed trust boundary

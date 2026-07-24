@@ -138,28 +138,32 @@ public static partial class SqlValidationSummaryReader
         var observations = new List<SqlValidationObservation>();
         foreach (var candidate in deduped)
         {
-            var source = expectedSources.Where(expected =>
+            var sourceCandidates = expectedSources.Where(expected =>
                     string.Equals(expected.Repository, candidate.Repository, StringComparison.Ordinal)
                     && string.Equals(expected.CommitSha, candidate.CommitSha, StringComparison.Ordinal))
                 .OrderBy(expected => expected.SourceLabel, StringComparer.Ordinal)
                 .ToArray();
-            if (source.Length == 0)
+            if (sourceCandidates.Length == 0)
             {
                 gaps.Add(Gap("SourceMismatch", candidate.ArtifactId, "The summary repository and commit did not match a selected scan source."));
                 continue;
             }
-            if (source.Length > 1)
-            {
-                gaps.Add(Gap("AmbiguousSource", candidate.ArtifactId, "The summary matched more than one selected source and was not accepted."));
-                continue;
-            }
 
-            var expected = source[0];
-            if (!expected.Contexts.Contains(candidate.Context))
+            var contextMatches = sourceCandidates
+                .Where(expected => expected.Contexts.Contains(candidate.Context))
+                .ToArray();
+            if (contextMatches.Length == 0)
             {
                 gaps.Add(Gap("ContextMismatch", candidate.ArtifactId, "The categorical target context did not match cataloged static SQL context."));
                 continue;
             }
+            if (contextMatches.Length > 1)
+            {
+                gaps.Add(Gap("AmbiguousSource", candidate.ArtifactId, "The summary repository, commit, and categorical target context matched more than one selected source and was not accepted."));
+                continue;
+            }
+
+            var expected = contextMatches[0];
             if (candidate.ObservedAt >= candidate.ExpiresAt || candidate.ObservedAt > expected.EvaluatedAt)
             {
                 gaps.Add(Gap("InvalidObservationWindow", candidate.ArtifactId, "The observation timestamps were inconsistent with deterministic scan time."));

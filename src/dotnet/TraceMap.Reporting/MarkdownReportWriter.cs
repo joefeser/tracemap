@@ -681,7 +681,8 @@ public static class MarkdownReportWriter
         lines.Add($"- Intended/validation milestones: `{packet.Milestones.Count}`");
         lines.Add($"- Prerequisite rows: `{packet.Prerequisites.Count}`");
         lines.Add($"- Protected steps: `{packet.ProtectedSteps.Count}`");
-        lines.Add($"- Static gaps: `{packet.Gaps.Count}`");
+        lines.Add($"- Static gaps: `{packet.Gaps.Count(gap => gap.Category != "observed-validation")}`");
+        lines.Add($"- Observed-validation gaps: `{packet.Gaps.Count(gap => gap.Category == "observed-validation")}`");
         lines.Add($"- Packet rule: `{RuleIds.DatabaseSqlOperatorRunbookPacket}`");
     }
 
