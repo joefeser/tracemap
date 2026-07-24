@@ -32,6 +32,13 @@ scratch deletion best-effort and expanding the public-safe assertion to cover
 common connection-string key forms. The disposable PostgreSQL smoke passed
 again after both changes.
 
+Exact-head Codex follow-up: cleanup now uses `docker rm -fv` so the official
+image's anonymous data volume is removed, and readiness now executes `SELECT 1`
+over the final loopback TCP listener against the requested database rather
+than accepting the entrypoint's temporary socket-only server. Bash syntax,
+the disposable smoke, container cleanup, and 29/29 focused SQL-validation
+tests passed after these changes.
+
 Deferred: reusable archive/source plan templates and operator packet; public
 static-versus-observed story; PostgreSQL schema/migration adapter work; live
 RDS, `pg_cron`, `dblink`, execution, migration, rollback, and richer Access
