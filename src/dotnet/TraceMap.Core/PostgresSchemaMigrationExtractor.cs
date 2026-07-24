@@ -83,6 +83,12 @@ public static partial class PostgresSchemaMigrationExtractor
                     continue;
                 }
 
+                if (CreateRoutinePrefix().IsMatch(structural) && !HasCompleteRoutineBody(structural))
+                {
+                    fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "IncompleteDdlStatement", statementHash));
+                    continue;
+                }
+
                 if (TryCreateRoutine(structural, out schema, out var routineName, out var routineKind))
                 {
                     fileFacts.Add(RoutineSurface(manifest, FactTypes.PostgresMigrationOperation, file.RelativePath, statement, schema, routineName, routineKind, "migration-operation"));
@@ -286,6 +292,12 @@ public static partial class PostgresSchemaMigrationExtractor
             else if (character == ')' && --depth < 0) return false;
         }
         return depth == 0;
+    }
+
+    private static bool HasCompleteRoutineBody(string value)
+    {
+        var beginAtomic = value.IndexOf("BEGIN ATOMIC", StringComparison.OrdinalIgnoreCase);
+        return beginAtomic < 0 || value[(beginAtomic + "BEGIN ATOMIC".Length)..].TrimEnd().EndsWith("END", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasTopLevelComma(string value)
