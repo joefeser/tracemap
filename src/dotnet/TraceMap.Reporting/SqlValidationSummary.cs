@@ -138,29 +138,33 @@ public static partial class SqlValidationSummaryReader
         var observations = new List<SqlValidationObservation>();
         foreach (var candidate in deduped)
         {
-            var source = expectedSources.Where(expected =>
+            var sourceCandidates = expectedSources.Where(expected =>
                     string.Equals(expected.Repository, candidate.Repository, StringComparison.Ordinal)
                     && string.Equals(expected.CommitSha, candidate.CommitSha, StringComparison.Ordinal))
                 .OrderBy(expected => expected.SourceLabel, StringComparer.Ordinal)
                 .ToArray();
-            if (source.Length == 0)
+            if (sourceCandidates.Length == 0)
             {
                 gaps.Add(Gap("SourceMismatch", candidate.ArtifactId, "The summary repository and commit did not match a selected scan source."));
                 continue;
             }
-            if (source.Length > 1)
-            {
-                gaps.Add(Gap("AmbiguousSource", candidate.ArtifactId, "The summary matched more than one selected source and was not accepted."));
-                continue;
-            }
 
-            var expected = source[0];
-            if (!expected.Contexts.Contains(candidate.Context))
+            var contextMatches = sourceCandidates
+                .Where(expected => expected.Contexts.Contains(candidate.Context))
+                .ToArray();
+            if (contextMatches.Length == 0)
             {
                 gaps.Add(Gap("ContextMismatch", candidate.ArtifactId, "The categorical target context did not match cataloged static SQL context."));
                 continue;
             }
-            if (candidate.ObservedAt > candidate.ExpiresAt || candidate.ObservedAt > expected.EvaluatedAt)
+            if (contextMatches.Length > 1)
+            {
+                gaps.Add(Gap("AmbiguousSource", candidate.ArtifactId, "The summary repository, commit, and categorical target context matched more than one selected source and was not accepted."));
+                continue;
+            }
+
+            var expected = contextMatches[0];
+            if (candidate.ObservedAt >= candidate.ExpiresAt || candidate.ObservedAt > expected.EvaluatedAt)
             {
                 gaps.Add(Gap("InvalidObservationWindow", candidate.ArtifactId, "The observation timestamps were inconsistent with deterministic scan time."));
                 continue;
@@ -242,8 +246,10 @@ public static partial class SqlValidationSummaryReader
             var root = document.RootElement;
             RequireObject(root, "summary");
             RequireProperties(root, "schemaVersion", "artifactId", "repository", "commitSha", "observedAt", "expiresAt", "targetContext", "validator", "artifact", "publicClaimLevel", "assertions", "limitations");
-            artifactId = RequiredString(root, "artifactId");
-            if (!SafeId().IsMatch(artifactId)) return Reject("MalformedSummary", artifactId, "The artifact ID was outside the safe token contract.");
+            var suppliedArtifactId = RequiredString(root, "artifactId");
+            if (!SafeId().IsMatch(suppliedArtifactId))
+                return Reject("MalformedSummary", "unidentified", "The artifact ID was outside the safe token contract.");
+            artifactId = suppliedArtifactId;
             if (RequiredString(root, "schemaVersion") != SchemaVersion) return Reject("UnsupportedSchema", artifactId, "The SQL validation summary schema version is unsupported.");
             var repository = RequiredString(root, "repository");
             if (!SafeRepository().IsMatch(repository)) return Reject("MalformedSummary", artifactId, "The repository identity was outside the safe token contract.");
@@ -251,6 +257,8 @@ public static partial class SqlValidationSummaryReader
             if (!CommitSha().IsMatch(commitSha)) return Reject("MalformedSummary", artifactId, "The commit SHA was not a full hexadecimal identity.");
             var observedAt = RequiredTimestamp(root, "observedAt");
             var expiresAt = RequiredTimestamp(root, "expiresAt");
+            if (observedAt >= expiresAt)
+                return Reject("InvalidObservationWindow", artifactId, "The observation expiry must be strictly later than the observation time.");
 
             var contextElement = root.GetProperty("targetContext");
             RequireObject(contextElement, "targetContext");
