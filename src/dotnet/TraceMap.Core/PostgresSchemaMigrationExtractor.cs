@@ -138,6 +138,7 @@ public static partial class PostgresSchemaMigrationExtractor
         CreateTablePrefix().IsMatch(sql)
         || AlterTablePrefix().IsMatch(sql)
         || DropTablePrefix().IsMatch(sql)
+        || UnsupportedDestructiveDdlPrefix().IsMatch(sql)
         || CreateIndexPrefix().IsMatch(sql)
         || CreateEnumPrefix().IsMatch(sql)
         || CreateRoutinePrefix().IsMatch(sql);
@@ -151,7 +152,9 @@ public static partial class PostgresSchemaMigrationExtractor
             && (sql.Contains("INDEX", StringComparison.OrdinalIgnoreCase)
                 || sql.Contains("TYPE", StringComparison.OrdinalIgnoreCase)
                 || sql.Contains("FUNCTION", StringComparison.OrdinalIgnoreCase)
-                || sql.Contains("PROCEDURE", StringComparison.OrdinalIgnoreCase)));
+                || sql.Contains("PROCEDURE", StringComparison.OrdinalIgnoreCase)))
+        || sql.Contains("DROP", StringComparison.OrdinalIgnoreCase)
+        || sql.Contains("TRUNCATE", StringComparison.OrdinalIgnoreCase);
 
     private static bool TryCreateTable(
         string sql,
@@ -616,6 +619,7 @@ public static partial class PostgresSchemaMigrationExtractor
     [GeneratedRegex(@"^CREATE\s+(?:UNLOGGED\s+|TEMP(?:ORARY)?\s+)?TABLE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateTablePrefix();
     [GeneratedRegex(@"^ALTER\s+TABLE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex AlterTablePrefix();
     [GeneratedRegex(@"^DROP\s+TABLE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex DropTablePrefix();
+    [GeneratedRegex(@"^(?:DROP\b|TRUNCATE\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex UnsupportedDestructiveDdlPrefix();
     [GeneratedRegex(@"^CREATE\s+(?:UNIQUE\s+)?INDEX\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateIndexPrefix();
     [GeneratedRegex(@"^CREATE\s+TYPE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateEnumPrefix();
     [GeneratedRegex(@"^CREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateRoutinePrefix();

@@ -292,6 +292,28 @@ public sealed class PostgresSchemaMigrationExtractorTests
     }
 
     [Fact]
+    public void Extract_gaps_unsupported_destructive_ddl_without_leaking_identity()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "unsupported-destructive.sql"), """
+            DROP INDEX private_index;
+            DROP TYPE private_type;
+            TRUNCATE TABLE private_records;
+            """);
+
+        var facts = Extract(temp.Path);
+        var json = JsonSerializer.Serialize(facts);
+
+        Assert.Single(facts, fact => fact.FactType == FactTypes.PostgresMigrationFileDeclared);
+        Assert.Equal(3, facts.Count(fact => fact.RuleId == RuleIds.DatabasePostgresSchemaMigrationGap));
+        Assert.All(facts.Where(fact => fact.RuleId == RuleIds.DatabasePostgresSchemaMigrationGap), fact =>
+            Assert.Equal("UnsupportedSchemaDdlShape", fact.Properties["classification"]));
+        Assert.DoesNotContain("private_index", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_type", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_records", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Extract_gaps_unsafe_or_deferred_constraint_and_index_shapes_without_leaking_identity()
     {
         using var temp = new TempDirectory();
