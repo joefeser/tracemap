@@ -226,6 +226,72 @@ public sealed class PostgresSchemaMigrationExtractorTests
     }
 
     [Fact]
+    public void Extract_emits_bounded_drop_and_rename_operations()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "destructive.sql"), """
+            ALTER TABLE archive.records RENAME COLUMN retention_state TO archive_state;
+            ALTER TABLE IF EXISTS ONLY archive.records DROP COLUMN IF EXISTS legacy_payload RESTRICT;
+            ALTER TABLE archive.records RENAME TO archived_records;
+            DROP TABLE IF EXISTS archive.retired_records CASCADE;
+            """);
+
+        var facts = Extract(temp.Path);
+        var operations = facts.Where(fact => fact.FactType == FactTypes.PostgresMigrationOperation)
+            .OrderBy(fact => fact.Properties["statementOrdinal"], StringComparer.Ordinal).ToArray();
+
+        Assert.Equal(4, operations.Length);
+        Assert.Equal(
+            ["rename-column", "drop-column", "rename-table", "drop-table"],
+            operations.Select(fact => fact.Properties["operationKind"]).ToArray());
+
+        Assert.Equal("records", operations[0].Properties["tableName"]);
+        Assert.Equal("retention_state", operations[0].Properties["columnName"]);
+        Assert.Equal("archive_state", operations[0].Properties["newColumnName"]);
+        Assert.Equal("restrict", operations[1].Properties["dropBehavior"]);
+        Assert.Equal("legacy_payload", operations[1].Properties["columnName"]);
+        Assert.Equal("archived_records", operations[2].Properties["newTableName"]);
+        Assert.Equal("retired_records", operations[3].Properties["tableName"]);
+        Assert.Equal("cascade", operations[3].Properties["dropBehavior"]);
+        Assert.All(operations, fact =>
+        {
+            Assert.Equal("archive", fact.Properties["schemaName"]);
+            Assert.Equal("bounded-static-evidence", fact.Properties["coverageLabel"]);
+            Assert.Equal(RuleIds.DatabasePostgresSchemaMigration, fact.RuleId);
+            Assert.Equal(EvidenceTiers.Tier2Structural, fact.EvidenceTier);
+            Assert.Equal(ScannerVersions.PostgresSchemaMigrationExtractor, fact.Evidence.ExtractorVersion);
+            Assert.Equal("destructive.sql", fact.Evidence.FilePath);
+            Assert.Equal("0123456789abcdef", fact.CommitSha);
+            Assert.Contains("execution order", fact.Properties["limitations"], StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    [Fact]
+    public void Extract_gaps_quoted_multi_object_and_multi_subcommand_destructive_shapes_without_leaking_identity()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "deferred-destructive.sql"), """
+            DROP TABLE archive.private_one, archive.private_two;
+            DROP TABLE "private_schema"."private_table";
+            ALTER TABLE archive.records RENAME COLUMN "private_column" TO visible_column;
+            ALTER TABLE archive.records DROP COLUMN first_private, DROP COLUMN second_private;
+            """);
+
+        var facts = Extract(temp.Path);
+        var json = JsonSerializer.Serialize(facts);
+
+        Assert.Equal(4, facts.Count(fact => fact.RuleId == RuleIds.DatabasePostgresSchemaMigrationGap));
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.PostgresMigrationOperation);
+        Assert.DoesNotContain("private_one", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_two", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_schema", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_table", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_column", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("first_private", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("second_private", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Extract_gaps_unsafe_or_deferred_constraint_and_index_shapes_without_leaking_identity()
     {
         using var temp = new TempDirectory();
@@ -293,8 +359,11 @@ public sealed class PostgresSchemaMigrationExtractorTests
         Assert.Contains("CREATE INDEX", block, StringComparison.Ordinal);
         Assert.Contains("CREATE TYPE", block, StringComparison.Ordinal);
         Assert.Contains("CREATE FUNCTION", block, StringComparison.Ordinal);
+        Assert.Contains("DROP TABLE", block, StringComparison.Ordinal);
+        Assert.Contains("RENAME TABLE", block, StringComparison.Ordinal);
         Assert.Contains("routine signatures", block, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("referential integrity", block, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("data loss", block, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -312,6 +381,8 @@ public sealed class PostgresSchemaMigrationExtractorTests
             CREATE TYPE archive.retention_state AS ENUM ('ready', 'archived');
             CREATE FUNCTION archive.move_batch(batch_size integer)
             RETURNS integer LANGUAGE sql AS $$ SELECT batch_size $$;
+            ALTER TABLE archive.records RENAME COLUMN id TO record_id;
+            DROP TABLE archive.retired_records RESTRICT;
             """);
 
         var first = ScanEngine.Scan(new ScanOptions(repo.Path, firstOutput.Path)).Facts
@@ -326,6 +397,10 @@ public sealed class PostgresSchemaMigrationExtractorTests
         Assert.Contains(first, fact => fact.FactType == FactTypes.PostgresSchemaIndexDeclared);
         Assert.Contains(first, fact => fact.FactType == FactTypes.PostgresSchemaEnumDeclared);
         Assert.Contains(first, fact => fact.FactType == FactTypes.PostgresSchemaRoutineDeclared);
+        Assert.Contains(first, fact => fact.FactType == FactTypes.PostgresMigrationOperation
+            && fact.Properties.GetValueOrDefault("operationKind") == "rename-column");
+        Assert.Contains(first, fact => fact.FactType == FactTypes.PostgresMigrationOperation
+            && fact.Properties.GetValueOrDefault("operationKind") == "drop-table");
     }
 
     [Fact]
@@ -339,6 +414,8 @@ public sealed class PostgresSchemaMigrationExtractorTests
             CREATE TYPE archive.retention_state AS ENUM ('sentinel-private-label');
             CREATE FUNCTION archive.move_batch(private_limit integer)
             RETURNS integer LANGUAGE sql AS $$ SELECT private_limit $$;
+            ALTER TABLE archive.records RENAME COLUMN id TO record_id;
+            DROP TABLE archive.retired_records RESTRICT;
             """);
         var manifest = Manifest();
         var facts = PostgresSchemaMigrationExtractor.Extract(repo.Path, manifest, FileInventory.Collect(repo.Path));
@@ -359,6 +436,13 @@ public sealed class PostgresSchemaMigrationExtractorTests
             && finding.Metadata.Any(pair => pair.Key == "routineKind" && pair.Value == "function")
             && finding.Metadata.Any(pair => pair.Key == "routineSignatureOmitted" && pair.Value == "true")
             && finding.Metadata.Any(pair => pair.Key == "routineBodyOmitted" && pair.Value == "true"));
+        Assert.Contains(review.SqlEvidence.Findings, finding =>
+            finding.Metadata.Any(pair => pair.Key == "operationKind" && pair.Value == "rename-column")
+            && finding.Metadata.Any(pair => pair.Key == "columnName" && pair.Value == "id")
+            && finding.Metadata.Any(pair => pair.Key == "newColumnName" && pair.Value == "record_id"));
+        Assert.Contains(review.SqlEvidence.Findings, finding =>
+            finding.Metadata.Any(pair => pair.Key == "operationKind" && pair.Value == "drop-table")
+            && finding.Metadata.Any(pair => pair.Key == "dropBehavior" && pair.Value == "restrict"));
         Assert.All(review.SqlEvidence.Findings.Where(finding => finding.RuleId == RuleIds.DatabasePostgresSchemaMigration), finding =>
         {
             Assert.Equal(manifest.CommitSha, finding.CommitSha);

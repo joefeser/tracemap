@@ -1069,3 +1069,20 @@ repository-relative span, commit SHA, extractor version, coverage label, and
 limitations while omitting enum labels, routine signatures, parameters,
 return declarations, languages, bodies, literals, and raw SQL. Unsupported
 recognized-family shapes must emit Tier 4 categorical gaps.
+
+### PostgreSQL destructive migration evidence
+
+For changes to bounded PostgreSQL drop/rename projection, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~PostgresSchemaMigrationExtractorTests
+```
+
+Use checked-in synthetic SQL containing single-object `DROP TABLE`,
+single-subcommand `ALTER TABLE ... DROP COLUMN`, `RENAME COLUMN`, and
+`RENAME TO`. Confirm facts retain safe source/new identities, categorical drop
+behavior, rule ID, Tier 2, repository-relative span, commit SHA, extractor
+version, coverage label, and limitations. Quoted identifiers, multi-object
+drops, and multi-subcommand alterations must emit Tier 4 categorical gaps
+without raw SQL or unsupported identities.
