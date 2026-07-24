@@ -213,7 +213,7 @@ public sealed class AccessMacroReportingTests
             index,
             index,
             Path.Combine(temp.Path, "release-review.md")));
-        Assert.Equal("1.1", review.Version);
+        Assert.Equal("1.2", review.Version);
         Assert.Equal(ReleaseReviewStatuses.Available, review.AccessEvidence.Status);
         Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "database-inventory"));
         Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "table"));
