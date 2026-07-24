@@ -188,6 +188,9 @@ public static class TraceMapCommand
             return 1;
         }
 
+        var sqlValidationSummaryPaths = values.GetMany("--sql-validation-summary");
+        var sqlValidationAsOf = ParseSqlValidationAsOf(values, sqlValidationSummaryPaths);
+
         var result = ScanEngine.Scan(new ScanOptions(
             repoPath,
             outputPath,
@@ -204,7 +207,12 @@ public static class TraceMapCommand
         await ManifestWriter.WriteAsync(Path.Combine(fullOutputPath, "scan-manifest.json"), result.Manifest, cancellationToken);
         await JsonlFactWriter.WriteAsync(Path.Combine(fullOutputPath, "facts.ndjson"), result.Facts, cancellationToken);
         SqliteIndexWriter.Write(Path.Combine(fullOutputPath, "index.sqlite"), result.Manifest, result.Facts);
-        var packetCandidate = SqlRunbookPacketBuilder.Build(result);
+        var staticPacket = SqlRunbookPacketBuilder.Build(result);
+        var validationComposition = await SqlValidationSummaryReader.ReadAsync(
+            sqlValidationSummaryPaths,
+            [SqlRunbookPacketBuilder.ValidationExpectedSource(result, staticPacket, evaluatedAt: sqlValidationAsOf)],
+            cancellationToken);
+        var packetCandidate = SqlRunbookPacketBuilder.Build(result, validationComposition);
         await MarkdownReportWriter.WriteAsync(Path.Combine(fullOutputPath, "report.md"), result, packetCandidate, cancellationToken);
         if (SqlRunbookPacketBuilder.HasMeaningfulContent(packetCandidate))
             await SqlRunbookPacketWriter.WriteAsync(fullOutputPath, packetCandidate, cancellationToken);
@@ -760,6 +768,9 @@ public static class TraceMapCommand
             return 1;
         }
 
+        var sqlValidationSummaryPaths = values.GetMany("--sql-validation-summary");
+        var sqlValidationAsOf = ParseSqlValidationAsOf(values, sqlValidationSummaryPaths);
+
         var result = await ReleaseReviewReporter.WriteAsync(
             new ReleaseReviewOptions(
                 beforePath,
@@ -782,7 +793,9 @@ public static class TraceMapCommand
                 ParsePositiveInt(values, "--max-paths", 25),
                 ParsePositiveInt(values, "--max-gaps", 1000),
                 ParsePositiveInt(values, "--max-checklist-items", 50),
-                values.HasFlag("--include-priority")),
+                values.HasFlag("--include-priority"),
+                sqlValidationSummaryPaths,
+                sqlValidationAsOf),
             cancellationToken);
 
         await output.WriteLineAsync($"TraceMap release-review completed: {result.MarkdownPath ?? result.JsonPath}");
@@ -1655,6 +1668,22 @@ public static class TraceMapCommand
         throw new ArgumentException("Date values must be full dates or year-month values.");
     }
 
+    private static DateTimeOffset? ParseSqlValidationAsOf(ParsedOptions values, IReadOnlyList<string> summaryPaths)
+    {
+        var text = values.GetValueOrDefault("--sql-validation-as-of");
+        if (summaryPaths.Count == 0)
+        {
+            if (!string.IsNullOrWhiteSpace(text))
+                throw new ArgumentException("--sql-validation-as-of requires at least one --sql-validation-summary.");
+            return null;
+        }
+        if (string.IsNullOrWhiteSpace(text))
+            throw new ArgumentException("--sql-validation-summary requires --sql-validation-as-of <RFC3339 timestamp> for deterministic freshness evaluation.");
+        if (!SqlValidationSummaryReader.TryParseTimestamp(text, out var value))
+            throw new ArgumentException("--sql-validation-as-of must use RFC3339 with an explicit offset.");
+        return value;
+    }
+
     private static bool IsHelp(string arg)
     {
         return arg is "-h" or "--help" or "help";
@@ -1777,7 +1806,7 @@ public static class TraceMapCommand
     {
         return """
             Usage:
-              tracemap scan --repo <path> --out <path> [--solution <path>] [--project <path>] [--include <glob>] [--exclude <glob>] [--target-framework <tfm>] [--restore]
+              tracemap scan --repo <path> --out <path> [--solution <path>] [--project <path>] [--include <glob>] [--exclude <glob>] [--target-framework <tfm>] [--restore] [--sql-validation-summary <path>]
 
             Required:
               --repo <path>   Repository or folder to scan.
@@ -1790,6 +1819,10 @@ public static class TraceMapCommand
               --exclude <glob>         Exclude matching inventoried paths. Repeatable.
               --target-framework <tfm> MSBuild TargetFramework property for semantic load.
               --restore                Run dotnet restore for selected solution/project targets before semantic load.
+              --sql-validation-summary <path>
+                                       Explicit sql-validation-summary/v1 input. Repeatable; never executed.
+              --sql-validation-as-of <timestamp>
+                                       Required with summaries; RFC3339 instant used for deterministic freshness.
 
             Outputs:
               scan-manifest.json
@@ -2129,6 +2162,10 @@ public static class TraceMapCommand
               --contract-delta <path>    Include contract delta impact context.
               --sql-schema-delta <path>  Validate SQL/schema delta input and report workflow status.
               --package-delta <path>     Validate package delta input and report deferred package-upgrade status.
+              --sql-validation-summary <path>
+                                         Compose an explicit sql-validation-summary/v1 input. Repeatable; never executed.
+              --sql-validation-as-of <timestamp>
+                                         Required with summaries; RFC3339 instant used for deterministic freshness.
               --include-paths            Include bounded path context where combined indexes support it.
               --include-reverse          Include bounded reverse context where combined indexes support it.
               --include-priority         Include deterministic review priority scoring in release-review output.

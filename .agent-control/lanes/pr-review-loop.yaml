@@ -10,10 +10,12 @@ agentControl:
     - requiredReviewerBatching
     - runPrLoopUntilTerminal
     - quietJson
+    - externalReviewReceipts
+    - boundedLocalReviewFallback
 
 lane:
   id: tracemap-pr-review-loop
-  version: 0.1.0
+  version: 0.2.0
   status: active
   description: >
     Repo-local PR-loop policy for TraceMap. This YAML file is lane
@@ -22,8 +24,10 @@ lane:
     findings. Qodo remains required review evidence but uses the documented
     one-pass quorum posture below, so ACK can process an exact-head Codex result
     without waiting for a Qodo refresh; stale reviews cannot manufacture merge
-    readiness. Bounded timeouts produce typed human-decision evidence instead
-    of endless retags.
+    readiness. After the bounded Codex freshness cycle is exhausted, ACK may
+    run the configured read-only Claude Opus reviewer and admit only its
+    exact-head owner-authorized receipt. Bounded timeouts produce typed
+    human-decision evidence instead of endless retags.
 
 # agent-control lane config key; not an inter-agent coordination packet payload.
 prLoopPacket:
@@ -54,6 +58,35 @@ prLoopPacket:
         preferAllReturned: false
         waitForAllTimeoutSeconds: 900
         noneReturnedStopReason: REQUIRED_REVIEW_QUORUM_NOT_MET
+  # Trusted-base authorization: the PR introducing this block must be merged
+  # manually before ACK can use it. Head-only policy cannot authorize itself.
+  localReviewers:
+    claude-local:
+      enabled: true
+      provider: claude-code
+      authority: owner_authorized_receipt
+      requirement: try
+      quorumGroups:
+        - trustedCodeReview
+      admitters:
+        - joefeser
+      model: claude-opus-4-8
+      modelFamily: claude-opus-4.8
+      kind: implementation
+      targets:
+        - "."
+      outputDir: .agent-control/tmp/local-reviews/claude
+      timeoutSeconds: 1800
+      maxBudgetUsd: 4
+      allowDirty: false
+  localReviewFallback:
+    enabled: true
+    trigger: fresh_review_fix_cycle_ceiling
+    reviewer: claude-local
+    # Two durable attempts at $4 each bound aggregate authorized spend to $8.
+    maxAttempts: 2
+    maxFixCycles: 2
+    postTerminalComment: true
   pushPolicy:
     mode: batch_until_review_settles
     localFixesPresent: false

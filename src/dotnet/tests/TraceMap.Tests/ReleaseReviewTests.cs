@@ -843,6 +843,12 @@ public sealed class ReleaseReviewTests
         Assert.Empty(gapCapped.Report.ApiDtoChanges.Gaps);
         Assert.Empty(gapCapped.Report.SqlSchemaImpact.Gaps);
         Assert.Empty(gapCapped.Report.PackageImpact.Gaps);
+        Assert.Equal(ReleaseReviewStatuses.Unavailable, gapCapped.Report.ApiDtoChanges.Status);
+        Assert.Equal(ReleaseReviewStatuses.Unavailable, gapCapped.Report.SqlSchemaImpact.Status);
+        Assert.Equal(ReleaseReviewStatuses.Deferred, gapCapped.Report.PackageImpact.Status);
+        Assert.Equal(1, gapCapped.Report.ApiDtoChanges.OmittedCount);
+        Assert.Equal(1, gapCapped.Report.SqlSchemaImpact.OmittedCount);
+        Assert.Equal(1, gapCapped.Report.PackageImpact.OmittedCount);
 
         var checklistCapped = await ReleaseReviewReporter.WriteAsync(new ReleaseReviewOptions(
             beforeCombined,
@@ -938,6 +944,7 @@ public sealed class ReleaseReviewTests
             ReleaseReviewClassifications.SelectorNoMatch,
             "release.review.rollup.v1",
             1,
+            0,
             0,
             0,
             0,
@@ -1241,6 +1248,7 @@ public sealed class ReleaseReviewTests
             false,
             false,
             false,
+            false,
             100,
             50,
             25,
@@ -1274,6 +1282,7 @@ public sealed class ReleaseReviewTests
             0,
             0,
             0,
+            0,
             1,
             0,
             0,
@@ -1289,6 +1298,7 @@ public sealed class ReleaseReviewTests
             snapshot with { Side = "after" },
             summary,
             [],
+            section,
             section,
             section,
             section,
