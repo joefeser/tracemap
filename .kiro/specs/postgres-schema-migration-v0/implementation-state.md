@@ -34,6 +34,13 @@ clauses now retain supported table/column evidence while emitting
 regression proves the unsupported identity is not rendered; focused and full
 solution validation pass.
 
+Main-promotion review follow-up: release-review now includes the schema
+migration rule and gap rule in its SQL evidence projection, renders
+schema/migration facts with safe upstream provenance and allowlisted structural
+metadata, and preserves categorical schema-migration gaps. A schema-only index
+regression proves the SQL evidence section remains available instead of
+reporting `CompatibleEvidenceUnavailable`.
+
 Deferred: quoted identifiers; indexes; constraints; enums; routines;
 checked-in snapshots; EF Core/Npgsql migration APIs; execution/order graphs;
 live introspection; shared cross-extractor SQL read/statement caching; and all

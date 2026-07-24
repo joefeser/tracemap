@@ -260,7 +260,29 @@ public static class ReleaseReviewReporter
         RuleIds.DatabasePostgresPermissionStatement,
         RuleIds.DatabasePostgresPermissionPrerequisite,
         RuleIds.DatabasePostgresPermissionCoverage,
-        RuleIds.DatabasePostgresPermissionGap
+        RuleIds.DatabasePostgresPermissionGap,
+        RuleIds.DatabasePostgresSchemaMigration,
+        RuleIds.DatabasePostgresSchemaMigrationGap
+    };
+
+    private static readonly HashSet<string> SqlSchemaMigrationMetadataKeys = new(StringComparer.Ordinal)
+    {
+        "objectKind",
+        "operationKind",
+        "schemaName",
+        "tableName",
+        "columnName",
+        "constraintName",
+        "constraintKind",
+        "indexName",
+        "indexKind",
+        "accessMethod",
+        "columnNames",
+        "referencedSchemaName",
+        "referencedTableName",
+        "referencedColumnNames",
+        "statementOrdinal",
+        "coverageLabel"
     };
 
     private static readonly HashSet<string> ValidScopes = new(StringComparer.Ordinal)
@@ -884,6 +906,24 @@ public static class ReleaseReviewReporter
         foreach (var input in inputs.OrderBy(input => input.SourceLabel, StringComparer.Ordinal))
         {
             var packet = SqlRunbookPacketBuilder.Build(input.Result);
+            foreach (var fact in input.Result.Facts
+                .Where(fact => fact.RuleId == RuleIds.DatabasePostgresSchemaMigration && fact.Evidence is not null)
+                .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                .ThenBy(fact => fact.Evidence.StartLine)
+                .ThenBy(fact => fact.FactId, StringComparer.Ordinal))
+            {
+                var displayName = fact.TargetSymbol ?? fact.ContractElement ?? fact.FactType;
+                findings.Add(SqlEvidenceFinding(
+                    input.SourceLabel,
+                    "schema-migration",
+                    displayName,
+                    ReleaseReviewClassifications.NoActionableEvidence,
+                    SqlRunbookPacketBuilder.ProjectFactEvidence(fact, input.Result.Manifest.CommitSha ?? "unknown"),
+                    fact.Properties
+                        .Where(pair => SqlSchemaMigrationMetadataKeys.Contains(pair.Key))
+                        .Select(pair => new KeyValuePair<string, string?>(pair.Key, pair.Value))
+                        .Append(Pair("factType", fact.FactType))));
+            }
             foreach (var group in packet.StepGroups)
                 foreach (var step in group.Steps)
                     findings.Add(SqlEvidenceFinding(input.SourceLabel, "context-step", step.StepKind, ReleaseReviewClassifications.NoActionableEvidence, step.Evidence,
