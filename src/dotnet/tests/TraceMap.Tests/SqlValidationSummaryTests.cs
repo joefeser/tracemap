@@ -95,6 +95,32 @@ public sealed class SqlValidationSummaryTests
         Assert.DoesNotContain("missing-two", safe, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Same_commit_sources_are_disambiguated_by_categorical_context()
+    {
+        using var temp = new TempDirectory();
+        var path = await WriteSummaryAsync(temp.Path, "summary.json");
+        var otherContext = new SqlValidationTargetContext("postgresql", "source", "source-data", "application", "manual");
+        var expectedSources = new[]
+        {
+            new SqlValidationExpectedSource("archive", Repository, Commit, EvaluatedAt, [Context]),
+            new SqlValidationExpectedSource("source", Repository, Commit, EvaluatedAt, [otherContext])
+        };
+
+        var result = await SqlValidationSummaryReader.ReadAsync([path], expectedSources);
+
+        Assert.Single(result.Observations);
+        Assert.Empty(result.Gaps);
+
+        var ambiguous = await SqlValidationSummaryReader.ReadAsync([path],
+        [
+            expectedSources[0],
+            new SqlValidationExpectedSource("archive-copy", Repository, Commit, EvaluatedAt, [Context])
+        ]);
+        Assert.Empty(ambiguous.Observations);
+        Assert.Contains(ambiguous.Gaps, gap => gap.Code == "AmbiguousSource");
+    }
+
     [Theory]
     [InlineData("expired", "ExpiredSummary")]
     [InlineData("zero-window", "InvalidObservationWindow")]
@@ -183,6 +209,25 @@ public sealed class SqlValidationSummaryTests
             before, after, Path.Combine(temp.Path, "rejected"), Scope: "sql-evidence", SqlValidationSummaryPaths: [expired], SqlValidationAsOf: EvaluatedAt));
         Assert.Equal(ReleaseReviewStatuses.Unavailable, rejected.SqlValidationObservations.Status);
         Assert.Contains(rejected.Gaps, gap => gap.GapKind == "ExpiredSummary" && gap.RuleId == RuleIds.DatabaseSqlValidationSummaryGap);
+    }
+
+    [Fact]
+    public async Task Observed_validation_gaps_do_not_reduce_or_inflate_static_coverage()
+    {
+        using var temp = new TempDirectory();
+        var expired = await WriteSummaryAsync(temp.Path, "expired.json", root =>
+            root["expiresAt"] = "2026-07-22T11:00:00.0000000+00:00");
+        var composition = await ReadAsync([expired]);
+        var scan = ScanResultWithContext();
+
+        var packet = SqlRunbookPacketBuilder.Build(scan, composition);
+        var report = MarkdownReportWriter.Build(scan, packet);
+
+        Assert.Equal("complete-static-evidence", packet.Coverage.Status);
+        Assert.DoesNotContain("sql-static-analysis", packet.Coverage.ReducedComponents);
+        Assert.Contains(packet.Gaps, gap => gap.Category == "observed-validation" && gap.Code == "ExpiredSummary");
+        Assert.Contains("- Static gaps: `0`", report);
+        Assert.Contains("- Observed-validation gaps: `1`", report);
     }
 
     [Fact]

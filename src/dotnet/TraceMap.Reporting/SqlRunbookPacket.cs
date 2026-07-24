@@ -102,9 +102,11 @@ public static class SqlRunbookPacketBuilder
             Ordinal(f), "validation-step-present", "validation-evidence-not-provided", Evidence(f, commitSha))).ToArray();
         var cleanup = contexts.Where(f => Value(f, "stepKind", "") == "destructive-operation")
             .Select(f => new SqlRunbookCleanup(Ordinal(f), "intended-by-script", Evidence(f, commitSha))).ToArray();
-        var gaps = sqlFacts.Where(f => f.FactType == FactTypes.AnalysisGap && f.Evidence is not null)
+        var staticGaps = sqlFacts.Where(f => f.FactType == FactTypes.AnalysisGap && f.Evidence is not null)
             .OrderBy(FactOrder).Select(f => new SqlRunbookGap(
                 Value(f, "gapKind", "unknown-static-gap"), GapCategory(f.RuleId), Evidence(f, commitSha)))
+            .ToArray();
+        var gaps = staticGaps
             .Concat(validationComposition.Gaps.Select(gap => new SqlRunbookGap(
                 gap.Code, "observed-validation", ValidationGapEvidence(gap, commitSha), gap.ArtifactId)))
             .OrderBy(gap => gap.Category, StringComparer.Ordinal)
@@ -144,7 +146,7 @@ public static class SqlRunbookPacketBuilder
         var reduced = new List<string>();
         if (!string.Equals(result.Manifest.BuildStatus, "Succeeded", StringComparison.OrdinalIgnoreCase)) reduced.Add("build");
         if (!commitKnown) reduced.Add("commit-identity");
-        if (gaps.Length > 0) reduced.Add("sql-static-analysis");
+        if (staticGaps.Length > 0) reduced.Add("sql-static-analysis");
         if (contexts.Any(f => Value(f, "coverage", "reduced") != "complete")) reduced.Add("execution-context");
         if (validationFacts.Length == 0 && surfaces.Length > 0) reduced.Add("validation-step-evidence");
         if (multipleSqlFiles) reduced.Add("cross-file-order");
