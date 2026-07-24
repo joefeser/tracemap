@@ -206,6 +206,26 @@ public sealed class PostgresSchemaMigrationExtractorTests
     }
 
     [Fact]
+    public void Extract_gaps_truncated_sql_standard_routine_body_without_emitting_routine_facts()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "atomic.sql"), """
+            CREATE FUNCTION archive.move_batch() RETURNS integer
+            BEGIN ATOMIC
+              INSERT INTO archive.audit VALUES (1);
+              RETURN 1;
+            END;
+            """);
+
+        var facts = Extract(temp.Path);
+
+        Assert.DoesNotContain(facts, fact => fact.FactType is FactTypes.PostgresMigrationOperation or FactTypes.PostgresSchemaRoutineDeclared);
+        var gap = Assert.Single(facts, fact => fact.Properties.GetValueOrDefault("classification") == "IncompleteDdlStatement");
+        Assert.Equal(1, gap.Evidence.StartLine);
+        Assert.NotNull(gap.Evidence.SnippetHash);
+    }
+
+    [Fact]
     public void Extract_gaps_unsafe_or_deferred_constraint_and_index_shapes_without_leaking_identity()
     {
         using var temp = new TempDirectory();
