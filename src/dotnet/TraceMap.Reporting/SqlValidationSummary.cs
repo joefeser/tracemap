@@ -160,7 +160,7 @@ public static partial class SqlValidationSummaryReader
                 gaps.Add(Gap("ContextMismatch", candidate.ArtifactId, "The categorical target context did not match cataloged static SQL context."));
                 continue;
             }
-            if (candidate.ObservedAt > candidate.ExpiresAt || candidate.ObservedAt > expected.EvaluatedAt)
+            if (candidate.ObservedAt >= candidate.ExpiresAt || candidate.ObservedAt > expected.EvaluatedAt)
             {
                 gaps.Add(Gap("InvalidObservationWindow", candidate.ArtifactId, "The observation timestamps were inconsistent with deterministic scan time."));
                 continue;
@@ -251,6 +251,8 @@ public static partial class SqlValidationSummaryReader
             if (!CommitSha().IsMatch(commitSha)) return Reject("MalformedSummary", artifactId, "The commit SHA was not a full hexadecimal identity.");
             var observedAt = RequiredTimestamp(root, "observedAt");
             var expiresAt = RequiredTimestamp(root, "expiresAt");
+            if (observedAt >= expiresAt)
+                return Reject("InvalidObservationWindow", artifactId, "The observation expiry must be strictly later than the observation time.");
 
             var contextElement = root.GetProperty("targetContext");
             RequireObject(contextElement, "targetContext");

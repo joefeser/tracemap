@@ -97,6 +97,7 @@ public sealed class SqlValidationSummaryTests
 
     [Theory]
     [InlineData("expired", "ExpiredSummary")]
+    [InlineData("zero-window", "InvalidObservationWindow")]
     [InlineData("commit", "SourceMismatch")]
     [InlineData("repository", "SourceMismatch")]
     [InlineData("context", "ContextMismatch")]
@@ -113,6 +114,9 @@ public sealed class SqlValidationSummaryTests
             {
                 case "expired":
                     root["expiresAt"] = "2026-07-22T11:00:00.0000000+00:00";
+                    break;
+                case "zero-window":
+                    root["expiresAt"] = "2026-07-22T10:00:00.0000000+00:00";
                     break;
                 case "commit":
                     root["commitSha"] = "1123456789abcdef0123456789abcdef01234567";
