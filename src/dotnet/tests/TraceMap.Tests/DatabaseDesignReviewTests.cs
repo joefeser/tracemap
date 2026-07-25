@@ -404,9 +404,14 @@ public sealed class DatabaseDesignReviewTests
         var index = Path.Combine(temp.Path, "single.sqlite");
         var firstOutput = Path.Combine(temp.Path, "first");
         var secondOutput = Path.Combine(temp.Path, "second");
+        var protectedGapHash = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         var manifest = Manifest("server") with
         {
-            KnownGaps = ["test-reduced-coverage"]
+            KnownGaps =
+            [
+                "test-reduced-coverage",
+                $"Package.swift local path dependency omitted; pathHash={protectedGapHash}"
+            ]
         };
         var protectedValue = "Server=private.internal;Password=do-not-render";
         SqliteIndexWriter.Write(index, manifest,
@@ -460,8 +465,18 @@ public sealed class DatabaseDesignReviewTests
             firstJson,
             await File.ReadAllTextAsync(Path.Combine(secondOutput, "database-design-review.json")));
         Assert.DoesNotContain(protectedValue, firstJson, StringComparison.Ordinal);
+        Assert.DoesNotContain(protectedGapHash, firstJson, StringComparison.Ordinal);
         Assert.DoesNotContain(temp.Path, firstJson, StringComparison.Ordinal);
         Assert.NotNull(secondResult.JsonPath);
+
+        var capped = await DatabaseDesignReviewReporter.BuildReportAsync(
+            new DatabaseDesignReviewOptions(
+                index,
+                Path.Combine(temp.Path, "capped"),
+                MaxGaps: 1));
+        var retainedRouteGap = Assert.Single(capped.Gaps);
+        Assert.Equal("SingleIndexRoutePathUnavailable", retainedRouteGap.GapKind);
+        Assert.True(capped.Summary.OmittedGapCount > 0);
     }
 
     [Fact]
@@ -482,6 +497,27 @@ public sealed class DatabaseDesignReviewTests
                 new DatabaseDesignReviewOptions(invalid, Path.Combine(temp.Path, "out"))));
 
         Assert.Contains("TraceMap index", exception.Message, StringComparison.OrdinalIgnoreCase);
+
+        var malformed = Path.Combine(temp.Path, "malformed.sqlite");
+        await using (var connection = new SqliteConnection($"Data Source={malformed}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                create table scan_manifest (scan_id text);
+                create table facts (fact_id text);
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var malformedException = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            DatabaseDesignReviewReporter.BuildReportAsync(
+                new DatabaseDesignReviewOptions(malformed, Path.Combine(temp.Path, "malformed-out"))));
+        Assert.Contains(
+            "missing scan_manifest.repo",
+            malformedException.Message,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("no such column", malformedException.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
