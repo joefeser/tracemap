@@ -3250,6 +3250,21 @@ rules:
       - Structural fallback uses class/base type/property type naming patterns and does not prove runtime EF usage.
       - SaveChanges syntax fallback is name-only and may include unrelated methods.
 
+  - id: database.operation.call-pattern.v1
+    name: Application database operation call pattern
+    description: Classifies compiler-resolved EF/EF Core, Dapper, ADO.NET, and Npgsql calls as bounded static database-operation candidates.
+    evidenceTier: Tier1Semantic or Tier4Unknown
+    emits:
+      - DatabaseOperationCandidate
+      - AnalysisGap
+    limitations:
+      - Candidates prove only a compiler-resolved static call shape; they do not prove runtime reachability, provider selection, database identity, SQL generation, execution, affected rows, transaction outcome, or success.
+      - EF entity targets require an explicit generic receiver, method type, or argument type; convention-only table identities and generated SQL are not reconstructed.
+      - Dapper and command targets use the existing bounded constant SQL-shape projection. Raw SQL, command text, parameter values, and connection material are not retained on operation facts.
+      - ADO.NET and Npgsql v0 table projection is limited to inline constant command construction; command variables, helper-returned commands, stored-procedure indirection, repository abstractions, DI dispatch, reflection, and branch feasibility remain reduced coverage.
+      - Save and transaction boundaries do not identify the tracked changes, affected tables, isolation, scope, commit, rollback, or atomicity.
+      - Recognizable calls without semantic binding and candidates without one bounded target emit explicit Tier4 gaps rather than guessed operations.
+
   - id: database.dapper.invocation.v1
     name: Dapper invocation
     description: Finds common Dapper Query and Execute calls.

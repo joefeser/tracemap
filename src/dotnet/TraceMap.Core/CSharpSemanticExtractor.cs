@@ -69,6 +69,47 @@ public static class CSharpSemanticExtractor
         "ExecuteAsync"
     };
 
+    private static readonly IReadOnlyDictionary<string, string> EfOperationKinds =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Add"] = "insert-candidate",
+            ["AddAsync"] = "insert-candidate",
+            ["AddRange"] = "insert-candidate",
+            ["AddRangeAsync"] = "insert-candidate",
+            ["Update"] = "update-candidate",
+            ["UpdateRange"] = "update-candidate",
+            ["Remove"] = "delete-candidate",
+            ["RemoveRange"] = "delete-candidate",
+            ["Find"] = "select-candidate",
+            ["FindAsync"] = "select-candidate",
+            ["FromSql"] = "select-candidate",
+            ["FromSqlRaw"] = "select-candidate",
+            ["FromSqlInterpolated"] = "select-candidate",
+            ["ExecuteSqlRaw"] = "execute-candidate",
+            ["ExecuteSqlRawAsync"] = "execute-candidate",
+            ["ExecuteSqlInterpolated"] = "execute-candidate",
+            ["ExecuteSqlInterpolatedAsync"] = "execute-candidate",
+            ["SaveChanges"] = "save-boundary",
+            ["SaveChangesAsync"] = "save-boundary",
+            ["BeginTransaction"] = "transaction-begin",
+            ["BeginTransactionAsync"] = "transaction-begin",
+            ["CommitTransaction"] = "transaction-commit",
+            ["CommitTransactionAsync"] = "transaction-commit",
+            ["RollbackTransaction"] = "transaction-rollback",
+            ["RollbackTransactionAsync"] = "transaction-rollback"
+        };
+
+    private static readonly HashSet<string> EfOperationContainerNames = new(StringComparer.Ordinal)
+    {
+        "Database",
+        "DatabaseFacade",
+        "DbContext",
+        "DbSet",
+        "EntityFrameworkQueryableExtensions",
+        "RelationalDatabaseFacadeExtensions",
+        "RelationalQueryableExtensions"
+    };
+
     private static readonly SymbolDisplayFormat SymbolFormat = new(
         globalNamespaceStyle: SymbolDisplayGlobalNamespaceStyle.Included,
         typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
@@ -3125,11 +3166,23 @@ public static class CSharpSemanticExtractor
         {
             if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method)
             {
+                if (TryGetPotentialDatabaseOperationMethodName(invocation, out var unresolvedMethod))
+                {
+                    facts.Add(CreateDatabaseOperationGap(
+                        projectPath,
+                        filePath,
+                        invocation,
+                        "SemanticBindingUnavailable",
+                        "unknown",
+                        unresolvedMethod,
+                        "unknown-candidate"));
+                }
                 continue;
             }
 
             var methodName = method.Name;
             var containingType = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty;
+            AddDatabaseOperationCandidateFact(projectPath, filePath, invocation, model, method, facts);
             if (IsHttpClientCall(method))
             {
                 facts.Add(CreateSemanticFact(
@@ -3223,6 +3276,376 @@ public static class CSharpSemanticExtractor
             }
         }
     }
+
+    private static void AddDatabaseOperationCandidateFact(
+        string? projectPath,
+        string filePath,
+        InvocationExpressionSyntax invocation,
+        SemanticModel model,
+        IMethodSymbol method,
+        List<SemanticFactCandidate> facts)
+    {
+        string frameworkFamily;
+        string operationKind;
+        ITypeSymbol? entityType = null;
+        string? sql = null;
+        var dynamicSqlInput = false;
+
+        if (TryClassifyEntityFrameworkOperation(invocation, model, method, out operationKind, out entityType))
+        {
+            frameworkFamily = GetNamespaceName((method.ReducedFrom ?? method).ContainingType)
+                .StartsWith("System.Data.Entity", StringComparison.Ordinal)
+                ? "entity-framework"
+                : "ef-core";
+            if (method.Name.Contains("Sql", StringComparison.Ordinal))
+            {
+                _ = TryGetDatabaseOperationSql(invocation, model, method, out sql);
+                dynamicSqlInput = sql is null && HasDynamicDatabaseOperationSql(invocation, model, method);
+            }
+        }
+        else if (IsDapperCall(method))
+        {
+            frameworkFamily = "dapper";
+            operationKind = method.Name.StartsWith("Query", StringComparison.Ordinal)
+                ? "select-candidate"
+                : "execute-candidate";
+            _ = TryGetDatabaseOperationSql(invocation, model, method, out sql);
+            dynamicSqlInput = sql is null && HasDynamicDatabaseOperationSql(invocation, model, method);
+        }
+        else if (TryClassifyCommandOperation(invocation, model, method, out operationKind, out sql))
+        {
+            frameworkFamily = GetNamespaceName(method.ContainingType).StartsWith("Npgsql", StringComparison.Ordinal)
+                ? "npgsql"
+                : "ado-net";
+            dynamicSqlInput = sql is null && HasDynamicCommandConstructionSql(invocation, model);
+        }
+        else
+        {
+            return;
+        }
+
+        string? tableName = null;
+        string? sqlOperationName = null;
+        if (!string.IsNullOrWhiteSpace(sql))
+        {
+            var shape = SqlShapeExtractor.QueryShape(sql);
+            sqlOperationName = shape.OperationName;
+            tableName = shape.PrimaryTable;
+            operationKind = OperationKindFromSql(sqlOperationName, operationKind);
+        }
+
+        var isBoundary = operationKind is "save-boundary"
+            or "transaction-begin"
+            or "transaction-commit"
+            or "transaction-rollback";
+        var targetIdentityStatus = !string.IsNullOrWhiteSpace(tableName)
+            ? "table-static"
+            : entityType is not null
+                ? "entity-static"
+                : isBoundary
+                    ? "boundary-only"
+                    : "unavailable";
+        var properties = AddAssemblyProperties(
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = targetIdentityStatus == "unavailable" ? "reduced" : "bounded-static-call",
+                ["frameworkFamily"] = frameworkFamily,
+                ["limitations"] = "Static call-pattern candidate only; runtime execution, target database, generated SQL, affected rows, transaction outcome, and success are not proven.",
+                ["methodName"] = method.Name,
+                ["operationKind"] = operationKind,
+                ["targetIdentityStatus"] = targetIdentityStatus
+            },
+            model.GetEnclosingSymbol(invocation.SpanStart)?.ContainingAssembly,
+            method.ContainingAssembly);
+        if (entityType is not null)
+        {
+            properties["entityType"] = entityType.ToDisplayString(SymbolFormat);
+            AddSymbolProperties(properties, "entityType", entityType);
+        }
+        if (!string.IsNullOrWhiteSpace(tableName))
+        {
+            properties["tableName"] = tableName;
+        }
+        if (!string.IsNullOrWhiteSpace(sqlOperationName))
+        {
+            properties["sqlOperationName"] = sqlOperationName;
+        }
+        AddSymbolProperties(properties, "target", method);
+
+        facts.Add(CreateSemanticFact(
+            FactTypes.DatabaseOperationCandidate,
+            RuleIds.DatabaseOperationCallPattern,
+            projectPath,
+            filePath,
+            invocation,
+            sourceSymbol: GetEnclosingSymbol(model, invocation),
+            targetSymbol: method.ToDisplayString(SymbolFormat),
+            contractElement: operationKind,
+            properties: properties));
+
+        if (targetIdentityStatus == "unavailable")
+        {
+            facts.Add(CreateDatabaseOperationGap(
+                projectPath,
+                filePath,
+                invocation,
+                dynamicSqlInput
+                    ? "DynamicDatabaseOperationSql"
+                    : string.IsNullOrWhiteSpace(sql)
+                        ? "DatabaseOperationTargetUnavailable"
+                        : "DatabaseOperationSqlShapeUnavailable",
+                frameworkFamily,
+                method.Name,
+                operationKind));
+        }
+    }
+
+    private static bool TryClassifyEntityFrameworkOperation(
+        InvocationExpressionSyntax invocation,
+        SemanticModel model,
+        IMethodSymbol method,
+        out string operationKind,
+        out ITypeSymbol? entityType)
+    {
+        operationKind = string.Empty;
+        entityType = null;
+        if (!EfOperationKinds.TryGetValue(method.Name, out var classifiedOperationKind)
+            || !IsEntityFrameworkOperationMethod(method))
+        {
+            return false;
+        }
+        operationKind = classifiedOperationKind;
+
+        if (operationKind is not ("save-boundary"
+            or "transaction-begin"
+            or "transaction-commit"
+            or "transaction-rollback"))
+        {
+            entityType = TryGetDatabaseOperationEntityType(invocation, model, method);
+        }
+        return true;
+    }
+
+    private static bool IsEntityFrameworkOperationMethod(IMethodSymbol method)
+    {
+        var definition = method.ReducedFrom ?? method;
+        var namespaceName = GetNamespaceName(definition.ContainingType);
+        var knownNamespace = namespaceName.Equals("Microsoft.EntityFrameworkCore", StringComparison.Ordinal)
+            || namespaceName.StartsWith("Microsoft.EntityFrameworkCore.", StringComparison.Ordinal)
+            || namespaceName.Equals("System.Data.Entity", StringComparison.Ordinal)
+            || namespaceName.StartsWith("System.Data.Entity.", StringComparison.Ordinal);
+        return (knownNamespace && EfOperationContainerNames.Contains(definition.ContainingType.Name))
+            || method.ContainingType is not null && DerivesFromDbContext(method.ContainingType)
+            || method.ContainingType is not null && IsDbSetType(method.ContainingType);
+    }
+
+    private static ITypeSymbol? TryGetDatabaseOperationEntityType(
+        InvocationExpressionSyntax invocation,
+        SemanticModel model,
+        IMethodSymbol method)
+    {
+        var receiver = GetInvocationReceiver(invocation.Expression);
+        var receiverType = receiver is null ? null : model.GetTypeInfo(receiver).Type;
+        if (receiverType is INamedTypeSymbol { TypeArguments.Length: 1 } receiverNamed
+            && IsDbSetType(receiverNamed))
+        {
+            return receiverNamed.TypeArguments[0];
+        }
+
+        if (method.TypeArguments.Length == 1
+            && method.TypeArguments[0].TypeKind != TypeKind.TypeParameter)
+        {
+            return method.TypeArguments[0];
+        }
+
+        foreach (var argument in invocation.ArgumentList.Arguments)
+        {
+            var argumentType = model.GetTypeInfo(argument.Expression).Type;
+            if (argumentType is IArrayTypeSymbol array)
+            {
+                return array.ElementType;
+            }
+            if (argumentType is INamedTypeSymbol { TypeArguments.Length: 1 } generic
+                && generic.Name is "IEnumerable" or "IAsyncEnumerable")
+            {
+                return generic.TypeArguments[0];
+            }
+            if (argumentType is not null
+                && argumentType.SpecialType == SpecialType.None
+                && argumentType.TypeKind is TypeKind.Class or TypeKind.Struct)
+            {
+                return argumentType;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool TryGetDatabaseOperationSql(
+        InvocationExpressionSyntax invocation,
+        SemanticModel model,
+        IMethodSymbol method,
+        out string? sql)
+    {
+        foreach (var parameterName in new[] { "sql", "query", "commandText" })
+        {
+            if (TryGetConstantStringArgument(invocation, model, method, parameterName, out var value))
+            {
+                sql = value;
+                return true;
+            }
+        }
+
+        sql = null;
+        return false;
+    }
+
+    private static bool HasDynamicDatabaseOperationSql(
+        InvocationExpressionSyntax invocation,
+        SemanticModel model,
+        IMethodSymbol method)
+    {
+        for (var index = 0; index < invocation.ArgumentList.Arguments.Count; index++)
+        {
+            var argument = invocation.ArgumentList.Arguments[index];
+            var boundParameter = (model.GetOperation(argument) as Microsoft.CodeAnalysis.Operations.IArgumentOperation)?.Parameter;
+            var positionalParameter = argument.NameColon is null && index < method.Parameters.Length
+                ? method.Parameters[index]
+                : null;
+            var parameterName = argument.NameColon?.Name.Identifier.ValueText
+                ?? boundParameter?.Name
+                ?? positionalParameter?.Name;
+            if (parameterName is not ("sql" or "query" or "commandText"))
+                continue;
+            var constant = model.GetConstantValue(argument.Expression);
+            return !constant.HasValue || constant.Value is not string;
+        }
+        return false;
+    }
+
+    private static bool HasDynamicCommandConstructionSql(
+        InvocationExpressionSyntax invocation,
+        SemanticModel model)
+    {
+        var receiver = UnwrapExpression(GetInvocationReceiver(invocation.Expression));
+        if (receiver is not ObjectCreationExpressionSyntax { ArgumentList.Arguments.Count: > 0 } creation)
+            return false;
+        var constant = model.GetConstantValue(creation.ArgumentList.Arguments[0].Expression);
+        return !constant.HasValue || constant.Value is not string;
+    }
+
+    private static bool TryClassifyCommandOperation(
+        InvocationExpressionSyntax invocation,
+        SemanticModel model,
+        IMethodSymbol method,
+        out string operationKind,
+        out string? sql)
+    {
+        operationKind = method.Name switch
+        {
+            "ExecuteReader" or "ExecuteReaderAsync" => "select-candidate",
+            "ExecuteScalar" or "ExecuteScalarAsync" => "scalar-candidate",
+            "ExecuteNonQuery" or "ExecuteNonQueryAsync" => "execute-candidate",
+            _ => string.Empty
+        };
+        sql = null;
+        if (operationKind.Length == 0 || method.ContainingType is null || !DerivesFromDbCommand(method.ContainingType))
+        {
+            return false;
+        }
+
+        var receiver = UnwrapExpression(GetInvocationReceiver(invocation.Expression));
+        if (receiver is ObjectCreationExpressionSyntax creation
+            && creation.ArgumentList is { Arguments.Count: > 0 })
+        {
+            var constant = model.GetConstantValue(creation.ArgumentList.Arguments[0].Expression);
+            if (constant.HasValue && constant.Value is string value && !string.IsNullOrWhiteSpace(value))
+            {
+                sql = value;
+            }
+        }
+        return true;
+    }
+
+    private static ExpressionSyntax? UnwrapExpression(ExpressionSyntax? expression)
+    {
+        while (expression is ParenthesizedExpressionSyntax parenthesized)
+        {
+            expression = parenthesized.Expression;
+        }
+        return expression;
+    }
+
+    private static bool DerivesFromDbCommand(INamedTypeSymbol symbol)
+    {
+        for (INamedTypeSymbol? current = symbol; current is not null; current = current.BaseType)
+        {
+            if (IsKnownType(current, "System.Data.Common.DbCommand")
+                || IsKnownType(current, "System.Data.SqlClient.SqlCommand")
+                || IsKnownType(current, "Microsoft.Data.SqlClient.SqlCommand")
+                || IsKnownType(current, "Npgsql.NpgsqlCommand"))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static string OperationKindFromSql(string? operationName, string fallback) =>
+        operationName switch
+        {
+            "SELECT" => "select-candidate",
+            "INSERT" => "insert-candidate",
+            "UPDATE" => "update-candidate",
+            "DELETE" => "delete-candidate",
+            "MERGE" => "upsert-candidate",
+            "CALL" or "EXEC" or "EXECUTE" => "stored-routine-call-candidate",
+            _ => fallback
+        };
+
+    private static bool TryGetPotentialDatabaseOperationMethodName(
+        InvocationExpressionSyntax invocation,
+        out string methodName)
+    {
+        methodName = GetInvocationMemberName(invocation.Expression) ?? string.Empty;
+        return methodName is "SaveChanges"
+            or "SaveChangesAsync"
+            or "ExecuteSqlRaw"
+            or "ExecuteSqlRawAsync"
+            or "ExecuteSqlInterpolated"
+            or "ExecuteSqlInterpolatedAsync"
+            or "FromSqlRaw"
+            or "FromSqlInterpolated"
+            or "BeginTransaction"
+            or "BeginTransactionAsync"
+            or "CommitTransaction"
+            or "RollbackTransaction";
+    }
+
+    private static SemanticFactCandidate CreateDatabaseOperationGap(
+        string? projectPath,
+        string filePath,
+        InvocationExpressionSyntax invocation,
+        string classification,
+        string frameworkFamily,
+        string methodName,
+        string operationKind) =>
+        new(
+            FactTypes.AnalysisGap,
+            RuleIds.DatabaseOperationCallPattern,
+            EvidenceTiers.Tier4Unknown,
+            ToEvidenceSpan(filePath, invocation),
+            ProjectPath: projectPath,
+            ContractElement: operationKind,
+            Properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["classification"] = classification,
+                ["coverageLabel"] = "reduced",
+                ["frameworkFamily"] = frameworkFamily,
+                ["limitations"] = "Static operation target coverage is incomplete; runtime dispatch, SQL generation, database identity, execution, and effects are not proven.",
+                ["methodName"] = methodName,
+                ["operationKind"] = operationKind
+            });
 
     private static void AddSqlCommandFacts(
         string? projectPath,
