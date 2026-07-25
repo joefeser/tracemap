@@ -4,6 +4,8 @@ Status: ready-for-review
 
 Branch: `codex/postgres-schema-snapshot-evidence`
 
+PR: #530 (`https://github.com/joefeser/tracemap/pull/530`)
+
 Base: `origin/dev` through PR #529 / merge
 `28f2701c6b30a84a15d70f5eba4f2df70abe6be2`
 
