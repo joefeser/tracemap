@@ -24,16 +24,29 @@ are deferred.
 ## Validation
 
 - Focused extractor, database design-review, release-review, and rule-catalog
-  tests — passed 46/46.
+  tests — passed. Post-review extractor/design-review coverage passed 13/13.
 - `dotnet build src/dotnet/TraceMap.sln --no-restore` — passed with the
   existing `SQLitePCLRaw.lib.e_sqlite3` NU1903 advisory warnings.
 - `dotnet test src/dotnet/TraceMap.sln --no-restore --no-build` — passed
-  901/901.
+  902/902 after one unchanged rerun. The first post-review run had one
+  unrelated transient failure in
+  `BuildEnvironmentDiagnosticTests.Cli_restore_failure_artifacts_are_sanitized`;
+  that test passed immediately in isolation and the unchanged full rerun
+  passed.
 - Documented PostgreSQL sample `scan` → `combine` →
   `database-design-review` smoke — passed twice with byte-identical Markdown
   and JSON; four tables and explicit partial coverage/gaps.
 - `./scripts/check-private-paths.sh` — passed.
 - `git diff --check` — passed.
+
+## Review fixes
+
+ACK authorized six current-head Codex/Qodo threads. The follow-up resolves
+fluent arguments against Roslyn parameters (including reordered named
+arguments), evaluates constant attribute schema expressions, emits a Tier4 gap
+for recognizable fluent chains without semantic binding, removes null-forgiving
+semantic failure outputs, and preserves bounded generic/nested entity type
+metadata. Focused regression coverage was added for each behavior.
 
 ## Deferred
 

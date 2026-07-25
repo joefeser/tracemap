@@ -17,9 +17,9 @@ the existing database design-review packet.
 4. Constant fluent `Entity<T>().ToTable(...)` and
    `Entity<T>().Property(...).HasColumnName(...)` mappings shall emit
    `DatabaseColumnMapping` facts under `database.ef.v1`.
-5. Dynamic table/column arguments and assembly/reflection-driven model
-   configuration shall emit rule-backed `AnalysisGap` facts rather than a
-   guessed mapping.
+5. Dynamic table/column arguments, recognizable fluent chains without
+   semantic binding, and assembly/reflection-driven model configuration shall
+   emit rule-backed `AnalysisGap` facts rather than a guessed mapping.
 6. The database design-review packet shall compose compatible EF table and
    column mappings into same-source PostgreSQL table groups using exact,
    case-insensitive bounded identifiers. When EF omits schema identity, a table

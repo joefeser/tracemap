@@ -1340,16 +1340,15 @@ public static class DatabaseDesignReviewReporter
     {
         if (string.IsNullOrWhiteSpace(value))
             return "unavailable";
-        var trimmed = value.Trim();
-        if (trimmed.StartsWith("global::", StringComparison.Ordinal))
-            trimmed = trimmed["global::".Length..];
-        var parts = trimmed.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return parts.Length is > 0 and <= 16
-            && parts.All(part => part.Length <= 128
-                && (char.IsLetter(part[0]) || part[0] == '_')
-                && part.All(character => char.IsLetterOrDigit(character) || character is '_' or '`'))
-                ? string.Join('.', parts)
-                : "unavailable";
+        var trimmed = value.Trim().Replace("global::", string.Empty, StringComparison.Ordinal);
+        return trimmed.Length <= 160
+            && trimmed.Any(char.IsLetter)
+            && trimmed.All(character =>
+                char.IsLetterOrDigit(character)
+                || char.IsWhiteSpace(character)
+                || character is '_' or '.' or '<' or '>' or ',' or '+' or '?' or '[' or ']')
+            ? trimmed
+            : "unavailable";
     }
 
     private static string SafeIdentifierList(string? value)
