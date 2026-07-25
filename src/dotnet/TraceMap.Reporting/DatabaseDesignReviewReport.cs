@@ -190,20 +190,17 @@ public static class DatabaseDesignReviewReporter
         }.ToString();
         await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
-        await CombinedDependencyReporter.ValidateCombinedIndexAsync(connection, cancellationToken);
-
-        var read = await CombinedDependencyReporter.ReadAsync(connection, cancellationToken);
-        var extractorVersions = await ReadExtractorVersionsAsync(connection, cancellationToken);
-        var sqlInputs = await ReleaseReviewReporter.ReadSqlEvidenceInputsAsync(
-            options.IndexPath,
-            "combined",
-            cancellationToken,
-            includeModelMappings: true);
-        var sourceByLabel = read.Sources
-            .GroupBy(source => source.Label, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var designInput = await ReadInputAsync(connection, options.IndexPath, cancellationToken);
+        var sqlInputs = designInput.SqlInputs;
+        var extractorVersions = designInput.IndexKind == "combined"
+            ? await ReadExtractorVersionsAsync(connection, cancellationToken)
+            : sqlInputs.SelectMany(row => row.Result.Facts)
+                .ToDictionary(
+                    fact => fact.FactId,
+                    fact => (SafeTokenOrNull(fact.Evidence.ExtractorId), SafeTokenOrNull(fact.Evidence.ExtractorVersion)),
+                    StringComparer.Ordinal);
         var gaps = new List<DatabaseDesignGap>();
-        foreach (var knownGap in read.KnownGaps.OrderBy(row => row.SourceLabel, StringComparer.Ordinal).ThenBy(row => row.Category, StringComparer.Ordinal))
+        foreach (var knownGap in designInput.KnownGaps.OrderBy(row => row.SourceLabel, StringComparer.Ordinal).ThenBy(row => row.Category, StringComparer.Ordinal))
         {
             gaps.Add(Gap(
                 "SourceCoverageReduced",
@@ -299,7 +296,7 @@ public static class DatabaseDesignReviewReporter
             globalObjects,
             gaps);
 
-        var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts, read.Sources)
+        var surfaces = CombinedDependencyReporter.BuildSurfaces(designInput.Facts, designInput.Sources)
             .Where(surface => surface.SurfaceKind == "sql-query")
             .OrderBy(surface => surface.SourceLabel, StringComparer.Ordinal)
             .ThenBy(surface => surface.FilePath, StringComparer.Ordinal)
@@ -346,25 +343,28 @@ public static class DatabaseDesignReviewReporter
         }
 
         CombinedDependencyPathReport? pathReport = null;
-        try
+        if (designInput.IndexKind == "combined")
         {
-            pathReport = await CombinedDependencyPathReporter.BuildReportAsync(
-                new CombinedDependencyPathOptions(
-                    options.IndexPath,
-                    "database-design-review",
-                    "json",
-                    ToSurface: "sql-query",
-                    IncludeLegacyRoots: true,
-                    MaxDepth: 8,
-                    MaxPaths: options.MaxRouteReferences == int.MaxValue
-                        ? int.MaxValue
-                        : options.MaxRouteReferences + 1,
-                    MaxFrontier: 10000),
-                cancellationToken);
-        }
-        catch (InvalidDataException exception)
-        {
-            gaps.Add(Gap("RouteEvidenceUnavailable", null, "Bounded path evidence is unavailable for the combined index.", [Pair("reason", SafeReason(exception.Message))]));
+            try
+            {
+                pathReport = await CombinedDependencyPathReporter.BuildReportAsync(
+                    new CombinedDependencyPathOptions(
+                        options.IndexPath,
+                        "database-design-review",
+                        "json",
+                        ToSurface: "sql-query",
+                        IncludeLegacyRoots: true,
+                        MaxDepth: 8,
+                        MaxPaths: options.MaxRouteReferences == int.MaxValue
+                            ? int.MaxValue
+                            : options.MaxRouteReferences + 1,
+                        MaxFrontier: 10000),
+                    cancellationToken);
+            }
+            catch (InvalidDataException exception)
+            {
+                gaps.Add(Gap("RouteEvidenceUnavailable", null, "Bounded path evidence is unavailable for the combined index.", [Pair("reason", SafeReason(exception.Message))]));
+            }
         }
 
         var routeReferences = new List<(TableKey Key, DatabaseDesignRouteReference Row)>();
@@ -442,7 +442,7 @@ public static class DatabaseDesignReviewReporter
 
         foreach (var (factId, query) in queryByFactId.OrderBy(row => row.Key, StringComparer.Ordinal))
         {
-            if (routedQueryFactIds.Contains(factId))
+            if (designInput.IndexKind == "single" || routedQueryFactIds.Contains(factId))
                 continue;
             gaps.Add(Gap(
                 "QueryRoutePathUnavailable",
@@ -461,7 +461,7 @@ public static class DatabaseDesignReviewReporter
 
         CombinedDependencyPathReport? operationPathReport = null;
         var operationPathCoverageReduced = false;
-        if (operationTableByFactId.Count > 0)
+        if (designInput.IndexKind == "combined" && operationTableByFactId.Count > 0)
         {
             try
             {
@@ -555,7 +555,7 @@ public static class DatabaseDesignReviewReporter
 
         foreach (var (factId, operation) in operationTableByFactId.OrderBy(row => row.Key, StringComparer.Ordinal))
         {
-            if (routedOperationFactIds.Contains(factId))
+            if (designInput.IndexKind == "single" || routedOperationFactIds.Contains(factId))
                 continue;
             gaps.Add(Gap(
                 operationPathCoverageReduced
@@ -620,7 +620,7 @@ public static class DatabaseDesignReviewReporter
             .OrderBy(row => row.Evidence.SourceLabel, StringComparer.Ordinal)
             .ThenBy(row => row.ItemId, StringComparer.Ordinal)
             .ToArray();
-        var sources = read.Sources
+        var sources = designInput.Sources
             .OrderBy(source => source.Label, StringComparer.Ordinal)
             .ThenBy(source => source.SourceIndexId, StringComparer.Ordinal)
             .Select(source => new DatabaseDesignSource(
@@ -630,7 +630,7 @@ public static class DatabaseDesignReviewReporter
                 SafeToken(source.AnalysisLevel, "unknown"),
                 SafeToken(source.BuildStatus, "unknown"),
                 CombinedReportHelpers.SourceIdentityVerified(source),
-                read.CoverageWarnings
+                designInput.CoverageWarnings
                     .Where(warning => warning.Contains(source.Label, StringComparison.OrdinalIgnoreCase))
                     .Select(SafeReason)
                     .Distinct(StringComparer.Ordinal)
@@ -642,8 +642,21 @@ public static class DatabaseDesignReviewReporter
             gaps.Add(Gap(
                 "SourceCoverageWarning",
                 source.SourceLabel,
-                "The combined source reports reduced analysis, build, language, or identity coverage; packet conclusions remain partial.",
+                "The source reports reduced analysis, build, language, or identity coverage; packet conclusions remain partial.",
                 [Pair("warningCount", source.CoverageWarnings.Count.ToString(CultureInfo.InvariantCulture))]));
+        }
+        if (designInput.IndexKind == "single")
+        {
+            var anchor = sources.FirstOrDefault();
+            gaps.Add(Gap(
+                "SingleIndexRoutePathUnavailable",
+                anchor?.SourceLabel,
+                "Single-index input does not contain the combined graph/path contract; route references were not evaluated.",
+                [
+                    Pair("indexKind", "single"),
+                    Pair("routeReferenceCount", "0")
+                ],
+                commitSha: anchor?.CommitSha));
         }
 
         var compatibleDesignCount = tables.Sum(TableEvidenceCount) + globals.Length;
@@ -653,7 +666,7 @@ public static class DatabaseDesignReviewReporter
             gaps.Add(Gap(
                 "CompatiblePostgresEvidenceUnavailable",
                 null,
-                "No compatible bounded PostgreSQL schema, migration, or snapshot evidence is present in the combined index."));
+                $"No compatible bounded PostgreSQL schema, migration, or snapshot evidence is present in the {designInput.IndexKind} index."));
         }
 
         var sortedGaps = gaps
@@ -718,7 +731,7 @@ public static class DatabaseDesignReviewReporter
     private static void ValidateOptions(DatabaseDesignReviewOptions options)
     {
         if (string.IsNullOrWhiteSpace(options.IndexPath))
-            throw new ArgumentException("database-design-review requires --index <combined.sqlite>.");
+            throw new ArgumentException("database-design-review requires --index <index.sqlite|combined.sqlite>.");
         if (string.IsNullOrWhiteSpace(options.OutputPath))
             throw new ArgumentException("database-design-review requires --out <path>.");
         if (options.MaxObjects <= 0 || options.MaxEvidence <= 0 || options.MaxRouteReferences <= 0 || options.MaxGaps <= 0)
@@ -1412,6 +1425,148 @@ public static class DatabaseDesignReviewReporter
         return builder;
     }
 
+    private static async Task<DesignReadInput> ReadInputAsync(
+        SqliteConnection connection,
+        string indexPath,
+        CancellationToken cancellationToken)
+    {
+        var hasCombinedSources = await TableExistsAsync(connection, "index_sources", cancellationToken);
+        var hasCombinedFacts = await TableExistsAsync(connection, "combined_facts", cancellationToken);
+        if (hasCombinedSources && hasCombinedFacts)
+        {
+            await CombinedDependencyReporter.ValidateCombinedIndexAsync(connection, cancellationToken);
+            var combined = await CombinedDependencyReporter.ReadAsync(connection, cancellationToken);
+            var combinedSqlInputs = await ReleaseReviewReporter.ReadSqlEvidenceInputsAsync(
+                indexPath,
+                "combined",
+                cancellationToken,
+                includeModelMappings: true,
+                includeQuerySurfaces: true);
+            return new DesignReadInput(
+                "combined",
+                combined.Sources,
+                combined.KnownGaps,
+                combined.CoverageWarnings,
+                combined.Facts,
+                combinedSqlInputs);
+        }
+
+        var hasManifest = await TableExistsAsync(connection, "scan_manifest", cancellationToken);
+        var hasFacts = await TableExistsAsync(connection, "facts", cancellationToken);
+        if (!hasManifest || !hasFacts)
+        {
+            throw new InvalidDataException(
+                "database-design-review input is not a valid TraceMap index; expected scan_manifest/facts or index_sources/combined_facts.");
+        }
+
+        await using var manifestCommand = connection.CreateCommand();
+        manifestCommand.CommandText = "select manifest_json from scan_manifest order by scan_id limit 2;";
+        var manifestRows = new List<string>();
+        await using (var reader = await manifestCommand.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+                manifestRows.Add(reader.GetString(0));
+        }
+        if (manifestRows.Count != 1)
+            throw new InvalidDataException("TraceMap single index must contain exactly one scan_manifest row.");
+
+        var manifest = JsonSerializer.Deserialize<ScanManifest>(
+            manifestRows[0],
+            CombinedDependencyReporter.JsonOptions)
+            ?? throw new InvalidDataException("TraceMap single index contains an invalid scan manifest.");
+        var source = new CombinedReportSource(
+            "single",
+            "single",
+            CombinedReportHelpers.Hash("single-index", 16),
+            manifest.ScanId,
+            manifest.RepoName,
+            manifest.RemoteUrl,
+            manifest.Branch,
+            manifest.CommitSha,
+            manifest.ScannerVersion,
+            InferLanguage(manifest.ScannerVersion),
+            null,
+            false,
+            manifest.ScanRootRelativePath,
+            manifest.ScanRootPathHash,
+            manifest.GitRootHash,
+            manifest.AnalysisLevel,
+            manifest.BuildStatus);
+        var warnings = SingleSourceCoverageWarnings(source);
+        var knownGaps = manifest.KnownGaps
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .GroupBy(value => SafeToken(value, "known-gap"), StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => new CombinedKnownGapRow(
+                source.SourceIndexId,
+                source.Label,
+                group.Key,
+                group.Count(),
+                group.Key))
+            .ToArray();
+        var singleSqlInputs = await ReleaseReviewReporter.ReadSqlEvidenceInputsAsync(
+            indexPath,
+            "single",
+            cancellationToken,
+            includeModelMappings: true,
+            includeQuerySurfaces: true);
+        var facts = singleSqlInputs
+            .SelectMany(row => row.Result.Facts)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .Select(fact => new CombinedFactRow(
+                fact.FactId,
+                source.SourceIndexId,
+                source.Label,
+                fact.FactId,
+                fact.ScanId,
+                fact.Repo,
+                fact.CommitSha,
+                fact.FactType,
+                fact.RuleId,
+                fact.EvidenceTier,
+                fact.SourceSymbol,
+                fact.TargetSymbol,
+                fact.ContractElement,
+                fact.Evidence.FilePath,
+                fact.Evidence.StartLine,
+                fact.Evidence.EndLine,
+                fact.Properties))
+            .ToArray();
+        return new DesignReadInput("single", [source], knownGaps, warnings, facts, singleSqlInputs);
+    }
+
+    private static IReadOnlyList<string> SingleSourceCoverageWarnings(CombinedReportSource source)
+    {
+        var warnings = new List<string>();
+        if (!source.AnalysisLevel.Equals("Level1SemanticAnalysis", StringComparison.Ordinal)
+            || !source.BuildStatus.Equals("Succeeded", StringComparison.Ordinal))
+        {
+            warnings.Add($"{source.Label} reports reduced analysis or build coverage.");
+        }
+        if (!CombinedReportHelpers.SourceIdentityVerified(source))
+            warnings.Add($"{source.Label} source identity is not fully verified.");
+        if (string.IsNullOrWhiteSpace(source.Language))
+            warnings.Add($"{source.Label} language is unknown.");
+        return warnings;
+    }
+
+    private static string? InferLanguage(string? scannerVersion)
+    {
+        if (string.IsNullOrWhiteSpace(scannerVersion))
+            return null;
+        if (scannerVersion.Contains("typescript", StringComparison.OrdinalIgnoreCase))
+            return "typescript";
+        if (scannerVersion.Contains("python", StringComparison.OrdinalIgnoreCase))
+            return "python";
+        if (scannerVersion.Contains("jvm", StringComparison.OrdinalIgnoreCase))
+            return "jvm";
+        if (scannerVersion.Contains("swift", StringComparison.OrdinalIgnoreCase))
+            return "swift";
+        return scannerVersion.Contains("tracemap", StringComparison.OrdinalIgnoreCase) ? "csharp" : null;
+    }
+
     private static async Task<IReadOnlyDictionary<string, (string? Id, string? Version)>> ReadExtractorVersionsAsync(
         SqliteConnection connection,
         CancellationToken cancellationToken)
@@ -1435,6 +1590,19 @@ public static class DatabaseDesignReviewReporter
                 reader.IsDBNull(2) ? null : reader.GetString(2));
         }
         return result;
+    }
+
+    private static async Task<bool> TableExistsAsync(SqliteConnection connection, string table, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            select 1
+            from sqlite_master
+            where type = 'table' and name = $table collate nocase
+            limit 1;
+            """;
+        command.Parameters.AddWithValue("$table", table);
+        return await command.ExecuteScalarAsync(cancellationToken) is not null;
     }
 
     private static async Task<bool> ColumnExistsAsync(SqliteConnection connection, string table, string column, CancellationToken cancellationToken)
@@ -1744,6 +1912,14 @@ public static class DatabaseDesignReviewReporter
             .ThenBy(pair => pair.Value, StringComparer.Ordinal)
             .ToArray();
     private static string Md(string value) => CombinedReportHelpers.Cell(value);
+
+    private sealed record DesignReadInput(
+        string IndexKind,
+        IReadOnlyList<CombinedReportSource> Sources,
+        IReadOnlyList<CombinedKnownGapRow> KnownGaps,
+        IReadOnlyList<string> CoverageWarnings,
+        IReadOnlyList<CombinedFactRow> Facts,
+        IReadOnlyList<SqlEvidenceInput> SqlInputs);
 
     private readonly record struct TableKey(string StableKey, string SourceLabel, string SchemaName, string TableName, string SchemaResolution);
 

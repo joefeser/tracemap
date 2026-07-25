@@ -268,7 +268,7 @@ public static class TraceMapCommand
         var values = ParseOptions(args);
         if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
         {
-            await error.WriteLineAsync("error: database-design-review requires --index <combined.sqlite>.");
+            await error.WriteLineAsync("error: database-design-review requires --index <index.sqlite|combined.sqlite>.");
             return 1;
         }
 
@@ -1894,10 +1894,10 @@ public static class TraceMapCommand
     {
         return """
             Usage:
-              tracemap database-design-review --index <combined.sqlite> --out <path> [--format <markdown|json>] [bounds]
+              tracemap database-design-review --index <index.sqlite|combined.sqlite> --out <path> [--format <markdown|json>] [bounds]
 
             Required:
-              --index <path>             Combined TraceMap index from tracemap combine.
+              --index <path>             Scanner index.sqlite or combined TraceMap index.
               --out <path>               Output directory or file path.
 
             Optional:
@@ -1913,6 +1913,7 @@ public static class TraceMapCommand
             Boundaries:
               Read-side composition only. No database connection, SQL execution,
               migration execution, runtime reachability claim, or release approval.
+              Single-index input reports route-path coverage as unavailable.
             """;
     }
 
