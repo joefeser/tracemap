@@ -1,12 +1,14 @@
 # PostgreSQL Constraint/Index Evidence State
 
-Status: ready-for-review
+Status: implemented-and-merged
 
 Branch: `codex/postgres-schema-migration-constraints-indexes`
 
 Base: `origin/dev` at `974ea1ed2902941bd7816494f4157794dfeaad9e`
 
 PR: [#526](https://github.com/joefeser/tracemap/pull/526)
+
+Merge commit: `11f25dae054fde47aea95dc23d373e9c7561b404`
 
 Scope: second bounded #435 raw-DDL slice for named primary-key, unique, and
 foreign-key constraints plus simple `CREATE [UNIQUE] INDEX` evidence and
@@ -27,7 +29,7 @@ Validation:
 - `./scripts/check-private-paths.sh`: passed; and
 - `git diff --check`: passed.
 
-PR/ACK: ready PR #526 targets `dev`. The first exact-head CI run had an
+PR/ACK: PR #526 merged into `dev`. The first exact-head CI run had an
 unrelated JVM integration-test timeout; a failed-job rerun passed the JVM and
 five-adapter combine jobs on the unchanged head. Review follow-up now marks
 inline `NOT NULL` declarations as reduced coverage and requires PostgreSQL
