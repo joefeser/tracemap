@@ -876,14 +876,15 @@ public static class DatabaseDesignReviewReporter
     private static async Task<bool> ColumnExistsAsync(SqliteConnection connection, string table, string column, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = $"pragma table_info(\"{table.Replace("\"", "\"\"", StringComparison.Ordinal)}\");";
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-        return false;
+        command.CommandText = """
+            select 1
+            from pragma_table_info($table)
+            where name = $column collate nocase
+            limit 1;
+            """;
+        command.Parameters.AddWithValue("$table", table);
+        command.Parameters.AddWithValue("$column", column);
+        return await command.ExecuteScalarAsync(cancellationToken) is not null;
     }
 
     private static (DatabaseDesignTableGroup[] Tables, DatabaseDesignEvidenceItem[] Globals, List<DatabaseDesignEvidenceItem> Unlinked) ApplyEvidenceCap(
