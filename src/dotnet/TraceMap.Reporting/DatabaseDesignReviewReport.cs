@@ -460,6 +460,7 @@ public static class DatabaseDesignReviewReporter
         }
 
         CombinedDependencyPathReport? operationPathReport = null;
+        var operationPathCoverageReduced = false;
         try
         {
             operationPathReport = await CombinedDependencyPathReporter.BuildReportAsync(
@@ -478,6 +479,7 @@ public static class DatabaseDesignReviewReporter
         }
         catch (InvalidDataException exception)
         {
+            operationPathCoverageReduced = true;
             gaps.Add(Gap(
                 "OperationRouteEvidenceUnavailable",
                 null,
@@ -509,6 +511,32 @@ public static class DatabaseDesignReviewReporter
                             : extractorVersions.GetValueOrDefault(entry.CombinedFactId))));
                 routedOperationFactIds.Add(terminal.CombinedFactId);
             }
+
+            foreach (var gap in operationPathReport.Gaps
+                         .Where(row => row.GapKind is "TruncatedByLimit" or "TraversalBounds" or "SchemaMissing"))
+            {
+                operationPathCoverageReduced = true;
+                gaps.Add(new DatabaseDesignGap(
+                    StableId("gap", "operation-path", gap.GapId),
+                    gap.GapKind,
+                    "PartialAnalysis",
+                    gap.Message,
+                    gap.SourceLabel,
+                    gap.RuleId ?? GapRuleId,
+                    NormalizeTier(gap.EvidenceTier),
+                    "reduced",
+                    gap.CommitSha,
+                    SafePath(gap.FilePath),
+                    gap.StartLine,
+                    gap.EndLine,
+                    null,
+                    SafeTokenOrNull(gap.ExtractorVersion),
+                    gap.CombinedFactId is null ? [] : [gap.CombinedFactId],
+                    [],
+                    gap.RuleId is null ? [GapRuleId] : [gap.RuleId],
+                    [Pair("pathScope", "application-database-operations")],
+                    gap.Reason is null ? Limitations : [gap.Reason, .. Limitations]));
+            }
         }
 
         foreach (var (factId, operation) in operationTableByFactId.OrderBy(row => row.Key, StringComparer.Ordinal))
@@ -516,9 +544,13 @@ public static class DatabaseDesignReviewReporter
             if (routedOperationFactIds.Contains(factId))
                 continue;
             gaps.Add(Gap(
-                "OperationRoutePathUnavailable",
+                operationPathCoverageReduced
+                    ? "OperationRoutePathCoverageReduced"
+                    : "OperationRoutePathUnavailable",
                 operation.Key.SourceLabel,
-                "A bounded application database-operation candidate matches a PostgreSQL table, but no existing static route path reaches that operation under available graph coverage.",
+                operationPathCoverageReduced
+                    ? "A bounded application database-operation candidate matches a PostgreSQL table, but the route-path search was truncated or reduced before reachability could be established."
+                    : "A bounded application database-operation candidate matches a PostgreSQL table, but no existing static route path reaches that operation under available graph coverage.",
                 [Pair("matchKind", "bounded-operation-table-match")],
                 [factId],
                 commitSha: operation.Item.Evidence.CommitSha,

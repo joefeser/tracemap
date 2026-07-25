@@ -289,6 +289,52 @@ public sealed class DatabaseDesignReviewTests
     }
 
     [Fact]
+    public async Task Packet_marks_unsearched_operation_paths_as_reduced_when_path_search_truncates()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        var manifest = Manifest("server");
+        var controller = "Server.OrdersController.Get()";
+        var first = "Server.OrderRepository.First()";
+        var second = "Server.OrderRepository.Second()";
+        var third = "Server.OrderRepository.Third()";
+        SqliteIndexWriter.Write(index, manifest,
+        [
+            RouteFact(manifest, controller),
+            CallFact(manifest, controller, first),
+            CallFact(manifest, controller, second),
+            CallFact(manifest, controller, third),
+            PostgresFact(manifest, FactTypes.PostgresSchemaTableDeclared, 20,
+                ("objectKind", "table"), ("schemaName", "public"), ("tableName", "orders")),
+            OperationFactForSource(manifest, 30, first,
+                ("frameworkFamily", "dapper"), ("methodName", "Execute"), ("operationKind", "delete-candidate"),
+                ("targetIdentityStatus", "table-static"), ("tableName", "public.orders")),
+            OperationFactForSource(manifest, 31, second,
+                ("frameworkFamily", "dapper"), ("methodName", "Execute"), ("operationKind", "update-candidate"),
+                ("targetIdentityStatus", "table-static"), ("tableName", "public.orders")),
+            OperationFactForSource(manifest, 32, third,
+                ("frameworkFamily", "dapper"), ("methodName", "Query"), ("operationKind", "select-candidate"),
+                ("targetIdentityStatus", "table-static"), ("tableName", "public.orders"))
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["server"]));
+
+        var report = await DatabaseDesignReviewReporter.BuildReportAsync(
+            new DatabaseDesignReviewOptions(
+                combined,
+                Path.Combine(temp.Path, "out"),
+                MaxObjects: 10,
+                MaxEvidence: 20,
+                MaxRouteReferences: 1,
+                MaxGaps: 20));
+
+        Assert.Contains(report.Gaps, gap => gap.GapKind == "TruncatedByLimit"
+            && gap.Metadata.Any(pair => pair.Key == "pathScope" && pair.Value == "application-database-operations"));
+        Assert.Contains(report.Gaps, gap => gap.GapKind == "OperationRoutePathCoverageReduced");
+        Assert.DoesNotContain(report.Gaps, gap => gap.GapKind == "OperationRoutePathUnavailable");
+    }
+
+    [Fact]
     public async Task Packet_emits_bounded_truncation_gaps()
     {
         using var temp = new TempDirectory();
@@ -429,13 +475,20 @@ public sealed class DatabaseDesignReviewTests
                 ("limitations", "Assembly-scanned model configuration was not evaluated.")));
 
     private static CodeFact OperationFact(ScanManifest manifest, int line, params (string Key, string Value)[] properties) =>
+        OperationFactForSource(manifest, line, "Server.OrderRepository.Query(System.Int32)", properties);
+
+    private static CodeFact OperationFactForSource(
+        ScanManifest manifest,
+        int line,
+        string sourceSymbol,
+        params (string Key, string Value)[] properties) =>
         FactFactory.Create(
             manifest,
             FactTypes.DatabaseOperationCandidate,
             RuleIds.DatabaseOperationCallPattern,
             EvidenceTiers.Tier1Semantic,
             new EvidenceSpan("Data/OrderRepository.cs", line, line, FactFactory.Hash($"operation:{line}", 32), "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
-            sourceSymbol: "Server.OrderRepository.Query(System.Int32)",
+            sourceSymbol: sourceSymbol,
             properties: Properties(properties.Concat([
                 ("coverageLabel", "bounded-static-call"),
                 ("limitations", "Static call-pattern candidate only; execution and effects are not proven.")

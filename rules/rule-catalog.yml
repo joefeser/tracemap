@@ -3259,11 +3259,14 @@ rules:
       - AnalysisGap
     limitations:
       - Candidates prove only a compiler-resolved static call shape; they do not prove runtime reachability, provider selection, database identity, SQL generation, execution, affected rows, transaction outcome, or success.
+      - Application methods merely declared on DbContext/DbSet subclasses are excluded unless their declaration or override chain resolves to an allowlisted EF framework container.
       - EF entity targets require an explicit generic receiver, method type, or argument type; convention-only table identities and generated SQL are not reconstructed.
-      - Dapper and command targets use the existing bounded constant SQL-shape projection. Raw SQL, command text, parameter values, and connection material are not retained on operation facts.
+      - Dapper and command targets use the existing bounded constant SQL-shape projection. One- or two-part unquoted table identities are retained; unsafe, quoted, or multipart identities remain gaps rather than being matched after qualifier loss.
+      - Raw SQL, command text, parameter values, and connection material are not retained on operation facts.
       - ADO.NET and Npgsql v0 table projection is limited to inline constant command construction; command variables, helper-returned commands, stored-procedure indirection, repository abstractions, DI dispatch, reflection, and branch feasibility remain reduced coverage.
       - Save and transaction boundaries do not identify the tracked changes, affected tables, isolation, scope, commit, rollback, or atomicity.
       - Recognizable calls without semantic binding and candidates without one bounded target emit explicit Tier4 gaps rather than guessed operations.
+      - When a C# file has no semantic model, name-only syntax fallback emits Tier4 gaps and does not claim framework or target identity.
 
   - id: database.dapper.invocation.v1
     name: Dapper invocation

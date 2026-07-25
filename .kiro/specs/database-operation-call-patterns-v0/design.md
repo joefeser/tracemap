@@ -39,6 +39,16 @@ The extractor never stores SQL or command text on this fact.
 Recognizable operation syntax without semantic binding emits Tier4 gap evidence
 only. Name resemblance never becomes a Tier1 operation.
 
+When no semantic model exists for a C# file, the integration syntax fallback
+emits name-only Tier4 operation gaps. Files with a semantic model do not also
+receive those fallback gaps. Compiler-resolved EF candidates must trace to an
+allowlisted framework declaration or override chain; merely deriving an
+application class from `DbContext` is insufficient.
+
+Constant SQL matching retains safe one- or two-part table identity before
+composition. If qualification is unsafe or cannot be retained, the operation
+target remains unavailable rather than being matched by a stripped table name.
+
 ## Design-review composition
 
 1. Existing PostgreSQL declarations establish table groups.
@@ -48,6 +58,8 @@ only. Name resemblance never becomes a Tier1 operation.
 4. Entity-scoped candidates use exactly one bounded entity-to-table match.
 5. Save/transaction boundaries are global evidence.
 6. Zero or multiple matches produce gaps.
+7. A truncated or reduced route-path search produces coverage gaps; it never
+   becomes evidence that no route reaches an operation.
 
 ## Limitations
 
@@ -56,4 +68,3 @@ targets the configured provider, commits, affects rows, or succeeds. Save calls
 do not identify which tracked changes are persisted. Transaction calls do not
 prove scope, isolation, commit, rollback, or atomicity. SQL-shape correlation
 does not prove generated SQL or runtime parameter values.
-
