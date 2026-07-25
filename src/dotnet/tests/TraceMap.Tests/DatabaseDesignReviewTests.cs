@@ -41,6 +41,10 @@ public sealed class DatabaseDesignReviewTests
                 ("objectKind", "enum"), ("schemaName", "public"), ("enumName", "order_state"), ("enumLabelsOmitted", "true")),
             PostgresFact(manifest, FactTypes.PostgresSchemaRoutineDeclared, 31,
                 ("objectKind", "routine"), ("schemaName", "public"), ("routineName", "archive_orders"), ("routineKind", "function"), ("routineBodyOmitted", "true")),
+            PostgresFact(manifest, FactTypes.PostgresMigrationOperation, 32,
+                ("objectKind", "migration-operation"), ("operationKind", "create-enum"), ("schemaName", "public"), ("enumName", "order_state")),
+            PostgresFact(manifest, FactTypes.PostgresMigrationOperation, 33,
+                ("objectKind", "migration-operation"), ("operationKind", "create-routine"), ("schemaName", "public"), ("routineName", "archive_orders"), ("routineKind", "function")),
             PostgresFact(manifest, FactTypes.PostgresSchemaSnapshotDeclared, 1,
                 ("objectKind", "schema-snapshot"), ("snapshotFormat", "pg-dump"), ("recognizedDdlStatementCount", "6"), ("unsupportedDdlStatementCount", "1"), ("sourceDatabaseIdentityOmitted", "true")),
             PostgresGap(manifest, 40, "SnapshotDdlCoverageReduced")
@@ -65,9 +69,15 @@ public sealed class DatabaseDesignReviewTests
         Assert.NotEmpty(route.Evidence.SupportingFactIds);
         Assert.NotEmpty(route.Evidence.SupportingEdgeIds);
         Assert.Contains(route.Evidence.SupportingRuleIds, rule => rule == RuleIds.CSharpSemanticCallGraph);
+        Assert.Equal("test-route", route.Evidence.ExtractorId);
+        Assert.Equal("test-route/1.0", route.Evidence.ExtractorVersion);
         Assert.Contains(first.Report.GlobalObjects, row => row.EvidenceKind == "snapshot");
         Assert.Contains(first.Report.GlobalObjects, row => row.EvidenceKind == "enum");
         Assert.Contains(first.Report.GlobalObjects, row => row.EvidenceKind == "routine");
+        Assert.Contains(first.Report.GlobalObjects, row => row.EvidenceKind == "migration-operation"
+            && row.Metadata.Any(pair => pair.Key == "enumName" && pair.Value == "order_state"));
+        Assert.Contains(first.Report.GlobalObjects, row => row.EvidenceKind == "migration-operation"
+            && row.Metadata.Any(pair => pair.Key == "routineName" && pair.Value == "archive_orders"));
         Assert.Contains(first.Report.Gaps, gap => gap.GapKind == "SnapshotDdlCoverageReduced");
         Assert.DoesNotContain(first.Report.Gaps, gap => gap.GapKind == "QueryRoutePathUnavailable");
         Assert.All(table.Declarations.Concat(table.Operations).Concat(table.QueryReferences), row =>
@@ -128,6 +138,8 @@ public sealed class DatabaseDesignReviewTests
         Assert.Equal("unavailable", report.Coverage);
         Assert.Empty(report.Tables);
         Assert.Single(report.UnlinkedQueries);
+        Assert.Equal("UnlinkedQuery", report.UnlinkedQueries[0].Classification);
+        Assert.Contains(report.UnlinkedQueries[0].Metadata, pair => pair.Key == "matchKind" && pair.Value == "none");
         Assert.Contains(report.Gaps, gap => gap.GapKind == "PostgresEvidenceProvenanceUnavailable");
         Assert.Contains(report.Gaps, gap => gap.GapKind == "QueryTableUnmatched");
         Assert.Contains(report.Gaps, gap => gap.GapKind == "CompatiblePostgresEvidenceUnavailable");
@@ -140,6 +152,20 @@ public sealed class DatabaseDesignReviewTests
         Assert.Null(provenanceGap.ExtractorVersion);
         Assert.Contains(provenanceGap.SupportingFactIds, id => id.EndsWith($":{incompatible.FactId}", StringComparison.Ordinal));
         Assert.Contains(incompatible.RuleId, provenanceGap.SupportingRuleIds);
+
+        var capped = await DatabaseDesignReviewReporter.BuildReportAsync(
+            new DatabaseDesignReviewOptions(
+                combined,
+                Path.Combine(temp.Path, "capped"),
+                MaxObjects: 10,
+                MaxEvidence: 10,
+                MaxRouteReferences: 10,
+                MaxGaps: 1));
+        var truncation = Assert.Single(capped.Gaps);
+        Assert.Equal("TruncatedByLimit", truncation.GapKind);
+        Assert.Equal(report.Gaps.Count, capped.Summary.OmittedGapCount);
+        Assert.Contains(truncation.Metadata, pair => pair.Key == "omittedCount"
+            && pair.Value == report.Gaps.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     [Fact]
@@ -149,7 +175,10 @@ public sealed class DatabaseDesignReviewTests
         var index = Path.Combine(temp.Path, "server.sqlite");
         var combined = Path.Combine(temp.Path, "combined.sqlite");
         var manifest = Manifest("server");
-        var query = QueryFact(manifest, "Server.Repository.Query()", "public.orders", "not-rendered");
+        var query = QueryFact(manifest, "Server.Repository.Query()", "public.orders", "not-rendered") with
+        {
+            EvidenceTier = "unexpected-tier"
+        };
         SqliteIndexWriter.Write(index, manifest,
         [
             PostgresFact(manifest, FactTypes.PostgresSchemaTableDeclared, 1,
@@ -162,7 +191,7 @@ public sealed class DatabaseDesignReviewTests
             new DatabaseDesignReviewOptions(combined, Path.Combine(temp.Path, "out")));
 
         var table = Assert.Single(report.Tables);
-        Assert.Single(table.QueryReferences);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, Assert.Single(table.QueryReferences).Evidence.EvidenceTier);
         Assert.Empty(table.RouteReferences);
         var gap = Assert.Single(report.Gaps, row => row.GapKind == "QueryRoutePathUnavailable");
         Assert.Equal(manifest.CommitSha, gap.CommitSha);
@@ -172,6 +201,49 @@ public sealed class DatabaseDesignReviewTests
         Assert.Equal("test-query/1.0", gap.ExtractorVersion);
         Assert.Contains(gap.SupportingFactIds, id => id.EndsWith($":{query.FactId}", StringComparison.Ordinal));
         Assert.Contains(query.RuleId, gap.SupportingRuleIds);
+    }
+
+    [Fact]
+    public async Task Packet_marks_source_warnings_partial_and_counts_observed_route_omissions()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        var manifest = Manifest("server") with
+        {
+            AnalysisLevel = "Level3SyntaxAnalysis",
+            BuildStatus = "Failed"
+        };
+        var firstController = "Server.OrdersController.Get(System.Int32)";
+        var secondController = "Server.OrdersController.List()";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+        SqliteIndexWriter.Write(index, manifest,
+        [
+            RouteFact(manifest, firstController),
+            RouteFact(manifest, secondController),
+            CallFact(manifest, firstController, repository),
+            CallFact(manifest, secondController, repository),
+            QueryFact(manifest, repository, "public.orders", "not-rendered"),
+            PostgresFact(manifest, FactTypes.PostgresSchemaTableDeclared, 20,
+                ("objectKind", "table"), ("schemaName", "public"), ("tableName", "orders"))
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["server"]));
+
+        var report = await DatabaseDesignReviewReporter.BuildReportAsync(
+            new DatabaseDesignReviewOptions(
+                combined,
+                Path.Combine(temp.Path, "out"),
+                MaxObjects: 10,
+                MaxEvidence: 10,
+                MaxRouteReferences: 1,
+                MaxGaps: 20));
+
+        Assert.Equal("partial", report.Coverage);
+        Assert.Contains(report.Gaps, gap => gap.GapKind == "SourceCoverageWarning");
+        Assert.Equal(1, report.Summary.RouteReferenceCount);
+        Assert.Equal(1, report.Summary.OmittedRouteReferenceCount);
+        Assert.Contains(report.Gaps, gap => gap.GapKind == "TruncatedByLimit"
+            && gap.Metadata.Any(pair => pair.Key == "omittedKind" && pair.Value == "route-references"));
     }
 
     [Fact]

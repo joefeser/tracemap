@@ -255,6 +255,12 @@ public static class DatabaseDesignReviewReporter
 
                 if (!TryFactTableKey(input.SourceLabel, fact, out var key))
                 {
+                    if (fact.FactType == FactTypes.PostgresMigrationOperation
+                        && (fact.Properties.ContainsKey("enumName") || fact.Properties.ContainsKey("routineName")))
+                    {
+                        globalObjects.Add(FromFact(input.SourceLabel, fact, "migration-operation"));
+                        continue;
+                    }
                     gaps.Add(Gap(
                         "TableIdentityUnavailable",
                         input.SourceLabel,
@@ -291,10 +297,13 @@ public static class DatabaseDesignReviewReporter
         var unlinkedQueries = new List<DatabaseDesignEvidenceItem>();
         foreach (var surface in surfaces)
         {
-            var item = FromQuerySurface(surface, extractorVersions.GetValueOrDefault(surface.CombinedFactId));
             if (!TrySurfaceTableKey(surface, out var key) || !builders.TryGetValue(key.StableKey, out var builder))
             {
-                unlinkedQueries.Add(item);
+                unlinkedQueries.Add(FromQuerySurface(
+                    surface,
+                    extractorVersions.GetValueOrDefault(surface.CombinedFactId),
+                    classification: "UnlinkedQuery",
+                    matchKind: "none"));
                 gaps.Add(Gap(
                     "QueryTableUnmatched",
                     surface.SourceLabel,
@@ -314,6 +323,11 @@ public static class DatabaseDesignReviewReporter
                 continue;
             }
 
+            var item = FromQuerySurface(
+                surface,
+                extractorVersions.GetValueOrDefault(surface.CombinedFactId),
+                classification: "StaticNameMatch",
+                matchKind: "static-name-match");
             builder.QueryReferences.Add(item);
             queryByFactId[surface.CombinedFactId] = (key, item);
         }
@@ -329,7 +343,9 @@ public static class DatabaseDesignReviewReporter
                     ToSurface: "sql-query",
                     IncludeLegacyRoots: true,
                     MaxDepth: 8,
-                    MaxPaths: Math.Max(options.MaxRouteReferences, 1),
+                    MaxPaths: options.MaxRouteReferences == int.MaxValue
+                        ? int.MaxValue
+                        : options.MaxRouteReferences + 1,
                     MaxFrontier: 10000),
                 cancellationToken);
         }
@@ -375,7 +391,14 @@ public static class DatabaseDesignReviewReporter
                     continue;
                 }
 
-                routeReferences.Add((query.Key, FromPath(path, entry)));
+                routeReferences.Add((
+                    query.Key,
+                    FromPath(
+                        path,
+                        entry,
+                        entry.CombinedFactId is null
+                            ? default
+                            : extractorVersions.GetValueOrDefault(entry.CombinedFactId))));
                 routedQueryFactIds.Add(terminal.CombinedFactId);
             }
 
@@ -388,7 +411,7 @@ public static class DatabaseDesignReviewReporter
                     gap.Message,
                     gap.SourceLabel,
                     gap.RuleId ?? GapRuleId,
-                    gap.EvidenceTier ?? EvidenceTiers.Tier4Unknown,
+                    NormalizeTier(gap.EvidenceTier),
                     "reduced",
                     gap.CommitSha,
                     SafePath(gap.FilePath),
@@ -467,33 +490,15 @@ public static class DatabaseDesignReviewReporter
             .OrderBy(row => row.Evidence.SourceLabel, StringComparer.Ordinal)
             .ThenBy(row => row.ItemId, StringComparer.Ordinal)
             .ToArray();
-        var sortedGaps = gaps
-            .GroupBy(row => row.GapId, StringComparer.Ordinal)
-            .Select(group => group.First())
-            .OrderBy(row => row.SourceLabel ?? string.Empty, StringComparer.Ordinal)
-            .ThenBy(row => row.GapKind, StringComparer.Ordinal)
-            .ThenBy(row => row.GapId, StringComparer.Ordinal)
-            .ToArray();
-        var omittedGaps = Math.Max(0, sortedGaps.Length - options.MaxGaps);
-        var cappedGaps = sortedGaps.Take(options.MaxGaps).ToList();
-        if (omittedGaps > 0)
-        {
-            var truncation = TruncationGap("gaps", omittedGaps);
-            if (cappedGaps.Count == options.MaxGaps)
-                cappedGaps[^1] = truncation;
-            else
-                cappedGaps.Add(truncation);
-        }
-
         var sources = read.Sources
             .OrderBy(source => source.Label, StringComparer.Ordinal)
             .ThenBy(source => source.SourceIndexId, StringComparer.Ordinal)
             .Select(source => new DatabaseDesignSource(
                 SafeLabel(source.Label),
                 SafeCommit(source.CommitSha),
-                source.Language ?? "unknown",
-                source.AnalysisLevel,
-                source.BuildStatus,
+                SafeToken(source.Language, "unknown"),
+                SafeToken(source.AnalysisLevel, "unknown"),
+                SafeToken(source.BuildStatus, "unknown"),
                 CombinedReportHelpers.SourceIdentityVerified(source),
                 read.CoverageWarnings
                     .Where(warning => warning.Contains(source.Label, StringComparison.OrdinalIgnoreCase))
@@ -502,20 +507,52 @@ public static class DatabaseDesignReviewReporter
                     .OrderBy(value => value, StringComparer.Ordinal)
                     .ToArray()))
             .ToArray();
+        foreach (var source in sources.Where(source => source.CoverageWarnings.Count > 0))
+        {
+            gaps.Add(Gap(
+                "SourceCoverageWarning",
+                source.SourceLabel,
+                "The combined source reports reduced analysis, build, language, or identity coverage; packet conclusions remain partial.",
+                [Pair("warningCount", source.CoverageWarnings.Count.ToString(CultureInfo.InvariantCulture))]));
+        }
+
         var compatibleDesignCount = tables.Sum(TableEvidenceCount) + globals.Length;
+        if (compatibleDesignCount == 0
+            && gaps.All(gap => gap.GapKind != "CompatiblePostgresEvidenceUnavailable"))
+        {
+            gaps.Add(Gap(
+                "CompatiblePostgresEvidenceUnavailable",
+                null,
+                "No compatible bounded PostgreSQL schema, migration, or snapshot evidence is present in the combined index."));
+        }
+
+        var sortedGaps = gaps
+            .GroupBy(row => row.GapId, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .OrderBy(row => row.SourceLabel ?? string.Empty, StringComparer.Ordinal)
+            .ThenBy(row => row.GapKind, StringComparer.Ordinal)
+            .ThenBy(row => row.GapId, StringComparer.Ordinal)
+            .ToArray();
+        int omittedGaps;
+        List<DatabaseDesignGap> cappedGaps;
+        if (sortedGaps.Length <= options.MaxGaps)
+        {
+            omittedGaps = 0;
+            cappedGaps = sortedGaps.ToList();
+        }
+        else
+        {
+            var retainedOriginalCount = options.MaxGaps - 1;
+            omittedGaps = sortedGaps.Length - retainedOriginalCount;
+            cappedGaps = sortedGaps.Take(retainedOriginalCount).ToList();
+            cappedGaps.Add(TruncationGap("gaps", omittedGaps));
+        }
+
         var coverage = compatibleDesignCount == 0
             ? "unavailable"
             : cappedGaps.Count == 0 && omittedObjects == 0 && omittedEvidence == 0 && omittedRoutes == 0 && omittedGaps == 0
                 ? "available"
                 : "partial";
-        if (compatibleDesignCount == 0 && cappedGaps.All(gap => gap.GapKind != "CompatiblePostgresEvidenceUnavailable"))
-        {
-            cappedGaps.Add(Gap(
-                "CompatiblePostgresEvidenceUnavailable",
-                null,
-                "No compatible bounded PostgreSQL schema, migration, or snapshot evidence is present in the combined index."));
-            coverage = "unavailable";
-        }
 
         var summary = new DatabaseDesignSummary(
             sources.Length,
@@ -570,7 +607,8 @@ public static class DatabaseDesignReviewReporter
 
     private static bool KnownCommit(string? value) =>
         !string.IsNullOrWhiteSpace(value)
-        && !value.Equals("unknown", StringComparison.OrdinalIgnoreCase)
+        && value.Length is >= 7 and <= 64
+        && value.All(Uri.IsHexDigit)
         && value.Trim('0').Length > 0;
 
     private static DatabaseDesignEvidenceItem FromFact(string sourceLabel, CodeFact fact, string kind)
@@ -603,7 +641,7 @@ public static class DatabaseDesignReviewReporter
             metadata,
             new DatabaseDesignEvidenceRef(
                 fact.RuleId,
-                fact.EvidenceTier,
+                NormalizeTier(fact.EvidenceTier),
                 SafeLabel(sourceLabel),
                 SafeCommit(fact.CommitSha),
                 SafePath(fact.Evidence.FilePath),
@@ -628,7 +666,7 @@ public static class DatabaseDesignReviewReporter
             "PostgreSQL schema/migration evidence has an explicit upstream coverage gap.",
             SafeLabel(sourceLabel),
             fact.RuleId,
-            fact.EvidenceTier,
+            NormalizeTier(fact.EvidenceTier),
             "reduced",
             SafeCommit(fact.CommitSha),
             SafePath(fact.Evidence.FilePath),
@@ -645,7 +683,9 @@ public static class DatabaseDesignReviewReporter
 
     private static DatabaseDesignEvidenceItem FromQuerySurface(
         CombinedDependencySurfaceRow surface,
-        (string? Id, string? Version) extractor)
+        (string? Id, string? Version) extractor,
+        string classification,
+        string matchKind)
     {
         var metadata = SortMetadata(
         [
@@ -653,17 +693,17 @@ public static class DatabaseDesignReviewReporter
             Pair("tableName", SafeIdentifier(surface.TableName, "unavailable")),
             Pair("columnNames", SafeIdentifierList(surface.ColumnNames)),
             Pair("sourceKind", SafeToken(surface.SourceKind, "unknown")),
-            Pair("matchKind", "static-name-match")
+            Pair("matchKind", matchKind)
         ]);
         return new DatabaseDesignEvidenceItem(
             StableId("query", surface.SourceLabel, surface.CombinedFactId),
             "query-reference",
             SafeIdentifier(surface.TableName, "unlinked-query"),
-            "StaticNameMatch",
+            classification,
             metadata,
             new DatabaseDesignEvidenceRef(
                 surface.RuleId,
-                surface.EvidenceTier,
+                NormalizeTier(surface.EvidenceTier),
                 SafeLabel(surface.SourceLabel),
                 SafeCommit(surface.CommitSha),
                 SafePath(surface.FilePath),
@@ -678,7 +718,10 @@ public static class DatabaseDesignReviewReporter
                 Limitations));
     }
 
-    private static DatabaseDesignRouteReference FromPath(CombinedPath path, CombinedPathNode entry)
+    private static DatabaseDesignRouteReference FromPath(
+        CombinedPath path,
+        CombinedPathNode entry,
+        (string? Id, string? Version) extractor)
     {
         var rules = path.Edges.Select(edge => edge.RuleId)
             .Concat(path.Nodes.Select(node => node.RuleId).OfType<string>())
@@ -704,8 +747,8 @@ public static class DatabaseDesignReviewReporter
                 SafePath(entry.FilePath),
                 entry.StartLine,
                 entry.EndLine,
-                null,
-                null,
+                SafeTokenOrNull(extractor.Id),
+                SafeTokenOrNull(extractor.Version),
                 "bounded-static-path",
                 path.SupportingFactIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                 path.SupportingEdgeIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -1024,7 +1067,7 @@ public static class DatabaseDesignReviewReporter
     }
 
     private static string SafeLabel(string? value) => SafeToken(value, "unknown-source");
-    private static string SafeCommit(string? value) => KnownCommit(value) ? value! : "unknown";
+    private static string SafeCommit(string? value) => KnownCommit(value) ? value!.Trim() : "unknown";
     private static string SafeReason(string? value) => SafeToken(value, "unavailable");
     private static string SafeRoute(string? value) =>
         string.IsNullOrWhiteSpace(value) ? "unavailable" : value.Replace("|", "%7C", StringComparison.Ordinal).Replace("\r", "", StringComparison.Ordinal).Replace("\n", "", StringComparison.Ordinal);
@@ -1097,6 +1140,15 @@ public static class DatabaseDesignReviewReporter
         };
     }
 
+    private static string NormalizeTier(string? tier) => tier switch
+    {
+        EvidenceTiers.Tier1Semantic => EvidenceTiers.Tier1Semantic,
+        EvidenceTiers.Tier2Structural => EvidenceTiers.Tier2Structural,
+        EvidenceTiers.Tier3SyntaxOrTextual => EvidenceTiers.Tier3SyntaxOrTextual,
+        EvidenceTiers.Tier4Unknown => EvidenceTiers.Tier4Unknown,
+        _ => EvidenceTiers.Tier4Unknown
+    };
+
     private static string StableId(params string[] parts)
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\0', parts)));
@@ -1111,7 +1163,7 @@ public static class DatabaseDesignReviewReporter
             .OrderBy(pair => pair.Key, StringComparer.Ordinal)
             .ThenBy(pair => pair.Value, StringComparer.Ordinal)
             .ToArray();
-    private static string Md(string value) => value.Replace("|", "\\|", StringComparison.Ordinal).Replace("\r", "", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
+    private static string Md(string value) => CombinedReportHelpers.Cell(value);
 
     private readonly record struct TableKey(string StableKey, string SourceLabel, string SchemaName, string TableName, string SchemaResolution);
 
