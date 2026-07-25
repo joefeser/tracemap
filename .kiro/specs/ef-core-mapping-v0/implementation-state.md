@@ -1,12 +1,14 @@
 # EF Core Mapping v0 Implementation State
 
-Status: implementation complete; PR pending
+Status: implemented; ACK merge-ready handoff
 
 Branch: `codex/ef-core-mapping-v0`
 
 Base: `origin/dev` at `07899292b0a66aa164137bebc747fe4df7f1012c`
 
 Issue: [#436](https://github.com/joefeser/tracemap/issues/436)
+
+PR: [#535](https://github.com/joefeser/tracemap/pull/535)
 
 ## Scope decision
 
@@ -47,6 +49,11 @@ arguments), evaluates constant attribute schema expressions, emits a Tier4 gap
 for recognizable fluent chains without semantic binding, removes null-forgiving
 semantic failure outputs, and preserves bounded generic/nested entity type
 metadata. Focused regression coverage was added for each behavior.
+
+After the review-fix commit, ACK returned `merge_ready / NONE / merge_ready`
+with clean checks and merge state, zero unresolved threads, and zero actionable,
+held, or stale findings. Codex and Qodo both returned under the configured
+trusted-review quorum.
 
 ## Deferred
 
