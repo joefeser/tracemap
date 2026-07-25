@@ -1,6 +1,6 @@
 # PostgreSQL Schema Snapshot Evidence State
 
-Status: implemented-and-merged
+Status: implemented
 
 Branch: `codex/postgres-schema-snapshot-evidence`
 

@@ -1,6 +1,6 @@
 # PostgreSQL Enum/Routine Evidence State
 
-Status: implemented-and-merged
+Status: implemented
 
 Branch: `codex/postgres-schema-migration-routines-enums`
 
