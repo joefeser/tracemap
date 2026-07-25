@@ -10,6 +10,21 @@ column, constraint, index, enum, and routine facts with rule IDs, Tier 2 evidenc
 repository-relative statement spans, commit-bound scan provenance, extractor
 version, bounded coverage labels, and limitations.
 
+Checked-in schema snapshots are recognized only when an active line comment
+contains the standard `-- PostgreSQL database dump` header or the explicit
+`-- tracemap-postgres-schema-snapshot: v1` directive. A filename such as
+`schema.sql` is not enough. Snapshot facts retain format, recognized bounded-DDL
+count, aggregate unsupported-DDL count, reduced/full bounded coverage, and an
+explicit source-database-identity omission. Comments, database names, server
+names, and raw dump text are not projected.
+
+Unsupported `CREATE`, `ALTER`, `DROP`, and `TRUNCATE` families inside an
+explicit snapshot are summarized by categorical family and count. Snapshot
+coverage becomes reduced, but supported table/column/constraint/index/enum/
+routine and migration-operation evidence remains useful. This does not verify
+how the dump was generated, whether it is complete or current, whether it can
+be restored, or whether it matches a live database.
+
 The current slice accepts unquoted PostgreSQL identifiers only. Constraint
 coverage is limited to explicitly named primary-key, unique, and foreign-key
 clauses at the top level of supported `CREATE TABLE` statements or in
