@@ -1053,6 +1053,38 @@ random loopback port, uses no host volume, asserts pass/fail/not-run behavior
 and deterministic summaries, checks identifier and connection-data exclusion,
 and cleans all container and scratch state. It is not a substitute for an
 authorized target-specific operator validation.
+
+## Database design-review packet
+
+For changes to the combined-index database design-review packet, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~DatabaseDesignReviewTests
+dotnet run --project src/dotnet/TraceMap.Cli -- scan \
+  --repo samples/postgres-schema-migration \
+  --out <tmp>/postgres-scan
+dotnet run --project src/dotnet/TraceMap.Cli -- combine \
+  --index <tmp>/postgres-scan/index.sqlite --label postgres-sample \
+  --out <tmp>/combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- database-design-review \
+  --index <tmp>/combined.sqlite \
+  --out <tmp>/database-design-review
+```
+
+Confirm both packet files are deterministic and contain rule IDs, evidence
+tiers, source labels, commit SHAs, repository-relative spans, extractor
+provenance, supporting fact/edge/rule IDs, coverage, limitations, and explicit
+gaps. Verify declaration rows remain separate from migration-operation rows,
+query/table correlation is exact and source-scoped, and route references come
+only from existing bounded path evidence.
+
+The smoke must not require PostgreSQL or network access. Confirm the packet does
+not render raw SQL, snippets or snippet hashes, credentials, connection
+strings, scheduled command bodies, local paths, private server identities, or
+validation output. It must not claim SQL execution, runtime reachability,
+production state, design correctness, release approval, or that a script is
+safe to run.
 ### PostgreSQL enum and routine declaration evidence
 
 For changes to the bounded PostgreSQL enum/routine projector, run:
