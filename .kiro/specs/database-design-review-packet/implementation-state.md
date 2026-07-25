@@ -1,6 +1,6 @@
 # Database Design-Review Packet Implementation State
 
-Status: implementation in progress (product complete; PR review active)
+Status: implemented
 
 Branch: `codex/database-design-review-packet`
 
@@ -10,6 +10,8 @@ Issue: [#438](https://github.com/joefeser/tracemap/issues/438)
 
 PR: [#533](https://github.com/joefeser/tracemap/pull/533)
 
+Merge commit: `f4b7fc1a0f785cf3201b6b116d2f4f17019aaecd`
+
 ## Scope decision
 
 Build a combined-index read-side packet over already-shipped PostgreSQL schema,
@@ -17,9 +19,9 @@ migration, snapshot, SQL/query surface, and bounded path evidence. Add no
 extractor, parser, database connection, execution, runtime probe, or Windows
 behavior.
 
-The packet will use existing path-report results as the route authority and
-will label exact query/table correlation as `static-name-match`. Missing links
-remain gaps.
+The packet uses existing path-report results as the route authority and labels
+exact query/table correlation as `static-name-match`. Missing links remain
+gaps.
 
 ## Bookkeeping dependency
 
@@ -39,7 +41,7 @@ and operation call-pattern depth remain #436 and #437.
 - End-to-end sample smoke:
   `scan samples/postgres-schema-migration` → `combine` →
   `database-design-review` — passed; emitted deterministic Markdown/JSON with
-  four table groups, eight global objects, explicit partial coverage, and no
+  four table groups, eleven global objects, explicit partial coverage, and no
   scratch path.
 - `./scripts/check-private-paths.sh` — passed.
 - `git diff --check` — passed.
@@ -63,6 +65,11 @@ patch preserves route extractor provenance, marks source warnings partial,
 retains global enum/routine migration operations, labels unlinked queries
 without claiming a match, normalizes tiers, hardens Markdown/commit rendering,
 and corrects route/gap truncation accounting with regression coverage.
+
+Final ACK returned `merge_ready / NONE / merge_ready` at exact head
+`09182645dd034c91d873d2434d40993e99074edf` with clean checks, zero unresolved
+threads, and zero actionable or held findings. PR #533 merged into `dev` as
+`f4b7fc1a0f785cf3201b6b116d2f4f17019aaecd`.
 
 ## Deferred
 
