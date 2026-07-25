@@ -3285,10 +3285,11 @@ rules:
 
   - id: database.postgres.schema-migration.v1
     name: PostgreSQL schema and migration surface
-    description: Extracts bounded table, column, named constraint, simple index, enum, routine, destructive-change, migration-operation, and migration-file evidence from explicit checked-in PostgreSQL DDL.
+    description: Extracts bounded schema-snapshot, table, column, named constraint, simple index, enum, routine, destructive-change, migration-operation, and migration-file evidence from explicit checked-in PostgreSQL DDL.
     evidenceTier: Tier2Structural
     emits:
       - PostgresMigrationFileDeclared
+      - PostgresSchemaSnapshotDeclared
       - PostgresSchemaTableDeclared
       - PostgresSchemaColumnDeclared
       - PostgresSchemaConstraintDeclared
@@ -3302,6 +3303,8 @@ rules:
       - Constraint and index facts do not model inline column constraints, check/exclusion expressions, foreign-key actions, expression/partial/include indexes, predicate semantics, index selection, uniqueness, or referential integrity.
       - Enum labels and routine signatures, parameters, returns, languages, bodies, dynamic SQL, overload identity, and runtime reachability are omitted.
       - Drop and rename facts record checked-in operation intent only; CASCADE/RESTRICT is categorical, omitted behavior remains unspecified, and dependency effects, data loss, rollback, and execution are not inferred.
+      - Schema snapshot identity requires an active standard PostgreSQL dump header or versioned TraceMap directive; filenames alone are insufficient, source database identity is omitted, and dump generation, completeness, restoreability, and freshness are not verified.
+      - Snapshot coverage counts only recognized bounded DDL and aggregate unsupported CREATE/ALTER/DROP/TRUNCATE families; reduced coverage is a static parser limitation, not evidence that the source database or dump is incomplete.
       - Static DDL evidence does not prove migration execution, execution order, live schema existence, database state, data correctness, permissions, rollback, production use, or release safety.
       - Raw SQL, source snippets, literals, connection material, local paths, and unsupported identifiers are not stored in fact properties.
 

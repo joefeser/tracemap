@@ -315,6 +315,160 @@ public sealed class PostgresSchemaMigrationExtractorTests
     }
 
     [Fact]
+    public void Extract_emits_explicit_pg_dump_snapshot_evidence_without_comment_identity()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "snapshot.sql"), """
+            -- tracemap-postgres-schema-snapshot: v1
+            -- PostgreSQL database dump
+            -- source database: sentinel-private-database
+            -- server: sentinel-private-server
+            CREATE TABLE archive.records (id bigint);
+            CREATE INDEX records_id_idx ON archive.records (id);
+            """);
+
+        var facts = Extract(temp.Path);
+        var json = JsonSerializer.Serialize(facts);
+        var snapshot = Assert.Single(facts, fact => fact.FactType == FactTypes.PostgresSchemaSnapshotDeclared);
+
+        Assert.Equal("pg-dump", snapshot.Properties["snapshotFormat"]);
+        Assert.Equal("2", snapshot.Properties["recognizedDdlStatementCount"]);
+        Assert.Equal("0", snapshot.Properties["unsupportedDdlStatementCount"]);
+        Assert.Equal("true", snapshot.Properties["sourceDatabaseIdentityOmitted"]);
+        Assert.Equal("bounded-static-evidence", snapshot.Properties["coverageLabel"]);
+        Assert.Equal(RuleIds.DatabasePostgresSchemaMigration, snapshot.RuleId);
+        Assert.Equal(EvidenceTiers.Tier2Structural, snapshot.EvidenceTier);
+        Assert.Equal("snapshot.sql", snapshot.Evidence.FilePath);
+        Assert.Equal(ScannerVersions.PostgresSchemaMigrationExtractor, snapshot.Evidence.ExtractorVersion);
+        Assert.NotNull(snapshot.Evidence.SnippetHash);
+        Assert.DoesNotContain(facts, fact =>
+            fact.RuleId == RuleIds.DatabasePostgresSchemaMigrationGap
+            && fact.Properties.GetValueOrDefault("classification")?.StartsWith("Snapshot", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain("sentinel-private", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Extract_marks_directive_snapshot_reduced_for_unsupported_ddl_families_without_identity_leakage()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "partial.sql"), """
+            -- tracemap-postgres-schema-snapshot: v1
+            CREATE TABLE archive.records (id bigint);
+            CREATE SEQUENCE archive.private_sequence;
+            CREATE VIEW archive.private_view AS SELECT id FROM archive.records;
+            """);
+
+        var facts = Extract(temp.Path);
+        var json = JsonSerializer.Serialize(facts);
+        var snapshot = Assert.Single(facts, fact => fact.FactType == FactTypes.PostgresSchemaSnapshotDeclared);
+        var gap = Assert.Single(facts, fact =>
+            fact.Properties.GetValueOrDefault("classification") == "SnapshotDdlCoverageReduced");
+
+        Assert.Equal("tracemap-directive-v1", snapshot.Properties["snapshotFormat"]);
+        Assert.Equal("1", snapshot.Properties["recognizedDdlStatementCount"]);
+        Assert.Equal("2", snapshot.Properties["unsupportedDdlStatementCount"]);
+        Assert.Equal("reduced-static-evidence", snapshot.Properties["coverageLabel"]);
+        Assert.Equal("2", gap.Properties["unsupportedDdlStatementCount"]);
+        Assert.Equal("create-sequence,create-view", gap.Properties["unsupportedDdlFamilies"]);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.DoesNotContain("private_sequence", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_view", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Extract_counts_only_projected_ddl_in_mixed_snapshot_coverage()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "mixed-snapshot.sql"), """
+            -- tracemap-postgres-schema-snapshot: v1
+            CREATE TABLE archive.records (id bigint);
+            DROP INDEX private_index;
+            TRUNCATE TABLE private_records;
+            """);
+
+        var facts = Extract(temp.Path);
+        var json = JsonSerializer.Serialize(facts);
+        var snapshot = Assert.Single(facts, fact => fact.FactType == FactTypes.PostgresSchemaSnapshotDeclared);
+        var gap = Assert.Single(facts, fact => fact.Properties.GetValueOrDefault("classification") == "SnapshotDdlCoverageReduced");
+
+        Assert.Equal("1", snapshot.Properties["recognizedDdlStatementCount"]);
+        Assert.Equal("2", snapshot.Properties["unsupportedDdlStatementCount"]);
+        Assert.Equal("drop-index,truncate-table", gap.Properties["unsupportedDdlFamilies"]);
+        Assert.Equal(2, facts.Count(fact => fact.Properties.GetValueOrDefault("classification") == "UnsupportedSchemaDdlShape"));
+        Assert.DoesNotContain("private_index", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_records", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Extract_preserves_unsupported_only_snapshot_identity_without_migration_file_fact()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "unsupported-only-snapshot.sql"), """
+            -- tracemap-postgres-schema-snapshot: v1
+            DROP VIEW private_view;
+            DROP TYPE private_type;
+            TRUNCATE TABLE private_records;
+            CREATE TABLE "private_schema"."private_table" (id bigint);
+            ALTER TABLE ONLY archive.records ADD COLUMN private_column text;
+            """);
+
+        var facts = Extract(temp.Path);
+        var json = JsonSerializer.Serialize(facts);
+        var snapshot = Assert.Single(facts, fact => fact.FactType == FactTypes.PostgresSchemaSnapshotDeclared);
+        var gap = Assert.Single(facts, fact => fact.Properties.GetValueOrDefault("classification") == "SnapshotRecognizedDdlUnavailable");
+
+        Assert.Equal("0", snapshot.Properties["recognizedDdlStatementCount"]);
+        Assert.Equal("5", snapshot.Properties["unsupportedDdlStatementCount"]);
+        Assert.Equal("alter-table,create-table,drop-type,drop-view,truncate-table", gap.Properties["unsupportedDdlFamilies"]);
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.PostgresMigrationFileDeclared);
+        Assert.Equal(5, facts.Count(fact => fact.RuleId == RuleIds.DatabasePostgresSchemaMigrationGap
+            && fact.Properties.GetValueOrDefault("statementOrdinal") != "0"));
+        Assert.DoesNotContain("private_view", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_type", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_records", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_schema", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_table", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_column", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Extract_does_not_infer_snapshot_from_filename_or_marker_text_inside_sql_literals()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "schema.sql"), """
+            SELECT '-- PostgreSQL database dump';
+            CREATE TABLE archive.records (id bigint);
+            """);
+
+        var facts = Extract(temp.Path);
+
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.PostgresSchemaSnapshotDeclared);
+        Assert.Contains(facts, fact => fact.FactType == FactTypes.PostgresSchemaTableDeclared);
+    }
+
+    [Fact]
+    public void Extract_preserves_snapshot_identity_with_gap_when_no_supported_ddl_is_available()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "unsupported-snapshot.sql"), """
+            -- tracemap-postgres-schema-snapshot: v1
+            SET statement_timeout = 0;
+            CREATE SEQUENCE archive.private_sequence;
+            """);
+
+        var facts = Extract(temp.Path);
+        var snapshot = Assert.Single(facts, fact => fact.FactType == FactTypes.PostgresSchemaSnapshotDeclared);
+        var gap = Assert.Single(facts, fact =>
+            fact.Properties.GetValueOrDefault("classification") == "SnapshotRecognizedDdlUnavailable");
+
+        Assert.Equal("0", snapshot.Properties["recognizedDdlStatementCount"]);
+        Assert.Equal("1", snapshot.Properties["unsupportedDdlStatementCount"]);
+        Assert.Equal("reduced-static-evidence", snapshot.Properties["coverageLabel"]);
+        Assert.Equal("create-sequence", gap.Properties["unsupportedDdlFamilies"]);
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.PostgresMigrationFileDeclared);
+    }
+
+    [Fact]
     public void Extract_gaps_unsafe_or_deferred_constraint_and_index_shapes_without_leaking_identity()
     {
         using var temp = new TempDirectory();
@@ -387,6 +541,8 @@ public sealed class PostgresSchemaMigrationExtractorTests
         Assert.Contains("routine signatures", block, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("referential integrity", block, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("data loss", block, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("schema snapshot", block, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("source database", block, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -396,6 +552,7 @@ public sealed class PostgresSchemaMigrationExtractorTests
         using var firstOutput = new TempDirectory();
         using var secondOutput = new TempDirectory();
         File.WriteAllText(Path.Combine(repo.Path, "migration.sql"), """
+            -- PostgreSQL database dump
             CREATE TABLE archive.records (
               id bigint,
               CONSTRAINT records_pkey PRIMARY KEY (id)
@@ -420,6 +577,7 @@ public sealed class PostgresSchemaMigrationExtractorTests
         Assert.Contains(first, fact => fact.FactType == FactTypes.PostgresSchemaIndexDeclared);
         Assert.Contains(first, fact => fact.FactType == FactTypes.PostgresSchemaEnumDeclared);
         Assert.Contains(first, fact => fact.FactType == FactTypes.PostgresSchemaRoutineDeclared);
+        Assert.Contains(first, fact => fact.FactType == FactTypes.PostgresSchemaSnapshotDeclared);
         Assert.Contains(first, fact => fact.FactType == FactTypes.PostgresMigrationOperation
             && fact.Properties.GetValueOrDefault("operationKind") == "rename-column");
         Assert.Contains(first, fact => fact.FactType == FactTypes.PostgresMigrationOperation
@@ -433,6 +591,7 @@ public sealed class PostgresSchemaMigrationExtractorTests
         using var output = new TempDirectory();
         var indexPath = Path.Combine(output.Path, "index.sqlite");
         File.WriteAllText(Path.Combine(repo.Path, "migration.sql"), """
+            -- tracemap-postgres-schema-snapshot: v1
             CREATE TABLE archive.records (id bigint);
             CREATE TYPE archive.retention_state AS ENUM ('sentinel-private-label');
             CREATE FUNCTION archive.move_batch(private_limit integer)
@@ -451,6 +610,10 @@ public sealed class PostgresSchemaMigrationExtractorTests
         Assert.Contains(review.SqlEvidence.Findings, finding =>
             finding.RuleId == RuleIds.DatabasePostgresSchemaMigration
             && finding.Metadata.Any(pair => pair.Key == "factType" && pair.Value == FactTypes.PostgresSchemaTableDeclared));
+        Assert.Contains(review.SqlEvidence.Findings, finding =>
+            finding.Metadata.Any(pair => pair.Key == "factType" && pair.Value == FactTypes.PostgresSchemaSnapshotDeclared)
+            && finding.Metadata.Any(pair => pair.Key == "snapshotFormat" && pair.Value == "tracemap-directive-v1")
+            && finding.Metadata.Any(pair => pair.Key == "sourceDatabaseIdentityOmitted" && pair.Value == "true"));
         Assert.Contains(review.SqlEvidence.Findings, finding =>
             finding.Metadata.Any(pair => pair.Key == "factType" && pair.Value == FactTypes.PostgresSchemaEnumDeclared)
             && finding.Metadata.Any(pair => pair.Key == "enumLabelsOmitted" && pair.Value == "true"));

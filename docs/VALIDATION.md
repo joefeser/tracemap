@@ -1086,3 +1086,22 @@ behavior, rule ID, Tier 2, repository-relative span, commit SHA, extractor
 version, coverage label, and limitations. Quoted identifiers, multi-object
 drops, and multi-subcommand alterations must emit Tier 4 categorical gaps
 without raw SQL or unsupported identities.
+
+### PostgreSQL checked-in schema snapshot evidence
+
+For changes to schema-snapshot recognition and coverage, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~PostgresSchemaMigrationExtractorTests
+```
+
+Use synthetic checked-in SQL with an active standard
+`-- PostgreSQL database dump` header or the exact
+`-- tracemap-postgres-schema-snapshot: v1` directive. Verify snapshot format,
+recognized bounded-DDL count, aggregate unsupported-DDL count, coverage label,
+source-database-identity omission, rule, tier, span, commit, extractor version,
+and limitations. Confirm filename-only candidates and marker text inside SQL
+strings do not establish snapshot identity. Unsupported DDL must produce
+categorical Tier 4 snapshot gaps without retaining object names, comments,
+database/server identity, or raw SQL.
