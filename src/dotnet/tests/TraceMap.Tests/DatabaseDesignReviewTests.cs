@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using TraceMap.Cli;
 using TraceMap.Combine;
 using TraceMap.Core;
@@ -392,24 +393,95 @@ public sealed class DatabaseDesignReviewTests
     }
 
     [Fact]
-    public async Task Cli_exposes_help_and_rejects_single_index_input()
+    public async Task Single_index_packet_preserves_design_evidence_and_labels_route_coverage_partial()
     {
         var output = new StringWriter();
         var error = new StringWriter();
         Assert.Equal(0, await TraceMapCommand.RunAsync(["database-design-review", "--help"], output, error));
-        Assert.Contains("database-design-review --index", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("index.sqlite|combined.sqlite", output.ToString(), StringComparison.Ordinal);
 
         using var temp = new TempDirectory();
         var index = Path.Combine(temp.Path, "single.sqlite");
-        SqliteIndexWriter.Write(index, Manifest("server"), []);
+        var firstOutput = Path.Combine(temp.Path, "first");
+        var secondOutput = Path.Combine(temp.Path, "second");
+        var manifest = Manifest("server") with
+        {
+            KnownGaps = ["test-reduced-coverage"]
+        };
+        var protectedValue = "Server=private.internal;Password=do-not-render";
+        SqliteIndexWriter.Write(index, manifest,
+        [
+            PostgresFact(manifest, FactTypes.PostgresSchemaTableDeclared, 1,
+                ("objectKind", "table"), ("schemaName", "public"), ("tableName", "orders")),
+            PostgresFact(manifest, FactTypes.PostgresSchemaColumnDeclared, 2,
+                ("objectKind", "column"), ("schemaName", "public"), ("tableName", "orders"), ("columnName", "status")),
+            EfMappingFact(manifest, 3,
+                ("mappingKind", "DatabaseTableMapping"), ("configurationKind", "fluent"),
+                ("entityType", "global::Server.Order"), ("mappedName", "orders")),
+            OperationFact(manifest, 4,
+                ("frameworkFamily", "dapper"), ("methodName", "Execute"), ("operationKind", "update-candidate"),
+                ("targetIdentityStatus", "table-static"), ("tableName", "public.orders")),
+            QueryFact(manifest, "Server.OrderRepository.Query(System.Int32)", "public.orders", protectedValue)
+        ]);
         output.GetStringBuilder().Clear();
         error.GetStringBuilder().Clear();
         var exit = await TraceMapCommand.RunAsync(
-            ["database-design-review", "--index", index, "--out", Path.Combine(temp.Path, "out")],
+            ["database-design-review", "--index", index, "--out", firstOutput],
             output,
             error);
-        Assert.Equal(1, exit);
-        Assert.Contains("combined index", error.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, exit);
+        Assert.Empty(error.ToString());
+
+        var first = await DatabaseDesignReviewReporter.BuildReportAsync(
+            new DatabaseDesignReviewOptions(index, secondOutput));
+        Assert.Equal("partial", first.Coverage);
+        var source = Assert.Single(first.Sources);
+        Assert.Equal("single", source.SourceLabel);
+        Assert.Equal(manifest.CommitSha, source.CommitSha);
+        var table = Assert.Single(first.Tables);
+        Assert.Equal("public", table.SchemaName);
+        Assert.Equal("orders", table.TableName);
+        Assert.Contains(table.Declarations, row => row.EvidenceKind == "column" && row.DisplayName == "status");
+        Assert.Contains(table.Declarations, row => row.EvidenceKind == "ef-table-mapping");
+        Assert.Contains(table.Operations, row => row.EvidenceKind == "application-operation");
+        Assert.Single(table.QueryReferences);
+        Assert.Empty(table.RouteReferences);
+        Assert.Equal(0, first.Summary.RouteReferenceCount);
+        var routeGap = Assert.Single(first.Gaps, row => row.GapKind == "SingleIndexRoutePathUnavailable");
+        Assert.Equal(manifest.CommitSha, routeGap.CommitSha);
+        Assert.Contains(routeGap.Metadata, pair => pair.Key == "routeReferenceCount" && pair.Value == "0");
+        Assert.DoesNotContain(first.Gaps, row => row.GapKind is "QueryRoutePathUnavailable" or "OperationRoutePathUnavailable");
+        Assert.Contains(first.Gaps, row => row.GapKind == "SourceCoverageReduced");
+
+        var firstJson = await File.ReadAllTextAsync(Path.Combine(firstOutput, "database-design-review.json"));
+        var secondResult = await DatabaseDesignReviewReporter.WriteAsync(
+            new DatabaseDesignReviewOptions(index, secondOutput));
+        Assert.Equal(
+            firstJson,
+            await File.ReadAllTextAsync(Path.Combine(secondOutput, "database-design-review.json")));
+        Assert.DoesNotContain(protectedValue, firstJson, StringComparison.Ordinal);
+        Assert.DoesNotContain(temp.Path, firstJson, StringComparison.Ordinal);
+        Assert.NotNull(secondResult.JsonPath);
+    }
+
+    [Fact]
+    public async Task Packet_rejects_non_tracemap_sqlite_shape()
+    {
+        using var temp = new TempDirectory();
+        var invalid = Path.Combine(temp.Path, "invalid.sqlite");
+        await using (var connection = new SqliteConnection($"Data Source={invalid}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "create table unrelated (id integer primary key);";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() =>
+            DatabaseDesignReviewReporter.BuildReportAsync(
+                new DatabaseDesignReviewOptions(invalid, Path.Combine(temp.Path, "out"))));
+
+        Assert.Contains("TraceMap index", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

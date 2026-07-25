@@ -1056,7 +1056,7 @@ authorized target-specific operator validation.
 
 ## Database design-review packet
 
-For changes to the combined-index database design-review packet, run:
+For changes to the single- or combined-index database design-review packet, run:
 
 ```bash
 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
@@ -1068,8 +1068,11 @@ dotnet run --project src/dotnet/TraceMap.Cli -- combine \
   --index <tmp>/postgres-scan/index.sqlite --label postgres-sample \
   --out <tmp>/combined.sqlite
 dotnet run --project src/dotnet/TraceMap.Cli -- database-design-review \
+  --index <tmp>/postgres-scan/index.sqlite \
+  --out <tmp>/database-design-review-single
+dotnet run --project src/dotnet/TraceMap.Cli -- database-design-review \
   --index <tmp>/combined.sqlite \
-  --out <tmp>/database-design-review
+  --out <tmp>/database-design-review-combined
 ```
 
 Confirm both packet files are deterministic and contain rule IDs, evidence
@@ -1077,7 +1080,9 @@ tiers, source labels, commit SHAs, repository-relative spans, extractor
 provenance, supporting fact/edge/rule IDs, coverage, limitations, and explicit
 gaps. Verify declaration rows remain separate from migration-operation rows,
 query/table correlation is exact and source-scoped, and route references come
-only from existing bounded path evidence.
+only from existing bounded path evidence. For the single-index packet, confirm
+route references are zero and `SingleIndexRoutePathUnavailable` labels the
+missing combined graph/path contract without per-query route-absence claims.
 
 The smoke must not require PostgreSQL or network access. Confirm the packet does
 not render raw SQL, snippets or snippet hashes, credentials, connection
