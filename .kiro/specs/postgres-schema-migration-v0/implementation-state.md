@@ -1,6 +1,6 @@
 # PostgreSQL Schema/Migration v0 State
 
-Status: implemented-and-merged
+Status: implemented
 
 Branch: `codex/postgres-schema-migration-v0`
 
