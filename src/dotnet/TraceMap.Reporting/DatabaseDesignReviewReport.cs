@@ -291,7 +291,13 @@ public static class DatabaseDesignReviewReporter
             }
         }
 
-        AddEntityFrameworkMappings(sqlInputs, builders, gaps);
+        var tableKeysByEntity = AddEntityFrameworkMappings(sqlInputs, builders, gaps);
+        var operationTableByFactId = AddApplicationOperations(
+            sqlInputs,
+            builders,
+            tableKeysByEntity,
+            globalObjects,
+            gaps);
 
         var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts, read.Sources)
             .Where(surface => surface.SurfaceKind == "sql-query")
@@ -451,6 +457,77 @@ public static class DatabaseDesignReviewReporter
                 extractorId: query.Item.Evidence.ExtractorId,
                 extractorVersion: query.Item.Evidence.ExtractorVersion,
                 supportingRuleIds: [query.Item.Evidence.RuleId]));
+        }
+
+        CombinedDependencyPathReport? operationPathReport = null;
+        try
+        {
+            operationPathReport = await CombinedDependencyPathReporter.BuildReportAsync(
+                new CombinedDependencyPathOptions(
+                    options.IndexPath,
+                    "database-design-review-operations",
+                    "json",
+                    ToSurface: "sql-persistence",
+                    IncludeLegacyRoots: true,
+                    MaxDepth: 8,
+                    MaxPaths: options.MaxRouteReferences == int.MaxValue
+                        ? int.MaxValue
+                        : options.MaxRouteReferences + 1,
+                    MaxFrontier: 10000),
+                cancellationToken);
+        }
+        catch (InvalidDataException exception)
+        {
+            gaps.Add(Gap(
+                "OperationRouteEvidenceUnavailable",
+                null,
+                "Bounded path evidence is unavailable for application database-operation candidates.",
+                [Pair("reason", SafeReason(exception.Message))]));
+        }
+
+        var routedOperationFactIds = new HashSet<string>(StringComparer.Ordinal);
+        if (operationPathReport is not null)
+        {
+            foreach (var path in operationPathReport.Paths.OrderBy(row => row.PathId, StringComparer.Ordinal))
+            {
+                var terminal = path.Nodes.LastOrDefault(node => node.SurfaceKind == "sql-persistence");
+                var entry = path.Nodes.FirstOrDefault(node => node.NodeKind is "EndpointRoute" or "EndpointClient" or "webforms-event" or "webforms-lifecycle" or "winforms-event");
+                if (terminal?.CombinedFactId is null
+                    || entry is null
+                    || !operationTableByFactId.TryGetValue(terminal.CombinedFactId, out var operation))
+                {
+                    continue;
+                }
+
+                routeReferences.Add((
+                    operation.Key,
+                    FromPath(
+                        path,
+                        entry,
+                        entry.CombinedFactId is null
+                            ? default
+                            : extractorVersions.GetValueOrDefault(entry.CombinedFactId))));
+                routedOperationFactIds.Add(terminal.CombinedFactId);
+            }
+        }
+
+        foreach (var (factId, operation) in operationTableByFactId.OrderBy(row => row.Key, StringComparer.Ordinal))
+        {
+            if (routedOperationFactIds.Contains(factId))
+                continue;
+            gaps.Add(Gap(
+                "OperationRoutePathUnavailable",
+                operation.Key.SourceLabel,
+                "A bounded application database-operation candidate matches a PostgreSQL table, but no existing static route path reaches that operation under available graph coverage.",
+                [Pair("matchKind", "bounded-operation-table-match")],
+                [factId],
+                commitSha: operation.Item.Evidence.CommitSha,
+                filePath: operation.Item.Evidence.FilePath,
+                startLine: operation.Item.Evidence.StartLine,
+                endLine: operation.Item.Evidence.EndLine,
+                extractorId: operation.Item.Evidence.ExtractorId,
+                extractorVersion: operation.Item.Evidence.ExtractorVersion,
+                supportingRuleIds: [operation.Item.Evidence.RuleId]));
         }
 
         var omittedRoutes = Math.Max(0, routeReferences.Count - options.MaxRouteReferences);
@@ -688,7 +765,7 @@ public static class DatabaseDesignReviewReporter
             SplitLimitations(fact.Properties.GetValueOrDefault("limitations")).Concat(Limitations).Distinct(StringComparer.Ordinal).ToArray());
     }
 
-    private static void AddEntityFrameworkMappings(
+    private static Dictionary<string, List<TableKey>> AddEntityFrameworkMappings(
         IReadOnlyList<SqlEvidenceInput> inputs,
         Dictionary<string, TableBuilder> builders,
         List<DatabaseDesignGap> gaps)
@@ -803,7 +880,195 @@ public static class DatabaseDesignReviewReporter
                 "ef-column-mapping",
                 "entity-table-static-match"));
         }
+        return tableKeysByEntity;
     }
+
+    private static Dictionary<string, (TableKey Key, DatabaseDesignEvidenceItem Item)> AddApplicationOperations(
+        IReadOnlyList<SqlEvidenceInput> inputs,
+        Dictionary<string, TableBuilder> builders,
+        IReadOnlyDictionary<string, List<TableKey>> tableKeysByEntity,
+        List<DatabaseDesignEvidenceItem> globalObjects,
+        List<DatabaseDesignGap> gaps)
+    {
+        var operationTableByFactId = new Dictionary<string, (TableKey Key, DatabaseDesignEvidenceItem Item)>(StringComparer.Ordinal);
+        foreach (var input in inputs.OrderBy(row => row.SourceLabel, StringComparer.Ordinal))
+        {
+            foreach (var fact in input.Result.Facts
+                         .Where(fact => fact.RuleId == RuleIds.DatabaseOperationCallPattern)
+                         .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                         .ThenBy(fact => fact.Evidence.StartLine)
+                         .ThenBy(fact => fact.FactId, StringComparer.Ordinal))
+            {
+                if (!CompatibleProvenance(input.Result.Manifest, fact))
+                {
+                    gaps.Add(OperationGap(
+                        "DatabaseOperationEvidenceProvenanceUnavailable",
+                        input.SourceLabel,
+                        "An application database-operation fact lacks compatible commit/extractor provenance and was not projected.",
+                        fact));
+                    continue;
+                }
+
+                if (fact.FactType == FactTypes.AnalysisGap)
+                {
+                    gaps.Add(FromOperationGap(input.SourceLabel, fact));
+                    continue;
+                }
+                if (fact.FactType != FactTypes.DatabaseOperationCandidate)
+                    continue;
+
+                var operationKind = fact.Properties.GetValueOrDefault("operationKind");
+                if (operationKind is "save-boundary"
+                    or "transaction-begin"
+                    or "transaction-commit"
+                    or "transaction-rollback")
+                {
+                    globalObjects.Add(FromApplicationOperation(input.SourceLabel, fact, "boundary-only"));
+                    continue;
+                }
+
+                var keys = ResolveOperationTableKeys(input.SourceLabel, fact, builders, tableKeysByEntity);
+                if (keys.Length != 1)
+                {
+                    gaps.Add(OperationGap(
+                        keys.Length > 1
+                            ? "DatabaseOperationTableMappingAmbiguous"
+                            : "DatabaseOperationTableMappingUnavailable",
+                        input.SourceLabel,
+                        keys.Length > 1
+                            ? "A static application database-operation candidate has more than one bounded table match and was not assigned."
+                            : "A static application database-operation candidate lacks one bounded PostgreSQL table match and was not assigned.",
+                        fact));
+                    continue;
+                }
+
+                var item = FromApplicationOperation(input.SourceLabel, fact, OperationMatchKind(fact));
+                builders[keys[0].StableKey].Operations.Add(item);
+                operationTableByFactId[fact.FactId] = (keys[0], item);
+            }
+        }
+        return operationTableByFactId;
+    }
+
+    private static TableKey[] ResolveOperationTableKeys(
+        string sourceLabel,
+        CodeFact fact,
+        Dictionary<string, TableBuilder> builders,
+        IReadOnlyDictionary<string, List<TableKey>> tableKeysByEntity)
+    {
+        var tableIdentity = fact.Properties.GetValueOrDefault("tableName");
+        if (!string.IsNullOrWhiteSpace(tableIdentity))
+        {
+            var parts = tableIdentity.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length == 2
+                && TryFindEntityFrameworkTable(sourceLabel, parts[0], parts[1], builders, out var exact, out _))
+                return [exact];
+            if (parts.Length == 1
+                && TryFindEntityFrameworkTable(sourceLabel, null, parts[0], builders, out var unique, out _))
+                return [unique];
+            return [];
+        }
+
+        var entityType = fact.Properties.GetValueOrDefault("entityType");
+        if (string.IsNullOrWhiteSpace(entityType))
+            return [];
+        var entityKey = $"{SafeLabel(sourceLabel)}\0{entityType}";
+        return tableKeysByEntity.GetValueOrDefault(entityKey)?
+            .DistinctBy(key => key.StableKey)
+            .ToArray() ?? [];
+    }
+
+    private static string OperationMatchKind(CodeFact fact) =>
+        !string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("tableName"))
+            ? "static-table-name-match"
+            : "entity-table-static-match";
+
+    private static DatabaseDesignEvidenceItem FromApplicationOperation(
+        string sourceLabel,
+        CodeFact fact,
+        string matchKind)
+    {
+        var operationKind = SafeToken(fact.Properties.GetValueOrDefault("operationKind"), "operation-candidate");
+        var metadata = SortMetadata(
+        [
+            Pair("frameworkFamily", SafeToken(fact.Properties.GetValueOrDefault("frameworkFamily"), "unknown")),
+            Pair("methodName", SafeToken(fact.Properties.GetValueOrDefault("methodName"), "unknown")),
+            Pair("operationKind", operationKind),
+            Pair("targetIdentityStatus", SafeToken(fact.Properties.GetValueOrDefault("targetIdentityStatus"), "unavailable")),
+            Pair("entityType", SafeTypeName(fact.Properties.GetValueOrDefault("entityType"))),
+            Pair("tableName", SafeIdentifier(fact.Properties.GetValueOrDefault("tableName"), "unavailable")),
+            Pair("sqlOperationName", SafeToken(fact.Properties.GetValueOrDefault("sqlOperationName"), "unavailable")),
+            Pair("matchKind", matchKind)
+        ]);
+        return new DatabaseDesignEvidenceItem(
+            StableId("item", sourceLabel, "application-operation", fact.FactId),
+            "application-operation",
+            operationKind,
+            "CandidateOnly",
+            metadata,
+            new DatabaseDesignEvidenceRef(
+                fact.RuleId,
+                NormalizeTier(fact.EvidenceTier),
+                SafeLabel(sourceLabel),
+                SafeCommit(fact.CommitSha),
+                SafePath(fact.Evidence.FilePath),
+                fact.Evidence.StartLine,
+                fact.Evidence.EndLine,
+                SafeTokenOrNull(fact.Evidence.ExtractorId),
+                SafeTokenOrNull(fact.Evidence.ExtractorVersion),
+                SafeToken(fact.Properties.GetValueOrDefault("coverageLabel"), "bounded-static-call"),
+                [fact.FactId],
+                [],
+                [fact.RuleId],
+                SplitLimitations(fact.Properties.GetValueOrDefault("limitations"))
+                    .Concat(Limitations)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray()));
+    }
+
+    private static DatabaseDesignGap FromOperationGap(string sourceLabel, CodeFact fact)
+    {
+        var kind = SafeToken(fact.Properties.GetValueOrDefault("classification"), "DatabaseOperationCoverageGap");
+        return OperationGap(
+            kind,
+            sourceLabel,
+            "Application database-operation evidence has an explicit upstream coverage gap.",
+            fact);
+    }
+
+    private static DatabaseDesignGap OperationGap(
+        string kind,
+        string sourceLabel,
+        string message,
+        CodeFact fact) =>
+        new(
+            StableId("gap", sourceLabel, kind, fact.FactId),
+            kind,
+            "PartialAnalysis",
+            message,
+            SafeLabel(sourceLabel),
+            fact.RuleId,
+            NormalizeTier(fact.EvidenceTier),
+            "reduced",
+            SafeCommit(fact.CommitSha),
+            SafePath(fact.Evidence.FilePath),
+            fact.Evidence.StartLine,
+            fact.Evidence.EndLine,
+            SafeTokenOrNull(fact.Evidence.ExtractorId),
+            SafeTokenOrNull(fact.Evidence.ExtractorVersion),
+            [fact.FactId],
+            [],
+            [fact.RuleId],
+            SortMetadata(
+            [
+                Pair("frameworkFamily", SafeToken(fact.Properties.GetValueOrDefault("frameworkFamily"), "unknown")),
+                Pair("methodName", SafeToken(fact.Properties.GetValueOrDefault("methodName"), "unknown")),
+                Pair("operationKind", SafeToken(fact.Properties.GetValueOrDefault("operationKind"), "unknown"))
+            ]),
+            SplitLimitations(fact.Properties.GetValueOrDefault("limitations"))
+                .Concat(Limitations)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray());
 
     private static bool TryFindEntityFrameworkTable(
         string sourceLabel,
@@ -1256,7 +1521,7 @@ public static class DatabaseDesignReviewReporter
             builder.AppendLine();
             builder.AppendLine($"Source: `{Md(table.SourceLabel)}` · schema: `{Md(table.SchemaResolution)}` · coverage: `{Md(table.Coverage)}`");
             AppendItems(builder, "Declarations", table.Declarations);
-            AppendItems(builder, "Migration operations", table.Operations);
+            AppendItems(builder, "Database operations", table.Operations);
             AppendItems(builder, "Query references", table.QueryReferences);
             if (table.RouteReferences.Count > 0)
             {

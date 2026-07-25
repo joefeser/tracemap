@@ -2859,6 +2859,7 @@ public static class CombinedRouteFlowReporter
                 'SqlCommandDetected',
                 'DapperCallDetected',
                 'DatabaseColumnMapping',
+                'DatabaseOperationCandidate',
                 'PackageReferenced',
                 'ConfigBinding',
                 'ConfigKeyDeclared',
@@ -3837,6 +3838,7 @@ public static class CombinedRouteFlowReporter
             or FactTypes.SqlCommandDetected
             or FactTypes.DapperCallDetected
             or FactTypes.DatabaseColumnMapping
+            or FactTypes.DatabaseOperationCandidate
             or FactTypes.PackageReferenced
             or FactTypes.ConfigBinding
             or FactTypes.ConfigKeyDeclared
@@ -3853,7 +3855,7 @@ public static class CombinedRouteFlowReporter
         {
             FactTypes.ObjectShapeInferred => "object-shape",
             FactTypes.QueryPatternDetected or FactTypes.SqlTextUsed or FactTypes.SqlCommandDetected or FactTypes.DapperCallDetected => "query-shape",
-            FactTypes.DatabaseColumnMapping => "data-surface",
+            FactTypes.DatabaseColumnMapping or FactTypes.DatabaseOperationCandidate => "data-surface",
             FactTypes.PackageReferenced or FactTypes.ConfigBinding or FactTypes.ConfigKeyDeclared or FactTypes.ConnectionStringDeclared => "dependency-surface",
             FactTypes.CallbackBoundary or FactTypes.AsyncBoundary => "flow-boundary",
             FactTypes.BranchFeasibility => "validation-guard",

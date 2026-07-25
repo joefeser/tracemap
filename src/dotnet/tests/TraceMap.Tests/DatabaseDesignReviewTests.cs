@@ -54,7 +54,17 @@ public sealed class DatabaseDesignReviewTests
                 ("mappingKind", "DatabaseColumnMapping"), ("configurationKind", "fluent"), ("entityType", "global::Server.Envelope<global::Server.Order>"), ("memberName", "Status"), ("mappedName", "status")),
             EfMappingFact(manifest, 52,
                 ("mappingKind", "DatabaseTableMapping"), ("configurationKind", "annotation"), ("entityType", "global::Server.Invoice"), ("mappedName", "invoices")),
-            EfGap(manifest, 53, "AssemblyModelConfigurationUnavailable")
+            EfGap(manifest, 53, "AssemblyModelConfigurationUnavailable"),
+            OperationFact(manifest, 54,
+                ("frameworkFamily", "ef-core"), ("methodName", "Add"), ("operationKind", "insert-candidate"),
+                ("targetIdentityStatus", "entity-static"), ("entityType", "global::Server.Envelope<global::Server.Order>")),
+            OperationFact(manifest, 55,
+                ("frameworkFamily", "dapper"), ("methodName", "Execute"), ("operationKind", "delete-candidate"),
+                ("targetIdentityStatus", "table-static"), ("tableName", "orders"), ("sqlOperationName", "DELETE")),
+            OperationFact(manifest, 56,
+                ("frameworkFamily", "ef-core"), ("methodName", "SaveChanges"), ("operationKind", "save-boundary"),
+                ("targetIdentityStatus", "boundary-only")),
+            OperationGap(manifest, 57, "DatabaseOperationTargetUnavailable")
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["server"]));
 
@@ -76,13 +86,23 @@ public sealed class DatabaseDesignReviewTests
         Assert.Equal(RuleIds.DatabaseEntityFramework, efColumn.Evidence.RuleId);
         Assert.DoesNotContain(table.Declarations, row => row.EvidenceKind == "migration-operation");
         Assert.Contains(table.Operations, row => row.DisplayName == "drop-column");
+        var efOperation = Assert.Single(table.Operations, row =>
+            row.EvidenceKind == "application-operation" && row.DisplayName == "insert-candidate");
+        Assert.Equal("CandidateOnly", efOperation.Classification);
+        Assert.Contains(efOperation.Metadata, pair => pair.Key == "matchKind" && pair.Value == "entity-table-static-match");
+        var dapperOperation = Assert.Single(table.Operations, row =>
+            row.EvidenceKind == "application-operation" && row.DisplayName == "delete-candidate");
+        Assert.Contains(dapperOperation.Metadata, pair => pair.Key == "matchKind" && pair.Value == "static-table-name-match");
         var query = Assert.Single(table.QueryReferences);
         Assert.Equal("StaticNameMatch", query.Classification);
-        var route = Assert.Single(table.RouteReferences);
+        Assert.Equal(2, table.RouteReferences.Count);
+        var route = table.RouteReferences[0];
         Assert.Equal("static-name-match", route.TableMatchKind);
         Assert.NotEmpty(route.Evidence.SupportingFactIds);
         Assert.NotEmpty(route.Evidence.SupportingEdgeIds);
         Assert.Contains(route.Evidence.SupportingRuleIds, rule => rule == RuleIds.CSharpSemanticCallGraph);
+        Assert.Contains(table.RouteReferences, row =>
+            row.Evidence.SupportingRuleIds.Contains(RuleIds.DatabaseOperationCallPattern, StringComparer.Ordinal));
         Assert.Equal("test-route", route.Evidence.ExtractorId);
         Assert.Equal("test-route/1.0", route.Evidence.ExtractorVersion);
         Assert.Contains(first.Report.GlobalObjects, row => row.EvidenceKind == "snapshot");
@@ -92,11 +112,15 @@ public sealed class DatabaseDesignReviewTests
             && row.Metadata.Any(pair => pair.Key == "enumName" && pair.Value == "order_state"));
         Assert.Contains(first.Report.GlobalObjects, row => row.EvidenceKind == "migration-operation"
             && row.Metadata.Any(pair => pair.Key == "routineName" && pair.Value == "archive_orders"));
+        Assert.Contains(first.Report.GlobalObjects, row =>
+            row.EvidenceKind == "application-operation" && row.DisplayName == "save-boundary");
         Assert.Contains(first.Report.Gaps, gap => gap.GapKind == "SnapshotDdlCoverageReduced");
         Assert.Contains(first.Report.Gaps, gap => gap.GapKind == "EntityFrameworkTableMappingUnmatched");
         var efGap = Assert.Single(first.Report.Gaps, gap => gap.GapKind == "AssemblyModelConfigurationUnavailable");
         Assert.Equal(RuleIds.DatabaseEntityFramework, efGap.RuleId);
         Assert.Contains(efGap.SupportingFactIds, id => !string.IsNullOrWhiteSpace(id));
+        var operationGap = Assert.Single(first.Report.Gaps, gap => gap.GapKind == "DatabaseOperationTargetUnavailable");
+        Assert.Equal(RuleIds.DatabaseOperationCallPattern, operationGap.RuleId);
         Assert.DoesNotContain(first.Report.Gaps, gap => gap.GapKind == "QueryRoutePathUnavailable");
         Assert.All(table.Declarations.Concat(table.Operations).Concat(table.QueryReferences), row =>
         {
@@ -314,7 +338,12 @@ public sealed class DatabaseDesignReviewTests
     public void Packet_rules_are_cataloged_with_limitations()
     {
         var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
-        foreach (var rule in new[] { DatabaseDesignReviewReporter.PacketRuleId, DatabaseDesignReviewReporter.GapRuleId })
+        foreach (var rule in new[]
+                 {
+                     DatabaseDesignReviewReporter.PacketRuleId,
+                     DatabaseDesignReviewReporter.GapRuleId,
+                     RuleIds.DatabaseOperationCallPattern
+                 })
         {
             var start = catalog.IndexOf($"  - id: {rule}", StringComparison.Ordinal);
             Assert.True(start >= 0);
@@ -398,6 +427,34 @@ public sealed class DatabaseDesignReviewTests
                 ("configurationMethod", "ApplyConfigurationsFromAssembly"),
                 ("coverageLabel", "source-unavailable"),
                 ("limitations", "Assembly-scanned model configuration was not evaluated.")));
+
+    private static CodeFact OperationFact(ScanManifest manifest, int line, params (string Key, string Value)[] properties) =>
+        FactFactory.Create(
+            manifest,
+            FactTypes.DatabaseOperationCandidate,
+            RuleIds.DatabaseOperationCallPattern,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan("Data/OrderRepository.cs", line, line, FactFactory.Hash($"operation:{line}", 32), "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            sourceSymbol: "Server.OrderRepository.Query(System.Int32)",
+            properties: Properties(properties.Concat([
+                ("coverageLabel", "bounded-static-call"),
+                ("limitations", "Static call-pattern candidate only; execution and effects are not proven.")
+            ]).ToArray()));
+
+    private static CodeFact OperationGap(ScanManifest manifest, int line, string classification) =>
+        FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.DatabaseOperationCallPattern,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan("Data/OrderRepository.cs", line, line, FactFactory.Hash($"operation-gap:{line}", 32), "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            properties: Properties(
+                ("classification", classification),
+                ("frameworkFamily", "dapper"),
+                ("methodName", "Execute"),
+                ("operationKind", "execute-candidate"),
+                ("coverageLabel", "reduced"),
+                ("limitations", "Static operation target coverage is incomplete.")));
 
     private static CodeFact QueryFact(ScanManifest manifest, string sourceSymbol, string tableName, string protectedValue) =>
         FactFactory.Create(

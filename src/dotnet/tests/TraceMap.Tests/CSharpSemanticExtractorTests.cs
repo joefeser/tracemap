@@ -624,4 +624,162 @@ public sealed class CSharpSemanticExtractorTests
             fact.FactType == FactTypes.DatabaseColumnMapping
             && fact.ContractElement == "orders");
     }
+
+    [Fact]
+    public void Scan_emits_bounded_database_operation_candidates_without_retaining_sql_text()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "src", "OperationSample"));
+        File.WriteAllText(Path.Combine(temp.Path, "src", "OperationSample", "OperationSample.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "src", "OperationSample", "Frameworks.cs"), """
+            namespace Microsoft.EntityFrameworkCore
+            {
+                public class DbContext
+                {
+                    public DatabaseFacade Database { get; } = new();
+                    public int SaveChanges() => 0;
+                }
+                public sealed class DatabaseFacade
+                {
+                    public void BeginTransaction() { }
+                    public int ExecuteSqlRaw(string sql) => 0;
+                }
+                public class DbSet<T>
+                {
+                    public void Add(T entity) { }
+                    public void Update(T entity) { }
+                    public void Remove(T entity) { }
+                }
+            }
+
+            namespace Dapper
+            {
+                public static class SqlMapper
+                {
+                    public static object Query(this object connection, string sql) => new();
+                    public static int Execute(this object connection, string sql) => 0;
+                }
+            }
+
+            namespace Microsoft.Data.SqlClient
+            {
+                public sealed class SqlCommand
+                {
+                    public SqlCommand(string commandText) { }
+                    public int ExecuteNonQuery() => 0;
+                }
+            }
+
+            namespace Npgsql
+            {
+                public sealed class NpgsqlCommand
+                {
+                    public NpgsqlCommand(string commandText) { }
+                    public object ExecuteScalar() => new();
+                }
+            }
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "src", "OperationSample", "Operations.cs"), """
+            using Dapper;
+            using Microsoft.Data.SqlClient;
+            using Microsoft.EntityFrameworkCore;
+            using Npgsql;
+
+            namespace OperationSample;
+
+            public sealed class Order { }
+
+            public sealed class OrdersContext : DbContext
+            {
+                public DbSet<Order> Orders { get; } = new();
+
+                public void Persist(Order order, object connection, string dynamicSql)
+                {
+                    Orders.Add(order);
+                    Orders.Update(order);
+                    Orders.Remove(order);
+                    SaveChanges();
+                    Database.BeginTransaction();
+                    Database.ExecuteSqlRaw(dynamicSql);
+                    connection.Query("select id from public.orders");
+                    connection.Execute("delete from public.orders where id = 42");
+                    new SqlCommand("insert into public.orders (id) values (42)").ExecuteNonQuery();
+                    new NpgsqlCommand("select count(*) from public.orders").ExecuteScalar();
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+        var operations = result.Facts
+            .Where(fact => fact.FactType == FactTypes.DatabaseOperationCandidate
+                && fact.RuleId == RuleIds.DatabaseOperationCallPattern)
+            .ToArray();
+
+        Assert.Contains(operations, fact =>
+            fact.Properties.GetValueOrDefault("frameworkFamily") == "ef-core"
+            && fact.Properties.GetValueOrDefault("operationKind") == "insert-candidate"
+            && fact.Properties.GetValueOrDefault("entityType") == "global::OperationSample.Order"
+            && fact.Properties.GetValueOrDefault("targetIdentityStatus") == "entity-static");
+        Assert.Contains(operations, fact => fact.Properties.GetValueOrDefault("operationKind") == "update-candidate");
+        Assert.Contains(operations, fact => fact.Properties.GetValueOrDefault("operationKind") == "delete-candidate"
+            && fact.Properties.GetValueOrDefault("frameworkFamily") == "ef-core");
+        Assert.Contains(operations, fact => fact.Properties.GetValueOrDefault("operationKind") == "save-boundary");
+        Assert.Contains(operations, fact => fact.Properties.GetValueOrDefault("operationKind") == "transaction-begin");
+        Assert.Contains(operations, fact =>
+            fact.Properties.GetValueOrDefault("frameworkFamily") == "dapper"
+            && fact.Properties.GetValueOrDefault("operationKind") == "select-candidate"
+            && fact.Properties.GetValueOrDefault("tableName") == "orders");
+        Assert.Contains(operations, fact =>
+            fact.Properties.GetValueOrDefault("frameworkFamily") == "dapper"
+            && fact.Properties.GetValueOrDefault("operationKind") == "delete-candidate"
+            && fact.Properties.GetValueOrDefault("tableName") == "orders");
+        Assert.Contains(operations, fact =>
+            fact.Properties.GetValueOrDefault("frameworkFamily") == "ado-net"
+            && fact.Properties.GetValueOrDefault("operationKind") == "insert-candidate"
+            && fact.Properties.GetValueOrDefault("tableName") == "orders");
+        Assert.Contains(operations, fact =>
+            fact.Properties.GetValueOrDefault("frameworkFamily") == "npgsql"
+            && fact.Properties.GetValueOrDefault("operationKind") == "select-candidate"
+            && fact.Properties.GetValueOrDefault("tableName") == "orders");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseOperationCallPattern
+            && fact.Properties.GetValueOrDefault("classification") == "DynamicDatabaseOperationSql"
+            && fact.Properties.GetValueOrDefault("methodName") == "ExecuteSqlRaw");
+        Assert.All(operations, fact =>
+        {
+            Assert.DoesNotContain(fact.Properties.Keys, key =>
+                key.Contains("sql", StringComparison.OrdinalIgnoreCase)
+                && key != "sqlOperationName");
+            Assert.DoesNotContain(fact.Properties.Values, value =>
+                value.Contains("select id", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("delete from", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("insert into", StringComparison.OrdinalIgnoreCase));
+        });
+
+        var second = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+        Assert.Equal(
+            operations.Select(OperationProjection).OrderBy(value => value, StringComparer.Ordinal),
+            second.Facts
+                .Where(fact => fact.FactType == FactTypes.DatabaseOperationCandidate
+                    && fact.RuleId == RuleIds.DatabaseOperationCallPattern)
+                .Select(OperationProjection)
+                .OrderBy(value => value, StringComparer.Ordinal));
+    }
+
+    private static string OperationProjection(CodeFact fact) =>
+        string.Join(
+            "\u001f",
+            fact.FactId,
+            fact.Evidence.FilePath,
+            fact.Evidence.StartLine,
+            fact.SourceSymbol,
+            fact.ContractElement,
+            string.Join("\u001e", fact.Properties.Select(pair => $"{pair.Key}={pair.Value}")));
 }
