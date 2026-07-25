@@ -24,6 +24,12 @@ and database-centered reporting.
 
 Validation:
 
+- PR #530 review remediation: snapshot recognized-DDL accounting now records
+  only successfully projected bounded DDL. Prefix-admitted but unprojectable
+  statements are preserved as per-statement gaps and classified into safe,
+  categorical snapshot coverage gaps; focused regression coverage includes
+  mixed and unsupported-only snapshots.
+
 - focused PostgreSQL schema-migration tests: 22/22 passed;
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with the existing
   NU1903 SQLite advisory;
