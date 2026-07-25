@@ -1108,6 +1108,34 @@ migrations, generated SQL, or a database. It must not claim convention-derived
 names, runtime provider behavior, model completeness, database correspondence,
 query execution, or release safety.
 
+### Database operation call-pattern evidence
+
+For changes to application database-operation extraction or database
+design-review composition:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter "FullyQualifiedName~CSharpSemanticExtractorTests.Scan_emits_bounded_database_operation_candidates|FullyQualifiedName~DatabaseDesignReviewTests"
+```
+
+Use compiling EF/EF Core, Dapper, and ADO.NET/Npgsql fixtures. Confirm
+candidates preserve rule/tier/span/commit/extractor provenance, constant SQL
+contributes only safe operation/table shape metadata, dynamic or unresolved
+targets remain explicit gaps, and the packet never renders SQL text, command
+text, parameter values, connection material, or local paths.
+
+Also cover a C# file without a loadable project and confirm recognizable
+operation names emit Tier 4 operation-rule gaps rather than candidates.
+Qualified constant SQL targets must retain safe one- or two-part identity;
+unsafe or multipart identity must remain unlinked. Custom operation-named
+methods declared only on application `DbContext` subclasses must not become EF
+candidates. When operation route-path traversal is truncated, the packet must
+emit reduced-coverage gaps instead of claiming that no path exists.
+
+Treat every application operation as a static candidate. This validation does
+not prove execution, affected rows, database state, transaction outcome, or
+success.
+
 ### PostgreSQL enum and routine declaration evidence
 
 For changes to the bounded PostgreSQL enum/routine projector, run:

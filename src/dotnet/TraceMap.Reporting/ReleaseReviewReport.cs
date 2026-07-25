@@ -1582,6 +1582,7 @@ public static class ReleaseReviewReporter
                    or facts.rule_id like 'database.postgres.%'
                    or (@include_model_mappings = 1 and facts.rule_id = @ef_rule)
                    or (@include_model_mappings = 1 and facts.rule_id = @contract_mapping_rule)
+                   or (@include_model_mappings = 1 and facts.rule_id = @operation_rule)
                 order by sources.label, facts.file_path, facts.start_line, facts.combined_fact_id;
                 """
             : $"""
@@ -1596,11 +1597,13 @@ public static class ReleaseReviewReporter
                    or facts.rule_id like 'database.postgres.%'
                    or (@include_model_mappings = 1 and facts.rule_id = @ef_rule)
                    or (@include_model_mappings = 1 and facts.rule_id = @contract_mapping_rule)
+                   or (@include_model_mappings = 1 and facts.rule_id = @operation_rule)
                 order by facts.file_path, facts.start_line, facts.fact_id;
                 """;
         command.Parameters.AddWithValue("@include_model_mappings", includeModelMappings ? 1 : 0);
         command.Parameters.AddWithValue("@ef_rule", RuleIds.DatabaseEntityFramework);
         command.Parameters.AddWithValue("@contract_mapping_rule", RuleIds.CSharpSemanticContractMapping);
+        command.Parameters.AddWithValue("@operation_rule", RuleIds.DatabaseOperationCallPattern);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -1632,7 +1635,9 @@ public static class ReleaseReviewReporter
                 properties);
             if (!SqlRunwayRuleIds.Contains(fact.RuleId)
                 && !(includeModelMappings
-                    && fact.RuleId is RuleIds.DatabaseEntityFramework or RuleIds.CSharpSemanticContractMapping))
+                    && fact.RuleId is RuleIds.DatabaseEntityFramework
+                        or RuleIds.CSharpSemanticContractMapping
+                        or RuleIds.DatabaseOperationCallPattern))
             {
                 continue;
             }
