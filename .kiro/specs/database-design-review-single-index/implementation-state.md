@@ -69,6 +69,13 @@ packet-level route-coverage gap was not implemented because no source artifact
 supports those values. Inventing them would violate the packet's evidence
 contract.
 
+ACK returned `merge_ready / NONE / merge_ready` at implementation head
+`43b3905f0c89bbad0a8ad72fb9211cf966f7395a` after all checks passed, all review
+threads were resolved, the four current findings were fixed, and the optional
+placeholder-provenance suggestion was dispositioned with evidence. The
+spec-only bookkeeping commit that records this result requires one final
+exact-head ACK readback before merge handoff.
+
 ## Deferred
 
 - Public-site publication.
