@@ -694,10 +694,12 @@ public sealed class CSharpSemanticExtractorTests
             namespace OperationSample;
 
             public sealed class Order { }
+            public sealed class AuditRecord { }
 
             public sealed class OrdersContext : DbContext
             {
                 public DbSet<Order> Orders { get; } = new();
+                public void Update(AuditRecord record) { }
 
                 public void Persist(Order order, object connection, string dynamicSql)
                 {
@@ -708,9 +710,10 @@ public sealed class CSharpSemanticExtractorTests
                     Database.BeginTransaction();
                     Database.ExecuteSqlRaw(dynamicSql);
                     connection.Query("select id from public.orders");
-                    connection.Execute("delete from public.orders where id = 42");
+                    connection.Execute("delete from audit.orders where id = 42");
                     new SqlCommand("insert into public.orders (id) values (42)").ExecuteNonQuery();
                     new NpgsqlCommand("select count(*) from public.orders").ExecuteScalar();
+                    Update(new AuditRecord());
                 }
             }
             """);
@@ -734,24 +737,30 @@ public sealed class CSharpSemanticExtractorTests
         Assert.Contains(operations, fact =>
             fact.Properties.GetValueOrDefault("frameworkFamily") == "dapper"
             && fact.Properties.GetValueOrDefault("operationKind") == "select-candidate"
-            && fact.Properties.GetValueOrDefault("tableName") == "orders");
+            && fact.Properties.GetValueOrDefault("tableName") == "public.orders");
         Assert.Contains(operations, fact =>
             fact.Properties.GetValueOrDefault("frameworkFamily") == "dapper"
             && fact.Properties.GetValueOrDefault("operationKind") == "delete-candidate"
-            && fact.Properties.GetValueOrDefault("tableName") == "orders");
+            && fact.Properties.GetValueOrDefault("tableName") == "audit.orders");
         Assert.Contains(operations, fact =>
             fact.Properties.GetValueOrDefault("frameworkFamily") == "ado-net"
             && fact.Properties.GetValueOrDefault("operationKind") == "insert-candidate"
-            && fact.Properties.GetValueOrDefault("tableName") == "orders");
+            && fact.Properties.GetValueOrDefault("tableName") == "public.orders");
         Assert.Contains(operations, fact =>
             fact.Properties.GetValueOrDefault("frameworkFamily") == "npgsql"
             && fact.Properties.GetValueOrDefault("operationKind") == "select-candidate"
-            && fact.Properties.GetValueOrDefault("tableName") == "orders");
+            && fact.Properties.GetValueOrDefault("tableName") == "public.orders");
+        Assert.DoesNotContain(operations, fact =>
+            fact.Properties.GetValueOrDefault("entityType") == "global::OperationSample.AuditRecord"
+            || fact.TargetSymbol?.Contains("OrdersContext.Update", StringComparison.Ordinal) == true);
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.DatabaseOperationCallPattern
             && fact.Properties.GetValueOrDefault("classification") == "DynamicDatabaseOperationSql"
             && fact.Properties.GetValueOrDefault("methodName") == "ExecuteSqlRaw");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.RuleId == RuleIds.DatabaseOperationCallPattern
+            && fact.Properties.GetValueOrDefault("classification") == "SyntaxFallbackOperationCandidate");
         Assert.All(operations, fact =>
         {
             Assert.DoesNotContain(fact.Properties.Keys, key =>
@@ -771,6 +780,37 @@ public sealed class CSharpSemanticExtractorTests
                     && fact.RuleId == RuleIds.DatabaseOperationCallPattern)
                 .Select(OperationProjection)
                 .OrderBy(value => value, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Scan_emits_operation_rule_gaps_when_semantic_project_loading_is_unavailable()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Operations.cs"), """
+            public sealed class Operations
+            {
+                public void Run(dynamic context, dynamic connection, string sql)
+                {
+                    context.SaveChanges();
+                    connection.Execute(sql);
+                    context.Database.BeginTransaction();
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        var gaps = result.Facts.Where(fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseOperationCallPattern
+            && fact.Properties.GetValueOrDefault("classification") == "SyntaxFallbackOperationCandidate").ToArray();
+        Assert.Contains(gaps, fact => fact.Properties.GetValueOrDefault("methodName") == "SaveChanges");
+        Assert.Contains(gaps, fact => fact.Properties.GetValueOrDefault("methodName") == "Execute");
+        Assert.Contains(gaps, fact => fact.Properties.GetValueOrDefault("methodName") == "BeginTransaction");
+        Assert.All(gaps, fact => Assert.Equal(EvidenceTiers.Tier4Unknown, fact.EvidenceTier));
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.DatabaseOperationCandidate
+            && fact.RuleId == RuleIds.DatabaseOperationCallPattern);
     }
 
     private static string OperationProjection(CodeFact fact) =>

@@ -17,14 +17,23 @@ connection, startup, migration, or runtime behavior.
 
 ## Validation
 
-- Focused semantic, design-review, path, and route-flow tests: 117 passed.
+- Focused semantic, design-review, SQL-shape, integration, path, and route-flow
+  tests after review corrections: 129 passed.
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with 0 errors
   and the repository's existing NU1903 SQLite package warnings.
-- `dotnet test src/dotnet/TraceMap.sln --no-build --no-restore`: 903 passed.
+- `dotnet test src/dotnet/TraceMap.sln --no-build --no-restore`: 905 passed.
 - CLI smoke against `samples/modern-sample`: passed with all five required
   scan artifacts and Tier 1 semantic analysis.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
+
+## Review correction
+
+Exact-head Codex review identified four issues, all corrected with regression
+coverage: application methods on `DbContext` subclasses no longer masquerade
+as EF methods; safe schema qualification is retained before table matching;
+truncated operation-path searches emit reduced coverage rather than absence;
+and files without semantic models receive Tier 4 operation-rule fallback gaps.
 
 ## Deferred
 

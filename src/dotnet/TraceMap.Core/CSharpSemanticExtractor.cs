@@ -3330,7 +3330,9 @@ public static class CSharpSemanticExtractor
         {
             var shape = SqlShapeExtractor.QueryShape(sql);
             sqlOperationName = shape.OperationName;
-            tableName = shape.PrimaryTable;
+            tableName = SqlShapeExtractor.TryPrimaryTableIdentity(sql, out var boundedTableIdentity)
+                ? boundedTableIdentity
+                : shape.PrimaryTable;
             operationKind = OperationKindFromSql(sqlOperationName, operationKind);
         }
 
@@ -3428,15 +3430,19 @@ public static class CSharpSemanticExtractor
 
     private static bool IsEntityFrameworkOperationMethod(IMethodSymbol method)
     {
-        var definition = method.ReducedFrom ?? method;
-        var namespaceName = GetNamespaceName(definition.ContainingType);
-        var knownNamespace = namespaceName.Equals("Microsoft.EntityFrameworkCore", StringComparison.Ordinal)
-            || namespaceName.StartsWith("Microsoft.EntityFrameworkCore.", StringComparison.Ordinal)
-            || namespaceName.Equals("System.Data.Entity", StringComparison.Ordinal)
-            || namespaceName.StartsWith("System.Data.Entity.", StringComparison.Ordinal);
-        return (knownNamespace && EfOperationContainerNames.Contains(definition.ContainingType.Name))
-            || method.ContainingType is not null && DerivesFromDbContext(method.ContainingType)
-            || method.ContainingType is not null && IsDbSetType(method.ContainingType);
+        for (IMethodSymbol? current = method.ReducedFrom ?? method;
+             current is not null;
+             current = current.OverriddenMethod)
+        {
+            var namespaceName = GetNamespaceName(current.ContainingType);
+            var knownNamespace = namespaceName.Equals("Microsoft.EntityFrameworkCore", StringComparison.Ordinal)
+                || namespaceName.StartsWith("Microsoft.EntityFrameworkCore.", StringComparison.Ordinal)
+                || namespaceName.Equals("System.Data.Entity", StringComparison.Ordinal)
+                || namespaceName.StartsWith("System.Data.Entity.", StringComparison.Ordinal);
+            if (knownNamespace && EfOperationContainerNames.Contains(current.ContainingType.Name))
+                return true;
+        }
+        return false;
     }
 
     private static ITypeSymbol? TryGetDatabaseOperationEntityType(
