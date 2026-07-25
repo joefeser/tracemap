@@ -3395,7 +3395,9 @@ public static class CSharpSemanticExtractor
                     ? "DynamicDatabaseOperationSql"
                     : string.IsNullOrWhiteSpace(sql)
                         ? "DatabaseOperationTargetUnavailable"
-                        : "DatabaseOperationSqlShapeUnavailable",
+                        : string.IsNullOrWhiteSpace(sqlOperationName)
+                            ? "DatabaseOperationSqlShapeUnavailable"
+                            : "DatabaseOperationTargetUnavailable",
                 frameworkFamily,
                 method.Name,
                 operationKind));
@@ -3621,11 +3623,14 @@ public static class CSharpSemanticExtractor
             or "ExecuteSqlInterpolated"
             or "ExecuteSqlInterpolatedAsync"
             or "FromSqlRaw"
+            or "FromSql"
             or "FromSqlInterpolated"
             or "BeginTransaction"
             or "BeginTransactionAsync"
             or "CommitTransaction"
-            or "RollbackTransaction";
+            or "CommitTransactionAsync"
+            or "RollbackTransaction"
+            or "RollbackTransactionAsync";
     }
 
     private static SemanticFactCandidate CreateDatabaseOperationGap(

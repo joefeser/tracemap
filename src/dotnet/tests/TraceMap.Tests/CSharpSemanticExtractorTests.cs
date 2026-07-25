@@ -608,6 +608,8 @@ public sealed class CSharpSemanticExtractorTests
                 public void Configure(object modelBuilder)
                 {
                     modelBuilder.Entity<Order>().ToTable("orders");
+                    modelBuilder.FromSql();
+                    modelBuilder.CommitTransactionAsync();
                 }
             }
             """);
@@ -623,6 +625,16 @@ public sealed class CSharpSemanticExtractorTests
         Assert.DoesNotContain(result.Facts, fact =>
             fact.FactType == FactTypes.DatabaseColumnMapping
             && fact.ContractElement == "orders");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseOperationCallPattern
+            && fact.Properties.GetValueOrDefault("classification") == "SemanticBindingUnavailable"
+            && fact.Properties.GetValueOrDefault("methodName") == "FromSql");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseOperationCallPattern
+            && fact.Properties.GetValueOrDefault("classification") == "SemanticBindingUnavailable"
+            && fact.Properties.GetValueOrDefault("methodName") == "CommitTransactionAsync");
     }
 
     [Fact]
@@ -710,6 +722,7 @@ public sealed class CSharpSemanticExtractorTests
                     Database.BeginTransaction();
                     Database.ExecuteSqlRaw(dynamicSql);
                     connection.Query("select id from public.orders");
+                    connection.Query("select 1");
                     connection.Execute("delete from audit.orders where id = 42");
                     new SqlCommand("insert into public.orders (id) values (42)").ExecuteNonQuery();
                     new NpgsqlCommand("select count(*) from public.orders").ExecuteScalar();
@@ -758,6 +771,11 @@ public sealed class CSharpSemanticExtractorTests
             && fact.RuleId == RuleIds.DatabaseOperationCallPattern
             && fact.Properties.GetValueOrDefault("classification") == "DynamicDatabaseOperationSql"
             && fact.Properties.GetValueOrDefault("methodName") == "ExecuteSqlRaw");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseOperationCallPattern
+            && fact.Properties.GetValueOrDefault("classification") == "DatabaseOperationTargetUnavailable"
+            && fact.Properties.GetValueOrDefault("methodName") == "Query");
         Assert.DoesNotContain(result.Facts, fact =>
             fact.RuleId == RuleIds.DatabaseOperationCallPattern
             && fact.Properties.GetValueOrDefault("classification") == "SyntaxFallbackOperationCandidate");

@@ -461,30 +461,44 @@ public static class DatabaseDesignReviewReporter
 
         CombinedDependencyPathReport? operationPathReport = null;
         var operationPathCoverageReduced = false;
-        try
+        if (operationTableByFactId.Count > 0)
         {
-            operationPathReport = await CombinedDependencyPathReporter.BuildReportAsync(
-                new CombinedDependencyPathOptions(
-                    options.IndexPath,
-                    "database-design-review-operations",
-                    "json",
-                    ToSurface: "sql-persistence",
-                    IncludeLegacyRoots: true,
-                    MaxDepth: 8,
-                    MaxPaths: options.MaxRouteReferences == int.MaxValue
-                        ? int.MaxValue
-                        : options.MaxRouteReferences + 1,
-                    MaxFrontier: 10000),
-                cancellationToken);
-        }
-        catch (InvalidDataException exception)
-        {
-            operationPathCoverageReduced = true;
-            gaps.Add(Gap(
-                "OperationRouteEvidenceUnavailable",
-                null,
-                "Bounded path evidence is unavailable for application database-operation candidates.",
-                [Pair("reason", SafeReason(exception.Message))]));
+            try
+            {
+                operationPathReport = await CombinedDependencyPathReporter.BuildReportAsync(
+                    new CombinedDependencyPathOptions(
+                        options.IndexPath,
+                        "database-design-review-operations",
+                        "json",
+                        ToSurface: "sql-persistence",
+                        IncludeLegacyRoots: true,
+                        MaxDepth: 8,
+                        MaxPaths: options.MaxRouteReferences == int.MaxValue
+                            ? int.MaxValue
+                            : options.MaxRouteReferences + 1,
+                        MaxFrontier: 10000),
+                    cancellationToken);
+            }
+            catch (InvalidDataException exception)
+            {
+                operationPathCoverageReduced = true;
+                var anchor = operationTableByFactId
+                    .OrderBy(row => row.Key, StringComparer.Ordinal)
+                    .First();
+                gaps.Add(Gap(
+                    "OperationRouteEvidenceUnavailable",
+                    anchor.Value.Key.SourceLabel,
+                    "Bounded path evidence is unavailable for application database-operation candidates.",
+                    [Pair("reason", SafeReason(exception.Message))],
+                    [anchor.Key],
+                    commitSha: anchor.Value.Item.Evidence.CommitSha,
+                    filePath: anchor.Value.Item.Evidence.FilePath,
+                    startLine: anchor.Value.Item.Evidence.StartLine,
+                    endLine: anchor.Value.Item.Evidence.EndLine,
+                    extractorId: anchor.Value.Item.Evidence.ExtractorId,
+                    extractorVersion: anchor.Value.Item.Evidence.ExtractorVersion,
+                    supportingRuleIds: [anchor.Value.Item.Evidence.RuleId]));
+            }
         }
 
         var routedOperationFactIds = new HashSet<string>(StringComparer.Ordinal);

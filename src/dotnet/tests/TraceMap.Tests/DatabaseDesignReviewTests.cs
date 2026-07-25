@@ -335,6 +335,38 @@ public sealed class DatabaseDesignReviewTests
     }
 
     [Fact]
+    public async Task Packet_uses_qualified_operation_identity_to_select_the_exact_schema()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "server.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        var manifest = Manifest("server");
+        SqliteIndexWriter.Write(index, manifest,
+        [
+            PostgresFact(manifest, FactTypes.PostgresSchemaTableDeclared, 20,
+                ("objectKind", "table"), ("schemaName", "public"), ("tableName", "orders")),
+            PostgresFact(manifest, FactTypes.PostgresSchemaTableDeclared, 21,
+                ("objectKind", "table"), ("schemaName", "audit"), ("tableName", "orders")),
+            OperationFact(manifest, 30,
+                ("frameworkFamily", "dapper"), ("methodName", "Execute"), ("operationKind", "delete-candidate"),
+                ("targetIdentityStatus", "table-static"), ("tableName", "audit.orders"), ("sqlOperationName", "DELETE"))
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["server"]));
+
+        var report = await DatabaseDesignReviewReporter.BuildReportAsync(
+            new DatabaseDesignReviewOptions(combined, Path.Combine(temp.Path, "out")));
+
+        var audit = Assert.Single(report.Tables, table => table.SchemaName == "audit");
+        Assert.Contains(audit.Operations, operation =>
+            operation.EvidenceKind == "application-operation"
+            && operation.DisplayName == "delete-candidate");
+        var publicTable = Assert.Single(report.Tables, table => table.SchemaName == "public");
+        Assert.DoesNotContain(publicTable.Operations, operation => operation.EvidenceKind == "application-operation");
+        Assert.DoesNotContain(report.Gaps, gap => gap.GapKind is
+            "DatabaseOperationTableMappingAmbiguous" or "DatabaseOperationTableMappingUnavailable");
+    }
+
+    [Fact]
     public async Task Packet_emits_bounded_truncation_gaps()
     {
         using var temp = new TempDirectory();
