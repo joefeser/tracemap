@@ -1,8 +1,12 @@
 # PostgreSQL Enum/Routine Evidence State
 
-Status: ready-for-review
+Status: implemented-and-merged
 
 Branch: `codex/postgres-schema-migration-routines-enums`
+
+PR: [#528](https://github.com/joefeser/tracemap/pull/528)
+
+Merge commit: `fc9f3a4fd016f7133d82a38605a8bbcc82b90983`
 
 Base: reconciled `origin/dev` through PR #527 / merge
 `dda039325b802c43466c846f06a6bbe308237d4d`
