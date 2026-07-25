@@ -512,7 +512,12 @@ public sealed class CSharpSemanticExtractorTests
 
             namespace EfSample;
 
-            [Table("order_archive", Schema = "audit")]
+            public static class DbSchemas
+            {
+                public const string Audit = "audit";
+            }
+
+            [Table("order_archive", Schema = DbSchemas.Audit)]
             public sealed class Order
             {
                 [Column("legacy_number")]
@@ -525,7 +530,7 @@ public sealed class CSharpSemanticExtractorTests
 
                 public void Configure(ModelBuilder modelBuilder, string dynamicTable)
                 {
-                    modelBuilder.Entity<Order>().ToTable("orders", "sales");
+                    modelBuilder.Entity<Order>().ToTable(schema: "sales", name: "orders");
                     modelBuilder.Entity<Order>().Property(order => order.Number).HasColumnName("order_number");
                     modelBuilder.Entity<Order>().ToTable(dynamicTable);
                     modelBuilder.ApplyConfigurationsFromAssembly(typeof(OrdersContext).Assembly);
@@ -579,5 +584,44 @@ public sealed class CSharpSemanticExtractorTests
             fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.DatabaseEntityFramework
             && fact.Properties.GetValueOrDefault("classification") == "AssemblyModelConfigurationUnavailable");
+    }
+
+    [Fact]
+    public void Scan_emits_an_explicit_ef_gap_for_a_recognizable_unbound_fluent_chain()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "src", "EfReduced"));
+        File.WriteAllText(Path.Combine(temp.Path, "src", "EfReduced", "EfReduced.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "src", "EfReduced", "Reduced.cs"), """
+            namespace EfReduced;
+
+            public sealed class Order { }
+
+            public sealed class Configuration
+            {
+                public void Configure(object modelBuilder)
+                {
+                    modelBuilder.Entity<Order>().ToTable("orders");
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseEntityFramework
+            && fact.ContractElement == "ToTable"
+            && fact.Properties.GetValueOrDefault("classification") == "SemanticBindingUnavailable"
+            && fact.EvidenceTier == EvidenceTiers.Tier4Unknown);
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.DatabaseColumnMapping
+            && fact.ContractElement == "orders");
     }
 }

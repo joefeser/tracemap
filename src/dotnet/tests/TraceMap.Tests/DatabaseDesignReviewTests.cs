@@ -49,9 +49,9 @@ public sealed class DatabaseDesignReviewTests
                 ("objectKind", "schema-snapshot"), ("snapshotFormat", "pg-dump"), ("recognizedDdlStatementCount", "6"), ("unsupportedDdlStatementCount", "1"), ("sourceDatabaseIdentityOmitted", "true")),
             PostgresGap(manifest, 40, "SnapshotDdlCoverageReduced"),
             ContractMappingFact(manifest, 50,
-                ("mappingKind", "DatabaseTableMapping"), ("configurationKind", "fluent"), ("entityType", "global::Server.Order"), ("mappedName", "orders")),
+                ("mappingKind", "DatabaseTableMapping"), ("configurationKind", "fluent"), ("entityType", "global::Server.Envelope<global::Server.Order>"), ("mappedName", "orders")),
             EfMappingFact(manifest, 51,
-                ("mappingKind", "DatabaseColumnMapping"), ("configurationKind", "fluent"), ("entityType", "global::Server.Order"), ("memberName", "Status"), ("mappedName", "status")),
+                ("mappingKind", "DatabaseColumnMapping"), ("configurationKind", "fluent"), ("entityType", "global::Server.Envelope<global::Server.Order>"), ("memberName", "Status"), ("mappedName", "status")),
             EfMappingFact(manifest, 52,
                 ("mappingKind", "DatabaseTableMapping"), ("configurationKind", "annotation"), ("entityType", "global::Server.Invoice"), ("mappedName", "invoices")),
             EfGap(manifest, 53, "AssemblyModelConfigurationUnavailable")
@@ -69,6 +69,7 @@ public sealed class DatabaseDesignReviewTests
         Assert.Contains(table.Declarations, row => row.EvidenceKind == "index" && row.DisplayName == "ix_orders_status");
         var efTable = Assert.Single(table.Declarations, row => row.EvidenceKind == "ef-table-mapping");
         Assert.Contains(efTable.Metadata, pair => pair.Key == "matchKind" && pair.Value == "unique-table-name-match-schema-unspecified");
+        Assert.Contains(efTable.Metadata, pair => pair.Key == "entityType" && pair.Value == "Server.Envelope<Server.Order>");
         Assert.Equal(RuleIds.CSharpSemanticContractMapping, efTable.Evidence.RuleId);
         var efColumn = Assert.Single(table.Declarations, row => row.EvidenceKind == "ef-column-mapping");
         Assert.Equal("status", efColumn.DisplayName);

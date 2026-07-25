@@ -3245,7 +3245,7 @@ rules:
     limitations:
       - Tier1 requires Roslyn symbol binding to EF or EF Core types.
       - Mapping evidence is limited to constant ToTable/HasColumnName fluent calls; Table/Column annotations remain separately attributable to csharp.semantic.contractmapping.v1 because annotations alone do not prove EF usage.
-      - Dynamic mapping names and assembly-scanned model configuration emit explicit gaps; helper methods, reflection, compiled models, provider conventions, keys, indexes, relationships, owned types, and converters are not reconstructed.
+      - Dynamic mapping names, recognizable fluent chains without semantic binding, and assembly-scanned model configuration emit explicit gaps; helper methods, reflection, compiled models, provider conventions, keys, indexes, relationships, owned types, and converters are not reconstructed.
       - Entity/table and property/column mappings do not prove database existence, schema correspondence, generated SQL, migration application, reads, writes, or runtime reachability.
       - Structural fallback uses class/base type/property type naming patterns and does not prove runtime EF usage.
       - SaveChanges syntax fallback is name-only and may include unrelated methods.

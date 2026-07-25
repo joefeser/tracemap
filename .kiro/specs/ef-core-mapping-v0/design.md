@@ -26,9 +26,10 @@ Only method symbols bound to `Microsoft.EntityFrameworkCore` types are accepted
 for fluent mapping evidence. Syntax resemblance alone does not produce a
 Tier1 mapping.
 
-Dynamic names and `ApplyConfigurationsFromAssembly` produce Tier4
-`AnalysisGap` facts with safe classifications and hashes/count-free metadata;
-expressions are not rendered.
+Dynamic names, recognizable EF fluent chains whose method symbol cannot bind,
+and `ApplyConfigurationsFromAssembly` produce Tier4 `AnalysisGap` facts with
+safe classifications and hashes/count-free metadata; expressions are not
+rendered.
 
 ## Composition
 
