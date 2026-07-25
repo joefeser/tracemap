@@ -167,6 +167,7 @@ public static class FactTypes
     public const string InfrastructureBoilerplate = nameof(InfrastructureBoilerplate);
     public const string QueryPatternDetected = nameof(QueryPatternDetected);
     public const string PostgresMigrationFileDeclared = nameof(PostgresMigrationFileDeclared);
+    public const string PostgresSchemaSnapshotDeclared = nameof(PostgresSchemaSnapshotDeclared);
     public const string PostgresSchemaTableDeclared = nameof(PostgresSchemaTableDeclared);
     public const string PostgresSchemaColumnDeclared = nameof(PostgresSchemaColumnDeclared);
     public const string PostgresSchemaConstraintDeclared = nameof(PostgresSchemaConstraintDeclared);
@@ -447,7 +448,7 @@ public static class ScannerVersions
     public const string SqlSecretSafetyExtractor = "sql-secret-safety/0.1.0";
     public const string PostgresArchiveLinkExtractor = "postgres-archive-link/0.1.0";
     public const string PostgresPermissionEvidenceExtractor = "postgres-permission-evidence/0.1.0";
-    public const string PostgresSchemaMigrationExtractor = "postgres-schema-migration/0.4.0";
+    public const string PostgresSchemaMigrationExtractor = "postgres-schema-migration/0.5.0";
     public const string LegacyWcfExtractor = "legacy-wcf/0.2.0";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.1.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
