@@ -34,10 +34,12 @@ public static partial class PostgresSchemaMigrationExtractor
                     continue;
                 }
                 var statementHash = FactFactory.Hash(structural, 32);
-                recognizedStatementHashes.Add(statementHash);
+                if (snapshotFormat is null)
+                    recognizedStatementHashes.Add(statementHash);
                 if (!statement.LexicallyComplete || !HasBalancedParentheses(structural))
                 {
                     fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "IncompleteDdlStatement", statementHash));
+                    AddUnsupportedSnapshotDdlFamily(snapshotFormat, structural, unsupportedSnapshotDdlFamilies);
                     continue;
                 }
 
@@ -53,12 +55,14 @@ public static partial class PostgresSchemaMigrationExtractor
                         fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "CreateTableClauseUnsupported", statementHash));
                     else if (columns.Count == 0)
                         fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "CreateTableColumnsUnavailable", statementHash));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
                     continue;
                 }
 
                 if (AlterTablePrefix().IsMatch(structural) && HasTopLevelComma(structural))
                 {
                     fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "AlterTableMultipleSubcommandsUnsupported", statementHash));
+                    AddUnsupportedSnapshotDdlFamily(snapshotFormat, structural, unsupportedSnapshotDdlFamilies);
                     continue;
                 }
 
@@ -66,6 +70,7 @@ public static partial class PostgresSchemaMigrationExtractor
                 {
                     fileFacts.Add(Surface(manifest, FactTypes.PostgresMigrationOperation, file.RelativePath, statement, schema, table, column, "add-column", "migration-operation"));
                     fileFacts.Add(Surface(manifest, FactTypes.PostgresSchemaColumnDeclared, file.RelativePath, statement, schema, table, column, "add-column", "column"));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
                     continue;
                 }
 
@@ -73,30 +78,35 @@ public static partial class PostgresSchemaMigrationExtractor
                 {
                     fileFacts.Add(ConstraintSurface(manifest, FactTypes.PostgresMigrationOperation, file.RelativePath, statement, schema, table, alterConstraint, "add-constraint", "migration-operation"));
                     fileFacts.Add(ConstraintSurface(manifest, FactTypes.PostgresSchemaConstraintDeclared, file.RelativePath, statement, schema, table, alterConstraint, "add-constraint", "constraint"));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
                     continue;
                 }
 
                 if (TryAlterDropColumn(structural, out schema, out table, out column, out var dropBehavior))
                 {
                     fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, column, null, "drop-column", dropBehavior));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
                     continue;
                 }
 
                 if (TryAlterRenameColumn(structural, out schema, out table, out column, out var newColumn))
                 {
                     fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, column, newColumn, "rename-column"));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
                     continue;
                 }
 
                 if (TryAlterRenameTable(structural, out schema, out table, out var newTable))
                 {
                     fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, null, newTable, "rename-table"));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
                     continue;
                 }
 
                 if (TryDropTable(structural, out schema, out table, out dropBehavior))
                 {
                     fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, null, null, "drop-table", dropBehavior));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
                     continue;
                 }
 
@@ -104,6 +114,7 @@ public static partial class PostgresSchemaMigrationExtractor
                 {
                     fileFacts.Add(IndexSurface(manifest, FactTypes.PostgresMigrationOperation, file.RelativePath, statement, schema, table, index, "migration-operation"));
                     fileFacts.Add(IndexSurface(manifest, FactTypes.PostgresSchemaIndexDeclared, file.RelativePath, statement, schema, table, index, "index"));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
                     continue;
                 }
 
@@ -111,12 +122,14 @@ public static partial class PostgresSchemaMigrationExtractor
                 {
                     fileFacts.Add(EnumSurface(manifest, FactTypes.PostgresMigrationOperation, file.RelativePath, statement, schema, enumName, "migration-operation"));
                     fileFacts.Add(EnumSurface(manifest, FactTypes.PostgresSchemaEnumDeclared, file.RelativePath, statement, schema, enumName, "enum"));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
                     continue;
                 }
 
                 if (CreateRoutinePrefix().IsMatch(structural) && !HasCompleteRoutineBody(structural))
                 {
                     fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "IncompleteDdlStatement", statementHash));
+                    AddUnsupportedSnapshotDdlFamily(snapshotFormat, structural, unsupportedSnapshotDdlFamilies);
                     continue;
                 }
 
@@ -124,10 +137,12 @@ public static partial class PostgresSchemaMigrationExtractor
                 {
                     fileFacts.Add(RoutineSurface(manifest, FactTypes.PostgresMigrationOperation, file.RelativePath, statement, schema, routineName, routineKind, "migration-operation"));
                     fileFacts.Add(RoutineSurface(manifest, FactTypes.PostgresSchemaRoutineDeclared, file.RelativePath, statement, schema, routineName, routineKind, "routine"));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
                     continue;
                 }
 
                 fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "UnsupportedSchemaDdlShape", statementHash));
+                AddUnsupportedSnapshotDdlFamily(snapshotFormat, structural, unsupportedSnapshotDdlFamilies);
             }
 
             if (snapshotFormat is not null)
@@ -190,6 +205,18 @@ public static partial class PostgresSchemaMigrationExtractor
             : "other";
         family = $"{verb}-{subject}";
         return true;
+    }
+
+    private static void AddUnsupportedSnapshotDdlFamily(string? snapshotFormat, string sql, ICollection<string> families)
+    {
+        if (snapshotFormat is not null && TryUnsupportedSnapshotDdlFamily(sql, out var family))
+            families.Add(family);
+    }
+
+    private static void AddRecognizedSnapshotStatementHash(string? snapshotFormat, string statementHash, ICollection<string> hashes)
+    {
+        if (snapshotFormat is not null)
+            hashes.Add(statementHash);
     }
 
     private static bool StartsSupportedFamily(string sql) =>
@@ -729,7 +756,7 @@ public static partial class PostgresSchemaMigrationExtractor
     [GeneratedRegex(@"^DROP\s+TABLE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex DropTablePrefix();
     [GeneratedRegex(@"^(?:DROP\b|TRUNCATE\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex UnsupportedDestructiveDdlPrefix();
     [GeneratedRegex(@"^\s*--\s*tracemap-postgres-schema-snapshot:\s*v1\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex SnapshotDirective();
-    [GeneratedRegex(@"^(?<verb>CREATE|ALTER|DROP|TRUNCATE)\s+(?:OR\s+REPLACE\s+)?(?<subject>MATERIALIZED\s+VIEW|SCHEMA|SEQUENCE|VIEW|TRIGGER|EXTENSION|DOMAIN|COLLATION|PUBLICATION|SUBSCRIPTION|POLICY|RULE|OTHER)?\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex SnapshotDdlPrefix();
+    [GeneratedRegex(@"^(?<verb>CREATE|ALTER|DROP|TRUNCATE)\s+(?:OR\s+REPLACE\s+)?(?<subject>MATERIALIZED\s+VIEW|TABLE|INDEX|TYPE|SCHEMA|SEQUENCE|VIEW|TRIGGER|EXTENSION|DOMAIN|COLLATION|PUBLICATION|SUBSCRIPTION|POLICY|RULE|OTHER)?\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex SnapshotDdlPrefix();
     [GeneratedRegex(@"^CREATE\s+(?:UNIQUE\s+)?INDEX\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateIndexPrefix();
     [GeneratedRegex(@"^CREATE\s+TYPE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateEnumPrefix();
     [GeneratedRegex(@"^CREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateRoutinePrefix();

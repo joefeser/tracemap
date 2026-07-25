@@ -376,6 +376,62 @@ public sealed class PostgresSchemaMigrationExtractorTests
     }
 
     [Fact]
+    public void Extract_counts_only_projected_ddl_in_mixed_snapshot_coverage()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "mixed-snapshot.sql"), """
+            -- tracemap-postgres-schema-snapshot: v1
+            CREATE TABLE archive.records (id bigint);
+            DROP INDEX private_index;
+            TRUNCATE TABLE private_records;
+            """);
+
+        var facts = Extract(temp.Path);
+        var json = JsonSerializer.Serialize(facts);
+        var snapshot = Assert.Single(facts, fact => fact.FactType == FactTypes.PostgresSchemaSnapshotDeclared);
+        var gap = Assert.Single(facts, fact => fact.Properties.GetValueOrDefault("classification") == "SnapshotDdlCoverageReduced");
+
+        Assert.Equal("1", snapshot.Properties["recognizedDdlStatementCount"]);
+        Assert.Equal("2", snapshot.Properties["unsupportedDdlStatementCount"]);
+        Assert.Equal("drop-index,truncate-table", gap.Properties["unsupportedDdlFamilies"]);
+        Assert.Equal(2, facts.Count(fact => fact.Properties.GetValueOrDefault("classification") == "UnsupportedSchemaDdlShape"));
+        Assert.DoesNotContain("private_index", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_records", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Extract_preserves_unsupported_only_snapshot_identity_without_migration_file_fact()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "unsupported-only-snapshot.sql"), """
+            -- tracemap-postgres-schema-snapshot: v1
+            DROP VIEW private_view;
+            DROP TYPE private_type;
+            TRUNCATE TABLE private_records;
+            CREATE TABLE "private_schema"."private_table" (id bigint);
+            ALTER TABLE ONLY archive.records ADD COLUMN private_column text;
+            """);
+
+        var facts = Extract(temp.Path);
+        var json = JsonSerializer.Serialize(facts);
+        var snapshot = Assert.Single(facts, fact => fact.FactType == FactTypes.PostgresSchemaSnapshotDeclared);
+        var gap = Assert.Single(facts, fact => fact.Properties.GetValueOrDefault("classification") == "SnapshotRecognizedDdlUnavailable");
+
+        Assert.Equal("0", snapshot.Properties["recognizedDdlStatementCount"]);
+        Assert.Equal("5", snapshot.Properties["unsupportedDdlStatementCount"]);
+        Assert.Equal("alter-table,create-table,drop-type,drop-view,truncate-table", gap.Properties["unsupportedDdlFamilies"]);
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.PostgresMigrationFileDeclared);
+        Assert.Equal(5, facts.Count(fact => fact.RuleId == RuleIds.DatabasePostgresSchemaMigrationGap
+            && fact.Properties.GetValueOrDefault("statementOrdinal") != "0"));
+        Assert.DoesNotContain("private_view", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_type", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_records", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_schema", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_table", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private_column", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Extract_does_not_infer_snapshot_from_filename_or_marker_text_inside_sql_literals()
     {
         using var temp = new TempDirectory();
