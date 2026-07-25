@@ -55,6 +55,20 @@ to a separate slice.
 - Updated CLI help, rule limitations, validation guidance, deterministic
   regression coverage, and protected-value checks.
 
+## Review fixes
+
+ACK authorized four current review threads for patching. The patch removes a
+redundant combined-index query read, validates required single-index columns
+before projection, reduces manifest known gaps to bounded categories, and
+preserves `SingleIndexRoutePathUnavailable` when the gap cap is one. Regression
+coverage includes malformed schemas, protected gap hashes, and mandatory-gap
+retention.
+
+The optional suggestion to add placeholder file/span/extractor values to the
+packet-level route-coverage gap was not implemented because no source artifact
+supports those values. Inventing them would violate the packet's evidence
+contract.
+
 ## Deferred
 
 - Public-site publication.

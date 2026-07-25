@@ -683,6 +683,25 @@ public static class DatabaseDesignReviewReporter
             omittedGaps = 0;
             cappedGaps = sortedGaps.ToList();
         }
+        else if (designInput.IndexKind == "single")
+        {
+            var routeCoverageGap = sortedGaps.First(row => row.GapKind == "SingleIndexRoutePathUnavailable");
+            if (options.MaxGaps == 1)
+            {
+                omittedGaps = sortedGaps.Length - 1;
+                cappedGaps = [routeCoverageGap];
+            }
+            else
+            {
+                var retainedOtherCount = options.MaxGaps - 2;
+                var retained = sortedGaps
+                    .Where(row => row.GapId != routeCoverageGap.GapId)
+                    .Take(retainedOtherCount)
+                    .ToArray();
+                omittedGaps = sortedGaps.Length - retained.Length - 1;
+                cappedGaps = [routeCoverageGap, .. retained, TruncationGap("gaps", omittedGaps)];
+            }
+        }
         else
         {
             var retainedOriginalCount = options.MaxGaps - 1;
@@ -1440,8 +1459,7 @@ public static class DatabaseDesignReviewReporter
                 indexPath,
                 "combined",
                 cancellationToken,
-                includeModelMappings: true,
-                includeQuerySurfaces: true);
+                includeModelMappings: true);
             return new DesignReadInput(
                 "combined",
                 combined.Sources,
@@ -1458,6 +1476,7 @@ public static class DatabaseDesignReviewReporter
             throw new InvalidDataException(
                 "database-design-review input is not a valid TraceMap index; expected scan_manifest/facts or index_sources/combined_facts.");
         }
+        await ValidateSingleIndexColumnsAsync(connection, cancellationToken);
 
         await using var manifestCommand = connection.CreateCommand();
         manifestCommand.CommandText = "select manifest_json from scan_manifest order by scan_id limit 2;";
@@ -1495,7 +1514,9 @@ public static class DatabaseDesignReviewReporter
         var warnings = SingleSourceCoverageWarnings(source);
         var knownGaps = manifest.KnownGaps
             .Where(value => !string.IsNullOrWhiteSpace(value))
-            .GroupBy(value => SafeToken(value, "known-gap"), StringComparer.Ordinal)
+            .GroupBy(
+                value => SafeKnownGapCategory(CombinedDependencyReporter.GapCategory(value)),
+                StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal)
             .Select(group => new CombinedKnownGapRow(
                 source.SourceIndexId,
@@ -1537,6 +1558,46 @@ public static class DatabaseDesignReviewReporter
         return new DesignReadInput("single", [source], knownGaps, warnings, facts, singleSqlInputs);
     }
 
+    private static async Task ValidateSingleIndexColumnsAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        var requiredColumns = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["scan_manifest"] = ["scan_id", "repo", "manifest_json"],
+            ["facts"] =
+            [
+                "fact_id",
+                "scan_id",
+                "repo",
+                "commit_sha",
+                "project_path",
+                "fact_type",
+                "rule_id",
+                "evidence_tier",
+                "source_symbol",
+                "target_symbol",
+                "contract_element",
+                "file_path",
+                "start_line",
+                "end_line",
+                "snippet_hash",
+                "properties_json"
+            ]
+        };
+        foreach (var (table, columns) in requiredColumns)
+        {
+            foreach (var column in columns)
+            {
+                if (!await ColumnExistsAsync(connection, table, column, cancellationToken))
+                {
+                    throw new InvalidDataException(
+                        $"database-design-review input is not a valid TraceMap index; missing {table}.{column}.");
+                }
+            }
+        }
+    }
+
     private static IReadOnlyList<string> SingleSourceCoverageWarnings(CombinedReportSource source)
     {
         var warnings = new List<string>();
@@ -1565,6 +1626,20 @@ public static class DatabaseDesignReviewReporter
         if (scannerVersion.Contains("swift", StringComparison.OrdinalIgnoreCase))
             return "swift";
         return scannerVersion.Contains("tracemap", StringComparison.OrdinalIgnoreCase) ? "csharp" : null;
+    }
+
+    private static string SafeKnownGapCategory(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "KnownGap";
+        var trimmed = value.Trim();
+        if (trimmed.Length > 80
+            || trimmed.Any(character => !(char.IsLetterOrDigit(character) || char.IsWhiteSpace(character) || character is '-' or '_'))
+            || (trimmed.Length >= 16 && trimmed.All(Uri.IsHexDigit)))
+        {
+            return "KnownGap";
+        }
+        return trimmed;
     }
 
     private static async Task<IReadOnlyDictionary<string, (string? Id, string? Version)>> ReadExtractorVersionsAsync(
