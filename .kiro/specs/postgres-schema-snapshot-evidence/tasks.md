@@ -9,4 +9,4 @@
 - [x] Project safe snapshot metadata into release review.
 - [x] Update the rule catalog, documentation, validation guide, and sample.
 - [x] Run focused and full validation.
-- [ ] Open and review the focused PR.
+- [x] Open the focused PR for review.
