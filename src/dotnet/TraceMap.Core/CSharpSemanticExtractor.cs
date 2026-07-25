@@ -2013,7 +2013,18 @@ public static class CSharpSemanticExtractor
                     continue;
                 }
 
-                facts.Add(CreateDatabaseMappingFact(projectPath, filePath, attribute, model, type, type, mappingKind, mappedName));
+                facts.Add(CreateDatabaseMappingFact(
+                    projectPath,
+                    filePath,
+                    attribute,
+                    model,
+                    type,
+                    type,
+                    mappingKind,
+                    mappedName,
+                    mappingKind == "DatabaseTableMapping"
+                        ? GetAttributeConstantStringArgument(attribute, model, "Schema")
+                        : null));
             }
         }
 
@@ -2037,7 +2048,15 @@ public static class CSharpSemanticExtractor
                     continue;
                 }
 
-                facts.Add(CreateDatabaseMappingFact(projectPath, filePath, attribute, model, symbol.ContainingType, symbol, mappingKind, mappedName));
+                facts.Add(CreateDatabaseMappingFact(
+                    projectPath,
+                    filePath,
+                    attribute,
+                    model,
+                    symbol.ContainingType,
+                    symbol,
+                    mappingKind,
+                    mappedName));
             }
         }
     }
@@ -2540,8 +2559,8 @@ public static class CSharpSemanticExtractor
         }
 
         mappingKind = shortName == "Table" ? "DatabaseTableMapping" : "DatabaseColumnMapping";
-        mappedName = GetAttributeStringArgument(attribute, "Name")
-            ?? GetAttributeStringArgument(attribute, null)
+        mappedName = GetAttributeConstantStringArgument(attribute, model, "Name")
+            ?? GetAttributeConstantStringArgument(attribute, model, null)
             ?? string.Empty;
         return !string.IsNullOrWhiteSpace(mappedName);
     }
@@ -2554,11 +2573,14 @@ public static class CSharpSemanticExtractor
         INamedTypeSymbol? containingType,
         ISymbol mappedSymbol,
         string mappingKind,
-        string mappedName)
+        string mappedName,
+        string? schemaName = null)
     {
         var properties = AddAssemblyProperties(
             new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
+                ["configurationKind"] = "annotation",
+                ["entityType"] = containingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
                 ["mappingKind"] = mappingKind,
                 ["mappedName"] = mappedName,
                 ["mappedSymbol"] = mappedSymbol.ToDisplayString(SymbolFormat),
@@ -2567,6 +2589,14 @@ public static class CSharpSemanticExtractor
             },
             mappedSymbol.ContainingAssembly,
             mappedSymbol.ContainingAssembly);
+        if (mappingKind == "DatabaseColumnMapping")
+        {
+            properties["memberName"] = mappedSymbol.Name;
+        }
+        if (!string.IsNullOrWhiteSpace(schemaName))
+        {
+            properties["schemaName"] = schemaName;
+        }
         AddSymbolProperties(properties, "target", mappedSymbol);
 
         return CreateSemanticFact(
@@ -2931,6 +2961,20 @@ public static class CSharpSemanticExtractor
                 continue;
             }
 
+            var entityType = property.Type is INamedTypeSymbol { TypeArguments.Length: 1 } dbSetType
+                ? dbSetType.TypeArguments[0]
+                : null;
+            var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["entityType"] = entityType?.ToDisplayString(SymbolFormat) ?? string.Empty,
+                ["propertyName"] = property.Name,
+                ["propertyType"] = property.Type.ToDisplayString(SymbolFormat)
+            };
+            if (entityType is not null)
+            {
+                AddSymbolProperties(properties, "entityType", entityType);
+            }
+
             facts.Add(CreateSemanticFact(
                 FactTypes.DbSetDeclared,
                 RuleIds.DatabaseEntityFramework,
@@ -2940,11 +2984,133 @@ public static class CSharpSemanticExtractor
                 sourceSymbol: property.ContainingType?.ToDisplayString(SymbolFormat),
                 targetSymbol: property.ToDisplayString(SymbolFormat),
                 contractElement: property.Name,
-                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                properties: properties));
+        }
+
+        AddEntityFrameworkFluentMappingFacts(projectPath, filePath, root, model, facts);
+    }
+
+    private static void AddEntityFrameworkFluentMappingFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method)
+            {
+                if (TryGetPotentialEntityFrameworkMethodName(invocation, out var unresolvedMethod))
                 {
-                    ["propertyName"] = property.Name,
-                    ["propertyType"] = property.Type.ToDisplayString(SymbolFormat)
-                }));
+                    facts.Add(CreateEntityFrameworkGap(
+                        projectPath,
+                        filePath,
+                        invocation,
+                        "SemanticBindingUnavailable",
+                        unresolvedMethod));
+                }
+                continue;
+            }
+
+            if (!IsEntityFrameworkMethod(method))
+            {
+                continue;
+            }
+
+            if (method.Name == "ApplyConfigurationsFromAssembly")
+            {
+                facts.Add(CreateEntityFrameworkGap(
+                    projectPath,
+                    filePath,
+                    invocation,
+                    "AssemblyModelConfigurationUnavailable",
+                    method.Name));
+                continue;
+            }
+
+            if (method.Name is not ("ToTable" or "HasColumnName"))
+            {
+                continue;
+            }
+
+            if (!TryGetConstantStringArgument(invocation, model, method, "name", out var mappedName))
+            {
+                facts.Add(CreateEntityFrameworkGap(
+                    projectPath,
+                    filePath,
+                    invocation,
+                    "DynamicModelMappingName",
+                    method.Name));
+                continue;
+            }
+
+            var entityType = TryGetEntityFrameworkEntityType(invocation, model);
+            if (entityType is null)
+            {
+                facts.Add(CreateEntityFrameworkGap(
+                    projectPath,
+                    filePath,
+                    invocation,
+                    "EntityTypeUnavailable",
+                    method.Name));
+                continue;
+            }
+
+            var mappingKind = method.Name == "ToTable"
+                ? "DatabaseTableMapping"
+                : "DatabaseColumnMapping";
+            var properties = AddAssemblyProperties(
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["configurationKind"] = "fluent",
+                    ["entityType"] = entityType.ToDisplayString(SymbolFormat),
+                    ["mappingKind"] = mappingKind,
+                    ["mappedName"] = mappedName,
+                    ["methodSymbol"] = method.ToDisplayString(SymbolFormat)
+                },
+                model.GetEnclosingSymbol(invocation.SpanStart)?.ContainingAssembly,
+                method.ContainingAssembly);
+            AddSymbolProperties(properties, "entityType", entityType);
+
+            string? memberName = null;
+            ISymbol? mappedMember = null;
+            if (method.Name == "ToTable")
+            {
+                if (TryGetConstantStringArgument(invocation, model, method, "schema", out var schemaName))
+                {
+                    properties["schemaName"] = schemaName;
+                }
+            }
+            else if (!TryGetEntityFrameworkPropertyMember(invocation, model, out memberName, out mappedMember))
+            {
+                facts.Add(CreateEntityFrameworkGap(
+                    projectPath,
+                    filePath,
+                    invocation,
+                    "PropertyIdentityUnavailable",
+                    method.Name));
+                continue;
+            }
+            else
+            {
+                properties["memberName"] = memberName;
+                if (mappedMember is not null)
+                {
+                    AddSymbolProperties(properties, "target", mappedMember);
+                }
+            }
+
+            facts.Add(CreateSemanticFact(
+                FactTypes.DatabaseColumnMapping,
+                RuleIds.DatabaseEntityFramework,
+                projectPath,
+                filePath,
+                invocation,
+                sourceSymbol: GetEnclosingSymbol(model, invocation),
+                targetSymbol: mappedMember?.ToDisplayString(SymbolFormat) ?? entityType.ToDisplayString(SymbolFormat),
+                contractElement: mappedName,
+                properties: properties));
         }
     }
 
@@ -3344,6 +3510,42 @@ public static class CSharpSemanticExtractor
         return null;
     }
 
+    private static string? GetAttributeConstantStringArgument(
+        AttributeSyntax attribute,
+        SemanticModel model,
+        string? name)
+    {
+        var arguments = attribute.ArgumentList?.Arguments;
+        if (arguments is null)
+        {
+            return null;
+        }
+
+        foreach (var argument in arguments)
+        {
+            if (name is not null
+                && argument.NameEquals?.Name.Identifier.ValueText.Equals(name, StringComparison.Ordinal) != true)
+            {
+                continue;
+            }
+
+            if (name is null && argument.NameEquals is not null)
+            {
+                continue;
+            }
+
+            var constant = model.GetConstantValue(argument.Expression);
+            if (constant.HasValue
+                && constant.Value is string value
+                && !string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
     private static string? GetNameExpressionValue(ExpressionSyntax expression)
     {
         if (expression is LiteralExpressionSyntax literal
@@ -3602,6 +3804,194 @@ public static class CSharpSemanticExtractor
             && DerivesFromDbContext(method.ContainingType);
     }
 
+    private static bool IsEntityFrameworkMethod(IMethodSymbol method)
+    {
+        var definition = method.ReducedFrom ?? method;
+        var namespaceName = GetNamespaceName(definition.ContainingType);
+        return namespaceName.Equals("Microsoft.EntityFrameworkCore", StringComparison.Ordinal)
+            || namespaceName.StartsWith("Microsoft.EntityFrameworkCore.", StringComparison.Ordinal);
+    }
+
+    private static bool TryGetConstantStringArgument(
+        InvocationExpressionSyntax invocation,
+        SemanticModel model,
+        IMethodSymbol method,
+        string parameterName,
+        out string value)
+    {
+        value = string.Empty;
+        ArgumentSyntax? selected = null;
+        for (var index = 0; index < invocation.ArgumentList.Arguments.Count; index++)
+        {
+            var argument = invocation.ArgumentList.Arguments[index];
+            var boundParameter = (model.GetOperation(argument) as Microsoft.CodeAnalysis.Operations.IArgumentOperation)?.Parameter;
+            var positionalParameter = argument.NameColon is null && index < method.Parameters.Length
+                ? method.Parameters[index]
+                : null;
+            if (argument.NameColon?.Name.Identifier.ValueText.Equals(parameterName, StringComparison.Ordinal) == true
+                || boundParameter?.Name.Equals(parameterName, StringComparison.Ordinal) == true
+                || positionalParameter?.Name.Equals(parameterName, StringComparison.Ordinal) == true)
+            {
+                selected = argument;
+                break;
+            }
+        }
+
+        if (selected is null)
+        {
+            return false;
+        }
+
+        var constant = model.GetConstantValue(selected.Expression);
+        if (!constant.HasValue || constant.Value is not string text || string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        value = text;
+        return true;
+    }
+
+    private static ITypeSymbol? TryGetEntityFrameworkEntityType(
+        InvocationExpressionSyntax invocation,
+        SemanticModel model)
+    {
+        ExpressionSyntax? cursor = GetInvocationReceiver(invocation.Expression);
+        while (cursor is not null)
+        {
+            var builderEntityType = TryGetEntityTypeFromBuilder(model.GetTypeInfo(cursor).Type);
+            if (builderEntityType is not null)
+            {
+                return builderEntityType;
+            }
+
+            if (cursor is not InvocationExpressionSyntax receiverInvocation)
+            {
+                break;
+            }
+
+            if (model.GetSymbolInfo(receiverInvocation).Symbol is IMethodSymbol receiverMethod
+                && IsEntityFrameworkMethod(receiverMethod)
+                && receiverMethod.Name == "Entity"
+                && receiverMethod.TypeArguments.Length == 1)
+            {
+                return receiverMethod.TypeArguments[0];
+            }
+
+            cursor = GetInvocationReceiver(receiverInvocation.Expression);
+        }
+
+        return null;
+    }
+
+    private static ITypeSymbol? TryGetEntityTypeFromBuilder(ITypeSymbol? type)
+    {
+        if (type is INamedTypeSymbol { TypeArguments.Length: 1 } namedType
+            && namedType.OriginalDefinition.Name == "EntityTypeBuilder"
+            && namedType.OriginalDefinition.Arity == 1
+            && GetNamespaceName(namedType.OriginalDefinition)
+                .Equals("Microsoft.EntityFrameworkCore.Metadata.Builders", StringComparison.Ordinal))
+        {
+            return namedType.TypeArguments[0];
+        }
+
+        return null;
+    }
+
+    private static bool TryGetPotentialEntityFrameworkMethodName(
+        InvocationExpressionSyntax invocation,
+        out string methodName)
+    {
+        methodName = GetInvocationMemberName(invocation.Expression) ?? string.Empty;
+        if (methodName == "ApplyConfigurationsFromAssembly")
+        {
+            return true;
+        }
+
+        if (methodName is not ("ToTable" or "HasColumnName"))
+        {
+            return false;
+        }
+
+        var requiredReceiver = methodName == "ToTable" ? "Entity" : "Property";
+        ExpressionSyntax? cursor = GetInvocationReceiver(invocation.Expression);
+        while (cursor is InvocationExpressionSyntax receiverInvocation)
+        {
+            if (GetInvocationMemberName(receiverInvocation.Expression) == requiredReceiver)
+            {
+                return true;
+            }
+            cursor = GetInvocationReceiver(receiverInvocation.Expression);
+        }
+
+        return false;
+    }
+
+    private static bool TryGetEntityFrameworkPropertyMember(
+        InvocationExpressionSyntax invocation,
+        SemanticModel model,
+        out string memberName,
+        out ISymbol? member)
+    {
+        memberName = string.Empty;
+        member = null;
+        ExpressionSyntax? cursor = GetInvocationReceiver(invocation.Expression);
+        while (cursor is InvocationExpressionSyntax receiverInvocation)
+        {
+            if (model.GetSymbolInfo(receiverInvocation).Symbol is IMethodSymbol receiverMethod
+                && IsEntityFrameworkMethod(receiverMethod)
+                && receiverMethod.Name == "Property"
+                && receiverInvocation.ArgumentList.Arguments.Count > 0)
+            {
+                var expression = receiverInvocation.ArgumentList.Arguments[0].Expression switch
+                {
+                    SimpleLambdaExpressionSyntax simple => simple.ExpressionBody,
+                    ParenthesizedLambdaExpressionSyntax parenthesized => parenthesized.ExpressionBody,
+                    _ => null
+                };
+                if (expression is null)
+                {
+                    return false;
+                }
+
+                member = model.GetSymbolInfo(expression).Symbol;
+                memberName = member?.Name
+                    ?? (expression as MemberAccessExpressionSyntax)?.Name.Identifier.ValueText
+                    ?? (expression as IdentifierNameSyntax)?.Identifier.ValueText
+                    ?? string.Empty;
+                return !string.IsNullOrWhiteSpace(memberName);
+            }
+
+            cursor = GetInvocationReceiver(receiverInvocation.Expression);
+        }
+
+        return false;
+    }
+
+    private static SemanticFactCandidate CreateEntityFrameworkGap(
+        string? projectPath,
+        string filePath,
+        InvocationExpressionSyntax invocation,
+        string classification,
+        string configurationMethod)
+    {
+        return new SemanticFactCandidate(
+            FactTypes.AnalysisGap,
+            RuleIds.DatabaseEntityFramework,
+            EvidenceTiers.Tier4Unknown,
+            ToEvidenceSpan(filePath, invocation),
+            ProjectPath: projectPath,
+            ContractElement: configurationMethod,
+            Properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["classification"] = classification,
+                ["configurationMethod"] = configurationMethod,
+                ["coverageLabel"] = "source-unavailable",
+                ["expressionHash"] = FactFactory.Hash(invocation.ToString(), 32),
+                ["limitations"] = "The static extractor did not evaluate dynamic, helper-driven, reflection-driven, or assembly-scanned EF model configuration."
+            });
+    }
+
     private static bool IsDapperCall(IMethodSymbol method)
     {
         return DapperMethods.Contains(method.Name)
@@ -3626,10 +4016,17 @@ public static class CSharpSemanticExtractor
 
     private static bool IsDbSetType(ITypeSymbol type)
     {
-        return type is INamedTypeSymbol namedType
-            && (IsKnownType(namedType.OriginalDefinition, "Microsoft.EntityFrameworkCore.DbSet<T>")
-                || IsKnownType(namedType.OriginalDefinition, "System.Data.Entity.DbSet<T>")
-                || IsKnownType(namedType.OriginalDefinition, "System.Data.Entity.IDbSet<T>"));
+        if (type is not INamedTypeSymbol { Arity: 1 } namedType)
+        {
+            return false;
+        }
+
+        var namespaceName = GetNamespaceName(namedType.OriginalDefinition);
+        return namedType.Name == "DbSet"
+                   && (namespaceName.Equals("Microsoft.EntityFrameworkCore", StringComparison.Ordinal)
+                       || namespaceName.Equals("System.Data.Entity", StringComparison.Ordinal))
+            || namedType.Name == "IDbSet"
+                   && namespaceName.Equals("System.Data.Entity", StringComparison.Ordinal);
     }
 
     private static bool IsSqlCommandType(INamedTypeSymbol type)

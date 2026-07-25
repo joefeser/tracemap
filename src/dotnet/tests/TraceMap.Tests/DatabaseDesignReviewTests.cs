@@ -47,7 +47,14 @@ public sealed class DatabaseDesignReviewTests
                 ("objectKind", "migration-operation"), ("operationKind", "create-routine"), ("schemaName", "public"), ("routineName", "archive_orders"), ("routineKind", "function")),
             PostgresFact(manifest, FactTypes.PostgresSchemaSnapshotDeclared, 1,
                 ("objectKind", "schema-snapshot"), ("snapshotFormat", "pg-dump"), ("recognizedDdlStatementCount", "6"), ("unsupportedDdlStatementCount", "1"), ("sourceDatabaseIdentityOmitted", "true")),
-            PostgresGap(manifest, 40, "SnapshotDdlCoverageReduced")
+            PostgresGap(manifest, 40, "SnapshotDdlCoverageReduced"),
+            ContractMappingFact(manifest, 50,
+                ("mappingKind", "DatabaseTableMapping"), ("configurationKind", "fluent"), ("entityType", "global::Server.Envelope<global::Server.Order>"), ("mappedName", "orders")),
+            EfMappingFact(manifest, 51,
+                ("mappingKind", "DatabaseColumnMapping"), ("configurationKind", "fluent"), ("entityType", "global::Server.Envelope<global::Server.Order>"), ("memberName", "Status"), ("mappedName", "status")),
+            EfMappingFact(manifest, 52,
+                ("mappingKind", "DatabaseTableMapping"), ("configurationKind", "annotation"), ("entityType", "global::Server.Invoice"), ("mappedName", "invoices")),
+            EfGap(manifest, 53, "AssemblyModelConfigurationUnavailable")
         ]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["server"]));
 
@@ -60,6 +67,13 @@ public sealed class DatabaseDesignReviewTests
         Assert.Contains(table.Declarations, row => row.EvidenceKind == "column" && row.DisplayName == "status");
         Assert.Contains(table.Declarations, row => row.EvidenceKind == "constraint" && row.DisplayName == "pk_orders");
         Assert.Contains(table.Declarations, row => row.EvidenceKind == "index" && row.DisplayName == "ix_orders_status");
+        var efTable = Assert.Single(table.Declarations, row => row.EvidenceKind == "ef-table-mapping");
+        Assert.Contains(efTable.Metadata, pair => pair.Key == "matchKind" && pair.Value == "unique-table-name-match-schema-unspecified");
+        Assert.Contains(efTable.Metadata, pair => pair.Key == "entityType" && pair.Value == "Server.Envelope<Server.Order>");
+        Assert.Equal(RuleIds.CSharpSemanticContractMapping, efTable.Evidence.RuleId);
+        var efColumn = Assert.Single(table.Declarations, row => row.EvidenceKind == "ef-column-mapping");
+        Assert.Equal("status", efColumn.DisplayName);
+        Assert.Equal(RuleIds.DatabaseEntityFramework, efColumn.Evidence.RuleId);
         Assert.DoesNotContain(table.Declarations, row => row.EvidenceKind == "migration-operation");
         Assert.Contains(table.Operations, row => row.DisplayName == "drop-column");
         var query = Assert.Single(table.QueryReferences);
@@ -79,6 +93,10 @@ public sealed class DatabaseDesignReviewTests
         Assert.Contains(first.Report.GlobalObjects, row => row.EvidenceKind == "migration-operation"
             && row.Metadata.Any(pair => pair.Key == "routineName" && pair.Value == "archive_orders"));
         Assert.Contains(first.Report.Gaps, gap => gap.GapKind == "SnapshotDdlCoverageReduced");
+        Assert.Contains(first.Report.Gaps, gap => gap.GapKind == "EntityFrameworkTableMappingUnmatched");
+        var efGap = Assert.Single(first.Report.Gaps, gap => gap.GapKind == "AssemblyModelConfigurationUnavailable");
+        Assert.Equal(RuleIds.DatabaseEntityFramework, efGap.RuleId);
+        Assert.Contains(efGap.SupportingFactIds, id => !string.IsNullOrWhiteSpace(id));
         Assert.DoesNotContain(first.Report.Gaps, gap => gap.GapKind == "QueryRoutePathUnavailable");
         Assert.All(table.Declarations.Concat(table.Operations).Concat(table.QueryReferences), row =>
         {
@@ -342,6 +360,44 @@ public sealed class DatabaseDesignReviewTests
             EvidenceTiers.Tier4Unknown,
             new EvidenceSpan("db/schema.sql", line, line, FactFactory.Hash($"gap:{line}", 32), nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
             properties: Properties(("classification", classification), ("coverageLabel", "reduced"), ("limitations", "Coverage is partial.")));
+
+    private static CodeFact EfMappingFact(ScanManifest manifest, int line, params (string Key, string Value)[] properties) =>
+        FactFactory.Create(
+            manifest,
+            FactTypes.DatabaseColumnMapping,
+            RuleIds.DatabaseEntityFramework,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan("Data/OrdersContext.cs", line, line, FactFactory.Hash($"ef:{line}", 32), "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            properties: Properties(properties.Concat([
+                ("coverageLabel", "bounded-static-evidence"),
+                ("limitations", "Static EF mapping evidence only; the runtime model is not proven.")
+            ]).ToArray()));
+
+    private static CodeFact ContractMappingFact(ScanManifest manifest, int line, params (string Key, string Value)[] properties) =>
+        FactFactory.Create(
+            manifest,
+            FactTypes.DatabaseColumnMapping,
+            RuleIds.CSharpSemanticContractMapping,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan("Data/Order.cs", line, line, FactFactory.Hash($"mapping:{line}", 32), "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            properties: Properties(properties.Concat([
+                ("coverageLabel", "bounded-static-evidence"),
+                ("limitations", "Static mapping annotation evidence only; EF usage and the runtime model are not proven.")
+            ]).ToArray()));
+
+    private static CodeFact EfGap(ScanManifest manifest, int line, string classification) =>
+        FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.DatabaseEntityFramework,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan("Data/OrdersContext.cs", line, line, FactFactory.Hash($"ef-gap:{line}", 32), "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            contractElement: "ApplyConfigurationsFromAssembly",
+            properties: Properties(
+                ("classification", classification),
+                ("configurationMethod", "ApplyConfigurationsFromAssembly"),
+                ("coverageLabel", "source-unavailable"),
+                ("limitations", "Assembly-scanned model configuration was not evaluated.")));
 
     private static CodeFact QueryFact(ScanManifest manifest, string sourceSymbol, string tableName, string protectedValue) =>
         FactFactory.Create(
