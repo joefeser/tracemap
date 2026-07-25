@@ -138,6 +138,7 @@ public static class DatabaseDesignReviewReporter
         "The packet describes bounded static repository evidence only; it does not prove database existence, current schema state, schema completeness, or schema freshness.",
         "Migration operations are repository evidence, not proof that migrations were ordered, applied, compatible, reversible, or safe to run.",
         "Query/table correlation is an exact source-scoped static name match; it does not prove runtime provider, connection, search-path, generated SQL, branch feasibility, or query execution.",
+        "EF table and column mappings are bounded compiler-resolved repository evidence; they do not reconstruct the runtime EF model, conventions, provider behavior, generated SQL, or database correspondence.",
         "Route references preserve existing bounded static path evidence; they do not prove runtime reachability, traffic, authorization, deployment, or user exercise.",
         "The packet does not prove data correctness, effective permissions, production state, rollback, release approval, or operational success.",
         "Raw SQL, source snippets, query hashes, connection material, credentials, scheduled command bodies, local paths, private server names, validation output, and arbitrary fact properties are not rendered."
@@ -193,7 +194,11 @@ public static class DatabaseDesignReviewReporter
 
         var read = await CombinedDependencyReporter.ReadAsync(connection, cancellationToken);
         var extractorVersions = await ReadExtractorVersionsAsync(connection, cancellationToken);
-        var sqlInputs = await ReleaseReviewReporter.ReadSqlEvidenceInputsAsync(options.IndexPath, "combined", cancellationToken);
+        var sqlInputs = await ReleaseReviewReporter.ReadSqlEvidenceInputsAsync(
+            options.IndexPath,
+            "combined",
+            cancellationToken,
+            includeModelMappings: true);
         var sourceByLabel = read.Sources
             .GroupBy(source => source.Label, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
@@ -285,6 +290,8 @@ public static class DatabaseDesignReviewReporter
                     builder.Declarations.Add(item);
             }
         }
+
+        AddEntityFrameworkMappings(sqlInputs, builders, gaps);
 
         var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts, read.Sources)
             .Where(surface => surface.SurfaceKind == "sql-query")
@@ -680,6 +687,252 @@ public static class DatabaseDesignReviewReporter
             SafeFactMetadata(fact),
             SplitLimitations(fact.Properties.GetValueOrDefault("limitations")).Concat(Limitations).Distinct(StringComparer.Ordinal).ToArray());
     }
+
+    private static void AddEntityFrameworkMappings(
+        IReadOnlyList<SqlEvidenceInput> inputs,
+        Dictionary<string, TableBuilder> builders,
+        List<DatabaseDesignGap> gaps)
+    {
+        var tableKeysByEntity = new Dictionary<string, List<TableKey>>(StringComparer.Ordinal);
+        var columnMappings = new List<(string SourceLabel, CodeFact Fact)>();
+        foreach (var input in inputs.OrderBy(row => row.SourceLabel, StringComparer.Ordinal))
+        {
+            foreach (var fact in input.Result.Facts
+                         .Where(fact =>
+                             (fact.RuleId == RuleIds.DatabaseEntityFramework
+                                 && (fact.FactType == FactTypes.DatabaseColumnMapping
+                                     || fact.FactType == FactTypes.AnalysisGap))
+                             || (fact.RuleId == RuleIds.CSharpSemanticContractMapping
+                                 && fact.FactType == FactTypes.DatabaseColumnMapping))
+                         .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                         .ThenBy(fact => fact.Evidence.StartLine)
+                         .ThenBy(fact => fact.FactId, StringComparer.Ordinal))
+            {
+                if (!CompatibleProvenance(input.Result.Manifest, fact))
+                {
+                    gaps.Add(Gap(
+                        "EntityFrameworkEvidenceProvenanceUnavailable",
+                        input.SourceLabel,
+                        "An EF mapping fact lacks compatible commit/extractor provenance and was not projected.",
+                        [Pair("factType", SafeToken(fact.FactType, "unknown"))],
+                        [fact.FactId],
+                        commitSha: fact.CommitSha,
+                        filePath: fact.Evidence.FilePath,
+                        startLine: fact.Evidence.StartLine,
+                        endLine: fact.Evidence.EndLine,
+                        extractorId: fact.Evidence.ExtractorId,
+                        extractorVersion: fact.Evidence.ExtractorVersion,
+                        supportingRuleIds: [fact.RuleId]));
+                    continue;
+                }
+
+                if (fact.FactType == FactTypes.AnalysisGap)
+                {
+                    gaps.Add(FromEntityFrameworkGap(input.SourceLabel, fact));
+                    continue;
+                }
+
+                if (fact.Properties.GetValueOrDefault("mappingKind") == "DatabaseTableMapping")
+                {
+                    if (!TryFindEntityFrameworkTable(
+                            input.SourceLabel,
+                            fact.Properties.GetValueOrDefault("schemaName"),
+                            fact.Properties.GetValueOrDefault("mappedName"),
+                            builders,
+                            out var key,
+                            out var matchKind))
+                    {
+                        gaps.Add(EntityFrameworkMappingGap(
+                            "EntityFrameworkTableMappingUnmatched",
+                            input.SourceLabel,
+                            "An explicit EF table mapping could not be linked to one bounded PostgreSQL table declaration in the same source.",
+                            fact));
+                        continue;
+                    }
+
+                    builders[key.StableKey].Declarations.Add(FromEntityFrameworkMapping(
+                        input.SourceLabel,
+                        fact,
+                        "ef-table-mapping",
+                        matchKind));
+                    var entityType = fact.Properties.GetValueOrDefault("entityType");
+                    if (!string.IsNullOrWhiteSpace(entityType))
+                    {
+                        var entityKey = $"{SafeLabel(input.SourceLabel)}\0{entityType}";
+                        if (!tableKeysByEntity.TryGetValue(entityKey, out var keys))
+                        {
+                            keys = [];
+                            tableKeysByEntity.Add(entityKey, keys);
+                        }
+                        keys.Add(key);
+                    }
+                    continue;
+                }
+
+                if (fact.Properties.GetValueOrDefault("mappingKind") == "DatabaseColumnMapping")
+                {
+                    columnMappings.Add((input.SourceLabel, fact));
+                }
+            }
+        }
+
+        foreach (var (sourceLabel, fact) in columnMappings)
+        {
+            var entityType = fact.Properties.GetValueOrDefault("entityType");
+            var entityKey = $"{SafeLabel(sourceLabel)}\0{entityType}";
+            var keys = tableKeysByEntity.GetValueOrDefault(entityKey)?
+                .DistinctBy(key => key.StableKey)
+                .ToArray() ?? [];
+            if (string.IsNullOrWhiteSpace(entityType) || keys.Length != 1)
+            {
+                gaps.Add(EntityFrameworkMappingGap(
+                    keys.Length > 1
+                        ? "EntityFrameworkColumnTableMappingAmbiguous"
+                        : "EntityFrameworkColumnTableMappingUnavailable",
+                    sourceLabel,
+                    keys.Length > 1
+                        ? "An explicit EF column mapping has more than one bounded entity-to-table candidate and was not assigned."
+                        : "An explicit EF column mapping lacks one bounded entity-to-table match and was not assigned.",
+                    fact));
+                continue;
+            }
+
+            builders[keys[0].StableKey].Declarations.Add(FromEntityFrameworkMapping(
+                sourceLabel,
+                fact,
+                "ef-column-mapping",
+                "entity-table-static-match"));
+        }
+    }
+
+    private static bool TryFindEntityFrameworkTable(
+        string sourceLabel,
+        string? schemaName,
+        string? tableName,
+        Dictionary<string, TableBuilder> builders,
+        out TableKey key,
+        out string matchKind)
+    {
+        matchKind = string.Empty;
+        if (!string.IsNullOrWhiteSpace(schemaName))
+        {
+            if (TryTableKey(sourceLabel, schemaName, tableName, out key)
+                && builders.ContainsKey(key.StableKey))
+            {
+                matchKind = "exact-schema-table-match";
+                return true;
+            }
+            return Fail(out key);
+        }
+
+        var normalizedTable = NormalizeIdentifier(tableName);
+        if (normalizedTable is null)
+            return Fail(out key);
+        var candidates = builders.Values
+            .Select(builder => builder.Key)
+            .Where(candidate => candidate.SourceLabel.Equals(SafeLabel(sourceLabel), StringComparison.Ordinal)
+                && candidate.TableName.Equals(normalizedTable, StringComparison.Ordinal))
+            .DistinctBy(candidate => candidate.StableKey)
+            .ToArray();
+        if (candidates.Length != 1)
+            return Fail(out key);
+        key = candidates[0];
+        matchKind = "unique-table-name-match-schema-unspecified";
+        return true;
+    }
+
+    private static DatabaseDesignEvidenceItem FromEntityFrameworkMapping(
+        string sourceLabel,
+        CodeFact fact,
+        string kind,
+        string matchKind)
+    {
+        var metadata = SortMetadata(
+        [
+            Pair("configurationKind", SafeToken(fact.Properties.GetValueOrDefault("configurationKind"), "unknown")),
+            Pair("entityType", SafeTypeName(fact.Properties.GetValueOrDefault("entityType"))),
+            Pair("mappedName", SafeIdentifier(fact.Properties.GetValueOrDefault("mappedName"), "unavailable")),
+            Pair("memberName", SafeIdentifier(fact.Properties.GetValueOrDefault("memberName"), "unavailable")),
+            Pair("schemaName", SafeIdentifier(fact.Properties.GetValueOrDefault("schemaName"), "unspecified")),
+            Pair("matchKind", matchKind)
+        ]);
+        var limitations = SplitLimitations(fact.Properties.GetValueOrDefault("limitations"))
+            .Concat(Limitations)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return new DatabaseDesignEvidenceItem(
+            StableId("item", sourceLabel, kind, fact.FactId),
+            kind,
+            SafeIdentifier(fact.Properties.GetValueOrDefault("mappedName"), kind),
+            "StaticEvidence",
+            metadata,
+            new DatabaseDesignEvidenceRef(
+                fact.RuleId,
+                NormalizeTier(fact.EvidenceTier),
+                SafeLabel(sourceLabel),
+                SafeCommit(fact.CommitSha),
+                SafePath(fact.Evidence.FilePath),
+                fact.Evidence.StartLine,
+                fact.Evidence.EndLine,
+                SafeTokenOrNull(fact.Evidence.ExtractorId),
+                SafeTokenOrNull(fact.Evidence.ExtractorVersion),
+                SafeToken(fact.Properties.GetValueOrDefault("coverageLabel"), "bounded-static-evidence"),
+                [fact.FactId],
+                [],
+                [fact.RuleId],
+                limitations));
+    }
+
+    private static DatabaseDesignGap FromEntityFrameworkGap(string sourceLabel, CodeFact fact)
+    {
+        var kind = SafeToken(fact.Properties.GetValueOrDefault("classification"), "EntityFrameworkMappingGap");
+        return new DatabaseDesignGap(
+            StableId("gap", sourceLabel, fact.FactId),
+            kind,
+            "PartialAnalysis",
+            "EF model mapping evidence has an explicit upstream coverage gap.",
+            SafeLabel(sourceLabel),
+            fact.RuleId,
+            NormalizeTier(fact.EvidenceTier),
+            "reduced",
+            SafeCommit(fact.CommitSha),
+            SafePath(fact.Evidence.FilePath),
+            fact.Evidence.StartLine,
+            fact.Evidence.EndLine,
+            SafeTokenOrNull(fact.Evidence.ExtractorId),
+            SafeTokenOrNull(fact.Evidence.ExtractorVersion),
+            [fact.FactId],
+            [],
+            [fact.RuleId],
+            SortMetadata(
+            [
+                Pair("classification", kind),
+                Pair("configurationMethod", SafeToken(fact.Properties.GetValueOrDefault("configurationMethod"), "unknown"))
+            ]),
+            SplitLimitations(fact.Properties.GetValueOrDefault("limitations")).Concat(Limitations).Distinct(StringComparer.Ordinal).ToArray());
+    }
+
+    private static DatabaseDesignGap EntityFrameworkMappingGap(
+        string kind,
+        string sourceLabel,
+        string message,
+        CodeFact fact) =>
+        Gap(
+            kind,
+            sourceLabel,
+            message,
+            [
+                Pair("configurationKind", SafeToken(fact.Properties.GetValueOrDefault("configurationKind"), "unknown")),
+                Pair("mappingKind", SafeToken(fact.Properties.GetValueOrDefault("mappingKind"), "unknown"))
+            ],
+            [fact.FactId],
+            commitSha: fact.CommitSha,
+            filePath: fact.Evidence.FilePath,
+            startLine: fact.Evidence.StartLine,
+            endLine: fact.Evidence.EndLine,
+            extractorId: fact.Evidence.ExtractorId,
+            extractorVersion: fact.Evidence.ExtractorVersion,
+            supportingRuleIds: [fact.RuleId]);
 
     private static DatabaseDesignEvidenceItem FromQuerySurface(
         CombinedDependencySurfaceRow surface,
@@ -1083,6 +1336,22 @@ public static class DatabaseDesignReviewReporter
             : fallback;
     }
 
+    private static string SafeTypeName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "unavailable";
+        var trimmed = value.Trim();
+        if (trimmed.StartsWith("global::", StringComparison.Ordinal))
+            trimmed = trimmed["global::".Length..];
+        var parts = trimmed.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length is > 0 and <= 16
+            && parts.All(part => part.Length <= 128
+                && (char.IsLetter(part[0]) || part[0] == '_')
+                && part.All(character => char.IsLetterOrDigit(character) || character is '_' or '`'))
+                ? string.Join('.', parts)
+                : "unavailable";
+    }
+
     private static string SafeIdentifierList(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -1168,8 +1437,16 @@ public static class DatabaseDesignReviewReporter
 
     private readonly record struct TableKey(string StableKey, string SourceLabel, string SchemaName, string TableName, string SchemaResolution);
 
-    private sealed class TableBuilder(TableKey key)
+    private sealed class TableBuilder
     {
+        private readonly TableKey key;
+
+        public TableBuilder(TableKey key)
+        {
+            this.key = key;
+        }
+
+        public TableKey Key => key;
         public List<DatabaseDesignEvidenceItem> Declarations { get; } = [];
         public List<DatabaseDesignEvidenceItem> Operations { get; } = [];
         public List<DatabaseDesignEvidenceItem> QueryReferences { get; } = [];

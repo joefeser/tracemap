@@ -1557,7 +1557,8 @@ public static class ReleaseReviewReporter
     internal static async Task<IReadOnlyList<SqlEvidenceInput>> ReadSqlEvidenceInputsAsync(
         string path,
         string indexKind,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool includeModelMappings = false)
     {
         await using var connection = new SqliteConnection(ReadOnlyConnectionString(path));
         await connection.OpenAsync(cancellationToken);
@@ -1577,7 +1578,10 @@ public static class ReleaseReviewReporter
                        {extractorIdColumn}, {extractorVersionColumn}, facts.properties_json
                 from combined_facts facts
                 join index_sources sources on sources.source_index_id = facts.source_index_id
-                where facts.rule_id like 'database.sql.%' or facts.rule_id like 'database.postgres.%'
+                where facts.rule_id like 'database.sql.%'
+                   or facts.rule_id like 'database.postgres.%'
+                   or (@include_model_mappings = 1 and facts.rule_id = @ef_rule)
+                   or (@include_model_mappings = 1 and facts.rule_id = @contract_mapping_rule)
                 order by sources.label, facts.file_path, facts.start_line, facts.combined_fact_id;
                 """
             : $"""
@@ -1588,9 +1592,15 @@ public static class ReleaseReviewReporter
                        {extractorIdColumn}, {extractorVersionColumn}, facts.properties_json
                 from facts
                 cross join scan_manifest manifest
-                where facts.rule_id like 'database.sql.%' or facts.rule_id like 'database.postgres.%'
+                where facts.rule_id like 'database.sql.%'
+                   or facts.rule_id like 'database.postgres.%'
+                   or (@include_model_mappings = 1 and facts.rule_id = @ef_rule)
+                   or (@include_model_mappings = 1 and facts.rule_id = @contract_mapping_rule)
                 order by facts.file_path, facts.start_line, facts.fact_id;
                 """;
+        command.Parameters.AddWithValue("@include_model_mappings", includeModelMappings ? 1 : 0);
+        command.Parameters.AddWithValue("@ef_rule", RuleIds.DatabaseEntityFramework);
+        command.Parameters.AddWithValue("@contract_mapping_rule", RuleIds.CSharpSemanticContractMapping);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -1620,7 +1630,9 @@ public static class ReleaseReviewReporter
                 StringOrNull(reader, 12),
                 evidence,
                 properties);
-            if (!SqlRunwayRuleIds.Contains(fact.RuleId))
+            if (!SqlRunwayRuleIds.Contains(fact.RuleId)
+                && !(includeModelMappings
+                    && fact.RuleId is RuleIds.DatabaseEntityFramework or RuleIds.CSharpSemanticContractMapping))
             {
                 continue;
             }
