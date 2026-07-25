@@ -15,4 +15,4 @@
 - [x] Run focused/full validation, CLI smoke, private-path checking, and
       `git diff --check`.
 - [x] Update this checklist and implementation state with exact validation.
-- [ ] Commit, push, open a ready PR to `dev`, and follow ACK.
+- [x] Commit, push, open a ready PR to `dev`, and follow ACK.
