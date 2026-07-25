@@ -1,10 +1,12 @@
 # PostgreSQL Destructive Migration Evidence State
 
-Status: merge-ready
+Status: implemented
 
 Branch: `codex/postgres-schema-migration-destructive-changes`
 
 PR: #529 (`https://github.com/joefeser/tracemap/pull/529`)
+
+Merge commit: `28f2701c6b30a84a15d70f5eba4f2df70abe6be2`
 
 Base: `origin/dev` through PR #528 / merge
 `fc9f3a4fd016f7133d82a38605a8bbcc82b90983`
@@ -43,4 +45,5 @@ unsupported destructive DDL had been filtered before gap emission. ACK then
 returned `merge_ready` for the reviewed head with clean checks, no unresolved
 threads, and no actionable or held findings. The configured trusted-review
 quorum leaves the absent Qodo result as medium residual risk; it is not a
-merge blocker under the repo-local lane policy.
+merge blocker under the repo-local lane policy. PR #529 then merged into
+`dev`.

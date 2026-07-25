@@ -1,10 +1,12 @@
 # PostgreSQL Schema Snapshot Evidence State
 
-Status: ready-for-review
+Status: implemented
 
 Branch: `codex/postgres-schema-snapshot-evidence`
 
 PR: #530 (`https://github.com/joefeser/tracemap/pull/530`)
+
+Merge commit: `47680fdf502c7c4f1c0608ba004bae4b3f4d91f7`
 
 Base: `origin/dev` through PR #529 / merge
 `28f2701c6b30a84a15d70f5eba4f2df70abe6be2`
@@ -41,3 +43,7 @@ Validation:
   sequence identity;
 - `./scripts/check-private-paths.sh`: passed; and
 - `git diff --check`: passed.
+
+Review-loop state: ACK-authorized review remediation fixed unsupported snapshot
+DDL accounting, recorded the repository-wide rule-ID model disposition, and
+returned `merge_ready` on the final head. PR #530 then merged into `dev`.
