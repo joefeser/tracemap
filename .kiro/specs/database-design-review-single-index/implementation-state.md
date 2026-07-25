@@ -8,6 +8,8 @@ Base: `origin/dev` at `efb404a284fe102b60b6b4a870ee96354ba7f85d`
 
 Issue: [#438](https://github.com/joefeser/tracemap/issues/438)
 
+PR: [#537](https://github.com/joefeser/tracemap/pull/537)
+
 ## Scope decision
 
 Implement the optional single-index packet input identified by #438. Reuse the
