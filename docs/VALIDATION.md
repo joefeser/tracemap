@@ -1085,6 +1085,29 @@ strings, scheduled command bodies, local paths, private server identities, or
 validation output. It must not claim SQL execution, runtime reachability,
 production state, design correctness, release approval, or that a script is
 safe to run.
+
+### EF Core mapping evidence
+
+For changes to EF/EF Core model mapping extraction or design-review
+composition, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter "FullyQualifiedName~CSharpSemanticExtractorTests|FullyQualifiedName~DatabaseDesignReviewTests"
+```
+
+Use a compiling fixture with framework-shaped semantic symbols and confirm
+`DbSet<TEntity>`, `Table`/`Column`, constant `ToTable`/`HasColumnName`, dynamic
+mapping names, and assembly-scanned configuration boundaries. Confirm the
+design-review packet links mappings only through exact schema/table identity or
+a unique same-source table name when the EF schema is unspecified. Ambiguous,
+unmatched, dynamic, and assembly-driven cases must remain explicit gaps.
+
+This validation does not execute application startup, `OnModelCreating`,
+migrations, generated SQL, or a database. It must not claim convention-derived
+names, runtime provider behavior, model completeness, database correspondence,
+query execution, or release safety.
+
 ### PostgreSQL enum and routine declaration evidence
 
 For changes to the bounded PostgreSQL enum/routine projector, run:

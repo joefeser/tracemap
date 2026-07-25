@@ -3051,7 +3051,8 @@ rules:
     limitations:
       - Requires Roslyn semantic analysis; syntax fallback does not emit these mapping facts.
       - HTTP route binding is limited to attribute-declared route/http method metadata and parameter symbols visible in source. Route conventions, endpoint builders, middleware, filters, and runtime route transforms are not expanded.
-      - Database mapping is limited to attribute-declared `Table` and `Column` mappings. EF fluent configuration, conventions, migrations, provider-specific naming policies, and runtime model mutation are not resolved.
+      - Database mapping is limited to attribute-declared `Table` and `Column` mappings with bounded entity/member identity and a constant schema when present. An annotation alone does not prove EF usage.
+      - EF fluent configuration is emitted separately under database.ef.v1; conventions, migrations, provider-specific naming policies, and runtime model mutation are not resolved by this rule.
       - Config binding is limited to direct `GetSection(\"...\").Bind(...)` and `GetSection(\"...\").Get<T>()` call chains with literal section names. Options registration, named options, validation, reload behavior, and provider precedence are not inferred.
       - These facts prove source mapping declarations or calls, not runtime request routing, database schema existence, config availability, or branch reachability.
 
@@ -3233,14 +3234,19 @@ rules:
 
   - id: database.ef.v1
     name: Entity Framework style database surface
-    description: Finds DbContext-like classes, DbSet properties, and SaveChanges calls.
-    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    description: Finds EF/EF Core contexts, sets, save calls, and bounded explicit entity/table or property/column mappings.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - DbContextDeclared
       - DbSetDeclared
       - DbChangeSaved
+      - DatabaseColumnMapping
+      - AnalysisGap
     limitations:
       - Tier1 requires Roslyn symbol binding to EF or EF Core types.
+      - Mapping evidence is limited to constant ToTable/HasColumnName fluent calls; Table/Column annotations remain separately attributable to csharp.semantic.contractmapping.v1 because annotations alone do not prove EF usage.
+      - Dynamic mapping names, recognizable fluent chains without semantic binding, and assembly-scanned model configuration emit explicit gaps; helper methods, reflection, compiled models, provider conventions, keys, indexes, relationships, owned types, and converters are not reconstructed.
+      - Entity/table and property/column mappings do not prove database existence, schema correspondence, generated SQL, migration application, reads, writes, or runtime reachability.
       - Structural fallback uses class/base type/property type naming patterns and does not prove runtime EF usage.
       - SaveChanges syntax fallback is name-only and may include unrelated methods.
 
