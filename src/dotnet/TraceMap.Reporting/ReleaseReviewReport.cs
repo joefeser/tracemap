@@ -1558,7 +1558,8 @@ public static class ReleaseReviewReporter
         string path,
         string indexKind,
         CancellationToken cancellationToken,
-        bool includeModelMappings = false)
+        bool includeModelMappings = false,
+        bool includeQuerySurfaces = false)
     {
         await using var connection = new SqliteConnection(ReadOnlyConnectionString(path));
         await connection.OpenAsync(cancellationToken);
@@ -1583,6 +1584,8 @@ public static class ReleaseReviewReporter
                    or (@include_model_mappings = 1 and facts.rule_id = @ef_rule)
                    or (@include_model_mappings = 1 and facts.rule_id = @contract_mapping_rule)
                    or (@include_model_mappings = 1 and facts.rule_id = @operation_rule)
+                   or (@include_query_surfaces = 1 and facts.fact_type in (
+                       'QueryPatternDetected', 'SqlTextUsed', 'SqlCommandDetected', 'DapperCallDetected', 'SqlFileDeclared'))
                 order by sources.label, facts.file_path, facts.start_line, facts.combined_fact_id;
                 """
             : $"""
@@ -1598,12 +1601,15 @@ public static class ReleaseReviewReporter
                    or (@include_model_mappings = 1 and facts.rule_id = @ef_rule)
                    or (@include_model_mappings = 1 and facts.rule_id = @contract_mapping_rule)
                    or (@include_model_mappings = 1 and facts.rule_id = @operation_rule)
+                   or (@include_query_surfaces = 1 and facts.fact_type in (
+                       'QueryPatternDetected', 'SqlTextUsed', 'SqlCommandDetected', 'DapperCallDetected', 'SqlFileDeclared'))
                 order by facts.file_path, facts.start_line, facts.fact_id;
                 """;
         command.Parameters.AddWithValue("@include_model_mappings", includeModelMappings ? 1 : 0);
         command.Parameters.AddWithValue("@ef_rule", RuleIds.DatabaseEntityFramework);
         command.Parameters.AddWithValue("@contract_mapping_rule", RuleIds.CSharpSemanticContractMapping);
         command.Parameters.AddWithValue("@operation_rule", RuleIds.DatabaseOperationCallPattern);
+        command.Parameters.AddWithValue("@include_query_surfaces", includeQuerySurfaces ? 1 : 0);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -1637,7 +1643,13 @@ public static class ReleaseReviewReporter
                 && !(includeModelMappings
                     && fact.RuleId is RuleIds.DatabaseEntityFramework
                         or RuleIds.CSharpSemanticContractMapping
-                        or RuleIds.DatabaseOperationCallPattern))
+                        or RuleIds.DatabaseOperationCallPattern)
+                && !(includeQuerySurfaces
+                    && fact.FactType is FactTypes.QueryPatternDetected
+                        or FactTypes.SqlTextUsed
+                        or FactTypes.SqlCommandDetected
+                        or FactTypes.DapperCallDetected
+                        or FactTypes.SqlFileDeclared))
             {
                 continue;
             }
