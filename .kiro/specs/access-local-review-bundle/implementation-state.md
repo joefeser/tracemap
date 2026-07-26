@@ -55,9 +55,8 @@ count-only capability evidence before an in-person review.
 - Unchanged full solution rerun: 912/912 passed.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
-- PowerShell is not installed on the macOS host; Homebrew discovery found the
-  available formula. Syntax and product execution remain assigned to the
-  isolated Windows smoke rather than installing a second PowerShell runtime.
+- PowerShell 7.6.4 was installed from Homebrew after review changed both
+  Windows harnesses; both scripts pass parser-only syntax validation locally.
 - Exact-head Windows synthetic smoke at `9cdae53b`: completed.
 - Both changed PowerShell scripts passed syntax parsing.
 - Phase 9 consumer contracts and the local-review-bundle contract passed.
@@ -70,6 +69,39 @@ count-only capability evidence before an in-person review.
   removed, only the sanitized local review bundle was retained, and the
   exact-head worktree remained clean.
 - The Windows run edited, committed, pushed, and posted nothing.
+
+## Review hardening
+
+ACK authorized one consolidated patch for the six exact-head review threads.
+The patch:
+
+- verifies manifest, NDJSON, and SQLite scan identity plus exact fact-ID
+  inventory before composing either consumer;
+- walks existing Windows path segments and rejects junction/reparse ancestors;
+- preserves or restores the previous generated bundle on publication failure,
+  retaining the backup when a concurrent collision prevents restoration;
+- distinguishes rooted machine-local paths from valid repository-relative
+  `private` and `home` path segments;
+- converts unexpected composition/filesystem failures to categorical
+  path-safe diagnostics;
+- accepts both `available` and valid `truncated` Access evidence in the
+  synthetic and representative harness contracts.
+
+Post-patch validation:
+
+- focused Access bundle, macro-reporting, and explorer tests: 40/40 passed;
+- both PowerShell harnesses passed syntax parsing;
+- solution build: passed with the unchanged SQLite package advisories;
+- full solution tests: 916/916 passed;
+- private-path guard: passed;
+- `git diff --check`: passed.
+
+The successful Windows smoke remains authoritative for the unchanged Access
+reader/extractor boundary. A second Access run is deferred because the review
+patch changes only read-side artifact consistency, output publication safety,
+categorical diagnostics, and acceptance of an already-supported `truncated`
+status; it adds no COM read, projector fact, fixture behavior, or execution
+surface.
 
 ## Deferred
 
