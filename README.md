@@ -276,6 +276,19 @@ dotnet run --project src/dotnet/TraceMap.Cli -- release-review \
 
 The release review command writes `release-review.md` and `release-review.json` when `--out` is a directory. It composes available TraceMap evidence from source coverage, combined change impact, contract delta impact, SQL runway evidence, Microsoft Access design evidence, optional path/reverse context, section gaps, and a deterministic reviewer checklist. Access composition is after-snapshot static context over allowlisted inventory, schema, relationship, query-shape, external-boundary, count-only metadata, and structured gaps; it does not reopen Access COM extraction or infer UI/VBA/macro identities. The packet is not release approval, CI policy, runtime risk prediction, deployment verification, or production usage proof. API/DTO, SQL/schema, and package-upgrade sections are rendered from available deterministic workflows or as explicit unavailable/deferred sections when compatible inputs are not supplied.
 
+Compose an existing Microsoft Access scan into a private local design-review bundle:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- access-review create \
+  --scan-output .tracemap-access \
+  --out .tracemap-access-review
+```
+
+The bundle contains an Access-only release-review packet, a hidden-local static
+HTML explorer, an integrity manifest, and a local handoff README. It performs no
+Access/COM extraction and keeps the shipped count-only UI/VBA/macro boundary.
+See [the Microsoft Access local review workflow](docs/ACCESS_LOCAL_REVIEW_BUNDLE.md).
+
 Add `--include-priority` to include deterministic review priority scoring in the release-review Markdown and JSON. The opt-in JSON adds `reviewPriority` and sidecar `reviewPriorityRows` fields with closed-vocabulary `attentionLevel` and `severityHint` values. V1 is ordinal-only, so `priorityScore` is always `null`; it uses no numeric weights and does not change the underlying release-review classifications or exit-code behavior.
 
 TypeScript scanner:
