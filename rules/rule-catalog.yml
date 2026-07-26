@@ -3051,7 +3051,8 @@ rules:
     limitations:
       - Requires Roslyn semantic analysis; syntax fallback does not emit these mapping facts.
       - HTTP route binding is limited to attribute-declared route/http method metadata and parameter symbols visible in source. Route conventions, endpoint builders, middleware, filters, and runtime route transforms are not expanded.
-      - Database mapping is limited to attribute-declared `Table` and `Column` mappings. EF fluent configuration, conventions, migrations, provider-specific naming policies, and runtime model mutation are not resolved.
+      - Database mapping is limited to attribute-declared `Table` and `Column` mappings with bounded entity/member identity and a constant schema when present. An annotation alone does not prove EF usage.
+      - EF fluent configuration is emitted separately under database.ef.v1; conventions, migrations, provider-specific naming policies, and runtime model mutation are not resolved by this rule.
       - Config binding is limited to direct `GetSection(\"...\").Bind(...)` and `GetSection(\"...\").Get<T>()` call chains with literal section names. Options registration, named options, validation, reload behavior, and provider precedence are not inferred.
       - These facts prove source mapping declarations or calls, not runtime request routing, database schema existence, config availability, or branch reachability.
 
@@ -3233,16 +3234,39 @@ rules:
 
   - id: database.ef.v1
     name: Entity Framework style database surface
-    description: Finds DbContext-like classes, DbSet properties, and SaveChanges calls.
-    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
+    description: Finds EF/EF Core contexts, sets, save calls, and bounded explicit entity/table or property/column mappings.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - DbContextDeclared
       - DbSetDeclared
       - DbChangeSaved
+      - DatabaseColumnMapping
+      - AnalysisGap
     limitations:
       - Tier1 requires Roslyn symbol binding to EF or EF Core types.
+      - Mapping evidence is limited to constant ToTable/HasColumnName fluent calls; Table/Column annotations remain separately attributable to csharp.semantic.contractmapping.v1 because annotations alone do not prove EF usage.
+      - Dynamic mapping names, recognizable fluent chains without semantic binding, and assembly-scanned model configuration emit explicit gaps; helper methods, reflection, compiled models, provider conventions, keys, indexes, relationships, owned types, and converters are not reconstructed.
+      - Entity/table and property/column mappings do not prove database existence, schema correspondence, generated SQL, migration application, reads, writes, or runtime reachability.
       - Structural fallback uses class/base type/property type naming patterns and does not prove runtime EF usage.
       - SaveChanges syntax fallback is name-only and may include unrelated methods.
+
+  - id: database.operation.call-pattern.v1
+    name: Application database operation call pattern
+    description: Classifies compiler-resolved EF/EF Core, Dapper, ADO.NET, and Npgsql calls as bounded static database-operation candidates.
+    evidenceTier: Tier1Semantic or Tier4Unknown
+    emits:
+      - DatabaseOperationCandidate
+      - AnalysisGap
+    limitations:
+      - Candidates prove only a compiler-resolved static call shape; they do not prove runtime reachability, provider selection, database identity, SQL generation, execution, affected rows, transaction outcome, or success.
+      - Application methods merely declared on DbContext/DbSet subclasses are excluded unless their declaration or override chain resolves to an allowlisted EF framework container.
+      - EF entity targets require an explicit generic receiver, method type, or argument type; convention-only table identities and generated SQL are not reconstructed.
+      - Dapper and command targets use the existing bounded constant SQL-shape projection. One- or two-part unquoted table identities are retained; unsafe, quoted, or multipart identities remain gaps rather than being matched after qualifier loss.
+      - Raw SQL, command text, parameter values, and connection material are not retained on operation facts.
+      - ADO.NET and Npgsql v0 table projection is limited to inline constant command construction; command variables, helper-returned commands, stored-procedure indirection, repository abstractions, DI dispatch, reflection, and branch feasibility remain reduced coverage.
+      - Save and transaction boundaries do not identify the tracked changes, affected tables, isolation, scope, commit, rollback, or atomicity.
+      - Recognizable calls without semantic binding and candidates without one bounded target emit explicit Tier4 gaps rather than guessed operations.
+      - When a C# file has no semantic model, name-only syntax fallback emits Tier4 gaps and does not claim framework or target identity.
 
   - id: database.dapper.invocation.v1
     name: Dapper invocation
@@ -3285,16 +3309,26 @@ rules:
 
   - id: database.postgres.schema-migration.v1
     name: PostgreSQL schema and migration surface
-    description: Extracts bounded table, column, migration-operation, and migration-file evidence from explicit checked-in PostgreSQL DDL.
+    description: Extracts bounded schema-snapshot, table, column, named constraint, simple index, enum, routine, destructive-change, migration-operation, and migration-file evidence from explicit checked-in PostgreSQL DDL.
     evidenceTier: Tier2Structural
     emits:
       - PostgresMigrationFileDeclared
+      - PostgresSchemaSnapshotDeclared
       - PostgresSchemaTableDeclared
       - PostgresSchemaColumnDeclared
+      - PostgresSchemaConstraintDeclared
+      - PostgresSchemaIndexDeclared
+      - PostgresSchemaEnumDeclared
+      - PostgresSchemaRoutineDeclared
       - PostgresMigrationOperation
     limitations:
-      - V0 recognizes unquoted identifiers in CREATE TABLE and single-subcommand ALTER TABLE ADD COLUMN only; quoted identifiers, multi-subcommand ALTER TABLE, indexes, constraints, enums, routines, snapshots, EF/Npgsql migrations, and other dialect shapes are deferred.
+      - Current bounded coverage recognizes unquoted identifiers in CREATE TABLE, single-subcommand ALTER TABLE ADD/DROP/RENAME COLUMN and RENAME TABLE, single-object DROP TABLE, named PRIMARY KEY/UNIQUE/FOREIGN KEY constraints, simple CREATE INDEX, CREATE TYPE AS ENUM, and CREATE FUNCTION/PROCEDURE statements; quoted identifiers and broader dialect shapes remain deferred.
       - Column facts identify explicit declaration names but do not model types, defaults, generated expressions, constraints, ordering semantics, or compatibility.
+      - Constraint and index facts do not model inline column constraints, check/exclusion expressions, foreign-key actions, expression/partial/include indexes, predicate semantics, index selection, uniqueness, or referential integrity.
+      - Enum labels and routine signatures, parameters, returns, languages, bodies, dynamic SQL, overload identity, and runtime reachability are omitted.
+      - Drop and rename facts record checked-in operation intent only; CASCADE/RESTRICT is categorical, omitted behavior remains unspecified, and dependency effects, data loss, rollback, and execution are not inferred.
+      - Schema snapshot identity requires an active standard PostgreSQL dump header or versioned TraceMap directive; filenames alone are insufficient, source database identity is omitted, and dump generation, completeness, restoreability, and freshness are not verified.
+      - Snapshot coverage counts only recognized bounded DDL and aggregate unsupported CREATE/ALTER/DROP/TRUNCATE families; reduced coverage is a static parser limitation, not evidence that the source database or dump is incomplete.
       - Static DDL evidence does not prove migration execution, execution order, live schema existence, database state, data correctness, permissions, rollback, production use, or release safety.
       - Raw SQL, source snippets, literals, connection material, local paths, and unsupported identifiers are not stored in fact properties.
 
@@ -3307,6 +3341,32 @@ rules:
     limitations:
       - A gap reports reduced static coverage for one checked-in surface; it does not establish that a live object or migration is absent, invalid, unapplied, or unsafe.
       - Gap properties contain categorical classifications and statement ordinals only; raw SQL and unsafe identifiers are omitted.
+
+  - id: database.design-review.packet.v1
+    name: Database design-review packet composition
+    description: Composes existing PostgreSQL schema, migration, snapshot, and SQL/query surface evidence from a single or combined index, plus bounded static path evidence when a combined graph is available, into deterministic Markdown and JSON review artifacts.
+    evidenceTier: Inherits each projected source fact or path tier
+    emits:
+      - database-design-review.md
+      - database-design-review.json
+    limitations:
+      - The packet is a read-side static composition and does not add SQL extraction, connect to a database, inspect a live catalog, execute SQL or migrations, start an application, or perform runtime probes.
+      - Query/table correlation is an exact source-scoped static name match and does not prove runtime database identity, provider or connection selection, search-path behavior, generated SQL equivalence, branch feasibility, or execution.
+      - Route references preserve existing bounded static path evidence and do not prove runtime reachability, traffic, authorization, deployment, or user exercise.
+      - Single-index input has no combined graph/path contract, emits zero route references, and records reduced route coverage rather than inferring route absence.
+      - Migration operations do not prove ordering, application, compatibility, reversibility, production state, release approval, or safe execution.
+      - The allowlisted packet omits raw SQL, snippets, query hashes, credentials, connection material, scheduled command bodies, local paths, private server names, validation output, and arbitrary fact properties.
+
+  - id: database.design-review.gap.v1
+    name: Database design-review composition gap
+    description: Records missing provenance, unmatched query or route correlations, reduced source/path coverage, incompatible input, and bounded packet truncation.
+    evidenceTier: Tier4Unknown
+    emits:
+      - database-design-review.json gap
+      - database-design-review.md gap
+    limitations:
+      - A gap describes missing or reduced static evidence only and does not prove a database object, query, route, migration, or runtime behavior is absent or invalid.
+      - Gap metadata is categorical and bounded; raw SQL, snippets, hashes, connection material, private infrastructure identities, local paths, and unsafe values are omitted.
 
   - id: database.sql.context.declaration.v1
     name: SQL execution-context declaration

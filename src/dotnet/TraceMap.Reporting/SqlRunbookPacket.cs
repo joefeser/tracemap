@@ -221,7 +221,8 @@ public static class SqlRunbookPacketBuilder
     private static IReadOnlyList<string> FactLimitations(CodeFact fact) => new[]
         {
             fact.Properties.GetValueOrDefault("ruleLimitations"),
-            fact.Properties.GetValueOrDefault("limitation")
+            fact.Properties.GetValueOrDefault("limitation"),
+            fact.Properties.GetValueOrDefault("limitations")
         }
         .Where(value => !string.IsNullOrWhiteSpace(value))
         .Select(value => value!)

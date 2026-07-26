@@ -306,7 +306,7 @@ public static class CombinedSurfaceProjection
             return "http-route";
         }
 
-        if (fact.FactType == FactTypes.DatabaseColumnMapping)
+        if (fact.FactType is FactTypes.DatabaseColumnMapping or FactTypes.DatabaseOperationCandidate)
         {
             return "sql-persistence";
         }
