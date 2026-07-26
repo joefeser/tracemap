@@ -1,6 +1,7 @@
 # Access Parallels Source Runner Implementation State
 
-Status: implementation in progress
+Status: implementation and exact-head Parallels validation complete; PR
+workflow pending
 
 Branch: `codex/access-parallels-runner`
 
@@ -61,3 +62,36 @@ At exact `20f1a26ee0e71fad8e66d7131cda072a2b5b5333`:
 - macro identities or bodies;
 - public artifact publication;
 - remote physical-Windows Codex control.
+
+## Exact-head validation
+
+At `f3bc56fcebc44ed38ac57ba5934fcb11cae2e639`:
+
+- offline Git-bundle fast-forward completed with no configured remote;
+- host `doctor` passed the running-VM, disabled-network, scoped-share,
+  source-identity, clean-checkout, Access-registration, and no-remote gates;
+- three consecutive host-driven Windows source builds passed;
+- each build ran the six exact Access test classes sequentially;
+- host-driven synthetic validation completed;
+- Phase 9 consumer contracts and local-review-bundle contract passed;
+- the sanitized local review bundle was retained;
+- Access processes exited and the guest source checkout remained clean;
+- the controller emitted only allowlisted categorical output.
+
+macOS validation:
+
+- both PowerShell scripts passed parser-only syntax validation;
+- focused runner guard test: 1/1 passed;
+- Access local review bundle tests: 10/10 passed;
+- solution build passed with the repository's existing SQLite advisory;
+- first full solution test: 918/919 passed; the previously documented
+  synthetic NuGet restore-classification test flaked;
+- exact isolated rerun of that test: 1/1 passed unchanged;
+- unchanged full solution rerun: 919/919 passed;
+- private-path guard passed;
+- `git diff --check` passed.
+
+All SDK, Git, Git LFS, NuGet, Git-bundle, provisioning, diagnostic, and retained
+review-bundle assets remain outside the repository. The final product diff
+contains only the two generic source runners, deterministic guard coverage,
+the Windows SQLite test-disposal correction, and documentation/spec state.
