@@ -46,6 +46,9 @@ At exact `20f1a26ee0e71fad8e66d7131cda072a2b5b5333`:
 - exact Access test classes run sequentially so Windows SQLite pool state
   cannot race across classes and substring filters cannot select unrelated
   tests;
+- the non-Access bundle rejection fixture clears the test process's pooled
+  SQLite writer connection before immediate read-side composition, matching
+  the existing Windows disposal pattern in VBA and macro tests;
 - guest output is captured and reduced to one allowlisted categorical line;
 - representative inputs and richer extraction are deliberately absent;
 - offline toolchain provisioning remains operator-local and outside Git.
