@@ -4,6 +4,7 @@
   "publicClaimLevel": "demo",
   "purpose": "A synthetic public-safe projection showing how the shipped database design-review packet composes bounded static PostgreSQL, EF mapping, application operation, query, route, provenance, cap, and gap evidence.",
   "source": {
+    "repositoryId": "joefeser/tracemap",
     "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
     "sourceKind": "checked-in-synthetic-contract-test-projection"
   },
@@ -182,22 +183,22 @@
                   }
                 ],
                 "evidence": {
-                  "ruleId": "csharp.syntax.querypattern.v1",
-                  "evidenceTier": "Tier2Structural",
+                  "ruleId": "database.sql.shape.v1",
+                  "evidenceTier": "Tier3SyntaxOrTextual",
                   "sourceLabel": "single",
                   "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
                   "filePath": "Data/OrderRepository.cs",
                   "startLine": 12,
                   "endLine": 12,
-                  "extractorId": "test-query",
-                  "extractorVersion": "test-query/1.0",
+                  "extractorId": "CSharpIntegrationSyntaxExtractor",
+                  "extractorVersion": "csharp-integration-syntax/0.2.0",
                   "coverageLabel": "complete",
                   "supportingFactIds": [
                     "fact-public-query"
                   ],
                   "supportingEdgeIds": [],
                   "supportingRuleIds": [
-                    "csharp.syntax.querypattern.v1"
+                    "database.sql.shape.v1"
                   ],
                   "limitations": [
                     "Static query correlation does not prove provider selection, generated SQL, or execution."
@@ -461,22 +462,22 @@
                   }
                 ],
                 "evidence": {
-                  "ruleId": "csharp.syntax.querypattern.v1",
-                  "evidenceTier": "Tier2Structural",
+                  "ruleId": "database.sql.shape.v1",
+                  "evidenceTier": "Tier3SyntaxOrTextual",
                   "sourceLabel": "service",
                   "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
                   "filePath": "Data/OrderRepository.cs",
                   "startLine": 12,
                   "endLine": 12,
-                  "extractorId": "test-query",
-                  "extractorVersion": "test-query/1.0",
+                  "extractorId": "CSharpIntegrationSyntaxExtractor",
+                  "extractorVersion": "csharp-integration-syntax/0.2.0",
                   "coverageLabel": "complete",
                   "supportingFactIds": [
                     "fact-public-combined-query"
                   ],
                   "supportingEdgeIds": [],
                   "supportingRuleIds": [
-                    "csharp.syntax.querypattern.v1"
+                    "database.sql.shape.v1"
                   ],
                   "limitations": [
                     "Static query correlation does not prove execution or database identity."
@@ -514,7 +515,7 @@
                   "supportingRuleIds": [
                     "database.design-review.packet.v1",
                     "database.operation.call-pattern.v1",
-                    "csharp.syntax.querypattern.v1"
+                    "database.sql.shape.v1"
                   ],
                   "limitations": [
                     "A bounded static route reference does not prove runtime reachability, traffic, authorization, deployment, or user exercise."

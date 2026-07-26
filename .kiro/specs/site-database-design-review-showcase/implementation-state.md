@@ -22,8 +22,8 @@ synthetic allowlisted projection, not raw command output.
 ## Validation
 
 - `node --test site/scripts/database-design-review-showcase.test.mjs` — passed
-  10/10.
-- `cd site && npm test` — passed 714/714.
+  13/13 after review-finding regressions were added.
+- `cd site && npm test` — passed 717/717.
 - `cd site && npm run build` — passed.
 - `cd site && npm run validate` — passed; 96 HTML files, 3,310 internal
   references, and 95 sitemap URLs.
@@ -34,6 +34,18 @@ synthetic allowlisted projection, not raw command output.
   internal links, and no page console errors. The JSON link resolved to the
   checked-in public packet; the browser's raw-JSON view requested a default
   favicon that the static server does not provide for asset documents.
+
+## Pull request and review
+
+- Ready PR: https://github.com/joefeser/tracemap/pull/538
+- ACK's first exact-head run found only the private-path guard failure caused by
+  a planted test sentinel; the sentinel is now assembled at runtime and the
+  guard passes.
+- ACK's second exact-head run authorized four current review fixes: public
+  repository provenance, malformed-object validator handling, case-insensitive
+  protected-field rejection, and a producible query rule/tier projection. Those
+  fixes and focused regressions are complete; final ACK is pending on the new
+  exact head.
 
 ## Deferred
 
