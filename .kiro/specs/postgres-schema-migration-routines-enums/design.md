@@ -21,4 +21,3 @@ declarations fall through to the existing categorical gap path.
 This is extraction only. Enum and routine facts are not treated as table
 matches by the SQL schema-delta reducer; database-centered composition remains
 a later #438 slice.
-

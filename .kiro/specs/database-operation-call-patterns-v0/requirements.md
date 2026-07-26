@@ -39,4 +39,3 @@ compose bounded table/entity-linked candidates into database design review.
 - General LINQ classification where the compiler cannot prove a database
   framework receiver.
 - Full command-variable or parameter-value flow in v0.
-
