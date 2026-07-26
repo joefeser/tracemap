@@ -3344,7 +3344,7 @@ rules:
 
   - id: database.design-review.packet.v1
     name: Database design-review packet composition
-    description: Composes existing PostgreSQL schema, migration, snapshot, SQL/query surface, and bounded static path evidence from a combined index into deterministic Markdown and JSON review artifacts.
+    description: Composes existing PostgreSQL schema, migration, snapshot, and SQL/query surface evidence from a single or combined index, plus bounded static path evidence when a combined graph is available, into deterministic Markdown and JSON review artifacts.
     evidenceTier: Inherits each projected source fact or path tier
     emits:
       - database-design-review.md
@@ -3353,6 +3353,7 @@ rules:
       - The packet is a read-side static composition and does not add SQL extraction, connect to a database, inspect a live catalog, execute SQL or migrations, start an application, or perform runtime probes.
       - Query/table correlation is an exact source-scoped static name match and does not prove runtime database identity, provider or connection selection, search-path behavior, generated SQL equivalence, branch feasibility, or execution.
       - Route references preserve existing bounded static path evidence and do not prove runtime reachability, traffic, authorization, deployment, or user exercise.
+      - Single-index input has no combined graph/path contract, emits zero route references, and records reduced route coverage rather than inferring route absence.
       - Migration operations do not prove ordering, application, compatibility, reversibility, production state, release approval, or safe execution.
       - The allowlisted packet omits raw SQL, snippets, query hashes, credentials, connection material, scheduled command bodies, local paths, private server names, validation output, and arbitrary fact properties.
 
