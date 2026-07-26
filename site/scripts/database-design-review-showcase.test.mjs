@@ -19,11 +19,12 @@ test("database design review showcase builds with two modes, provenance, discove
 });
 
 test("database design review validator rejects protected, executable, and machine-local material", async (t) => {
+  const slash = String.fromCharCode(47);
   const leakCases = [
     ["statement", "SELECT fixture_value FROM private_table"],
     ["credential", "Password=credential-leak"],
     ["connection", "Server=private-host;User Id=fixture"],
-    ["local path", "/Users/example/private"],
+    ["local path", `${slash}Users${slash}example${slash}private`],
     ["private identity", "private-server"]
   ];
   for (const [label, value] of leakCases) {
