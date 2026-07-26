@@ -49,6 +49,7 @@ public static class TraceMapCommand
                 "impact" => ImpactHelp(),
                 "reverse" => ReverseHelp(),
                 "release-review" => ReleaseReviewHelp(),
+                "access-review" => AccessReviewHelp(),
                 "portfolio" => PortfolioHelp(),
                 "package-impact" => PackageImpactHelp(),
                 "vault" => VaultHelp(),
@@ -59,7 +60,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "database-design-review" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "scan" or "report" or "database-design-review" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         try
@@ -83,6 +84,7 @@ public static class TraceMapCommand
                 "impact" => await RunImpactAsync(rest, output, error, cancellationToken),
                 "reverse" => await RunReverseAsync(rest, output, error, cancellationToken),
                 "release-review" => await RunReleaseReviewAsync(rest, output, error, cancellationToken),
+                "access-review" => await RunAccessReviewAsync(rest, output, error, cancellationToken),
                 "portfolio" => await RunPortfolioAsync(rest, output, error, cancellationToken),
                 "package-impact" => await RunPackageImpactAsync(rest, output, error, cancellationToken),
                 "vault" => await RunVaultAsync(rest, output, error, cancellationToken),
@@ -841,6 +843,51 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Top changed surfaces: {result.Report.Summary.TopChangedSurfaceCount}");
         await output.WriteLineAsync($"Contract findings: {result.Report.Summary.ContractFindingCount}");
         await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        return 0;
+    }
+
+    private static async Task<int> RunAccessReviewAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        if (args.Length == 0 || IsHelp(args[0]))
+        {
+            await output.WriteLineAsync(AccessReviewHelp());
+            return 0;
+        }
+
+        var subcommand = args[0].ToLowerInvariant();
+        if (subcommand != "create")
+        {
+            await error.WriteLineAsync("error: access-review supports only the create subcommand.");
+            return 1;
+        }
+
+        var values = ParseOptions(args.Skip(1).ToArray(), "--force");
+        if (!values.TryGetValue("--scan-output", out var scanOutputPath) || string.IsNullOrWhiteSpace(scanOutputPath))
+        {
+            await error.WriteLineAsync("error: access-review create requires --scan-output <access-scan-directory>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: access-review create requires --out <bundle-directory>.");
+            return 1;
+        }
+
+        var result = await AccessLocalReviewBundle.CreateAsync(
+            new AccessLocalReviewBundleOptions(
+                scanOutputPath,
+                outputPath,
+                values.HasFlag("--force")),
+            cancellationToken);
+
+        await output.WriteLineAsync("TraceMap access-review create completed.");
+        await output.WriteLineAsync($"Claim level: {result.Manifest.ClaimLevel}");
+        await output.WriteLineAsync($"Access evidence status: {result.Manifest.AccessEvidenceStatus}");
+        await output.WriteLineAsync($"Access findings: {result.Manifest.Counts.AccessFindingCount}");
+        await output.WriteLineAsync($"Access gaps: {result.Manifest.Counts.AccessGapCount}");
+        await output.WriteLineAsync($"Explorer evidence rows: {result.Manifest.Counts.ExplorerEvidenceRowCount}");
+        await output.WriteLineAsync($"Files: {result.WrittenFiles.Count}");
         return 0;
     }
 
@@ -1805,6 +1852,7 @@ public static class TraceMapCommand
               tracemap impact --before <combined.sqlite> --after <combined.sqlite> --out <path>
               tracemap reverse --index <combined.sqlite> --out <path> [selectors]
               tracemap release-review --before <index.sqlite> --after <index.sqlite> --out <path>
+              tracemap access-review create --scan-output <access-scan-directory> --out <bundle-directory>
               tracemap portfolio --out <path> (--index <index.sqlite> --label <label> ... | --manifest <portfolio.json>)
               tracemap package-impact --index <index.sqlite> --package-delta <delta.json> --out <path>
               tracemap vault export --combined-index <combined.sqlite> --out <vault-output>
@@ -1831,6 +1879,7 @@ public static class TraceMapCommand
               impact    Explain static change evidence between two combined indexes.
               reverse   Trace reverse static reachability from dependency surfaces.
               release-review Assemble a deterministic before/after release evidence packet.
+              access-review Compose an existing Access scan into a private local review bundle.
               portfolio Summarize dependency evidence across many TraceMap indexes.
               package-impact Report static package upgrade evidence from indexed package declarations.
               vault    Export deterministic Markdown evidence notes and graph.json from existing TraceMap evidence.
@@ -2248,6 +2297,35 @@ public static class TraceMapCommand
 
             Outputs:
               release-review.md and/or release-review.json
+            """;
+    }
+
+    private static string AccessReviewHelp()
+    {
+        return """
+            Usage:
+              tracemap access-review create --scan-output <access-scan-directory> --out <bundle-directory> [--force]
+
+            Required:
+              --scan-output <path>       Existing Microsoft Access scan output with the five standard TraceMap artifacts.
+              --out <path>               New local review bundle directory outside the scan output.
+
+            Optional:
+              --force                    Replace only a compatible TraceMap-generated Access review bundle.
+
+            Outputs:
+              README.md
+              access-review-manifest.json
+              release-review/release-review.md
+              release-review/release-review.json
+              explorer/index.html
+              explorer/assets/*
+              explorer/data/*
+
+            Notes:
+              The command is read-side composition only. It does not invoke Microsoft Access,
+              COM, a scanner, queries, forms, reports, VBA, or macros.
+              The bundle is hidden local evidence and is not approved for publication by default.
             """;
     }
 

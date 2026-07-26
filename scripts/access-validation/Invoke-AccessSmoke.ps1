@@ -10,7 +10,9 @@ param(
 
     [string]$SmokeRoot = "C:\TraceMapAccessSmoke",
 
-    [string]$Phase9CheckpointPath
+    [string]$Phase9CheckpointPath,
+
+    [string]$ReviewBundlePath
 )
 
 $ErrorActionPreference = "Stop"
@@ -65,6 +67,15 @@ function Assert-DisposableSmokeRoot {
 
 $SmokeRoot = [IO.Path]::GetFullPath($SmokeRoot)
 Assert-DisposableSmokeRoot -Path $SmokeRoot
+$reviewBundleRequested = -not [string]::IsNullOrWhiteSpace($ReviewBundlePath)
+if ($reviewBundleRequested) {
+    $ReviewBundlePath = [IO.Path]::GetFullPath($ReviewBundlePath)
+    if ([string]::Equals($ReviewBundlePath, $SmokeRoot, [StringComparison]::OrdinalIgnoreCase) -or
+        $ReviewBundlePath.StartsWith($SmokeRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
+        (Test-Path $ReviewBundlePath)) {
+        throw "Review bundle must be a new path outside the disposable smoke root"
+    }
+}
 $phase9Coverage = "named-count-observed-loaded-state-unavailable-other-categories-identities-bodies-unavailable"
 $phase9Checkpoint = $null
 if (-not [string]::IsNullOrWhiteSpace($Phase9CheckpointPath)) {
@@ -87,6 +98,7 @@ if (-not [string]::IsNullOrWhiteSpace($Phase9CheckpointPath)) {
         docsContractCorrect = $false
         vaultContractCorrect = $false
         releaseReviewContractCorrect = $false
+        localReviewBundleContractCorrect = $false
         macroIdentityFactsZero = $false
         deterministic = $false
         generationCanariesFalse = $false
@@ -183,6 +195,7 @@ $export = Join-Path $SmokeRoot "index-export.json"
 $docsOutput = Join-Path $SmokeRoot "evidence-docs"
 $vaultOutput = Join-Path $SmokeRoot "vault"
 $releaseReviewOutput = Join-Path $SmokeRoot "release-review"
+$accessReviewOutput = if ($reviewBundleRequested) { $ReviewBundlePath } else { Join-Path $SmokeRoot "access-review" }
 
 if (Test-Path $SmokeRoot -PathType Container) {
     Remove-Item $SmokeRoot -Recurse -Force -ErrorAction Stop
@@ -501,8 +514,33 @@ if ($null -ne $phase9Checkpoint) {
     Save-Phase9Checkpoint
 }
 
+Set-Phase9Stage "access-review-validation"
+& $TraceMapCli access-review create --scan-output $outA --out $accessReviewOutput
+if ($LASTEXITCODE -ne 0) { throw "Access local review bundle failed" }
+$accessReviewManifestPath = Join-Path $accessReviewOutput "access-review-manifest.json"
+$accessReviewExplorerPath = Join-Path $accessReviewOutput "explorer\index.html"
+$accessReviewMarkdownPath = Join-Path $accessReviewOutput "release-review\release-review.md"
+if (-not (Test-Path $accessReviewManifestPath -PathType Leaf) -or
+    -not (Test-Path $accessReviewExplorerPath -PathType Leaf) -or
+    -not (Test-Path $accessReviewMarkdownPath -PathType Leaf)) {
+    throw "Access local review bundle outputs are missing"
+}
+$accessReviewManifest = Get-Content $accessReviewManifestPath -Raw | ConvertFrom-Json
+if ($accessReviewManifest.schemaVersion -ne "tracemap-access-local-review-bundle.v1" -or
+    $accessReviewManifest.tracemapGenerated -ne $true -or
+    $accessReviewManifest.claimLevel -ne "hidden" -or
+    @("available", "truncated") -notcontains $accessReviewManifest.accessEvidenceStatus -or
+    $accessReviewManifest.counts.accessFindingCount -le 0 -or
+    $accessReviewManifest.counts.accessGapCount -le 0) {
+    throw "Access local review bundle contract failed"
+}
+if ($null -ne $phase9Checkpoint) {
+    $phase9Checkpoint.localReviewBundleContractCorrect = $true
+    Save-Phase9Checkpoint
+}
+
 Set-Phase9Stage "safety-check"
-$protectedOutputs = @($outA, $outB, $outConcurrentA, $outConcurrentB, $outMdb, $outInvalidMdb, $export, $combined, $combinedReport, $docsOutput, $vaultOutput, $releaseReviewOutput)
+$protectedOutputs = @($outA, $outB, $outConcurrentA, $outConcurrentB, $outMdb, $outInvalidMdb, $export, $combined, $combinedReport, $docsOutput, $vaultOutput, $releaseReviewOutput, $accessReviewOutput)
 foreach ($outputItem in $protectedOutputs) {
     if (-not (Test-Path $outputItem)) { continue }
     $files = if (Test-Path $outputItem -PathType Container) { Get-ChildItem $outputItem -File -Recurse } else { Get-Item $outputItem }
@@ -533,6 +571,7 @@ catch {
             "docs-validation" { "docs-validation-failed" }
             "vault-validation" { "vault-validation-failed" }
             "release-review-validation" { "release-review-validation-failed" }
+            "access-review-validation" { "access-review-validation-failed" }
             "safety-check" { "safety-check-failed" }
             default { "phase9-validation-failed" }
         }
@@ -555,6 +594,7 @@ $smokeResult = [pscustomobject]@{
     Export = "passed"
     Combine = "passed"
     CombinedReport = "passed"
+    LocalReviewBundle = if ($reviewBundleRequested) { "retained" } else { "validated-disposable" }
     Phase9Checkpoint = if ($null -ne $phase9Checkpoint) { "written" } else { "not-requested" }
 }
 $smokeResult | ConvertTo-Json -Compress
