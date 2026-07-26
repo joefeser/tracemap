@@ -608,6 +608,9 @@ public sealed class CSharpSemanticExtractorTests
                 public void Configure(object modelBuilder)
                 {
                     modelBuilder.Entity<Order>().ToTable("orders");
+                    modelBuilder.Add(new Order());
+                    modelBuilder.Query();
+                    modelBuilder.ExecuteReader();
                     modelBuilder.FromSql();
                     modelBuilder.CommitTransactionAsync();
                 }
@@ -625,6 +628,21 @@ public sealed class CSharpSemanticExtractorTests
         Assert.DoesNotContain(result.Facts, fact =>
             fact.FactType == FactTypes.DatabaseColumnMapping
             && fact.ContractElement == "orders");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseOperationCallPattern
+            && fact.Properties.GetValueOrDefault("classification") == "SemanticBindingUnavailable"
+            && fact.Properties.GetValueOrDefault("methodName") == "Add");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseOperationCallPattern
+            && fact.Properties.GetValueOrDefault("classification") == "SemanticBindingUnavailable"
+            && fact.Properties.GetValueOrDefault("methodName") == "Query");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseOperationCallPattern
+            && fact.Properties.GetValueOrDefault("classification") == "SemanticBindingUnavailable"
+            && fact.Properties.GetValueOrDefault("methodName") == "ExecuteReader");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.DatabaseOperationCallPattern
@@ -660,7 +678,7 @@ public sealed class CSharpSemanticExtractorTests
                 public sealed class DatabaseFacade
                 {
                     public void BeginTransaction() { }
-                    public int ExecuteSqlRaw(string sql) => 0;
+                    public int ExecuteSqlRaw(string sql, params object[] parameters) => 0;
                 }
                 public class DbSet<T>
                 {
@@ -715,12 +733,14 @@ public sealed class CSharpSemanticExtractorTests
 
                 public void Persist(Order order, object connection, string dynamicSql)
                 {
+                    var parameters = new object[] { 42 };
                     Orders.Add(order);
                     Orders.Update(order);
                     Orders.Remove(order);
                     SaveChanges();
                     Database.BeginTransaction();
                     Database.ExecuteSqlRaw(dynamicSql);
+                    Database.ExecuteSqlRaw(dynamicSql, parameters);
                     connection.Query("select id from public.orders");
                     connection.Query("select 1");
                     connection.Execute("delete from audit.orders where id = 42");
@@ -747,6 +767,15 @@ public sealed class CSharpSemanticExtractorTests
             && fact.Properties.GetValueOrDefault("frameworkFamily") == "ef-core");
         Assert.Contains(operations, fact => fact.Properties.GetValueOrDefault("operationKind") == "save-boundary");
         Assert.Contains(operations, fact => fact.Properties.GetValueOrDefault("operationKind") == "transaction-begin");
+        var rawSqlOperations = operations
+            .Where(fact => fact.Properties.GetValueOrDefault("methodName") == "ExecuteSqlRaw")
+            .ToArray();
+        Assert.Equal(2, rawSqlOperations.Length);
+        Assert.All(rawSqlOperations, fact =>
+        {
+            Assert.Equal("unavailable", fact.Properties.GetValueOrDefault("targetIdentityStatus"));
+            Assert.DoesNotContain("entityType", fact.Properties.Keys);
+        });
         Assert.Contains(operations, fact =>
             fact.Properties.GetValueOrDefault("frameworkFamily") == "dapper"
             && fact.Properties.GetValueOrDefault("operationKind") == "select-candidate"
@@ -829,6 +858,31 @@ public sealed class CSharpSemanticExtractorTests
         Assert.DoesNotContain(result.Facts, fact =>
             fact.FactType == FactTypes.DatabaseOperationCandidate
             && fact.RuleId == RuleIds.DatabaseOperationCallPattern);
+    }
+
+    [Fact]
+    public void Semantic_coverage_file_set_excludes_documents_that_only_emitted_failure_gaps()
+    {
+        var failedGap = new SemanticFactCandidate(
+            FactTypes.AnalysisGap,
+            RuleIds.CSharpSemanticDeclarations,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan("Failed.cs", 1, 1, null, "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            Properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["classification"] = "SyntaxTreeReadFailed"
+            });
+        var semantic = new SemanticExtractionResult(
+            [],
+            [failedGap],
+            Attempted: true,
+            ReducedCoverage: true,
+            AnalyzedFiles: new HashSet<string>(["Successful.cs"], StringComparer.Ordinal));
+
+        var analyzedFiles = ScanEngine.GetSemanticallyAnalyzedFiles(semantic);
+
+        Assert.Contains("Successful.cs", analyzedFiles);
+        Assert.DoesNotContain("Failed.cs", analyzedFiles);
     }
 
     private static string OperationProjection(CodeFact fact) =>

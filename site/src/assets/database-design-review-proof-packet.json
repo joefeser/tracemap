@@ -21,6 +21,7 @@
         "sources": [
           {
             "sourceLabel": "single",
+            "repositoryId": "joefeser/tracemap",
             "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
             "language": "csharp-postgresql",
             "analysisLevel": "semantic-and-structural",
@@ -338,6 +339,7 @@
         "sources": [
           {
             "sourceLabel": "service",
+            "repositoryId": "joefeser/tracemap",
             "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
             "language": "csharp-postgresql",
             "analysisLevel": "semantic-and-structural",
