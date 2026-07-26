@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using TraceMap.Access;
 using TraceMap.Access.Cli;
 using TraceMap.Cli;
@@ -470,6 +471,7 @@ public sealed class AccessLocalReviewBundleTests
         await ManifestWriter.WriteAsync(Path.Combine(output, "scan-manifest.json"), manifest);
         await JsonlFactWriter.WriteAsync(Path.Combine(output, "facts.ndjson"), scan.Facts);
         SqliteIndexWriter.Write(Path.Combine(output, "index.sqlite"), manifest, scan.Facts);
+        SqliteConnection.ClearAllPools();
         await File.WriteAllTextAsync(Path.Combine(output, "report.md"), "# Non-Access scan\n");
         await File.WriteAllTextAsync(Path.Combine(output, "logs", "analyzer.log"), "scan complete\n");
         return output;
