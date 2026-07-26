@@ -163,7 +163,7 @@ public sealed class AccessLocalReviewBundleTests
         Assert.Equal(ReleaseReviewStatuses.Available, rerun.Manifest.AccessEvidenceStatus);
 
         await File.WriteAllTextAsync(Path.Combine(bundle, "caller-owned.txt"), "do not delete");
-        var modifiedError = await Assert.ThrowsAsync<InvalidOperationException>(
+        var modifiedError = await Assert.ThrowsAsync<AccessLocalReviewException>(
             () => AccessLocalReviewBundle.CreateAsync(new(scanOutput, bundle, Force: true)));
         Assert.Contains("AccessReviewOutputCollision", modifiedError.Message, StringComparison.Ordinal);
         Assert.Equal("do not delete", await File.ReadAllTextAsync(Path.Combine(bundle, "caller-owned.txt")));
@@ -171,7 +171,7 @@ public sealed class AccessLocalReviewBundleTests
         var callerOwned = Path.Combine(temp.Path, "caller-owned");
         Directory.CreateDirectory(callerOwned);
         await File.WriteAllTextAsync(Path.Combine(callerOwned, "sentinel.txt"), "preserve");
-        var foreignError = await Assert.ThrowsAsync<InvalidOperationException>(
+        var foreignError = await Assert.ThrowsAsync<AccessLocalReviewException>(
             () => AccessLocalReviewBundle.CreateAsync(new(scanOutput, callerOwned, Force: true)));
         Assert.Contains("AccessReviewOutputCollision", foreignError.Message, StringComparison.Ordinal);
         Assert.Equal("preserve", await File.ReadAllTextAsync(Path.Combine(callerOwned, "sentinel.txt")));
@@ -188,10 +188,107 @@ public sealed class AccessLocalReviewBundleTests
                 StringComparison.Ordinal));
         var outside = Path.Combine(temp.Path, "outside.txt");
         await File.WriteAllTextAsync(outside, "preserve");
-        var traversalError = await Assert.ThrowsAsync<InvalidOperationException>(
+        var traversalError = await Assert.ThrowsAsync<AccessLocalReviewException>(
             () => AccessLocalReviewBundle.CreateAsync(new(scanOutput, poisonedBundle, Force: true)));
         Assert.Contains("AccessReviewOutputCollision", traversalError.Message, StringComparison.Ordinal);
         Assert.Equal("preserve", await File.ReadAllTextAsync(outside));
+    }
+
+    [Fact]
+    public void Publication_failure_restores_or_retains_the_previous_bundle()
+    {
+        using var temp = new TempDirectory();
+        var output = Path.Combine(temp.Path, "bundle");
+        var staging = Path.Combine(temp.Path, "staging");
+        var backup = Path.Combine(temp.Path, "backup");
+        Directory.CreateDirectory(output);
+        Directory.CreateDirectory(staging);
+        File.WriteAllText(Path.Combine(output, "old.txt"), "old");
+        File.WriteAllText(Path.Combine(staging, "new.txt"), "new");
+
+        Assert.ThrowsAny<IOException>(
+            () => AccessLocalReviewBundle.Publish(
+                staging,
+                output,
+                backup,
+                () =>
+                {
+                    Directory.CreateDirectory(output);
+                    File.WriteAllText(Path.Combine(output, "collision.txt"), "collision");
+                }));
+
+        Assert.Equal("old", File.ReadAllText(Path.Combine(backup, "old.txt")));
+        Assert.Equal("collision", File.ReadAllText(Path.Combine(output, "collision.txt")));
+        Assert.True(File.Exists(Path.Combine(staging, "new.txt")));
+
+        var restoredOutput = Path.Combine(temp.Path, "restored-bundle");
+        var missingStaging = Path.Combine(temp.Path, "missing-staging");
+        var restoredBackup = Path.Combine(temp.Path, "restored-backup");
+        Directory.CreateDirectory(restoredOutput);
+        File.WriteAllText(Path.Combine(restoredOutput, "old.txt"), "old");
+
+        Assert.ThrowsAny<IOException>(
+            () => AccessLocalReviewBundle.Publish(missingStaging, restoredOutput, restoredBackup));
+
+        Assert.Equal("old", File.ReadAllText(Path.Combine(restoredOutput, "old.txt")));
+        Assert.False(Directory.Exists(restoredBackup));
+    }
+
+    [Fact]
+    public async Task Mixed_scan_artifacts_fail_closed_and_unexpected_io_does_not_leak_paths()
+    {
+        using var temp = new TempDirectory();
+        var first = await WriteCountOnlyAccessScanAsync(temp.Path, "first-scan");
+        var second = await WriteCountOnlyAccessScanAsync(
+            temp.Path,
+            "second-scan",
+            new string('f', 40));
+        File.Copy(Path.Combine(second, "index.sqlite"), Path.Combine(first, "index.sqlite"), overwrite: true);
+
+        var output = new StringWriter();
+        var error = new StringWriter();
+        var mismatchExit = await TraceMapCommand.RunAsync(
+            ["access-review", "create", "--scan-output", first, "--out", Path.Combine(temp.Path, "mixed-bundle")],
+            output,
+            error);
+
+        Assert.Equal(1, mismatchExit);
+        Assert.Contains("AccessReviewInputMismatch", error.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(temp.Path, error.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.False(Directory.Exists(Path.Combine(temp.Path, "mixed-bundle")));
+
+        var corrupt = await WriteCountOnlyAccessScanAsync(temp.Path, "corrupt-scan");
+        await File.WriteAllTextAsync(Path.Combine(corrupt, "index.sqlite"), "not a SQLite index");
+        error.GetStringBuilder().Clear();
+        var corruptExit = await TraceMapCommand.RunAsync(
+            ["access-review", "create", "--scan-output", corrupt, "--out", Path.Combine(temp.Path, "corrupt-bundle")],
+            output,
+            error);
+
+        Assert.Equal(1, corruptExit);
+        Assert.Contains("AccessReviewFailed", error.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(temp.Path, error.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.False(Directory.Exists(Path.Combine(temp.Path, "corrupt-bundle")));
+    }
+
+    [Theory]
+    [InlineData("databases/private/design.accdb")]
+    [InlineData("src/home/schema.accdb")]
+    public async Task Repository_relative_path_segments_do_not_trigger_absolute_path_denial(
+        string databaseRelativePath)
+    {
+        using var temp = new TempDirectory();
+        var scanOutput = await WriteCountOnlyAccessScanAsync(
+            temp.Path,
+            "relative-path-scan",
+            databaseRelativePath: databaseRelativePath);
+        var bundle = Path.Combine(temp.Path, "relative-path-bundle");
+
+        await AccessLocalReviewBundle.CreateAsync(new(scanOutput, bundle));
+
+        var releaseReview = await File.ReadAllTextAsync(
+            Path.Combine(bundle, "release-review", "release-review.json"));
+        Assert.Contains(databaseRelativePath, releaseReview, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -212,6 +309,10 @@ public sealed class AccessLocalReviewBundleTests
                 StringComparison.Ordinal);
             Assert.Contains("tracemap-access-local-review-bundle.v1", script, StringComparison.Ordinal);
             Assert.Contains("localReviewBundleContractCorrect", script, StringComparison.Ordinal);
+            Assert.Contains(
+                "@(\"available\", \"truncated\") -notcontains $accessReviewManifest.accessEvidenceStatus",
+                script,
+                StringComparison.Ordinal);
             Assert.Contains("$accessReviewOutput", script, StringComparison.Ordinal);
             Assert.DoesNotContain("RunMacro", script, StringComparison.Ordinal);
             Assert.DoesNotContain("OpenRecordset", script, StringComparison.Ordinal);
@@ -229,21 +330,25 @@ public sealed class AccessLocalReviewBundleTests
             StringComparison.Ordinal);
     }
 
-    private static async Task<string> WriteCountOnlyAccessScanAsync(string root)
+    private static async Task<string> WriteCountOnlyAccessScanAsync(
+        string root,
+        string outputName = "access-scan",
+        string? commitSha = null,
+        string databaseRelativePath = "fixture.accdb")
     {
-        var databasePath = Path.Combine(root, "fixture.accdb");
+        var databasePath = Path.Combine(root, $"{outputName}.accdb");
         await File.WriteAllBytesAsync(databasePath, [1, 2, 3, 4]);
         var databaseHash = AccessInputValidator.HashFile(databasePath);
-        var output = Path.Combine(root, "access-scan");
+        var output = Path.Combine(root, outputName);
         var input = new AccessValidatedInput(
             root,
             "private-repository-label",
             AccessSafeValues.RoleHash("access-repository-identity", "private-repository-label"),
             null,
             "test",
-            new string('e', 40),
+            commitSha ?? new string('e', 40),
             databasePath,
-            "fixture.accdb",
+            databaseRelativePath,
             databaseHash,
             ".accdb",
             output,
@@ -302,7 +407,7 @@ public sealed class AccessLocalReviewBundleTests
             UiInventory: new(2, 1, "counts-observed-identities-unavailable"),
             VbaInventory: new(3, true, "count-observed-source-unavailable"),
             MacroInventory: new(4, null, "named-count-observed-identities-bodies-unavailable"));
-        var scan = AccessFactBuilder.Build(input, projection, new(root, "fixture.accdb", output));
+        var scan = AccessFactBuilder.Build(input, projection, new(root, databaseRelativePath, output));
         await AccessArtifactWriter.WriteAsync(output, scan, AccessLimits.Default);
         return output;
     }

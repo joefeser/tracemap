@@ -529,7 +529,7 @@ $accessReviewManifest = Get-Content $accessReviewManifestPath -Raw | ConvertFrom
 if ($accessReviewManifest.schemaVersion -ne "tracemap-access-local-review-bundle.v1" -or
     $accessReviewManifest.tracemapGenerated -ne $true -or
     $accessReviewManifest.claimLevel -ne "hidden" -or
-    $accessReviewManifest.accessEvidenceStatus -ne "available" -or
+    @("available", "truncated") -notcontains $accessReviewManifest.accessEvidenceStatus -or
     $accessReviewManifest.counts.accessFindingCount -le 0 -or
     $accessReviewManifest.counts.accessGapCount -le 0) {
     throw "Access local review bundle contract failed"

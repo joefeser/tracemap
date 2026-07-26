@@ -2,6 +2,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+using Microsoft.Data.Sqlite;
+using TraceMap.Core;
 
 namespace TraceMap.Reporting;
 
@@ -41,6 +44,17 @@ public sealed record AccessLocalReviewBundleFile(
     string Sha256,
     long SizeBytes);
 
+public sealed class AccessLocalReviewException : Exception
+{
+    public AccessLocalReviewException(string code, string message)
+        : base($"{code}: {message}")
+    {
+        Code = code;
+    }
+
+    public string Code { get; }
+}
+
 public static class AccessLocalReviewBundle
 {
     public const string SchemaVersion = "tracemap-access-local-review-bundle.v1";
@@ -72,33 +86,72 @@ public static class AccessLocalReviewBundle
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
+    private static readonly Regex MachineLocalPathPattern = new(
+        """(?ix)(?<![A-Za-z0-9._~-])/(?:Users|home|private|var|tmp|Volumes|workspace|root|mnt)/|(?<![A-Za-z0-9])(?:[A-Za-z]:[\\/]|\\\\[^\\/\s]+[\\/])""",
+        RegexOptions.CultureInvariant);
+
     public static async Task<AccessLocalReviewBundleResult> CreateAsync(
         AccessLocalReviewBundleOptions options,
         CancellationToken cancellationToken = default)
     {
+        try
+        {
+            return await CreateCoreAsync(options, cancellationToken);
+        }
+        catch (AccessLocalReviewException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            throw new AccessLocalReviewException(
+                "AccessReviewFailed",
+                "local bundle composition failed without exposing operator-local details.");
+        }
+    }
+
+    private static async Task<AccessLocalReviewBundleResult> CreateCoreAsync(
+        AccessLocalReviewBundleOptions options,
+        CancellationToken cancellationToken)
+    {
         if (string.IsNullOrWhiteSpace(options.ScanOutputPath))
         {
-            throw new ArgumentException("access-review create requires --scan-output <access-scan-directory>.");
+            throw new AccessLocalReviewException(
+                "AccessReviewInputRequired",
+                "access-review create requires --scan-output <access-scan-directory>.");
         }
 
         if (string.IsNullOrWhiteSpace(options.OutputPath))
         {
-            throw new ArgumentException("access-review create requires --out <bundle-directory>.");
+            throw new AccessLocalReviewException(
+                "AccessReviewOutputRequired",
+                "access-review create requires --out <bundle-directory>.");
         }
 
         var inputDirectory = NormalizeDirectory(options.ScanOutputPath);
         var outputDirectory = NormalizeDirectory(options.OutputPath);
         if (!Directory.Exists(inputDirectory))
         {
-            throw new DirectoryNotFoundException("AccessReviewInputUnavailable: scan output directory was not found.");
+            throw new AccessLocalReviewException(
+                "AccessReviewInputUnavailable",
+                "scan output directory was not found.");
         }
 
+        RejectExistingReparsePath(inputDirectory, "AccessReviewInputInvalid");
+        RejectExistingReparsePath(outputDirectory, "AccessReviewOutputInvalid");
         ValidateNoOverlap(inputDirectory, outputDirectory);
         ValidateRequiredArtifacts(inputDirectory);
+        await ValidateScanConsistencyAsync(inputDirectory, cancellationToken);
         ValidateExistingOutput(outputDirectory, options.Force);
 
         var outputParent = Path.GetDirectoryName(outputDirectory)
-            ?? throw new InvalidOperationException("AccessReviewOutputInvalid: output directory requires a parent.");
+            ?? throw new AccessLocalReviewException(
+                "AccessReviewOutputInvalid",
+                "output directory requires a parent.");
         Directory.CreateDirectory(outputParent);
         var stagingDirectory = Path.Combine(
             outputParent,
@@ -107,6 +160,7 @@ public static class AccessLocalReviewBundle
             outputParent,
             $".{Path.GetFileName(outputDirectory)}.access-review-backup-{Guid.NewGuid():N}");
 
+        var publicationSucceeded = false;
         try
         {
             Directory.CreateDirectory(stagingDirectory);
@@ -121,8 +175,9 @@ public static class AccessLocalReviewBundle
             if (releaseReview.Report.AccessEvidence.Status is not ReleaseReviewStatuses.Available
                 and not ReleaseReviewStatuses.Truncated)
             {
-                throw new InvalidOperationException(
-                    "AccessEvidenceUnavailable: compatible Microsoft Access evidence was not found in the scan index.");
+                throw new AccessLocalReviewException(
+                    "AccessEvidenceUnavailable",
+                    "compatible Microsoft Access evidence was not found in the scan index.");
             }
 
             var explorer = await StaticHtmlEvidenceExplorer.GenerateAsync(
@@ -149,17 +204,21 @@ public static class AccessLocalReviewBundle
                 cancellationToken);
             EnsureGeneratedTextIsSafe(stagingDirectory, inputDirectory, outputDirectory);
 
-            Publish(stagingDirectory, outputDirectory, backupDirectory);
-            var writtenFiles = Directory.EnumerateFiles(outputDirectory, "*", SearchOption.AllDirectories)
-                .Select(path => Path.GetRelativePath(outputDirectory, path).Replace('\\', '/'))
+            var writtenFiles = Directory.EnumerateFiles(stagingDirectory, "*", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(stagingDirectory, path).Replace('\\', '/'))
                 .OrderBy(path => path, StringComparer.Ordinal)
                 .ToArray();
+            Publish(stagingDirectory, outputDirectory, backupDirectory);
+            publicationSucceeded = true;
             return new AccessLocalReviewBundleResult(manifest, writtenFiles);
         }
         finally
         {
             DeleteDirectoryIfPresent(stagingDirectory);
-            TryDeleteDirectoryIfPresent(backupDirectory);
+            if (publicationSucceeded)
+            {
+                TryDeleteDirectoryIfPresent(backupDirectory);
+            }
         }
     }
 
@@ -222,6 +281,180 @@ public static class AccessLocalReviewBundle
         return builder.ToString().ReplaceLineEndings("\n");
     }
 
+    private static async Task ValidateScanConsistencyAsync(
+        string inputDirectory,
+        CancellationToken cancellationToken)
+    {
+        var manifestPath = Path.Combine(inputDirectory, "scan-manifest.json");
+        ScanManifest fileManifest;
+        try
+        {
+            await using var manifestStream = File.OpenRead(manifestPath);
+            fileManifest = await JsonSerializer.DeserializeAsync<ScanManifest>(
+                    manifestStream,
+                    JsonOptions,
+                    cancellationToken)
+                ?? throw new JsonException();
+        }
+        catch (JsonException)
+        {
+            throw new AccessLocalReviewException(
+                "AccessReviewInputInvalid",
+                "scan manifest is not valid TraceMap JSON.");
+        }
+
+        var factIds = new HashSet<string>(StringComparer.Ordinal);
+        var factsPath = Path.Combine(inputDirectory, "facts.ndjson");
+        try
+        {
+            await foreach (var line in File.ReadLinesAsync(factsPath, cancellationToken))
+            {
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                var fact = JsonSerializer.Deserialize<CodeFact>(line, JsonOptions)
+                    ?? throw new JsonException();
+                if (!SameScanIdentity(fileManifest, fact.ScanId, fact.Repo, fact.CommitSha)
+                    || string.IsNullOrWhiteSpace(fact.FactId)
+                    || !factIds.Add(fact.FactId))
+                {
+                    throw new AccessLocalReviewException(
+                        "AccessReviewInputMismatch",
+                        "facts do not belong to one unique manifest scan.");
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            throw new AccessLocalReviewException(
+                "AccessReviewInputInvalid",
+                "facts artifact is not valid TraceMap NDJSON.");
+        }
+
+        var indexPath = Path.Combine(inputDirectory, "index.sqlite");
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = indexPath,
+            Mode = SqliteOpenMode.ReadOnly
+        }.ToString();
+        await using var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        await using (var manifestCommand = connection.CreateCommand())
+        {
+            manifestCommand.CommandText = """
+                select scan_id, repo, commit_sha, manifest_json
+                from scan_manifest
+                order by scan_id;
+                """;
+            await using var reader = await manifestCommand.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken)
+                || !SameScanIdentity(
+                    fileManifest,
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetString(2))
+                || !IndexManifestMatches(fileManifest, reader.GetString(3))
+                || await reader.ReadAsync(cancellationToken))
+            {
+                throw new AccessLocalReviewException(
+                    "AccessReviewInputMismatch",
+                    "index manifest does not match the scan manifest.");
+            }
+        }
+
+        var indexedFactIds = new List<string>();
+        await using (var factsCommand = connection.CreateCommand())
+        {
+            factsCommand.CommandText = """
+                select fact_id, scan_id, repo, commit_sha
+                from facts
+                order by fact_id;
+                """;
+            await using var reader = await factsCommand.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                if (!SameScanIdentity(
+                        fileManifest,
+                        reader.GetString(1),
+                        reader.GetString(2),
+                        reader.GetString(3)))
+                {
+                    throw new AccessLocalReviewException(
+                        "AccessReviewInputMismatch",
+                        "indexed facts do not match the scan manifest.");
+                }
+
+                indexedFactIds.Add(reader.GetString(0));
+            }
+        }
+
+        var artifactFactIds = factIds.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        if (!artifactFactIds.SequenceEqual(indexedFactIds, StringComparer.Ordinal))
+        {
+            throw new AccessLocalReviewException(
+                "AccessReviewInputMismatch",
+                "index facts do not match the NDJSON fact inventory.");
+        }
+    }
+
+    private static bool SameScanIdentity(
+        ScanManifest manifest,
+        string scanId,
+        string repository,
+        string commitSha) =>
+        string.Equals(manifest.ScanId, scanId, StringComparison.Ordinal)
+        && string.Equals(manifest.RepoName, repository, StringComparison.Ordinal)
+        && string.Equals(manifest.CommitSha, commitSha, StringComparison.Ordinal);
+
+    private static bool IndexManifestMatches(ScanManifest expected, string manifestJson)
+    {
+        try
+        {
+            var actual = JsonSerializer.Deserialize<ScanManifest>(manifestJson, JsonOptions);
+            return actual is not null
+                && SameScanIdentity(expected, actual.ScanId, actual.RepoName, actual.CommitSha)
+                && string.Equals(expected.ScannerVersion, actual.ScannerVersion, StringComparison.Ordinal)
+                && expected.ScannedAt.Equals(actual.ScannedAt);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static void RejectExistingReparsePath(string path, string code)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            if ((File.Exists(path) || Directory.Exists(path))
+                && (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new AccessLocalReviewException(code, "path cannot be a reparse point.");
+            }
+
+            return;
+        }
+
+        var root = Path.GetPathRoot(path)
+            ?? throw new AccessLocalReviewException(code, "path root is unavailable.");
+        var current = root;
+        var relative = Path.GetRelativePath(root, path);
+        foreach (var segment in relative.Split(
+                     [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                     StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, segment);
+            if ((File.Exists(current) || Directory.Exists(current))
+                && (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new AccessLocalReviewException(code, "path ancestors cannot be reparse points.");
+            }
+        }
+    }
+
     private static void ValidateRequiredArtifacts(string inputDirectory)
     {
         foreach (var relativePath in RequiredArtifacts)
@@ -229,14 +462,17 @@ public static class AccessLocalReviewBundle
             var path = Path.Combine(inputDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar));
             if (!File.Exists(path))
             {
-                throw new InvalidOperationException(
-                    $"AccessReviewInputIncomplete: required generated artifact is missing: {relativePath}.");
+                throw new AccessLocalReviewException(
+                    "AccessReviewInputIncomplete",
+                    $"required generated artifact is missing: {relativePath}.");
             }
 
+            RejectExistingReparsePath(path, "AccessReviewInputInvalid");
             if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
             {
-                throw new InvalidOperationException(
-                    $"AccessReviewInputInvalid: generated artifact cannot be a reparse point: {relativePath}.");
+                throw new AccessLocalReviewException(
+                    "AccessReviewInputInvalid",
+                    $"generated artifact cannot be a reparse point: {relativePath}.");
             }
         }
     }
@@ -245,7 +481,9 @@ public static class AccessLocalReviewBundle
     {
         if (File.Exists(outputDirectory))
         {
-            throw new InvalidOperationException("AccessReviewOutputCollision: output path is an existing file.");
+            throw new AccessLocalReviewException(
+                "AccessReviewOutputCollision",
+                "output path is an existing file.");
         }
 
         if (!Directory.Exists(outputDirectory))
@@ -255,19 +493,23 @@ public static class AccessLocalReviewBundle
 
         if ((File.GetAttributes(outputDirectory) & FileAttributes.ReparsePoint) != 0)
         {
-            throw new InvalidOperationException("AccessReviewOutputCollision: output directory cannot be a reparse point.");
+            throw new AccessLocalReviewException(
+                "AccessReviewOutputCollision",
+                "output directory cannot be a reparse point.");
         }
 
         if (!force)
         {
-            throw new InvalidOperationException(
-                "AccessReviewOutputExists: use --force only for an existing TraceMap-generated Access review bundle.");
+            throw new AccessLocalReviewException(
+                "AccessReviewOutputExists",
+                "use --force only for an existing TraceMap-generated Access review bundle.");
         }
 
         if (!IsRecognizedGeneratedBundle(outputDirectory))
         {
-            throw new InvalidOperationException(
-                "AccessReviewOutputCollision: refusing to replace an unrecognized caller-owned directory.");
+            throw new AccessLocalReviewException(
+                "AccessReviewOutputCollision",
+                "refusing to replace an unrecognized caller-owned directory.");
         }
     }
 
@@ -276,8 +518,9 @@ public static class AccessLocalReviewBundle
         if (IsEqualOrDescendant(inputDirectory, outputDirectory)
             || IsEqualOrDescendant(outputDirectory, inputDirectory))
         {
-            throw new InvalidOperationException(
-                "AccessReviewPathOverlap: scan input and bundle output must not overlap.");
+            throw new AccessLocalReviewException(
+                "AccessReviewPathOverlap",
+                "scan input and bundle output must not overlap.");
         }
     }
 
@@ -325,22 +568,16 @@ public static class AccessLocalReviewBundle
         string inputDirectory,
         string outputDirectory)
     {
-        var prohibited = new[]
-        {
-            inputDirectory,
-            outputDirectory,
-            "/Users/",
-            "/home/",
-            "/private/",
-            "\\Users\\"
-        };
         foreach (var path in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
         {
             var content = File.ReadAllText(path);
-            if (prohibited.Any(value => content.Contains(value, StringComparison.OrdinalIgnoreCase)))
+            if (content.Contains(inputDirectory, StringComparison.OrdinalIgnoreCase)
+                || content.Contains(outputDirectory, StringComparison.OrdinalIgnoreCase)
+                || MachineLocalPathPattern.IsMatch(content))
             {
-                throw new InvalidOperationException(
-                    "AccessReviewUnsafeOutput: generated bundle contains a prohibited local path.");
+                throw new AccessLocalReviewException(
+                    "AccessReviewUnsafeOutput",
+                    "generated bundle contains a prohibited local path.");
             }
         }
     }
@@ -421,10 +658,11 @@ public static class AccessLocalReviewBundle
         return segments.All(segment => segment.Length > 0 && segment is not "." and not "..");
     }
 
-    private static void Publish(
+    internal static void Publish(
         string stagingDirectory,
         string outputDirectory,
-        string backupDirectory)
+        string backupDirectory,
+        Action? afterBackupMoved = null)
     {
         var existing = Directory.Exists(outputDirectory);
         if (existing)
@@ -434,11 +672,15 @@ public static class AccessLocalReviewBundle
 
         try
         {
+            afterBackupMoved?.Invoke();
             Directory.Move(stagingDirectory, outputDirectory);
         }
         catch
         {
-            if (existing && !Directory.Exists(outputDirectory) && Directory.Exists(backupDirectory))
+            if (existing
+                && !Directory.Exists(outputDirectory)
+                && !File.Exists(outputDirectory)
+                && Directory.Exists(backupDirectory))
             {
                 Directory.Move(backupDirectory, outputDirectory);
             }

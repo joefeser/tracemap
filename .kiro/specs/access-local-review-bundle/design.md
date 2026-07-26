@@ -50,10 +50,13 @@ does not claim that a change occurred or did not occur.
 ## Input gate
 
 Input validation requires regular readable standard artifacts, a readable
-SQLite index, and at least one compatible Access fact. The implementation uses
-the existing Access composition read hook rather than adding another fact
-reader. If Access evidence is absent or incompatible, the command fails with a
-categorical message before publishing output.
+SQLite index, and at least one compatible Access fact. Before composition, the
+command proves that the file manifest, every NDJSON fact, the SQLite manifest,
+and every indexed fact share one scan/repository/commit identity and that the
+NDJSON and index contain the same fact-ID inventory. The implementation uses
+the existing Access composition read hook rather than adding another Access
+fact projector. If artifacts disagree or Access evidence is absent, the command
+fails with a categorical message before publishing output.
 
 ## Publication
 
@@ -61,6 +64,13 @@ All files are written under a randomly named sibling staging directory. A new
 destination is created by directory move. `--force` may replace only a
 directory whose `access-review-manifest.json` proves the expected schema and
 `tracemapGenerated: true`; unrecognized destinations fail closed.
+Existing Windows path segments are rejected when any segment is a reparse
+point, preventing a junctioned parent from bypassing the overlap and ownership
+guards.
+
+If forced publication fails after moving the prior bundle aside, the prior
+bundle is restored when the destination remains free. If another process
+recreates the destination, the intact backup is retained rather than deleted.
 
 The manifest does not hash itself. Relative paths use `/` separators and ordinal
 ordering. JSON and Markdown use normalized deterministic formatting.
@@ -73,6 +83,11 @@ fixed text, and content hashes. Existing release-review and explorer safety
 paths remain authoritative for evidence rendering, including the required
 repository-relative database evidence span and rejection of machine-local
 absolute paths.
+
+Unexpected I/O and parser failures are converted to categorical diagnostics;
+framework exception text is not exposed by the command. Rooted machine-local
+path patterns are denied without treating ordinary repository-relative
+segments such as `databases/private/` or `src/home/` as absolute paths.
 
 The implementation adds no Windows-only dependency and changes no Access
 adapter, COM, fixture-generation, worker, or projector code.
