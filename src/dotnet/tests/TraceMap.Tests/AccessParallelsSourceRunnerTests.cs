@@ -29,6 +29,10 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("Invoke-AccessSmoke.ps1", guest, StringComparison.Ordinal);
         Assert.Contains("phase9ConsumerContracts", guest, StringComparison.Ordinal);
         Assert.Contains("localReviewBundleContractCorrect", guest, StringComparison.Ordinal);
+        Assert.Contains("TraceMap.Tests.AccessFoundationTests", guest, StringComparison.Ordinal);
+        Assert.Contains("TraceMap.Tests.AccessLocalReviewBundleTests", guest, StringComparison.Ordinal);
+        Assert.Contains("FullyQualifiedName~$testClass", guest, StringComparison.Ordinal);
+        Assert.DoesNotContain("--filter \"Access\"", guest, StringComparison.Ordinal);
         Assert.DoesNotContain("Invoke-AccessRepresentativeSmoke.ps1", guest, StringComparison.Ordinal);
 
         foreach (var source in new[] { host, guest })
