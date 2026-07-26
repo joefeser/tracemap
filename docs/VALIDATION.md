@@ -245,6 +245,27 @@ captions, expressions, local paths, and infrastructure identities must remain
 absent. These read-side composition changes do not require a new Windows probe
 when Access COM, the product reader, and fixture generation are unchanged.
 
+For Access local-review bundle changes, also run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter AccessLocalReviewBundleTests
+```
+
+Verify `access-review create` produces the Access-only release review,
+`hidden-local` explorer, deterministic `access-review-manifest.json`, and
+relative-link README. Repeat to two output directories and compare every file.
+Verify manifest hashes, explicit count-only UI/VBA/macro gaps, protected-value
+suppression, overlap rejection, non-Access rejection, and guarded `--force`.
+
+When the isolated Windows + Access VM is available, run the synthetic smoke
+with `-ReviewBundlePath <new-durable-local-review-directory>` outside the
+disposable smoke root. The harness must validate the bundle, include it in the
+protected-marker scan, preserve false canaries and the original hash, and leave
+the extraction boundary unchanged. A representative run additionally requires
+`-InputExplicitlyAuthorized`; see
+`docs/ACCESS_LOCAL_REVIEW_BUNDLE.md`.
+
 The repository CI runs the existing .NET, TypeScript, Python, JVM, and Swift
 test suites, validates one real output per adapter, and combines all five
 indexes. Local environments with only Apple Command Line Tools may build and
