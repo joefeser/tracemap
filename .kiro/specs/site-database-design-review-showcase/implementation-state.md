@@ -44,8 +44,12 @@ synthetic allowlisted projection, not raw command output.
 - ACK's second exact-head run authorized four current review fixes: public
   repository provenance, malformed-object validator handling, case-insensitive
   protected-field rejection, and a producible query rule/tier projection. Those
-  fixes and focused regressions are complete; final ACK is pending on the new
-  exact head.
+  fixes and focused regressions are complete.
+- Final exact head: `651cfa9660c8da3bb14b18bb9dc11890377b9620`.
+- Final ACK: `merge_ready / NONE / merge_ready`, with clean checks, zero
+  unresolved threads, and zero actionable findings.
+- PR #538 merged into `dev` as merge commit
+  `580e0c876477c4d0d0f850c1e345c5346f6da59e`.
 
 ## Deferred
 

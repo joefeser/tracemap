@@ -247,7 +247,10 @@ function validatePacket(packet, mode, commitSha, errors) {
     errors.push(`Database design review ${mode} packet must retain substantive limitations.`);
   }
   for (const source of asArray(packet.sources)) {
-    if (!requireExactFields(source, new Set(["sourceLabel", "commitSha", "language", "analysisLevel", "buildStatus", "identityVerified", "coverageWarnings"]), `${mode} source`, errors)) continue;
+    if (!requireExactFields(source, new Set(["sourceLabel", "repositoryId", "commitSha", "language", "analysisLevel", "buildStatus", "identityVerified", "coverageWarnings"]), `${mode} source`, errors)) continue;
+    if (!/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/i.test(source.repositoryId ?? "")) {
+      errors.push(`${mode} source repositoryId must be a bounded public repository identifier`);
+    }
     if (source.commitSha !== commitSha) errors.push(`Database design review ${mode} source commit does not match projection provenance.`);
     if (source.identityVerified !== false || !source.coverageWarnings?.includes("source-identity-synthetic")) {
       errors.push(`Database design review ${mode} public source must retain its synthetic identity boundary.`);

@@ -72,6 +72,11 @@ public sealed class DatabaseDesignReviewTests
         var first = await DatabaseDesignReviewReporter.WriteAsync(new DatabaseDesignReviewOptions(combined, firstOutput));
         var second = await DatabaseDesignReviewReporter.WriteAsync(new DatabaseDesignReviewOptions(combined, secondOutput));
 
+        Assert.All(first.Report.Sources, source =>
+        {
+            Assert.Equal(manifest.RepoName, source.RepositoryId);
+            Assert.Equal(manifest.CommitSha, source.CommitSha);
+        });
         var table = Assert.Single(first.Report.Tables);
         Assert.Equal("public", table.SchemaName);
         Assert.Equal("orders", table.TableName);
@@ -142,6 +147,8 @@ public sealed class DatabaseDesignReviewTests
         Assert.DoesNotContain("select *", firstJson, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(temp.Path, firstJson, StringComparison.Ordinal);
         Assert.DoesNotContain(temp.Path, firstMarkdown, StringComparison.Ordinal);
+        Assert.Contains("| Source | Repository | Commit |", firstMarkdown, StringComparison.Ordinal);
+        Assert.Contains(manifest.RepoName, firstMarkdown, StringComparison.Ordinal);
         Assert.Contains("does not prove", firstMarkdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("is safe to run", firstMarkdown, StringComparison.OrdinalIgnoreCase);
 

@@ -36,6 +36,7 @@ public sealed record DatabaseDesignReviewDocument(
 
 public sealed record DatabaseDesignSource(
     string SourceLabel,
+    string RepositoryId,
     string CommitSha,
     string Language,
     string AnalysisLevel,
@@ -625,6 +626,7 @@ public static class DatabaseDesignReviewReporter
             .ThenBy(source => source.SourceIndexId, StringComparer.Ordinal)
             .Select(source => new DatabaseDesignSource(
                 SafeLabel(source.Label),
+                SafeToken(source.RepoName, "unknown-repository"),
                 SafeCommit(source.CommitSha),
                 SafeToken(source.Language, "unknown"),
                 SafeToken(source.AnalysisLevel, "unknown"),
@@ -1796,10 +1798,10 @@ public static class DatabaseDesignReviewReporter
         builder.AppendLine();
         builder.AppendLine("## Sources");
         builder.AppendLine();
-        builder.AppendLine("| Source | Commit | Analysis | Build | Identity |");
-        builder.AppendLine("|---|---|---|---|---|");
+        builder.AppendLine("| Source | Repository | Commit | Analysis | Build | Identity |");
+        builder.AppendLine("|---|---|---|---|---|---|");
         foreach (var source in report.Sources)
-            builder.AppendLine($"| {Md(source.SourceLabel)} | `{Md(source.CommitSha)}` | `{Md(source.AnalysisLevel)}` | `{Md(source.BuildStatus)}` | `{(source.IdentityVerified ? "verified" : "unverified")}` |");
+            builder.AppendLine($"| {Md(source.SourceLabel)} | `{Md(source.RepositoryId)}` | `{Md(source.CommitSha)}` | `{Md(source.AnalysisLevel)}` | `{Md(source.BuildStatus)}` | `{(source.IdentityVerified ? "verified" : "unverified")}` |");
 
         builder.AppendLine();
         builder.AppendLine("## Table design");

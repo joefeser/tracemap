@@ -23,7 +23,8 @@ public sealed record SemanticExtractionResult(
     IReadOnlyList<SemanticFactCandidate> Facts,
     IReadOnlyList<SemanticFactCandidate> GapFacts,
     bool Attempted,
-    bool ReducedCoverage);
+    bool ReducedCoverage,
+    IReadOnlySet<string>? AnalyzedFiles = null);
 
 public static class CSharpSemanticExtractor
 {
@@ -132,6 +133,7 @@ public static class CSharpSemanticExtractor
         options ??= new ScanOptions(repoPath, ".");
         var facts = new List<SemanticFactCandidate>();
         var gaps = new List<SemanticFactCandidate>();
+        var analyzedFiles = new HashSet<string>(StringComparer.Ordinal);
         var projects = inventory.Where(item => item.Kind == "Project").OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
         var solutions = inventory.Where(item => item.Kind == "Solution").OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
         var csharpFiles = inventory.Where(item => FileInventory.IsCSharpKind(item.Kind)).ToArray();
@@ -142,17 +144,17 @@ public static class CSharpSemanticExtractor
                 ".",
                 "No C# project or solution was found; semantic analysis is unavailable for inventoried C# files.",
                 "NoProjectOrSolution"));
-            return new SemanticExtractionResult(facts, gaps, Attempted: false, ReducedCoverage: true);
+            return new SemanticExtractionResult(facts, gaps, Attempted: false, ReducedCoverage: true, AnalyzedFiles: analyzedFiles);
         }
 
         if (projects.Length == 0)
         {
-            return new SemanticExtractionResult(facts, gaps, Attempted: false, ReducedCoverage: false);
+            return new SemanticExtractionResult(facts, gaps, Attempted: false, ReducedCoverage: false, AnalyzedFiles: analyzedFiles);
         }
 
         if (!TryRegisterMsBuild(gaps))
         {
-            return new SemanticExtractionResult(facts, gaps, Attempted: true, ReducedCoverage: true);
+            return new SemanticExtractionResult(facts, gaps, Attempted: true, ReducedCoverage: true, AnalyzedFiles: analyzedFiles);
         }
 
         RunRestoreIfRequested(repoPath, projects, solutions, options, gaps);
@@ -186,7 +188,7 @@ public static class CSharpSemanticExtractor
                 try
                 {
                     var solution = workspace.OpenSolutionAsync(solutionPath).GetAwaiter().GetResult();
-                    ExtractSolution(repoPath, solution, facts, gaps, loadedProjectPaths);
+                    ExtractSolution(repoPath, solution, facts, gaps, loadedProjectPaths, analyzedFiles);
                 }
                 catch (Exception ex) when (IsWorkspaceException(ex))
                 {
@@ -206,7 +208,7 @@ public static class CSharpSemanticExtractor
             try
             {
                 var project = workspace.OpenProjectAsync(projectPath).GetAwaiter().GetResult();
-                ExtractProject(repoPath, project, facts, gaps);
+                ExtractProject(repoPath, project, facts, gaps, analyzedFiles);
                 loadedProjectPaths.Add(projectItem.RelativePath);
             }
             catch (Exception ex) when (IsWorkspaceException(ex))
@@ -222,7 +224,8 @@ public static class CSharpSemanticExtractor
             facts,
             gaps,
             Attempted: attempted,
-            ReducedCoverage: gaps.Count > 0);
+            ReducedCoverage: gaps.Count > 0,
+            AnalyzedFiles: analyzedFiles);
     }
 
     public static IReadOnlyList<CodeFact> MaterializeFacts(ScanManifest manifest, IEnumerable<SemanticFactCandidate> candidates)
@@ -354,11 +357,12 @@ public static class CSharpSemanticExtractor
         Solution solution,
         List<SemanticFactCandidate> facts,
         List<SemanticFactCandidate> gaps,
-        HashSet<string> loadedProjectPaths)
+        HashSet<string> loadedProjectPaths,
+        HashSet<string> analyzedFiles)
     {
         foreach (var project in solution.Projects.OrderBy(project => ToRelativePath(repoPath, project.FilePath), StringComparer.Ordinal))
         {
-            ExtractProject(repoPath, project, facts, gaps);
+            ExtractProject(repoPath, project, facts, gaps, analyzedFiles);
             if (!string.IsNullOrWhiteSpace(project.FilePath))
             {
                 loadedProjectPaths.Add(ToRelativePath(repoPath, project.FilePath));
@@ -370,7 +374,8 @@ public static class CSharpSemanticExtractor
         string repoPath,
         Project project,
         List<SemanticFactCandidate> facts,
-        List<SemanticFactCandidate> gaps)
+        List<SemanticFactCandidate> gaps,
+        HashSet<string> analyzedFiles)
     {
         var projectPath = ToRelativePath(repoPath, project.FilePath);
         Compilation? compilation;
@@ -398,7 +403,7 @@ public static class CSharpSemanticExtractor
 
         foreach (var document in project.Documents.OrderBy(document => ToRelativePath(repoPath, document.FilePath), StringComparer.Ordinal))
         {
-            ExtractDocument(repoPath, projectPath, document, compilation, facts, gaps);
+            ExtractDocument(repoPath, projectPath, document, compilation, facts, gaps, analyzedFiles);
         }
     }
 
@@ -408,7 +413,8 @@ public static class CSharpSemanticExtractor
         Document document,
         Compilation compilation,
         List<SemanticFactCandidate> facts,
-        List<SemanticFactCandidate> gaps)
+        List<SemanticFactCandidate> gaps,
+        HashSet<string> analyzedFiles)
     {
         if (!document.SupportsSyntaxTree || IsGeneratedSource(document.FilePath))
         {
@@ -436,6 +442,7 @@ public static class CSharpSemanticExtractor
         }
 
         var model = compilation.GetSemanticModel(tree, ignoreAccessibility: true);
+        analyzedFiles.Add(filePath);
         AddTypeDeclarationFacts(projectPath, filePath, root, model, facts);
         AddSymbolRelationshipFacts(projectPath, filePath, root, model, facts);
         AddFieldDeclarationFacts(projectPath, filePath, root, model, facts);
@@ -3466,8 +3473,17 @@ public static class CSharpSemanticExtractor
             return method.TypeArguments[0];
         }
 
-        foreach (var argument in invocation.ArgumentList.Arguments)
+        for (var index = 0; index < invocation.ArgumentList.Arguments.Count; index++)
         {
+            var argument = invocation.ArgumentList.Arguments[index];
+            var boundParameter = (model.GetOperation(argument) as Microsoft.CodeAnalysis.Operations.IArgumentOperation)?.Parameter;
+            var positionalParameter = argument.NameColon is null && index < method.Parameters.Length
+                ? method.Parameters[index]
+                : null;
+            var parameter = boundParameter ?? positionalParameter;
+            if (!IsEntityOperationParameter(parameter))
+                continue;
+
             var argumentType = model.GetTypeInfo(argument.Expression).Type;
             if (argumentType is IArrayTypeSymbol array)
             {
@@ -3488,6 +3504,11 @@ public static class CSharpSemanticExtractor
 
         return null;
     }
+
+    private static bool IsEntityOperationParameter(IParameterSymbol? parameter) =>
+        parameter is not null
+        && (parameter.Name.Equals("entity", StringComparison.OrdinalIgnoreCase)
+            || parameter.Name.Equals("entities", StringComparison.OrdinalIgnoreCase));
 
     private static bool TryGetDatabaseOperationSql(
         InvocationExpressionSyntax invocation,
@@ -3616,21 +3637,15 @@ public static class CSharpSemanticExtractor
         out string methodName)
     {
         methodName = GetInvocationMemberName(invocation.Expression) ?? string.Empty;
-        return methodName is "SaveChanges"
-            or "SaveChangesAsync"
-            or "ExecuteSqlRaw"
-            or "ExecuteSqlRawAsync"
-            or "ExecuteSqlInterpolated"
-            or "ExecuteSqlInterpolatedAsync"
-            or "FromSqlRaw"
-            or "FromSql"
-            or "FromSqlInterpolated"
-            or "BeginTransaction"
-            or "BeginTransactionAsync"
-            or "CommitTransaction"
-            or "CommitTransactionAsync"
-            or "RollbackTransaction"
-            or "RollbackTransactionAsync";
+        return EfOperationKinds.ContainsKey(methodName)
+            || DapperMethods.Contains(methodName)
+            || methodName is "SqlQueryRaw"
+                or "ExecuteReader"
+                or "ExecuteReaderAsync"
+                or "ExecuteScalar"
+                or "ExecuteScalarAsync"
+                or "ExecuteNonQuery"
+                or "ExecuteNonQueryAsync";
     }
 
     private static SemanticFactCandidate CreateDatabaseOperationGap(
