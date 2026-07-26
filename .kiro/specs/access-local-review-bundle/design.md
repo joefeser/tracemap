@@ -64,9 +64,10 @@ All files are written under a randomly named sibling staging directory. A new
 destination is created by directory move. `--force` may replace only a
 directory whose `access-review-manifest.json` proves the expected schema and
 `tracemapGenerated: true`; unrecognized destinations fail closed.
-Existing Windows path segments are rejected when any segment is a reparse
-point, preventing a junctioned parent from bypassing the overlap and ownership
-guards.
+Existing symlink, junction, and reparse-point ancestors are resolved on every
+platform before overlap and ownership checks. The selected input or output
+itself cannot be a reparse point. This prevents an aliased parent from bypassing
+the guards while allowing ordinary platform aliases such as macOS `/var`.
 
 If forced publication fails after moving the prior bundle aside, the prior
 bundle is restored when the destination remains free. If another process
