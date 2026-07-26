@@ -77,7 +77,8 @@ The patch:
 
 - verifies manifest, NDJSON, and SQLite scan identity plus exact fact-ID
   inventory before composing either consumer;
-- walks existing Windows path segments and rejects junction/reparse ancestors;
+- resolves existing symlink/junction/reparse ancestors on every platform before
+  overlap checks while rejecting a selected path that is itself a reparse point;
 - preserves or restores the previous generated bundle on publication failure,
   retaining the backup when a concurrent collision prevents restoration;
 - distinguishes rooted machine-local paths from valid repository-relative
@@ -90,9 +91,11 @@ The patch:
 Post-patch validation:
 
 - focused Access bundle, macro-reporting, and explorer tests: 40/40 passed;
+- focused Access bundle tests after cross-platform ancestor resolution:
+  10/10 passed;
 - both PowerShell harnesses passed syntax parsing;
 - solution build: passed with the unchanged SQLite package advisories;
-- full solution tests: 916/916 passed;
+- full solution tests after the final review fix: 917/917 passed;
 - private-path guard: passed;
 - `git diff --check`: passed.
 

@@ -141,8 +141,8 @@ public static class AccessLocalReviewBundle
                 "scan output directory was not found.");
         }
 
-        RejectExistingReparsePath(inputDirectory, "AccessReviewInputInvalid");
-        RejectExistingReparsePath(outputDirectory, "AccessReviewOutputInvalid");
+        inputDirectory = ResolveExistingPathAncestors(inputDirectory, "AccessReviewInputInvalid");
+        outputDirectory = ResolveExistingPathAncestors(outputDirectory, "AccessReviewOutputInvalid");
         ValidateNoOverlap(inputDirectory, outputDirectory);
         ValidateRequiredArtifacts(inputDirectory);
         await ValidateScanConsistencyAsync(inputDirectory, cancellationToken);
@@ -425,34 +425,43 @@ public static class AccessLocalReviewBundle
         }
     }
 
-    private static void RejectExistingReparsePath(string path, string code)
+    private static string ResolveExistingPathAncestors(string path, string code)
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            if ((File.Exists(path) || Directory.Exists(path))
-                && (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-            {
-                throw new AccessLocalReviewException(code, "path cannot be a reparse point.");
-            }
-
-            return;
-        }
-
         var root = Path.GetPathRoot(path)
             ?? throw new AccessLocalReviewException(code, "path root is unavailable.");
         var current = root;
         var relative = Path.GetRelativePath(root, path);
-        foreach (var segment in relative.Split(
-                     [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
-                     StringSplitOptions.RemoveEmptyEntries))
+        var segments = relative.Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries);
+        for (var index = 0; index < segments.Length; index++)
         {
-            current = Path.Combine(current, segment);
-            if ((File.Exists(current) || Directory.Exists(current))
-                && (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+            current = Path.Combine(current, segments[index]);
+            FileSystemInfo? pathInfo = Directory.Exists(current)
+                ? new DirectoryInfo(current)
+                : File.Exists(current)
+                    ? new FileInfo(current)
+                    : null;
+            if (pathInfo is not null
+                && (pathInfo.LinkTarget is not null
+                    || (pathInfo.Attributes & FileAttributes.ReparsePoint) != 0))
             {
-                throw new AccessLocalReviewException(code, "path ancestors cannot be reparse points.");
+                if (index == segments.Length - 1)
+                {
+                    throw new AccessLocalReviewException(code, "the selected path cannot be a reparse point.");
+                }
+
+                var resolved = pathInfo.ResolveLinkTarget(returnFinalTarget: true);
+                if (resolved is null)
+                {
+                    throw new AccessLocalReviewException(code, "a path ancestor could not be resolved safely.");
+                }
+
+                current = ResolveExistingPathAncestors(Path.GetFullPath(resolved.FullName), code);
             }
         }
+
+        return Path.TrimEndingDirectorySeparator(current);
     }
 
     private static void ValidateRequiredArtifacts(string inputDirectory)
@@ -467,7 +476,7 @@ public static class AccessLocalReviewBundle
                     $"required generated artifact is missing: {relativePath}.");
             }
 
-            RejectExistingReparsePath(path, "AccessReviewInputInvalid");
+            _ = ResolveExistingPathAncestors(path, "AccessReviewInputInvalid");
             if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
             {
                 throw new AccessLocalReviewException(

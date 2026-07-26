@@ -271,6 +271,27 @@ public sealed class AccessLocalReviewBundleTests
         Assert.False(Directory.Exists(Path.Combine(temp.Path, "corrupt-bundle")));
     }
 
+    [Fact]
+    public async Task Symlinked_output_ancestor_cannot_bypass_scan_overlap()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var temp = new TempDirectory();
+        var scanOutput = await WriteCountOnlyAccessScanAsync(temp.Path);
+        var link = Path.Combine(temp.Path, "scan-link");
+        Directory.CreateSymbolicLink(link, scanOutput);
+        var redirectedOutput = Path.Combine(link, "bundle");
+
+        var exception = await Assert.ThrowsAsync<AccessLocalReviewException>(
+            () => AccessLocalReviewBundle.CreateAsync(new(scanOutput, redirectedOutput)));
+
+        Assert.Equal("AccessReviewPathOverlap", exception.Code);
+        Assert.False(Directory.Exists(Path.Combine(scanOutput, "bundle")));
+    }
+
     [Theory]
     [InlineData("databases/private/design.accdb")]
     [InlineData("src/home/schema.accdb")]
