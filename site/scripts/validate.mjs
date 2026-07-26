@@ -7,6 +7,7 @@ import { validateAdoptionPlaybookDist } from "./adoption-playbook.mjs";
 import { validateBuildReviewWorkflowStoryDist } from "./build-review-workflow-story.mjs";
 import { validateBlogProofPathSeriesDist } from "./blog-proof-path-series.mjs";
 import { validateChangeRiskLanguageGuideDist } from "./change-risk-language-guide.mjs";
+import { validateDatabaseDesignReviewShowcaseDist } from "./database-design-review-showcase.mjs";
 import {
   validateDiscoveryDist,
   validateDiscoveryNotInSitemap,
@@ -127,6 +128,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateDemoRunbookDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateDemoTroubleshootingDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateChangeRiskLanguageGuideDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateDatabaseDesignReviewShowcaseDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateEvidenceHandoffTemplateDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateEvidenceDecisionRecordDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateEvidenceGapRegisterDist({ baseUrl: normalizedBaseUrl, dist, errors });
