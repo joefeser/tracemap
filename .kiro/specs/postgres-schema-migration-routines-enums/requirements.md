@@ -23,4 +23,3 @@ evidence from checked-in SQL migrations.
    connection material, or raw SQL.
 7. Do not claim dialect validity, execution, reachability, live object state,
    permissions, transaction behavior, production use, or release safety.
-

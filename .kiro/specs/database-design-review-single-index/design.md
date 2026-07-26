@@ -28,4 +28,3 @@ and reduced build/analysis identity remain explicit packet gaps.
 The output schema and allowlists do not change. The adapter never renders
 arbitrary fact properties, raw SQL, source text, hashes, connection material,
 local paths, or private infrastructure identifiers.
-
