@@ -6,6 +6,6 @@
 - [x] Run the existing synthetic Access workflow from guest-local source.
 - [x] Implement host and guest source runners with categorical output.
 - [x] Add deterministic guard tests and documentation.
-- [ ] Refresh the guest clone and validate all runner operations at exact head.
-- [ ] Remove non-product scaffolding and validate the final diff.
+- [x] Refresh the guest clone and validate all runner operations at exact head.
+- [x] Remove non-product scaffolding and validate the final diff.
 - [ ] Commit, push, open a focused PR to `dev`, and run ACK.

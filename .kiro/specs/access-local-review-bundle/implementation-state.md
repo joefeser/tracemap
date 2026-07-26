@@ -37,11 +37,12 @@ count-only capability evidence before an in-person review.
 - `Windows 11` is running;
 - the previously validated `Windows 11 - Access Isolated` VM is present and
   was started for validation;
-- host-command execution remained unavailable by design in the isolated
-  Parallels VM;
-- because Codex was not installed inside that VM, the user explicitly moved
-  the synthetic run to the established Windows Phase 9.5 environment rather
-  than weakening Parallels isolation.
+- host-command execution had not yet been exercised in the isolated Parallels
+  VM, so the user explicitly moved the synthetic run to the established
+  Windows Phase 9.5 environment rather than weakening isolation;
+- later `access-parallels-source-runner` validation proved Parallels Tools
+  guest command execution works with networking still disabled and without
+  installing Codex inside the VM.
 
 ## Validation
 
