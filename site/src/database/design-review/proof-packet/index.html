@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A synthetic public-safe database design-review proof packet showing PostgreSQL design, EF mapping, operation, query, route, provenance, and gap evidence.">
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Database Design Review Proof Packet | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/database/design-review/proof-packet/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Database Design Review Proof Packet">
+    <meta property="og:description" content="Inspect a public-safe database design packet with single-index and combined-index evidence boundaries.">
+    <meta property="og:url" content="https://tracemap.tools/database/design-review/proof-packet/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home"><span class="brand-mark" aria-hidden="true">T</span><span>TraceMap</span></a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a><a href="/outputs/">Outputs</a><a href="/workflows/">Workflows</a><a href="/examples/">Examples</a><a href="/blog/">Blog</a><a href="/capabilities/">Capabilities</a><a href="/docs/">Docs</a><a href="/validation/">Validation</a><a href="/limitations/">Limitations</a><a href="/demo/">Demo</a><a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero" data-database-proof-section="hero">
+        <p class="eyebrow">Public-safe database design packet</p>
+        <h1>See the database review shape without publishing database material.</h1>
+        <p class="hero-subhead">This checked-in synthetic example shows how table declarations, EF mappings, operation candidates, query references, route context, provenance, caps, gaps, and limitations travel together.</p>
+        <p class="hero-note">Public claim level: demo. Derived from <code>database-design-review/1.0</code>. The rows are synthetic public-safe projections shaped like the shipped output—not raw command output or evidence about a live system.</p>
+        <nav class="hero-actions" aria-label="Database proof packet links"><a class="button primary" href="/assets/database-design-review-proof-packet.json">Inspect the JSON packet</a><a class="button secondary" href="/database/design-review/">Read the manager story</a><a class="button secondary" href="#single-index">Single-index boundary</a><a class="button secondary" href="#combined-index">Combined-index boundary</a></nav>
+      </section>
+
+      <section class="section split-section" data-database-proof-section="identity">
+        <div><p class="section-kicker">Packet identity</p><h2>One public projection, two supported input modes.</h2></div>
+        <div class="detail-list">
+          <div><strong>Contract</strong><span><code>database-design-review/1.0</code></span></div>
+          <div><strong>Composition rule</strong><span><code>database.design-review.packet.v1</code></span></div>
+          <div><strong>Gap rule</strong><span><code>database.design-review.gap.v1</code></span></div>
+          <div><strong>Claim level</strong><span><code>demo</code> for this public projection; nested packet claim level remains <code>static-evidence</code>.</span></div>
+          <div><strong>Coverage</strong><span><code>partial</code> because the example preserves source, mode, and composition gaps.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="single-index" data-database-proof-section="single">
+        <div class="section-header"><p class="section-kicker">Single index</p><h2>Design evidence is useful even when graph paths are unavailable.</h2><p>The single-index example retains PostgreSQL declarations, an EF table mapping, an application operation candidate, and a query reference. Its route-reference count is zero by contract.</p></div>
+        <div class="output-list">
+          <div><code>table declaration</code><span><strong>public.orders</strong> · <code>database.postgres.schema-migration.v1</code> · <code>Tier2Structural</code> · complete · repo-relative span · <code>postgres-schema-migration/0.5.0</code></span></div>
+          <div><code>EF mapping</code><span><strong>status</strong> · <code>database.ef.v1</code> · <code>Tier1Semantic</code> · complete · supporting fact ID retained · <code>csharp-semantic/0.14.0</code></span></div>
+          <div><code>application operation</code><span><strong>insert-candidate</strong> · <code>database.operation.call-pattern.v1</code> · <code>Tier1Semantic</code> · candidate only</span></div>
+          <div><code>query reference</code><span><strong>public.orders</strong> · <code>database.sql.shape.v1</code> · <code>Tier3SyntaxOrTextual</code> · exact static name match; query text and hash omitted</span></div>
+          <div><code>route coverage gap</code><span><strong>SingleIndexRoutePathUnavailable</strong> · <code>database.design-review.gap.v1</code> · <code>Tier4Unknown</code> · route-reference count <code>0</code></span></div>
+        </div>
+      </section>
+
+      <section class="section" id="combined-index" data-database-proof-section="combined">
+        <div class="section-header"><p class="section-kicker">Combined index</p><h2>Existing static graph evidence can add bounded route context.</h2><p>The combined-index example retains the same evidence families plus one synthetic route reference supported by packet, route, call, query, and operation rule IDs.</p></div>
+        <div class="output-list">
+          <div><code>route reference</code><span><strong>GET /orders/{id}</strong> · static path · exact table match · <code>database.design-review.packet.v1</code> · supporting fact and edge IDs retained</span></div>
+          <div><code>path boundary</code><span>Existing graph evidence only; no runtime reachability, request traffic, authorization, deployment, provider selection, or user exercise is established.</span></div>
+          <div><code>remaining gap</code><span><strong>SourceCoverageReduced</strong> · source parsing or build coverage remains partial and cannot be upgraded by composition.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" data-database-proof-section="provenance">
+        <div><p class="section-kicker">Evidence attachment</p><h2>Proof identity survives the public projection.</h2></div>
+        <div class="detail-list">
+          <div><strong>Rule and tier</strong><span>Each evidence or gap row carries its rule ID and evidence tier.</span></div>
+          <div><strong>Source identity</strong><span>Public source label, full public commit SHA, and repo-relative file spans remain visible.</span></div>
+          <div><strong>Extractor provenance</strong><span>Extractor IDs and versions remain attached where the shipped packet provides them.</span></div>
+          <div><strong>Supporting IDs</strong><span>Allowlisted synthetic fact, edge, and rule IDs preserve the shape of upstream support without publishing raw evidence.</span></div>
+          <div><strong>Caps</strong><span>Object, evidence, route-reference, and gap omitted counts remain explicit, even when they are zero.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" data-database-proof-section="limitations">
+        <div><p class="section-kicker">Public claim boundary</p><h2>The packet supports design review, not a database conclusion.</h2></div>
+        <ul>
+          <li>It does not inspect a live database or catalog, execute SQL, queries, migrations, functions, jobs, or application code, or prove that a migration was applied.</li>
+          <li>It does not prove runtime provider or connection selection, generated SQL, search-path behavior, branch feasibility, runtime reachability, traffic, authorization, deployment, or user exercise.</li>
+          <li>It does not establish current or production schema, data correctness, compatibility, effective permissions, rollback, operational success, release approval, DBA approval, or that anything is safe to run.</li>
+          <li>It contains no raw SQL, source snippets or snippet hashes, credentials, connection strings, scheduled command bodies, local paths, private infrastructure identities, raw command output, raw SQLite, or arbitrary fact properties.</li>
+          <li>The core scanner and reducer use no LLM calls, embeddings, vector databases, or prompt-based classification.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section" data-database-proof-section="links">
+        <div><p class="section-kicker">Keep the packet attached</p><h2>Carry the example with its gaps and non-claims.</h2></div>
+        <div class="link-grid"><a href="/assets/database-design-review-proof-packet.json">Public JSON packet</a><a href="/database/design-review/">Database design review</a><a href="/manager-packet/">Manager packet</a><a href="/proof-paths/for-managers/">Proof paths for managers</a><a href="/packets/examples/">Packet examples</a><a href="/outputs/">Output artifacts</a><a href="/capabilities/">Capabilities</a><a href="/limitations/">Limitations</a><a href="https://github.com/joefeser/tracemap/blob/dev/rules/rule-catalog.yml">Rule catalog</a></div>
+      </section>
+    </main>
+
+    <footer class="site-footer"><p>This synthetic packet keeps deterministic static evidence, gaps, caps, and approval boundaries together.</p><p class="copyright">© 2026 Joe Feser.</p></footer>
+  </body>
+</html>
