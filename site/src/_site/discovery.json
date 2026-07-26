@@ -1127,6 +1127,40 @@
     ]
   },
   {
+    "path": "/database/design-review/",
+    "title": "Database Design Review",
+    "summary": "Demo-level manager story composing bounded PostgreSQL design, EF mapping, application operation, query, and route evidence into one static review packet.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/database/design-review/proof-packet/",
+    "limitations": [
+      "The route explains an already-shipped deterministic static composition and adds no extraction, live catalog access, database connection, execution, or runtime probe.",
+      "Single-index inputs have no route graph; combined-index route references remain bounded static evidence and preserve gaps."
+    ],
+    "nonClaims": [
+      "No live database state, SQL or migration execution, applied-migration proof, runtime provider or connection selection, reachability, traffic, production schema, compatibility, rollback, release approval, DBA approval, or operational safety proof.",
+      "No raw SQL, source snippets or snippet hashes, credentials, connection strings, scheduled command bodies, local paths, private infrastructure identities, raw command output, raw SQLite, arbitrary fact properties, LLM analysis, embeddings, vector databases, or prompt-based classification."
+    ]
+  },
+  {
+    "path": "/database/design-review/proof-packet/",
+    "title": "Database Design Review Proof Packet",
+    "summary": "Demo-level synthetic public-safe projection of the database-design-review 1.0 contract for single-index and combined-index evidence boundaries.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/database/design-review/",
+    "limitations": [
+      "The route and JSON asset are synthetic allowlisted projections shaped like shipped output, not raw scanner output or evidence about a live system.",
+      "Rule IDs, tiers, coverage, repo-relative spans, public commit and extractor provenance, supporting IDs, caps, explicit gaps, and limitations remain visible."
+    ],
+    "nonClaims": [
+      "No live catalog or database state, execution, applied migration, runtime provider selection, reachability, production schema, data correctness, compatibility, rollback, release approval, DBA approval, or safe-to-run conclusion.",
+      "No raw SQL, source snippets or snippet hashes, credentials, connection strings, scheduled command bodies, local paths, private infrastructure identities, raw command output, raw SQLite, arbitrary fact properties, LLM analysis, embeddings, vector databases, or prompt-based classification."
+    ]
+  },
+  {
     "path": "/sql/operator-handoff/",
     "title": "SQL Operator Handoff",
     "summary": "Demo-level manager story for reviewing categorical SQL context, prerequisite candidates, protected steps, validation expectations, stop conditions, gaps, and owner questions before operator action.",

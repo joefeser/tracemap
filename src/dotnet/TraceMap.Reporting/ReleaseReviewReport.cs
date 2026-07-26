@@ -272,10 +272,23 @@ public static class ReleaseReviewReporter
         "schemaName",
         "tableName",
         "columnName",
+        "newTableName",
+        "newColumnName",
+        "dropBehavior",
         "constraintName",
         "constraintKind",
         "indexName",
         "indexKind",
+        "enumName",
+        "enumLabelsOmitted",
+        "routineName",
+        "routineKind",
+        "routineSignatureOmitted",
+        "routineBodyOmitted",
+        "snapshotFormat",
+        "recognizedDdlStatementCount",
+        "unsupportedDdlStatementCount",
+        "sourceDatabaseIdentityOmitted",
         "accessMethod",
         "columnNames",
         "referencedSchemaName",
@@ -918,7 +931,7 @@ public static class ReleaseReviewReporter
                     "schema-migration",
                     displayName,
                     ReleaseReviewClassifications.NoActionableEvidence,
-                    SqlRunbookPacketBuilder.ProjectFactEvidence(fact, input.Result.Manifest.CommitSha ?? "unknown"),
+                    SqlRunbookPacketBuilder.ProjectFactEvidence(fact, fact.CommitSha),
                     fact.Properties
                         .Where(pair => SqlSchemaMigrationMetadataKeys.Contains(pair.Key))
                         .Select(pair => new KeyValuePair<string, string?>(pair.Key, pair.Value))
@@ -1544,7 +1557,9 @@ public static class ReleaseReviewReporter
     internal static async Task<IReadOnlyList<SqlEvidenceInput>> ReadSqlEvidenceInputsAsync(
         string path,
         string indexKind,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool includeModelMappings = false,
+        bool includeQuerySurfaces = false)
     {
         await using var connection = new SqliteConnection(ReadOnlyConnectionString(path));
         await connection.OpenAsync(cancellationToken);
@@ -1564,7 +1579,13 @@ public static class ReleaseReviewReporter
                        {extractorIdColumn}, {extractorVersionColumn}, facts.properties_json
                 from combined_facts facts
                 join index_sources sources on sources.source_index_id = facts.source_index_id
-                where facts.rule_id like 'database.sql.%' or facts.rule_id like 'database.postgres.%'
+                where facts.rule_id like 'database.sql.%'
+                   or facts.rule_id like 'database.postgres.%'
+                   or (@include_model_mappings = 1 and facts.rule_id = @ef_rule)
+                   or (@include_model_mappings = 1 and facts.rule_id = @contract_mapping_rule)
+                   or (@include_model_mappings = 1 and facts.rule_id = @operation_rule)
+                   or (@include_query_surfaces = 1 and facts.fact_type in (
+                       'QueryPatternDetected', 'SqlTextUsed', 'SqlCommandDetected', 'DapperCallDetected', 'SqlFileDeclared'))
                 order by sources.label, facts.file_path, facts.start_line, facts.combined_fact_id;
                 """
             : $"""
@@ -1575,9 +1596,20 @@ public static class ReleaseReviewReporter
                        {extractorIdColumn}, {extractorVersionColumn}, facts.properties_json
                 from facts
                 cross join scan_manifest manifest
-                where facts.rule_id like 'database.sql.%' or facts.rule_id like 'database.postgres.%'
+                where facts.rule_id like 'database.sql.%'
+                   or facts.rule_id like 'database.postgres.%'
+                   or (@include_model_mappings = 1 and facts.rule_id = @ef_rule)
+                   or (@include_model_mappings = 1 and facts.rule_id = @contract_mapping_rule)
+                   or (@include_model_mappings = 1 and facts.rule_id = @operation_rule)
+                   or (@include_query_surfaces = 1 and facts.fact_type in (
+                       'QueryPatternDetected', 'SqlTextUsed', 'SqlCommandDetected', 'DapperCallDetected', 'SqlFileDeclared'))
                 order by facts.file_path, facts.start_line, facts.fact_id;
                 """;
+        command.Parameters.AddWithValue("@include_model_mappings", includeModelMappings ? 1 : 0);
+        command.Parameters.AddWithValue("@ef_rule", RuleIds.DatabaseEntityFramework);
+        command.Parameters.AddWithValue("@contract_mapping_rule", RuleIds.CSharpSemanticContractMapping);
+        command.Parameters.AddWithValue("@operation_rule", RuleIds.DatabaseOperationCallPattern);
+        command.Parameters.AddWithValue("@include_query_surfaces", includeQuerySurfaces ? 1 : 0);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -1607,13 +1639,27 @@ public static class ReleaseReviewReporter
                 StringOrNull(reader, 12),
                 evidence,
                 properties);
-            if (!SqlRunwayRuleIds.Contains(fact.RuleId))
+            if (!SqlRunwayRuleIds.Contains(fact.RuleId)
+                && !(includeModelMappings
+                    && fact.RuleId is RuleIds.DatabaseEntityFramework
+                        or RuleIds.CSharpSemanticContractMapping
+                        or RuleIds.DatabaseOperationCallPattern)
+                && !(includeQuerySurfaces
+                    && fact.FactType is FactTypes.QueryPatternDetected
+                        or FactTypes.SqlTextUsed
+                        or FactTypes.SqlCommandDetected
+                        or FactTypes.DapperCallDetected
+                        or FactTypes.SqlFileDeclared))
             {
                 continue;
             }
             var sourceLabel = indexKind == "single" ? "single" : StringOrDefault(reader, 0, manifest.RepoName);
             rows.Add(new SqlEvidenceFactRow(sourceLabel, manifest, fact,
-                !string.IsNullOrWhiteSpace(extractorId) && !string.IsNullOrWhiteSpace(extractorVersion)));
+                !string.IsNullOrWhiteSpace(extractorId)
+                && !string.IsNullOrWhiteSpace(extractorVersion)
+                && IsKnownCommitSha(manifest.CommitSha)
+                && IsKnownCommitSha(fact.CommitSha)
+                && string.Equals(manifest.CommitSha, fact.CommitSha, StringComparison.Ordinal)));
         }
 
         return rows
@@ -1625,6 +1671,11 @@ public static class ReleaseReviewReporter
                 group.All(row => row.ProvenanceCompatible)))
             .ToArray();
     }
+
+    private static bool IsKnownCommitSha(string? value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && !value.Equals("unknown", StringComparison.OrdinalIgnoreCase)
+        && value.Trim('0').Length > 0;
 
     internal static async Task<AccessEvidencePresence> ReadAccessEvidencePresenceAsync(
         string path,

@@ -34,6 +34,7 @@ public static class TraceMapCommand
             {
                 "scan" => ScanHelp(),
                 "report" => ReportHelp(),
+                "database-design-review" => DatabaseDesignReviewHelp(),
                 "reduce" => ReduceHelp(),
                 "flow" => FlowHelp(),
                 "relate" => RelateHelp(),
@@ -58,7 +59,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "scan" or "report" or "database-design-review" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         try
@@ -67,6 +68,7 @@ public static class TraceMapCommand
             {
                 "scan" => await RunScanAsync(rest, output, error, cancellationToken),
                 "report" => await RunReportAsync(rest, output, error, cancellationToken),
+                "database-design-review" => await RunDatabaseDesignReviewAsync(rest, output, error, cancellationToken),
                 "reduce" => await RunReduceAsync(rest, output, error, cancellationToken),
                 "flow" => await RunFlowAsync(rest, output, error, cancellationToken),
                 "relate" => await RunRelateAsync(rest, output, error, cancellationToken),
@@ -258,6 +260,41 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Dependency edges: {result.Report.Summary.DependencyEdgeCount}");
         await output.WriteLineAsync($"Endpoint findings: {result.Report.Summary.EndpointFindingCount}");
         await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
+        return 0;
+    }
+
+    private static async Task<int> RunDatabaseDesignReviewAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: database-design-review requires --index <index.sqlite|combined.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: database-design-review requires --out <path>.");
+            return 1;
+        }
+
+        var result = await DatabaseDesignReviewReporter.WriteAsync(
+            new DatabaseDesignReviewOptions(
+                indexPath,
+                outputPath,
+                values.GetValueOrDefault("--format") ?? "markdown",
+                ParsePositiveInt(values, "--max-objects", 500),
+                ParsePositiveInt(values, "--max-evidence", 2000),
+                ParsePositiveInt(values, "--max-route-references", 500),
+                ParsePositiveInt(values, "--max-gaps", 1000)),
+            cancellationToken);
+
+        await output.WriteLineAsync($"TraceMap database design review completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Coverage: {result.Report.Coverage}");
+        await output.WriteLineAsync($"Tables: {result.Report.Summary.TableCount}");
+        await output.WriteLineAsync($"Query references: {result.Report.Summary.QueryReferenceCount}");
+        await output.WriteLineAsync($"Route references: {result.Report.Summary.RouteReferenceCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
         return 0;
     }
 
@@ -1754,6 +1791,7 @@ public static class TraceMapCommand
             Usage:
               tracemap scan --repo <path> --out <path>
               tracemap report --index <path> --out <path>
+              tracemap database-design-review --index <combined.sqlite> --out <path>
               tracemap reduce --index <path> --contract-delta <path> --out <path>
               tracemap flow --index <path> --symbol <symbol-or-fragment> --out <path>
               tracemap relate --index <path> --symbol <symbol-or-fragment> --out <path>
@@ -1778,6 +1816,7 @@ public static class TraceMapCommand
             Commands:
               scan      Inventory a repository and emit TraceMap artifacts.
               report    Generate a combined dependency report from a combined index.
+              database-design-review Compose existing PostgreSQL design, query, and route evidence.
               reduce    Reduce a contract delta against an index.
               flow      Trace deterministic parameter-forwarding paths.
               relate    Trace deterministic symbol relationship paths.
@@ -1848,6 +1887,33 @@ public static class TraceMapCommand
 
             Outputs:
               dependency-report.md and/or dependency-report.json
+            """;
+    }
+
+    private static string DatabaseDesignReviewHelp()
+    {
+        return """
+            Usage:
+              tracemap database-design-review --index <index.sqlite|combined.sqlite> --out <path> [--format <markdown|json>] [bounds]
+
+            Required:
+              --index <path>             Scanner index.sqlite or combined TraceMap index.
+              --out <path>               Output directory or file path.
+
+            Optional:
+              --format <value>           markdown or json. Directory outputs write both.
+              --max-objects <n>          Maximum table/global design objects (default 500).
+              --max-evidence <n>         Maximum declaration/operation/query rows (default 2000).
+              --max-route-references <n> Maximum proven static route references (default 500).
+              --max-gaps <n>             Maximum structured gap rows (default 1000).
+
+            Outputs:
+              database-design-review.md and database-design-review.json
+
+            Boundaries:
+              Read-side composition only. No database connection, SQL execution,
+              migration execution, runtime reachability claim, or release approval.
+              Single-index input reports route-path coverage as unavailable.
             """;
     }
 
