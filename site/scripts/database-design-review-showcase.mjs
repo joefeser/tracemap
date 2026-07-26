@@ -51,7 +51,7 @@ const proofText = [
   "database.postgres.schema-migration.v1",
   "database.ef.v1",
   "database.operation.call-pattern.v1",
-  "csharp.syntax.querypattern.v1",
+  "database.sql.shape.v1",
   "Tier1Semantic",
   "Tier2Structural",
   "Tier4Unknown",
@@ -84,6 +84,14 @@ const forbiddenKeys = new Set([
   "rawSql", "sql", "queryText", "commandText", "sourceSnippet", "snippetHash", "queryHash",
   "connectionString", "password", "credential", "scheduledCommandBody", "localPath",
   "serverName", "properties", "sqlite"
+].map((key) => key.toLowerCase()));
+const compatibleRuleTiers = new Map([
+  ["database.postgres.schema-migration.v1", new Set(["Tier2Structural"])],
+  ["database.ef.v1", new Set(["Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual", "Tier4Unknown"])],
+  ["database.operation.call-pattern.v1", new Set(["Tier1Semantic", "Tier4Unknown"])],
+  ["database.sql.shape.v1", new Set(["Tier2Structural", "Tier3SyntaxOrTextual"])],
+  ["database.design-review.packet.v1", evidenceTiers],
+  ["database.design-review.gap.v1", new Set(["Tier4Unknown"])]
 ]);
 const forbiddenPatterns = [
   /(?:\/Users\/|\/home\/|[A-Z]:\\Users\\)/i,
@@ -171,7 +179,7 @@ function validatePage(html, phrases, route, label, errors) {
 
 function validateProjection(projection, errors) {
   const topFields = new Set(["schemaVersion", "derivedFromContract", "publicClaimLevel", "purpose", "source", "modes", "limitations"]);
-  requireExactFields(projection, topFields, "public projection", errors);
+  if (!requireExactFields(projection, topFields, "public projection", errors)) return;
   if (projection.schemaVersion !== "tracemap-public-database-design-review-proof-packet/v1") {
     errors.push("Database design review projection schemaVersion is incorrect.");
   }
@@ -179,6 +187,14 @@ function validateProjection(projection, errors) {
     errors.push("Database design review projection must identify database-design-review/1.0.");
   }
   if (projection.publicClaimLevel !== "demo") errors.push("Database design review publicClaimLevel must remain demo.");
+  requireExactFields(
+    projection.source,
+    new Set(["repositoryId", "commitSha", "sourceKind"]),
+    "public projection source",
+    errors);
+  if (!/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/i.test(projection.source?.repositoryId ?? "")) {
+    errors.push("Database design review projection must include a public repository identifier.");
+  }
   if (!/^[0-9a-f]{40}$/.test(projection.source?.commitSha ?? "")) {
     errors.push("Database design review projection must include a full public commit SHA.");
   }
@@ -193,7 +209,7 @@ function validateProjection(projection, errors) {
   if (!single || single.inputKind !== "index.sqlite") errors.push("Database design review projection is missing the single-index mode.");
   if (!combined || combined.inputKind !== "combined.sqlite") errors.push("Database design review projection is missing the combined-index mode.");
   for (const mode of modes) {
-    requireExactFields(mode, new Set(["mode", "inputKind", "routeCoverage", "packet"]), `mode ${mode?.mode ?? "unknown"}`, errors);
+    if (!requireExactFields(mode, new Set(["mode", "inputKind", "routeCoverage", "packet"]), `mode ${mode?.mode ?? "unknown"}`, errors)) continue;
     validatePacket(mode?.packet, mode?.mode, projection.source?.commitSha, errors);
   }
   if (single?.packet?.summary?.routeReferenceCount !== 0
@@ -207,7 +223,7 @@ function validateProjection(projection, errors) {
   }
 
   walk(projection, (key) => {
-    if (forbiddenKeys.has(key)) errors.push(`Database design review projection contains forbidden arbitrary or protected field: ${key}`);
+    if (forbiddenKeys.has(key.toLowerCase())) errors.push(`Database design review projection contains forbidden arbitrary or protected field: ${key}`);
   });
 }
 
@@ -220,37 +236,38 @@ function validatePacket(packet, mode, commitSha, errors) {
   if (packet.version !== "1.0" || packet.ruleId !== "database.design-review.packet.v1" || packet.claimLevel !== "static-evidence") {
     errors.push(`Database design review ${mode} packet identity does not match the shipped contract.`);
   }
-  requireExactFields(packet.summary, summaryFields, `${mode} summary`, errors);
-  for (const field of summaryFields) {
-    if (!Number.isInteger(packet.summary?.[field]) || packet.summary[field] < 0) {
-      errors.push(`Database design review ${mode} summary has invalid count: ${field}`);
+  if (requireExactFields(packet.summary, summaryFields, `${mode} summary`, errors)) {
+    for (const field of summaryFields) {
+      if (!Number.isInteger(packet.summary[field]) || packet.summary[field] < 0) {
+        errors.push(`Database design review ${mode} summary has invalid count: ${field}`);
+      }
     }
   }
   if (!Array.isArray(packet.limitations) || packet.limitations.length < 5) {
     errors.push(`Database design review ${mode} packet must retain substantive limitations.`);
   }
-  for (const source of packet.sources ?? []) {
-    requireExactFields(source, new Set(["sourceLabel", "commitSha", "language", "analysisLevel", "buildStatus", "identityVerified", "coverageWarnings"]), `${mode} source`, errors);
+  for (const source of asArray(packet.sources)) {
+    if (!requireExactFields(source, new Set(["sourceLabel", "commitSha", "language", "analysisLevel", "buildStatus", "identityVerified", "coverageWarnings"]), `${mode} source`, errors)) continue;
     if (source.commitSha !== commitSha) errors.push(`Database design review ${mode} source commit does not match projection provenance.`);
     if (source.identityVerified !== false || !source.coverageWarnings?.includes("source-identity-synthetic")) {
       errors.push(`Database design review ${mode} public source must retain its synthetic identity boundary.`);
     }
   }
-  for (const table of packet.tables ?? []) {
-    requireExactFields(table, new Set(["groupId", "sourceLabel", "schemaName", "tableName", "schemaResolution", "coverage", "declarations", "operations", "queryReferences", "routeReferences", "limitations"]), `${mode} table`, errors);
+  for (const table of asArray(packet.tables)) {
+    if (!requireExactFields(table, new Set(["groupId", "sourceLabel", "schemaName", "tableName", "schemaResolution", "coverage", "declarations", "operations", "queryReferences", "routeReferences", "limitations"]), `${mode} table`, errors)) continue;
     for (const collection of ["declarations", "operations", "queryReferences"]) {
-      for (const item of table[collection] ?? []) validateItem(item, mode, commitSha, errors);
+      for (const item of asArray(table[collection])) validateItem(item, mode, commitSha, errors);
     }
-    for (const route of table.routeReferences ?? []) {
-      requireExactFields(route, new Set(["routeReferenceId", "entryKind", "method", "normalizedPathKey", "pathClassification", "tableMatchKind", "evidence"]), `${mode} route reference`, errors);
+    for (const route of asArray(table.routeReferences)) {
+      if (!requireExactFields(route, new Set(["routeReferenceId", "entryKind", "method", "normalizedPathKey", "pathClassification", "tableMatchKind", "evidence"]), `${mode} route reference`, errors)) continue;
       validateEvidence(route.evidence, mode, commitSha, errors);
     }
   }
   for (const collection of ["globalObjects", "unlinkedQueries"]) {
-    for (const item of packet[collection] ?? []) validateItem(item, mode, commitSha, errors);
+    for (const item of asArray(packet[collection])) validateItem(item, mode, commitSha, errors);
   }
-  for (const gap of packet.gaps ?? []) {
-    requireExactFields(gap, new Set(["gapId", "gapKind", "classification", "message", "sourceLabel", "ruleId", "evidenceTier", "coverage", "commitSha", "filePath", "startLine", "endLine", "extractorId", "extractorVersion", "supportingFactIds", "supportingEdgeIds", "supportingRuleIds", "metadata", "limitations"]), `${mode} gap`, errors);
+  for (const gap of asArray(packet.gaps)) {
+    if (!requireExactFields(gap, new Set(["gapId", "gapKind", "classification", "message", "sourceLabel", "ruleId", "evidenceTier", "coverage", "commitSha", "filePath", "startLine", "endLine", "extractorId", "extractorVersion", "supportingFactIds", "supportingEdgeIds", "supportingRuleIds", "metadata", "limitations"]), `${mode} gap`, errors)) continue;
     if (gap.ruleId !== "database.design-review.gap.v1" || gap.evidenceTier !== "Tier4Unknown") {
       errors.push(`Database design review ${mode} gap must use the shipped gap rule and Tier4Unknown.`);
     }
@@ -259,15 +276,18 @@ function validatePacket(packet, mode, commitSha, errors) {
 }
 
 function validateItem(item, mode, commitSha, errors) {
-  requireExactFields(item, new Set(["itemId", "evidenceKind", "displayName", "classification", "metadata", "evidence"]), `${mode} evidence item`, errors);
+  if (!requireExactFields(item, new Set(["itemId", "evidenceKind", "displayName", "classification", "metadata", "evidence"]), `${mode} evidence item`, errors)) return;
   validateMetadata(item.metadata, mode, errors);
   validateEvidence(item.evidence, mode, commitSha, errors);
 }
 
 function validateEvidence(evidence, mode, commitSha, errors) {
-  requireExactFields(evidence, evidenceFields, `${mode} evidence reference`, errors);
+  if (!requireExactFields(evidence, evidenceFields, `${mode} evidence reference`, errors)) return;
   if (!evidence?.ruleId || !evidenceTiers.has(evidence?.evidenceTier) || evidence?.commitSha !== commitSha) {
     errors.push(`Database design review ${mode} evidence reference is missing compatible rule, tier, or commit provenance.`);
+  }
+  if (!compatibleRuleTiers.get(evidence.ruleId)?.has(evidence.evidenceTier)) {
+    errors.push(`Database design review ${mode} evidence reference uses an incompatible rule and tier: ${evidence.ruleId} / ${evidence.evidenceTier}.`);
   }
   if (!evidence?.extractorId || !evidence?.extractorVersion || !evidence?.coverageLabel) {
     errors.push(`Database design review ${mode} evidence reference is missing extractor or coverage provenance.`);
@@ -293,7 +313,7 @@ function validateMetadata(metadata, mode, errors) {
     return;
   }
   for (const row of metadata) {
-    requireExactFields(row, new Set(["key", "value"]), `${mode} metadata row`, errors);
+    if (!requireExactFields(row, new Set(["key", "value"]), `${mode} metadata row`, errors)) continue;
     if (!metadataKeys.has(row?.key)) errors.push(`Database design review ${mode} metadata contains non-allowlisted key: ${row?.key}`);
   }
 }
@@ -315,7 +335,7 @@ async function validateInboundLinks(dist, routes, destination, label, errors) {
 function requireExactFields(value, allowed, label, errors) {
   if (!isPlainObject(value)) {
     errors.push(`Database design review ${label} must be an object.`);
-    return;
+    return false;
   }
   for (const field of allowed) {
     if (!Object.hasOwn(value, field)) errors.push(`Database design review ${label} is missing field: ${field}`);
@@ -323,6 +343,11 @@ function requireExactFields(value, allowed, label, errors) {
   for (const field of Object.keys(value)) {
     if (!allowed.has(field)) errors.push(`Database design review ${label} contains non-contract field: ${field}`);
   }
+  return true;
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
 }
 
 function walk(value, visit) {

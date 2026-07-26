@@ -57,6 +57,45 @@ test("database design review validator rejects arbitrary packet fields and unsaf
   assert.match(errors.join("\n"), /non-allowlisted key: arbitrarySourceProperty/);
 });
 
+test("database design review validator rejects case-variant protected source fields", async (t) => {
+  const root = await createSiteFixture(t);
+  const assetPath = join(root, "src", "assets", "database-design-review-proof-packet.json");
+  const projection = JSON.parse(await readFile(assetPath, "utf8"));
+  projection.source.Password = "not-public";
+  await writeFile(assetPath, `${JSON.stringify(projection, null, 2)}\n`);
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateDatabaseDesignReviewShowcaseDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /non-contract field: Password/);
+  assert.match(errors.join("\n"), /forbidden arbitrary or protected field: Password/);
+});
+
+test("database design review validator reports malformed nested objects without throwing", async (t) => {
+  const root = await createSiteFixture(t);
+  const assetPath = join(root, "src", "assets", "database-design-review-proof-packet.json");
+  const projection = JSON.parse(await readFile(assetPath, "utf8"));
+  projection.modes[0].packet.summary = null;
+  projection.modes[0].packet.tables[0].declarations[0] = null;
+  await writeFile(assetPath, `${JSON.stringify(projection, null, 2)}\n`);
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateDatabaseDesignReviewShowcaseDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /single-index summary must be an object/);
+  assert.match(errors.join("\n"), /single-index evidence item must be an object/);
+});
+
+test("database design review validator enforces rule and evidence-tier compatibility", async (t) => {
+  const root = await createSiteFixture(t);
+  const assetPath = join(root, "src", "assets", "database-design-review-proof-packet.json");
+  const projection = JSON.parse(await readFile(assetPath, "utf8"));
+  projection.modes[0].packet.tables[0].queryReferences[0].evidence.evidenceTier = "Tier1Semantic";
+  await writeFile(assetPath, `${JSON.stringify(projection, null, 2)}\n`);
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateDatabaseDesignReviewShowcaseDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /incompatible rule and tier: database\.sql\.shape\.v1 \/ Tier1Semantic/);
+});
+
 test("database design review validator enforces single-index and combined-index route contracts", async (t) => {
   const root = await createSiteFixture(t);
   const assetPath = join(root, "src", "assets", "database-design-review-proof-packet.json");
@@ -77,6 +116,7 @@ test("database design review validator enforces public provenance and demo claim
   const assetPath = join(root, "src", "assets", "database-design-review-proof-packet.json");
   const projection = JSON.parse(await readFile(assetPath, "utf8"));
   projection.publicClaimLevel = "shipped";
+  projection.source.repositoryId = "";
   projection.modes[0].packet.tables[0].declarations[0].evidence.commitSha = "unknown";
   projection.modes[1].packet.tables[0].operations[0].evidence.filePath = "/tmp/private.cs";
   await writeFile(assetPath, `${JSON.stringify(projection, null, 2)}\n`);
@@ -84,6 +124,7 @@ test("database design review validator enforces public provenance and demo claim
   const errors = [];
   await validateDatabaseDesignReviewShowcaseDist({ dist: join(root, "dist"), errors });
   assert.match(errors.join("\n"), /publicClaimLevel must remain demo/);
+  assert.match(errors.join("\n"), /public repository identifier/);
   assert.match(errors.join("\n"), /missing compatible rule, tier, or commit provenance/);
   assert.match(errors.join("\n"), /public repo-relative synthetic fixture path/);
 });
