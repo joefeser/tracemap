@@ -13,6 +13,7 @@
 - [x] Add command, determinism, provenance, gap, link, hash, and leak tests.
 - [x] Document the local Windows/Parallels dogfood workflow.
 - [x] Run focused/full macOS validation, private-path guard, and diff check.
-- [ ] Run or explicitly defer the unchanged-boundary synthetic Parallels smoke.
+- [x] Run the unchanged-boundary synthetic Windows smoke using the established
+      Phase 9.5 isolation procedure.
 - [ ] Update implementation state, commit, push, open a ready PR to `dev`, and
       run ACK to a terminal handoff.
