@@ -1,6 +1,7 @@
 # Access Local Review Bundle Implementation State
 
-Status: implementation complete; Windows smoke and PR workflow pending
+Status: implementation and exact-head Windows smoke complete; PR workflow
+pending
 
 Branch: `codex/access-local-review-bundle`
 
@@ -35,9 +36,12 @@ count-only capability evidence before an in-person review.
 - Parallels is installed;
 - `Windows 11` is running;
 - the previously validated `Windows 11 - Access Isolated` VM is present and
-  stopped at implementation start;
-- Windows validation will use the isolated VM only, not broaden sharing or
-  networking policy.
+  was started for validation;
+- host-command execution remained unavailable by design in the isolated
+  Parallels VM;
+- because Codex was not installed inside that VM, the user explicitly moved
+  the synthetic run to the established Windows Phase 9.5 environment rather
+  than weakening Parallels isolation.
 
 ## Validation
 
@@ -54,7 +58,18 @@ count-only capability evidence before an in-person review.
 - PowerShell is not installed on the macOS host; Homebrew discovery found the
   available formula. Syntax and product execution remain assigned to the
   isolated Windows smoke rather than installing a second PowerShell runtime.
-- Isolated Parallels smoke: pending exact committed head.
+- Exact-head Windows synthetic smoke at `9cdae53b`: completed.
+- Both changed PowerShell scripts passed syntax parsing.
+- Phase 9 consumer contracts and the local-review-bundle contract passed.
+- The retained bundle had the expected manifest, relative contained paths,
+  verified file sizes and SHA-256 hashes, available Access evidence, and
+  positive finding/gap counts.
+- Determinism, generation/extraction canaries, protected-output suppression,
+  and baseline fixture integrity passed.
+- Access and worker processes exited, networking was restored, raw scratch was
+  removed, only the sanitized local review bundle was retained, and the
+  exact-head worktree remained clean.
+- The Windows run edited, committed, pushed, and posted nothing.
 
 ## Deferred
 
