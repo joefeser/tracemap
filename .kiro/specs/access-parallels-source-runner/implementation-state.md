@@ -43,6 +43,9 @@ At exact `20f1a26ee0e71fad8e66d7131cda072a2b5b5333`:
   VM configuration;
 - Windows guest runner validates exact source identity, builds, tests, and
   delegates synthetic validation to the existing harness;
+- exact Access test classes run sequentially so Windows SQLite pool state
+  cannot race across classes and substring filters cannot select unrelated
+  tests;
 - guest output is captured and reduced to one allowlisted categorical line;
 - representative inputs and richer extraction are deliberately absent;
 - offline toolchain provisioning remains operator-local and outside Git.

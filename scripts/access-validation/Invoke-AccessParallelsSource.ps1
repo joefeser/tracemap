@@ -42,7 +42,7 @@ if ($vmInfo -notmatch "(?m)^\s+access_input\s+\(\+\).+mode='ro'\s*$" -or
     Stop-Host "AccessParallelsScopedSharesUnavailable"
 }
 
-$guestScript = Join-Path $GuestRoot "tracemap\scripts\access-validation\Invoke-AccessGuestSource.ps1"
+$guestScript = "$($GuestRoot.TrimEnd([char]92))\tracemap\scripts\access-validation\Invoke-AccessGuestSource.ps1"
 $previousPreference = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
 $guestOutput = (& prlctl exec $VmName powershell.exe `

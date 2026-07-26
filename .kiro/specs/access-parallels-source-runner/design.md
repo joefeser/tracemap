@@ -37,7 +37,9 @@ It never changes those settings.
 `doctor` validates the boundary and source/tool availability.
 
 `build` runs the solution build with the already-restored offline cache and the
-Access-focused test slice.
+six exact Access test classes sequentially. Separate test processes avoid
+cross-class SQLite pool races on Windows and prevent substring filters from
+selecting unrelated tests.
 
 `synthetic` delegates to `Invoke-AccessSmoke.ps1`, validates its highest
 immutable checkpoint, and retains the generated hidden-local review bundle in

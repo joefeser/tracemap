@@ -62,18 +62,32 @@ if ($Action -eq "doctor") {
 }
 
 if ($Action -eq "build") {
+    $testClasses = @(
+        "TraceMap.Tests.AccessFoundationTests",
+        "TraceMap.Tests.AccessUiProjectionTests",
+        "TraceMap.Tests.AccessVbaProjectionTests",
+        "TraceMap.Tests.AccessMacroReportingTests",
+        "TraceMap.Tests.AccessLocalReviewBundleTests",
+        "TraceMap.Tests.AccessParallelsSourceRunnerTests"
+    )
     $previousPreference = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     & $dotnet build $solution --no-restore --verbosity quiet *> $null
     $buildExit = $LASTEXITCODE
+    $testExit = 0
     if ($buildExit -eq 0) {
-        & $dotnet test $tests `
-            --no-build `
-            --no-restore `
-            --filter "Access" `
-            --logger "console;verbosity=quiet" *> $null
+        foreach ($testClass in $testClasses) {
+            & $dotnet test $tests `
+                --no-build `
+                --no-restore `
+                --filter "FullyQualifiedName~$testClass" `
+                --logger "console;verbosity=quiet" *> $null
+            if ($LASTEXITCODE -ne 0) {
+                $testExit = $LASTEXITCODE
+                break
+            }
+        }
     }
-    $testExit = $LASTEXITCODE
     $ErrorActionPreference = $previousPreference
     if ($buildExit -ne 0 -or $testExit -ne 0) {
         Stop-Guest "AccessGuestSourceBuildFailed"
