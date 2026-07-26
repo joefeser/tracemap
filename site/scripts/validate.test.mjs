@@ -22,6 +22,13 @@ import {
 } from "./swift-api-client-article.mjs";
 import { changeRiskLanguageGuideRoute } from "./change-risk-language-guide.mjs";
 import { claimReviewDrillRoute } from "./claim-review-drill.mjs";
+import {
+  databaseDesignReviewAsset,
+  databaseDesignReviewProofInboundRoutes,
+  databaseDesignReviewProofRoute,
+  databaseDesignReviewRoute,
+  databaseDesignReviewStoryInboundRoutes
+} from "./database-design-review-showcase.mjs";
 import { createDiscoveryOutputs } from "./discovery.mjs";
 import { demoEvidenceTrailRoute } from "./demo-evidence-trail.mjs";
 import { demoRunbookInboundLinkRoutes, demoRunbookRoute } from "./demo-runbook.mjs";
@@ -222,6 +229,8 @@ async function createDistFixture({
       demoEvidenceTrailRoute,
       demoRunbookRoute,
       demoTroubleshootingRoute,
+      databaseDesignReviewRoute,
+      databaseDesignReviewProofRoute,
       "/demo/start-here/",
       "/demo/proof-assets/",
       evidenceDecisionRecordRoute,
@@ -301,6 +310,8 @@ async function createDistFixture({
     demoEvidenceTrailRoute,
     demoRunbookRoute,
     demoTroubleshootingRoute,
+    databaseDesignReviewRoute,
+    databaseDesignReviewProofRoute,
     evidenceDecisionRecordRoute,
     evidenceGapRegisterRoute,
     evidenceHandoffTemplateRoute,
@@ -381,6 +392,12 @@ async function createDistFixture({
     if (sqlRunbookProofPacketInboundRoutes.includes(route) && !html.includes(sqlRunbookProofPacketRoute)) {
       html = html.replace("</main>", `<a href="${sqlRunbookProofPacketRoute}">SQL runbook proof packet</a></main>`);
     }
+    if (databaseDesignReviewStoryInboundRoutes.includes(route) && !html.includes(databaseDesignReviewRoute)) {
+      html = html.replace("</main>", `<a href="${databaseDesignReviewRoute}">Database design review</a></main>`);
+    }
+    if (databaseDesignReviewProofInboundRoutes.includes(route) && !html.includes(databaseDesignReviewProofRoute)) {
+      html = html.replace("</main>", `<a href="${databaseDesignReviewProofRoute}">Database design proof packet</a></main>`);
+    }
     await writeFile(join(dist, path, "index.html"), html, "utf8");
   }
 
@@ -392,6 +409,10 @@ async function createDistFixture({
   await cp(
     new URL("../src/assets/sql-operator-runbook-proof-packet.json", import.meta.url),
     join(dist, "assets", "sql-operator-runbook-proof-packet.json")
+  );
+  await cp(
+    new URL(`../src${databaseDesignReviewAsset}`, import.meta.url),
+    join(dist, "assets", "database-design-review-proof-packet.json")
   );
   await writeFile(join(dist, "robots.txt"), robots, "utf8");
   await writeFile(join(dist, "sitemap.xml"), renderSitemap(sitemapUrls), "utf8");
@@ -575,6 +596,12 @@ Browser sanity: fixture-only state record for aggregate validation.
 }
 
 async function fixturePageHtml(route, path) {
+  if (route === databaseDesignReviewProofRoute) {
+    return readFile(new URL("../src/database/design-review/proof-packet/index.html", import.meta.url), "utf8");
+  }
+  if (route === databaseDesignReviewRoute) {
+    return readFile(new URL("../src/database/design-review/index.html", import.meta.url), "utf8");
+  }
   if (route === sqlRunbookProofPacketRoute) {
     return readFile(new URL("../src/sql/operator-handoff/proof-packet/index.html", import.meta.url), "utf8");
   }
@@ -1001,6 +1028,28 @@ function buildReviewWorkflowStoryPage() {
 async function writeDiscoveryFiles(dist) {
   const outputs = await createDiscoveryOutputs(
     [
+      {
+        path: databaseDesignReviewRoute,
+        title: "Database Design Review",
+        summary: "Demo-level manager story for bounded static database design evidence.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: databaseDesignReviewProofRoute,
+        limitations: ["Static composition does not establish live database state."],
+        nonClaims: ["No execution, runtime reachability, production state, release approval, DBA approval, or operational safety proof."]
+      },
+      {
+        path: databaseDesignReviewProofRoute,
+        title: "Database Design Review Proof Packet",
+        summary: "Synthetic public-safe projection of single-index and combined-index database design-review evidence.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: databaseDesignReviewRoute,
+        limitations: ["Synthetic packet rows remain bounded static evidence."],
+        nonClaims: ["No live catalog, execution, runtime reachability, production state, release approval, DBA approval, or operational safety proof."]
+      },
       {
         path: sqlOperatorHandoffRoute,
         title: "SQL operator handoff",
