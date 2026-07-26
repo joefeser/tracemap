@@ -113,11 +113,21 @@ dotnet run --project src/dotnet/TraceMap.Cli -- combine \
 dotnet run --project src/dotnet/TraceMap.Cli -- report --index .tracemap-combined.sqlite --out .tracemap-combined-report
 dotnet run --project src/dotnet/TraceMap.Cli -- paths --index .tracemap-combined.sqlite --from-endpoint "GET /api/admin/runner/get-by-id/{}" --to-surface sql-query --out .tracemap-combined-paths
 dotnet run --project src/dotnet/TraceMap.Cli -- route-flow --index .tracemap-combined.sqlite --route "GET /api/admin/runner/get-by-id/{}" --to-surface sql-query --out .tracemap-route-flow
+dotnet run --project src/dotnet/TraceMap.Cli -- database-design-review --index .tracemap-combined.sqlite --out .tracemap-database-design-review
 dotnet run --project src/dotnet/TraceMap.Cli -- reverse --index .tracemap-combined.sqlite --surface sql-query --surface-name ClubMemberships --to endpoints --out .tracemap-combined-reverse
 dotnet run --project src/dotnet/TraceMap.Cli -- export --index .tracemap-combined.sqlite --out .tracemap-combined.json --format json
 ```
 
 `tracemap route-flow` writes `route-flow-report.md` and `route-flow-report.json` for directory outputs. It is a route-centered static evidence view over a combined index: it preserves rule IDs, evidence tiers, source labels, commit SHAs, file spans, supporting fact/edge IDs, coverage labels, gaps, and limitations. The report includes additive context groups that summarize already-selected method, service, repository, query, data-surface, dependency, value-origin, and gap rows without creating new runtime conclusions. It does not prove runtime execution, dependency-injection target selection, SQL execution, traffic, auth behavior, deployment, or production use.
+
+`tracemap database-design-review` writes `database-design-review.md` and
+`database-design-review.json` from an existing combined index. It groups
+bounded PostgreSQL declarations separately from migration operations, matches
+SQL/query surfaces to tables only by exact source-scoped static identity, and
+composes only already-proven bounded route paths. Missing matches, routes, or
+compatible provenance remain explicit gaps. It does not parse new SQL, connect
+to a database, execute migrations or queries, inspect runtime state, or approve
+a design or release.
 
 ### SQL evidence runway
 

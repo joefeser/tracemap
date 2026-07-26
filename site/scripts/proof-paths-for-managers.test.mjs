@@ -7,6 +7,10 @@ import test from "node:test";
 
 import { createDiscoveryOutputs } from "./discovery.mjs";
 import {
+  databaseDesignReviewProofRoute,
+  databaseDesignReviewRoute
+} from "./database-design-review-showcase.mjs";
+import {
   proofPathsForManagersRequiredLinks,
   proofPathsForManagersRoute,
   validateProofPathsForManagersDist
@@ -147,6 +151,8 @@ async function createFixture({
   discoveryRoutes = [
     routeEntry(proofPathsForManagersRoute),
     ...proofPathsForManagersRequiredLinks.map(routeEntry),
+    routeEntry(databaseDesignReviewRoute),
+    routeEntry(databaseDesignReviewProofRoute),
     routeEntry("/sql/operator-handoff/proof-packet/")
   ],
   includeInboundLinks = true,
@@ -158,6 +164,8 @@ async function createFixture({
   const routes = new Set([
     proofPathsForManagersRoute,
     ...proofPathsForManagersRequiredLinks,
+    databaseDesignReviewRoute,
+    databaseDesignReviewProofRoute,
     "/sql/operator-handoff/proof-packet/"
   ]);
   const source = pageHtml ?? (await page());

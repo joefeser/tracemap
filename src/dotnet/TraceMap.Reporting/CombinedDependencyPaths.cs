@@ -3260,6 +3260,7 @@ public static class CombinedDependencyPathReporter
         return fact.FactType is FactTypes.QueryPatternDetected
             or FactTypes.SqlTextUsed
             or FactTypes.DatabaseColumnMapping
+            or FactTypes.DatabaseOperationCandidate
             or FactTypes.DapperCallDetected
             or FactTypes.SqlCommandDetected
             or FactTypes.HttpCallDetected

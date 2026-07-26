@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A manager-facing database design review over deterministic PostgreSQL, EF mapping, application operation, query, and bounded route evidence.">
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>Database Design Review | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/database/design-review/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap Database Design Review">
+    <meta property="og:description" content="See what database design, mappings, operations, and query relationships are visible in a repository—and where static proof stops.">
+    <meta property="og:url" content="https://tracemap.tools/database/design-review/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home"><span class="brand-mark" aria-hidden="true">T</span><span>TraceMap</span></a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a><a href="/outputs/">Outputs</a><a href="/workflows/">Workflows</a><a href="/examples/">Examples</a><a href="/blog/">Blog</a><a href="/capabilities/">Capabilities</a><a href="/docs/">Docs</a><a href="/validation/">Validation</a><a href="/limitations/">Limitations</a><a href="/demo/">Demo</a><a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero" data-database-design-section="hero">
+        <p class="eyebrow">Database design review</p>
+        <h1>What database design, mappings, operations, and query relationships are visible in this repository?</h1>
+        <p class="hero-subhead">TraceMap composes existing PostgreSQL schema and migration evidence, EF mappings, application database-operation candidates, query surfaces, and bounded route references into one review packet—with gaps and limitations kept beside every conclusion.</p>
+        <p class="hero-note">Public claim level: demo. This is a synthetic, public-safe illustration of the shipped <code>database-design-review/1.0</code> output contract. It is not raw scan output, a live catalog inspection, or approval to change a database.</p>
+        <nav class="hero-actions" aria-label="Database design review links"><a class="button primary" href="/database/design-review/proof-packet/">Open the proof packet</a><a class="button secondary" href="#modes">Compare input modes</a><a class="button secondary" href="/manager-packet/">Manager packet</a><a class="button secondary" href="/limitations/">Limitations</a></nav>
+      </section>
+
+      <section class="section split-section" data-database-design-section="question">
+        <div><p class="section-kicker">Manager question</p><h2>Turn scattered repository clues into a bounded design conversation.</h2></div>
+        <div class="detail-list">
+          <div><strong>Declared design</strong><span>Tables, columns, named constraints, indexes, enums, routines, snapshots, and migration operations recognized in checked-in PostgreSQL DDL.</span></div>
+          <div><strong>Application mapping</strong><span>Compiler-resolved EF table and column mappings attached to compatible table evidence where the static identity match is bounded.</span></div>
+          <div><strong>Operation candidates</strong><span>Recognized EF, Dapper, ADO.NET, and Npgsql call shapes labeled as candidates—not executions or successful changes.</span></div>
+          <div><strong>Query relationships</strong><span>Simple query/table correlation by exact, source-scoped static name match, without rendering query text or hashes.</span></div>
+          <div><strong>Route context</strong><span>Existing combined-graph paths can be retained as bounded references; they never establish runtime reachability or traffic.</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="modes" data-database-design-section="modes">
+        <div class="section-header"><p class="section-kicker">Two supported inputs</p><h2>The packet says exactly what its input can support.</h2><p>Both modes reuse already-shipped evidence. Neither performs new SQL extraction, opens a database connection, or runs an application.</p></div>
+        <div class="workflow-grid">
+          <article>
+            <p class="card-meta">single <code>index.sqlite</code></p>
+            <h3>Repository design without graph paths</h3>
+            <p>Includes compatible PostgreSQL schema and migration evidence, EF mappings, database-operation candidates, and query surfaces. Route references are zero and the packet records <code>SingleIndexRoutePathUnavailable</code> rather than inferring that no route exists.</p>
+          </article>
+          <article>
+            <p class="card-meta">combined <code>combined.sqlite</code></p>
+            <h3>Design evidence with bounded route context</h3>
+            <p>Includes the same evidence families and may retain existing static route references when graph evidence reaches a matched query or operation surface. Missing paths remain gaps.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" data-database-design-section="packet">
+        <div class="section-header"><p class="section-kicker">Review packet</p><h2>Every row carries proof identity and its stopping point.</h2><p>The deterministic Markdown and JSON outputs keep source identity, commit SHA, rule ID, tier, coverage, repo-relative span, extractor provenance, supporting IDs, caps, and limitations together.</p></div>
+        <div class="output-list">
+          <div><code>database-design-review.md</code><span>Human-readable sources, table groups, declarations, operations, query references, bounded route references, gaps, and limitations.</span></div>
+          <div><code>database-design-review.json</code><span>Stable <code>1.0</code> packet shape under rule <code>database.design-review.packet.v1</code>, with composition gaps under <code>database.design-review.gap.v1</code>.</span></div>
+          <div><code>coverage</code><span><code>available</code>, <code>partial</code>, or <code>unavailable</code> based on compatible static evidence, explicit gaps, and bounded truncation.</span></div>
+          <div><code>caps</code><span>Object, evidence, route-reference, and gap limits stay visible through omitted counts and <code>TruncatedByLimit</code> evidence.</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" data-database-design-section="questions">
+        <div><p class="section-kicker">Questions this sharpens</p><h2>Useful review prompts without pretending the packet knows production.</h2></div>
+        <div class="detail-list">
+          <div><strong>Schema ownership</strong><span>Which checked-in declarations and migrations describe this table, and which parser gaps still need a database owner?</span></div>
+          <div><strong>Model alignment</strong><span>Which EF mappings correlate to the static table identity, and which conventions or runtime model behavior remain unavailable?</span></div>
+          <div><strong>Change surface</strong><span>Which application call sites are candidates for reads, writes, saves, transactions, or direct commands?</span></div>
+          <div><strong>Entry context</strong><span>Which existing route paths reach the static query or operation evidence, and where did path evidence stop?</span></div>
+          <div><strong>Coverage decision</strong><span>Which gaps require source review, migration tooling, DBA validation, tests, or runtime observability before a decision?</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" data-database-design-section="non-claims">
+        <div><p class="section-kicker">Non-claims</p><h2>A design-review packet is evidence for questions, not database authority.</h2></div>
+        <ul>
+          <li>TraceMap does not inspect a live database or catalog, execute SQL, queries, migrations, functions, jobs, or application code, or establish that a migration was applied.</li>
+          <li>Static matches do not prove runtime provider or connection selection, search-path behavior, generated SQL, branch feasibility, runtime reachability, traffic, authorization, deployment, or user exercise.</li>
+          <li>The packet does not establish the current or production schema, data correctness, compatibility, effective permissions, rollback, operational success, release approval, DBA approval, or that anything is safe to run.</li>
+          <li>The public example contains no raw SQL, source snippets or snippet hashes, credentials, connection strings, scheduled command bodies, local paths, private infrastructure identities, raw command output, raw SQLite, or arbitrary fact properties.</li>
+          <li>The core scanner and reducer use no LLM calls, embeddings, vector databases, or prompt-based classification.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section" data-database-design-section="links">
+        <div><p class="section-kicker">Continue the proof path</p><h2>Inspect the example, then keep its boundaries attached.</h2></div>
+        <div class="link-grid"><a href="/database/design-review/proof-packet/">Database design proof packet</a><a href="/manager-packet/">Manager packet</a><a href="/proof-paths/for-managers/">Proof paths for managers</a><a href="/packets/examples/">Packet examples</a><a href="/outputs/">Output artifacts</a><a href="/capabilities/">Capabilities</a><a href="/evidence/">Evidence tiers</a><a href="/limitations/">Limitations</a><a href="https://github.com/joefeser/tracemap/blob/dev/rules/rule-catalog.yml">Rule catalog</a></div>
+      </section>
+    </main>
+
+    <footer class="site-footer"><p>This manager story stays bounded to deterministic static repository evidence and explicit gaps.</p><p class="copyright">© 2026 Joe Feser.</p></footer>
+  </body>
+</html>

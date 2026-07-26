@@ -1786,7 +1786,7 @@ public static class CombinedDependencyReporter
         };
     }
 
-    private static string GapCategory(string gap)
+    internal static string GapCategory(string gap)
     {
         var trimmed = gap.Trim();
         if (trimmed.Length == 0)

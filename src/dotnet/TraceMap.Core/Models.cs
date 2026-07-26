@@ -167,8 +167,13 @@ public static class FactTypes
     public const string InfrastructureBoilerplate = nameof(InfrastructureBoilerplate);
     public const string QueryPatternDetected = nameof(QueryPatternDetected);
     public const string PostgresMigrationFileDeclared = nameof(PostgresMigrationFileDeclared);
+    public const string PostgresSchemaSnapshotDeclared = nameof(PostgresSchemaSnapshotDeclared);
     public const string PostgresSchemaTableDeclared = nameof(PostgresSchemaTableDeclared);
     public const string PostgresSchemaColumnDeclared = nameof(PostgresSchemaColumnDeclared);
+    public const string PostgresSchemaConstraintDeclared = nameof(PostgresSchemaConstraintDeclared);
+    public const string PostgresSchemaIndexDeclared = nameof(PostgresSchemaIndexDeclared);
+    public const string PostgresSchemaEnumDeclared = nameof(PostgresSchemaEnumDeclared);
+    public const string PostgresSchemaRoutineDeclared = nameof(PostgresSchemaRoutineDeclared);
     public const string PostgresMigrationOperation = nameof(PostgresMigrationOperation);
     public const string ObjectShapeInferred = nameof(ObjectShapeInferred);
     public const string PropertyAccessed = nameof(PropertyAccessed);
@@ -178,6 +183,7 @@ public static class FactTypes
     public const string DbContextDeclared = nameof(DbContextDeclared);
     public const string DbSetDeclared = nameof(DbSetDeclared);
     public const string DbChangeSaved = nameof(DbChangeSaved);
+    public const string DatabaseOperationCandidate = nameof(DatabaseOperationCandidate);
     public const string DapperCallDetected = nameof(DapperCallDetected);
     public const string SqlCommandDetected = nameof(SqlCommandDetected);
     public const string SqlTextUsed = nameof(SqlTextUsed);
@@ -312,6 +318,7 @@ public static class RuleIds
     public const string AnalyzerCapabilityDownstreamCoverage = "analyzer.capability.downstream-coverage.v1";
     public const string HttpClientInvocation = "http.client.invocation.v1";
     public const string DatabaseEntityFramework = "database.ef.v1";
+    public const string DatabaseOperationCallPattern = "database.operation.call-pattern.v1";
     public const string DatabaseDapperInvocation = "database.dapper.invocation.v1";
     public const string DatabaseSqlText = "database.sql.text.v1";
     public const string DatabaseSqlShape = "database.sql.shape.v1";
@@ -434,8 +441,8 @@ public static class ScannerVersions
     public const string AnalyzerCapabilityExtractor = "analyzer-capability/0.1.0";
     public const string CSharpSyntaxExtractor = "csharp-syntax/0.3.0";
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
-    public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.1.0";
-    public const string CSharpSemanticExtractor = "csharp-semantic/0.12.0";
+    public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.2.0";
+    public const string CSharpSemanticExtractor = "csharp-semantic/0.14.0";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
     public const string SqlShapeExtractor = "sql-shape/0.1.0";
@@ -443,7 +450,7 @@ public static class ScannerVersions
     public const string SqlSecretSafetyExtractor = "sql-secret-safety/0.1.0";
     public const string PostgresArchiveLinkExtractor = "postgres-archive-link/0.1.0";
     public const string PostgresPermissionEvidenceExtractor = "postgres-permission-evidence/0.1.0";
-    public const string PostgresSchemaMigrationExtractor = "postgres-schema-migration/0.1.0";
+    public const string PostgresSchemaMigrationExtractor = "postgres-schema-migration/0.5.0";
     public const string LegacyWcfExtractor = "legacy-wcf/0.2.0";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.1.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";

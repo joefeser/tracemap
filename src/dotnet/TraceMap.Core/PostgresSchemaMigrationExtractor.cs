@@ -18,38 +18,51 @@ public static partial class PostgresSchemaMigrationExtractor
                 facts.Add(Gap(manifest, file.RelativePath, 1, 1, 0, "SqlFileUnavailable"));
                 continue;
             }
-            if (!MightContainSupportedFamily(text)) continue;
+            var snapshotFormat = SnapshotFormat(text);
+            if (snapshotFormat is null && !MightContainSupportedFamily(text)) continue;
 
             var fileFacts = new List<CodeFact>();
             var recognizedStatementHashes = new List<string>();
+            var unsupportedSnapshotDdlFamilies = new List<string>();
             foreach (var statement in SqlExecutionContextExtractor.SplitStatements(text))
             {
                 var structural = statement.StructuralText;
-                if (!StartsSupportedFamily(structural)) continue;
+                if (!StartsSupportedFamily(structural))
+                {
+                    if (snapshotFormat is not null && TryUnsupportedSnapshotDdlFamily(structural, out var unsupportedFamily))
+                        unsupportedSnapshotDdlFamilies.Add(unsupportedFamily);
+                    continue;
+                }
                 var statementHash = FactFactory.Hash(structural, 32);
-                recognizedStatementHashes.Add(statementHash);
+                if (snapshotFormat is null)
+                    recognizedStatementHashes.Add(statementHash);
                 if (!statement.LexicallyComplete || !HasBalancedParentheses(structural))
                 {
                     fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "IncompleteDdlStatement", statementHash));
+                    AddUnsupportedSnapshotDdlFamily(snapshotFormat, structural, unsupportedSnapshotDdlFamilies);
                     continue;
                 }
 
-                if (TryCreateTable(structural, out var schema, out var table, out var columns, out var hasUnsupportedClauses))
+                if (TryCreateTable(structural, out var schema, out var table, out var columns, out var constraints, out var hasUnsupportedClauses))
                 {
                     fileFacts.Add(Surface(manifest, FactTypes.PostgresMigrationOperation, file.RelativePath, statement, schema, table, null, "create-table", "migration-operation"));
                     fileFacts.Add(Surface(manifest, FactTypes.PostgresSchemaTableDeclared, file.RelativePath, statement, schema, table, null, "create-table", "table"));
                     foreach (var declaredColumn in columns)
                         fileFacts.Add(Surface(manifest, FactTypes.PostgresSchemaColumnDeclared, file.RelativePath, statement, schema, table, declaredColumn, "create-table", "column"));
+                    foreach (var tableConstraint in constraints)
+                        fileFacts.Add(ConstraintSurface(manifest, FactTypes.PostgresSchemaConstraintDeclared, file.RelativePath, statement, schema, table, tableConstraint, "create-table-constraint", "constraint"));
                     if (hasUnsupportedClauses)
                         fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "CreateTableClauseUnsupported", statementHash));
                     else if (columns.Count == 0)
                         fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "CreateTableColumnsUnavailable", statementHash));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
                     continue;
                 }
 
                 if (AlterTablePrefix().IsMatch(structural) && HasTopLevelComma(structural))
                 {
                     fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "AlterTableMultipleSubcommandsUnsupported", statementHash));
+                    AddUnsupportedSnapshotDdlFamily(snapshotFormat, structural, unsupportedSnapshotDdlFamilies);
                     continue;
                 }
 
@@ -57,51 +70,213 @@ public static partial class PostgresSchemaMigrationExtractor
                 {
                     fileFacts.Add(Surface(manifest, FactTypes.PostgresMigrationOperation, file.RelativePath, statement, schema, table, column, "add-column", "migration-operation"));
                     fileFacts.Add(Surface(manifest, FactTypes.PostgresSchemaColumnDeclared, file.RelativePath, statement, schema, table, column, "add-column", "column"));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
+                    continue;
+                }
+
+                if (TryAlterAddConstraint(structural, out schema, out table, out var alterConstraint))
+                {
+                    fileFacts.Add(ConstraintSurface(manifest, FactTypes.PostgresMigrationOperation, file.RelativePath, statement, schema, table, alterConstraint, "add-constraint", "migration-operation"));
+                    fileFacts.Add(ConstraintSurface(manifest, FactTypes.PostgresSchemaConstraintDeclared, file.RelativePath, statement, schema, table, alterConstraint, "add-constraint", "constraint"));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
+                    continue;
+                }
+
+                if (TryAlterDropColumn(structural, out schema, out table, out column, out var dropBehavior))
+                {
+                    fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, column, null, "drop-column", dropBehavior));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
+                    continue;
+                }
+
+                if (TryAlterRenameColumn(structural, out schema, out table, out column, out var newColumn))
+                {
+                    fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, column, newColumn, "rename-column"));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
+                    continue;
+                }
+
+                if (TryAlterRenameTable(structural, out schema, out table, out var newTable))
+                {
+                    fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, null, newTable, "rename-table"));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
+                    continue;
+                }
+
+                if (TryDropTable(structural, out schema, out table, out dropBehavior))
+                {
+                    fileFacts.Add(ChangeSurface(manifest, file.RelativePath, statement, schema, table, null, null, "drop-table", dropBehavior));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
+                    continue;
+                }
+
+                if (TryCreateIndex(structural, out schema, out table, out var index))
+                {
+                    fileFacts.Add(IndexSurface(manifest, FactTypes.PostgresMigrationOperation, file.RelativePath, statement, schema, table, index, "migration-operation"));
+                    fileFacts.Add(IndexSurface(manifest, FactTypes.PostgresSchemaIndexDeclared, file.RelativePath, statement, schema, table, index, "index"));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
+                    continue;
+                }
+
+                if (TryCreateEnum(structural, out schema, out var enumName))
+                {
+                    fileFacts.Add(EnumSurface(manifest, FactTypes.PostgresMigrationOperation, file.RelativePath, statement, schema, enumName, "migration-operation"));
+                    fileFacts.Add(EnumSurface(manifest, FactTypes.PostgresSchemaEnumDeclared, file.RelativePath, statement, schema, enumName, "enum"));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
+                    continue;
+                }
+
+                if (CreateRoutinePrefix().IsMatch(structural) && !HasCompleteRoutineBody(structural))
+                {
+                    fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "IncompleteDdlStatement", statementHash));
+                    AddUnsupportedSnapshotDdlFamily(snapshotFormat, structural, unsupportedSnapshotDdlFamilies);
+                    continue;
+                }
+
+                if (TryCreateRoutine(structural, out schema, out var routineName, out var routineKind))
+                {
+                    fileFacts.Add(RoutineSurface(manifest, FactTypes.PostgresMigrationOperation, file.RelativePath, statement, schema, routineName, routineKind, "migration-operation"));
+                    fileFacts.Add(RoutineSurface(manifest, FactTypes.PostgresSchemaRoutineDeclared, file.RelativePath, statement, schema, routineName, routineKind, "routine"));
+                    AddRecognizedSnapshotStatementHash(snapshotFormat, statementHash, recognizedStatementHashes);
                     continue;
                 }
 
                 fileFacts.Add(Gap(manifest, file.RelativePath, statement.StartLine, statement.EndLine, statement.Ordinal, "UnsupportedSchemaDdlShape", statementHash));
+                AddUnsupportedSnapshotDdlFamily(snapshotFormat, structural, unsupportedSnapshotDdlFamilies);
             }
 
-            if (fileFacts.Count == 0) continue;
-            facts.Add(FactFactory.Create(manifest, FactTypes.PostgresMigrationFileDeclared, RuleIds.DatabasePostgresSchemaMigration,
-                EvidenceTiers.Tier2Structural,
-                new EvidenceSpan(file.RelativePath, 1, CountLines(text), FactFactory.Hash(string.Join(";", recognizedStatementHashes), 32), nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
-                targetSymbol: Path.GetFileName(file.RelativePath),
-                properties: Properties(("objectKind", "migration-file"), ("coverageLabel", "bounded-static-evidence"), ("limitations", Limitation))));
+            if (snapshotFormat is not null)
+            {
+                var classification = recognizedStatementHashes.Count == 0
+                    ? "SnapshotRecognizedDdlUnavailable"
+                    : unsupportedSnapshotDdlFamilies.Count > 0
+                        ? "SnapshotDdlCoverageReduced"
+                        : null;
+                if (classification is not null)
+                    fileFacts.Add(SnapshotGap(
+                        manifest,
+                        file.RelativePath,
+                        CountLines(text),
+                        classification,
+                        unsupportedSnapshotDdlFamilies));
+            }
+
+            if (recognizedStatementHashes.Count > 0)
+                facts.Add(FactFactory.Create(manifest, FactTypes.PostgresMigrationFileDeclared, RuleIds.DatabasePostgresSchemaMigration,
+                    EvidenceTiers.Tier2Structural,
+                    new EvidenceSpan(file.RelativePath, 1, CountLines(text), FactFactory.Hash(string.Join(";", recognizedStatementHashes), 32), nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
+                    targetSymbol: Path.GetFileName(file.RelativePath),
+                    properties: Properties(("objectKind", "migration-file"), ("coverageLabel", "bounded-static-evidence"), ("limitations", Limitation))));
+            if (snapshotFormat is not null)
+                facts.Add(SnapshotSurface(
+                    manifest,
+                    file.RelativePath,
+                    CountLines(text),
+                    snapshotFormat,
+                    recognizedStatementHashes,
+                    unsupportedSnapshotDdlFamilies,
+                    fileFacts.Any(fact => fact.RuleId == RuleIds.DatabasePostgresSchemaMigrationGap)));
             facts.AddRange(fileFacts);
         }
         return facts;
     }
 
-    private static bool StartsSupportedFamily(string sql) => CreateTablePrefix().IsMatch(sql) || AlterTablePrefix().IsMatch(sql);
+    private static string? SnapshotFormat(string text)
+    {
+        var traceMapDirectiveObserved = false;
+        foreach (var (_, comment) in SqlExecutionContextExtractor.EnumerateActiveLineComments(text))
+        {
+            if (comment.Trim().Equals("-- PostgreSQL database dump", StringComparison.OrdinalIgnoreCase))
+                return "pg-dump";
+            if (SnapshotDirective().IsMatch(comment))
+                traceMapDirectiveObserved = true;
+        }
+        return traceMapDirectiveObserved ? "tracemap-directive-v1" : null;
+    }
+
+    private static bool TryUnsupportedSnapshotDdlFamily(string sql, out string family)
+    {
+        family = string.Empty;
+        var match = SnapshotDdlPrefix().Match(sql);
+        if (!match.Success) return false;
+        var verb = match.Groups["verb"].Value.ToLowerInvariant();
+        var subject = match.Groups["subject"].Success
+            ? match.Groups["subject"].Value.ToLowerInvariant().Replace(' ', '-')
+            : "other";
+        family = $"{verb}-{subject}";
+        return true;
+    }
+
+    private static void AddUnsupportedSnapshotDdlFamily(string? snapshotFormat, string sql, ICollection<string> families)
+    {
+        if (snapshotFormat is not null && TryUnsupportedSnapshotDdlFamily(sql, out var family))
+            families.Add(family);
+    }
+
+    private static void AddRecognizedSnapshotStatementHash(string? snapshotFormat, string statementHash, ICollection<string> hashes)
+    {
+        if (snapshotFormat is not null)
+            hashes.Add(statementHash);
+    }
+
+    private static bool StartsSupportedFamily(string sql) =>
+        CreateTablePrefix().IsMatch(sql)
+        || AlterTablePrefix().IsMatch(sql)
+        || DropTablePrefix().IsMatch(sql)
+        || UnsupportedDestructiveDdlPrefix().IsMatch(sql)
+        || CreateIndexPrefix().IsMatch(sql)
+        || CreateEnumPrefix().IsMatch(sql)
+        || CreateRoutinePrefix().IsMatch(sql);
 
     private static bool MightContainSupportedFamily(string sql) =>
-        sql.Contains("TABLE", StringComparison.OrdinalIgnoreCase)
-        && (sql.Contains("CREATE", StringComparison.OrdinalIgnoreCase) || sql.Contains("ALTER", StringComparison.OrdinalIgnoreCase));
+        (sql.Contains("TABLE", StringComparison.OrdinalIgnoreCase)
+            && (sql.Contains("CREATE", StringComparison.OrdinalIgnoreCase)
+                || sql.Contains("ALTER", StringComparison.OrdinalIgnoreCase)
+                || sql.Contains("DROP", StringComparison.OrdinalIgnoreCase)))
+        || (sql.Contains("CREATE", StringComparison.OrdinalIgnoreCase)
+            && (sql.Contains("INDEX", StringComparison.OrdinalIgnoreCase)
+                || sql.Contains("TYPE", StringComparison.OrdinalIgnoreCase)
+                || sql.Contains("FUNCTION", StringComparison.OrdinalIgnoreCase)
+                || sql.Contains("PROCEDURE", StringComparison.OrdinalIgnoreCase)))
+        || sql.Contains("DROP", StringComparison.OrdinalIgnoreCase)
+        || sql.Contains("TRUNCATE", StringComparison.OrdinalIgnoreCase);
 
     private static bool TryCreateTable(
         string sql,
         out string schema,
         out string table,
         out IReadOnlyList<string> columns,
+        out IReadOnlyList<ConstraintProjection> constraints,
         out bool hasUnsupportedClauses)
     {
         schema = table = string.Empty;
         columns = [];
+        constraints = [];
         hasUnsupportedClauses = false;
         var match = CreateTable().Match(sql);
         if (!match.Success) return false;
         schema = match.Groups["schema"].Success ? match.Groups["schema"].Value : string.Empty;
         table = match.Groups["table"].Value;
         var declaredColumns = new List<string>();
+        var declaredConstraints = new List<ConstraintProjection>();
         var seenColumns = new HashSet<string>(StringComparer.Ordinal);
+        var seenConstraints = new HashSet<string>(StringComparer.Ordinal);
         foreach (var part in SplitTopLevel(match.Groups["body"].Value))
         {
-            var candidate = part.Trim().Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+            var trimmed = part.Trim();
+            var candidate = trimmed.Split((char[]?)null, 2, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
             if (SafeIdentifier().IsMatch(candidate) && !ConstraintPrefixes.Contains(candidate, StringComparer.OrdinalIgnoreCase))
             {
                 if (seenColumns.Add(candidate)) declaredColumns.Add(candidate);
+                if (InlineConstraintSignal().IsMatch(trimmed[candidate.Length..]))
+                    hasUnsupportedClauses = true;
+            }
+            else if (TryNamedConstraint(trimmed, out var constraint))
+            {
+                if (seenConstraints.Add(constraint.Name))
+                    declaredConstraints.Add(constraint);
+                else
+                    hasUnsupportedClauses = true;
             }
             else
             {
@@ -109,6 +284,7 @@ public static partial class PostgresSchemaMigrationExtractor
             }
         }
         columns = declaredColumns;
+        constraints = declaredConstraints;
         return true;
     }
 
@@ -123,6 +299,174 @@ public static partial class PostgresSchemaMigrationExtractor
         return true;
     }
 
+    private static bool TryAlterAddConstraint(string sql, out string schema, out string table, out ConstraintProjection constraint)
+    {
+        schema = table = string.Empty;
+        constraint = ConstraintProjection.Empty;
+        var match = AlterAddConstraint().Match(sql);
+        if (!match.Success || !TryNamedConstraint(match.Groups["constraint"].Value, out constraint)) return false;
+        schema = match.Groups["schema"].Success ? match.Groups["schema"].Value : string.Empty;
+        table = match.Groups["table"].Value;
+        return true;
+    }
+
+    private static bool TryAlterDropColumn(
+        string sql,
+        out string schema,
+        out string table,
+        out string column,
+        out string dropBehavior)
+    {
+        schema = table = column = dropBehavior = string.Empty;
+        var match = AlterDropColumn().Match(sql);
+        if (!match.Success) return false;
+        schema = match.Groups["schema"].Success ? match.Groups["schema"].Value : string.Empty;
+        table = match.Groups["table"].Value;
+        column = match.Groups["column"].Value;
+        dropBehavior = DropBehavior(match);
+        return true;
+    }
+
+    private static bool TryAlterRenameColumn(
+        string sql,
+        out string schema,
+        out string table,
+        out string column,
+        out string newColumn)
+    {
+        schema = table = column = newColumn = string.Empty;
+        var match = AlterRenameColumn().Match(sql);
+        if (!match.Success) return false;
+        schema = match.Groups["schema"].Success ? match.Groups["schema"].Value : string.Empty;
+        table = match.Groups["table"].Value;
+        column = match.Groups["column"].Value;
+        newColumn = match.Groups["newColumn"].Value;
+        return true;
+    }
+
+    private static bool TryAlterRenameTable(
+        string sql,
+        out string schema,
+        out string table,
+        out string newTable)
+    {
+        schema = table = newTable = string.Empty;
+        var match = AlterRenameTable().Match(sql);
+        if (!match.Success) return false;
+        schema = match.Groups["schema"].Success ? match.Groups["schema"].Value : string.Empty;
+        table = match.Groups["table"].Value;
+        newTable = match.Groups["newTable"].Value;
+        return true;
+    }
+
+    private static bool TryDropTable(
+        string sql,
+        out string schema,
+        out string table,
+        out string dropBehavior)
+    {
+        schema = table = dropBehavior = string.Empty;
+        var match = DropTable().Match(sql);
+        if (!match.Success) return false;
+        schema = match.Groups["schema"].Success ? match.Groups["schema"].Value : string.Empty;
+        table = match.Groups["table"].Value;
+        dropBehavior = DropBehavior(match);
+        return true;
+    }
+
+    private static string DropBehavior(Match match) =>
+        match.Groups["cascade"].Success
+            ? "cascade"
+            : match.Groups["restrict"].Success
+                ? "restrict"
+                : "unspecified";
+
+    private static bool TryCreateIndex(string sql, out string schema, out string table, out IndexProjection index)
+    {
+        schema = table = string.Empty;
+        index = IndexProjection.Empty;
+        var match = CreateIndex().Match(sql);
+        if (!match.Success || !TryIdentifierList(match.Groups["columns"].Value, allowOrdering: true, out var columns)) return false;
+        schema = match.Groups["schema"].Success ? match.Groups["schema"].Value : string.Empty;
+        table = match.Groups["table"].Value;
+        index = new IndexProjection(
+            match.Groups["index"].Value,
+            match.Groups["unique"].Success,
+            match.Groups["method"].Success ? match.Groups["method"].Value : "btree",
+            columns);
+        return true;
+    }
+
+    private static bool TryCreateEnum(string sql, out string schema, out string enumName)
+    {
+        schema = enumName = string.Empty;
+        var match = CreateEnum().Match(sql);
+        if (!match.Success) return false;
+        schema = match.Groups["schema"].Success ? match.Groups["schema"].Value : string.Empty;
+        enumName = match.Groups["enum"].Value;
+        return true;
+    }
+
+    private static bool TryCreateRoutine(string sql, out string schema, out string routineName, out string routineKind)
+    {
+        schema = routineName = routineKind = string.Empty;
+        var match = CreateRoutine().Match(sql);
+        if (!match.Success) return false;
+        schema = match.Groups["schema"].Success ? match.Groups["schema"].Value : string.Empty;
+        routineName = match.Groups["routine"].Value;
+        routineKind = match.Groups["kind"].Value.Equals("PROCEDURE", StringComparison.OrdinalIgnoreCase)
+            ? "procedure"
+            : "function";
+        return true;
+    }
+
+    private static bool TryNamedConstraint(string value, out ConstraintProjection constraint)
+    {
+        constraint = ConstraintProjection.Empty;
+        var match = NamedConstraint().Match(value);
+        if (!match.Success || !TryIdentifierList(match.Groups["columns"].Value, allowOrdering: false, out var columns)) return false;
+
+        if (match.Groups["primary"].Success)
+        {
+            constraint = new ConstraintProjection(match.Groups["name"].Value, "primary-key", columns, string.Empty, string.Empty, []);
+            return true;
+        }
+        if (match.Groups["unique"].Success)
+        {
+            constraint = new ConstraintProjection(match.Groups["name"].Value, "unique", columns, string.Empty, string.Empty, []);
+            return true;
+        }
+        if (!match.Groups["foreign"].Success
+            || !TryIdentifierList(match.Groups["referencedColumns"].Value, allowOrdering: false, out var referencedColumns))
+            return false;
+
+        constraint = new ConstraintProjection(
+            match.Groups["name"].Value,
+            "foreign-key",
+            columns,
+            match.Groups["referencedSchema"].Success ? match.Groups["referencedSchema"].Value : string.Empty,
+            match.Groups["referencedTable"].Value,
+            referencedColumns);
+        return true;
+    }
+
+    private static bool TryIdentifierList(string value, bool allowOrdering, out IReadOnlyList<string> identifiers)
+    {
+        var result = new List<string>();
+        foreach (var part in SplitTopLevel(value))
+        {
+            var match = (allowOrdering ? OrderedIdentifier() : PlainIdentifier()).Match(part.Trim());
+            if (!match.Success)
+            {
+                identifiers = [];
+                return false;
+            }
+            result.Add(match.Groups["identifier"].Value);
+        }
+        identifiers = result;
+        return result.Count > 0;
+    }
+
     private static readonly string[] ConstraintPrefixes = ["CONSTRAINT", "PRIMARY", "FOREIGN", "UNIQUE", "CHECK", "EXCLUDE", "LIKE"];
 
     private static bool HasBalancedParentheses(string value)
@@ -134,6 +478,12 @@ public static partial class PostgresSchemaMigrationExtractor
             else if (character == ')' && --depth < 0) return false;
         }
         return depth == 0;
+    }
+
+    private static bool HasCompleteRoutineBody(string value)
+    {
+        var beginAtomic = value.IndexOf("BEGIN ATOMIC", StringComparison.OrdinalIgnoreCase);
+        return beginAtomic < 0 || value[(beginAtomic + "BEGIN ATOMIC".Length)..].TrimEnd().EndsWith("END", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasTopLevelComma(string value)
@@ -178,19 +528,251 @@ public static partial class PostgresSchemaMigrationExtractor
             targetSymbol: target, contractElement: target, properties: properties);
     }
 
+    private static CodeFact ConstraintSurface(
+        ScanManifest manifest,
+        string factType,
+        string path,
+        SqlExecutionContextExtractor.SqlStatement statement,
+        string schema,
+        string table,
+        ConstraintProjection constraint,
+        string operation,
+        string objectKind)
+    {
+        var target = string.IsNullOrEmpty(schema) ? table : $"{schema}.{table}";
+        target += $".{constraint.Name}";
+        var properties = Properties(
+            ("objectKind", objectKind),
+            ("operationKind", operation),
+            ("tableName", table),
+            ("constraintName", constraint.Name),
+            ("constraintKind", constraint.Kind),
+            ("columnNames", string.Join(',', constraint.Columns)),
+            ("statementOrdinal", statement.Ordinal.ToString()),
+            ("coverageLabel", "bounded-static-evidence"),
+            ("limitations", Limitation));
+        if (!string.IsNullOrEmpty(schema)) properties["schemaName"] = schema;
+        if (!string.IsNullOrEmpty(constraint.ReferencedTable))
+        {
+            properties["referencedTableName"] = constraint.ReferencedTable;
+            properties["referencedColumnNames"] = string.Join(',', constraint.ReferencedColumns);
+        }
+        if (!string.IsNullOrEmpty(constraint.ReferencedSchema))
+            properties["referencedSchemaName"] = constraint.ReferencedSchema;
+        return FactFactory.Create(manifest, factType, RuleIds.DatabasePostgresSchemaMigration, EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(path, statement.StartLine, statement.EndLine, FactFactory.Hash(statement.StructuralText, 32), nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
+            targetSymbol: target, contractElement: target, properties: properties);
+    }
+
+    private static CodeFact IndexSurface(
+        ScanManifest manifest,
+        string factType,
+        string path,
+        SqlExecutionContextExtractor.SqlStatement statement,
+        string schema,
+        string table,
+        IndexProjection index,
+        string objectKind)
+    {
+        var target = string.IsNullOrEmpty(schema) ? table : $"{schema}.{table}";
+        target += $".{index.Name}";
+        var properties = Properties(
+            ("objectKind", objectKind),
+            ("operationKind", "create-index"),
+            ("tableName", table),
+            ("indexName", index.Name),
+            ("indexKind", index.Unique ? "unique" : "non-unique"),
+            ("accessMethod", index.AccessMethod),
+            ("columnNames", string.Join(',', index.Columns)),
+            ("statementOrdinal", statement.Ordinal.ToString()),
+            ("coverageLabel", "bounded-static-evidence"),
+            ("limitations", Limitation));
+        if (!string.IsNullOrEmpty(schema)) properties["schemaName"] = schema;
+        return FactFactory.Create(manifest, factType, RuleIds.DatabasePostgresSchemaMigration, EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(path, statement.StartLine, statement.EndLine, FactFactory.Hash(statement.StructuralText, 32), nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
+            targetSymbol: target, contractElement: target, properties: properties);
+    }
+
+    private static CodeFact ChangeSurface(
+        ScanManifest manifest,
+        string path,
+        SqlExecutionContextExtractor.SqlStatement statement,
+        string schema,
+        string table,
+        string? column,
+        string? newName,
+        string operation,
+        string? dropBehavior = null)
+    {
+        var target = string.IsNullOrEmpty(schema) ? table : $"{schema}.{table}";
+        if (!string.IsNullOrEmpty(column)) target += $".{column}";
+        var properties = Properties(
+            ("objectKind", "migration-operation"),
+            ("operationKind", operation),
+            ("tableName", table),
+            ("statementOrdinal", statement.Ordinal.ToString()),
+            ("coverageLabel", "bounded-static-evidence"),
+            ("limitations", Limitation));
+        if (!string.IsNullOrEmpty(schema)) properties["schemaName"] = schema;
+        if (!string.IsNullOrEmpty(column)) properties["columnName"] = column;
+        if (!string.IsNullOrEmpty(newName))
+            properties[operation == "rename-column" ? "newColumnName" : "newTableName"] = newName;
+        if (!string.IsNullOrEmpty(dropBehavior)) properties["dropBehavior"] = dropBehavior;
+        return FactFactory.Create(manifest, FactTypes.PostgresMigrationOperation, RuleIds.DatabasePostgresSchemaMigration, EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(path, statement.StartLine, statement.EndLine, FactFactory.Hash(statement.StructuralText, 32), nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
+            targetSymbol: target, contractElement: target, properties: properties);
+    }
+
+    private static CodeFact SnapshotSurface(
+        ScanManifest manifest,
+        string path,
+        int lineCount,
+        string snapshotFormat,
+        IReadOnlyList<string> recognizedStatementHashes,
+        IReadOnlyList<string> unsupportedDdlFamilies,
+        bool hasGaps)
+    {
+        var properties = Properties(
+            ("objectKind", "schema-snapshot"),
+            ("snapshotFormat", snapshotFormat),
+            ("recognizedDdlStatementCount", recognizedStatementHashes.Count.ToString()),
+            ("unsupportedDdlStatementCount", unsupportedDdlFamilies.Count.ToString()),
+            ("sourceDatabaseIdentityOmitted", "true"),
+            ("coverageLabel", hasGaps ? "reduced-static-evidence" : "bounded-static-evidence"),
+            ("limitations", Limitation));
+        var evidenceHash = FactFactory.Hash(
+            $"{snapshotFormat};{string.Join(';', recognizedStatementHashes)};{string.Join(',', unsupportedDdlFamilies.Order(StringComparer.Ordinal))}",
+            32);
+        return FactFactory.Create(manifest, FactTypes.PostgresSchemaSnapshotDeclared, RuleIds.DatabasePostgresSchemaMigration, EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(path, 1, lineCount, evidenceHash, nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
+            targetSymbol: Path.GetFileName(path), properties: properties);
+    }
+
+    private static CodeFact EnumSurface(
+        ScanManifest manifest,
+        string factType,
+        string path,
+        SqlExecutionContextExtractor.SqlStatement statement,
+        string schema,
+        string enumName,
+        string objectKind)
+    {
+        var target = string.IsNullOrEmpty(schema) ? enumName : $"{schema}.{enumName}";
+        var properties = Properties(
+            ("objectKind", objectKind),
+            ("operationKind", "create-enum"),
+            ("enumName", enumName),
+            ("enumLabelsOmitted", "true"),
+            ("statementOrdinal", statement.Ordinal.ToString()),
+            ("coverageLabel", "bounded-static-evidence"),
+            ("limitations", Limitation));
+        if (!string.IsNullOrEmpty(schema)) properties["schemaName"] = schema;
+        return FactFactory.Create(manifest, factType, RuleIds.DatabasePostgresSchemaMigration, EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(path, statement.StartLine, statement.EndLine, FactFactory.Hash(statement.StructuralText, 32), nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
+            targetSymbol: target, contractElement: target, properties: properties);
+    }
+
+    private static CodeFact RoutineSurface(
+        ScanManifest manifest,
+        string factType,
+        string path,
+        SqlExecutionContextExtractor.SqlStatement statement,
+        string schema,
+        string routineName,
+        string routineKind,
+        string objectKind)
+    {
+        var target = string.IsNullOrEmpty(schema) ? routineName : $"{schema}.{routineName}";
+        var properties = Properties(
+            ("objectKind", objectKind),
+            ("operationKind", $"create-{routineKind}"),
+            ("routineName", routineName),
+            ("routineKind", routineKind),
+            ("routineSignatureOmitted", "true"),
+            ("routineBodyOmitted", "true"),
+            ("statementOrdinal", statement.Ordinal.ToString()),
+            ("coverageLabel", "bounded-static-evidence"),
+            ("limitations", Limitation));
+        if (!string.IsNullOrEmpty(schema)) properties["schemaName"] = schema;
+        return FactFactory.Create(manifest, factType, RuleIds.DatabasePostgresSchemaMigration, EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(path, statement.StartLine, statement.EndLine, FactFactory.Hash(statement.StructuralText, 32), nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
+            targetSymbol: target, contractElement: target, properties: properties);
+    }
+
     private static CodeFact Gap(ScanManifest manifest, string path, int start, int end, int ordinal, string classification, string? snippetHash = null) =>
         FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.DatabasePostgresSchemaMigrationGap, EvidenceTiers.Tier4Unknown,
             new EvidenceSpan(path, start, end, snippetHash, nameof(PostgresSchemaMigrationExtractor), ScannerVersions.PostgresSchemaMigrationExtractor),
             properties: Properties(("classification", classification), ("statementOrdinal", ordinal.ToString()), ("coverageLabel", "reduced-static-evidence"), ("limitations", Limitation)));
+
+    private static CodeFact SnapshotGap(
+        ScanManifest manifest,
+        string path,
+        int lineCount,
+        string classification,
+        IReadOnlyList<string> unsupportedDdlFamilies)
+    {
+        var properties = Properties(
+            ("classification", classification),
+            ("statementOrdinal", "0"),
+            ("unsupportedDdlStatementCount", unsupportedDdlFamilies.Count.ToString()),
+            ("coverageLabel", "reduced-static-evidence"),
+            ("limitations", Limitation));
+        if (unsupportedDdlFamilies.Count > 0)
+            properties["unsupportedDdlFamilies"] = string.Join(',', unsupportedDdlFamilies.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
+        return FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.DatabasePostgresSchemaMigrationGap, EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(
+                path,
+                1,
+                lineCount,
+                FactFactory.Hash($"{classification};{string.Join(',', unsupportedDdlFamilies.Order(StringComparer.Ordinal))}", 32),
+                nameof(PostgresSchemaMigrationExtractor),
+                ScannerVersions.PostgresSchemaMigrationExtractor),
+            properties: properties);
+    }
 
     private static SortedDictionary<string, string> Properties(params (string Key, string Value)[] values) =>
         new(values.ToDictionary(value => value.Key, value => value.Value, StringComparer.Ordinal), StringComparer.Ordinal);
 
     private static int CountLines(string text) => text.Length == 0 ? 1 : 1 + text.Count(character => character == '\n');
 
+    private sealed record ConstraintProjection(
+        string Name,
+        string Kind,
+        IReadOnlyList<string> Columns,
+        string ReferencedSchema,
+        string ReferencedTable,
+        IReadOnlyList<string> ReferencedColumns)
+    {
+        public static ConstraintProjection Empty { get; } = new(string.Empty, string.Empty, [], string.Empty, string.Empty, []);
+    }
+
+    private sealed record IndexProjection(string Name, bool Unique, string AccessMethod, IReadOnlyList<string> Columns)
+    {
+        public static IndexProjection Empty { get; } = new(string.Empty, false, string.Empty, []);
+    }
+
     [GeneratedRegex(@"^CREATE\s+(?:UNLOGGED\s+|TEMP(?:ORARY)?\s+)?TABLE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateTablePrefix();
     [GeneratedRegex(@"^ALTER\s+TABLE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex AlterTablePrefix();
+    [GeneratedRegex(@"^DROP\s+TABLE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex DropTablePrefix();
+    [GeneratedRegex(@"^(?:DROP\b|TRUNCATE\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex UnsupportedDestructiveDdlPrefix();
+    [GeneratedRegex(@"^\s*--\s*tracemap-postgres-schema-snapshot:\s*v1\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex SnapshotDirective();
+    [GeneratedRegex(@"^(?<verb>CREATE|ALTER|DROP|TRUNCATE)\s+(?:OR\s+REPLACE\s+)?(?<subject>MATERIALIZED\s+VIEW|TABLE|INDEX|TYPE|SCHEMA|SEQUENCE|VIEW|TRIGGER|EXTENSION|DOMAIN|COLLATION|PUBLICATION|SUBSCRIPTION|POLICY|RULE|OTHER)?\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex SnapshotDdlPrefix();
+    [GeneratedRegex(@"^CREATE\s+(?:UNIQUE\s+)?INDEX\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateIndexPrefix();
+    [GeneratedRegex(@"^CREATE\s+TYPE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateEnumPrefix();
+    [GeneratedRegex(@"^CREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex CreateRoutinePrefix();
     [GeneratedRegex(@"^CREATE\s+(?:UNLOGGED\s+|TEMP(?:ORARY)?\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)\s*\((?<body>.*)\)\s*;?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)] private static partial Regex CreateTable();
     [GeneratedRegex(@"^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)\s+ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(?!(?:CONSTRAINT|PRIMARY|FOREIGN|UNIQUE|CHECK|EXCLUDE)\b)(?<column>[A-Za-z_][A-Za-z0-9_$]*)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex AlterAddColumn();
+    [GeneratedRegex(@"^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)\s+ADD\s+(?<constraint>CONSTRAINT\s+.*)\s*;?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)] private static partial Regex AlterAddConstraint();
+    [GeneratedRegex(@"^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)\s+DROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?(?<column>[A-Za-z_][A-Za-z0-9_$]*)(?:\s+(?:(?<cascade>CASCADE)|(?<restrict>RESTRICT)))?\s*;?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex AlterDropColumn();
+    [GeneratedRegex(@"^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)\s+RENAME\s+(?:COLUMN\s+)?(?<column>[A-Za-z_][A-Za-z0-9_$]*)\s+TO\s+(?<newColumn>[A-Za-z_][A-Za-z0-9_$]*)\s*;?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex AlterRenameColumn();
+    [GeneratedRegex(@"^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)\s+RENAME\s+TO\s+(?<newTable>[A-Za-z_][A-Za-z0-9_$]*)\s*;?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex AlterRenameTable();
+    [GeneratedRegex(@"^DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)(?:\s+(?:(?<cascade>CASCADE)|(?<restrict>RESTRICT)))?\s*;?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex DropTable();
+    [GeneratedRegex(@"^CONSTRAINT\s+(?<name>[A-Za-z_][A-Za-z0-9_$]*)\s+(?:(?<primary>PRIMARY\s+KEY)\s*\((?<columns>[^()]*)\)|(?<unique>UNIQUE)\s*\((?<columns>[^()]*)\)|(?<foreign>FOREIGN\s+KEY)\s*\((?<columns>[^()]*)\)\s+REFERENCES\s+(?:(?<referencedSchema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<referencedTable>[A-Za-z_][A-Za-z0-9_$]*)\s*\((?<referencedColumns>[^()]*)\))\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)] private static partial Regex NamedConstraint();
+    [GeneratedRegex(@"^CREATE\s+(?<unique>UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(?<index>[A-Za-z_][A-Za-z0-9_$]*)\s+ON\s+(?:ONLY\s+)?(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<table>[A-Za-z_][A-Za-z0-9_$]*)(?:\s+USING\s+(?<method>[A-Za-z_][A-Za-z0-9_$]*))?\s*\((?<columns>[^()]*)\)\s*;?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)] private static partial Regex CreateIndex();
+    [GeneratedRegex(@"^CREATE\s+TYPE\s+(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<enum>[A-Za-z_][A-Za-z0-9_$]*)\s+AS\s+ENUM\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)] private static partial Regex CreateEnum();
+    [GeneratedRegex(@"^CREATE\s+(?:OR\s+REPLACE\s+)?(?<kind>FUNCTION|PROCEDURE)\s+(?:(?<schema>[A-Za-z_][A-Za-z0-9_$]*)\.)?(?<routine>[A-Za-z_][A-Za-z0-9_$]*)\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)] private static partial Regex CreateRoutine();
+    [GeneratedRegex(@"\b(?:PRIMARY\s+KEY|UNIQUE|REFERENCES|CHECK|CONSTRAINT|NOT\s+NULL)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex InlineConstraintSignal();
+    [GeneratedRegex(@"^(?<identifier>[A-Za-z_][A-Za-z0-9_$]*)$", RegexOptions.CultureInvariant)] private static partial Regex PlainIdentifier();
+    [GeneratedRegex(@"^(?<identifier>[A-Za-z_][A-Za-z0-9_$]*)(?:\s+(?:ASC|DESC))?(?:\s+NULLS\s+(?:FIRST|LAST))?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)] private static partial Regex OrderedIdentifier();
     [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_$]*$", RegexOptions.CultureInvariant)] private static partial Regex SafeIdentifier();
 }

@@ -954,6 +954,27 @@ IDs, safe spans, rule/tier, coverage, and limitations. Raw SQL, role/object/
 infrastructure names, credentials, connection data, and local paths must be
 absent. `present-in-scripts` must be described as checked-in evidence only and
 must never claim effective or sufficient runtime access.
+
+## PostgreSQL Schema/Migration Evidence Smoke
+
+Schema/migration extractor changes should run the focused tests and a
+disposable checked-in-style fixture scan without connecting to PostgreSQL:
+
+```bash
+dotnet test src/dotnet/TraceMap.sln --filter FullyQualifiedName~PostgresSchemaMigrationExtractorTests
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/postgres-schema-migration --out /tmp/tracemap-postgres-schema-smoke
+```
+
+Expected output may include `PostgresMigrationFileDeclared`,
+`PostgresMigrationOperation`, `PostgresSchemaTableDeclared`,
+`PostgresSchemaColumnDeclared`, `PostgresSchemaConstraintDeclared`,
+`PostgresSchemaIndexDeclared`, and cataloged gaps. Inspect generated output for
+rule IDs, tiers, repository-relative spans, commit SHA, extractor version,
+coverage, and limitations. Raw SQL, expressions, predicates, literals, quoted
+or unsupported identifiers, connection material, and local paths must not
+appear. Static facts must not claim migration execution, live objects, index
+selection, uniqueness, referential integrity, compatibility, rollback, or
+release safety.
 # SQL operator runbook packet smoke
 
 Run the deterministic public-safe fixture and verify standard scan artifacts plus
@@ -1032,3 +1053,143 @@ random loopback port, uses no host volume, asserts pass/fail/not-run behavior
 and deterministic summaries, checks identifier and connection-data exclusion,
 and cleans all container and scratch state. It is not a substitute for an
 authorized target-specific operator validation.
+
+## Database design-review packet
+
+For changes to the single- or combined-index database design-review packet, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~DatabaseDesignReviewTests
+dotnet run --project src/dotnet/TraceMap.Cli -- scan \
+  --repo samples/postgres-schema-migration \
+  --out <tmp>/postgres-scan
+dotnet run --project src/dotnet/TraceMap.Cli -- combine \
+  --index <tmp>/postgres-scan/index.sqlite --label postgres-sample \
+  --out <tmp>/combined.sqlite
+dotnet run --project src/dotnet/TraceMap.Cli -- database-design-review \
+  --index <tmp>/postgres-scan/index.sqlite \
+  --out <tmp>/database-design-review-single
+dotnet run --project src/dotnet/TraceMap.Cli -- database-design-review \
+  --index <tmp>/combined.sqlite \
+  --out <tmp>/database-design-review-combined
+```
+
+Confirm both packet files are deterministic and contain rule IDs, evidence
+tiers, source labels, commit SHAs, repository-relative spans, extractor
+provenance, supporting fact/edge/rule IDs, coverage, limitations, and explicit
+gaps. Verify declaration rows remain separate from migration-operation rows,
+query/table correlation is exact and source-scoped, and route references come
+only from existing bounded path evidence. For the single-index packet, confirm
+route references are zero and `SingleIndexRoutePathUnavailable` labels the
+missing combined graph/path contract without per-query route-absence claims.
+
+The smoke must not require PostgreSQL or network access. Confirm the packet does
+not render raw SQL, snippets or snippet hashes, credentials, connection
+strings, scheduled command bodies, local paths, private server identities, or
+validation output. It must not claim SQL execution, runtime reachability,
+production state, design correctness, release approval, or that a script is
+safe to run.
+
+### EF Core mapping evidence
+
+For changes to EF/EF Core model mapping extraction or design-review
+composition, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter "FullyQualifiedName~CSharpSemanticExtractorTests|FullyQualifiedName~DatabaseDesignReviewTests"
+```
+
+Use a compiling fixture with framework-shaped semantic symbols and confirm
+`DbSet<TEntity>`, `Table`/`Column`, constant `ToTable`/`HasColumnName`, dynamic
+mapping names, and assembly-scanned configuration boundaries. Confirm the
+design-review packet links mappings only through exact schema/table identity or
+a unique same-source table name when the EF schema is unspecified. Ambiguous,
+unmatched, dynamic, and assembly-driven cases must remain explicit gaps.
+
+This validation does not execute application startup, `OnModelCreating`,
+migrations, generated SQL, or a database. It must not claim convention-derived
+names, runtime provider behavior, model completeness, database correspondence,
+query execution, or release safety.
+
+### Database operation call-pattern evidence
+
+For changes to application database-operation extraction or database
+design-review composition:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter "FullyQualifiedName~CSharpSemanticExtractorTests.Scan_emits_bounded_database_operation_candidates|FullyQualifiedName~DatabaseDesignReviewTests"
+```
+
+Use compiling EF/EF Core, Dapper, and ADO.NET/Npgsql fixtures. Confirm
+candidates preserve rule/tier/span/commit/extractor provenance, constant SQL
+contributes only safe operation/table shape metadata, dynamic or unresolved
+targets remain explicit gaps, and the packet never renders SQL text, command
+text, parameter values, connection material, or local paths.
+
+Also cover a C# file without a loadable project and confirm recognizable
+operation names emit Tier 4 operation-rule gaps rather than candidates.
+Qualified constant SQL targets must retain safe one- or two-part identity;
+unsafe or multipart identity must remain unlinked. Custom operation-named
+methods declared only on application `DbContext` subclasses must not become EF
+candidates. When operation route-path traversal is truncated, the packet must
+emit reduced-coverage gaps instead of claiming that no path exists.
+
+Treat every application operation as a static candidate. This validation does
+not prove execution, affected rows, database state, transaction outcome, or
+success.
+
+### PostgreSQL enum and routine declaration evidence
+
+For changes to the bounded PostgreSQL enum/routine projector, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~PostgresSchemaMigrationExtractorTests
+```
+
+Use checked-in synthetic SQL containing `CREATE TYPE ... AS ENUM`,
+`CREATE FUNCTION`, and `CREATE PROCEDURE`, including dollar-quoted bodies and
+quoted-identifier negative cases. Confirm facts retain rule ID, Tier 2,
+repository-relative span, commit SHA, extractor version, coverage label, and
+limitations while omitting enum labels, routine signatures, parameters,
+return declarations, languages, bodies, literals, and raw SQL. Unsupported
+recognized-family shapes must emit Tier 4 categorical gaps.
+
+### PostgreSQL destructive migration evidence
+
+For changes to bounded PostgreSQL drop/rename projection, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~PostgresSchemaMigrationExtractorTests
+```
+
+Use checked-in synthetic SQL containing single-object `DROP TABLE`,
+single-subcommand `ALTER TABLE ... DROP COLUMN`, `RENAME COLUMN`, and
+`RENAME TO`. Confirm facts retain safe source/new identities, categorical drop
+behavior, rule ID, Tier 2, repository-relative span, commit SHA, extractor
+version, coverage label, and limitations. Quoted identifiers, multi-object
+drops, and multi-subcommand alterations must emit Tier 4 categorical gaps
+without raw SQL or unsupported identities.
+
+### PostgreSQL checked-in schema snapshot evidence
+
+For changes to schema-snapshot recognition and coverage, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~PostgresSchemaMigrationExtractorTests
+```
+
+Use synthetic checked-in SQL with an active standard
+`-- PostgreSQL database dump` header or the exact
+`-- tracemap-postgres-schema-snapshot: v1` directive. Verify snapshot format,
+recognized bounded-DDL count, aggregate unsupported-DDL count, coverage label,
+source-database-identity omission, rule, tier, span, commit, extractor version,
+and limitations. Confirm filename-only candidates and marker text inside SQL
+strings do not establish snapshot identity. Unsupported DDL must produce
+categorical Tier 4 snapshot gaps without retaining object names, comments,
+database/server identity, or raw SQL.

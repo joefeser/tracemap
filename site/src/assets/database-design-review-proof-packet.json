@@ -1,0 +1,584 @@
+{
+  "schemaVersion": "tracemap-public-database-design-review-proof-packet/v1",
+  "derivedFromContract": "database-design-review/1.0",
+  "publicClaimLevel": "demo",
+  "purpose": "A synthetic public-safe projection showing how the shipped database design-review packet composes bounded static PostgreSQL, EF mapping, application operation, query, route, provenance, cap, and gap evidence.",
+  "source": {
+    "repositoryId": "joefeser/tracemap",
+    "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
+    "sourceKind": "checked-in-synthetic-contract-test-projection"
+  },
+  "modes": [
+    {
+      "mode": "single-index",
+      "inputKind": "index.sqlite",
+      "routeCoverage": "unavailable-with-explicit-gap",
+      "packet": {
+        "version": "1.0",
+        "ruleId": "database.design-review.packet.v1",
+        "claimLevel": "static-evidence",
+        "coverage": "partial",
+        "sources": [
+          {
+            "sourceLabel": "single",
+            "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
+            "language": "csharp-postgresql",
+            "analysisLevel": "semantic-and-structural",
+            "buildStatus": "not-run-for-public-projection",
+            "identityVerified": false,
+            "coverageWarnings": [
+              "synthetic-public-projection",
+              "source-identity-synthetic",
+              "runtime-observation-unavailable"
+            ]
+          }
+        ],
+        "summary": {
+          "sourceCount": 1,
+          "tableCount": 1,
+          "declarationCount": 2,
+          "operationCount": 1,
+          "queryReferenceCount": 1,
+          "routeReferenceCount": 0,
+          "globalObjectCount": 1,
+          "unlinkedQueryCount": 0,
+          "gapCount": 2,
+          "omittedObjectCount": 0,
+          "omittedEvidenceCount": 0,
+          "omittedRouteReferenceCount": 0,
+          "omittedGapCount": 0
+        },
+        "tables": [
+          {
+            "groupId": "group-public-orders",
+            "sourceLabel": "single",
+            "schemaName": "public",
+            "tableName": "orders",
+            "schemaResolution": "explicit",
+            "coverage": "partial",
+            "declarations": [
+              {
+                "itemId": "item-public-table",
+                "evidenceKind": "table",
+                "displayName": "orders",
+                "classification": "Declared",
+                "metadata": [
+                  {
+                    "key": "operationKind",
+                    "value": "create-table"
+                  }
+                ],
+                "evidence": {
+                  "ruleId": "database.postgres.schema-migration.v1",
+                  "evidenceTier": "Tier2Structural",
+                  "sourceLabel": "single",
+                  "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
+                  "filePath": "db/schema.sql",
+                  "startLine": 20,
+                  "endLine": 20,
+                  "extractorId": "PostgresSchemaMigrationExtractor",
+                  "extractorVersion": "postgres-schema-migration/0.5.0",
+                  "coverageLabel": "complete",
+                  "supportingFactIds": [
+                    "fact-public-schema-table"
+                  ],
+                  "supportingEdgeIds": [],
+                  "supportingRuleIds": [
+                    "database.postgres.schema-migration.v1"
+                  ],
+                  "limitations": [
+                    "Checked-in declaration evidence does not prove live schema existence or migration application."
+                  ]
+                }
+              },
+              {
+                "itemId": "item-public-ef-mapping",
+                "evidenceKind": "ef-column-mapping",
+                "displayName": "status",
+                "classification": "StaticMapping",
+                "metadata": [
+                  {
+                    "key": "configurationKind",
+                    "value": "fluent"
+                  },
+                  {
+                    "key": "matchKind",
+                    "value": "unique-table-name-match-schema-unspecified"
+                  }
+                ],
+                "evidence": {
+                  "ruleId": "database.ef.v1",
+                  "evidenceTier": "Tier1Semantic",
+                  "sourceLabel": "single",
+                  "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
+                  "filePath": "Data/OrdersContext.cs",
+                  "startLine": 51,
+                  "endLine": 51,
+                  "extractorId": "CSharpSemanticExtractor",
+                  "extractorVersion": "csharp-semantic/0.14.0",
+                  "coverageLabel": "complete",
+                  "supportingFactIds": [
+                    "fact-public-ef-mapping"
+                  ],
+                  "supportingEdgeIds": [],
+                  "supportingRuleIds": [
+                    "database.ef.v1"
+                  ],
+                  "limitations": [
+                    "Static mapping evidence does not reconstruct the runtime EF model or database correspondence."
+                  ]
+                }
+              }
+            ],
+            "operations": [
+              {
+                "itemId": "item-public-operation",
+                "evidenceKind": "application-operation",
+                "displayName": "insert-candidate",
+                "classification": "CandidateOnly",
+                "metadata": [
+                  {
+                    "key": "frameworkFamily",
+                    "value": "ef-core"
+                  },
+                  {
+                    "key": "matchKind",
+                    "value": "entity-table-static-match"
+                  }
+                ],
+                "evidence": {
+                  "ruleId": "database.operation.call-pattern.v1",
+                  "evidenceTier": "Tier1Semantic",
+                  "sourceLabel": "single",
+                  "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
+                  "filePath": "Data/OrderRepository.cs",
+                  "startLine": 54,
+                  "endLine": 54,
+                  "extractorId": "CSharpSemanticExtractor",
+                  "extractorVersion": "csharp-semantic/0.14.0",
+                  "coverageLabel": "complete",
+                  "supportingFactIds": [
+                    "fact-public-operation"
+                  ],
+                  "supportingEdgeIds": [],
+                  "supportingRuleIds": [
+                    "database.operation.call-pattern.v1"
+                  ],
+                  "limitations": [
+                    "A compiler-resolved call shape is a static candidate and does not prove execution or success."
+                  ]
+                }
+              }
+            ],
+            "queryReferences": [
+              {
+                "itemId": "item-public-query",
+                "evidenceKind": "query-reference",
+                "displayName": "public.orders",
+                "classification": "StaticNameMatch",
+                "metadata": [
+                  {
+                    "key": "matchKind",
+                    "value": "exact-source-scoped-static-name"
+                  }
+                ],
+                "evidence": {
+                  "ruleId": "database.sql.shape.v1",
+                  "evidenceTier": "Tier3SyntaxOrTextual",
+                  "sourceLabel": "single",
+                  "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
+                  "filePath": "Data/OrderRepository.cs",
+                  "startLine": 12,
+                  "endLine": 12,
+                  "extractorId": "CSharpIntegrationSyntaxExtractor",
+                  "extractorVersion": "csharp-integration-syntax/0.2.0",
+                  "coverageLabel": "complete",
+                  "supportingFactIds": [
+                    "fact-public-query"
+                  ],
+                  "supportingEdgeIds": [],
+                  "supportingRuleIds": [
+                    "database.sql.shape.v1"
+                  ],
+                  "limitations": [
+                    "Static query correlation does not prove provider selection, generated SQL, or execution."
+                  ]
+                }
+              }
+            ],
+            "routeReferences": [],
+            "limitations": [
+              "Single-index input has no combined graph contract, so route references remain unavailable."
+            ]
+          }
+        ],
+        "globalObjects": [
+          {
+            "itemId": "item-public-migration",
+            "evidenceKind": "migration-operation",
+            "displayName": "create-enum",
+            "classification": "Declared",
+            "metadata": [
+              {
+                "key": "objectKind",
+                "value": "migration-operation"
+              },
+              {
+                "key": "operationKind",
+                "value": "create-enum"
+              }
+            ],
+            "evidence": {
+              "ruleId": "database.postgres.schema-migration.v1",
+              "evidenceTier": "Tier2Structural",
+              "sourceLabel": "single",
+              "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
+              "filePath": "db/schema.sql",
+              "startLine": 32,
+              "endLine": 32,
+              "extractorId": "PostgresSchemaMigrationExtractor",
+              "extractorVersion": "postgres-schema-migration/0.5.0",
+              "coverageLabel": "complete",
+              "supportingFactIds": [
+                "fact-public-migration"
+              ],
+              "supportingEdgeIds": [],
+              "supportingRuleIds": [
+                "database.postgres.schema-migration.v1"
+              ],
+              "limitations": [
+                "Migration intent does not prove ordering, application, compatibility, rollback, or safety."
+              ]
+            }
+          }
+        ],
+        "unlinkedQueries": [],
+        "gaps": [
+          {
+            "gapId": "gap-public-single-route",
+            "gapKind": "SingleIndexRoutePathUnavailable",
+            "classification": "ReducedCoverage",
+            "message": "Single-index input has no combined graph contract; route references are unavailable.",
+            "sourceLabel": "single",
+            "ruleId": "database.design-review.gap.v1",
+            "evidenceTier": "Tier4Unknown",
+            "coverage": "partial",
+            "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
+            "filePath": null,
+            "startLine": null,
+            "endLine": null,
+            "extractorId": null,
+            "extractorVersion": null,
+            "supportingFactIds": [],
+            "supportingEdgeIds": [],
+            "supportingRuleIds": [
+              "database.design-review.packet.v1"
+            ],
+            "metadata": [
+              {
+                "key": "routeReferenceCount",
+                "value": "0"
+              }
+            ],
+            "limitations": [
+              "Unavailable route evidence is not evidence that no runtime route exists."
+            ]
+          },
+          {
+            "gapId": "gap-public-source-coverage",
+            "gapKind": "SourceCoverageReduced",
+            "classification": "ReducedCoverage",
+            "message": "The synthetic source keeps reduced build and runtime coverage visible.",
+            "sourceLabel": "single",
+            "ruleId": "database.design-review.gap.v1",
+            "evidenceTier": "Tier4Unknown",
+            "coverage": "partial",
+            "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
+            "filePath": null,
+            "startLine": null,
+            "endLine": null,
+            "extractorId": null,
+            "extractorVersion": null,
+            "supportingFactIds": [],
+            "supportingEdgeIds": [],
+            "supportingRuleIds": [
+              "database.design-review.packet.v1"
+            ],
+            "metadata": [
+              {
+                "key": "coverageReason",
+                "value": "synthetic-public-projection"
+              }
+            ],
+            "limitations": [
+              "Reduced source coverage cannot support complete-design or runtime conclusions."
+            ]
+          }
+        ],
+        "limitations": [
+          "The packet describes bounded static repository evidence only; it does not prove database existence, current schema state, schema completeness, or schema freshness.",
+          "Migration operations are repository evidence, not proof that migrations were ordered, applied, compatible, reversible, or safe to run.",
+          "Query and table correlation does not prove runtime provider, connection, search path, generated SQL, branch feasibility, or execution.",
+          "EF mappings do not reconstruct the runtime model, conventions, provider behavior, generated SQL, or database correspondence.",
+          "Single-index input has no combined graph contract; zero route references do not prove runtime route absence.",
+          "The packet does not prove data correctness, effective permissions, production state, rollback, release approval, DBA approval, or operational success.",
+          "Raw database and source material is omitted from this public projection."
+        ]
+      }
+    },
+    {
+      "mode": "combined-index",
+      "inputKind": "combined.sqlite",
+      "routeCoverage": "bounded-static-references-available",
+      "packet": {
+        "version": "1.0",
+        "ruleId": "database.design-review.packet.v1",
+        "claimLevel": "static-evidence",
+        "coverage": "partial",
+        "sources": [
+          {
+            "sourceLabel": "service",
+            "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
+            "language": "csharp-postgresql",
+            "analysisLevel": "semantic-and-structural",
+            "buildStatus": "not-run-for-public-projection",
+            "identityVerified": false,
+            "coverageWarnings": [
+              "synthetic-public-projection",
+              "source-identity-synthetic",
+              "runtime-observation-unavailable"
+            ]
+          }
+        ],
+        "summary": {
+          "sourceCount": 1,
+          "tableCount": 1,
+          "declarationCount": 1,
+          "operationCount": 1,
+          "queryReferenceCount": 1,
+          "routeReferenceCount": 1,
+          "globalObjectCount": 0,
+          "unlinkedQueryCount": 0,
+          "gapCount": 1,
+          "omittedObjectCount": 0,
+          "omittedEvidenceCount": 0,
+          "omittedRouteReferenceCount": 0,
+          "omittedGapCount": 0
+        },
+        "tables": [
+          {
+            "groupId": "group-public-combined-orders",
+            "sourceLabel": "service",
+            "schemaName": "public",
+            "tableName": "orders",
+            "schemaResolution": "explicit",
+            "coverage": "partial",
+            "declarations": [
+              {
+                "itemId": "item-public-combined-table",
+                "evidenceKind": "table",
+                "displayName": "orders",
+                "classification": "Declared",
+                "metadata": [
+                  {
+                    "key": "operationKind",
+                    "value": "create-table"
+                  }
+                ],
+                "evidence": {
+                  "ruleId": "database.postgres.schema-migration.v1",
+                  "evidenceTier": "Tier2Structural",
+                  "sourceLabel": "service",
+                  "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
+                  "filePath": "db/schema.sql",
+                  "startLine": 20,
+                  "endLine": 20,
+                  "extractorId": "PostgresSchemaMigrationExtractor",
+                  "extractorVersion": "postgres-schema-migration/0.5.0",
+                  "coverageLabel": "complete",
+                  "supportingFactIds": [
+                    "fact-public-combined-table"
+                  ],
+                  "supportingEdgeIds": [],
+                  "supportingRuleIds": [
+                    "database.postgres.schema-migration.v1"
+                  ],
+                  "limitations": [
+                    "Checked-in declaration evidence does not prove live schema existence."
+                  ]
+                }
+              }
+            ],
+            "operations": [
+              {
+                "itemId": "item-public-combined-operation",
+                "evidenceKind": "application-operation",
+                "displayName": "insert-candidate",
+                "classification": "CandidateOnly",
+                "metadata": [
+                  {
+                    "key": "frameworkFamily",
+                    "value": "ef-core"
+                  },
+                  {
+                    "key": "matchKind",
+                    "value": "entity-table-static-match"
+                  }
+                ],
+                "evidence": {
+                  "ruleId": "database.operation.call-pattern.v1",
+                  "evidenceTier": "Tier1Semantic",
+                  "sourceLabel": "service",
+                  "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
+                  "filePath": "Data/OrderRepository.cs",
+                  "startLine": 54,
+                  "endLine": 54,
+                  "extractorId": "CSharpSemanticExtractor",
+                  "extractorVersion": "csharp-semantic/0.14.0",
+                  "coverageLabel": "complete",
+                  "supportingFactIds": [
+                    "fact-public-combined-operation"
+                  ],
+                  "supportingEdgeIds": [],
+                  "supportingRuleIds": [
+                    "database.operation.call-pattern.v1"
+                  ],
+                  "limitations": [
+                    "A static operation candidate does not prove execution, affected rows, or success."
+                  ]
+                }
+              }
+            ],
+            "queryReferences": [
+              {
+                "itemId": "item-public-combined-query",
+                "evidenceKind": "query-reference",
+                "displayName": "public.orders",
+                "classification": "StaticNameMatch",
+                "metadata": [
+                  {
+                    "key": "matchKind",
+                    "value": "exact-source-scoped-static-name"
+                  }
+                ],
+                "evidence": {
+                  "ruleId": "database.sql.shape.v1",
+                  "evidenceTier": "Tier3SyntaxOrTextual",
+                  "sourceLabel": "service",
+                  "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
+                  "filePath": "Data/OrderRepository.cs",
+                  "startLine": 12,
+                  "endLine": 12,
+                  "extractorId": "CSharpIntegrationSyntaxExtractor",
+                  "extractorVersion": "csharp-integration-syntax/0.2.0",
+                  "coverageLabel": "complete",
+                  "supportingFactIds": [
+                    "fact-public-combined-query"
+                  ],
+                  "supportingEdgeIds": [],
+                  "supportingRuleIds": [
+                    "database.sql.shape.v1"
+                  ],
+                  "limitations": [
+                    "Static query correlation does not prove execution or database identity."
+                  ]
+                }
+              }
+            ],
+            "routeReferences": [
+              {
+                "routeReferenceId": "route-public-orders",
+                "entryKind": "http-route",
+                "method": "GET",
+                "normalizedPathKey": "/orders/{id}",
+                "pathClassification": "StaticPath",
+                "tableMatchKind": "static-name-match",
+                "evidence": {
+                  "ruleId": "database.design-review.packet.v1",
+                  "evidenceTier": "Tier1Semantic",
+                  "sourceLabel": "service",
+                  "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
+                  "filePath": "Controllers/OrdersController.cs",
+                  "startLine": 5,
+                  "endLine": 5,
+                  "extractorId": "test-route",
+                  "extractorVersion": "test-route/1.0",
+                  "coverageLabel": "partial",
+                  "supportingFactIds": [
+                    "fact-public-route",
+                    "fact-public-combined-query"
+                  ],
+                  "supportingEdgeIds": [
+                    "edge-public-route-call",
+                    "edge-public-call-query"
+                  ],
+                  "supportingRuleIds": [
+                    "database.design-review.packet.v1",
+                    "database.operation.call-pattern.v1",
+                    "database.sql.shape.v1"
+                  ],
+                  "limitations": [
+                    "A bounded static route reference does not prove runtime reachability, traffic, authorization, deployment, or user exercise."
+                  ]
+                }
+              }
+            ],
+            "limitations": [
+              "Combined graph evidence adds bounded static route context only."
+            ]
+          }
+        ],
+        "globalObjects": [],
+        "unlinkedQueries": [],
+        "gaps": [
+          {
+            "gapId": "gap-public-combined-source",
+            "gapKind": "SourceCoverageReduced",
+            "classification": "ReducedCoverage",
+            "message": "The synthetic combined source keeps build and runtime coverage unavailable.",
+            "sourceLabel": "service",
+            "ruleId": "database.design-review.gap.v1",
+            "evidenceTier": "Tier4Unknown",
+            "coverage": "partial",
+            "commitSha": "aa8940257f4c132a1682c6b6c5be26486bf6c66f",
+            "filePath": null,
+            "startLine": null,
+            "endLine": null,
+            "extractorId": null,
+            "extractorVersion": null,
+            "supportingFactIds": [
+              "fact-public-route"
+            ],
+            "supportingEdgeIds": [],
+            "supportingRuleIds": [
+              "database.design-review.packet.v1"
+            ],
+            "metadata": [
+              {
+                "key": "coverageReason",
+                "value": "synthetic-public-projection"
+              }
+            ],
+            "limitations": [
+              "Route composition cannot upgrade missing source, build, or runtime evidence."
+            ]
+          }
+        ],
+        "limitations": [
+          "The packet describes bounded static repository evidence only; it does not prove database existence, current schema state, schema completeness, or schema freshness.",
+          "Migration operations are repository evidence, not proof that migrations were ordered, applied, compatible, reversible, or safe to run.",
+          "Query and table correlation does not prove runtime provider, connection, search path, generated SQL, branch feasibility, or execution.",
+          "Route references preserve existing bounded static path evidence; they do not prove runtime reachability, traffic, authorization, deployment, or user exercise.",
+          "The packet does not prove data correctness, effective permissions, production state, rollback, release approval, DBA approval, or operational success.",
+          "Raw database and source material is omitted from this public projection."
+        ]
+      }
+    }
+  ],
+  "limitations": [
+    "This asset is a synthetic public-safe projection shaped like the shipped output contract, not raw scanner output or evidence about a live system.",
+    "It does not add extraction, connect to a database, execute SQL or application code, or inspect a live catalog.",
+    "Static evidence does not establish runtime provider selection, current or production state, correctness, compatibility, rollback, release approval, DBA approval, or operational safety.",
+    "Protected, executable, machine-local, private, raw, and arbitrary source material is intentionally omitted."
+  ]
+}

@@ -370,6 +370,16 @@
     "priority": "0.8"
   },
   {
+    "path": "/database/design-review/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
+    "path": "/database/design-review/proof-packet/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/sql/operator-handoff/",
     "changefreq": "monthly",
     "priority": "0.8"

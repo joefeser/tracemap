@@ -450,4 +450,394 @@ public sealed class CSharpSemanticExtractorTests
             && fact.ContractElement == "CustomerDefaults"
             && fact.RuleId == RuleIds.CSharpSemanticContractMapping);
     }
+
+    [Fact]
+    public void Scan_extracts_bounded_ef_entity_table_and_column_mappings_with_explicit_gaps()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "src", "EfSample"));
+        File.WriteAllText(Path.Combine(temp.Path, "src", "EfSample", "EfSample.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <Nullable>enable</Nullable>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "src", "EfSample", "EfStubs.cs"), """
+            using System;
+            using System.Linq.Expressions;
+
+            namespace Microsoft.EntityFrameworkCore.Metadata.Builders
+            {
+                public sealed class EntityTypeBuilder<TEntity>
+                {
+                    public PropertyBuilder<TProperty> Property<TProperty>(
+                        Expression<Func<TEntity, TProperty>> expression) => new();
+                }
+
+                public sealed class PropertyBuilder<TProperty> { }
+            }
+
+            namespace Microsoft.EntityFrameworkCore
+            {
+                using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+                public abstract class DbContext { }
+                public sealed class DbSet<TEntity> { }
+
+                public sealed class ModelBuilder
+                {
+                    public EntityTypeBuilder<TEntity> Entity<TEntity>() => new();
+                    public void ApplyConfigurationsFromAssembly(object assembly) { }
+                }
+
+                public static class RelationalEntityTypeBuilderExtensions
+                {
+                    public static EntityTypeBuilder<TEntity> ToTable<TEntity>(
+                        this EntityTypeBuilder<TEntity> builder,
+                        string name,
+                        string? schema = null) => builder;
+
+                    public static PropertyBuilder<TProperty> HasColumnName<TProperty>(
+                        this PropertyBuilder<TProperty> builder,
+                        string name) => builder;
+                }
+            }
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "src", "EfSample", "Orders.cs"), """
+            using System.ComponentModel.DataAnnotations.Schema;
+            using Microsoft.EntityFrameworkCore;
+
+            namespace EfSample;
+
+            public static class DbSchemas
+            {
+                public const string Audit = "audit";
+            }
+
+            [Table("order_archive", Schema = DbSchemas.Audit)]
+            public sealed class Order
+            {
+                [Column("legacy_number")]
+                public string Number { get; set; } = "";
+            }
+
+            public sealed class OrdersContext : DbContext
+            {
+                public DbSet<Order> Orders { get; } = new();
+
+                public void Configure(ModelBuilder modelBuilder, string dynamicTable)
+                {
+                    modelBuilder.Entity<Order>().ToTable(schema: "sales", name: "orders");
+                    modelBuilder.Entity<Order>().Property(order => order.Number).HasColumnName("order_number");
+                    modelBuilder.Entity<Order>().ToTable(dynamicTable);
+                    modelBuilder.ApplyConfigurationsFromAssembly(typeof(OrdersContext).Assembly);
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        Assert.Equal("Level1SemanticAnalysis", result.Manifest.AnalysisLevel);
+        var dbSet = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.DbSetDeclared
+            && fact.ContractElement == "Orders"
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic);
+        Assert.Equal("global::EfSample.Order", dbSet.Properties["entityType"]);
+        Assert.True(dbSet.Properties.ContainsKey("entityTypeSymbolId"));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.DatabaseColumnMapping
+            && fact.RuleId == RuleIds.CSharpSemanticContractMapping
+            && fact.Properties.GetValueOrDefault("configurationKind") == "annotation"
+            && fact.Properties.GetValueOrDefault("mappingKind") == "DatabaseTableMapping"
+            && fact.Properties.GetValueOrDefault("mappedName") == "order_archive"
+            && fact.Properties.GetValueOrDefault("schemaName") == "audit"
+            && fact.Properties.GetValueOrDefault("entityType") == "global::EfSample.Order");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.DatabaseColumnMapping
+            && fact.RuleId == RuleIds.CSharpSemanticContractMapping
+            && fact.Properties.GetValueOrDefault("configurationKind") == "annotation"
+            && fact.Properties.GetValueOrDefault("mappedName") == "legacy_number"
+            && fact.Properties.GetValueOrDefault("memberName") == "Number");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.DatabaseColumnMapping
+            && fact.RuleId == RuleIds.DatabaseEntityFramework
+            && fact.Properties.GetValueOrDefault("configurationKind") == "fluent"
+            && fact.Properties.GetValueOrDefault("mappingKind") == "DatabaseTableMapping"
+            && fact.Properties.GetValueOrDefault("mappedName") == "orders"
+            && fact.Properties.GetValueOrDefault("schemaName") == "sales");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.DatabaseColumnMapping
+            && fact.RuleId == RuleIds.DatabaseEntityFramework
+            && fact.Properties.GetValueOrDefault("configurationKind") == "fluent"
+            && fact.Properties.GetValueOrDefault("mappingKind") == "DatabaseColumnMapping"
+            && fact.Properties.GetValueOrDefault("mappedName") == "order_number"
+            && fact.Properties.GetValueOrDefault("memberName") == "Number");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseEntityFramework
+            && fact.Properties.GetValueOrDefault("classification") == "DynamicModelMappingName");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseEntityFramework
+            && fact.Properties.GetValueOrDefault("classification") == "AssemblyModelConfigurationUnavailable");
+    }
+
+    [Fact]
+    public void Scan_emits_an_explicit_ef_gap_for_a_recognizable_unbound_fluent_chain()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "src", "EfReduced"));
+        File.WriteAllText(Path.Combine(temp.Path, "src", "EfReduced", "EfReduced.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "src", "EfReduced", "Reduced.cs"), """
+            namespace EfReduced;
+
+            public sealed class Order { }
+
+            public sealed class Configuration
+            {
+                public void Configure(object modelBuilder)
+                {
+                    modelBuilder.Entity<Order>().ToTable("orders");
+                    modelBuilder.FromSql();
+                    modelBuilder.CommitTransactionAsync();
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseEntityFramework
+            && fact.ContractElement == "ToTable"
+            && fact.Properties.GetValueOrDefault("classification") == "SemanticBindingUnavailable"
+            && fact.EvidenceTier == EvidenceTiers.Tier4Unknown);
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.DatabaseColumnMapping
+            && fact.ContractElement == "orders");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseOperationCallPattern
+            && fact.Properties.GetValueOrDefault("classification") == "SemanticBindingUnavailable"
+            && fact.Properties.GetValueOrDefault("methodName") == "FromSql");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseOperationCallPattern
+            && fact.Properties.GetValueOrDefault("classification") == "SemanticBindingUnavailable"
+            && fact.Properties.GetValueOrDefault("methodName") == "CommitTransactionAsync");
+    }
+
+    [Fact]
+    public void Scan_emits_bounded_database_operation_candidates_without_retaining_sql_text()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "src", "OperationSample"));
+        File.WriteAllText(Path.Combine(temp.Path, "src", "OperationSample", "OperationSample.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "src", "OperationSample", "Frameworks.cs"), """
+            namespace Microsoft.EntityFrameworkCore
+            {
+                public class DbContext
+                {
+                    public DatabaseFacade Database { get; } = new();
+                    public int SaveChanges() => 0;
+                }
+                public sealed class DatabaseFacade
+                {
+                    public void BeginTransaction() { }
+                    public int ExecuteSqlRaw(string sql) => 0;
+                }
+                public class DbSet<T>
+                {
+                    public void Add(T entity) { }
+                    public void Update(T entity) { }
+                    public void Remove(T entity) { }
+                }
+            }
+
+            namespace Dapper
+            {
+                public static class SqlMapper
+                {
+                    public static object Query(this object connection, string sql) => new();
+                    public static int Execute(this object connection, string sql) => 0;
+                }
+            }
+
+            namespace Microsoft.Data.SqlClient
+            {
+                public sealed class SqlCommand
+                {
+                    public SqlCommand(string commandText) { }
+                    public int ExecuteNonQuery() => 0;
+                }
+            }
+
+            namespace Npgsql
+            {
+                public sealed class NpgsqlCommand
+                {
+                    public NpgsqlCommand(string commandText) { }
+                    public object ExecuteScalar() => new();
+                }
+            }
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "src", "OperationSample", "Operations.cs"), """
+            using Dapper;
+            using Microsoft.Data.SqlClient;
+            using Microsoft.EntityFrameworkCore;
+            using Npgsql;
+
+            namespace OperationSample;
+
+            public sealed class Order { }
+            public sealed class AuditRecord { }
+
+            public sealed class OrdersContext : DbContext
+            {
+                public DbSet<Order> Orders { get; } = new();
+                public void Update(AuditRecord record) { }
+
+                public void Persist(Order order, object connection, string dynamicSql)
+                {
+                    Orders.Add(order);
+                    Orders.Update(order);
+                    Orders.Remove(order);
+                    SaveChanges();
+                    Database.BeginTransaction();
+                    Database.ExecuteSqlRaw(dynamicSql);
+                    connection.Query("select id from public.orders");
+                    connection.Query("select 1");
+                    connection.Execute("delete from audit.orders where id = 42");
+                    new SqlCommand("insert into public.orders (id) values (42)").ExecuteNonQuery();
+                    new NpgsqlCommand("select count(*) from public.orders").ExecuteScalar();
+                    Update(new AuditRecord());
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+        var operations = result.Facts
+            .Where(fact => fact.FactType == FactTypes.DatabaseOperationCandidate
+                && fact.RuleId == RuleIds.DatabaseOperationCallPattern)
+            .ToArray();
+
+        Assert.Contains(operations, fact =>
+            fact.Properties.GetValueOrDefault("frameworkFamily") == "ef-core"
+            && fact.Properties.GetValueOrDefault("operationKind") == "insert-candidate"
+            && fact.Properties.GetValueOrDefault("entityType") == "global::OperationSample.Order"
+            && fact.Properties.GetValueOrDefault("targetIdentityStatus") == "entity-static");
+        Assert.Contains(operations, fact => fact.Properties.GetValueOrDefault("operationKind") == "update-candidate");
+        Assert.Contains(operations, fact => fact.Properties.GetValueOrDefault("operationKind") == "delete-candidate"
+            && fact.Properties.GetValueOrDefault("frameworkFamily") == "ef-core");
+        Assert.Contains(operations, fact => fact.Properties.GetValueOrDefault("operationKind") == "save-boundary");
+        Assert.Contains(operations, fact => fact.Properties.GetValueOrDefault("operationKind") == "transaction-begin");
+        Assert.Contains(operations, fact =>
+            fact.Properties.GetValueOrDefault("frameworkFamily") == "dapper"
+            && fact.Properties.GetValueOrDefault("operationKind") == "select-candidate"
+            && fact.Properties.GetValueOrDefault("tableName") == "public.orders");
+        Assert.Contains(operations, fact =>
+            fact.Properties.GetValueOrDefault("frameworkFamily") == "dapper"
+            && fact.Properties.GetValueOrDefault("operationKind") == "delete-candidate"
+            && fact.Properties.GetValueOrDefault("tableName") == "audit.orders");
+        Assert.Contains(operations, fact =>
+            fact.Properties.GetValueOrDefault("frameworkFamily") == "ado-net"
+            && fact.Properties.GetValueOrDefault("operationKind") == "insert-candidate"
+            && fact.Properties.GetValueOrDefault("tableName") == "public.orders");
+        Assert.Contains(operations, fact =>
+            fact.Properties.GetValueOrDefault("frameworkFamily") == "npgsql"
+            && fact.Properties.GetValueOrDefault("operationKind") == "select-candidate"
+            && fact.Properties.GetValueOrDefault("tableName") == "public.orders");
+        Assert.DoesNotContain(operations, fact =>
+            fact.Properties.GetValueOrDefault("entityType") == "global::OperationSample.AuditRecord"
+            || fact.TargetSymbol?.Contains("OrdersContext.Update", StringComparison.Ordinal) == true);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseOperationCallPattern
+            && fact.Properties.GetValueOrDefault("classification") == "DynamicDatabaseOperationSql"
+            && fact.Properties.GetValueOrDefault("methodName") == "ExecuteSqlRaw");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseOperationCallPattern
+            && fact.Properties.GetValueOrDefault("classification") == "DatabaseOperationTargetUnavailable"
+            && fact.Properties.GetValueOrDefault("methodName") == "Query");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.RuleId == RuleIds.DatabaseOperationCallPattern
+            && fact.Properties.GetValueOrDefault("classification") == "SyntaxFallbackOperationCandidate");
+        Assert.All(operations, fact =>
+        {
+            Assert.DoesNotContain(fact.Properties.Keys, key =>
+                key.Contains("sql", StringComparison.OrdinalIgnoreCase)
+                && key != "sqlOperationName");
+            Assert.DoesNotContain(fact.Properties.Values, value =>
+                value.Contains("select id", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("delete from", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("insert into", StringComparison.OrdinalIgnoreCase));
+        });
+
+        var second = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+        Assert.Equal(
+            operations.Select(OperationProjection).OrderBy(value => value, StringComparer.Ordinal),
+            second.Facts
+                .Where(fact => fact.FactType == FactTypes.DatabaseOperationCandidate
+                    && fact.RuleId == RuleIds.DatabaseOperationCallPattern)
+                .Select(OperationProjection)
+                .OrderBy(value => value, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Scan_emits_operation_rule_gaps_when_semantic_project_loading_is_unavailable()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Operations.cs"), """
+            public sealed class Operations
+            {
+                public void Run(dynamic context, dynamic connection, string sql)
+                {
+                    context.SaveChanges();
+                    connection.Execute(sql);
+                    context.Database.BeginTransaction();
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        var gaps = result.Facts.Where(fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseOperationCallPattern
+            && fact.Properties.GetValueOrDefault("classification") == "SyntaxFallbackOperationCandidate").ToArray();
+        Assert.Contains(gaps, fact => fact.Properties.GetValueOrDefault("methodName") == "SaveChanges");
+        Assert.Contains(gaps, fact => fact.Properties.GetValueOrDefault("methodName") == "Execute");
+        Assert.Contains(gaps, fact => fact.Properties.GetValueOrDefault("methodName") == "BeginTransaction");
+        Assert.All(gaps, fact => Assert.Equal(EvidenceTiers.Tier4Unknown, fact.EvidenceTier));
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.DatabaseOperationCandidate
+            && fact.RuleId == RuleIds.DatabaseOperationCallPattern);
+    }
+
+    private static string OperationProjection(CodeFact fact) =>
+        string.Join(
+            "\u001f",
+            fact.FactId,
+            fact.Evidence.FilePath,
+            fact.Evidence.StartLine,
+            fact.SourceSymbol,
+            fact.ContractElement,
+            string.Join("\u001e", fact.Properties.Select(pair => $"{pair.Key}={pair.Value}")));
 }
