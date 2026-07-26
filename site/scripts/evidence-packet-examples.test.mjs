@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { createDiscoveryOutputs } from "./discovery.mjs";
+import { databaseDesignReviewProofRoute } from "./database-design-review-showcase.mjs";
 import { claimReviewDrillRoute } from "./claim-review-drill.mjs";
 import {
   evidencePacketExamplesRequiredLinks,
@@ -212,6 +213,7 @@ async function createEvidencePacketExamplesFixture({
     evidencePacketExamplesRoute,
     ...evidencePacketExamplesRequiredLinks,
     claimReviewDrillRoute,
+    databaseDesignReviewProofRoute,
     "/sql/operator-handoff/proof-packet/"
   ],
   examplesHtml = null,
@@ -225,6 +227,7 @@ async function createEvidencePacketExamplesFixture({
     ...evidencePacketExamplesRequiredLinks,
     claimReviewDrillRoute,
     "/packets/assembly/",
+    databaseDesignReviewProofRoute,
     "/sql/operator-handoff/proof-packet/"
   ]);
 

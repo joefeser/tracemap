@@ -262,7 +262,8 @@ public static class ScanEngine
 
         facts.AddRange(BuildEnvironmentDiagnosticExtractor.Extract(repoPath, manifest, inventory, semanticResult));
         facts.AddRange(CSharpSyntaxExtractor.Extract(repoPath, manifest, inventory));
-        facts.AddRange(CSharpIntegrationSyntaxExtractor.Extract(repoPath, manifest, inventory));
+        var semanticallyAnalyzedFiles = GetSemanticallyAnalyzedFiles(semanticResult);
+        facts.AddRange(CSharpIntegrationSyntaxExtractor.Extract(repoPath, manifest, inventory, semanticallyAnalyzedFiles));
         facts.AddRange(RazorBindingExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(LegacyWcfExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(LegacyAsmxExtractor.Extract(repoPath, manifest, inventory));
@@ -289,6 +290,14 @@ public static class ScanEngine
             .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
     }
+
+    internal static IReadOnlySet<string> GetSemanticallyAnalyzedFiles(SemanticExtractionResult semanticResult) =>
+        semanticResult.AnalyzedFiles is not null
+            ? new HashSet<string>(semanticResult.AnalyzedFiles, StringComparer.Ordinal)
+            : semanticResult.Facts
+                .Select(candidate => candidate.Evidence.FilePath)
+                .Where(path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                .ToHashSet(StringComparer.Ordinal);
 
     private static string GetGapMessage(SemanticFactCandidate gap)
     {

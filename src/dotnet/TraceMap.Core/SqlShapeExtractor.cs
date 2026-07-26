@@ -94,6 +94,35 @@ public static class SqlShapeExtractor
         }
     }
 
+    public static bool TryPrimaryTableIdentity(string value, out string? tableIdentity)
+    {
+        tableIdentity = null;
+        try
+        {
+            var normalized = NormalizeSql(value);
+            var candidates = TableNameCandidates(normalized, ShapeOperation(normalized));
+            if (candidates.Count == 0)
+                return false;
+            var parts = candidates[0]
+                .Trim()
+                .Trim(',', ';')
+                .Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length is not (1 or 2))
+                return true;
+            var safeParts = parts
+                .Select(CleanUnqualifiedIdentifier)
+                .ToArray();
+            if (safeParts.Any(part => part.Length == 0))
+                return true;
+            tableIdentity = string.Join('.', safeParts);
+            return true;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return true;
+        }
+    }
+
     public static SortedDictionary<string, string> QueryShapeProperties(string value, string sourceKind)
     {
         var shape = QueryShape(value);
@@ -206,6 +235,11 @@ public static class SqlShapeExtractor
 
     private static IReadOnlyList<string> TableNames(string sql, string operation)
     {
+        return Unique(TableNameCandidates(sql, operation).Select(CleanIdentifier));
+    }
+
+    private static IReadOnlyList<string> TableNameCandidates(string sql, string operation)
+    {
         var candidates = new List<string>();
         switch (operation)
         {
@@ -233,7 +267,7 @@ public static class SqlShapeExtractor
         }
 
         // CALL/EXEC routine names are intentionally not table candidates in v1.
-        return Unique(candidates.Select(CleanIdentifier));
+        return candidates;
     }
 
     private static IReadOnlyList<string> ColumnNames(string sql, string operation)
@@ -387,6 +421,15 @@ public static class SqlShapeExtractor
         }
 
         return value;
+    }
+
+    private static string CleanUnqualifiedIdentifier(string value)
+    {
+        value = value.Trim().Trim('"', '`', '[', ']');
+        return value.Length > 0
+            && Regex.IsMatch(value, @"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100))
+                ? value
+                : string.Empty;
     }
 
     private static IReadOnlyList<string> Unique(IEnumerable<string> values)

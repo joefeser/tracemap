@@ -46,6 +46,46 @@ public static class CSharpIntegrationSyntaxExtractor
         "SqlQueryRaw"
     };
 
+    private static readonly IReadOnlyDictionary<string, string> DatabaseOperationFallbackKinds =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Add"] = "insert-candidate",
+            ["AddAsync"] = "insert-candidate",
+            ["AddRange"] = "insert-candidate",
+            ["AddRangeAsync"] = "insert-candidate",
+            ["Update"] = "update-candidate",
+            ["UpdateRange"] = "update-candidate",
+            ["Remove"] = "delete-candidate",
+            ["RemoveRange"] = "delete-candidate",
+            ["Find"] = "select-candidate",
+            ["FindAsync"] = "select-candidate",
+            ["FromSql"] = "select-candidate",
+            ["FromSqlRaw"] = "select-candidate",
+            ["FromSqlInterpolated"] = "select-candidate",
+            ["ExecuteSqlRaw"] = "execute-candidate",
+            ["ExecuteSqlRawAsync"] = "execute-candidate",
+            ["ExecuteSqlInterpolated"] = "execute-candidate",
+            ["ExecuteSqlInterpolatedAsync"] = "execute-candidate",
+            ["Query"] = "select-candidate",
+            ["QueryAsync"] = "select-candidate",
+            ["Execute"] = "execute-candidate",
+            ["ExecuteAsync"] = "execute-candidate",
+            ["ExecuteReader"] = "select-candidate",
+            ["ExecuteReaderAsync"] = "select-candidate",
+            ["ExecuteScalar"] = "scalar-candidate",
+            ["ExecuteScalarAsync"] = "scalar-candidate",
+            ["ExecuteNonQuery"] = "execute-candidate",
+            ["ExecuteNonQueryAsync"] = "execute-candidate",
+            ["SaveChanges"] = "save-boundary",
+            ["SaveChangesAsync"] = "save-boundary",
+            ["BeginTransaction"] = "transaction-begin",
+            ["BeginTransactionAsync"] = "transaction-begin",
+            ["CommitTransaction"] = "transaction-commit",
+            ["CommitTransactionAsync"] = "transaction-commit",
+            ["RollbackTransaction"] = "transaction-rollback",
+            ["RollbackTransactionAsync"] = "transaction-rollback"
+        };
+
     private static readonly HashSet<string> MessagePublisherMethods = new(StringComparer.Ordinal)
     {
         "Publish",
@@ -84,7 +124,11 @@ public static class CSharpIntegrationSyntaxExtractor
         "ReceiveEndpoint"
     };
 
-    public static IReadOnlyList<CodeFact> Extract(string repoPath, ScanManifest manifest, IEnumerable<FileInventoryItem> inventory)
+    public static IReadOnlyList<CodeFact> Extract(
+        string repoPath,
+        ScanManifest manifest,
+        IEnumerable<FileInventoryItem> inventory,
+        IReadOnlySet<string>? semanticallyAnalyzedFiles = null)
     {
         var facts = new List<CodeFact>();
         foreach (var file in inventory
@@ -107,7 +151,12 @@ public static class CSharpIntegrationSyntaxExtractor
 
                 var root = CSharpSyntaxTree.ParseText(SourceText.From(source), path: file.RelativePath).GetCompilationUnitRoot();
                 AddDbContextFacts(manifest, facts, file.RelativePath, root);
-                AddInvocationFacts(manifest, facts, file.RelativePath, root);
+                AddInvocationFacts(
+                    manifest,
+                    facts,
+                    file.RelativePath,
+                    root,
+                    semanticallyAnalyzedFiles?.Contains(file.RelativePath) == true);
                 AddMessageAttributeFacts(manifest, facts, file.RelativePath, root);
                 AddSqlCommandFacts(manifest, facts, file.RelativePath, root);
                 AddSqlStringFacts(manifest, facts, file.RelativePath, root);
@@ -181,13 +230,40 @@ public static class CSharpIntegrationSyntaxExtractor
         }
     }
 
-    private static void AddInvocationFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    private static void AddInvocationFacts(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        CompilationUnitSyntax root,
+        bool semanticAnalysisAvailable)
     {
         var constants = ExtractStringConstants(root);
         foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
             var invocationName = GetInvocationName(invocation.Expression);
             var receiverName = GetReceiver(invocation.Expression);
+            if (!semanticAnalysisAvailable
+                && DatabaseOperationFallbackKinds.TryGetValue(invocationName, out var operationKind))
+            {
+                facts.Add(FactFactory.Create(
+                    manifest,
+                    FactTypes.AnalysisGap,
+                    RuleIds.DatabaseOperationCallPattern,
+                    EvidenceTiers.Tier4Unknown,
+                    ToEvidenceSpan(filePath, invocation),
+                    sourceSymbol: receiverName,
+                    targetSymbol: invocationName,
+                    contractElement: operationKind,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["classification"] = "SyntaxFallbackOperationCandidate",
+                        ["coverageLabel"] = "reduced",
+                        ["frameworkFamily"] = "unknown",
+                        ["limitations"] = "Name-only syntax fallback does not prove the framework receiver, operation target, runtime dispatch, SQL, database identity, execution, or effects.",
+                        ["methodName"] = invocationName,
+                        ["operationKind"] = operationKind
+                    }));
+            }
             if (HttpClientMethods.Contains(invocationName) || JsonHttpMethods.Contains(invocationName))
             {
                 facts.Add(FactFactory.Create(
