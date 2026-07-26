@@ -235,6 +235,14 @@ name, hash, object identities, SQL, VBA, macro bodies, expressions, connections,
 or exception text in its checkpoint. Raw scratch remains disposable; retain the
 sanitized checkpoint family until its issue result is confirmed posted.
 
+For source builds in an isolated local Parallels Windows VM, follow
+[`ACCESS_PARALLELS_SOURCE_RUNNER.md`](ACCESS_PARALLELS_SOURCE_RUNNER.md).
+The host runner requires a disabled VM network device, scoped read-only input
+and read/write output shares, an exact clean guest-local checkout with no Git
+remote, and an offline toolchain/package cache. It supports only `doctor`,
+`build`, and synthetic validation. It does not accept a representative
+database or change the Access extraction boundary.
+
 For Access design-review composition changes, run the focused Access and
 release-review tests and verify both single and combined indexes produce an
 `Access Design Evidence` section with `available` status, upstream rule/tier/
