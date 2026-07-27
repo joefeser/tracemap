@@ -66,6 +66,15 @@ At exact `20f1a26ee0e71fad8e66d7131cda072a2b5b5333`:
 - guest output is captured and reduced to one allowlisted categorical line;
 - each action's categorical output uses an exact ordered field allowlist, so
   an unexpected guest-controlled key cannot carry protected data to the host;
+- host preflight rejects any enabled network adapter or unexpected enabled host
+  share;
+- build and synthetic operations re-prove SHA, cleanliness, and zero remotes
+  after execution;
+- validated Git/.NET launcher hashes are pinned, required path chains reject
+  reparse points, and freshly rebuilt CLI hashes are stable across synthetic
+  execution;
+- rejected synthetic runs remove both unvalidated review bundles and their
+  checkpoint families;
 - representative inputs and richer extraction are deliberately absent;
 - offline toolchain provisioning remains operator-local and outside Git.
 
@@ -110,3 +119,13 @@ All SDK, Git, Git LFS, NuGet, Git-bundle, provisioning, diagnostic, and retained
 review-bundle assets remain outside the repository. The final product diff
 contains only the two generic source runners, deterministic guard coverage,
 the Windows SQLite test-disposal correction, and documentation/spec state.
+
+## Exact-head security audit
+
+At `736c9f1e3ad692ecce8bea2a668fd52f0d8e2f20`, a read-only
+`claude-opus-5` audit identified three P2 boundary gaps: additional enabled
+adapters/shares were not rejected, post-operation identity rechecks omitted SHA
+and remotes, and guest tool/executable provenance was under-specified. It also
+identified concrete P3 cleanup, PowerShell exit-state, test-strength, and
+documentation issues. The follow-up implementation addresses the deterministic
+checks and explicitly documents the remaining guest-attestation limitation.

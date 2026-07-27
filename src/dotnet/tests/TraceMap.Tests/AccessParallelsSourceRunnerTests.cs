@@ -2,6 +2,20 @@ namespace TraceMap.Tests;
 
 public sealed class AccessParallelsSourceRunnerTests
 {
+    [Theory]
+    [InlineData("prefix\r\nprotected=true")]
+    [InlineData("prefix\rprotected=true")]
+    [InlineData("prefix\nprotected=true")]
+    [InlineData("prefix\0protected=true")]
+    [InlineData("protected=true\nprefix")]
+    [InlineData("PREFIX")]
+    public void Exact_host_output_contract_rejects_nonidentical_guest_output(string candidate)
+    {
+        const string expected = "prefix";
+
+        Assert.False(string.Equals(candidate, expected, StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task Source_runners_preserve_isolation_and_existing_extraction_boundary()
     {
@@ -19,29 +33,47 @@ public sealed class AccessParallelsSourceRunnerTests
 
         Assert.Contains("ValidateSet(\"doctor\", \"build\", \"synthetic\")", host, StringComparison.Ordinal);
         Assert.Contains("net0\\s+\\(-\\)", host, StringComparison.Ordinal);
-        Assert.Contains("mode='ro'", host, StringComparison.Ordinal);
-        Assert.Contains("mode='rw'", host, StringComparison.Ordinal);
+        Assert.Contains("\"access_input|ro\"", host, StringComparison.Ordinal);
+        Assert.Contains("\"access_output|rw\"", host, StringComparison.Ordinal);
         Assert.Contains("AccessParallelsNetworkEnabled", host, StringComparison.Ordinal);
         Assert.Contains(
-            "sourceClean=true;remoteAbsent=true;accessAvailable=true$",
+            "$vmInfo -match \"(?m)^\\s+net\\d+\\s+\\(\\+\\)\"",
+            host,
+            StringComparison.Ordinal);
+        Assert.Contains("$shares.Count -ne 2", host, StringComparison.Ordinal);
+        Assert.Contains(
+            "sourceClean=true;remoteAbsent=true;accessAvailable=true\"",
             host,
             StringComparison.Ordinal);
         Assert.Contains(
-            "buildPassed=true;accessTestsPassed=true;sourceClean=true$",
+            "buildPassed=true;accessTestsPassed=true;sourceClean=true\"",
             host,
             StringComparison.Ordinal);
         Assert.Contains(
-            "consumerContracts=completed;reviewBundleRetained=true;processCleanup=true;sourceClean=true$",
+            "consumerContracts=completed;reviewBundleRetained=true;processCleanup=true;sourceClean=true\"",
             host,
             StringComparison.Ordinal);
+        Assert.Contains("[StringComparison]::Ordinal", host, StringComparison.Ordinal);
         Assert.DoesNotContain(
             "[A-Za-z][A-Za-z0-9]*=",
             host,
             StringComparison.Ordinal);
+        Assert.Equal(
+            1,
+            host.Split("Write-Output", StringSplitOptions.None).Length - 1);
+        Assert.DoesNotContain("Write-Host", host, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("prlctl set", host, StringComparison.OrdinalIgnoreCase);
 
         Assert.Contains("remote", guest, StringComparison.Ordinal);
         Assert.Contains("status --porcelain", guest, StringComparison.Ordinal);
+        Assert.Contains("Get-SourceIdentity", guest, StringComparison.Ordinal);
+        Assert.True(
+            guest.Split(
+                "Test-ExpectedIdentity",
+                StringSplitOptions.None).Length - 1 >= 5);
+        Assert.Contains("Get-FileHash -LiteralPath $git", guest, StringComparison.Ordinal);
+        Assert.Contains("Get-FileHash -LiteralPath $dotnet", guest, StringComparison.Ordinal);
+        Assert.Contains("[IO.FileAttributes]::ReparsePoint", guest, StringComparison.Ordinal);
         Assert.Contains("Invoke-AccessSmoke.ps1", guest, StringComparison.Ordinal);
         Assert.Contains("phase9ConsumerContracts", guest, StringComparison.Ordinal);
         Assert.Contains("localReviewBundleContractCorrect", guest, StringComparison.Ordinal);
@@ -57,8 +89,11 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("$headExit = $LASTEXITCODE", guest, StringComparison.Ordinal);
         Assert.Contains("$statusExit = $LASTEXITCODE", guest, StringComparison.Ordinal);
         Assert.Contains("$remoteExit = $LASTEXITCODE", guest, StringComparison.Ordinal);
-        Assert.Contains("$statusAfterBuildExit = $LASTEXITCODE", guest, StringComparison.Ordinal);
-        Assert.Contains("$statusAfterExit = $LASTEXITCODE", guest, StringComparison.Ordinal);
+        Assert.Contains("$harnessExit = 0", guest, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "$harnessExit = $LASTEXITCODE",
+            guest,
+            StringComparison.Ordinal);
         Assert.Contains("finally {", guest, StringComparison.Ordinal);
         Assert.Contains(
             "Remove-Item $smokeRoot -Recurse -Force -ErrorAction Stop",
@@ -66,6 +101,10 @@ public sealed class AccessParallelsSourceRunnerTests
             StringComparison.Ordinal);
         Assert.Contains(
             "Remove-Item $reviewBundle -Recurse -Force -ErrorAction Stop",
+            guest,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Split-Path -Leaf $checkpoint",
             guest,
             StringComparison.Ordinal);
         Assert.Contains("$syntheticSucceeded = $true", guest, StringComparison.Ordinal);

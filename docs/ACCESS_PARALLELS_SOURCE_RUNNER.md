@@ -7,25 +7,34 @@ VM. Codex and network access are not required inside the guest.
 This workflow orchestrates the existing Access adapter and validation harness.
 It adds no extraction capability.
 
-## Boundary
+## Host-verified boundary
 
 The host runner refuses to continue unless:
 
 - the selected VM is running;
-- its `net0` device is disabled;
-- a scoped `access_input` share is read-only;
-- a scoped `access_output` share is read/write.
+- every configured network adapter is disabled;
+- the only enabled host shares are a read-only `access_input` share and a
+  read/write `access_output` share;
+- the guest emits the exact ordered categorical fields for the requested
+  action, with no additional output.
 
-The guest runner refuses to continue unless:
+## Guest-attested boundary
+
+The guest runner checks and attests that:
 
 - the source checkout is at the explicitly supplied commit SHA;
 - the checkout is clean;
 - it has no Git remote;
 - Microsoft Access is registered;
-- the offline .NET and Git tools are present.
+- the pinned offline .NET and Git launchers match their expected SHA-256
+  digests and required path chains contain no reparse points;
+- freshly rebuilt CLI executables do not change during synthetic validation.
 
-Neither script changes VM settings. Host-visible output is a single
-categorical status line. Raw build and harness output is suppressed.
+These guest attestations detect accidental or local tool/source substitution;
+they are not independent host attestation of an uncompromised Windows kernel,
+PowerShell runtime, complete .NET SDK tree, or Parallels Tools service. Neither
+script changes VM settings. Host-visible output is a single categorical status
+line. Raw build and harness output is suppressed.
 
 ## Guest-local source setup
 
@@ -42,6 +51,16 @@ Verify downloaded tool hashes against their official release metadata before
 placing them on the read-only input share. Extract them into a guest-local
 tool root, clone the Git bundle into a guest-local checkout, remove the bundle
 remote, and restore only from the offline NuGet feed.
+
+The default runner pins the validated Windows ARM64 launchers:
+
+- MinGit 2.55.0.3 `git.exe` SHA-256:
+  `b05b2d7eb80933c602272b5ddf132adf288cf78ad8e32a7a47ca7e200076b9f3`
+- .NET SDK 10.0.302 `dotnet.exe` SHA-256:
+  `05602a1b5eff9cd0be076c25ac9ab31c5e2f76df824a35b8bc9a16ab340767b6`
+
+An operator may supply different expected digests only when deliberately
+validating another separately verified toolchain.
 
 The runner expects this default guest-local shape:
 
@@ -76,7 +95,8 @@ PowerShell 7 and Parallels `prlctl` must be available on the host.
 ```
 
 Override `-VmName` and `-GuestRoot` only when the VM uses different
-operator-local names. Those values are never included in successful output.
+operator-local names. Override tool hashes only after separately verifying the
+replacement binaries. Those values are never included in successful output.
 
 ## Representative databases
 
@@ -90,4 +110,6 @@ database, its path, and raw outputs inside the established isolated workflow.
 The workflow does not inspect rows, execute queries, render forms or reports,
 execute VBA or macros, prove runtime behavior, or approve a release. A
 successful source build and synthetic smoke proves only the bounded contracts
-reported by those operations at the supplied commit.
+reported by those operations at the supplied commit. Guest-side identity and
+toolchain checks are not hardware-backed or independently re-proven by the
+host.
