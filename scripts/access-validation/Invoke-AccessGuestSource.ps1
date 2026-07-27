@@ -40,7 +40,7 @@ function Test-TrustedPath(
         }
 
         $current = Get-Item -LiteralPath $fullPath -Force -ErrorAction Stop
-        if ($RequireLeaf -and $current.PSIsContainer) {
+        if ($RequireLeaf -and $current -is [IO.DirectoryInfo]) {
             return $false
         }
         while ($null -ne $current) {
@@ -52,7 +52,7 @@ function Test-TrustedPath(
                     [StringComparison]::OrdinalIgnoreCase)) {
                 return $true
             }
-            if ($current.PSIsContainer) {
+            if ($current -is [IO.DirectoryInfo]) {
                 $current = $current.Parent
             }
             else {
