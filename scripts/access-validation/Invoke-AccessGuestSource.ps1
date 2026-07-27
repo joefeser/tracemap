@@ -100,6 +100,17 @@ if ($Action -eq "build") {
     if ($buildExit -ne 0 -or $testExit -ne 0) {
         Stop-Guest "AccessGuestSourceBuildFailed"
     }
+
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $statusAfterBuild = (& $git -C $repository status --porcelain 2>$null | Out-String)
+    $statusAfterBuildExit = $LASTEXITCODE
+    $dirtyAfterBuild = -not [string]::IsNullOrWhiteSpace($statusAfterBuild)
+    $ErrorActionPreference = $previousPreference
+    if ($statusAfterBuildExit -ne 0 -or $dirtyAfterBuild) {
+        Stop-Guest "AccessGuestSourceChanged"
+    }
+
     Write-Output "access-parallels-build=completed;head=$head;buildPassed=true;accessTestsPassed=true;sourceClean=true"
     exit 0
 }
@@ -123,66 +134,81 @@ $runId = [Guid]::NewGuid().ToString("N")
 $smokeRoot = Join-Path $GuestRoot "runs\$runId"
 $checkpoint = Join-Path $GuestRoot "checkpoints\$runId.json"
 $reviewBundle = Join-Path $GuestRoot "review-bundles\$runId"
-$previousPreference = $ErrorActionPreference
-$harnessExit = 1
-$smokeCleanupFailed = $false
+$syntheticSucceeded = $false
 try {
-    $ErrorActionPreference = "Continue"
-    & $harness `
-        -AccessCli $accessCli `
-        -TraceMapCli $traceMapCli `
-        -Generator $generator `
-        -SmokeRoot $smokeRoot `
-        -Phase9CheckpointPath $checkpoint `
-        -ReviewBundlePath $reviewBundle *> $null
-    $harnessExit = $LASTEXITCODE
-}
-finally {
-    $ErrorActionPreference = $previousPreference
+    $previousPreference = $ErrorActionPreference
+    $harnessExit = 1
+    $smokeCleanupFailed = $false
     try {
-        if (Test-Path $smokeRoot) {
-            Remove-Item $smokeRoot -Recurse -Force -ErrorAction Stop
+        $ErrorActionPreference = "Continue"
+        & $harness `
+            -AccessCli $accessCli `
+            -TraceMapCli $traceMapCli `
+            -Generator $generator `
+            -SmokeRoot $smokeRoot `
+            -Phase9CheckpointPath $checkpoint `
+            -ReviewBundlePath $reviewBundle *> $null
+        $harnessExit = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+        try {
+            if (Test-Path $smokeRoot) {
+                Remove-Item $smokeRoot -Recurse -Force -ErrorAction Stop
+            }
+        }
+        catch {
+            $smokeCleanupFailed = $true
         }
     }
-    catch {
-        $smokeCleanupFailed = $true
+    if ($smokeCleanupFailed -or (Test-Path $smokeRoot)) {
+        Stop-Guest "AccessGuestSyntheticCleanupFailed"
     }
-}
-if ($smokeCleanupFailed -or (Test-Path $smokeRoot)) {
-    Stop-Guest "AccessGuestSyntheticCleanupFailed"
-}
-if ($harnessExit -ne 0) {
-    Stop-Guest "AccessGuestSyntheticFailed"
-}
+    if ($harnessExit -ne 0) {
+        Stop-Guest "AccessGuestSyntheticFailed"
+    }
 
-$checkpointFiles = @(
-    Get-ChildItem -Path "$(Split-Path -Parent $checkpoint)\$(Split-Path -Leaf $checkpoint).*" -File |
-        Where-Object { $_.Name -match '\.\d+$' }
-)
-if ($checkpointFiles.Count -eq 0) {
-    Stop-Guest "AccessGuestSyntheticCheckpointMissing"
-}
-$highest = $checkpointFiles |
-    ForEach-Object { Get-Content $_.FullName -Raw | ConvertFrom-Json } |
-    Sort-Object checkpointSequence -Descending |
-    Select-Object -First 1
-if ($highest.phase9ConsumerContracts -ne "completed" -or
-    -not $highest.localReviewBundleContractCorrect -or
-    -not (Test-Path (Join-Path $reviewBundle "access-review-manifest.json"))) {
-    Stop-Guest "AccessGuestSyntheticContractFailed"
-}
-if (Get-Process -Name "MSACCESS", "tracemap-access" -ErrorAction SilentlyContinue) {
-    Stop-Guest "AccessGuestSyntheticProcessCleanupFailed"
-}
+    $checkpointFiles = @(
+        Get-ChildItem -Path "$(Split-Path -Parent $checkpoint)\$(Split-Path -Leaf $checkpoint).*" -File |
+            Where-Object { $_.Name -match '\.\d+$' }
+    )
+    if ($checkpointFiles.Count -eq 0) {
+        Stop-Guest "AccessGuestSyntheticCheckpointMissing"
+    }
+    $highest = $checkpointFiles |
+        ForEach-Object { Get-Content $_.FullName -Raw | ConvertFrom-Json } |
+        Sort-Object checkpointSequence -Descending |
+        Select-Object -First 1
+    if ($highest.phase9ConsumerContracts -ne "completed" -or
+        -not $highest.localReviewBundleContractCorrect -or
+        -not (Test-Path (Join-Path $reviewBundle "access-review-manifest.json"))) {
+        Stop-Guest "AccessGuestSyntheticContractFailed"
+    }
+    if (Get-Process -Name "MSACCESS", "tracemap-access" -ErrorAction SilentlyContinue) {
+        Stop-Guest "AccessGuestSyntheticProcessCleanupFailed"
+    }
 
-$previousPreference = $ErrorActionPreference
-$ErrorActionPreference = "Continue"
-$statusAfter = (& $git -C $repository status --porcelain 2>$null | Out-String)
-$statusAfterExit = $LASTEXITCODE
-$dirtyAfter = -not [string]::IsNullOrWhiteSpace($statusAfter)
-$ErrorActionPreference = $previousPreference
-if ($statusAfterExit -ne 0 -or $dirtyAfter) {
-    Stop-Guest "AccessGuestSourceChanged"
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $statusAfter = (& $git -C $repository status --porcelain 2>$null | Out-String)
+    $statusAfterExit = $LASTEXITCODE
+    $dirtyAfter = -not [string]::IsNullOrWhiteSpace($statusAfter)
+    $ErrorActionPreference = $previousPreference
+    if ($statusAfterExit -ne 0 -or $dirtyAfter) {
+        Stop-Guest "AccessGuestSourceChanged"
+    }
+
+    $syntheticSucceeded = $true
+}
+finally {
+    if (-not $syntheticSucceeded -and (Test-Path $reviewBundle)) {
+        try {
+            Remove-Item $reviewBundle -Recurse -Force -ErrorAction Stop
+        }
+        catch {
+            Stop-Guest "AccessGuestSyntheticCleanupFailed"
+        }
+    }
 }
 
 Write-Output "access-parallels-synthetic=completed;head=$head;consumerContracts=completed;reviewBundleRetained=true;processCleanup=true;sourceClean=true"
