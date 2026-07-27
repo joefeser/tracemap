@@ -59,12 +59,18 @@ if ($guestExit -ne 0) {
     Stop-Host "AccessParallelsGuestActionFailed"
 }
 
-$expectedPrefix = switch ($Action) {
-    "doctor" { "access-parallels-doctor=ready" }
-    "build" { "access-parallels-build=completed" }
-    "synthetic" { "access-parallels-synthetic=completed" }
+$escapedHead = [Regex]::Escape($ExpectedHead)
+$safePattern = switch ($Action) {
+    "doctor" {
+        "^access-parallels-doctor=ready;head=$escapedHead;sourceClean=true;remoteAbsent=true;accessAvailable=true$"
+    }
+    "build" {
+        "^access-parallels-build=completed;head=$escapedHead;buildPassed=true;accessTestsPassed=true;sourceClean=true$"
+    }
+    "synthetic" {
+        "^access-parallels-synthetic=completed;head=$escapedHead;consumerContracts=completed;reviewBundleRetained=true;processCleanup=true;sourceClean=true$"
+    }
 }
-$safePattern = "^$([Regex]::Escape($expectedPrefix));head=$ExpectedHead;(?:[A-Za-z][A-Za-z0-9]*=(?:true|false|completed|ready);?)+$"
 if ($guestOutput -notmatch $safePattern -or
     $guestOutput -match "[\\/:]" -or
     $guestOutput.Contains([Environment]::NewLine, [StringComparison]::Ordinal)) {

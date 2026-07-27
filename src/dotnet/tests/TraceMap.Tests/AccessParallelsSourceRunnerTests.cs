@@ -22,6 +22,22 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("mode='ro'", host, StringComparison.Ordinal);
         Assert.Contains("mode='rw'", host, StringComparison.Ordinal);
         Assert.Contains("AccessParallelsNetworkEnabled", host, StringComparison.Ordinal);
+        Assert.Contains(
+            "sourceClean=true;remoteAbsent=true;accessAvailable=true$",
+            host,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "buildPassed=true;accessTestsPassed=true;sourceClean=true$",
+            host,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "consumerContracts=completed;reviewBundleRetained=true;processCleanup=true;sourceClean=true$",
+            host,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "[A-Za-z][A-Za-z0-9]*=",
+            host,
+            StringComparison.Ordinal);
         Assert.DoesNotContain("prlctl set", host, StringComparison.OrdinalIgnoreCase);
 
         Assert.Contains("remote", guest, StringComparison.Ordinal);

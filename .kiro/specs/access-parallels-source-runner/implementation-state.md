@@ -59,6 +59,8 @@ At exact `20f1a26ee0e71fad8e66d7131cda072a2b5b5333`:
   SQLite writer connection before immediate read-side composition, matching
   the existing Windows disposal pattern in VBA and macro tests;
 - guest output is captured and reduced to one allowlisted categorical line;
+- each action's categorical output uses an exact ordered field allowlist, so
+  an unexpected guest-controlled key cannot carry protected data to the host;
 - representative inputs and richer extraction are deliberately absent;
 - offline toolchain provisioning remains operator-local and outside Git.
 
