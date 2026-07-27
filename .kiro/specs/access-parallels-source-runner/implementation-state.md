@@ -49,6 +49,9 @@ At exact `20f1a26ee0e71fad8e66d7131cda072a2b5b5333`:
 - the standalone synthetic action rebuilds the two CLI executables from the
   validated exact head before invoking the harness, preventing ignored output
   from an older checkout from being reported as current evidence;
+- the disposable per-run smoke root is removed in a `finally` path while the
+  sanitized checkpoint and review bundle remain in their separate retained
+  locations;
 - exact Access test classes run sequentially so Windows SQLite pool state
   cannot race across classes and substring filters cannot select unrelated
   tests;

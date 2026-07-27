@@ -42,6 +42,12 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("$statusExit = $LASTEXITCODE", guest, StringComparison.Ordinal);
         Assert.Contains("$remoteExit = $LASTEXITCODE", guest, StringComparison.Ordinal);
         Assert.Contains("$statusAfterExit = $LASTEXITCODE", guest, StringComparison.Ordinal);
+        Assert.Contains("finally {", guest, StringComparison.Ordinal);
+        Assert.Contains(
+            "Remove-Item $smokeRoot -Recurse -Force -ErrorAction Stop",
+            guest,
+            StringComparison.Ordinal);
+        Assert.Contains("AccessGuestSyntheticCleanupFailed", guest, StringComparison.Ordinal);
         Assert.DoesNotContain("--filter \"Access\"", guest, StringComparison.Ordinal);
         Assert.DoesNotContain("Invoke-AccessRepresentativeSmoke.ps1", guest, StringComparison.Ordinal);
 
