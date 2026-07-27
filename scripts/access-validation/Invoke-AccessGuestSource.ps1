@@ -7,13 +7,92 @@ param(
     [ValidatePattern("^[0-9a-f]{40}$")]
     [string]$ExpectedHead,
 
-    [string]$GuestRoot = "C:\TraceMapDev"
+    [string]$GuestRoot = "C:\TraceMapDev",
+
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern("^[0-9a-f]{64}$")]
+    [string]$ExpectedGitSha256,
+
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern("^[0-9a-f]{64}$")]
+    [string]$ExpectedDotnetSha256
 )
 
 $ErrorActionPreference = "Stop"
 
 function Stop-Guest([string]$Classification) {
     throw $Classification
+}
+
+function Test-TrustedPath(
+    [string]$Path,
+    [string]$Boundary,
+    [bool]$RequireLeaf = $false
+) {
+    try {
+        $fullPath = [IO.Path]::GetFullPath($Path)
+        $fullBoundary = [IO.Path]::GetFullPath($Boundary).TrimEnd([char]92)
+        if ($fullPath -ne $fullBoundary -and
+            -not $fullPath.StartsWith(
+                "$fullBoundary\",
+                [StringComparison]::OrdinalIgnoreCase)) {
+            return $false
+        }
+
+        $current = Get-Item -LiteralPath $fullPath -Force -ErrorAction Stop
+        if ($RequireLeaf -and $current.PSIsContainer) {
+            return $false
+        }
+        while ($null -ne $current) {
+            if (($current.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                return $false
+            }
+            if ($current.FullName.TrimEnd([char]92).Equals(
+                    $fullBoundary,
+                    [StringComparison]::OrdinalIgnoreCase)) {
+                return $true
+            }
+            if ($current.PSIsContainer) {
+                $current = $current.Parent
+            }
+            else {
+                $current = $current.Directory
+            }
+        }
+    }
+    catch {
+        return $false
+    }
+    return $false
+}
+
+function Get-SourceIdentity([string]$Git, [string]$Repository) {
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $head = (& $Git -C $Repository rev-parse HEAD 2>$null | Out-String).Trim()
+    $headExit = $LASTEXITCODE
+    $status = (& $Git -C $Repository status --porcelain 2>$null | Out-String)
+    $statusExit = $LASTEXITCODE
+    $remotes = (& $Git -C $Repository remote 2>$null | Out-String).Trim()
+    $remoteExit = $LASTEXITCODE
+    $ErrorActionPreference = $previousPreference
+    return [pscustomobject]@{
+        Head = $head
+        HeadExit = $headExit
+        StatusExit = $statusExit
+        Dirty = -not [string]::IsNullOrWhiteSpace($status)
+        RemoteExit = $remoteExit
+        Remotes = $remotes
+    }
+}
+
+function Test-ExpectedIdentity($Identity, [string]$ExpectedHead) {
+    return $Identity.HeadExit -eq 0 -and
+        $Identity.StatusExit -eq 0 -and
+        $Identity.RemoteExit -eq 0 -and
+        $Identity.Head -eq $ExpectedHead -and
+        -not $Identity.Dirty -and
+        [string]::IsNullOrWhiteSpace($Identity.Remotes)
 }
 
 $repository = Join-Path $GuestRoot "tracemap"
@@ -26,30 +105,26 @@ $tests = Join-Path $repository "src\dotnet\tests\TraceMap.Tests\TraceMap.Tests.c
 $generator = Join-Path $repository "scripts\access-validation\New-SyntheticAccessFixture.ps1"
 $harness = Join-Path $repository "scripts\access-validation\Invoke-AccessSmoke.ps1"
 
-foreach ($required in @($repository, $git, $dotnet, $solution, $tests)) {
-    if (-not (Test-Path $required)) {
+if (-not (Test-TrustedPath $repository $GuestRoot)) {
+    Stop-Guest "AccessGuestSourceInputMissing"
+}
+foreach ($required in @($git, $dotnet, $solution, $tests, $generator, $harness)) {
+    if (-not (Test-TrustedPath $required $GuestRoot $true)) {
         Stop-Guest "AccessGuestSourceInputMissing"
     }
 }
+if ((Get-FileHash -LiteralPath $git -Algorithm SHA256).Hash.ToLowerInvariant() -ne
+        $ExpectedGitSha256 -or
+    (Get-FileHash -LiteralPath $dotnet -Algorithm SHA256).Hash.ToLowerInvariant() -ne
+        $ExpectedDotnetSha256) {
+    Stop-Guest "AccessGuestToolchainIdentityMismatch"
+}
 
-$previousPreference = $ErrorActionPreference
-$ErrorActionPreference = "Continue"
-$head = (& $git -C $repository rev-parse HEAD 2>$null | Out-String).Trim()
-$headExit = $LASTEXITCODE
-$status = (& $git -C $repository status --porcelain 2>$null | Out-String)
-$statusExit = $LASTEXITCODE
-$dirty = -not [string]::IsNullOrWhiteSpace($status)
-$remotes = (& $git -C $repository remote 2>$null | Out-String).Trim()
-$remoteExit = $LASTEXITCODE
-$ErrorActionPreference = $previousPreference
-if ($headExit -ne 0 -or
-    $statusExit -ne 0 -or
-    $remoteExit -ne 0 -or
-    $head -ne $ExpectedHead -or
-    $dirty -or
-    $remotes) {
+$identity = Get-SourceIdentity $git $repository
+if (-not (Test-ExpectedIdentity $identity $ExpectedHead)) {
     Stop-Guest "AccessGuestSourceIdentityMismatch"
 }
+$head = $identity.Head
 
 $accessRegistration = Get-ItemProperty `
     "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\MSACCESS.EXE" `
@@ -101,18 +176,26 @@ if ($Action -eq "build") {
         Stop-Guest "AccessGuestSourceBuildFailed"
     }
 
-    $previousPreference = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    $statusAfterBuild = (& $git -C $repository status --porcelain 2>$null | Out-String)
-    $statusAfterBuildExit = $LASTEXITCODE
-    $dirtyAfterBuild = -not [string]::IsNullOrWhiteSpace($statusAfterBuild)
-    $ErrorActionPreference = $previousPreference
-    if ($statusAfterBuildExit -ne 0 -or $dirtyAfterBuild) {
+    $identityAfterBuild = Get-SourceIdentity $git $repository
+    if (-not (Test-ExpectedIdentity $identityAfterBuild $ExpectedHead)) {
         Stop-Guest "AccessGuestSourceChanged"
     }
 
     Write-Output "access-parallels-build=completed;head=$head;buildPassed=true;accessTestsPassed=true;sourceClean=true"
     exit 0
+}
+
+$cliOutputDirectories = @(
+    Split-Path -Parent $accessCli
+    Split-Path -Parent $traceMapCli
+)
+foreach ($outputDirectory in $cliOutputDirectories) {
+    if (Test-Path -LiteralPath $outputDirectory) {
+        if (-not (Test-TrustedPath $outputDirectory $GuestRoot)) {
+            Stop-Guest "AccessGuestSyntheticInputMissing"
+        }
+        Remove-Item $outputDirectory -Recurse -Force -ErrorAction Stop
+    }
 }
 
 $previousPreference = $ErrorActionPreference
@@ -123,12 +206,18 @@ $ErrorActionPreference = $previousPreference
 if ($syntheticBuildExit -ne 0) {
     Stop-Guest "AccessGuestSyntheticBuildFailed"
 }
+$identityAfterSyntheticBuild = Get-SourceIdentity $git $repository
+if (-not (Test-ExpectedIdentity $identityAfterSyntheticBuild $ExpectedHead)) {
+    Stop-Guest "AccessGuestSourceChanged"
+}
 
-foreach ($required in @($accessCli, $traceMapCli, $generator, $harness)) {
-    if (-not (Test-Path $required)) {
+foreach ($required in @($accessCli, $traceMapCli)) {
+    if (-not (Test-TrustedPath $required $GuestRoot $true)) {
         Stop-Guest "AccessGuestSyntheticInputMissing"
     }
 }
+$accessCliHash = (Get-FileHash -LiteralPath $accessCli -Algorithm SHA256).Hash
+$traceMapCliHash = (Get-FileHash -LiteralPath $traceMapCli -Algorithm SHA256).Hash
 
 $runId = [Guid]::NewGuid().ToString("N")
 $smokeRoot = Join-Path $GuestRoot "runs\$runId"
@@ -141,14 +230,19 @@ try {
     $smokeCleanupFailed = $false
     try {
         $ErrorActionPreference = "Continue"
-        & $harness `
-            -AccessCli $accessCli `
-            -TraceMapCli $traceMapCli `
-            -Generator $generator `
-            -SmokeRoot $smokeRoot `
-            -Phase9CheckpointPath $checkpoint `
-            -ReviewBundlePath $reviewBundle *> $null
-        $harnessExit = $LASTEXITCODE
+        try {
+            & $harness `
+                -AccessCli $accessCli `
+                -TraceMapCli $traceMapCli `
+                -Generator $generator `
+                -SmokeRoot $smokeRoot `
+                -Phase9CheckpointPath $checkpoint `
+                -ReviewBundlePath $reviewBundle *> $null
+            $harnessExit = 0
+        }
+        catch {
+            $harnessExit = 1
+        }
     }
     finally {
         $ErrorActionPreference = $previousPreference
@@ -187,23 +281,31 @@ try {
     if (Get-Process -Name "MSACCESS", "tracemap-access" -ErrorAction SilentlyContinue) {
         Stop-Guest "AccessGuestSyntheticProcessCleanupFailed"
     }
+    if ((Get-FileHash -LiteralPath $accessCli -Algorithm SHA256).Hash -ne
+            $accessCliHash -or
+        (Get-FileHash -LiteralPath $traceMapCli -Algorithm SHA256).Hash -ne
+            $traceMapCliHash) {
+        Stop-Guest "AccessGuestSyntheticExecutableChanged"
+    }
 
-    $previousPreference = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    $statusAfter = (& $git -C $repository status --porcelain 2>$null | Out-String)
-    $statusAfterExit = $LASTEXITCODE
-    $dirtyAfter = -not [string]::IsNullOrWhiteSpace($statusAfter)
-    $ErrorActionPreference = $previousPreference
-    if ($statusAfterExit -ne 0 -or $dirtyAfter) {
+    $identityAfterSynthetic = Get-SourceIdentity $git $repository
+    if (-not (Test-ExpectedIdentity $identityAfterSynthetic $ExpectedHead)) {
         Stop-Guest "AccessGuestSourceChanged"
     }
 
     $syntheticSucceeded = $true
 }
 finally {
-    if (-not $syntheticSucceeded -and (Test-Path $reviewBundle)) {
+    if (-not $syntheticSucceeded) {
         try {
-            Remove-Item $reviewBundle -Recurse -Force -ErrorAction Stop
+            if (Test-Path $reviewBundle) {
+                Remove-Item $reviewBundle -Recurse -Force -ErrorAction Stop
+            }
+            Get-ChildItem `
+                -Path "$(Split-Path -Parent $checkpoint)\$(Split-Path -Leaf $checkpoint).*" `
+                -File `
+                -ErrorAction SilentlyContinue |
+                Remove-Item -Force -ErrorAction Stop
         }
         catch {
             Stop-Guest "AccessGuestSyntheticCleanupFailed"
@@ -212,3 +314,4 @@ finally {
 }
 
 Write-Output "access-parallels-synthetic=completed;head=$head;consumerContracts=completed;reviewBundleRetained=true;processCleanup=true;sourceClean=true"
+exit 0

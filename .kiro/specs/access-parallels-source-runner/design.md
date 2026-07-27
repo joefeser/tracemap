@@ -28,9 +28,17 @@ The guest script requires:
 - installed Microsoft Access discovered without launching it;
 - guest-local source and toolchain paths.
 
-The host preflight requires the configured VM to be running, `net0` disabled,
-the `access_input` share read-only, and the `access_output` share read/write.
-It never changes those settings.
+The host preflight requires the configured VM to be running, every configured
+network adapter disabled, and exactly the read-only `access_input` and
+read/write `access_output` host shares enabled. It never changes those
+settings.
+
+Guest identity and toolchain results are attestations from inside Windows, not
+independent host or hardware-backed proof. The runner pins the validated
+Git/.NET launcher hashes, rejects required reparse-point path chains, rebuilds
+CLI output from a clean output directory, and verifies executable hashes across
+synthetic execution. It does not prove an uncompromised Windows kernel,
+PowerShell runtime, complete SDK tree, or Parallels Tools service.
 
 ## Operations
 

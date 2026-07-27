@@ -9,9 +9,10 @@ or broaden Access extraction.
 
 ## Requirements
 
-1. The host runner must fail closed unless the selected VM is running with its
-   network device disabled and the established scoped input/output shares are
-   present with read-only/read-write modes respectively.
+1. The host runner must fail closed unless the selected VM is running with
+   every configured network adapter disabled and exactly the established
+   scoped input/output shares present with read-only/read-write modes
+   respectively.
 2. The guest runner must use a guest-local repository, offline .NET SDK, Git,
    and package cache. It must reject a dirty checkout, an unexpected commit, or
    any configured Git remote.
@@ -26,6 +27,9 @@ or broaden Access extraction.
    credentials, or raw tool output.
 7. The runner must not enable networking, alter VM sharing, launch a
    representative database, or add form/report, VBA, or macro extraction.
+8. Guest checks must pin the validated Git/.NET launchers, reject required
+   reparse-point path chains, and label guest identity/toolchain results as
+   attestations rather than independent host proof.
 
 ## Non-claims
 
