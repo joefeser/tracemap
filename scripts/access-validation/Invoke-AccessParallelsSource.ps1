@@ -11,6 +11,10 @@ param(
 
     [string]$GuestRoot = "C:\TraceMapDev",
 
+    [string]$ExpectedInputSharePath = (Join-Path $HOME "AccessAnalysis/input"),
+
+    [string]$ExpectedOutputSharePath = (Join-Path $HOME "AccessAnalysis/output"),
+
     [ValidatePattern("^[0-9a-f]{64}$")]
     [string]$ExpectedGitSha256 = "b05b2d7eb80933c602272b5ddf132adf288cf78ad8e32a7a47ca7e200076b9f3",
 
@@ -23,6 +27,16 @@ $ErrorActionPreference = "Stop"
 function Stop-Host([string]$Classification) {
     [Console]::Error.WriteLine("error: $Classification")
     exit 1
+}
+
+function Get-CanonicalHostPath([string]$Path) {
+    try {
+        $resolved = Resolve-Path -LiteralPath $Path -ErrorAction Stop
+        return $resolved.Path.TrimEnd([IO.Path]::DirectorySeparatorChar)
+    }
+    catch {
+        Stop-Host "AccessParallelsSharePathUnavailable"
+    }
 }
 
 if (-not (Get-Command "prlctl" -ErrorAction SilentlyContinue)) {
@@ -46,16 +60,30 @@ if ($vmInfo -notmatch "(?m)^\s+net0\s+\(-\)" -or
 }
 $shareMatches = [Regex]::Matches(
     $vmInfo,
-    "(?m)^\s+(?<name>.+?)\s+\(\+\)\s+path='[^']*'\s+mode='(?<mode>ro|rw)'\s*$")
+    "(?m)^\s+(?<name>.+?)\s+\(\+\)\s+path='(?<path>[^']*)'\s+mode='(?<mode>ro|rw)'\s*$")
 $shares = @(
     $shareMatches |
         ForEach-Object {
-            "$($_.Groups["name"].Value)|$($_.Groups["mode"].Value)"
+            [pscustomobject]@{
+                Name = $_.Groups["name"].Value
+                Path = $_.Groups["path"].Value.TrimEnd([IO.Path]::DirectorySeparatorChar)
+                Mode = $_.Groups["mode"].Value
+            }
         }
 )
+$expectedInputPath = Get-CanonicalHostPath $ExpectedInputSharePath
+$expectedOutputPath = Get-CanonicalHostPath $ExpectedOutputSharePath
 if ($shares.Count -ne 2 -or
-    $shares -notcontains "access_input|ro" -or
-    $shares -notcontains "access_output|rw") {
+    @($shares | Where-Object {
+        $_.Name -eq "access_input" -and
+        $_.Mode -eq "ro" -and
+        [string]::Equals($_.Path, $expectedInputPath, [StringComparison]::Ordinal)
+    }).Count -ne 1 -or
+    @($shares | Where-Object {
+        $_.Name -eq "access_output" -and
+        $_.Mode -eq "rw" -and
+        [string]::Equals($_.Path, $expectedOutputPath, [StringComparison]::Ordinal)
+    }).Count -ne 1) {
     Stop-Host "AccessParallelsScopedSharesUnavailable"
 }
 

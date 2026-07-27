@@ -33,8 +33,15 @@ public sealed class AccessParallelsSourceRunnerTests
 
         Assert.Contains("ValidateSet(\"doctor\", \"build\", \"synthetic\")", host, StringComparison.Ordinal);
         Assert.Contains("net0\\s+\\(-\\)", host, StringComparison.Ordinal);
-        Assert.Contains("\"access_input|ro\"", host, StringComparison.Ordinal);
-        Assert.Contains("\"access_output|rw\"", host, StringComparison.Ordinal);
+        Assert.Contains("$ExpectedInputSharePath", host, StringComparison.Ordinal);
+        Assert.Contains("$ExpectedOutputSharePath", host, StringComparison.Ordinal);
+        Assert.Contains("Get-CanonicalHostPath", host, StringComparison.Ordinal);
+        Assert.Contains("$_.Name -eq \"access_input\"", host, StringComparison.Ordinal);
+        Assert.Contains("$_.Name -eq \"access_output\"", host, StringComparison.Ordinal);
+        Assert.Contains("$_.Path, $expectedInputPath", host, StringComparison.Ordinal);
+        Assert.Contains("$_.Path, $expectedOutputPath", host, StringComparison.Ordinal);
+        Assert.Contains("$_.Mode -eq \"ro\"", host, StringComparison.Ordinal);
+        Assert.Contains("$_.Mode -eq \"rw\"", host, StringComparison.Ordinal);
         Assert.Contains("AccessParallelsNetworkEnabled", host, StringComparison.Ordinal);
         Assert.Contains(
             "$vmInfo -match \"(?m)^\\s+net\\d+\\s+\\(\\+\\)\"",
@@ -105,6 +112,10 @@ public sealed class AccessParallelsSourceRunnerTests
             StringComparison.Ordinal);
         Assert.Contains(
             "Split-Path -Leaf $checkpoint",
+            guest,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Remove-Item -LiteralPath $checkpoint -Force -ErrorAction Stop",
             guest,
             StringComparison.Ordinal);
         Assert.Contains("$syntheticSucceeded = $true", guest, StringComparison.Ordinal);
