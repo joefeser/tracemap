@@ -1,0 +1,148 @@
+# Access Parallels Source Runner Implementation State
+
+Status: implementation and exact-head Parallels validation complete; PR open
+and ACK review findings in progress
+
+Branch: `codex/access-parallels-runner`
+
+Base: `origin/dev` at `20f1a26ee0e71fad8e66d7131cda072a2b5b5333`
+
+## Scope
+
+Build a thin source-only orchestration layer over the already-reviewed Access
+CLI, smoke harness, and local review bundle. Add no extraction, COM metadata,
+fact, rule, or consumer behavior.
+
+## Proven local environment
+
+- Parallels VM: `Windows 11 - Access Isolated`
+- Windows: ARM64, Microsoft Access 16 registered
+- VM network device: disabled
+- scoped host shares: `access_input` read-only, `access_output` read/write
+- Parallels Tools guest command execution: available
+- guest source root: operator-local and uncommitted
+- guest Git remote: absent
+
+## Baseline evidence
+
+At exact `20f1a26ee0e71fad8e66d7131cda072a2b5b5333`:
+
+- offline guest-local clone completed from a Git bundle;
+- exact upstream hashes were verified for .NET SDK 10.0.302 Windows ARM64,
+  MinGit 2.55.0.3 ARM64, and Git LFS 3.7.1 ARM64;
+- full solution build passed with 0 warnings and 0 errors in the guest;
+- Access-focused Windows tests passed 65/65;
+- the existing synthetic Access harness completed;
+- Phase 9 consumer contracts and the local review bundle contract passed;
+- the sanitized local review bundle was retained;
+- networking was not required;
+- the guest source checkout remained clean.
+
+## Implementation
+
+- macOS host runner validates the Parallels isolation posture without mutating
+  VM configuration;
+- Windows guest runner validates exact source identity, builds, tests, and
+  delegates synthetic validation to the existing harness;
+- every Git identity probe is checked independently so a failed `rev-parse`,
+  status, or remote read cannot be mistaken for a clean checkout;
+- the standalone synthetic action rebuilds the two CLI executables from the
+  validated exact head before invoking the harness, preventing ignored output
+  from an older checkout from being reported as current evidence;
+- the disposable per-run smoke root is removed in a `finally` path while the
+  sanitized checkpoint and review bundle remain in their separate retained
+  locations;
+- build mode rechecks the tracked checkout after tests before claiming
+  `sourceClean=true`;
+- synthetic mode retains its review bundle only after every contract,
+  process-cleanup, and source-cleanliness gate succeeds; failed runs remove an
+  unvalidated bundle;
+- exact Access test classes run sequentially so Windows SQLite pool state
+  cannot race across classes and substring filters cannot select unrelated
+  tests;
+- the non-Access bundle rejection fixture clears the test process's pooled
+  SQLite writer connection before immediate read-side composition, matching
+  the existing Windows disposal pattern in VBA and macro tests;
+- guest output is captured and reduced to one allowlisted categorical line;
+- each action's categorical output uses an exact ordered field allowlist, so
+  an unexpected guest-controlled key cannot carry protected data to the host;
+- host preflight rejects any enabled network adapter or unexpected enabled host
+  share;
+- build and synthetic operations re-prove SHA, cleanliness, and zero remotes
+  after execution;
+- validated Git/.NET launcher hashes are pinned, required path chains reject
+  reparse points, and freshly rebuilt CLI hashes are stable across synthetic
+  execution;
+- rejected synthetic runs remove both unvalidated review bundles and their
+  checkpoint families;
+- representative inputs and richer extraction are deliberately absent;
+- offline toolchain provisioning remains operator-local and outside Git.
+
+## Deferred
+
+- representative database selection and authorization;
+- form/report internals;
+- VBA source or flow;
+- macro identities or bodies;
+- public artifact publication;
+- remote physical-Windows Codex control.
+
+## Exact-head validation
+
+At `f3bc56fcebc44ed38ac57ba5934fcb11cae2e639`:
+
+- offline Git-bundle fast-forward completed with no configured remote;
+- host `doctor` passed the running-VM, disabled-network, scoped-share,
+  source-identity, clean-checkout, Access-registration, and no-remote gates;
+- three consecutive host-driven Windows source builds passed;
+- each build ran the six exact Access test classes sequentially;
+- host-driven synthetic validation completed;
+- Phase 9 consumer contracts and local-review-bundle contract passed;
+- the sanitized local review bundle was retained;
+- Access processes exited and the guest source checkout remained clean;
+- the controller emitted only allowlisted categorical output.
+
+macOS validation:
+
+- both PowerShell scripts passed parser-only syntax validation;
+- focused runner guard test: 1/1 passed;
+- Access local review bundle tests: 10/10 passed;
+- solution build passed with the repository's existing SQLite advisory;
+- first full solution test: 918/919 passed; the previously documented
+  synthetic NuGet restore-classification test flaked;
+- exact isolated rerun of that test: 1/1 passed unchanged;
+- unchanged full solution rerun: 919/919 passed;
+- private-path guard passed;
+- `git diff --check` passed.
+
+All SDK, Git, Git LFS, NuGet, Git-bundle, provisioning, diagnostic, and retained
+review-bundle assets remain outside the repository. The final product diff
+contains only the two generic source runners, deterministic guard coverage,
+the Windows SQLite test-disposal correction, and documentation/spec state.
+
+## Exact-head security audit
+
+At `736c9f1e3ad692ecce8bea2a668fd52f0d8e2f20`, a read-only
+`claude-opus-5` audit identified three P2 boundary gaps: additional enabled
+adapters/shares were not rejected, post-operation identity rechecks omitted SHA
+and remotes, and guest tool/executable provenance was under-specified. It also
+identified concrete P3 cleanup, PowerShell exit-state, test-strength, and
+documentation issues. The follow-up implementation addresses the deterministic
+checks and explicitly documents the remaining guest-attestation limitation.
+
+The later exact-head Codex review identified two additional boundary gaps. The
+host now binds both enabled share names and modes to canonical expected host
+directories instead of trusting share names alone. Failed synthetic runs now
+remove both the latest checkpoint and its numbered checkpoint family. Review
+follow-up validation passed:
+
+- PowerShell syntax parsing for both source runners;
+- focused Access Parallels source-runner tests: 7/7;
+- full .NET solution tests: 925/925;
+- private-path guard;
+- `git diff --check`.
+
+A subsequent exact-head Codex pass identified two more guest-local path gaps.
+The runner now validates the NuGet package-cache path and creates then validates
+the `runs`, `checkpoints`, and `review-bundles` parent directories before any
+synthetic artifact can be written beneath them.
