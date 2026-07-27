@@ -124,16 +124,33 @@ $smokeRoot = Join-Path $GuestRoot "runs\$runId"
 $checkpoint = Join-Path $GuestRoot "checkpoints\$runId.json"
 $reviewBundle = Join-Path $GuestRoot "review-bundles\$runId"
 $previousPreference = $ErrorActionPreference
-$ErrorActionPreference = "Continue"
-& $harness `
-    -AccessCli $accessCli `
-    -TraceMapCli $traceMapCli `
-    -Generator $generator `
-    -SmokeRoot $smokeRoot `
-    -Phase9CheckpointPath $checkpoint `
-    -ReviewBundlePath $reviewBundle *> $null
-$harnessExit = $LASTEXITCODE
-$ErrorActionPreference = $previousPreference
+$harnessExit = 1
+$smokeCleanupFailed = $false
+try {
+    $ErrorActionPreference = "Continue"
+    & $harness `
+        -AccessCli $accessCli `
+        -TraceMapCli $traceMapCli `
+        -Generator $generator `
+        -SmokeRoot $smokeRoot `
+        -Phase9CheckpointPath $checkpoint `
+        -ReviewBundlePath $reviewBundle *> $null
+    $harnessExit = $LASTEXITCODE
+}
+finally {
+    $ErrorActionPreference = $previousPreference
+    try {
+        if (Test-Path $smokeRoot) {
+            Remove-Item $smokeRoot -Recurse -Force -ErrorAction Stop
+        }
+    }
+    catch {
+        $smokeCleanupFailed = $true
+    }
+}
+if ($smokeCleanupFailed -or (Test-Path $smokeRoot)) {
+    Stop-Guest "AccessGuestSyntheticCleanupFailed"
+}
 if ($harnessExit -ne 0) {
     Stop-Guest "AccessGuestSyntheticFailed"
 }
