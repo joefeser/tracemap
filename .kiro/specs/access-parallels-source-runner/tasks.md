@@ -8,4 +8,5 @@
 - [x] Add deterministic guard tests and documentation.
 - [x] Refresh the guest clone and validate all runner operations at exact head.
 - [x] Remove non-product scaffolding and validate the final diff.
-- [ ] Commit, push, open a focused PR to `dev`, and run ACK.
+- [x] Commit, push, and open a focused PR to `dev`.
+- [ ] Complete the ACK PR loop.
