@@ -29,6 +29,8 @@ The guest runner checks and attests that:
 - Microsoft Access is registered;
 - the pinned offline .NET and Git launchers match their expected SHA-256
   digests and required path chains contain no reparse points;
+- the offline NuGet package cache and synthetic output parent directories are
+  guest-local and have reparse-free paths;
 - freshly rebuilt CLI executables do not change during synthetic validation.
 
 These guest attestations detect accidental or local tool/source substitution;

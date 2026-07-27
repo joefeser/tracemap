@@ -81,6 +81,15 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("Get-FileHash -LiteralPath $git", guest, StringComparison.Ordinal);
         Assert.Contains("Get-FileHash -LiteralPath $dotnet", guest, StringComparison.Ordinal);
         Assert.Contains("[IO.FileAttributes]::ReparsePoint", guest, StringComparison.Ordinal);
+        Assert.Contains("$packages = Join-Path $GuestRoot \"packages\"", guest, StringComparison.Ordinal);
+        Assert.Contains("Test-TrustedPath $packages $GuestRoot", guest, StringComparison.Ordinal);
+        Assert.Contains("$env:NUGET_PACKAGES = $packages", guest, StringComparison.Ordinal);
+        Assert.Contains("$artifactParents = @(", guest, StringComparison.Ordinal);
+        Assert.Contains("Join-Path $GuestRoot \"runs\"", guest, StringComparison.Ordinal);
+        Assert.Contains("Join-Path $GuestRoot \"checkpoints\"", guest, StringComparison.Ordinal);
+        Assert.Contains("Join-Path $GuestRoot \"review-bundles\"", guest, StringComparison.Ordinal);
+        Assert.Contains("Test-TrustedPath $artifactParent $GuestRoot", guest, StringComparison.Ordinal);
+        Assert.Contains("AccessGuestSyntheticOutputBoundaryInvalid", guest, StringComparison.Ordinal);
         Assert.Contains("Invoke-AccessSmoke.ps1", guest, StringComparison.Ordinal);
         Assert.Contains("phase9ConsumerContracts", guest, StringComparison.Ordinal);
         Assert.Contains("localReviewBundleContractCorrect", guest, StringComparison.Ordinal);

@@ -104,6 +104,7 @@ $solution = Join-Path $repository "src\dotnet\TraceMap.sln"
 $tests = Join-Path $repository "src\dotnet\tests\TraceMap.Tests\TraceMap.Tests.csproj"
 $generator = Join-Path $repository "scripts\access-validation\New-SyntheticAccessFixture.ps1"
 $harness = Join-Path $repository "scripts\access-validation\Invoke-AccessSmoke.ps1"
+$packages = Join-Path $GuestRoot "packages"
 
 if (-not (Test-TrustedPath $repository $GuestRoot)) {
     Stop-Guest "AccessGuestSourceInputMissing"
@@ -118,6 +119,9 @@ if ((Get-FileHash -LiteralPath $git -Algorithm SHA256).Hash.ToLowerInvariant() -
     (Get-FileHash -LiteralPath $dotnet -Algorithm SHA256).Hash.ToLowerInvariant() -ne
         $ExpectedDotnetSha256) {
     Stop-Guest "AccessGuestToolchainIdentityMismatch"
+}
+if (-not (Test-TrustedPath $packages $GuestRoot)) {
+    Stop-Guest "AccessGuestPackageCacheUnavailable"
 }
 
 $identity = Get-SourceIdentity $git $repository
@@ -137,7 +141,7 @@ $env:DOTNET_ROOT = Split-Path -Parent $dotnet
 $env:PATH = "$(Split-Path -Parent $git);$env:DOTNET_ROOT;$env:PATH"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
 $env:DOTNET_NOLOGO = "1"
-$env:NUGET_PACKAGES = Join-Path $GuestRoot "packages"
+$env:NUGET_PACKAGES = $packages
 
 if ($Action -eq "doctor") {
     Write-Output "access-parallels-doctor=ready;head=$head;sourceClean=true;remoteAbsent=true;accessAvailable=true"
@@ -219,10 +223,24 @@ foreach ($required in @($accessCli, $traceMapCli)) {
 $accessCliHash = (Get-FileHash -LiteralPath $accessCli -Algorithm SHA256).Hash
 $traceMapCliHash = (Get-FileHash -LiteralPath $traceMapCli -Algorithm SHA256).Hash
 
+$artifactParents = @(
+    (Join-Path $GuestRoot "runs"),
+    (Join-Path $GuestRoot "checkpoints"),
+    (Join-Path $GuestRoot "review-bundles")
+)
+foreach ($artifactParent in $artifactParents) {
+    if (-not (Test-Path -LiteralPath $artifactParent)) {
+        New-Item -ItemType Directory -Path $artifactParent -ErrorAction Stop | Out-Null
+    }
+    if (-not (Test-TrustedPath $artifactParent $GuestRoot)) {
+        Stop-Guest "AccessGuestSyntheticOutputBoundaryInvalid"
+    }
+}
+
 $runId = [Guid]::NewGuid().ToString("N")
-$smokeRoot = Join-Path $GuestRoot "runs\$runId"
-$checkpoint = Join-Path $GuestRoot "checkpoints\$runId.json"
-$reviewBundle = Join-Path $GuestRoot "review-bundles\$runId"
+$smokeRoot = Join-Path $artifactParents[0] $runId
+$checkpoint = Join-Path $artifactParents[1] "$runId.json"
+$reviewBundle = Join-Path $artifactParents[2] $runId
 $syntheticSucceeded = $false
 try {
     $previousPreference = $ErrorActionPreference

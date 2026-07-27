@@ -141,3 +141,8 @@ follow-up validation passed:
 - full .NET solution tests: 925/925;
 - private-path guard;
 - `git diff --check`.
+
+A subsequent exact-head Codex pass identified two more guest-local path gaps.
+The runner now validates the NuGet package-cache path and creates then validates
+the `runs`, `checkpoints`, and `review-bundles` parent directories before any
+synthetic artifact can be written beneath them.
