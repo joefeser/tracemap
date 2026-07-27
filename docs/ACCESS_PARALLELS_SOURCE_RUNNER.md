@@ -14,7 +14,8 @@ The host runner refuses to continue unless:
 - the selected VM is running;
 - every configured network adapter is disabled;
 - the only enabled host shares are a read-only `access_input` share and a
-  read/write `access_output` share;
+  read/write `access_output` share, and both target the expected canonical host
+  directories;
 - the guest emits the exact ordered categorical fields for the requested
   action, with no additional output.
 
@@ -95,8 +96,12 @@ PowerShell 7 and Parallels `prlctl` must be available on the host.
 ```
 
 Override `-VmName` and `-GuestRoot` only when the VM uses different
-operator-local names. Override tool hashes only after separately verifying the
-replacement binaries. Those values are never included in successful output.
+operator-local names. The default expected share targets are
+`$HOME/AccessAnalysis/input` and `$HOME/AccessAnalysis/output`; pass
+`-ExpectedInputSharePath` and `-ExpectedOutputSharePath` when the two scoped
+directories deliberately live elsewhere. Override tool hashes only after
+separately verifying the replacement binaries. Those values are never included
+in successful output.
 
 ## Representative databases
 

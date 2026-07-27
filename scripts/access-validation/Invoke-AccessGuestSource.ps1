@@ -301,6 +301,9 @@ finally {
             if (Test-Path $reviewBundle) {
                 Remove-Item $reviewBundle -Recurse -Force -ErrorAction Stop
             }
+            if (Test-Path -LiteralPath $checkpoint) {
+                Remove-Item -LiteralPath $checkpoint -Force -ErrorAction Stop
+            }
             Get-ChildItem `
                 -Path "$(Split-Path -Parent $checkpoint)\$(Split-Path -Leaf $checkpoint).*" `
                 -File `

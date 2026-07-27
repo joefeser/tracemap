@@ -129,3 +129,15 @@ and remotes, and guest tool/executable provenance was under-specified. It also
 identified concrete P3 cleanup, PowerShell exit-state, test-strength, and
 documentation issues. The follow-up implementation addresses the deterministic
 checks and explicitly documents the remaining guest-attestation limitation.
+
+The later exact-head Codex review identified two additional boundary gaps. The
+host now binds both enabled share names and modes to canonical expected host
+directories instead of trusting share names alone. Failed synthetic runs now
+remove both the latest checkpoint and its numbered checkpoint family. Review
+follow-up validation passed:
+
+- PowerShell syntax parsing for both source runners;
+- focused Access Parallels source-runner tests: 7/7;
+- full .NET solution tests: 925/925;
+- private-path guard;
+- `git diff --check`.
