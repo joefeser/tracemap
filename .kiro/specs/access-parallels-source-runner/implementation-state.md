@@ -1,7 +1,7 @@
 # Access Parallels Source Runner Implementation State
 
-Status: implementation and exact-head Parallels validation complete; PR
-workflow pending
+Status: implementation and exact-head Parallels validation complete; PR open
+and ACK review findings in progress
 
 Branch: `codex/access-parallels-runner`
 
@@ -44,6 +44,11 @@ At exact `20f1a26ee0e71fad8e66d7131cda072a2b5b5333`:
   VM configuration;
 - Windows guest runner validates exact source identity, builds, tests, and
   delegates synthetic validation to the existing harness;
+- every Git identity probe is checked independently so a failed `rev-parse`,
+  status, or remote read cannot be mistaken for a clean checkout;
+- the standalone synthetic action rebuilds the two CLI executables from the
+  validated exact head before invoking the harness, preventing ignored output
+  from an older checkout from being reported as current evidence;
 - exact Access test classes run sequentially so Windows SQLite pool state
   cannot race across classes and substring filters cannot select unrelated
   tests;

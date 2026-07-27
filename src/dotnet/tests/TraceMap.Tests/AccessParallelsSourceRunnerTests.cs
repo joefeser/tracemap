@@ -32,6 +32,16 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("TraceMap.Tests.AccessFoundationTests", guest, StringComparison.Ordinal);
         Assert.Contains("TraceMap.Tests.AccessLocalReviewBundleTests", guest, StringComparison.Ordinal);
         Assert.Contains("FullyQualifiedName~$testClass", guest, StringComparison.Ordinal);
+        Assert.Equal(
+            2,
+            guest.Split(
+                "& $dotnet build $solution --no-restore --verbosity quiet",
+                StringSplitOptions.None).Length - 1);
+        Assert.Contains("AccessGuestSyntheticBuildFailed", guest, StringComparison.Ordinal);
+        Assert.Contains("$headExit = $LASTEXITCODE", guest, StringComparison.Ordinal);
+        Assert.Contains("$statusExit = $LASTEXITCODE", guest, StringComparison.Ordinal);
+        Assert.Contains("$remoteExit = $LASTEXITCODE", guest, StringComparison.Ordinal);
+        Assert.Contains("$statusAfterExit = $LASTEXITCODE", guest, StringComparison.Ordinal);
         Assert.DoesNotContain("--filter \"Access\"", guest, StringComparison.Ordinal);
         Assert.DoesNotContain("Invoke-AccessRepresentativeSmoke.ps1", guest, StringComparison.Ordinal);
 

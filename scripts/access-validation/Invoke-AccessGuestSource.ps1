@@ -35,11 +35,19 @@ foreach ($required in @($repository, $git, $dotnet, $solution, $tests)) {
 $previousPreference = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
 $head = (& $git -C $repository rev-parse HEAD 2>$null | Out-String).Trim()
-$dirty = -not [string]::IsNullOrWhiteSpace((& $git -C $repository status --porcelain 2>$null | Out-String))
+$headExit = $LASTEXITCODE
+$status = (& $git -C $repository status --porcelain 2>$null | Out-String)
+$statusExit = $LASTEXITCODE
+$dirty = -not [string]::IsNullOrWhiteSpace($status)
 $remotes = (& $git -C $repository remote 2>$null | Out-String).Trim()
-$gitExit = $LASTEXITCODE
+$remoteExit = $LASTEXITCODE
 $ErrorActionPreference = $previousPreference
-if ($gitExit -ne 0 -or $head -ne $ExpectedHead -or $dirty -or $remotes) {
+if ($headExit -ne 0 -or
+    $statusExit -ne 0 -or
+    $remoteExit -ne 0 -or
+    $head -ne $ExpectedHead -or
+    $dirty -or
+    $remotes) {
     Stop-Guest "AccessGuestSourceIdentityMismatch"
 }
 
@@ -96,6 +104,15 @@ if ($Action -eq "build") {
     exit 0
 }
 
+$previousPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+& $dotnet build $solution --no-restore --verbosity quiet *> $null
+$syntheticBuildExit = $LASTEXITCODE
+$ErrorActionPreference = $previousPreference
+if ($syntheticBuildExit -ne 0) {
+    Stop-Guest "AccessGuestSyntheticBuildFailed"
+}
+
 foreach ($required in @($accessCli, $traceMapCli, $generator, $harness)) {
     if (-not (Test-Path $required)) {
         Stop-Guest "AccessGuestSyntheticInputMissing"
@@ -143,9 +160,11 @@ if (Get-Process -Name "MSACCESS", "tracemap-access" -ErrorAction SilentlyContinu
 
 $previousPreference = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
-$dirtyAfter = -not [string]::IsNullOrWhiteSpace((& $git -C $repository status --porcelain 2>$null | Out-String))
+$statusAfter = (& $git -C $repository status --porcelain 2>$null | Out-String)
+$statusAfterExit = $LASTEXITCODE
+$dirtyAfter = -not [string]::IsNullOrWhiteSpace($statusAfter)
 $ErrorActionPreference = $previousPreference
-if ($dirtyAfter) {
+if ($statusAfterExit -ne 0 -or $dirtyAfter) {
     Stop-Guest "AccessGuestSourceChanged"
 }
 
