@@ -6,6 +6,8 @@ public static class FileInventory
     {
         ".sln",
         ".csproj",
+        ".sqlproj",
+        ".refactorlog",
         ".vbproj",
         ".fsproj",
         ".props",
@@ -207,6 +209,8 @@ public static class FileInventory
         {
             ".sln" => "Solution",
             ".csproj" => "Project",
+            ".sqlproj" => "SqlProject",
+            ".refactorlog" => "SqlProjectRefactorLog",
             ".vbproj" => "NonCSharpProject",
             ".fsproj" => "NonCSharpProject",
             ".props" => "MSBuildProps",

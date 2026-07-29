@@ -175,6 +175,8 @@ public static class FactTypes
     public const string PostgresSchemaEnumDeclared = nameof(PostgresSchemaEnumDeclared);
     public const string PostgresSchemaRoutineDeclared = nameof(PostgresSchemaRoutineDeclared);
     public const string PostgresMigrationOperation = nameof(PostgresMigrationOperation);
+    public const string SqlProjectRefactorLogDeclared = nameof(SqlProjectRefactorLogDeclared);
+    public const string SqlProjectRefactorOperation = nameof(SqlProjectRefactorOperation);
     public const string ObjectShapeInferred = nameof(ObjectShapeInferred);
     public const string PropertyAccessed = nameof(PropertyAccessed);
     public const string MethodInvoked = nameof(MethodInvoked);
@@ -337,6 +339,8 @@ public static class RuleIds
     public const string DatabasePostgresPermissionGap = "database.postgres.permission.gap.v1";
     public const string DatabasePostgresSchemaMigration = "database.postgres.schema-migration.v1";
     public const string DatabasePostgresSchemaMigrationGap = "database.postgres.schema-migration.gap.v1";
+    public const string DatabaseSqlProjectRefactorIntent = "database.sql-project.refactor-intent.v1";
+    public const string DatabaseSqlProjectRefactorIntentGap = "database.sql-project.refactor-intent.gap.v1";
     public const string DatabaseSqlOperatorRunbookPacket = "database.sql.operator-runbook-packet.v1";
     public const string DatabaseSqlValidationSummaryObservation = "database.sql.validation-summary.observation.v1";
     public const string DatabaseSqlValidationSummaryGap = "database.sql.validation-summary.gap.v1";
@@ -451,6 +455,7 @@ public static class ScannerVersions
     public const string PostgresArchiveLinkExtractor = "postgres-archive-link/0.1.0";
     public const string PostgresPermissionEvidenceExtractor = "postgres-permission-evidence/0.1.0";
     public const string PostgresSchemaMigrationExtractor = "postgres-schema-migration/0.5.0";
+    public const string SqlProjectRefactorExtractor = "sql-project-refactor/0.1.0";
     public const string LegacyWcfExtractor = "legacy-wcf/0.2.0";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.1.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";

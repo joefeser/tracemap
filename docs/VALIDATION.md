@@ -1007,6 +1007,29 @@ or unsupported identifiers, connection material, and local paths must not
 appear. Static facts must not claim migration execution, live objects, index
 selection, uniqueness, referential integrity, compatibility, rollback, or
 release safety.
+
+## SQL Project Refactor Intent Smoke
+
+SQL project refactor-intent changes should run the focused tests and scan the
+checked-in static fixture without building the project, opening a DACPAC,
+invoking SqlPackage, or connecting to SQL Server:
+
+```bash
+dotnet test src/dotnet/TraceMap.sln --filter FullyQualifiedName~SqlProjectRefactorTests
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/sql-project-refactor --out /tmp/tracemap-sql-project-refactor-smoke
+```
+
+Expected output includes `SqlProjectRefactorLogDeclared` and bounded
+`SqlProjectRefactorOperation` facts under
+`database.sql-project.refactor-intent.v1`. Inspect generated output for rule
+IDs, Tier 2 structural evidence, repository-relative spans, commit SHA,
+extractor version, coverage, hashed operation keys, and limitations. Raw XML,
+SQL, local absolute paths, connection material, and unhashed operation keys
+must not appear. The facts must not claim project build, DACPAC packaging,
+deployment-plan generation, target `__RefactorLog` state, execution,
+application, compatibility, rollback, production state, release approval, or
+execution safety.
+
 # SQL operator runbook packet smoke
 
 Run the deterministic public-safe fixture and verify standard scan artifacts plus
