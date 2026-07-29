@@ -1,7 +1,7 @@
 # Site SQL Project Refactor Intent Story Implementation State
 
-- Status: implementation and local validation complete; PR #544 open and ACK
-  review findings in progress
+- Status: implementation and validation complete; PR #544 open; ACK reached a
+  terminal owner-decision state after the required reviewer-lag rerun
 - Branch: `codex/site-sql-project-refactor-intent`
 - Base: `origin/dev`
 - Base SHA: `26189d1dd8d97d5741005ae7cbd033840099f216`
@@ -44,3 +44,14 @@ compatibility claim, approval claim, or safety claim.
   `/blog/sql-project-refactor-intent-evidence/`; no horizontal overflow or
   browser console warnings/errors were observed. The article-to-proof link was
   exercised successfully.
+
+## PR review
+
+ACK-authorized findings were fixed in `7553c4b5`, all associated review threads
+were resolved, and evidence-backed dispositions were recorded for important
+prior-head Codex and Qodo findings. After all checks passed, ACK returned
+`not_merge_ready` / `REQUIRED_REVIEW_QUORUM_NOT_MET`: Qodo's one-shot evidence
+was terminal but stale, and no current-head required-review substitute was
+admitted. The required five-minute unchanged reviewer-lag wait and single rerun
+produced the same owner-decision result. This state does not claim merge
+readiness.
