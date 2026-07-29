@@ -1,6 +1,7 @@
 # Site SQL Project Refactor Intent Story Implementation State
 
-- Status: implementation and local validation complete; PR workflow pending
+- Status: implementation and local validation complete; PR #544 open and ACK
+  review findings in progress
 - Branch: `codex/site-sql-project-refactor-intent`
 - Base: `origin/dev`
 - Base SHA: `26189d1dd8d97d5741005ae7cbd033840099f216`
@@ -31,8 +32,10 @@ compatibility claim, approval claim, or safety claim.
 - `cd site && npm run build`: passed.
 - `cd site && npm run validate`: passed for 98 HTML files, 3,369 internal
   references, and 97 sitemap URLs.
-- `cd site && npm test`: 731 passed, 0 failed.
-- Focused story tests: 14 passed, 0 failed.
+- `cd site && npm test`: 737 passed, 0 failed.
+- Focused story tests: 20 passed, 0 failed, including ACK-authorized
+  attribute/obfuscation leak, full-boundary/JSON overclaim, and exact fixture
+  fact pinning regressions.
 - Aggregate validator tests: 11 passed, 0 failed.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
