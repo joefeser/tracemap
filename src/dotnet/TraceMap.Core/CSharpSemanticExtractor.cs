@@ -1,4 +1,3 @@
-using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -28,7 +27,6 @@ public sealed record SemanticExtractionResult(
 
 public static class CSharpSemanticExtractor
 {
-    private static readonly object MSBuildRegistrationLock = new();
     private static readonly Regex SafeCompilerTokenRegex = new(
         "'([A-Za-z_][A-Za-z0-9_]{0,127})'",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -247,27 +245,16 @@ public static class CSharpSemanticExtractor
 
     private static bool TryRegisterMsBuild(List<SemanticFactCandidate> gaps)
     {
-        lock (MSBuildRegistrationLock)
+        if (MsBuildRuntimeRegistration.TryRegister(out var error))
         {
-            if (MSBuildLocator.IsRegistered)
-            {
-                return true;
-            }
-
-            try
-            {
-                MSBuildLocator.RegisterDefaults();
-                return true;
-            }
-            catch (Exception ex) when (ex is InvalidOperationException or FileNotFoundException)
-            {
-                gaps.Add(CreateGap(
-                    ".",
-                    $"Unable to register MSBuild for Roslyn semantic analysis: {ex.Message}",
-                    "MSBuildRegistrationFailed"));
-                return false;
-            }
+            return true;
         }
+
+        gaps.Add(CreateGap(
+            ".",
+            $"Unable to register MSBuild for Roslyn semantic analysis: {error}",
+            "MSBuildRegistrationFailed"));
+        return false;
     }
 
     private static void RunRestoreIfRequested(
