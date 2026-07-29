@@ -262,7 +262,9 @@ public static class ReleaseReviewReporter
         RuleIds.DatabasePostgresPermissionCoverage,
         RuleIds.DatabasePostgresPermissionGap,
         RuleIds.DatabasePostgresSchemaMigration,
-        RuleIds.DatabasePostgresSchemaMigrationGap
+        RuleIds.DatabasePostgresSchemaMigrationGap,
+        RuleIds.DatabaseSqlProjectRefactorIntent,
+        RuleIds.DatabaseSqlProjectRefactorIntentGap
     };
 
     private static readonly HashSet<string> SqlSchemaMigrationMetadataKeys = new(StringComparer.Ordinal)
@@ -295,6 +297,21 @@ public static class ReleaseReviewReporter
         "referencedTableName",
         "referencedColumnNames",
         "statementOrdinal",
+        "coverageLabel"
+    };
+
+    private static readonly HashSet<string> SqlProjectRefactorMetadataKeys = new(StringComparer.Ordinal)
+    {
+        "objectKind",
+        "operationKind",
+        "schemaName",
+        "tableName",
+        "columnName",
+        "newSchemaName",
+        "newTableName",
+        "newColumnName",
+        "linkStatus",
+        "operationKeyHash",
         "coverageLabel"
     };
 
@@ -920,6 +937,41 @@ public static class ReleaseReviewReporter
         {
             var packet = SqlRunbookPacketBuilder.Build(input.Result);
             foreach (var fact in input.Result.Facts
+                .Where(fact => fact.RuleId == RuleIds.DatabaseSqlProjectRefactorIntent)
+                .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                .ThenBy(fact => fact.Evidence.StartLine)
+                .ThenBy(fact => fact.FactId, StringComparer.Ordinal))
+            {
+                var operation = fact.FactType == FactTypes.SqlProjectRefactorOperation;
+                findings.Add(SqlEvidenceFinding(
+                    input.SourceLabel,
+                    operation ? "sql-project-refactor" : "sql-project-refactor-log",
+                    operation
+                        ? fact.Properties.GetValueOrDefault("operationKind") ?? "refactor-operation"
+                        : "refactor-log",
+                    operation
+                        ? ReleaseReviewClassifications.ReviewRecommended
+                        : ReleaseReviewClassifications.NoActionableEvidence,
+                    SqlRunbookPacketBuilder.ProjectFactEvidence(fact, fact.CommitSha),
+                    fact.Properties
+                        .Where(pair => SqlProjectRefactorMetadataKeys.Contains(pair.Key))
+                        .Select(pair => new KeyValuePair<string, string?>(pair.Key, pair.Value))
+                        .Append(Pair("factType", fact.FactType))));
+            }
+            foreach (var fact in input.Result.Facts
+                .Where(fact => fact.RuleId == RuleIds.DatabaseSqlProjectRefactorIntentGap)
+                .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                .ThenBy(fact => fact.Evidence.StartLine)
+                .ThenBy(fact => fact.FactId, StringComparer.Ordinal))
+            {
+                var classification = fact.Properties.GetValueOrDefault("classification") ?? "SqlProjectRefactorCoverageGap";
+                gaps.Add(SqlEvidenceGap(
+                    input.SourceLabel,
+                    classification,
+                    "Upstream SQL project refactor-intent evidence recorded a bounded static-analysis gap.",
+                    SqlRunbookPacketBuilder.ProjectFactEvidence(fact, fact.CommitSha)));
+            }
+            foreach (var fact in input.Result.Facts
                 .Where(fact => fact.RuleId == RuleIds.DatabasePostgresSchemaMigration && fact.Evidence is not null)
                 .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
                 .ThenBy(fact => fact.Evidence.StartLine)
@@ -941,7 +993,8 @@ public static class ReleaseReviewReporter
                 foreach (var step in group.Steps)
                     findings.Add(SqlEvidenceFinding(input.SourceLabel, "context-step", step.StepKind, ReleaseReviewClassifications.NoActionableEvidence, step.Evidence,
                         [Pair("engine", group.Engine), Pair("serverRole", group.ServerRole), Pair("databaseRole", group.DatabaseRole), Pair("schemaRole", group.SchemaRole), Pair("executionMode", group.ExecutionMode), Pair("contextClassification", step.ContextClassification), Pair("stopConditions", string.Join(',', step.StopConditions))]));
-            foreach (var milestone in packet.Milestones)
+            foreach (var milestone in packet.Milestones
+                         .Where(milestone => milestone.Evidence.RuleId != RuleIds.DatabaseSqlProjectRefactorIntent))
                 findings.Add(SqlEvidenceFinding(input.SourceLabel, "milestone", milestone.Kind, ReleaseReviewClassifications.NoActionableEvidence, milestone.Evidence,
                     [Pair("state", milestone.State), Pair("validationState", milestone.ValidationState)]));
             foreach (var prerequisite in packet.Prerequisites)
@@ -1141,6 +1194,7 @@ public static class ReleaseReviewReporter
     private static IReadOnlyList<string> SqlEvidenceLimitations() =>
     [
         "TraceMap does not execute SQL or establish runtime reachability, production database state, effective permissions, deployment, or release approval.",
+        "SQL project refactor-log evidence is checked-in intent only; TraceMap does not build the project, inspect a DACPAC or deployment plan, query target __RefactorLog state, or prove deployment or application.",
         "SQL runway evidence does not provide an execution-safety conclusion or replace DBA/operator judgment.",
         "Raw SQL, connection strings, credentials, scheduled command bodies, private infrastructure identities, and local absolute paths are omitted."
     ];
@@ -1581,6 +1635,8 @@ public static class ReleaseReviewReporter
                 join index_sources sources on sources.source_index_id = facts.source_index_id
                 where facts.rule_id like 'database.sql.%'
                    or facts.rule_id like 'database.postgres.%'
+                   or facts.rule_id = @sql_project_refactor_rule
+                   or facts.rule_id = @sql_project_refactor_gap_rule
                    or (@include_model_mappings = 1 and facts.rule_id = @ef_rule)
                    or (@include_model_mappings = 1 and facts.rule_id = @contract_mapping_rule)
                    or (@include_model_mappings = 1 and facts.rule_id = @operation_rule)
@@ -1598,6 +1654,8 @@ public static class ReleaseReviewReporter
                 cross join scan_manifest manifest
                 where facts.rule_id like 'database.sql.%'
                    or facts.rule_id like 'database.postgres.%'
+                   or facts.rule_id = @sql_project_refactor_rule
+                   or facts.rule_id = @sql_project_refactor_gap_rule
                    or (@include_model_mappings = 1 and facts.rule_id = @ef_rule)
                    or (@include_model_mappings = 1 and facts.rule_id = @contract_mapping_rule)
                    or (@include_model_mappings = 1 and facts.rule_id = @operation_rule)
@@ -1606,6 +1664,8 @@ public static class ReleaseReviewReporter
                 order by facts.file_path, facts.start_line, facts.fact_id;
                 """;
         command.Parameters.AddWithValue("@include_model_mappings", includeModelMappings ? 1 : 0);
+        command.Parameters.AddWithValue("@sql_project_refactor_rule", RuleIds.DatabaseSqlProjectRefactorIntent);
+        command.Parameters.AddWithValue("@sql_project_refactor_gap_rule", RuleIds.DatabaseSqlProjectRefactorIntentGap);
         command.Parameters.AddWithValue("@ef_rule", RuleIds.DatabaseEntityFramework);
         command.Parameters.AddWithValue("@contract_mapping_rule", RuleIds.CSharpSemanticContractMapping);
         command.Parameters.AddWithValue("@operation_rule", RuleIds.DatabaseOperationCallPattern);

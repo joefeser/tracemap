@@ -137,7 +137,8 @@ public static class DatabaseDesignReviewReporter
     private static readonly IReadOnlyList<string> Limitations =
     [
         "The packet describes bounded static repository evidence only; it does not prove database existence, current schema state, schema completeness, or schema freshness.",
-        "Migration operations are repository evidence, not proof that migrations were ordered, applied, compatible, reversible, or safe to run.",
+        "Migration operations are repository evidence, not proof that migrations were ordered, applied, compatible, reversible, or operationally safe.",
+        "SQL project refactor-log evidence is checked-in intent only; TraceMap does not build the project, inspect a DACPAC or deployment plan, query target __RefactorLog state, or prove deployment or application.",
         "Query/table correlation is an exact source-scoped static name match; it does not prove runtime provider, connection, search-path, generated SQL, branch feasibility, or query execution.",
         "EF table and column mappings are bounded compiler-resolved repository evidence; they do not reconstruct the runtime EF model, conventions, provider behavior, generated SQL, or database correspondence.",
         "Route references preserve existing bounded static path evidence; they do not prove runtime reachability, traffic, authorization, deployment, or user exercise.",
@@ -215,7 +216,10 @@ public static class DatabaseDesignReviewReporter
         foreach (var input in sqlInputs.OrderBy(row => row.SourceLabel, StringComparer.Ordinal))
         {
             foreach (var fact in input.Result.Facts
-                         .Where(fact => fact.RuleId is RuleIds.DatabasePostgresSchemaMigration or RuleIds.DatabasePostgresSchemaMigrationGap)
+                         .Where(fact => fact.RuleId is RuleIds.DatabasePostgresSchemaMigration
+                             or RuleIds.DatabasePostgresSchemaMigrationGap
+                             or RuleIds.DatabaseSqlProjectRefactorIntent
+                             or RuleIds.DatabaseSqlProjectRefactorIntentGap)
                          .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
                          .ThenBy(fact => fact.Evidence.StartLine)
                          .ThenBy(fact => fact.FactId, StringComparer.Ordinal))
@@ -241,6 +245,17 @@ public static class DatabaseDesignReviewReporter
                 if (fact.FactType == FactTypes.AnalysisGap)
                 {
                     gaps.Add(FromFactGap(input.SourceLabel, fact));
+                    continue;
+                }
+
+                if (fact.FactType is FactTypes.SqlProjectRefactorLogDeclared or FactTypes.SqlProjectRefactorOperation)
+                {
+                    globalObjects.Add(FromFact(
+                        input.SourceLabel,
+                        fact,
+                        fact.FactType == FactTypes.SqlProjectRefactorOperation
+                            ? "sql-project-refactor"
+                            : "sql-project-refactor-log"));
                     continue;
                 }
 
@@ -788,6 +803,8 @@ public static class DatabaseDesignReviewReporter
             "snapshot" => "checked-in-schema-snapshot",
             "migration-file" => "migration-file",
             "migration-operation" => fact.Properties.GetValueOrDefault("operationKind") ?? "migration-operation",
+            "sql-project-refactor" => fact.Properties.GetValueOrDefault("operationKind") ?? "refactor-operation",
+            "sql-project-refactor-log" => "refactor-log",
             _ => fact.Properties.GetValueOrDefault("tableName") ?? kind
         };
         var limitations = SplitLimitations(fact.Properties.GetValueOrDefault("limitations"))
@@ -795,13 +812,14 @@ public static class DatabaseDesignReviewReporter
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         var safeDisplayName = kind is "migration-operation" or "snapshot" or "migration-file"
+            or "sql-project-refactor" or "sql-project-refactor-log"
             ? SafeToken(displayName, kind)
             : SafeIdentifier(displayName, kind);
         return new DatabaseDesignEvidenceItem(
             StableId("item", sourceLabel, kind, fact.FactId),
             kind,
             safeDisplayName,
-            kind == "migration-operation" ? "ReviewRecommended" : "StaticEvidence",
+            kind is "migration-operation" or "sql-project-refactor" ? "ReviewRecommended" : "StaticEvidence",
             metadata,
             new DatabaseDesignEvidenceRef(
                 fact.RuleId,
@@ -822,12 +840,18 @@ public static class DatabaseDesignReviewReporter
 
     private static DatabaseDesignGap FromFactGap(string sourceLabel, CodeFact fact)
     {
-        var kind = SafeToken(fact.Properties.GetValueOrDefault("classification"), "PostgresSchemaMigrationGap");
+        var kind = SafeToken(
+            fact.Properties.GetValueOrDefault("classification"),
+            fact.RuleId == RuleIds.DatabaseSqlProjectRefactorIntentGap
+                ? "SqlProjectRefactorIntentGap"
+                : "PostgresSchemaMigrationGap");
         return new DatabaseDesignGap(
             StableId("gap", sourceLabel, fact.FactId),
             kind,
             "PartialAnalysis",
-            "PostgreSQL schema/migration evidence has an explicit upstream coverage gap.",
+            fact.RuleId == RuleIds.DatabaseSqlProjectRefactorIntentGap
+                ? "SQL project refactor-intent evidence has an explicit upstream coverage gap."
+                : "PostgreSQL schema/migration evidence has an explicit upstream coverage gap.",
             SafeLabel(sourceLabel),
             fact.RuleId,
             NormalizeTier(fact.EvidenceTier),
@@ -1367,7 +1391,9 @@ public static class DatabaseDesignReviewReporter
             FactTypes.PostgresSchemaSnapshotDeclared => new[] { "objectKind", "snapshotFormat", "recognizedDdlStatementCount", "unsupportedDdlStatementCount", "sourceDatabaseIdentityOmitted", "coverageLabel" },
             FactTypes.PostgresMigrationOperation => new[] { "objectKind", "operationKind", "schemaName", "tableName", "columnName", "newTableName", "newColumnName", "dropBehavior", "constraintName", "constraintKind", "indexName", "indexKind", "enumName", "routineName", "routineKind", "coverageLabel" },
             FactTypes.PostgresMigrationFileDeclared => new[] { "objectKind", "coverageLabel" },
-            FactTypes.AnalysisGap => new[] { "classification", "coverageLabel", "unsupportedDdlStatementCount", "unsupportedDdlFamilies" },
+            FactTypes.SqlProjectRefactorLogDeclared => new[] { "objectKind", "linkStatus", "coverageLabel" },
+            FactTypes.SqlProjectRefactorOperation => new[] { "objectKind", "operationKind", "schemaName", "tableName", "columnName", "newSchemaName", "newTableName", "newColumnName", "operationKeyHash", "coverageLabel" },
+            FactTypes.AnalysisGap => new[] { "classification", "coverageLabel", "unsupportedDdlStatementCount", "unsupportedDdlFamilies", "omittedOperationCount" },
             _ => Array.Empty<string>()
         };
         return SortMetadata(keys

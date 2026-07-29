@@ -19,7 +19,7 @@ public static class ScanEngine
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
         var projects = inventory
-            .Where(item => item.Kind == "Project")
+            .Where(item => item.Kind is "Project" or "SqlProject")
             .Select(item => item.RelativePath)
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
@@ -271,6 +271,11 @@ public static class ScanEngine
         facts.AddRange(SqlFileExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(SqlExecutionContextExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(PostgresSchemaMigrationExtractor.Extract(repoPath, manifest, inventory));
+        facts.AddRange(SqlProjectRefactorExtractor.Extract(
+            repoPath,
+            manifest,
+            inventory,
+            includeUnreferencedLogGaps: options.ProjectPaths is null || options.ProjectPaths.Count == 0));
         facts.AddRange(ConfigExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.GapFacts));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.Facts));
@@ -356,7 +361,7 @@ public static class ScanEngine
             .Where(item => includeGlobs.Length == 0 || includeGlobs.Any(glob => GlobMatches(item.RelativePath, glob)))
             .Where(item => excludeGlobs.Length == 0 || !excludeGlobs.Any(glob => GlobMatches(item.RelativePath, glob)))
             .Where(item => solutionPaths.Count == 0 || item.Kind != "Solution" || solutionPaths.Contains(item.RelativePath))
-            .Where(item => projectPaths.Count == 0 || item.Kind != "Project" || projectPaths.Contains(item.RelativePath))
+            .Where(item => projectPaths.Count == 0 || item.Kind is not ("Project" or "SqlProject") || projectPaths.Contains(item.RelativePath))
             .Where(item => projectDirectories.Length == 0
                 || item.Kind is "Solution"
                 || projectPaths.Contains(item.RelativePath)
