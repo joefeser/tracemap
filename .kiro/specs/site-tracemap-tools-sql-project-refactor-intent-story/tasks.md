@@ -9,4 +9,4 @@
 - [x] Run focused and full site validation.
 - [x] Complete desktop and mobile browser checks for both routes.
 - [x] Commit, push, and open ready PR #544 to `dev`.
-- [ ] Run ACK to a terminal result.
+- [x] Run ACK to a terminal result.
