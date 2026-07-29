@@ -24,6 +24,7 @@ export const sqlProjectRefactorInboundRoutes = [
 ];
 
 const expectedCommit = "26189d1dd8d97d5741005ae7cbd033840099f216";
+const expectedScanId = "scan-bc301542ac1a5995396c";
 const requiredProofLinks = [
   sqlProjectRefactorArticleRoute,
   sqlProjectRefactorAsset,
@@ -77,7 +78,40 @@ const requiredRuleIds = new Set([
   "database.sql-project.refactor-intent.gap.v1"
 ]);
 const requiredOperationKinds = new Set(["rename-table", "rename-column", "move-schema"]);
-const requiredDownstreamSurfaces = new Set(["database-design-review", "release-review", "sql-runbook"]);
+const expectedGapShapes = [
+  {
+    id: "unsupported-or-unsafe-shape",
+    classification: "RefactorOperationUnsupported",
+    coverageLabel: "reduced"
+  },
+  {
+    id: "missing-project-link",
+    classification: "RefactorLogReferenceMissing",
+    coverageLabel: "reduced"
+  },
+  {
+    id: "bounded-operation-cap",
+    classification: "RefactorOperationLimitExceeded",
+    coverageLabel: "partial"
+  }
+];
+const expectedDownstreamSurfaces = [
+  {
+    surface: "database-design-review",
+    classification: "ReviewRecommended",
+    state: undefined
+  },
+  {
+    surface: "release-review",
+    classification: "ReviewRecommended",
+    state: undefined
+  },
+  {
+    surface: "sql-runbook",
+    classification: undefined,
+    state: "intended-by-project-refactor-log"
+  }
+];
 const expectedFixtureEvidence = [
   {
     id: "project-log-link",
@@ -303,7 +337,7 @@ function validatePacket(packet, errors) {
   }
   if (packet.publicClaimLevel !== "demo") errors.push("SQL project refactor-intent proof asset must remain demo-level.");
   if (packet.source?.repository !== "joefeser/tracemap" || packet.source?.commitSha !== expectedCommit
-    || packet.source?.fixtureRoot !== "samples/sql-project-refactor" || !packet.source?.scanId) {
+    || packet.source?.fixtureRoot !== "samples/sql-project-refactor" || packet.source?.scanId !== expectedScanId) {
     errors.push("SQL project refactor-intent proof asset has invalid public source provenance.");
   }
   if (packet.extractor?.family !== "SqlProjectRefactorExtractor" || packet.extractor?.version !== "sql-project-refactor/0.1.0") {
@@ -361,7 +395,9 @@ function validatePacket(packet, errors) {
   if (fixtureKinds.has("rename-column")) errors.push("SQL project refactor-intent proof asset must not present column rename as fixture evidence.");
 
   const gaps = Array.isArray(packet.gaps) ? packet.gaps : [];
-  if (gaps.length < 3) errors.push("SQL project refactor-intent proof asset must keep representative gaps visible.");
+  if (gaps.length !== expectedGapShapes.length) {
+    errors.push("SQL project refactor-intent proof asset must contain exactly the three pinned representative gap shapes.");
+  }
   for (const [index, gap] of gaps.entries()) {
     if (gap?.exampleKind !== "illustrative-gap-shape"
       || gap?.ruleId !== "database.sql-project.refactor-intent.gap.v1"
@@ -370,10 +406,22 @@ function validatePacket(packet, errors) {
       errors.push(`SQL project refactor-intent gap row ${index + 1} must remain an illustrative Tier 4 reduced/partial shape.`);
     }
   }
+  for (const expected of expectedGapShapes) {
+    const gap = gaps.find((candidate) => candidate?.id === expected.id);
+    if (!gap || gap.classification !== expected.classification || gap.coverageLabel !== expected.coverageLabel) {
+      errors.push(`SQL project refactor-intent proof asset does not match pinned gap shape: ${expected.id}`);
+    }
+  }
 
-  const downstream = new Set((Array.isArray(packet.downstreamReviewSurfaces) ? packet.downstreamReviewSurfaces : []).map((row) => row?.surface));
-  for (const surface of requiredDownstreamSurfaces) {
-    if (!downstream.has(surface)) errors.push(`SQL project refactor-intent proof asset is missing downstream review surface: ${surface}`);
+  const downstream = Array.isArray(packet.downstreamReviewSurfaces) ? packet.downstreamReviewSurfaces : [];
+  if (downstream.length !== expectedDownstreamSurfaces.length) {
+    errors.push("SQL project refactor-intent proof asset must contain exactly the three pinned downstream review surfaces.");
+  }
+  for (const expected of expectedDownstreamSurfaces) {
+    const row = downstream.find((candidate) => candidate?.surface === expected.surface);
+    if (!row || row.classification !== expected.classification || row.state !== expected.state) {
+      errors.push(`SQL project refactor-intent proof asset does not match pinned downstream review surface: ${expected.surface}`);
+    }
   }
   for (const field of ["reviewerQuestions", "limitations"]) {
     if (!Array.isArray(packet[field]) || packet[field].length === 0) errors.push(`SQL project refactor-intent proof asset must include non-empty ${field}.`);

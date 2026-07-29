@@ -1,7 +1,7 @@
 # Site SQL Project Refactor Intent Story Implementation State
 
-- Status: implementation and validation complete; PR #544 open; ACK reached a
-  terminal owner-decision state after the required reviewer-lag rerun
+- Status: implementation and validation complete; PR #544 open; second
+  ACK-authorized validator hardening pass complete
 - Branch: `codex/site-sql-project-refactor-intent`
 - Base: `origin/dev`
 - Base SHA: `26189d1dd8d97d5741005ae7cbd033840099f216`
@@ -32,10 +32,10 @@ compatibility claim, approval claim, or safety claim.
 - `cd site && npm run build`: passed.
 - `cd site && npm run validate`: passed for 98 HTML files, 3,369 internal
   references, and 97 sitemap URLs.
-- `cd site && npm test`: 737 passed, 0 failed.
-- Focused story tests: 20 passed, 0 failed, including ACK-authorized
+- `cd site && npm test`: 738 passed, 0 failed.
+- Focused story tests: 21 passed, 0 failed, including ACK-authorized
   attribute/obfuscation leak, full-boundary/JSON overclaim, and exact fixture
-  fact pinning regressions.
+  fact, scan, gap-shape, and downstream-handoff pinning regressions.
 - Aggregate validator tests: 11 passed, 0 failed.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
@@ -54,4 +54,7 @@ prior-head Codex and Qodo findings. After all checks passed, ACK returned
 was terminal but stale, and no current-head required-review substitute was
 admitted. The required five-minute unchanged reviewer-lag wait and single rerun
 produced the same owner-decision result. This state does not claim merge
-readiness.
+readiness. A subsequently requested current-head Codex review identified three
+additional exact-value validator gaps; the scan ID, representative gap
+classifications, and downstream review classifications/states are now pinned
+with focused regressions.
