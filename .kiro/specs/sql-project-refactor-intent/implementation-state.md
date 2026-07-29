@@ -19,13 +19,13 @@ generation, database connection, or runtime validation is required.
 ## Validation
 
 - `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter SqlProjectRefactorTests`
-  - 5 passed
-- Focused SQL-project, database-design-review, release-review, and inventory suite
-  - 45 passed
+  - 8 passed
+- Focused SQL-project, SQL-runbook, database-design-review, release-review, and CLI suite
+  - 66 passed
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`
   - passed with the repository's existing `NU1903` SQLite package advisory
 - `dotnet test src/dotnet/TraceMap.sln --no-restore`
-  - 930 passed
+  - 933 passed
 - checked-in `samples/sql-project-refactor` CLI scan
   - 1 linked log and 2 supported operations emitted
   - raw operation keys absent from generated output
@@ -35,6 +35,18 @@ generation, database connection, or runtime validation is required.
   - passed
 - `git diff --check`
   - passed
+
+## Review fixes
+
+- Read generated SSDT operation fields from `Property` `Name`/`Value`
+  attributes and operation keys from the `Operation` attribute, while rejecting
+  conflicting duplicate values.
+- Reject item/metadata/property expressions, include lists, conditions,
+  traversal, and symlink/reparse-point targets at the project-link boundary.
+- Honor explicit `.sqlproj` `--project` scope and suppress unrelated standalone
+  log gaps during project-scoped scans.
+- Project refactor operations and gaps into the standalone SQL runbook packet
+  without duplicating the explicit release-review projection.
 
 ## Deferred
 

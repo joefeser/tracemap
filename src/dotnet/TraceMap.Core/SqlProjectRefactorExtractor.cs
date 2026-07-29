@@ -13,7 +13,8 @@ public static class SqlProjectRefactorExtractor
     public static IReadOnlyList<CodeFact> Extract(
         string repoPath,
         ScanManifest manifest,
-        IEnumerable<FileInventoryItem> inventory)
+        IEnumerable<FileInventoryItem> inventory,
+        bool includeUnreferencedLogGaps = true)
     {
         var items = inventory.OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
         var projects = items.Where(item => item.Kind == "SqlProject").ToArray();
@@ -45,6 +46,11 @@ public static class SqlProjectRefactorExtractor
 
             foreach (var element in includes)
             {
+                if (element.Attributes().Any(attribute => attribute.Name.LocalName.Equals("Condition", StringComparison.Ordinal)))
+                {
+                    facts.Add(Gap(manifest, project.RelativePath, project.RelativePath, Line(element), "RefactorLogConditionUnsupported"));
+                    continue;
+                }
                 var include = (string?)element.Attribute("Include");
                 if (!TryResolveReference(repoPath, project.RelativePath, include, out var relativePath, out var classification))
                 {
@@ -86,8 +92,11 @@ public static class SqlProjectRefactorExtractor
             }
         }
 
-        foreach (var log in logs.Where(log => !referencedLogs.Contains(log.RelativePath)))
-            facts.Add(Gap(manifest, log.RelativePath, null, 1, "RefactorLogProjectReferenceUnavailable"));
+        if (includeUnreferencedLogGaps)
+        {
+            foreach (var log in logs.Where(log => !referencedLogs.Contains(log.RelativePath)))
+                facts.Add(Gap(manifest, log.RelativePath, null, 1, "RefactorLogProjectReferenceUnavailable"));
+        }
 
         return facts
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
@@ -123,7 +132,7 @@ public static class SqlProjectRefactorExtractor
                 continue;
             }
 
-            var key = ChildValue(operation, "Key");
+            var key = AttributeValue(operation, "Key") ?? OperationValue(operation, "Key");
             if (!string.IsNullOrWhiteSpace(key))
                 properties!["operationKeyHash"] = FactFactory.Hash(key, 32);
             properties!["coverageLabel"] = "bounded-static-evidence";
@@ -158,15 +167,15 @@ public static class SqlProjectRefactorExtractor
         source = null;
         target = null;
         classification = "RefactorOperationUnsupported";
-        var elementType = ChildValue(operation, "ElementType");
+        var elementType = OperationValue(operation, "ElementType");
         var objectKind = ObjectKind(elementType);
-        var elementName = ChildValue(operation, "ElementName");
+        var elementName = OperationValue(operation, "ElementName");
         if (objectKind is null)
         {
             classification = "RefactorElementTypeUnsupported";
             return false;
         }
-        if (!TrySourceIdentity(objectKind, elementName, ChildValue(operation, "ParentElementName"), out var sourceParts))
+        if (!TrySourceIdentity(objectKind, elementName, OperationValue(operation, "ParentElementName"), out var sourceParts))
         {
             classification = "RefactorSourceIdentityUnsupported";
             return false;
@@ -174,7 +183,7 @@ public static class SqlProjectRefactorExtractor
 
         if (string.Equals(name, "Rename Refactor", StringComparison.Ordinal))
         {
-            var newName = ChildValue(operation, "NewName");
+            var newName = OperationValue(operation, "NewName");
             if (!TryMultipartIdentifier(newName, out var targetParts))
             {
                 classification = "RefactorTargetIdentityUnsupported";
@@ -190,7 +199,7 @@ public static class SqlProjectRefactorExtractor
 
         if (string.Equals(name, "Move Schema", StringComparison.Ordinal) && objectKind == "table")
         {
-            var newSchema = ChildValue(operation, "NewSchema");
+            var newSchema = OperationValue(operation, "NewSchema");
             if (!TryMultipartIdentifier(newSchema, out var schemaParts) || schemaParts.Length != 1 || sourceParts.Length != 2)
             {
                 classification = "RefactorIdentityShapeUnsupported";
@@ -321,8 +330,12 @@ public static class SqlProjectRefactorExtractor
     {
         relativePath = null;
         classification = "RefactorLogReferenceUnsupported";
+        include = include?.Trim();
         if (string.IsNullOrWhiteSpace(include)
             || include.Contains("$(", StringComparison.Ordinal)
+            || include.Contains("@(", StringComparison.Ordinal)
+            || include.Contains("%(", StringComparison.Ordinal)
+            || include.Contains(';')
             || include.IndexOfAny(['*', '?']) >= 0
             || Path.IsPathRooted(include))
             return false;
@@ -340,12 +353,46 @@ public static class SqlProjectRefactorExtractor
                 classification = "RefactorLogReferenceEscapesScanRoot";
                 return false;
             }
+            if (ContainsLinkOrReparsePoint(root, resolved))
+            {
+                classification = "RefactorLogReferenceSymlinkRejected";
+                return false;
+            }
             relativePath = FileInventory.NormalizeRelativePath(Path.GetRelativePath(root, resolved));
             return true;
         }
         catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
         {
             return false;
+        }
+    }
+
+    private static bool ContainsLinkOrReparsePoint(string root, string path)
+    {
+        var relative = Path.GetRelativePath(root, path);
+        var current = root;
+        try
+        {
+            foreach (var part in relative.Split(
+                         [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                         StringSplitOptions.RemoveEmptyEntries))
+            {
+                current = Path.Combine(current, part);
+                var isDirectory = Directory.Exists(current);
+                var isFile = File.Exists(current);
+                FileSystemInfo info = isDirectory ? new DirectoryInfo(current) : new FileInfo(current);
+                if (info.LinkTarget is not null)
+                    return true;
+                if (!isDirectory && !isFile)
+                    continue;
+                if ((info.Attributes & FileAttributes.ReparsePoint) != 0)
+                    return true;
+            }
+            return false;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return true;
         }
     }
 
@@ -423,8 +470,25 @@ public static class SqlProjectRefactorExtractor
         new(filePath, Math.Max(1, line), Math.Max(1, line), null,
             nameof(SqlProjectRefactorExtractor), ScannerVersions.SqlProjectRefactorExtractor);
 
-    private static string? ChildValue(XElement operation, string localName) =>
-        operation.Elements().FirstOrDefault(element => element.Name.LocalName.Equals(localName, StringComparison.Ordinal))?.Value.Trim();
+    private static string? OperationValue(XElement operation, string name)
+    {
+        var values = operation.Elements()
+            .Where(element => element.Name.LocalName.Equals(name, StringComparison.Ordinal))
+            .Select(element => element.Value.Trim())
+            .Concat(operation.Elements()
+                .Where(element => element.Name.LocalName.Equals("Property", StringComparison.Ordinal)
+                    && string.Equals(AttributeValue(element, "Name"), name, StringComparison.Ordinal))
+                .Select(element => AttributeValue(element, "Value")?.Trim()))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return values.Length == 1 ? values[0] : null;
+    }
+
+    private static string? AttributeValue(XElement element, string name) =>
+        element.Attributes()
+            .FirstOrDefault(attribute => attribute.Name.LocalName.Equals(name, StringComparison.Ordinal))
+            ?.Value;
 
     private static int Line(XObject node) =>
         node is IXmlLineInfo info && info.HasLineInfo() ? Math.Max(1, info.LineNumber) : 1;

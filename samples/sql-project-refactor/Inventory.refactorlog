@@ -1,14 +1,12 @@
 <Operations>
-  <Operation Name="Rename Refactor">
-    <Key>8e1d9dd1-93d4-45d9-aa3b-172dd15585e2</Key>
-    <ElementName>[dbo].[InventoryItem]</ElementName>
-    <ElementType>SqlTable</ElementType>
-    <NewName>[CatalogItem]</NewName>
+  <Operation Name="Rename Refactor" Key="8e1d9dd1-93d4-45d9-aa3b-172dd15585e2">
+    <Property Name="ElementName" Value="[dbo].[InventoryItem]" />
+    <Property Name="ElementType" Value="SqlTable" />
+    <Property Name="NewName" Value="[CatalogItem]" />
   </Operation>
-  <Operation Name="Move Schema">
-    <Key>d623613b-45b7-4f2f-b397-46a455ef9ce6</Key>
-    <ElementName>[dbo].[CatalogItem]</ElementName>
-    <ElementType>SqlTable</ElementType>
-    <NewSchema>[catalog]</NewSchema>
+  <Operation Name="Move Schema" Key="d623613b-45b7-4f2f-b397-46a455ef9ce6">
+    <Property Name="ElementName" Value="[dbo].[CatalogItem]" />
+    <Property Name="ElementType" Value="SqlTable" />
+    <Property Name="NewSchema" Value="[catalog]" />
   </Operation>
 </Operations>
