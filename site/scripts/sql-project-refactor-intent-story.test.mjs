@@ -149,6 +149,25 @@ test("SQL project refactor-intent validator pins fixture evidence to exact check
   assert.match(errors.join("\n"), /does not match pinned fixture fact: table-rename-intent/);
 });
 
+test("SQL project refactor-intent validator pins scan, gap, and downstream handoff identities", async (t) => {
+  const root = await createSiteFixture(t);
+  const assetPath = join(root, "src", "assets", "sql-project-refactor-intent-proof-packet.json");
+  const packet = JSON.parse(await readFile(assetPath, "utf8"));
+  packet.source.scanId = "scan-fabricated";
+  packet.gaps[0].classification = "FabricatedGap";
+  packet.downstreamReviewSurfaces[0].classification = "DefiniteImpact";
+  packet.downstreamReviewSurfaces[2].state = "approved-for-deployment";
+  await writeFile(assetPath, `${JSON.stringify(packet, null, 2)}\n`);
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateSqlProjectRefactorIntentStoryDist({ dist: join(root, "dist"), errors });
+  const joined = errors.join("\n");
+  assert.match(joined, /invalid public source provenance/);
+  assert.match(joined, /does not match pinned gap shape: unsupported-or-unsafe-shape/);
+  assert.match(joined, /does not match pinned downstream review surface: database-design-review/);
+  assert.match(joined, /does not match pinned downstream review surface: sql-runbook/);
+});
+
 test("SQL project refactor-intent validator reports missing bidirectional, inbound, and discovery links", async (t) => {
   const root = await createSiteFixture(t);
   const proofPath = join(root, "src", "sql", "project-refactor-intent", "index.html");
