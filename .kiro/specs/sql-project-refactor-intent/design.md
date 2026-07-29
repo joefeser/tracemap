@@ -42,6 +42,12 @@ Supported v0 operations:
 - Rename Refactor for bounded table and column identities.
 - Move Schema for bounded table identities.
 
+Generated SSDT refactor logs represent operation fields as
+`Property` elements with `Name`/`Value` attributes and place the operation key
+on the `Operation` element. The reader accepts that generated shape and retains
+direct named child elements only as a deterministic compatibility form.
+Conflicting duplicate values are rejected rather than guessed.
+
 Names are accepted only as bracketed or bare SQL identifiers composed of letters,
 digits, `_`, `$`, `#`, and `@`, with a valid non-digit first character. The
 extractor stores decomposed source/target names and never stores the raw XML

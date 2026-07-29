@@ -993,7 +993,8 @@ public static class ReleaseReviewReporter
                 foreach (var step in group.Steps)
                     findings.Add(SqlEvidenceFinding(input.SourceLabel, "context-step", step.StepKind, ReleaseReviewClassifications.NoActionableEvidence, step.Evidence,
                         [Pair("engine", group.Engine), Pair("serverRole", group.ServerRole), Pair("databaseRole", group.DatabaseRole), Pair("schemaRole", group.SchemaRole), Pair("executionMode", group.ExecutionMode), Pair("contextClassification", step.ContextClassification), Pair("stopConditions", string.Join(',', step.StopConditions))]));
-            foreach (var milestone in packet.Milestones)
+            foreach (var milestone in packet.Milestones
+                         .Where(milestone => milestone.Evidence.RuleId != RuleIds.DatabaseSqlProjectRefactorIntent))
                 findings.Add(SqlEvidenceFinding(input.SourceLabel, "milestone", milestone.Kind, ReleaseReviewClassifications.NoActionableEvidence, milestone.Evidence,
                     [Pair("state", milestone.State), Pair("validationState", milestone.ValidationState)]));
             foreach (var prerequisite in packet.Prerequisites)

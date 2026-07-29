@@ -1,4 +1,5 @@
 using System.Text.Json;
+using TraceMap.Cli;
 using TraceMap.Core;
 using TraceMap.Reporting;
 using TraceMap.Storage;
@@ -15,28 +16,27 @@ public sealed class SqlProjectRefactorTests
         File.WriteAllText(Path.Combine(temp.Path, "Database", "App.sqlproj"), """
             <Project Sdk="Microsoft.Build.Sql/2.0.0">
               <ItemGroup>
-                <RefactorLog Include="Refactors\App.refactorlog" />
+                <RefactorLog Include="  Refactors\App.refactorlog  " />
               </ItemGroup>
             </Project>
             """);
         File.WriteAllText(Path.Combine(temp.Path, "Database", "Refactors", "App.refactorlog"), """
             <Operations>
-              <Operation Name="Rename Refactor">
-                <Key>private-operation-key-sentinel</Key>
-                <ElementName>[dbo].[Orders]</ElementName>
-                <ElementType>SqlTable</ElementType>
-                <NewName>[ArchivedOrders]</NewName>
+              <Operation Name="Rename Refactor" Key="private-operation-key-sentinel">
+                <Property Name="ElementName" Value="[dbo].[Orders]" />
+                <Property Name="ElementType" Value="SqlTable" />
+                <Property Name="NewName" Value="[ArchivedOrders]" />
               </Operation>
               <Operation Name="Rename Refactor">
-                <ElementName>[Status]</ElementName>
-                <ElementType>SqlSimpleColumn</ElementType>
-                <ParentElementName>[dbo].[Orders]</ParentElementName>
-                <NewName>[ArchiveStatus]</NewName>
+                <Property Name="ElementName" Value="[Status]" />
+                <Property Name="ElementType" Value="SqlSimpleColumn" />
+                <Property Name="ParentElementName" Value="[dbo].[Orders]" />
+                <Property Name="NewName" Value="[ArchiveStatus]" />
               </Operation>
               <Operation Name="Move Schema">
-                <ElementName>[dbo].[Orders]</ElementName>
-                <ElementType>SqlTable</ElementType>
-                <NewSchema>[archive]</NewSchema>
+                <Property Name="ElementName" Value="[dbo].[Orders]" />
+                <Property Name="ElementType" Value="SqlTable" />
+                <Property Name="NewSchema" Value="[archive]" />
               </Operation>
             </Operations>
             """);
@@ -80,9 +80,13 @@ public sealed class SqlProjectRefactorTests
             <Project>
               <ItemGroup>
                 <RefactorLog Include="$(PrivatePath)\secret.refactorlog" />
+                <RefactorLog Include="@(RefactorLogs)" />
+                <RefactorLog Include="%(Identity)" />
+                <RefactorLog Include="first.refactorlog;second.refactorlog" />
                 <RefactorLog Include="../../outside.refactorlog" />
                 <RefactorLog Include="missing.refactorlog" />
                 <RefactorLog Include="dangerous.refactorlog" />
+                <RefactorLog Include="conditional.refactorlog" Condition="'$(Configuration)' == 'Release'" />
               </ItemGroup>
             </Project>
             """);
@@ -95,10 +99,11 @@ public sealed class SqlProjectRefactorTests
         var facts = SqlProjectRefactorExtractor.Extract(temp.Path, Manifest(), FileInventory.Collect(temp.Path));
         var serialized = JsonSerializer.Serialize(facts);
 
-        Assert.Contains(facts, fact => fact.Properties.GetValueOrDefault("classification") == "RefactorLogReferenceUnsupported");
+        Assert.Equal(4, facts.Count(fact => fact.Properties.GetValueOrDefault("classification") == "RefactorLogReferenceUnsupported"));
         Assert.Contains(facts, fact => fact.Properties.GetValueOrDefault("classification") == "RefactorLogReferenceEscapesScanRoot");
         Assert.Contains(facts, fact => fact.Properties.GetValueOrDefault("classification") == "RefactorLogReferenceMissing");
         Assert.Contains(facts, fact => fact.Properties.GetValueOrDefault("classification") == "RefactorLogXmlSecurityRejected");
+        Assert.Contains(facts, fact => fact.Properties.GetValueOrDefault("classification") == "RefactorLogConditionUnsupported");
         Assert.Contains(facts, fact => fact.Properties.GetValueOrDefault("classification") == "RefactorLogProjectReferenceUnavailable");
         Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.SqlProjectRefactorOperation);
         Assert.DoesNotContain("PrivatePath", serialized, StringComparison.Ordinal);
@@ -114,11 +119,10 @@ public sealed class SqlProjectRefactorTests
             <Project><ItemGroup><RefactorLog Include="App.refactorlog" /></ItemGroup></Project>
             """);
         var operations = string.Join('\n', Enumerable.Range(0, 1002).Select(index => $"""
-            <Operation Name="Rename Refactor">
-              <Key>private-key-{index}</Key>
-              <ElementName>[dbo].[Table{index}]</ElementName>
-              <ElementType>SqlTable</ElementType>
-              <NewName>[Renamed{index}]</NewName>
+            <Operation Name="Rename Refactor" Key="private-key-{index}">
+              <Property Name="ElementName" Value="[dbo].[Table{index}]" />
+              <Property Name="ElementType" Value="SqlTable" />
+              <Property Name="NewName" Value="[Renamed{index}]" />
             </Operation>
             """));
         File.WriteAllText(Path.Combine(temp.Path, "App.refactorlog"), $"<Operations>{operations}</Operations>");
@@ -130,6 +134,106 @@ public sealed class SqlProjectRefactorTests
             fact => fact.Properties.GetValueOrDefault("classification") == "RefactorOperationLimitExceeded");
         Assert.Equal("2", gap.Properties["omittedOperationCount"]);
         Assert.DoesNotContain("private-key-1001", JsonSerializer.Serialize(facts), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Extractor_rejects_refactor_log_symlinks_before_reading_the_target()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var temp = new TempDirectory();
+        using var outside = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "App.sqlproj"),
+            "<Project><ItemGroup><RefactorLog Include=\"linked.refactorlog\" /></ItemGroup></Project>");
+        var outsideLog = Path.Combine(outside.Path, "outside.refactorlog");
+        File.WriteAllText(outsideLog, """
+            <Operations><Operation Name="Rename Refactor" Key="private-link-key">
+              <Property Name="ElementName" Value="[private].[Outside]" />
+              <Property Name="ElementType" Value="SqlTable" />
+              <Property Name="NewName" Value="[Exposed]" />
+            </Operation></Operations>
+            """);
+        File.CreateSymbolicLink(Path.Combine(temp.Path, "linked.refactorlog"), outsideLog);
+
+        var facts = SqlProjectRefactorExtractor.Extract(temp.Path, Manifest(), FileInventory.Collect(temp.Path));
+        var serialized = JsonSerializer.Serialize(facts);
+
+        Assert.Contains(facts,
+            fact => fact.Properties.GetValueOrDefault("classification") == "RefactorLogReferenceSymlinkRejected");
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.SqlProjectRefactorOperation);
+        Assert.DoesNotContain("Outside", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-link-key", serialized, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Project_scope_excludes_other_sql_projects_and_their_refactor_logs()
+    {
+        using var temp = new TempDirectory();
+        var output = Path.Combine(temp.Path, "out");
+        foreach (var name in new[] { "Keep", "Skip" })
+        {
+            File.WriteAllText(Path.Combine(temp.Path, $"{name}.sqlproj"),
+                $"<Project><ItemGroup><RefactorLog Include=\"{name}.refactorlog\" /></ItemGroup></Project>");
+            File.WriteAllText(Path.Combine(temp.Path, $"{name}.refactorlog"), $"""
+                <Operations><Operation Name="Rename Refactor" Key="{name}-key">
+                  <Property Name="ElementName" Value="[dbo].[{name}Old]" />
+                  <Property Name="ElementType" Value="SqlTable" />
+                  <Property Name="NewName" Value="[{name}New]" />
+                </Operation></Operations>
+                """);
+        }
+        using var standardOutput = new StringWriter();
+        using var errorOutput = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync(
+            ["scan", "--repo", temp.Path, "--out", output, "--project", "Keep.sqlproj"],
+            standardOutput,
+            errorOutput);
+        var facts = await File.ReadAllTextAsync(Path.Combine(output, "facts.ndjson"));
+        var refactorFacts = facts.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Where(line => line.Contains("database.sql-project.refactor-intent", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains(refactorFacts, line => line.Contains("KeepOld", StringComparison.Ordinal));
+        Assert.DoesNotContain(refactorFacts, line => line.Contains("SkipOld", StringComparison.Ordinal));
+        Assert.DoesNotContain(refactorFacts, line => line.Contains("Skip.refactorlog", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Runbook_packet_projects_refactor_milestone_and_gap_without_raw_operation_key()
+    {
+        var manifest = Manifest();
+        var operation = FactFactory.Create(
+            manifest,
+            FactTypes.SqlProjectRefactorOperation,
+            RuleIds.DatabaseSqlProjectRefactorIntent,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan("App.refactorlog", 2, 2, null, nameof(SqlProjectRefactorExtractor), ScannerVersions.SqlProjectRefactorExtractor),
+            properties: Properties(
+                ("operationKind", "rename-table"),
+                ("operationKeyHash", FactFactory.Hash("private-runbook-key", 32)),
+                ("coverageLabel", "bounded-static-evidence"),
+                ("limitations", "Checked-in intent only.")));
+        var gap = FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.DatabaseSqlProjectRefactorIntentGap,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan("App.refactorlog", 3, 3, null, nameof(SqlProjectRefactorExtractor), ScannerVersions.SqlProjectRefactorExtractor),
+            properties: Properties(
+                ("classification", "RefactorOperationUnsupported"),
+                ("coverageLabel", "reduced"),
+                ("limitations", "Unsupported shape.")));
+
+        var packet = SqlRunbookPacketBuilder.Build(new ScanResult(manifest, [operation, gap], []));
+        var serialized = JsonSerializer.Serialize(packet);
+
+        var milestone = Assert.Single(packet.Milestones);
+        Assert.Equal("rename-table", milestone.Kind);
+        Assert.Equal("intended-by-project-refactor-log", milestone.State);
+        Assert.Contains(packet.Gaps, item => item.Evidence.RuleId == RuleIds.DatabaseSqlProjectRefactorIntentGap);
+        Assert.DoesNotContain("private-runbook-key", serialized, StringComparison.Ordinal);
     }
 
     [Fact]
