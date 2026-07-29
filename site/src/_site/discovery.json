@@ -1212,6 +1212,40 @@
     ]
   },
   {
+    "path": "/sql/project-refactor-intent/",
+    "title": "SQL Project Refactor Intent Evidence",
+    "summary": "Demo-level public proof for supported checked-in SQL project table renames, column renames, and table schema moves with provenance and explicit Tier 4 gaps.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/assets/sql-project-refactor-intent-proof-packet.json",
+    "limitations": [
+      "Supported rows are bounded checked-in structural intent and do not establish build, package, deployment, compatibility, or database state.",
+      "Unsupported, ambiguous, unsafe, missing, and truncated surfaces remain Tier 4 gaps."
+    ],
+    "nonClaims": [
+      "No SQL project build, DACPAC creation or inspection, deployment-plan or generated-script inspection, SqlPackage invocation, database connection, SQL execution, or target refactor-log table inspection.",
+      "No applied-state, compatibility, success, reversibility, approval, execution-safety, DBA replacement, or release-approval proof."
+    ]
+  },
+  {
+    "path": "/blog/sql-project-refactor-intent-evidence/",
+    "title": "What a Database Rename Can Prove Before Deployment",
+    "summary": "Demo-level article about using checked-in SQL project refactor intent to sharpen design and release review without claiming deployment or database state.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/sql/project-refactor-intent/",
+    "limitations": [
+      "The article explains supported static evidence and reviewer questions; it is not operational guidance or proof that a refactor was applied.",
+      "Microsoft’s article is linked as independent product-workflow context and does not imply affiliation, endorsement, or joint work."
+    ],
+    "nonClaims": [
+      "No SQL project build, DACPAC creation or inspection, deployment-plan or generated-script inspection, SqlPackage invocation, database connection, SQL execution, or target refactor-log table inspection.",
+      "No applied-state, compatibility, success, reversibility, approval, execution-safety, DBA replacement, or release-approval proof."
+    ]
+  },
+  {
     "path": "/manager-brief/",
     "title": "Manager Problem Brief",
     "summary": "Concept-level manager brief for the coordination problem TraceMap reduces with deterministic static evidence packets and visible limitations.",

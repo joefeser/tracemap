@@ -1,0 +1,150 @@
+<p>
+  <strong>Public claim level: demo.</strong>
+  A database rename can be easy to misunderstand when a reviewer sees only the
+  before and after shapes. A conventional schema diff may show one object
+  disappearing and another appearing. That is useful change evidence, but it
+  may not explain whether the author intended a rename, a schema move, or a
+  destructive replacement.
+</p>
+
+<p>
+  Microsoft described the product workflow behind this distinction in
+  <a href="https://devblogs.microsoft.com/azure-sql/refactor-your-database-with-sql-projects-in-vs-code/">“Refactor your database with SQL projects in VS Code”</a>.
+  The article explains how SQL Database Projects can record supported refactor
+  operations and use those operation keys during later build and deployment
+  workflows. TraceMap is not affiliated with or endorsed by Microsoft. The
+  article is context for the checked-in project artifacts; TraceMap’s public
+  claim remains narrower.
+</p>
+
+<section data-sql-project-refactor-blog-block="diff-ambiguity">
+  <h2>Why a schema diff can hide rename intent.</h2>
+  <p>
+    Suppose a table name changes between two repository states. A structural
+    comparison can report that the old identity is gone and the new identity is
+    present. It cannot automatically know whether that pairing represents a
+    deliberate rename, a replacement, two unrelated edits, or an incomplete
+    change. The same ambiguity appears when a column changes name or a table
+    moves between schemas.
+  </p>
+  <p>
+    That ambiguity matters during review. A destructive replacement and an
+    intended rename can ask very different questions about application
+    compatibility, deployment sequencing, retained data, and owner validation.
+    Static evidence should help reviewers find those questions without claiming
+    that the operational answers are already known.
+  </p>
+</section>
+
+<section data-sql-project-refactor-blog-block="checked-in-surface">
+  <h2>The project and refactor log form a checked-in intent surface.</h2>
+  <p>
+    A literal <code>.sqlproj</code> reference to a checked-in
+    <code>.refactorlog</code> gives TraceMap a deterministic structural surface.
+    The extractor reads only bounded supported identities. It does not evaluate
+    arbitrary project expressions, invoke the build system, open a package, or
+    contact a database.
+  </p>
+  <p>
+    The public-safe flow is small:
+    <code>.sqlproj</code> → <code>.refactorlog</code> → TraceMap evidence →
+    database design and release review. At the evidence step, the rule ID,
+    evidence tier, repository-relative span, commit SHA, extractor version,
+    coverage label, safe source and target identity, and limitation stay
+    attached. That provenance is what lets another reviewer distinguish a
+    fixture-backed row from an illustrative example.
+  </p>
+</section>
+
+<section data-sql-project-refactor-blog-block="operation-examples">
+  <h2>Three supported categories, read as intent.</h2>
+  <p>
+    A sanitized table-rename example reads
+    <strong>dbo.InventoryItem → dbo.CatalogItem</strong>. A column-rename
+    example reads
+    <strong>dbo.InventoryItem.DisplayName → dbo.InventoryItem.ItemName</strong>.
+    A table schema-move example reads
+    <strong>dbo.CatalogItem → catalog.CatalogItem</strong>.
+  </p>
+  <p>
+    The checked-in public sample backs the table rename and schema move. The
+    column row is an explicitly illustrative supported category, not a third
+    fact invented from the sample. All three shapes mean “the checked-in project
+    records this supported intent.” None means “the database now has this
+    shape.”
+  </p>
+</section>
+
+<section data-sql-project-refactor-blog-block="tiers-and-gaps">
+  <h2>Tier 2 explains the supported shape; Tier 4 keeps uncertainty visible.</h2>
+  <p>
+    Supported literal project linkage, table renames, column renames, and table
+    schema moves use <code>database.sql-project.refactor-intent.v1</code> with
+    <code>Tier2Structural</code> evidence. The tier says TraceMap recognized a
+    documented checked-in structure. It does not upgrade that structure into
+    compiler, package, deployment, or runtime proof.
+  </p>
+  <p>
+    Unsupported, ambiguous, unsafe, missing, malformed, oversized, or truncated
+    surfaces use <code>database.sql-project.refactor-intent.gap.v1</code> with
+    <code>Tier4Unknown</code>. A missing referenced log reduces coverage. A
+    capped operation list remains partial. An unsupported operation remains a
+    gap. None of those rows establishes clean absence, invalidity, or
+    operational danger.
+  </p>
+</section>
+
+<section data-sql-project-refactor-blog-block="review-value">
+  <h2>Where the evidence helps downstream review.</h2>
+  <p>
+    In <a href="/database/design-review/">database design review</a>, supported
+    refactor operations appear as review-recommended global evidence rather
+    than PostgreSQL schema state. In release review, the evidence can keep safe
+    source and target identity, supporting fact IDs, extractor provenance, and
+    limitations next to the question being reviewed. In the
+    <a href="/sql/operator-handoff/">SQL operator handoff</a>, a milestone can
+    say <code>intended-by-project-refactor-log</code> while build, deployment,
+    validation, and approval remain visibly unproven.
+  </p>
+  <p>
+    That is the practical value: a reviewer can ask whether application changes
+    match the checked-in rename intent, whether gaps hide other operations, and
+    which owner must supply build, compatibility, runtime, and release evidence.
+    The evidence routes the conversation; it does not decide it.
+  </p>
+</section>
+
+<section data-sql-project-refactor-blog-block="non-claims" data-sql-project-refactor-boundary="non-claims">
+  <h2>What this story does not prove.</h2>
+  <p>
+    TraceMap does not build the SQL project, create or inspect a DACPAC, inspect
+    a deployment plan or generated script, invoke SqlPackage, connect to a
+    database, execute SQL, or inspect the target
+    <code>dbo.__RefactorLog</code> table. It does not claim that a refactor was
+    deployed, applied, compatible, successful, reversible, approved, or safe to
+    run.
+  </p>
+  <p>
+    This evidence does not replace database owners, DBAs, tests, runtime
+    validation, telemetry, change control, or release approval. The public
+    surfaces publish no raw SQL, raw XML, operation keys, credentials,
+    connection strings, local paths, private infrastructure names, raw analyzer
+    output, or copyable deployment commands.
+  </p>
+</section>
+
+<section data-sql-project-refactor-blog-block="reviewer-questions">
+  <h2>Questions for the reviewer.</h2>
+  <ul>
+    <li>Does the proposed application change align with the checked-in source and target identity?</li>
+    <li>Are unsupported, missing, ambiguous, or truncated refactor-log shapes hiding additional intent?</li>
+    <li>Who owns build, deployment-plan, compatibility, runtime validation, and release evidence?</li>
+    <li>Which database owner or DBA must review the change before an operational decision?</li>
+  </ul>
+  <p>
+    Inspect the compact
+    <a href="/sql/project-refactor-intent/">SQL project refactor-intent proof page</a>
+    and its public-safe JSON packet for the exact demo rows, provenance, gaps,
+    and limitations.
+  </p>
+</section>

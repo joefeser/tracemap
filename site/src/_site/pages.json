@@ -395,6 +395,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/sql/project-refactor-intent/",
+    "changefreq": "monthly",
+    "priority": "0.8"
+  },
+  {
     "path": "/manager-brief/",
     "changefreq": "monthly",
     "priority": "0.7"
