@@ -19,7 +19,7 @@ public static class ScanEngine
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
         var projects = inventory
-            .Where(item => item.Kind == "Project")
+            .Where(item => item.Kind is "Project" or "SqlProject")
             .Select(item => item.RelativePath)
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
@@ -271,6 +271,7 @@ public static class ScanEngine
         facts.AddRange(SqlFileExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(SqlExecutionContextExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(PostgresSchemaMigrationExtractor.Extract(repoPath, manifest, inventory));
+        facts.AddRange(SqlProjectRefactorExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(ConfigExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.GapFacts));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.Facts));
