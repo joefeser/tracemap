@@ -8,4 +8,5 @@
 - [x] Add focused schema, provenance, link, claim, and leak validators.
 - [x] Run focused and full site validation.
 - [x] Complete desktop and mobile browser checks for both routes.
-- [ ] Commit, push, open a ready PR to `dev`, and run ACK to a terminal result.
+- [x] Commit, push, and open ready PR #544 to `dev`.
+- [ ] Run ACK to a terminal result.

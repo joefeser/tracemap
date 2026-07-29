@@ -78,10 +78,55 @@ const requiredRuleIds = new Set([
 ]);
 const requiredOperationKinds = new Set(["rename-table", "rename-column", "move-schema"]);
 const requiredDownstreamSurfaces = new Set(["database-design-review", "release-review", "sql-runbook"]);
+const expectedFixtureEvidence = [
+  {
+    id: "project-log-link",
+    sourceFactId: "fact-37e5fc9f9eabe1c68db6",
+    factType: "SqlProjectRefactorLogDeclared",
+    operationKind: undefined,
+    projectPath: "samples/sql-project-refactor/Inventory.sqlproj",
+    safeSource: "Inventory.sqlproj",
+    safeTarget: "Inventory.refactorlog",
+    span: {
+      filePath: "samples/sql-project-refactor/Inventory.sqlproj",
+      startLine: 3,
+      endLine: 3
+    }
+  },
+  {
+    id: "table-rename-intent",
+    sourceFactId: "fact-58e4a0e819b64afe7430",
+    factType: "SqlProjectRefactorOperation",
+    operationKind: "rename-table",
+    projectPath: "samples/sql-project-refactor/Inventory.sqlproj",
+    safeSource: "dbo.InventoryItem",
+    safeTarget: "dbo.CatalogItem",
+    span: {
+      filePath: "samples/sql-project-refactor/Inventory.refactorlog",
+      startLine: 2,
+      endLine: 2
+    }
+  },
+  {
+    id: "table-schema-move-intent",
+    sourceFactId: "fact-b4dea22f53654c5c9cfe",
+    factType: "SqlProjectRefactorOperation",
+    operationKind: "move-schema",
+    projectPath: "samples/sql-project-refactor/Inventory.sqlproj",
+    safeSource: "dbo.CatalogItem",
+    safeTarget: "catalog.CatalogItem",
+    span: {
+      filePath: "samples/sql-project-refactor/Inventory.refactorlog",
+      startLine: 7,
+      endLine: 7
+    }
+  }
+];
 
 const hardLeakPatterns = [
   /(?:\/Users\/|\/home\/|\/private\/|[A-Z]:\\Users\\)/i,
   /\b(?:Server|Password|User Id)\s*=/i,
+  /\bP\s*a\s*s\s*s\s*w\s*o\s*r\s*d\s*=/i,
   /\b(?:ConnectionString|connection string|api[_-]?key|secret\s*=|sk-[A-Za-z0-9_-]{12,})\b/i,
   /\b(?:private-infrastructure|private-host|internal-ticket|raw-analyzer-output|operation-key-sentinel)\b/i,
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/i,
@@ -94,7 +139,7 @@ const rawMaterialPatterns = [
 const positiveOverclaimPatterns = [
   /\b(?:deployment|refactor|rename|schema move)\s+(?:succeeded|completed successfully|is safe|was approved)\b/i,
   /\b(?:proves|confirms|guarantees|certifies)\b[^.]{0,100}\b(?:deployed|applied|compatible|successful|reversible|approved|safe to run)\b/i,
-  /\b(?:ready|approved|safe)\s+(?:for|to)\s+(?:deploy|deployment|release|run)\b/i
+  /\b(?:it|this|the (?:change|deployment|refactor|release|rename|schema move|script))\s+(?:is|was)\s+(?:ready|approved|safe)\s+(?:for|to)\s+(?:deploy|deployment|release|run)\b/i
 ];
 
 export async function validateSqlProjectRefactorIntentStoryDist({
@@ -134,18 +179,27 @@ export async function validateSqlProjectRefactorIntentStoryDist({
     requiredText: requiredProofText
   });
 
-  const combinedRendered = [articleHtml, proofHtml]
+  const renderedStoryText = [articleHtml, proofHtml]
     .map((html) => decodeHtmlEntities(stripTagsQuoteAware(html)))
     .join(" ");
+  const leakScanText = [
+    decodeHtmlEntities(articleHtml),
+    decodeHtmlEntities(proofHtml),
+    renderedStoryText,
+    collapseTagSplitTextTight(articleHtml),
+    collapseTagSplitTextTight(proofHtml),
+    assetText
+  ].join(" ");
   for (const pattern of [...hardLeakPatterns, ...rawMaterialPatterns]) {
-    if (pattern.test(`${combinedRendered} ${assetText}`)) {
+    if (pattern.test(leakScanText)) {
       errors.push(`SQL project refactor-intent story contains forbidden private, raw, key, command, SQL, or XML material: ${pattern}`);
     }
   }
-  const claimScan = [articleHtml, proofHtml]
-    .map(stripNonClaimBoundary)
-    .map((html) => normalizeRenderedText(decodeHtmlEntities(html)))
-    .join(" ");
+  const claimScan = [
+    normalizeRenderedText(articleHtml),
+    normalizeRenderedText(proofHtml),
+    assetText
+  ].join(" ");
   for (const pattern of positiveOverclaimPatterns) {
     if (pattern.test(claimScan)) {
       errors.push(`SQL project refactor-intent story contains a forbidden positive deployment, approval, or safety claim: ${pattern}`);
@@ -270,7 +324,9 @@ function validatePacket(packet, errors) {
   }
 
   const evidence = Array.isArray(packet.evidence) ? packet.evidence : [];
-  if (evidence.length < 3) errors.push("SQL project refactor-intent proof asset must include the three fixture-backed evidence rows.");
+  if (evidence.length !== expectedFixtureEvidence.length) {
+    errors.push("SQL project refactor-intent proof asset must contain exactly the three pinned fixture-backed evidence rows.");
+  }
   const evidenceIds = new Set();
   for (const [index, row] of evidence.entries()) {
     if (!row?.id || evidenceIds.has(row.id)) errors.push(`SQL project refactor-intent evidence row ${index + 1} has a missing or duplicate ID.`);
@@ -289,6 +345,12 @@ function validatePacket(packet, errors) {
     if (!Number.isInteger(row?.span?.startLine) || !Number.isInteger(row?.span?.endLine)
       || row.span.startLine < 1 || row.span.endLine < row.span.startLine) {
       errors.push(`SQL project refactor-intent evidence row ${index + 1} has an invalid line span.`);
+    }
+  }
+  for (const expected of expectedFixtureEvidence) {
+    const row = evidence.find((candidate) => candidate?.id === expected.id);
+    if (!row || !fixtureEvidenceMatches(row, expected)) {
+      errors.push(`SQL project refactor-intent proof asset does not match pinned fixture fact: ${expected.id}`);
     }
   }
 
@@ -318,11 +380,20 @@ function validatePacket(packet, errors) {
   }
 }
 
-function stripNonClaimBoundary(html) {
-  return html.replace(
-    /<section\b(?=[^>]*\bdata-sql-project-refactor-boundary\s*=\s*["']non-claims["'])[^>]*>[\s\S]*?<\/section>/gi,
-    ""
-  );
+function collapseTagSplitTextTight(html) {
+  return decodeHtmlEntities(stripTagsQuoteAware(String(html))).replace(/\s+/g, "");
+}
+
+function fixtureEvidenceMatches(row, expected) {
+  return row.sourceFactId === expected.sourceFactId
+    && row.factType === expected.factType
+    && row.operationKind === expected.operationKind
+    && row.projectPath === expected.projectPath
+    && row.safeSource === expected.safeSource
+    && row.safeTarget === expected.safeTarget
+    && row.span?.filePath === expected.span.filePath
+    && row.span?.startLine === expected.span.startLine
+    && row.span?.endLine === expected.span.endLine;
 }
 
 function hasHref(html, href) {

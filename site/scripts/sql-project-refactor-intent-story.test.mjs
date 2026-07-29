@@ -57,11 +57,56 @@ test("SQL project refactor-intent validator rejects tag-split private material",
   assert.match(errors.join("\n"), /forbidden private, raw, key, command, SQL, or XML material/);
 });
 
+test("SQL project refactor-intent validator rejects attribute and whitespace-obfuscated private material", async (t) => {
+  const slash = String.fromCharCode(47);
+  const cases = [
+    ["attribute", `<a href="file:${slash}${slash}${slash}Users${slash}example${slash}private">fixture</a>`],
+    ["whitespace-obfuscated", "<p>Pass w ord = leak</p>"]
+  ];
+
+  for (const [label, plantedHtml] of cases) {
+    await t.test(label, async (subtest) => {
+      const root = await createSiteFixture(subtest);
+      const pagePath = join(root, "src", "sql", "project-refactor-intent", "index.html");
+      const html = await readFile(pagePath, "utf8");
+      await writeFile(pagePath, html.replace("</main>", `${plantedHtml}</main>`));
+      await buildSite({ root, log() {} });
+      const errors = [];
+      await validateSqlProjectRefactorIntentStoryDist({ dist: join(root, "dist"), errors });
+      assert.match(errors.join("\n"), /forbidden private, raw, key, command, SQL, or XML material/);
+    });
+  }
+});
+
 test("SQL project refactor-intent validator rejects positive deployment claims outside the non-claim boundary", async (t) => {
   const root = await createSiteFixture(t);
   const pagePath = join(root, "src", "sql", "project-refactor-intent", "index.html");
   const html = await readFile(pagePath, "utf8");
   await writeFile(pagePath, html.replace("</main>", "<p>The deployment succeeded.</p></main>"));
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateSqlProjectRefactorIntentStoryDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /forbidden positive deployment, approval, or safety claim/);
+});
+
+test("SQL project refactor-intent validator rejects positive deployment claims inside the non-claim boundary", async (t) => {
+  const root = await createSiteFixture(t);
+  const pagePath = join(root, "src", "sql", "project-refactor-intent", "index.html");
+  const html = await readFile(pagePath, "utf8");
+  const boundary = '<section class="section boundary-section" data-sql-project-refactor-boundary="non-claims">';
+  await writeFile(pagePath, html.replace(boundary, `${boundary}<p>The deployment succeeded.</p>`));
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateSqlProjectRefactorIntentStoryDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /forbidden positive deployment, approval, or safety claim/);
+});
+
+test("SQL project refactor-intent validator applies positive-claim guardrails to the JSON packet", async (t) => {
+  const root = await createSiteFixture(t);
+  const assetPath = join(root, "src", "assets", "sql-project-refactor-intent-proof-packet.json");
+  const packet = JSON.parse(await readFile(assetPath, "utf8"));
+  packet.purpose = "The deployment succeeded.";
+  await writeFile(assetPath, `${JSON.stringify(packet, null, 2)}\n`);
   await buildSite({ root, log() {} });
   const errors = [];
   await validateSqlProjectRefactorIntentStoryDist({ dist: join(root, "dist"), errors });
@@ -86,6 +131,22 @@ test("SQL project refactor-intent validator rejects invalid provenance and inven
   assert.match(errors.join("\n"), /incomplete rule, tier, coverage, fact, commit, or extractor provenance/);
   assert.match(errors.join("\n"), /invalid line span/);
   assert.match(errors.join("\n"), /must not present column rename as fixture evidence/);
+});
+
+test("SQL project refactor-intent validator pins fixture evidence to exact checked-in facts", async (t) => {
+  const root = await createSiteFixture(t);
+  const assetPath = join(root, "src", "assets", "sql-project-refactor-intent-proof-packet.json");
+  const packet = JSON.parse(await readFile(assetPath, "utf8"));
+  const rename = packet.evidence.find((row) => row.id === "table-rename-intent");
+  rename.sourceFactId = "fact-fabricated";
+  rename.safeSource = "dbo.Fabricated";
+  rename.span.startLine = 99;
+  rename.span.endLine = 99;
+  await writeFile(assetPath, `${JSON.stringify(packet, null, 2)}\n`);
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateSqlProjectRefactorIntentStoryDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /does not match pinned fixture fact: table-rename-intent/);
 });
 
 test("SQL project refactor-intent validator reports missing bidirectional, inbound, and discovery links", async (t) => {
