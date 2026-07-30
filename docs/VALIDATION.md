@@ -78,6 +78,38 @@ Troubleshooting:
 - If the demo refuses an in-repo output directory, use `.tracemap-demo/` or add a generic ignored output path before running the script.
 - If .NET or TypeScript build restore fails, run the build/test commands above directly to restore local toolchain dependencies and inspect their native diagnostics.
 - Reduced sample scan and report coverage is expected for samples that intentionally rely on syntax fallback or missing framework packages. The summary labels those sections as partial while preserving rule-backed evidence counts.
+
+## MSBuild Binary-Log Evidence
+
+For changes to explicit `.binlog` ingestion, run the focused synthetic suite:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~MsBuildBinlogExtractorTests
+```
+
+For a pinned local product smoke, generate a binary log from the checked-in
+modern sample and supply it explicitly with the current commit:
+
+```bash
+smoke_root="$(mktemp -d)"
+dotnet build samples/modern-sample/ModernSample.csproj \
+  -bl:"$smoke_root/modern-sample.binlog"
+dotnet run --project src/dotnet/TraceMap.Cli -- scan \
+  --repo samples/modern-sample \
+  --out "$smoke_root/scan" \
+  --binlog "$smoke_root/modern-sample.binlog" \
+  --binlog-commit-sha "$(git rev-parse HEAD)"
+```
+
+Confirm `facts.ndjson`, `index.sqlite`, `report.md`, and `logs/analyzer.log`
+contain only the TraceMap-owned allowlist: artifact SHA-256, recorded build
+result, repository-relative project/graph identities, safe diagnostic
+code/severity/location, aggregate counts, provenance, limitations, and
+categorical gaps. Do not publish or retain the raw binlog. The smoke observes
+artifact contents only; it does not authenticate the artifact, prove the build
+ran at the declared commit, prove tests passed, or grant deployment/release
+approval.
 - If endpoint, path, reverse, or portfolio assertions fail, inspect the generated JSON reports under `reports/`; accepted evidence rows must include rule IDs, evidence tiers, source labels, commit SHAs, and supporting fact or edge IDs where the report exposes them.
 - If the generated public-report sentinel fails, inspect the relative file paths and category it prints. Keep scan manifests, SQLite files, facts, and logs local-only; public summaries and reports must use hashes, labels, or relative paths.
 

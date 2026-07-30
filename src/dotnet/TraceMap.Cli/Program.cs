@@ -203,7 +203,9 @@ public static class TraceMapCommand
             IncludeGlobs: values.GetMany("--include"),
             ExcludeGlobs: values.GetMany("--exclude"),
             TargetFramework: values.GetValueOrDefault("--target-framework"),
-            Restore: values.HasFlag("--restore")));
+            Restore: values.HasFlag("--restore"),
+            BinlogPaths: values.GetMany("--binlog"),
+            BinlogCommitSha: values.GetValueOrDefault("--binlog-commit-sha")));
         var fullOutputPath = Path.GetFullPath(outputPath);
         var logsPath = Path.Combine(fullOutputPath, "logs");
         Directory.CreateDirectory(logsPath);
@@ -1894,7 +1896,7 @@ public static class TraceMapCommand
     {
         return """
             Usage:
-              tracemap scan --repo <path> --out <path> [--solution <path>] [--project <path>] [--include <glob>] [--exclude <glob>] [--target-framework <tfm>] [--restore] [--sql-validation-summary <path>]
+              tracemap scan --repo <path> --out <path> [--solution <path>] [--project <path>] [--include <glob>] [--exclude <glob>] [--target-framework <tfm>] [--restore] [--binlog <path> --binlog-commit-sha <sha>] [--sql-validation-summary <path>]
 
             Required:
               --repo <path>   Repository or folder to scan.
@@ -1907,6 +1909,9 @@ public static class TraceMapCommand
               --exclude <glob>         Exclude matching inventoried paths. Repeatable.
               --target-framework <tfm> MSBuild TargetFramework property for semantic load.
               --restore                Run dotnet restore for selected solution/project targets before semantic load.
+              --binlog <path>          Explicit local MSBuild binary log to ingest offline. Repeatable; never discovered.
+              --binlog-commit-sha <sha>
+                                       Required with --binlog and must match the repository commit detected by TraceMap.
               --sql-validation-summary <path>
                                        Explicit sql-validation-summary/v1 input. Repeatable; never executed.
               --sql-validation-as-of <timestamp>
