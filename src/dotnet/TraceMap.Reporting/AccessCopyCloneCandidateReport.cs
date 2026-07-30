@@ -84,6 +84,12 @@ public sealed record AccessCopyCloneGap(
     string? ScopeId,
     string RuleId,
     string EvidenceTier,
+    string CommitSha,
+    string FilePath,
+    int StartLine,
+    int EndLine,
+    string ExtractorId,
+    string ExtractorVersion,
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> Limitations);
 
@@ -181,31 +187,57 @@ public static class AccessCopyCloneCandidateReporter
                 group => group.Select(item => item.Path).DistinctBy(path => path.PathId)
                     .OrderBy(path => path.PathId, StringComparer.Ordinal).ToArray(),
                 StringComparer.Ordinal);
-        if (flow.Summary.Truncated)
+        foreach (var flowGap in flow.Gaps.Where(gap => gap.Classification is
+                     "AccessFlowPathLimitReached"
+                     or "AccessFlowDepthLimitReached"
+                     or "AccessFlowGapLimitReached"))
+        {
+            var classification = flowGap.Classification switch
+            {
+                "AccessFlowPathLimitReached" => "AccessCopyCloneFlowPathLimitReached",
+                "AccessFlowDepthLimitReached" => "AccessCopyCloneFlowDepthLimitReached",
+                _ => "AccessCopyCloneFlowGapLimitReached"
+            };
             AddGap(
                 gaps,
                 maxGaps,
                 ref truncated,
                 Gap(
-                    "AccessCopyCloneFlowPathLimitReached",
+                    classification,
                     "flow",
                     null,
-                    flow.Paths.SelectMany(path => path.SupportingFactIds).ToArray()));
+                    flow.CommitSha,
+                    flowGap: flowGap,
+                    supportingFactIds: flowGap.SupportingFactIds));
+        }
+        if (flow.Summary.Truncated
+            && !flow.Gaps.Any(gap => gap.Classification is
+                "AccessFlowPathLimitReached"
+                or "AccessFlowDepthLimitReached"
+                or "AccessFlowGapLimitReached"))
+            AddGap(
+                gaps,
+                maxGaps,
+                ref truncated,
+                Gap("AccessCopyCloneFlowCoverageTruncated", "flow", null, flow.CommitSha));
 
         foreach (var fact in safeFacts.Where(fact => fact.FactType == FactTypes.AccessQueryDeclared))
         {
             var queryKind = SafeCategory(fact.Properties.GetValueOrDefault("queryKind"), "unknown");
+            var referenceCoverage = fact.Properties.GetValueOrDefault("referenceCoverage");
             if (!SupportedQueryKinds.TryGetValue(queryKind, out var supported))
                 continue;
             if (!SafeStableKey(fact.TargetSymbol))
             {
-                AddGap(gaps, maxGaps, ref truncated, Gap("AccessCopyCloneUnsafeStableIdentity", "saved-query", null, fact.FactId));
+                AddGap(gaps, maxGaps, ref truncated, Gap(
+                    "AccessCopyCloneUnsafeStableIdentity", "saved-query", null, flow.CommitSha, fact, supportingFactIds: [fact.FactId]));
                 continue;
             }
             if (candidates.Count >= maxCandidates)
             {
                 truncated = true;
-                AddGap(gaps, maxGaps, ref truncated, Gap("AccessCopyCloneCandidateLimitReached", "report", null));
+                AddGap(gaps, maxGaps, ref truncated, Gap(
+                    "AccessCopyCloneCandidateLimitReached", "report", null, flow.CommitSha, fact, supportingFactIds: [fact.FactId]));
                 break;
             }
 
@@ -245,6 +277,7 @@ public static class AccessCopyCloneCandidateReporter
                 .ToArray();
             var coverageLabels = evidence.Select(item => item.CoverageLabel)
                 .Append(paths.Length == 0 ? "flow-path-unavailable" : "flow-path-candidate")
+                .Concat(referenceCoverage is null ? [] : [SafeCategory(referenceCoverage, "unknown")])
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .ToArray();
@@ -274,18 +307,25 @@ public static class AccessCopyCloneCandidateReporter
                 limitations);
             candidates.Add(candidate);
 
-            AddGap(gaps, maxGaps, ref truncated, Gap("AccessCopyCloneRoleDirectionUnavailable", "candidate", candidate.CandidateId, supportingFacts));
+            AddGap(gaps, maxGaps, ref truncated, Gap(
+                "AccessCopyCloneRoleDirectionUnavailable", "candidate", candidate.CandidateId, flow.CommitSha, fact, supportingFactIds: supportingFacts));
             if (queryKind is "append" or "make-table" or "bulk" or "compound")
-                AddGap(gaps, maxGaps, ref truncated, Gap("AccessCopyCloneFieldCorrespondenceUnavailable", "candidate", candidate.CandidateId, supportingFacts));
+                AddGap(gaps, maxGaps, ref truncated, Gap(
+                    "AccessCopyCloneFieldCorrespondenceUnavailable", "candidate", candidate.CandidateId, flow.CommitSha, fact, supportingFactIds: supportingFacts));
             if (paths.Length == 0)
-                AddGap(gaps, maxGaps, ref truncated, Gap("AccessCopyCloneFlowPathUnavailable", "candidate", candidate.CandidateId, supportingFacts));
-            if (queryDependencies.Any(dependency => dependency.Properties.GetValueOrDefault("coverageLabel") != "complete"
+                AddGap(gaps, maxGaps, ref truncated, Gap(
+                    "AccessCopyCloneFlowPathUnavailable", "candidate", candidate.CandidateId, flow.CommitSha, fact, supportingFactIds: supportingFacts));
+            if (referenceCoverage is "partial" or "unknown"
+                || queryDependencies.Any(dependency => dependency.Properties.GetValueOrDefault("coverageLabel") != "complete"
                     && dependency.Properties.GetValueOrDefault("coverageLabel") != "direct-static-reference"))
-                AddGap(gaps, maxGaps, ref truncated, Gap("AccessCopyCloneDependencyPartial", "candidate", candidate.CandidateId, supportingFacts));
+                AddGap(gaps, maxGaps, ref truncated, Gap(
+                    "AccessCopyCloneDependencyPartial", "candidate", candidate.CandidateId, flow.CommitSha, fact, supportingFactIds: supportingFacts));
             if (participants.Length > 1)
-                AddGap(gaps, maxGaps, ref truncated, Gap("AccessCopyCloneDependencyFanOutNeedsReview", "candidate", candidate.CandidateId, supportingFacts));
+                AddGap(gaps, maxGaps, ref truncated, Gap(
+                    "AccessCopyCloneDependencyFanOutNeedsReview", "candidate", candidate.CandidateId, flow.CommitSha, fact, supportingFactIds: supportingFacts));
             if (queryDependencies.Any(dependency => dependency.TargetSymbol is not null && externalObjects.Contains(dependency.TargetSymbol)))
-                AddGap(gaps, maxGaps, ref truncated, Gap("AccessCopyCloneExternalParticipantPartial", "candidate", candidate.CandidateId, supportingFacts));
+                AddGap(gaps, maxGaps, ref truncated, Gap(
+                    "AccessCopyCloneExternalParticipantPartial", "candidate", candidate.CandidateId, flow.CommitSha, fact, supportingFactIds: supportingFacts));
         }
 
         foreach (var fact in safeFacts.Where(fact => fact.FactType == FactTypes.AnalysisGap))
@@ -295,19 +335,32 @@ public static class AccessCopyCloneCandidateReporter
                 || classification.Contains("Macro", StringComparison.Ordinal)
                 || classification.Contains("Vba", StringComparison.Ordinal)
                 || classification.Contains("Query", StringComparison.Ordinal))
-                AddGap(gaps, maxGaps, ref truncated, Gap("AccessCopyCloneUpstreamEvidenceGap", "upstream", null, fact.FactId));
+                AddGap(gaps, maxGaps, ref truncated, Gap(
+                    "AccessCopyCloneUpstreamEvidenceGap", "upstream", null, flow.CommitSha, fact, supportingFactIds: [fact.FactId]));
         }
 
         if (candidates.Count == 0)
-            AddGap(gaps, maxGaps, ref truncated, Gap("AccessCopyCloneCandidateEvidenceUnavailable", "database", null));
-        if (flow.Gaps.Any(gap => gap.Classification == "AccessFlowCycleDetected"))
-            AddGap(gaps, maxGaps, ref truncated, Gap("AccessCopyCloneFlowCycleNeedsReview", "flow", null));
+        {
+            var declaredQueries = safeFacts.Where(fact => fact.FactType == FactTypes.AccessQueryDeclared).ToArray();
+            AddGap(gaps, maxGaps, ref truncated, Gap(
+                "AccessCopyCloneCandidateEvidenceUnavailable",
+                "database",
+                null,
+                flow.CommitSha,
+                declaredQueries.FirstOrDefault(),
+                supportingFactIds: declaredQueries.Select(fact => fact.FactId).ToArray()));
+        }
+        foreach (var flowGap in flow.Gaps.Where(gap => gap.Classification == "AccessFlowCycleDetected"))
+            AddGap(gaps, maxGaps, ref truncated, Gap(
+                "AccessCopyCloneFlowCycleNeedsReview", "flow", null, flow.CommitSha, flowGap: flowGap,
+                supportingFactIds: flowGap.SupportingFactIds));
         if (candidates.Count > 1)
             AddGap(gaps, maxGaps, ref truncated, Gap(
                 "AccessCopyCloneParentChildSequenceUnavailable",
                 "candidate-set",
                 null,
-                candidates.SelectMany(candidate => candidate.SupportingFactIds).ToArray()));
+                flow.CommitSha,
+                supportingFactIds: candidates.SelectMany(candidate => candidate.SupportingFactIds).ToArray()));
 
         var orderedGaps = gaps
             .GroupBy(gap => gap.GapId, StringComparer.Ordinal)
@@ -345,15 +398,29 @@ public static class AccessCopyCloneCandidateReporter
         string classification,
         string scopeKind,
         string? scopeId,
-        params string[] supportingFactIds) => new(
-            Id("gap", classification, scopeId ?? "global", SupportingFactsDigest(supportingFactIds)),
+        string commitSha,
+        CodeFact? fact = null,
+        AccessFlowGap? flowGap = null,
+        IReadOnlyList<string>? supportingFactIds = null)
+    {
+        var safeSupportingFactIds = (supportingFactIds ?? [])
+            .Where(SafeFactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        return new(
+            Id("gap", classification, scopeId ?? "global", SupportingFactsDigest(safeSupportingFactIds)),
             classification,
             scopeKind,
             scopeId,
             RuleIds.LegacyAccessCopyCloneCandidate,
             EvidenceTiers.Tier4Unknown,
-            supportingFactIds.Where(SafeFactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            fact is not null ? SafeCommit(fact.CommitSha) ?? commitSha : flowGap?.CommitSha ?? commitSha,
+            fact is not null ? SafeEvidencePath(fact.Evidence.FilePath) : flowGap?.FilePath ?? "access-copy-clone-report",
+            fact?.Evidence.StartLine ?? flowGap?.StartLine ?? 1,
+            fact?.Evidence.EndLine ?? flowGap?.EndLine ?? 1,
+            fact is not null ? SafeToken(fact.Evidence.ExtractorId) : flowGap?.ExtractorId ?? nameof(AccessCopyCloneCandidateReporter),
+            fact is not null ? SafeToken(fact.Evidence.ExtractorVersion) : flowGap?.ExtractorVersion ?? SchemaVersion,
+            safeSupportingFactIds,
             ["static-candidate-gap", "not-clean-absence", "no-copy-or-clone-conclusion"]);
+    }
 
     private static void AddGap(
         List<AccessCopyCloneGap> gaps,
@@ -366,7 +433,13 @@ public static class AccessCopyCloneCandidateReporter
         {
             truncated = true;
             if (maxGaps > 0 && !gaps.Any(item => item.Classification == "AccessCopyCloneGapLimitReached"))
-                gaps[^1] = Gap("AccessCopyCloneGapLimitReached", "report", null);
+                gaps[^1] = gap with
+                {
+                    GapId = Id("gap", "AccessCopyCloneGapLimitReached", "global", SupportingFactsDigest(gap.SupportingFactIds)),
+                    Classification = "AccessCopyCloneGapLimitReached",
+                    ScopeKind = "report",
+                    ScopeId = null
+                };
         }
     }
 
@@ -495,7 +568,7 @@ public static class AccessCopyCloneCandidateReporter
         builder.AppendLine("## Gaps");
         builder.AppendLine();
         foreach (var gap in report.Gaps)
-            builder.AppendLine($"- `{gap.Classification}` ({gap.ScopeKind}); rule `{gap.RuleId}`, tier `{gap.EvidenceTier}`, supporting facts {Format(gap.SupportingFactIds)}.");
+            builder.AppendLine($"- `{gap.Classification}` ({gap.ScopeKind}); rule `{gap.RuleId}`, tier `{gap.EvidenceTier}`, commit `{gap.CommitSha}`, span `{gap.FilePath}:{gap.StartLine}-{gap.EndLine}`, extractor `{gap.ExtractorId}/{gap.ExtractorVersion}`, supporting facts {Format(gap.SupportingFactIds)}.");
         builder.AppendLine();
         builder.AppendLine("## Limitations");
         builder.AppendLine();
