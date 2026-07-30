@@ -392,17 +392,20 @@ public static class AccessDesignEvidenceComposer
             disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly);
         foreach (var module in vba.Modules)
         {
-            var record = bundle.Records.Single(item => item.Kind == "vba-module"
-                && AccessSafeValues.Identity(
-                    databaseSeed,
-                    "vba-module",
-                    String(item.Payload, "identity"),
-                    disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly).StableKey == module.Identity.StableKey);
-            SetSupport(support, module.Identity.StableKey, [record]);
+            var records = bundle.Records
+                .Where(item => item.Kind == "vba-module"
+                    && AccessSafeValues.Identity(
+                        databaseSeed,
+                        "vba-module",
+                        String(item.Payload, "identity"),
+                        disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly).StableKey == module.Identity.StableKey)
+                .OrderBy(item => item.CanonicalRecordId, StringComparer.Ordinal)
+                .ToArray();
+            SetSupport(support, module.Identity.StableKey, records);
             foreach (var procedure in module.Procedures)
             {
-                SetSupport(support, procedure.Identity.StableKey, [record]);
-                foreach (var call in procedure.Calls) SetSupport(support, call.Identity.StableKey, [record]);
+                SetSupport(support, procedure.Identity.StableKey, records);
+                foreach (var call in procedure.Calls) SetSupport(support, call.Identity.StableKey, records);
             }
         }
 
@@ -418,16 +421,19 @@ public static class AccessDesignEvidenceComposer
         var macros = AccessMacroProjector.Project(databaseSeed, rawMacros, limits, AccessIdentityDisclosurePolicy.HashOnly);
         foreach (var macro in macros.Macros)
         {
-            var record = bundle.Records.Single(item => item.Kind == "macro-inventory"
-                && Int(item.Payload, "ordinal") == macro.Ordinal
-                && String(item.Payload, "macroCategory") == macro.MacroKind
-                && AccessSafeValues.Identity(
-                    databaseSeed,
-                    $"macro-{macro.MacroKind}-database",
-                    String(item.Payload, "identity"),
-                    macro.Ordinal,
-                    AccessIdentityDisclosurePolicy.HashOnly).StableKey == macro.Identity.StableKey);
-            SetSupport(support, macro.Identity.StableKey, [record]);
+            var records = bundle.Records
+                .Where(item => item.Kind == "macro-inventory"
+                    && Int(item.Payload, "ordinal") == macro.Ordinal
+                    && String(item.Payload, "macroCategory") == macro.MacroKind
+                    && AccessSafeValues.Identity(
+                        databaseSeed,
+                        $"macro-{macro.MacroKind}-database",
+                        String(item.Payload, "identity"),
+                        macro.Ordinal,
+                        AccessIdentityDisclosurePolicy.HashOnly).StableKey == macro.Identity.StableKey)
+                .OrderBy(item => item.CanonicalRecordId, StringComparer.Ordinal)
+                .ToArray();
+            SetSupport(support, macro.Identity.StableKey, records);
         }
 
         var gaps = bundle.Gaps.Select(gap => new AccessGapProjection(

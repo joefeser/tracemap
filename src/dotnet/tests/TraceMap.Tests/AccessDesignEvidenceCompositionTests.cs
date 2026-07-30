@@ -183,6 +183,21 @@ public sealed class AccessDesignEvidenceCompositionTests
         Assert.Equal("AccessBaseScanArtifactLimitReached", error.Classification);
     }
 
+    [Fact]
+    public async Task Enrichment_accumulates_support_when_distinct_records_share_a_projection_identity()
+    {
+        using var temp = new TempDirectory();
+        var baseScan = await WriteBaseScanAsync(temp.Path);
+        var design = WriteDesignBundle(temp.Path, baseScan, includeProjectionIdentityDuplicates: true);
+
+        var result = await AccessDesignEvidenceComposer.ComposeAsync(baseScan, design);
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AccessVbaModuleDeclared
+            && fact.Properties["sourceCanonicalRecordIds"].Split(';').Length == 2);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AccessMacroDeclared
+            && fact.Properties["sourceCanonicalRecordIds"].Split(';').Length == 2);
+    }
+
     private static async Task<string> WriteBaseScanAsync(string root)
     {
         var database = Path.Combine(root, "fixture.accdb");
@@ -238,7 +253,8 @@ public sealed class AccessDesignEvidenceCompositionTests
     private static string WriteDesignBundle(
         string root,
         string baseScan,
-        string? databaseIdentityOverride = null)
+        string? databaseIdentityOverride = null,
+        bool includeProjectionIdentityDuplicates = false)
     {
         var directory = Path.Combine(root, "protected-design-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -246,7 +262,7 @@ public sealed class AccessDesignEvidenceCompositionTests
         var vbaHash = Sha256(Encoding.UTF8.GetBytes(vba));
         var designText = "Begin Form\n    HasModule = -1\nEnd";
         var designTextHash = Sha256(Encoding.UTF8.GetBytes(designText));
-        var records = new[]
+        var records = new List<string>
         {
             Record("catalog-object", "catalog-query", null, "catalog-export", "container-only", null, null, null, "complete",
                 Object(("objectRole", "saved-query"), ("identity", "SharedQuery"), ("ordinal", 0))),
@@ -271,6 +287,44 @@ public sealed class AccessDesignEvidenceCompositionTests
             Record("source-gap", "gap", null, "producer-gap", "unavailable", null, null, null, "partial",
                 Object(("classification", "source-unavailable"), ("affectedScope", "macro"), ("coverageCategory", "source-unavailable")))
         };
+        if (includeProjectionIdentityDuplicates)
+        {
+            records.Add(Record(
+                "vba-module",
+                "module-alternate-role",
+                null,
+                "vba-module-export",
+                "exact-lines",
+                vbaHash,
+                1,
+                4,
+                "complete",
+                Object(
+                    ("moduleRole", "document"),
+                    ("identity", ProtectedModule),
+                    ("moduleKind", "standard"),
+                    ("sourceText", vba),
+                    ("sourceSha256", vbaHash),
+                    ("lineCount", 4),
+                    ("coordinateBasis", "module-relative"))));
+            records.Add(Record(
+                "macro-inventory",
+                "macro-owner",
+                null,
+                "macro-inventory-export",
+                "unavailable",
+                null,
+                null,
+                null,
+                "partial",
+                Object(
+                    ("macroCategory", "named"),
+                    ("identity", ProtectedMacro),
+                    ("ownerRole", "database"),
+                    ("ordinal", 0),
+                    ("startupRole", "autoexec"),
+                    ("bodyStatus", "unavailable"))));
+        }
         var recordsBytes = Encoding.UTF8.GetBytes(string.Join('\n', records) + "\n");
         File.WriteAllBytes(Path.Combine(directory, AccessDesignEvidenceReader.RecordsFileName), recordsBytes);
         var baseManifestBytes = File.ReadAllBytes(Path.Combine(baseScan, "scan-manifest.json"));
@@ -287,7 +341,7 @@ public sealed class AccessDesignEvidenceCompositionTests
                 ("manifestSha256", Sha256(baseManifestBytes)),
                 ("databaseIdentityHash", databaseIdentityOverride ?? databaseSeed))),
             ("sourceCopy", Object(("sha256", DatabaseHash), ("binding", "hash-identical"))),
-            ("records", Object(("sha256", Sha256(recordsBytes)), ("count", records.Length), ("countsByKind", counts))),
+            ("records", Object(("sha256", Sha256(recordsBytes)), ("count", records.Count), ("countsByKind", counts))),
             ("capabilities", Object(("coordinates", "mixed"), ("catalogCompleteness", "declared-partial"), ("identityDisclosure", "hash-only"))),
             ("exportedAtUtc", "2026-07-29T10:00:00Z"));
         File.WriteAllText(
