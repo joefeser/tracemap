@@ -1575,6 +1575,18 @@ rules:
       - Missing item-level source-neutral evidence, unresolved or dynamic targets, cycles, and traversal limits remain explicit gaps; an empty report does not prove the Access application has no behavior.
       - Output uses opaque stable identities and allowlisted categorical metadata. Raw object names, SQL, VBA, expressions, macro bodies, connections, credentials, local paths, and customer identity are not rendered.
 
+  - id: legacy.access.copy-clone-candidate.v1
+    name: Microsoft Access copy and clone static candidate composition
+    description: Composes conservative candidate or needs-review evidence from persisted Access action-query shapes, opaque dependencies, and bounded screen-to-data flow references.
+    evidenceTier: Tier4Unknown
+    possibleEvidenceTiers: [Tier2Structural, Tier3SyntaxOrTextual, Tier4Unknown]
+    emits:
+      - AnalysisGap
+    limitations:
+      - Append, make-table, update, bulk, and compound query shapes are mutation candidates only. They do not prove copying, cloning, business intent, source-to-target direction, row equivalence, transactionality, execution, or production use.
+      - Persisted v1 Access query facts do not retain role-specific source/target or field-correspondence evidence. Generated-key handling, parent/child sequencing, loops, callbacks, domain functions, dynamic SQL, external-link behavior, and late-bound dispatch remain explicit gaps.
+      - Names such as Clone, Copy, Duplicate, or New are never evidence. Output uses opaque stable identities and excludes raw names, SQL, VBA, literals, values, row counts, connections, customer identity, and local paths.
+
   - id: legacy.data.dbml.v1
     name: Legacy LINQ to SQL DBML metadata
     description: Extracts safe DBML entity, table, column, association, and routine descriptor evidence from checked-in metadata.

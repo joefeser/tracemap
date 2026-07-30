@@ -32,9 +32,10 @@ public static class AccessCommand
                 "scan" => ScanHelp(),
                 "enrich-design" => EnrichDesignHelp(),
                 "flow" => FlowHelp(),
+                "copy-clone" => CopyCloneHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "enrich-design" or "flow" ? 0 : 1;
+            return command is "scan" or "enrich-design" or "flow" or "copy-clone" ? 0 : 1;
         }
 
         try
@@ -44,6 +45,7 @@ public static class AccessCommand
                 "scan" => await RunScanAsync(ParseOptions(rest), output, cancellationToken),
                 "enrich-design" => await RunEnrichDesignAsync(ParseOptions(rest), output, cancellationToken),
                 "flow" => await RunFlowAsync(ParseOptions(rest), output, cancellationToken),
+                "copy-clone" => await RunCopyCloneAsync(ParseOptions(rest), output, cancellationToken),
                 "worker" => await AccessWorkerHost.RunAsync(ParseOptions(rest), output, cancellationToken),
                 _ => await UnknownAsync(error)
             };
@@ -111,6 +113,39 @@ public static class AccessCommand
         catch { throw new AccessScanException("AccessFlowCompositionFailed"); }
         await output.WriteLineAsync("TraceMap Access static flow composition completed.");
         await output.WriteLineAsync($"Candidate paths: {result.Report.Summary.PathCount}");
+        await output.WriteLineAsync($"Coverage: {result.Report.Coverage}");
+        return 0;
+    }
+
+    private static async Task<int> RunCopyCloneAsync(
+        IReadOnlyDictionary<string, string> values,
+        TextWriter output,
+        CancellationToken cancellationToken)
+    {
+        var index = Required(values, "--index", "AccessCopyCloneIndexMissing");
+        var outPath = Required(values, "--out", "AccessCopyCloneOutputMissing");
+        var maxCandidates = PositiveInt(values, "--max-candidates", 1_000, 10_000, "AccessCopyCloneBoundsInvalid");
+        var maxFlowPaths = PositiveInt(values, "--max-flow-paths", 1_000, 10_000, "AccessCopyCloneBoundsInvalid");
+        var maxGaps = PositiveInt(values, "--max-gaps", 1_000, 10_000, "AccessCopyCloneBoundsInvalid");
+        var unexpected = values.Keys.Except(
+            ["--index", "--out", "--max-candidates", "--max-flow-paths", "--max-gaps"],
+            StringComparer.Ordinal).Any();
+        if (unexpected) throw new AccessScanException("AccessInvalidArguments");
+        AccessCopyCloneResult result;
+        try
+        {
+            result = await AccessCopyCloneCandidateReporter.WriteAsync(
+                new(index, outPath, maxCandidates, maxFlowPaths, maxGaps),
+                cancellationToken);
+        }
+        catch (InvalidDataException ex)
+        {
+            throw new AccessScanException(SafeCopyCloneClassification(ex.Message));
+        }
+        catch (AccessScanException) { throw; }
+        catch { throw new AccessScanException("AccessCopyCloneCompositionFailed"); }
+        await output.WriteLineAsync("TraceMap Access copy/clone candidate composition completed.");
+        await output.WriteLineAsync($"Candidates: {result.Report.Summary.CandidateCount}");
         await output.WriteLineAsync($"Coverage: {result.Report.Coverage}");
         return 0;
     }
@@ -231,6 +266,13 @@ public static class AccessCommand
                 ? value
                 : "AccessFlowCompositionFailed";
 
+    private static string SafeCopyCloneClassification(string value) =>
+        value.StartsWith("AccessCopyClone", StringComparison.Ordinal)
+            && value.Length <= 128
+            && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_')
+                ? value
+                : "AccessCopyCloneCompositionFailed";
+
     private static bool IsHelp(string value) => value is "--help" or "-h" or "help";
     private static async Task<int> UnknownAsync(TextWriter error) { await error.WriteLineAsync("error: AccessUnknownCommand"); return 1; }
 
@@ -241,6 +283,7 @@ public static class AccessCommand
           tracemap-access scan --repo <git-worktree> --database <repo-relative.accdb-or-mdb> --out <new-directory> [--timeout-seconds <30-3600>]
           tracemap-access enrich-design --base-scan <completed-output> --design-evidence <protected-directory> --out <new-directory>
           tracemap-access flow --index <completed-index.sqlite> --out <new-directory> [--max-depth <1-64>] [--max-paths <1-10000>] [--max-gaps <1-10000>]
+          tracemap-access copy-clone --index <completed-index.sqlite> --out <new-directory> [--max-candidates <1-10000>] [--max-flow-paths <1-10000>] [--max-gaps <1-10000>]
           tracemap-access --version
 
         The adapter reads static design metadata only. Design enrichment is Mac-compatible and never opens the database or launches Access.
@@ -269,5 +312,14 @@ public static class AccessCommand
         Composes bounded static candidate trails from already-persisted Microsoft Access evidence.
         The command is Mac-compatible and does not open a database, launch Access, read rows, or execute queries, VBA, macros, forms, or reports.
         Outputs: access-flow.md and access-flow.json.
+        """;
+
+    private static string CopyCloneHelp() => """
+        Usage: tracemap-access copy-clone --index <completed-index.sqlite> --out <new-directory> [--max-candidates <1-10000>] [--max-flow-paths <1-10000>] [--max-gaps <1-10000>]
+
+        Composes conservative static mutation candidates from already-persisted Microsoft Access query and flow evidence.
+        Candidate never means proven copy, clone, business intent, execution, runtime reachability, or completeness.
+        The command is Mac-compatible and does not open a database, launch Access, read rows, or execute queries, VBA, macros, forms, or reports.
+        Outputs: access-copy-clone.md and access-copy-clone.json.
         """;
 }
