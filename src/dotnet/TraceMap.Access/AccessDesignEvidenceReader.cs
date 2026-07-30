@@ -503,6 +503,14 @@ public static class AccessDesignEvidenceReader
             RequireClosedString(payload, "objectRole",
                 ["table", "saved-query", "form", "report", "module", "macro", "table-field"],
                 "AccessDesignInputRecordMalformed");
+            var hasIdentity = payload.TryGetProperty("identity", out var identity)
+                && identity.ValueKind == JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(identity.GetString());
+            var hasStableKey = payload.TryGetProperty("stableKey", out var stableIdentity)
+                && stableIdentity.ValueKind == JsonValueKind.String
+                && IsSafeStableKey(stableIdentity.GetString());
+            if (!hasIdentity && !hasStableKey)
+                throw new AccessScanException("AccessDesignInputRecordMalformed");
             if (payload.TryGetProperty("stableKey", out var stableKey)
                 && stableKey.ValueKind != JsonValueKind.Null
                 && (stableKey.ValueKind != JsonValueKind.String
@@ -619,6 +627,13 @@ public static class AccessDesignEvidenceReader
         foreach (var record in records)
             if (!byProducerId.TryAdd(record.RecordId, record))
                 throw new AccessScanException("AccessDesignInputDuplicateProducerId");
+        foreach (var control in records.Where(record => record.Kind == "ui-control"))
+        {
+            if (control.ParentRecordId is null
+                || !byProducerId.TryGetValue(control.ParentRecordId, out var parent)
+                || parent.Kind != "ui-surface")
+                throw new AccessScanException("AccessDesignInputParentUnavailable");
+        }
 
         var canonicalByProducerId = new Dictionary<string, string>(StringComparer.Ordinal);
         var visiting = new HashSet<string>(StringComparer.Ordinal);
@@ -803,13 +818,13 @@ public static class AccessDesignEvidenceReader
             throw new AccessScanException("AccessDesignInputReparsePointRejected");
     }
 
-    private static byte[] ReadBoundedFile(string path, long maximum, string classification, bool allowEmpty = false)
+    internal static byte[] ReadBoundedFile(string path, long maximum, string classification, bool allowEmpty = false)
     {
-        var length = new FileInfo(path).Length;
-        if ((!allowEmpty && length <= 0) || length > maximum)
-            throw new AccessScanException(classification);
         try
         {
+            var length = new FileInfo(path).Length;
+            if ((!allowEmpty && length <= 0) || length > maximum)
+                throw new AccessScanException(classification);
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
             using var buffer = new MemoryStream(length > 0 && length <= int.MaxValue ? (int)length : 0);
             var chunk = new byte[64 * 1024];

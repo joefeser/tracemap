@@ -243,6 +243,12 @@ any exact-line parent bounds. Manifest projection also retains the declared
 catalog-completeness capability so later projection can distinguish complete,
 partial, and unavailable catalogs.
 
+Structural parent and identity prerequisites are also enforced before records
+can qualify as evidence: every UI control resolves to a UI surface, and every
+catalog object supplies either a protected local identity or a validated
+existing stable key. Initial file-size probe failures are translated into the
+same classification-only read boundary as later filesystem races.
+
 The public reader API can be consumed by the next composition slice without
 duplicating validation. Callers must dispose the returned bundle; its raw
 payload is protected material and exists only while the bundle is alive.
@@ -289,6 +295,9 @@ Mac-only synthetic tests cover:
 - accepted duplicate parents remaining available when another equivalent
   producer record is rejected;
 - retained manifest catalog-completeness capability;
+- required UI-surface ownership for UI controls;
+- required protected identity or validated stable key for catalog objects;
+- classification-only initial file-size probe failures;
 - suppression of protected markers from canonical record IDs and failure
   classifications.
 
@@ -299,10 +308,10 @@ Validation on the implementation head:
 
 - locked solution restore: passed, with the separately tracked
   `SQLitePCLRaw.lib.e_sqlite3` 2.1.11 advisory only;
-- focused strict reader tests: 23/23 passed after review fixes;
-- all Access-focused tests: 95/95 passed after review fixes;
+- focused strict reader tests: 27/27 passed after review fixes;
+- all Access-focused tests: 99/99 passed after review fixes;
 - full solution build: passed with 0 errors;
-- full solution tests: 962/962 passed after review fixes;
+- full solution tests: 966/966 passed after review fixes;
 - targeted rerun of one initially flaky restore-diagnostic test: passed; the
   unchanged full suite then passed;
 - focused `dotnet format --verify-no-changes`: passed;
