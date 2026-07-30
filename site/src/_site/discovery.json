@@ -1161,6 +1161,23 @@
     ]
   },
   {
+    "path": "/build/msbuild-binlog/proof-packet/",
+    "title": "MSBuild Binlog Evidence Proof Packet",
+    "summary": "Demo-level public-safe projection of one synthetic local MSBuild binlog smoke with explicit input, exact commit binding, bounded observed evidence, deterministic output, and non-claims.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/blog/what-an-msbuild-binlog-knows-that-a-source-diff-does-not/",
+    "limitations": [
+      "The route and JSON asset publish only a categorical allowlisted projection; the raw binary log, artifact digest, arbitrary build fields, and machine-local details are omitted.",
+      "The result covers one checked-in synthetic sample and is not a completeness, compatibility, or performance benchmark."
+    ],
+    "nonClaims": [
+      "No artifact authenticity, commit attestation, test-pass, clean-repository, package-use, deployment, runtime-correctness, release-approval, safe-to-release, complete diagnostic, or runtime-reachability conclusion.",
+      "No raw messages, properties, items, tasks, commands, environment values, URLs, credentials, connection material, private hosts, usernames, machine-local paths, LLM analysis, MCP analysis, embeddings, vector databases, or prompt-based classification."
+    ]
+  },
+  {
     "path": "/sql/operator-handoff/",
     "title": "SQL Operator Handoff",
     "summary": "Demo-level manager story for reviewing categorical SQL context, prerequisite candidates, protected steps, validation expectations, stop conditions, gaps, and owner questions before operator action.",

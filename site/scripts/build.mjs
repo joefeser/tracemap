@@ -233,6 +233,15 @@ function validateArticle(article, slugs, index) {
       `Blog article published date must use YYYY-MM-DD for ${formatArticleContext(article, index)}: ${article.published}`
     );
   }
+
+  if (
+    article.ogImage !== undefined &&
+    (typeof article.ogImage !== "string" || !/^\/assets\/[a-z0-9-]+\.png$/.test(article.ogImage))
+  ) {
+    throw new Error(
+      `Blog article Open Graph image path is invalid for ${formatArticleContext(article, index)}: ${article.ogImage}`
+    );
+  }
 }
 
 function validateSitemapPage(page, index) {
@@ -355,6 +364,7 @@ function renderBlogArticle(article, body) {
     ogType: "article",
     ogTitle: article.title,
     ogDescription: article.ogDescription,
+    ogImage: article.ogImage,
     articlePublished: article.published,
     main: `<article class="article">
         <header class="article-header">
@@ -408,6 +418,7 @@ function renderPage({
   footer,
   main,
   ogDescription,
+  ogImage,
   ogTitle,
   ogType,
   title
@@ -415,6 +426,9 @@ function renderPage({
   const canonicalUrl = `https://tracemap.tools${canonicalPath}`;
   const articleMeta = articlePublished
     ? `    <meta property="article:published_time" content="${escapeHtml(articlePublished)}">\n`
+    : "";
+  const socialImageMeta = ogImage
+    ? `    <meta property="og:image" content="${escapeHtml(`https://tracemap.tools${ogImage}`)}">\n    <meta name="twitter:card" content="summary_large_image">\n    <meta name="twitter:image" content="${escapeHtml(`https://tracemap.tools${ogImage}`)}">\n`
     : "";
   const header = renderHeader(canonicalPath);
 
@@ -439,7 +453,7 @@ function renderPage({
       content="${escapeHtml(ogDescription)}"
     >
     <meta property="og:url" content="${escapeHtml(canonicalUrl)}">
-${articleMeta}    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+${socialImageMeta}${articleMeta}    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>

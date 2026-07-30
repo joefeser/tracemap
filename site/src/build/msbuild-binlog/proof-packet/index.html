@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A public-safe proof packet for TraceMap's bounded, explicit MSBuild binary-log evidence boundary.">
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>MSBuild Binlog Evidence Proof Packet | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/build/msbuild-binlog/proof-packet/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap MSBuild Binlog Evidence Proof Packet">
+    <meta property="og:description" content="Inspect a bounded public projection without publishing the raw build artifact.">
+    <meta property="og:url" content="https://tracemap.tools/build/msbuild-binlog/proof-packet/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home"><span class="brand-mark" aria-hidden="true">T</span><span>TraceMap</span></a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a><a href="/outputs/">Outputs</a><a href="/workflows/">Workflows</a><a href="/examples/">Examples</a><a href="/blog/">Blog</a><a href="/capabilities/">Capabilities</a><a href="/docs/">Docs</a><a href="/validation/">Validation</a><a href="/limitations/">Limitations</a><a href="/demo/">Demo</a><a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero" data-msbuild-proof-section="hero">
+        <p class="eyebrow">Observed build evidence · public-safe projection</p>
+        <h1>Inspect what the binlog boundary retained—not the binlog itself.</h1>
+        <p class="hero-subhead">This proof packet records a tiny synthetic product smoke: explicit input, exact commit binding, allowlisted evidence, deterministic projection, and attached non-claims.</p>
+        <p class="hero-note">Public claim level: demo. The raw artifact, digest, messages, properties, environment values, command lines, credentials, private identities, and machine-local paths are not published.</p>
+        <nav class="hero-actions" aria-label="MSBuild binlog proof links"><a class="button primary" href="/assets/msbuild-binlog-proof-packet.json">Inspect the JSON packet</a><a class="button secondary" href="/blog/what-an-msbuild-binlog-knows-that-a-source-diff-does-not/">Read the article</a><a class="button secondary" href="#limitations">Read the boundary</a></nav>
+      </section>
+
+      <section class="section split-section" data-msbuild-proof-section="identity">
+        <div><p class="section-kicker">Evidence identity</p><h2>One supplied artifact, one bounded rule family.</h2></div>
+        <div class="detail-list">
+          <div><strong>Observation rule</strong><span><code>build.msbuild-binlog.observation.v1</code></span></div>
+          <div><strong>Gap rule</strong><span><code>build.msbuild-binlog.gap.v1</code></span></div>
+          <div><strong>Tier</strong><span><code>Tier2Structural</code></span></div>
+          <div><strong>Coverage</strong><span><code>observed-bounded</code></span></div>
+          <div><strong>Extractor</strong><span><code>MsBuildBinlogExtractor</code> · <code>msbuild-binlog/0.1.0</code></span></div>
+        </div>
+      </section>
+
+      <section class="section" data-msbuild-proof-section="result">
+        <div class="section-header"><p class="section-kicker">Synthetic dogfood result</p><h2>The useful result is intentionally small.</h2><p>Two scans over the same explicit artifact and declared commit produced the same categorical evidence.</p></div>
+        <div class="output-list">
+          <div><code>artifact observation</code><span><strong>1</strong> · recorded result <code>succeeded</code> · synthetic artifact span</span></div>
+          <div><code>project observation</code><span><strong>1</strong> · repository-relative identity only</span></div>
+          <div><code>project-reference observations</code><span><strong>0</strong> · no absence conclusion</span></div>
+          <div><code>diagnostic observations</code><span><strong>0</strong> · no defect-absence conclusion</span></div>
+          <div><code>gaps</code><span><strong>0</strong> for this bounded sample · not a completeness claim</span></div>
+        </div>
+      </section>
+
+      <section class="section split-section" data-msbuild-proof-section="safety">
+        <div><p class="section-kicker">Safety checks</p><h2>The packet validates the projection boundary.</h2></div>
+        <div class="detail-list">
+          <div><strong>Repeated scans</strong><span><code>2</code>, with deterministic projected facts.</span></div>
+          <div><strong>Commit binding</strong><span>Every projected fact retained the declared repository commit.</span></div>
+          <div><strong>Artifact span</strong><span>Every projected fact used a synthetic artifact identity.</span></div>
+          <div><strong>Protected markers</strong><span><code>0</code> matches across the five standard outputs.</span></div>
+          <div><strong>Raw artifact</strong><span>Deleted after local validation and not part of this public packet.</span></div>
+        </div>
+      </section>
+
+      <section class="section boundary-section" id="limitations" data-msbuild-proof-section="limitations" data-tm-boundary="claim-boundary">
+        <div><p class="section-kicker">Public claim boundary</p><h2>A recorded build result is not a release conclusion.</h2></div>
+        <ul>
+          <li>The packet does not authenticate or attest the binary log, or prove it was produced from the declared commit.</li>
+          <li>A recorded <code>succeeded</code> result does not prove tests passed, the repository was clean, deployment occurred, runtime behavior was correct, or a release is approved or safe.</li>
+          <li>Project and graph evidence does not prove runtime reachability. Missing diagnostics do not prove that defects are absent.</li>
+          <li>The result is one synthetic checked-in sample, not a completeness, compatibility, or performance benchmark.</li>
+          <li>TraceMap core scanning and reduction use no LLM calls, MCP analysis, embeddings, vector databases, or prompt-based classification.</li>
+        </ul>
+      </section>
+
+      <section class="section link-section" data-msbuild-proof-section="links">
+        <div><p class="section-kicker">Follow the evidence</p><h2>Keep the packet attached to its rule and limitations.</h2></div>
+        <div class="link-grid"><a href="/assets/msbuild-binlog-proof-packet.json">Public JSON packet</a><a href="/blog/what-an-msbuild-binlog-knows-that-a-source-diff-does-not/">MSBuild binlog article</a><a href="/evidence/">Evidence model</a><a href="/evidence/gaps/">Analysis gaps</a><a href="/static-vs-runtime/">Static versus runtime</a><a href="/outputs/">Output artifacts</a><a href="/limitations/">Limitations</a><a href="https://github.com/joefeser/tracemap/blob/dev/rules/rule-catalog.yml">Rule catalog</a></div>
+      </section>
+    </main>
+
+    <footer class="site-footer"><p>Build evidence is useful when the artifact boundary and non-claims travel with it.</p><p class="copyright">© 2026 Joe Feser.</p></footer>
+  </body>
+</html>
