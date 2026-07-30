@@ -24,7 +24,8 @@ internal sealed record AccessRawUiSurface(
     IReadOnlyList<AccessRawUiEvent> Events,
     string Coverage = "complete",
     string? Filter = null,
-    string? OrderBy = null);
+    string? OrderBy = null,
+    string? DeclaredBoundState = null);
 
 internal sealed record AccessUiProjectionResult(
     IReadOnlyList<AccessUiSurfaceProjection> Surfaces,
@@ -89,9 +90,15 @@ internal static partial class AccessUiProjector
                 identity,
                 kind,
                 raw.HasModule switch { true => "present", false => "absent", null => "unknown" },
-                string.IsNullOrWhiteSpace(raw.RecordSource)
-                    ? raw.Coverage == "complete" ? "unbound" : "unknown"
-                    : "bound-declared",
+                raw.DeclaredBoundState switch
+                {
+                    "bound" => "bound-declared",
+                    "unbound" => "unbound",
+                    "unknown" => "unknown",
+                    _ => string.IsNullOrWhiteSpace(raw.RecordSource)
+                        ? raw.Coverage == "complete" ? "unbound" : "unknown"
+                        : "bound-declared"
+                },
                 designHash,
                 bindings,
                 controls,

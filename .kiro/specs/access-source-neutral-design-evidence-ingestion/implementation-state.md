@@ -186,6 +186,36 @@ Phase 1 composition validation on branch
 - `./scripts/check-private-paths.sh`: passed;
 - `git diff --check`: passed.
 
+Exact-head PR #557 review corrections:
+
+- bounded artifact reads now reject lengths beyond both the configured ceiling
+  and the CLR byte-array limit before checked allocation;
+- Mac output/input overlap checks use case-folded path semantics, canonicalize
+  existing ancestors, and reject output-only reparse-point ancestors;
+- protected catalog identities first match name/name-hash evidence already in
+  the immutable base scan and reuse its stable key;
+- validated structured `boundState`, `startupRole`, and `bodyStatus`
+  observations flow through projection instead of being inferred again from
+  omitted protected text;
+- equivalent textual and structured surface evidence is merged before
+  projection, with all canonical support records retained; conflicting
+  observations become an explicit `AccessDesignInputSurfaceConflict` gap
+  rather than selecting first or last.
+
+Focused regressions cover oversized sparse artifacts, case aliases, symlinked
+output ancestors, base stable-key reuse, declared bound/macro observations,
+and dual-format surface evidence.
+
+Post-review validation:
+
+- focused composition tests: 3/3 passed;
+- all Access-focused tests: 120/120 passed;
+- full solution tests: 994/994 passed;
+- full solution build: passed with 0 errors;
+- focused `dotnet format --verify-no-changes`: passed;
+- `./scripts/check-private-paths.sh`: passed;
+- `git diff --check`: passed.
+
 ## Owner decisions required before implementation
 
 1. Accept or reject local ingestion of protected raw design/VBA input.

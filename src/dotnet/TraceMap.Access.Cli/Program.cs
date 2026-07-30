@@ -81,8 +81,11 @@ public static class AccessCommand
 
     private static void ValidateEnrichmentOutputPath(string baseScan, string designEvidence, string output)
     {
-        var target = Path.GetFullPath(output);
-        foreach (var input in new[] { Path.GetFullPath(baseScan), Path.GetFullPath(designEvidence) })
+        var rawInputs = new[] { Path.GetFullPath(baseScan), Path.GetFullPath(designEvidence) };
+        var rawTarget = Path.GetFullPath(output);
+        RejectExclusiveReparsePointAncestors(rawTarget, rawInputs);
+        var target = CanonicalizeExistingAncestors(rawTarget);
+        foreach (var input in rawInputs.Select(CanonicalizeExistingAncestors))
         {
             if (PathsEqual(target, input) || IsAncestor(target, input) || IsAncestor(input, target))
                 throw new AccessScanException("AccessUnsafeOutputPath");
@@ -91,17 +94,50 @@ public static class AccessCommand
 
     private static bool IsAncestor(string ancestor, string path)
     {
-        var relative = Path.GetRelativePath(ancestor, path);
-        return relative != ".."
-            && !relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-            && !Path.IsPathFullyQualified(relative);
+        var prefix = Path.TrimEndingDirectorySeparator(ancestor) + Path.DirectorySeparatorChar;
+        return Path.TrimEndingDirectorySeparator(path).StartsWith(prefix, PathComparison);
     }
 
     private static bool PathsEqual(string left, string right) =>
         string.Equals(
             Path.TrimEndingDirectorySeparator(left),
             Path.TrimEndingDirectorySeparator(right),
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+            PathComparison);
+
+    private static StringComparison PathComparison =>
+        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+    private static void RejectExclusiveReparsePointAncestors(string path, IReadOnlyList<string> inputs)
+    {
+        for (var current = path; !string.IsNullOrEmpty(current); current = Path.GetDirectoryName(current))
+        {
+            if ((File.Exists(current) || Directory.Exists(current))
+                && (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+            {
+                var sharedByAllInputs = inputs.All(input => PathsEqual(current, input) || IsAncestor(current, input));
+                if (!sharedByAllInputs) throw new AccessScanException("AccessUnsafeOutputPath");
+            }
+        }
+    }
+
+    private static string CanonicalizeExistingAncestors(string path)
+    {
+        var missing = new Stack<string>();
+        var current = path;
+        while (!File.Exists(current) && !Directory.Exists(current))
+        {
+            var name = Path.GetFileName(current);
+            if (name.Length > 0) missing.Push(name);
+            current = Path.GetDirectoryName(current)
+                ?? throw new AccessScanException("AccessUnsafeOutputPath");
+        }
+        var resolved = new DirectoryInfo(current).ResolveLinkTarget(returnFinalTarget: true)?.FullName
+            ?? Path.GetFullPath(current);
+        while (missing.Count > 0) resolved = Path.Combine(resolved, missing.Pop());
+        return Path.GetFullPath(resolved);
+    }
 
     private static async Task<int> RunScanAsync(IReadOnlyDictionary<string, string> values, TextWriter output, CancellationToken cancellationToken)
     {
