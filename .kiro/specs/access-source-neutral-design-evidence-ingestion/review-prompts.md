@@ -41,6 +41,9 @@ conclusion.
 
 Confirm that stable identities use role-separated hashes and that timestamps,
 paths, process IDs, and raw producer sequence never affect output.
+Confirm that envelope-wide record/byte overflow emits no design conclusions in
+either forward or reverse line order, while narrower collection/output caps are
+applied only after canonical ordering.
 
 ## Provenance, tier, and rule review
 
@@ -100,6 +103,7 @@ Identify any semantic mismatch hidden by similar field names. Pay special
 attention to:
 
 - current optional display-name persistence;
+- the protected `ui-design-document` input required by `AccessUiTextParser`;
 - UI/macro database-container spans;
 - VBA module-relative coordinates;
 - event-reference ownership;
