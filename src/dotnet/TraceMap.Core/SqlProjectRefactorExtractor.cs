@@ -46,7 +46,9 @@ public static class SqlProjectRefactorExtractor
 
             foreach (var element in includes)
             {
-                if (element.Attributes().Any(attribute => attribute.Name.LocalName.Equals("Condition", StringComparison.Ordinal)))
+                if (element.AncestorsAndSelf().Any(candidate =>
+                        candidate.Attributes().Any(attribute =>
+                            attribute.Name.LocalName.Equals("Condition", StringComparison.Ordinal))))
                 {
                     facts.Add(Gap(manifest, project.RelativePath, project.RelativePath, Line(element), "RefactorLogConditionUnsupported"));
                     continue;

@@ -125,7 +125,7 @@ public static partial class MsBuildBinlogExtractor
             return [Gap(manifest, "unavailable", "binlog-extension-unsupported", 1)];
         if (!File.Exists(inputPath))
             return [Gap(manifest, "unavailable", "binlog-unavailable", 1)];
-        if (IsLinkOrReparsePoint(inputPath))
+        if (HasLinkOrReparsePointInPath(inputPath))
             return [Gap(manifest, "unavailable", "binlog-link-input-rejected", 1)];
 
         byte[] artifactBytes;
@@ -505,7 +505,7 @@ public static partial class MsBuildBinlogExtractor
         {
             if (!File.Exists(path))
                 return "unavailable";
-            if (IsLinkOrReparsePoint(path))
+            if (HasLinkOrReparsePointInPath(path))
                 return "rejected:link";
             var info = new FileInfo(path);
             if (info.Length > DefaultLimits.MaxArtifactBytes)
@@ -551,15 +551,42 @@ public static partial class MsBuildBinlogExtractor
         }
     }
 
-    private static bool IsLinkOrReparsePoint(string path)
+    private static bool HasLinkOrReparsePointInPath(string path)
     {
         try
         {
-            var file = new FileInfo(path);
-            return !string.IsNullOrEmpty(file.LinkTarget)
-                || (file.Attributes & FileAttributes.ReparsePoint) != 0;
+            var fullPath = Path.GetFullPath(path);
+            var root = Path.GetPathRoot(fullPath);
+            if (string.IsNullOrEmpty(root))
+                return true;
+
+            var current = root;
+            var firstSegment = true;
+            foreach (var segment in Path.GetRelativePath(root, fullPath).Split(
+                         [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                         StringSplitOptions.RemoveEmptyEntries))
+            {
+                current = Path.Combine(current, segment);
+                FileSystemInfo info = Directory.Exists(current)
+                    ? new DirectoryInfo(current)
+                    : new FileInfo(current);
+                if (!string.IsNullOrEmpty(info.LinkTarget)
+                    || (info.Attributes & FileAttributes.ReparsePoint) != 0)
+                {
+                    if (!firstSegment)
+                        return true;
+
+                    var resolved = info.ResolveLinkTarget(returnFinalTarget: true);
+                    if (resolved is null)
+                        return true;
+                    current = resolved.FullName;
+                }
+                firstSegment = false;
+            }
+
+            return false;
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             return true;
         }

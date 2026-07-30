@@ -493,9 +493,10 @@ public static class AccessLocalReviewBundle
         {
             var actual = JsonSerializer.Deserialize<ScanManifest>(manifestJson, JsonOptions);
             return actual is not null
-                && SameScanIdentity(expected, actual.ScanId, actual.RepoName, actual.CommitSha)
-                && string.Equals(expected.ScannerVersion, actual.ScannerVersion, StringComparison.Ordinal)
-                && expected.ScannedAt.Equals(actual.ScannedAt);
+                && string.Equals(
+                    JsonSerializer.Serialize(expected, JsonOptions),
+                    JsonSerializer.Serialize(actual, JsonOptions),
+                    StringComparison.Ordinal);
         }
         catch (JsonException)
         {

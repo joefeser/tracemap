@@ -168,6 +168,31 @@ public sealed class MsBuildBinlogExtractorTests
     }
 
     [Fact]
+    public void Extract_rejects_input_beneath_a_symlinked_directory()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        using var temp = new TempDirectory();
+        var repo = CreateRepo(temp.Path);
+        var targetDirectory = Path.Combine(temp.Path, "target-binlogs");
+        Directory.CreateDirectory(targetDirectory);
+        var target = Path.Combine(targetDirectory, "build.binlog");
+        PrepareBinlog(target, repo, succeeded: true, includeOutsideRoot: false, extraMessages: 0);
+        var linkedDirectory = Path.Combine(temp.Path, "linked-binlogs");
+        Directory.CreateSymbolicLink(linkedDirectory, targetDirectory);
+
+        var facts = MsBuildBinlogExtractor.Extract(
+            repo,
+            Manifest(),
+            [Path.Combine(linkedDirectory, "build.binlog")]);
+
+        var gap = Assert.Single(facts);
+        Assert.Equal("binlog-link-input-rejected", gap.Properties["gapKind"]);
+        Assert.Equal("unavailable", gap.Properties["artifactSha256"]);
+    }
+
+    [Fact]
     public void Extract_is_deterministic_for_equivalent_inputs()
     {
         using var temp = new TempDirectory();

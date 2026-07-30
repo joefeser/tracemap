@@ -112,6 +112,38 @@ public sealed class SqlProjectRefactorTests
     }
 
     [Fact]
+    public void Extractor_rejects_refactor_logs_inherited_from_conditional_ancestors()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "App.sqlproj"), """
+            <Project>
+              <ItemGroup Condition="'$(Configuration)' == 'Release'">
+                <RefactorLog Include="App.refactorlog" />
+              </ItemGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "App.refactorlog"), """
+            <Operations>
+              <Operation Name="Rename Refactor" Key="conditional-key">
+                <Property Name="ElementName" Value="[dbo].[Before]" />
+                <Property Name="ElementType" Value="SqlTable" />
+                <Property Name="NewName" Value="[After]" />
+              </Operation>
+            </Operations>
+            """);
+
+        var facts = SqlProjectRefactorExtractor.Extract(
+            temp.Path,
+            Manifest(),
+            FileInventory.Collect(temp.Path));
+
+        Assert.Contains(facts, fact =>
+            fact.Properties.GetValueOrDefault("classification") == "RefactorLogConditionUnsupported");
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.SqlProjectRefactorLogDeclared);
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.SqlProjectRefactorOperation);
+    }
+
+    [Fact]
     public void Extractor_caps_operations_and_retains_only_sanitized_omission_count()
     {
         using var temp = new TempDirectory();
