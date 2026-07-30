@@ -95,7 +95,11 @@ export async function validateSite(options = {}) {
   return result;
 }
 
-export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoot } = {}) {
+export async function validateDist({
+  baseUrl = defaultBaseUrl,
+  requireMsbuildBinlogEvidence = true,
+  root = defaultRoot
+} = {}) {
   const dist = resolve(root, "dist");
   const errors = [];
   const normalizedBaseUrl = normalizeBaseUrl(baseUrl, errors);
@@ -131,7 +135,9 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateDemoTroubleshootingDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateChangeRiskLanguageGuideDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateDatabaseDesignReviewShowcaseDist({ baseUrl: normalizedBaseUrl, dist, errors });
-    await validateMsbuildBinlogEvidenceDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    if (requireMsbuildBinlogEvidence) {
+      await validateMsbuildBinlogEvidenceDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    }
     await validateEvidenceHandoffTemplateDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateEvidenceDecisionRecordDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateEvidenceGapRegisterDist({ baseUrl: normalizedBaseUrl, dist, errors });
