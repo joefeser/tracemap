@@ -24,13 +24,27 @@ public sealed class AccessCopyCloneCandidateTests
     {
         var facts = CandidateFacts();
 
-        var first = AccessCopyCloneCandidateReporter.Build(Commit, facts, 100, 100, 100);
-        var second = AccessCopyCloneCandidateReporter.Build(Commit, facts.Reverse().ToArray(), 100, 100, 100);
+        var first = AccessCopyCloneCandidateReporter.Build("synthetic", Commit, facts, 100, 100, 100);
+        var second = AccessCopyCloneCandidateReporter.Build("synthetic", Commit, facts.Reverse().ToArray(), 100, 100, 100);
 
         Assert.Equal(JsonSerializer.Serialize(first), JsonSerializer.Serialize(second));
+        Assert.StartsWith("repo-", first.RepositoryId, StringComparison.Ordinal);
+        Assert.Equal(Commit, first.CommitSha);
         Assert.Equal(2, first.Summary.CandidateCount);
         var append = Assert.Single(first.Candidates, candidate => candidate.Shape == "bulk-append-shape");
         Assert.Equal("Candidate", append.Classification);
+        Assert.Equal(RuleIds.LegacyAccessCopyCloneCandidate, append.RuleId);
+        Assert.Contains(append.EvidenceTier, new[]
+        {
+            EvidenceTiers.Tier2Structural,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            EvidenceTiers.Tier4Unknown
+        });
+        Assert.Equal(Commit, append.CommitSha);
+        Assert.Equal("fixture.accdb", append.FilePath);
+        Assert.Equal(1, append.StartLine);
+        Assert.Equal(1, append.EndLine);
+        Assert.NotEmpty(append.ExtractorVersion);
         Assert.NotEmpty(append.FlowPathIds);
         Assert.Equal(2, append.Participants.Count);
         Assert.All(append.Participants, participant => Assert.Equal("dependency-role-unknown", participant.Role));
@@ -64,17 +78,38 @@ public sealed class AccessCopyCloneCandidateTests
                 ("classification", "AccessVbaDynamicDispatch"), ("coverageLabel", "partial"))
         };
 
-        var noCandidate = AccessCopyCloneCandidateReporter.Build(Commit, nameOnly, 1, 1, 10);
+        var noCandidate = AccessCopyCloneCandidateReporter.Build("synthetic", Commit, nameOnly, 1, 1, 10);
 
         Assert.Empty(noCandidate.Candidates);
         Assert.Contains(noCandidate.Gaps, gap => gap.Classification == "AccessCopyCloneCandidateEvidenceUnavailable");
         Assert.Contains(noCandidate.Gaps, gap => gap.Classification == "AccessCopyCloneUpstreamEvidenceGap");
 
-        var bounded = AccessCopyCloneCandidateReporter.Build(Commit, CandidateFacts(), 1, 1, 1);
+        var bounded = AccessCopyCloneCandidateReporter.Build("synthetic", Commit, CandidateFacts(), 1, 1, 1);
         Assert.True(bounded.Summary.Truncated);
         Assert.Single(bounded.Candidates);
         Assert.Single(bounded.Gaps);
         Assert.Equal("AccessCopyCloneGapLimitReached", bounded.Gaps[0].Classification);
+    }
+
+    [Fact]
+    public void Builder_suppresses_windows_absolute_evidence_paths_on_every_host()
+    {
+        var facts = CandidateFacts();
+        var query = facts.Single(fact => fact.FactId == "fact-append") with
+        {
+            Evidence = facts.Single(fact => fact.FactId == "fact-append").Evidence with
+            {
+                FilePath = "Z:/operator-local/private.accdb"
+            }
+        };
+        facts = facts.Where(fact => fact.FactId != query.FactId).Append(query).ToArray();
+
+        var report = AccessCopyCloneCandidateReporter.Build("synthetic", Commit, facts, 100, 100, 100);
+
+        var candidate = Assert.Single(report.Candidates, item => item.Shape == "bulk-append-shape");
+        Assert.Equal("unavailable", candidate.FilePath);
+        Assert.DoesNotContain(report.Candidates.SelectMany(item => item.Evidence),
+            evidence => evidence.FilePath.Contains("operator-local", StringComparison.Ordinal));
     }
 
     [Fact]

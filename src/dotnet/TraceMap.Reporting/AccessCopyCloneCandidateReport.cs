@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -19,7 +20,8 @@ public sealed record AccessCopyCloneResult(
 
 public sealed record AccessCopyCloneReport(
     string SchemaVersion,
-    string? CommitSha,
+    string RepositoryId,
+    string CommitSha,
     string Coverage,
     AccessCopyCloneQuery Query,
     AccessCopyCloneSummary Summary,
@@ -39,6 +41,14 @@ public sealed record AccessCopyCloneCandidate(
     string Classification,
     string Shape,
     string QueryNodeId,
+    string RuleId,
+    string EvidenceTier,
+    string CommitSha,
+    string FilePath,
+    int StartLine,
+    int EndLine,
+    string ExtractorId,
+    string ExtractorVersion,
     IReadOnlyList<AccessCopyCloneParticipant> Participants,
     IReadOnlyList<string> FlowPathIds,
     IReadOnlyList<AccessCopyCloneEvidence> Evidence,
@@ -137,11 +147,12 @@ public static class AccessCopyCloneCandidateReporter
         CancellationToken cancellationToken = default)
     {
         Validate(options);
-        var (commitSha, facts) = await AccessScreenDataFlowReporter.ReadFactsAsync(options.IndexPath, cancellationToken);
-        return Build(commitSha, facts, options.MaxCandidates, options.MaxFlowPaths, options.MaxGaps);
+        var (repository, commitSha, facts) = await AccessScreenDataFlowReporter.ReadFactsAsync(options.IndexPath, cancellationToken);
+        return Build(repository, commitSha, facts, options.MaxCandidates, options.MaxFlowPaths, options.MaxGaps);
     }
 
     internal static AccessCopyCloneReport Build(
+        string repository,
         string? commitSha,
         IReadOnlyList<CodeFact> facts,
         int maxCandidates,
@@ -149,7 +160,7 @@ public static class AccessCopyCloneCandidateReporter
         int maxGaps)
     {
         var safeFacts = facts.Where(IsSafeAccessFact).OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray();
-        var flow = AccessScreenDataFlowReporter.Build(commitSha, safeFacts, 12, maxFlowPaths, maxGaps);
+        var flow = AccessScreenDataFlowReporter.Build(repository, commitSha, safeFacts, 12, maxFlowPaths, maxGaps);
         var dependencies = safeFacts
             .Where(fact => fact.FactType == FactTypes.AccessQueryDependencyCandidate && SafeStableKey(fact.SourceSymbol))
             .GroupBy(fact => fact.SourceSymbol!, StringComparer.Ordinal)
@@ -161,6 +172,14 @@ public static class AccessCopyCloneCandidateReporter
         var gaps = new List<AccessCopyCloneGap>();
         var candidates = new List<AccessCopyCloneCandidate>();
         var truncated = false;
+        var flowPathsByStableKey = flow.Paths
+            .SelectMany(path => path.Nodes.Select(node => (node.StableKey, path.PathId)))
+            .GroupBy(item => item.StableKey, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(item => item.PathId).Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
 
         foreach (var fact in safeFacts.Where(fact => fact.FactType == FactTypes.AccessQueryDeclared))
         {
@@ -191,15 +210,11 @@ public static class AccessCopyCloneCandidateReporter
                 .OrderBy(participant => participant.NodeId, StringComparer.Ordinal)
                 .ThenBy(participant => participant.Evidence.FactId, StringComparer.Ordinal)
                 .ToArray();
-            var paths = flow.Paths
-                .Where(path => path.Nodes.Any(node => node.StableKey == fact.TargetSymbol))
-                .Select(path => path.PathId)
-                .Distinct(StringComparer.Ordinal)
-                .OrderBy(value => value, StringComparer.Ordinal)
-                .ToArray();
+            var paths = flowPathsByStableKey.GetValueOrDefault(fact.TargetSymbol!) ?? [];
+            var primaryEvidence = Evidence(fact);
             var evidence = queryDependencies
                 .Select(Evidence)
-                .Append(Evidence(fact))
+                .Append(primaryEvidence)
                 .OrderBy(item => item.FactId, StringComparer.Ordinal)
                 .ToArray();
             var supportingFacts = evidence.Select(item => item.FactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
@@ -220,6 +235,15 @@ public static class AccessCopyCloneCandidateReporter
                 supported.Classification,
                 supported.Shape,
                 queryNodeId,
+                RuleIds.LegacyAccessCopyCloneCandidate,
+                evidence.Select(item => item.EvidenceTier).OrderBy(TierRank).FirstOrDefault()
+                    ?? EvidenceTiers.Tier4Unknown,
+                primaryEvidence.CommitSha,
+                primaryEvidence.FilePath,
+                primaryEvidence.StartLine,
+                primaryEvidence.EndLine,
+                primaryEvidence.ExtractorId,
+                primaryEvidence.ExtractorVersion,
                 participants,
                 paths,
                 evidence,
@@ -276,7 +300,8 @@ public static class AccessCopyCloneCandidateReporter
             .ToArray();
         return new(
             SchemaVersion,
-            SafeCommit(commitSha),
+            flow.RepositoryId,
+            flow.CommitSha,
             orderedGaps.Length == 0 && !truncated ? "complete" : "partial",
             new(maxCandidates, maxFlowPaths, maxGaps),
             new(candidates.Count, candidates.Sum(candidate => candidate.FlowPathIds.Count), orderedGaps.Length, truncated),
@@ -303,7 +328,7 @@ public static class AccessCopyCloneCandidateReporter
         string scopeKind,
         string? scopeId,
         params string[] supportingFactIds) => new(
-            Id("gap", classification, scopeId ?? "global", string.Join('|', supportingFactIds)),
+            Id("gap", classification, scopeId ?? "global", SupportingFactsDigest(supportingFactIds)),
             classification,
             scopeKind,
             scopeId,
@@ -363,10 +388,30 @@ public static class AccessCopyCloneCandidateReporter
     private static string SafeEvidencePath(string value)
     {
         var normalized = value.Replace('\\', '/');
-        return !Path.IsPathFullyQualified(normalized)
+        var driveRooted = normalized.Length >= 3
+            && char.IsAsciiLetter(normalized[0])
+            && normalized[1] == ':'
+            && normalized[2] == '/';
+        return !string.IsNullOrWhiteSpace(normalized)
+            && !normalized.StartsWith("/", StringComparison.Ordinal)
+            && !normalized.StartsWith("//", StringComparison.Ordinal)
+            && !driveRooted
+            && !normalized.Contains(':', StringComparison.Ordinal)
+            && !normalized.Any(character => character < 0x20)
+            && !Path.IsPathFullyQualified(normalized)
             && !normalized.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment is "." or "..")
                 ? normalized
                 : "unavailable";
+    }
+    private static string SupportingFactsDigest(IEnumerable<string> values)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        foreach (var value in values.Where(SafeFactId).Distinct(StringComparer.Ordinal).OrderBy(item => item, StringComparer.Ordinal))
+        {
+            hash.AppendData(Encoding.UTF8.GetBytes(value));
+            hash.AppendData([0]);
+        }
+        return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
     }
     private static string[] SafeLimitations(string? value) =>
         string.IsNullOrWhiteSpace(value)
@@ -395,7 +440,8 @@ public static class AccessCopyCloneCandidateReporter
         builder.AppendLine("# Microsoft Access Copy/Clone Static Candidates");
         builder.AppendLine();
         builder.AppendLine($"- Schema: `{report.SchemaVersion}`");
-        builder.AppendLine($"- Commit: `{report.CommitSha ?? "unknown"}`");
+        builder.AppendLine($"- Repository: `{report.RepositoryId}`");
+        builder.AppendLine($"- Commit: `{report.CommitSha}`");
         builder.AppendLine($"- Coverage: `{report.Coverage}`");
         builder.AppendLine($"- Candidates: `{report.Summary.CandidateCount}`");
         builder.AppendLine($"- Flow references: `{report.Summary.CandidatePathCount}`");
@@ -412,6 +458,7 @@ public static class AccessCopyCloneCandidateReporter
             builder.AppendLine($"- Classification: `{candidate.Classification}`");
             builder.AppendLine($"- Shape: `{candidate.Shape}`");
             builder.AppendLine($"- Query: `{candidate.QueryNodeId}`");
+            builder.AppendLine($"- Primary evidence: rule `{candidate.RuleId}`, tier `{candidate.EvidenceTier}`, commit `{candidate.CommitSha}`, span `{candidate.FilePath}:{candidate.StartLine}-{candidate.EndLine}`, extractor `{candidate.ExtractorId}/{candidate.ExtractorVersion}`");
             builder.AppendLine($"- Flow paths: {Format(candidate.FlowPathIds)}");
             builder.AppendLine($"- Supporting facts: {Format(candidate.SupportingFactIds)}");
             builder.AppendLine($"- Rules: {Format(candidate.RuleIds)}");
