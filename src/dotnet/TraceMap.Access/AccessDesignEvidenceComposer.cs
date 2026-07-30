@@ -188,6 +188,8 @@ public static class AccessDesignEvidenceComposer
         var knownObjects = new Dictionary<string, List<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase);
         var knownObjectsByHash = new Dictionary<string, List<(string StableKey, string Kind)>>(StringComparer.Ordinal);
         var fieldsByTable = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
+        var fieldsByTableAndHash = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
+        var stableKeyByCanonicalRecordId = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var fact in baseFacts)
         {
             if (fact.TargetSymbol is null) continue;
@@ -212,12 +214,18 @@ public static class AccessDesignEvidenceComposer
                 if (kind.Length > 0) AddKnown(knownObjectsByHash, nameHash, fact.TargetSymbol, kind);
             }
             if (fact.FactType == FactTypes.LegacyDataColumnDeclared
-                && fact.SourceSymbol is not null
-                && fact.Properties.TryGetValue("objectName", out var fieldName))
-                AddField(fieldsByTable, fact.SourceSymbol, fieldName, fact.TargetSymbol);
+                && fact.SourceSymbol is not null)
+            {
+                if (fact.Properties.TryGetValue("objectName", out var fieldName))
+                    AddField(fieldsByTable, fact.SourceSymbol, fieldName, fact.TargetSymbol);
+                if (fact.Properties.TryGetValue("objectNameHash", out var fieldHash))
+                    AddField(fieldsByTableAndHash, fact.SourceSymbol, fieldHash, fact.TargetSymbol);
+            }
         }
 
-        foreach (var record in bundle.Records.Where(record => record.Kind == "catalog-object"))
+        foreach (var record in bundle.Records.Where(record =>
+                     record.Kind == "catalog-object"
+                     && String(record.Payload, "objectRole") != "table-field"))
         {
             var role = String(record.Payload, "objectRole");
             var identity = OptionalString(record.Payload, "identity");
@@ -259,7 +267,59 @@ public static class AccessDesignEvidenceComposer
             if (identity is not null && stableKey is not null)
                 AddKnown(knownObjects, identity, stableKey, normalizedKind);
             if (stableKey is not null)
+            {
+                stableKeyByCanonicalRecordId[record.CanonicalRecordId] = stableKey;
                 SetSupport(support, stableKey, [record]);
+            }
+        }
+
+        foreach (var record in bundle.Records.Where(record =>
+                     record.Kind == "catalog-object"
+                     && String(record.Payload, "objectRole") == "table-field"))
+        {
+            var identity = OptionalString(record.Payload, "identity");
+            var declaredStableKey = OptionalString(record.Payload, "stableKey");
+            var tableStableKey = record.ParentCanonicalRecordId is not null
+                && stableKeyByCanonicalRecordId.TryGetValue(record.ParentCanonicalRecordId, out var parentStableKey)
+                    ? parentStableKey
+                    : null;
+            string? projectedStableKey = null;
+            if (identity is not null && tableStableKey is not null)
+            {
+                var fieldHash = AccessSafeValues.RoleHash($"access-field-{tableStableKey}-name", identity);
+                if (fieldsByTableAndHash.TryGetValue(tableStableKey, out var fieldsByHash)
+                    && fieldsByHash.TryGetValue(fieldHash, out var matches)
+                    && matches.Distinct(StringComparer.Ordinal).ToArray() is { Length: 1 } distinct)
+                {
+                    projectedStableKey = distinct[0];
+                    AddField(fieldsByTable, tableStableKey, identity, projectedStableKey);
+                }
+            }
+            if (declaredStableKey is not null
+                && projectedStableKey is not null
+                && !string.Equals(declaredStableKey, projectedStableKey, StringComparison.Ordinal))
+            {
+                normalizationGaps.Add(new(
+                    "AccessDesignInputCatalogIdentityMismatch",
+                    "table-field",
+                    record.CanonicalRecordId,
+                    RuleIds.LegacyAccessDesignInput));
+                continue;
+            }
+            var stableKey = projectedStableKey ?? declaredStableKey;
+            if (stableKey is null
+                || !baseFacts.Any(fact => fact.TargetSymbol == stableKey
+                    && fact.FactType == FactTypes.LegacyDataColumnDeclared))
+            {
+                normalizationGaps.Add(new(
+                    "AccessDesignInputCatalogStableKeyUnmatched",
+                    "table-field",
+                    record.CanonicalRecordId,
+                    RuleIds.LegacyAccessDesignInput));
+                continue;
+            }
+            stableKeyByCanonicalRecordId[record.CanonicalRecordId] = stableKey;
+            SetSupport(support, stableKey, [record]);
         }
 
         var surfaceInputs = new List<SurfaceInput>();
@@ -350,6 +410,7 @@ public static class AccessDesignEvidenceComposer
                 StringComparer.OrdinalIgnoreCase),
             StringComparer.Ordinal);
         var ui = AccessUiProjector.Project(databaseSeed, rawSurfaces, known, fields, AccessIdentityDisclosurePolicy.HashOnly);
+        var eventProcedureReferences = new List<AccessRawEventProcedureReference>();
         foreach (var input in mergedSurfaceInputs)
         {
             var raw = input.Raw;
@@ -361,8 +422,11 @@ public static class AccessDesignEvidenceComposer
             var source = sources.First();
             SetSupport(support, identity.StableKey, sources);
             var projectedSurface = ui.Surfaces.Single(item => item.Identity.StableKey == identity.StableKey);
+            foreach (var surfaceRecord in sources.Where(item => item.Kind == "ui-surface"))
+                stableKeyByCanonicalRecordId[surfaceRecord.CanonicalRecordId] = projectedSurface.Identity.StableKey;
             foreach (var control in projectedSurface.Controls)
-                SetSupport(support, control.Identity.StableKey, bundle.Records.Where(record =>
+            {
+                var controlRecords = bundle.Records.Where(record =>
                 {
                     if (record.Kind != "ui-control"
                         || !sources.Any(item => item.CanonicalRecordId == record.ParentCanonicalRecordId)
@@ -374,8 +438,39 @@ public static class AccessDesignEvidenceComposer
                         String(record.Payload, "identity"),
                         control.Ordinal,
                         AccessIdentityDisclosurePolicy.HashOnly).StableKey == control.Identity.StableKey;
-                }).DefaultIfEmpty(source).ToArray());
+                }).ToArray();
+                foreach (var controlRecord in controlRecords)
+                    stableKeyByCanonicalRecordId[controlRecord.CanonicalRecordId] = control.Identity.StableKey;
+                SetSupport(support, control.Identity.StableKey, controlRecords.DefaultIfEmpty(source));
+            }
             AddUiChildSupport(projectedSurface, support, sources);
+        }
+
+        foreach (var eventRecord in bundle.Records.Where(record =>
+                     record.Kind == "event-reference"
+                     && string.Equals(String(record.Payload, "value").Trim(), "[Event Procedure]", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (eventRecord.ParentCanonicalRecordId is null
+                || !stableKeyByCanonicalRecordId.TryGetValue(eventRecord.ParentCanonicalRecordId, out var ownerStableKey))
+                continue;
+            var parent = bundle.Records.Single(record =>
+                record.CanonicalRecordId == eventRecord.ParentCanonicalRecordId);
+            var surface = parent.Kind == "ui-surface"
+                ? parent
+                : bundle.Records.Single(record =>
+                    record.CanonicalRecordId == parent.ParentCanonicalRecordId);
+            var surfaceKind = String(surface.Payload, "surfaceRole");
+            var surfaceName = String(surface.Payload, "identity");
+            var eventSuffix = EventProcedureSuffix(String(eventRecord.Payload, "eventRole"));
+            var procedureOwner = parent.Kind == "ui-control"
+                ? String(parent.Payload, "identity")
+                : surfaceKind == "report" ? "Report" : "Form";
+            eventProcedureReferences.Add(new(
+                ownerStableKey,
+                String(eventRecord.Payload, "eventRole"),
+                $"{(surfaceKind == "report" ? "Report" : "Form")}_{surfaceName}",
+                $"{procedureOwner}_{eventSuffix}"));
+            SetSupport(support, ownerStableKey, [eventRecord]);
         }
 
         var rawModules = bundle.Records.Where(record => record.Kind == "vba-module")
@@ -387,6 +482,7 @@ public static class AccessDesignEvidenceComposer
         var vba = AccessVbaProjector.Project(
             databaseSeed,
             rawModules,
+            eventReferences: eventProcedureReferences,
             knownObjects: known,
             limits: limits,
             disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly);
@@ -413,7 +509,9 @@ public static class AccessDesignEvidenceComposer
             .Select(record => new AccessRawMacro(
                 String(record.Payload, "identity"),
                 String(record.Payload, "macroCategory"),
-                null,
+                record.ParentCanonicalRecordId is null
+                    ? null
+                    : stableKeyByCanonicalRecordId.GetValueOrDefault(record.ParentCanonicalRecordId) ?? string.Empty,
                 Int(record.Payload, "ordinal"),
                 OptionalString(record.Payload, "startupRole"),
                 OptionalString(record.Payload, "bodyStatus")))
@@ -425,9 +523,13 @@ public static class AccessDesignEvidenceComposer
                 .Where(item => item.Kind == "macro-inventory"
                     && Int(item.Payload, "ordinal") == macro.Ordinal
                     && String(item.Payload, "macroCategory") == macro.MacroKind
+                    && (item.ParentCanonicalRecordId is null
+                            ? null
+                            : stableKeyByCanonicalRecordId.GetValueOrDefault(item.ParentCanonicalRecordId))
+                        == macro.OwnerStableKey
                     && AccessSafeValues.Identity(
                         databaseSeed,
-                        $"macro-{macro.MacroKind}-database",
+                        $"macro-{macro.MacroKind}-{macro.OwnerStableKey ?? "database"}",
                         String(item.Payload, "identity"),
                         macro.Ordinal,
                         AccessIdentityDisclosurePolicy.HashOnly).StableKey == macro.Identity.StableKey)
@@ -764,7 +866,13 @@ public static class AccessDesignEvidenceComposer
         }
         var controls = ordered.SelectMany(item => item.Raw.Controls)
             .GroupBy(item => (item.Ordinal, NameHash: AccessSafeValues.RoleHash("access-control-merge-name", item.Name)))
-            .Select(group => group.First())
+            .Select(group =>
+            {
+                var observations = group.ToArray();
+                if (observations.Skip(1).Any(item => !EquivalentControl(observations[0], item)))
+                    conflict = true;
+                return observations[0];
+            })
             .OrderBy(item => item.Ordinal)
             .ThenBy(item => AccessSafeValues.RoleHash("access-control-sort-name", item.Name), StringComparer.Ordinal)
             .ToArray();
@@ -791,6 +899,33 @@ public static class AccessDesignEvidenceComposer
                 RuleIds.LegacyAccessDesignInput));
         return new(merged, ordered.SelectMany(item => item.Records).ToArray());
     }
+
+    private static bool EquivalentControl(AccessRawControl left, AccessRawControl right) =>
+        left.Ordinal == right.Ordinal
+        && left.ControlType == right.ControlType
+        && string.Equals(left.Name.Trim(), right.Name.Trim(), StringComparison.Ordinal)
+        && string.Equals(left.ControlSource?.Trim(), right.ControlSource?.Trim(), StringComparison.Ordinal)
+        && string.Equals(left.RowSource?.Trim(), right.RowSource?.Trim(), StringComparison.Ordinal)
+        && string.Equals(left.ValidationRule?.Trim(), right.ValidationRule?.Trim(), StringComparison.Ordinal)
+        && left.Events
+            .OrderBy(item => item.Role, StringComparer.Ordinal)
+            .ThenBy(item => item.Value, StringComparer.Ordinal)
+            .SequenceEqual(right.Events
+                .OrderBy(item => item.Role, StringComparer.Ordinal)
+                .ThenBy(item => item.Value, StringComparer.Ordinal));
+
+    private static string EventProcedureSuffix(string eventRole) => eventRole switch
+    {
+        "after-update" => "AfterUpdate",
+        "before-update" => "BeforeUpdate",
+        "on-click" => "Click",
+        "on-current" => "Current",
+        "on-dbl-click" => "DblClick",
+        "on-load" => "Load",
+        "on-no-data" => "NoData",
+        "on-open" => "Open",
+        _ => throw new AccessScanException("AccessDesignInputRecordMalformed")
+    };
 
     private static void SetSupport(
         IDictionary<string, IReadOnlyList<AccessDesignEvidenceRecord>> support,

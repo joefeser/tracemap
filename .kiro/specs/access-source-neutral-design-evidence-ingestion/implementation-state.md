@@ -108,7 +108,18 @@ contradictions:
   `AccessUiTextParser`;
 - provenance wording allowed safe-token producer-local record IDs to persist;
 - requirements conflated the manifest and record-envelope schemas and called
-  otherwise order-independent NDJSON records ordered.
+otherwise order-independent NDJSON records ordered.
+
+The implementation review then identified four composition gaps. The composer
+now resolves hash-only base fields through parented `table-field` catalog
+records, marks conflicting structured/textual control observations partial,
+derives exact Access event-procedure references for the existing VBA projector,
+and preserves projected surface/control ownership for UI and embedded macro
+inventory. Regression coverage proves these paths without persisting protected
+identities or widening the Access COM boundary. Root UI/VBA exact-line sources
+were also re-audited: `ParseRecord` already rejects payload/source hash mismatch
+and ranges beyond the validated document line count before records are accepted
+for projection.
 
 The specification now rejects envelope-wide byte/record overflow before any
 design conclusion, applies narrower caps after canonical ordering, defines an
