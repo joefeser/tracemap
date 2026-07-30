@@ -96,7 +96,13 @@ export async function validateMsbuildBinlogEvidenceDist({
 }
 
 async function validateSitemap({ baseUrl, dist, errors }) {
-  const urls = await readSitemapLocSet(resolve(dist, "sitemap.xml"));
+  let urls;
+  try {
+    urls = await readSitemapLocSet(resolve(dist, "sitemap.xml"));
+  } catch (error) {
+    errors.push(`MSBuild binlog sitemap is unavailable or invalid: ${error.message}`);
+    return;
+  }
   for (const route of [msbuildBinlogArticleRoute, msbuildBinlogProofRoute]) {
     if (!urls.has(`${baseUrl}${route}`)) errors.push(`MSBuild binlog sitemap is missing required route: ${route}`);
   }
@@ -125,7 +131,7 @@ async function validateArticle({ articlePath, baseUrl, errors }) {
 
   const words = text.split(/\s+/).filter(Boolean).length;
   if (words < 700 || words > 1600) errors.push(`MSBuild binlog article word count must be between 700 and 1600, got ${words}`);
-  scanUnsupportedClaims(text, "article", errors);
+  scanUnsupportedClaims(`${text}\n${decoded}`, "article", errors);
   scanPrivateMaterial(`${decoded}\n${text}\n${collapsed}`, "article", errors);
 }
 
@@ -243,6 +249,9 @@ async function validateDiscovery({ dist, errors }) {
   if (entry.publicClaimLevel !== "demo" || entry.preferredProofPath !== msbuildBinlogArticleRoute) {
     errors.push("MSBuild binlog discovery entry has an inconsistent claim level or proof path");
   }
+  const serializedEntry = JSON.stringify(entry);
+  scanUnsupportedClaims(serializedEntry, "discovery entry", errors);
+  scanPrivateMaterial(serializedEntry, "discovery entry", errors);
 }
 
 function requireExactKeys(value, expected, label, errors) {

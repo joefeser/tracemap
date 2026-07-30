@@ -167,6 +167,19 @@ test("MSBuild binlog article rejects sentence-split unsupported claims", async (
   assert.match(errors.join("\n"), /unsupported public claim/);
 });
 
+test("MSBuild binlog article rejects unsupported claims in public metadata", async (t) => {
+  const root = await createFixture(t);
+  const metadataPath = join(root, "src", "_blog", "articles.json");
+  const articles = JSON.parse(await readFile(metadataPath, "utf8"));
+  const article = articles.find((candidate) => candidate.slug === "what-an-msbuild-binlog-knows-that-a-source-diff-does-not");
+  article.ogDescription = "TraceMap proves tests passed and the release is safe.";
+  await writeFile(metadataPath, `${JSON.stringify(articles, null, 2)}\n`);
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateMsbuildBinlogEvidenceDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /article contains an unsupported public claim/);
+});
+
 test("MSBuild binlog private-material scan catches values split across markup", async (t) => {
   const root = await createFixture(t);
   const metadataPath = join(root, "src", "_blog", "articles", "what-an-msbuild-binlog-knows-that-a-source-diff-does-not.html");
@@ -216,6 +229,28 @@ test("MSBuild binlog discovery reports malformed JSON and shape without throwing
     await validateMsbuildBinlogEvidenceDist({ dist: join(root, "dist"), errors });
     assert.match(errors.join("\n"), /discovery metadata entries must be an array/);
   });
+});
+
+test("MSBuild binlog discovery rejects unsupported public claims", async (t) => {
+  const root = await createFixture(t);
+  const discoveryPath = join(root, "src", "_site", "discovery.json");
+  const entries = JSON.parse(await readFile(discoveryPath, "utf8"));
+  const entry = entries.find((candidate) => candidate.path === "/build/msbuild-binlog/proof-packet/");
+  entry.summary = "TraceMap proves tests passed and the release is safe.";
+  await writeFile(discoveryPath, `${JSON.stringify(entries, null, 2)}\n`);
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateMsbuildBinlogEvidenceDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /discovery entry contains an unsupported public claim/);
+});
+
+test("MSBuild binlog sitemap failures are aggregated instead of thrown", async (t) => {
+  const root = await createFixture(t);
+  await buildSite({ root, log() {} });
+  await rm(join(root, "dist", "sitemap.xml"));
+  const errors = [];
+  await validateMsbuildBinlogEvidenceDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /sitemap is unavailable or invalid/);
 });
 
 async function createFixture(t) {
