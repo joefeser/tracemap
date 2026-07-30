@@ -156,6 +156,17 @@ test("MSBuild binlog article rejects unsupported success claims", async (t) => {
   assert.match(errors.join("\n"), /unsupported public claim/);
 });
 
+test("MSBuild binlog article rejects sentence-split unsupported claims", async (t) => {
+  const root = await createFixture(t);
+  const metadataPath = join(root, "src", "_blog", "articles", "what-an-msbuild-binlog-knows-that-a-source-diff-does-not.html");
+  const article = await readFile(metadataPath, "utf8");
+  await writeFile(metadataPath, `${article}<p>TraceMap proves. The release is safe.</p>\n`);
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateMsbuildBinlogEvidenceDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /unsupported public claim/);
+});
+
 test("MSBuild binlog private-material scan catches values split across markup", async (t) => {
   const root = await createFixture(t);
   const metadataPath = join(root, "src", "_blog", "articles", "what-an-msbuild-binlog-knows-that-a-source-diff-does-not.html");
@@ -165,6 +176,25 @@ test("MSBuild binlog private-material scan catches values split across markup", 
   const errors = [];
   await validateMsbuildBinlogEvidenceDist({ dist: join(root, "dist"), errors });
   assert.match(errors.join("\n"), /forbidden private or executable material/);
+});
+
+test("MSBuild binlog private-material scan catches percent-encoded values", async (t) => {
+  for (const value of [
+    "%252FUsers%252Fexample%252Fprivate.binlog",
+    "Host%253Dexample.invalid%253BPassword%253Dfixture"
+  ]) {
+    await t.test(value.split("%")[0] || "path", async (subtest) => {
+      const root = await createFixture(subtest);
+      const assetPath = join(root, "src", "assets", "msbuild-binlog-proof-packet.json");
+      const packet = JSON.parse(await readFile(assetPath, "utf8"));
+      packet.purpose = value;
+      await writeFile(assetPath, `${JSON.stringify(packet, null, 2)}\n`);
+      await buildSite({ root, log() {} });
+      const errors = [];
+      await validateMsbuildBinlogEvidenceDist({ dist: join(root, "dist"), errors });
+      assert.match(errors.join("\n"), /forbidden private or executable material/);
+    });
+  }
 });
 
 test("MSBuild binlog discovery reports malformed JSON and shape without throwing", async (t) => {
