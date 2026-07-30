@@ -86,6 +86,12 @@ import { staticTriageRoute } from "./static-triage.mjs";
 import { staticVsRuntimeRoute } from "./static-vs-runtime.mjs";
 import { sqlOperatorHandoffInboundRoutes, sqlOperatorHandoffRoute } from "./sql-operator-handoff.mjs";
 import {
+  sqlProjectRefactorArticleRoute,
+  sqlProjectRefactorAsset,
+  sqlProjectRefactorInboundRoutes,
+  sqlProjectRefactorProofRoute
+} from "./sql-project-refactor-intent-story.mjs";
+import {
   sqlRunbookProofPacketInboundRoutes,
   sqlRunbookProofPacketRoute
 } from "./sql-runbook-proof-packet.mjs";
@@ -111,7 +117,7 @@ import { validateDist } from "./validate.mjs";
 test("validateDist accepts generated public sitemap and internal links", async () => {
   const root = await createDistFixture();
 
-  await validateDist({ root });
+  await validateDist({ requireMsbuildBinlogEvidence: false, root });
 });
 
 test("validateDist reports missing dist directory through validation errors", async () => {
@@ -126,7 +132,7 @@ test("validateDist reports missing dist directory through validation errors", as
 test("validateDist normalizes trailing slash baseUrl values", async () => {
   const root = await createDistFixture();
 
-  await validateDist({ baseUrl: "https://tracemap.tools/", root });
+  await validateDist({ baseUrl: "https://tracemap.tools/", requireMsbuildBinlogEvidence: false, root });
 });
 
 test("validateDist accepts directory links without trailing slashes", async () => {
@@ -134,7 +140,7 @@ test("validateDist accepts directory links without trailing slashes", async () =
     indexHtml: page('<a href="/docs">Docs</a>')
   });
 
-  await validateDist({ root });
+  await validateDist({ requireMsbuildBinlogEvidence: false, root });
 });
 
 test("validateDist rejects sitemap URLs without generated files", async () => {
@@ -217,7 +223,7 @@ test("validateStakeholderObjectionGuideDist rejects hard private leaks inside bo
 
 async function createDistFixture({
   docsHtml = page("<p>Docs</p>"),
-  indexHtml = page('<a href="/docs/">Docs</a><link rel="canonical" href="https://tracemap.tools/">'),
+  indexHtml = page(`<a href="/docs/">Docs</a><a href="${sqlProjectRefactorProofRoute}">SQL project refactor intent</a><link rel="canonical" href="https://tracemap.tools/">`),
   robots = "User-agent: *\nAllow: /\n\n# LLM discovery: https://tracemap.tools/llms.txt\nSitemap: https://tracemap.tools/sitemap.xml\n",
   sitemapUrls = [
       ...new Set([
@@ -278,8 +284,10 @@ async function createDistFixture({
       siteClaimGuardrailsRoute,
       staticTriageRoute,
       staticVsRuntimeRoute,
-      sqlOperatorHandoffRoute,
-      sqlRunbookProofPacketRoute,
+        sqlOperatorHandoffRoute,
+        sqlProjectRefactorArticleRoute,
+        sqlProjectRefactorProofRoute,
+        sqlRunbookProofPacketRoute,
       sqlStaticObservedValidationRoute,
       swiftAdapterStoryRoute,
       swiftApiClientWalkthroughRoute,
@@ -361,6 +369,8 @@ async function createDistFixture({
     staticTriageRoute,
     staticVsRuntimeRoute,
     sqlOperatorHandoffRoute,
+    sqlProjectRefactorArticleRoute,
+    sqlProjectRefactorProofRoute,
     sqlRunbookProofPacketRoute,
     sqlStaticObservedValidationRoute,
     swiftAdapterStoryRoute,
@@ -392,6 +402,9 @@ async function createDistFixture({
     if (sqlRunbookProofPacketInboundRoutes.includes(route) && !html.includes(sqlRunbookProofPacketRoute)) {
       html = html.replace("</main>", `<a href="${sqlRunbookProofPacketRoute}">SQL runbook proof packet</a></main>`);
     }
+    if (sqlProjectRefactorInboundRoutes.includes(route) && !html.includes(sqlProjectRefactorProofRoute)) {
+      html = html.replace("</main>", `<a href="${sqlProjectRefactorProofRoute}">SQL project refactor intent</a></main>`);
+    }
     if (databaseDesignReviewStoryInboundRoutes.includes(route) && !html.includes(databaseDesignReviewRoute)) {
       html = html.replace("</main>", `<a href="${databaseDesignReviewRoute}">Database design review</a></main>`);
     }
@@ -401,7 +414,10 @@ async function createDistFixture({
     await writeFile(join(dist, path, "index.html"), html, "utf8");
   }
 
-  await writeFile(join(dist, "index.html"), indexHtml, "utf8");
+  const rootedIndexHtml = sqlProjectRefactorInboundRoutes.includes("/") && !indexHtml.includes(sqlProjectRefactorProofRoute)
+    ? indexHtml.replace("</main>", `<a href="${sqlProjectRefactorProofRoute}">SQL project refactor intent</a></main>`)
+    : indexHtml;
+  await writeFile(join(dist, "index.html"), rootedIndexHtml, "utf8");
   await writeFile(join(dist, "docs", "index.html"), docsHtml, "utf8");
   await writeFile(join(dist, "favicon.svg"), "<svg></svg>", "utf8");
   await writeFile(join(dist, "styles.css"), "body { margin: 0; }\n", "utf8");
@@ -413,6 +429,10 @@ async function createDistFixture({
   await cp(
     new URL(`../src${databaseDesignReviewAsset}`, import.meta.url),
     join(dist, "assets", "database-design-review-proof-packet.json")
+  );
+  await cp(
+    new URL(`../src${sqlProjectRefactorAsset}`, import.meta.url),
+    join(dist, "assets", "sql-project-refactor-intent-proof-packet.json")
   );
   await writeFile(join(dist, "robots.txt"), robots, "utf8");
   await writeFile(join(dist, "sitemap.xml"), renderSitemap(sitemapUrls), "utf8");
@@ -611,6 +631,12 @@ async function fixturePageHtml(route, path) {
   if (route === sqlStaticObservedValidationRoute) {
     return readFile(new URL("../src/sql/operator-handoff/validation/index.html", import.meta.url), "utf8");
   }
+  if (route === sqlProjectRefactorProofRoute) {
+    return readFile(new URL("../src/sql/project-refactor-intent/index.html", import.meta.url), "utf8");
+  }
+  if (route === sqlProjectRefactorArticleRoute) {
+    return sqlProjectRefactorArticlePage();
+  }
 
   if (route === "/deploy-audit/") {
     return deployAuditPage();
@@ -621,7 +647,7 @@ async function fixturePageHtml(route, path) {
   }
 
   if (route === "/blog/") {
-    return page(`<a href="${buildReviewWorkflowStoryRoute}"><span>Workflow governance</span>Building TraceMap Under Review Pressure</a><a href="${blogProofPathSeriesRoute}">What a Proof Path Is</a><a href="${swiftApiClientArticleRoute}">How TraceMap Reads Swift API Clients Without Pretending They Ran</a><a href="${ragVsAgenticRetrievalArticleRoute}">RAG vs Agentic Retrieval for Code Review</a>`);
+    return page(`<a href="${sqlProjectRefactorArticleRoute}">What a Database Rename Can Prove Before Deployment</a><a href="${buildReviewWorkflowStoryRoute}"><span>Workflow governance</span>Building TraceMap Under Review Pressure</a><a href="${blogProofPathSeriesRoute}">What a Proof Path Is</a><a href="${swiftApiClientArticleRoute}">How TraceMap Reads Swift API Clients Without Pretending They Ran</a><a href="${ragVsAgenticRetrievalArticleRoute}">RAG vs Agentic Retrieval for Code Review</a>`);
   }
 
   if (route === buildReviewWorkflowStoryRoute) {
@@ -850,6 +876,21 @@ async function fixturePageHtml(route, path) {
   );
 }
 
+async function sqlProjectRefactorArticlePage() {
+  const body = await readFile(
+    new URL("../src/_blog/articles/sql-project-refactor-intent-evidence.html", import.meta.url),
+    "utf8"
+  );
+  return page(`
+    <article>
+      <meta property="og:type" content="article">
+      <link rel="canonical" href="https://tracemap.tools${sqlProjectRefactorArticleRoute}">
+      <h1>What a database rename can prove before deployment</h1>
+      ${body}
+    </article>
+  `);
+}
+
 function blogProofPathSeriesPage() {
   const links = blogProofPathRequiredLinks.map((link) => `<a href="${link}">${link}</a>`).join(" ");
   const filler = Array.from(
@@ -1028,6 +1069,28 @@ function buildReviewWorkflowStoryPage() {
 async function writeDiscoveryFiles(dist) {
   const outputs = await createDiscoveryOutputs(
     [
+      {
+        path: sqlProjectRefactorArticleRoute,
+        title: "What a Database Rename Can Prove Before Deployment",
+        summary: "Demo-level SQL project refactor-intent article fixture.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "use-case",
+        preferredProofPath: sqlProjectRefactorProofRoute,
+        limitations: ["Checked-in intent does not establish build or database state."],
+        nonClaims: ["No deployment, applied-state, compatibility, approval, or execution-safety proof."]
+      },
+      {
+        path: sqlProjectRefactorProofRoute,
+        title: "SQL Project Refactor Intent Evidence",
+        summary: "Demo-level SQL project refactor-intent proof fixture.",
+        publicClaimLevel: "demo",
+        sourceType: "site-page",
+        hintCategory: "evidence",
+        preferredProofPath: sqlProjectRefactorAsset,
+        limitations: ["Checked-in intent does not establish build or database state."],
+        nonClaims: ["No deployment, applied-state, compatibility, approval, or execution-safety proof."]
+      },
       {
         path: databaseDesignReviewRoute,
         title: "Database Design Review",

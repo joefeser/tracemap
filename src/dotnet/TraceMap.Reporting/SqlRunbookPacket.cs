@@ -88,6 +88,12 @@ public static class SqlRunbookPacketBuilder
             .Concat(validationFacts.Select(f => new SqlRunbookMilestone("validation", "validation-step-present", "validation-evidence-not-provided", Evidence(f, commitSha))))
             .Concat(contexts.Where(f => Value(f, "stepKind", "") == "destructive-operation")
                 .Select(f => new SqlRunbookMilestone("cleanup-or-rollback-candidate", "intended-by-script", "validation-evidence-not-provided", Evidence(f, commitSha))))
+            .Concat(sqlFacts.Where(f => f.FactType == FactTypes.SqlProjectRefactorOperation && f.Evidence is not null)
+                .Select(f => new SqlRunbookMilestone(
+                    Value(f, "operationKind", "sql-project-refactor"),
+                    "intended-by-project-refactor-log",
+                    "deployment-evidence-not-provided",
+                    Evidence(f, commitSha))))
             .OrderBy(m => m.Evidence.FilePath, StringComparer.Ordinal).ThenBy(m => m.Evidence.LineSpan.StartLine).ThenBy(m => m.Kind, StringComparer.Ordinal).ToArray();
 
         var prerequisites = sqlFacts.Where(f => f.FactType == FactTypes.DatabasePrerequisiteEvidence && f.Evidence is not null)
@@ -164,6 +170,7 @@ public static class SqlRunbookPacketBuilder
                 "Static permission evidence does not establish effective authorization.",
                 "Validation steps do not establish observed validation results.",
                 "Cleanup candidates do not establish that rollback is complete or reversible.",
+                "SQL project refactor-log milestones are checked-in intent and do not prove project build, DACPAC packaging, deployment planning, target __RefactorLog state, deployment, or application.",
                 "This packet does not certify safety, approve changes, or replace DBA/operator judgment."
             ]);
     }
@@ -178,7 +185,8 @@ public static class SqlRunbookPacketBuilder
         || packet.Gaps.Count > 0;
 
     private static bool IsSqlFact(CodeFact f) => f.RuleId.StartsWith("database.sql.", StringComparison.Ordinal)
-        || f.RuleId.StartsWith("database.postgres.", StringComparison.Ordinal);
+        || f.RuleId.StartsWith("database.postgres.", StringComparison.Ordinal)
+        || f.RuleId is RuleIds.DatabaseSqlProjectRefactorIntent or RuleIds.DatabaseSqlProjectRefactorIntentGap;
     private static string ContextKey(CodeFact f) => string.Join('|', Value(f, "engineFamily", "unknown"), Value(f, "serverRole", "unknown"), Value(f, "databaseRole", "unknown"), Value(f, "schemaRole", "unspecified"), Value(f, "executionMode", "unknown"));
     private static string? ContextSourcePath(CodeFact fact)
     {

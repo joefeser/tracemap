@@ -1,0 +1,157 @@
+<p>
+  <strong>Public claim level: demo.</strong>
+  A source diff and a build artifact answer different questions. The diff shows
+  what changed in repository text. An explicitly supplied MSBuild binary log can
+  carry evidence about what one recorded build observed. Neither source is a
+  complete account of runtime behavior, deployment state, or release safety.
+</p>
+
+<p>
+  Microsoft recently introduced a preview
+  <a href="https://devblogs.microsoft.com/dotnet/msbuild-binlog-analyzer-vscode/">MSBuild
+  Binlog Analyzer for VS Code</a>. Its interactive experience focuses on
+  investigating failures, timing, incremental builds, and differences between
+  logs. The announcement also highlights why binary logs deserve careful
+  handling: they are rich enough to answer useful build questions because they
+  can contain much more than the text a team normally pastes from CI.
+</p>
+
+<section data-msbuild-blog-block="different-evidence">
+  <h2>The source diff and the recorded build are different evidence.</h2>
+
+  <p>
+    Static repository analysis can inventory declarations, references,
+    dependencies, and changed contracts without running the application. It can
+    also describe where analysis was partial. What it cannot establish is which
+    project graph a particular build artifact recorded or which bounded
+    diagnostics appeared in that artifact.
+  </p>
+
+  <p>
+    A binlog can complement the static view with observed build structure. For
+    TraceMap's first MSBuild evidence boundary, that means only a recorded build
+    result, safe repository-relative project identities, project-reference
+    edges, and conservative diagnostic codes and locations. The evidence remains
+    attached to the artifact digest, repository, commit declaration, rule ID,
+    evidence tier, coverage label, and extractor version.
+  </p>
+</section>
+
+<section data-msbuild-blog-block="sensitive-artifact">
+  <h2>A useful build artifact can also be a sensitive artifact.</h2>
+
+  <p>
+    MSBuild binary logs may include properties, environment values, item data,
+    task parameters, command lines, package sources, imported content, and
+    machine-local paths. A full-fidelity log may be excellent input for a
+    trusted local debugger while still being the wrong object to publish, attach
+    broadly, or place in a public review packet.
+  </p>
+
+  <p>
+    TraceMap therefore does not treat a binlog as ordinary text input. The file
+    must be named explicitly; the scanner never discovers logs silently. The
+    declared binlog commit must match the repository commit detected for the
+    scan. Parsing happens locally through the official MSBuild replay API, with
+    bounds on artifact size, expanded data, records, projects, graph edges, and
+    diagnostics.
+  </p>
+</section>
+
+<section data-msbuild-blog-block="allowlist">
+  <h2>The projection is an allowlist, not a summary of everything in the log.</h2>
+
+  <p>
+    TraceMap retains only fields covered by
+    <code>build.msbuild-binlog.observation.v1</code>. Raw diagnostic messages,
+    arbitrary properties and items, task parameters, command lines, environment
+    values, embedded files, URLs, credentials, connection material, private
+    hosts, usernames, and absolute or outside-root paths are not public evidence.
+    The local input path is replaced by a synthetic artifact identity.
+  </p>
+
+  <p>
+    When a path cannot be normalized inside the repository, a diagnostic code
+    is not from a conservative recognized family, the parser cannot read the
+    artifact, or a bound is reached, the outcome becomes an explicit
+    <code>build.msbuild-binlog.gap.v1</code> row. Partial evidence stays useful,
+    but it stays labeled partial.
+  </p>
+</section>
+
+<section data-msbuild-blog-block="dogfood">
+  <h2>A small dogfood run is enough to test the boundary.</h2>
+
+  <p>
+    The public proof packet records a synthetic local product smoke over a
+    checked-in sample. The build artifact was supplied explicitly and scanned
+    twice at the same declared repository commit. Each scan produced the same
+    two bounded facts: one artifact observation and one project observation.
+    The recorded result was <code>succeeded</code>, coverage was
+    <code>observed-bounded</code>, and both rows used
+    <code>Tier2Structural</code>.
+  </p>
+
+  <p>
+    Synthetic protected-value markers were planted in the build environment.
+    They produced zero matches across the five standard TraceMap outputs. The
+    artifact location was synthetic, the commit binding was present on every
+    projected fact, and the raw binary log was deleted after validation. This is
+    one bounded sample, not a completeness or performance benchmark.
+  </p>
+</section>
+
+<section data-msbuild-blog-block="review-composition">
+  <h2>The value is in composition without evidence inflation.</h2>
+
+  <p>
+    A reviewer can now keep two statements separate: “the repository contains
+    this static project relationship” and “this supplied artifact recorded this
+    bounded build relationship.” Agreement can increase confidence that the
+    reviewer is looking in the right place. Disagreement can identify a useful
+    question about configuration, generated inputs, stale artifacts, or reduced
+    coverage.
+  </p>
+
+  <p>
+    Composition must not turn an observed build edge into runtime reachability,
+    or turn a recorded successful result into proof that tests passed. It should
+    preserve the source of each row and make absence equally careful: a missing
+    diagnostic is not proof that a defect is absent, especially when parsing is
+    partial.
+  </p>
+</section>
+
+<section data-msbuild-blog-block="non-claims" data-tm-boundary="claim-boundary">
+  <h2>What this evidence does not prove.</h2>
+
+  <p>
+    TraceMap does not authenticate or attest the binlog. Matching the declared
+    SHA to the repository scan does not prove the artifact was produced from
+    that commit. A recorded successful result does not prove tests passed, the
+    repository was clean, packages were deployed, runtime behavior was correct,
+    or a release is approved or safe.
+  </p>
+
+  <p>
+    Project graph edges do not prove runtime reachability. Diagnostic evidence
+    may be incomplete, and the absence of a diagnostic does not prove the
+    absence of a defect. TraceMap core scanning and reduction do not add LLM
+    calls, embeddings, vector databases, MCP analysis, or prompt-based
+    classification to this evidence boundary.
+  </p>
+</section>
+
+<section data-msbuild-blog-block="where-next">
+  <h2>Inspect the packet, then decide what question comes next.</h2>
+
+  <p>
+    Open the
+    <a href="/build/msbuild-binlog/proof-packet/">public-safe MSBuild binlog
+    proof packet</a> to see the exact categorical projection. Use the
+    <a href="/evidence/">evidence model</a> to interpret tiers and rule IDs,
+    review <a href="/evidence/gaps/">analysis gaps</a> before repeating an
+    absence claim, and keep the broader
+    <a href="/static-vs-runtime/">static-versus-runtime boundary</a> attached.
+  </p>
+</section>

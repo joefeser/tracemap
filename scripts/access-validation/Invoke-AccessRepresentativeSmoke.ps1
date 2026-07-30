@@ -14,7 +14,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$CheckpointBasePath,
 
-    [switch]$InputExplicitlyAuthorized
+    [switch]$InputExplicitlyAuthorized,
+
+    [string]$ReviewBundlePath
 )
 
 $ErrorActionPreference = "Stop"
@@ -135,6 +137,10 @@ $CheckpointBasePath = [IO.Path]::GetFullPath($CheckpointBasePath)
 $AccessCli = [IO.Path]::GetFullPath($AccessCli)
 $TraceMapCli = [IO.Path]::GetFullPath($TraceMapCli)
 $scriptPath = [IO.Path]::GetFullPath($PSCommandPath)
+$reviewBundleRequested = -not [string]::IsNullOrWhiteSpace($ReviewBundlePath)
+if ($reviewBundleRequested) {
+    $ReviewBundlePath = [IO.Path]::GetFullPath($ReviewBundlePath)
+}
 $extension = [IO.Path]::GetExtension($DatabasePath).ToLowerInvariant()
 $inputKind = if ($extension -eq ".accdb") { "accdb" } elseif ($extension -eq ".mdb") { "mdb" } else { "unknown" }
 $accessSurfaceObserved = $false
@@ -170,6 +176,7 @@ $checkpoint = [ordered]@{
     docsContractCorrect = $false
     vaultContractCorrect = $false
     releaseReviewContractCorrect = $false
+    localReviewBundleContractCorrect = $false
     promptUiCanariesFalse = $false
     protectedOutputMatchCount = 0
 }
@@ -196,6 +203,12 @@ if ($DatabasePath.StartsWith($ScratchRoot + [IO.Path]::DirectorySeparatorChar, [
 if ($CheckpointBasePath.StartsWith($ScratchRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
     Stop-Representative "input-authorization" "representative checkpoint must be outside scratch"
 }
+if ($reviewBundleRequested -and
+    ([string]::Equals($ReviewBundlePath, $ScratchRoot, [StringComparison]::OrdinalIgnoreCase) -or
+     $ReviewBundlePath.StartsWith($ScratchRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
+     (Test-Path $ReviewBundlePath))) {
+    Stop-Representative "input-authorization" "representative review bundle must be a new path outside scratch"
+}
 $scratchFilesystemRoot = [IO.Path]::GetPathRoot($ScratchRoot)
 if ([string]::Equals($ScratchRoot, $scratchFilesystemRoot, [StringComparison]::OrdinalIgnoreCase) -or
     (Test-Path $ScratchRoot)) {
@@ -215,6 +228,7 @@ $export = Join-Path $ScratchRoot "index-export.json"
 $docsOutput = Join-Path $ScratchRoot "evidence-docs"
 $vaultOutput = Join-Path $ScratchRoot "vault"
 $releaseReviewOutput = Join-Path $ScratchRoot "release-review"
+$accessReviewOutput = if ($reviewBundleRequested) { $ReviewBundlePath } else { Join-Path $ScratchRoot "access-review" }
 
 Set-RepresentativeStage "copy-provenance"
 $originalHash = (Get-FileHash $DatabasePath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -425,6 +439,28 @@ if ($releaseReview.accessEvidence.status -ne "available" -or $releaseFindings.Co
 $checkpoint.releaseReviewContractCorrect = $true
 Write-RepresentativeCheckpoint
 
+& $TraceMapCli access-review create --scan-output $outA --out $accessReviewOutput *> $null
+if ($LASTEXITCODE -ne 0) { Stop-Representative "downstream-validation" "representative local review bundle failed" }
+$accessReviewManifestPath = Join-Path $accessReviewOutput "access-review-manifest.json"
+$accessReviewExplorerPath = Join-Path $accessReviewOutput "explorer\index.html"
+$accessReviewMarkdownPath = Join-Path $accessReviewOutput "release-review\release-review.md"
+if (-not (Test-Path $accessReviewManifestPath -PathType Leaf) -or
+    -not (Test-Path $accessReviewExplorerPath -PathType Leaf) -or
+    -not (Test-Path $accessReviewMarkdownPath -PathType Leaf)) {
+    Stop-Representative "downstream-validation" "representative local review bundle outputs are missing"
+}
+$accessReviewManifest = Get-Content $accessReviewManifestPath -Raw | ConvertFrom-Json
+if ($accessReviewManifest.schemaVersion -ne "tracemap-access-local-review-bundle.v1" -or
+    $accessReviewManifest.tracemapGenerated -ne $true -or
+    $accessReviewManifest.claimLevel -ne "hidden" -or
+    @("available", "truncated") -notcontains $accessReviewManifest.accessEvidenceStatus -or
+    $accessReviewManifest.counts.accessFindingCount -le 0 -or
+    $accessReviewManifest.counts.accessGapCount -le 0) {
+    Stop-Representative "downstream-validation" "representative local review bundle contract failed"
+}
+$checkpoint.localReviewBundleContractCorrect = $true
+Write-RepresentativeCheckpoint
+
 Set-RepresentativeStage "safety-check"
 $markers = [System.Collections.Generic.List[string]]::new()
 $markers.Add($DatabasePath)
@@ -432,7 +468,7 @@ $originalName = [IO.Path]::GetFileName($DatabasePath)
 if (-not [string]::Equals($originalName, $databaseRelative, [StringComparison]::OrdinalIgnoreCase)) {
     $markers.Add($originalName)
 }
-$protectedOutputs = @($outA, $outB, $outConcurrentA, $outConcurrentB, $export, $combined, $combinedReport, $docsOutput, $vaultOutput, $releaseReviewOutput)
+$protectedOutputs = @($outA, $outB, $outConcurrentA, $outConcurrentB, $export, $combined, $combinedReport, $docsOutput, $vaultOutput, $releaseReviewOutput, $accessReviewOutput)
 $matches = 0
 foreach ($outputItem in $protectedOutputs) {
     if (-not (Test-Path $outputItem)) { continue }
