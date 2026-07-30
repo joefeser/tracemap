@@ -62,6 +62,8 @@ const forbiddenMaterial = [
   /\/tmp\//i,
   /\/var\/folders\//i,
   /\b[A-Z]:\\/i,
+  /\\{2,}[A-Za-z0-9._-]+\\{1,2}[^\s\\]+/i,
+  /\b(?:10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})\b/,
   /\bfile:\/\//i,
   /\b(?:Server|Host|Data Source|User Id|Username|Password)\s*=/i,
   /\b(?:api[_-]?key|access[_-]?token|client[_-]?secret)\s*[:=]/i,
