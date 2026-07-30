@@ -303,7 +303,7 @@ public static class AccessLocalReviewBundle
                 "scan manifest is not valid TraceMap JSON.");
         }
 
-        var factIds = new HashSet<string>(StringComparer.Ordinal);
+        var factFingerprints = new Dictionary<string, string>(StringComparer.Ordinal);
         var factsPath = Path.Combine(inputDirectory, "facts.ndjson");
         try
         {
@@ -318,7 +318,8 @@ public static class AccessLocalReviewBundle
                     ?? throw new JsonException();
                 if (!SameScanIdentity(fileManifest, fact.ScanId, fact.Repo, fact.CommitSha)
                     || string.IsNullOrWhiteSpace(fact.FactId)
-                    || !factIds.Add(fact.FactId))
+                    || fact.Evidence is null
+                    || !factFingerprints.TryAdd(fact.FactId, FactFingerprint(fact)))
                 {
                     throw new AccessLocalReviewException(
                         "AccessReviewInputMismatch",
@@ -365,11 +366,14 @@ public static class AccessLocalReviewBundle
             }
         }
 
-        var indexedFactIds = new List<string>();
+        var indexedFactFingerprints = new Dictionary<string, string>(StringComparer.Ordinal);
         await using (var factsCommand = connection.CreateCommand())
         {
             factsCommand.CommandText = """
-                select fact_id, scan_id, repo, commit_sha
+                select fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id,
+                       evidence_tier, source_symbol, target_symbol, contract_element, file_path,
+                       start_line, end_line, snippet_hash, extractor_id, extractor_version,
+                       properties_json
                 from facts
                 order by fact_id;
                 """;
@@ -387,17 +391,91 @@ public static class AccessLocalReviewBundle
                         "indexed facts do not match the scan manifest.");
                 }
 
-                indexedFactIds.Add(reader.GetString(0));
+                IReadOnlyDictionary<string, string> properties;
+                try
+                {
+                    properties = JsonSerializer.Deserialize<Dictionary<string, string>>(
+                            reader.GetString(17),
+                            JsonOptions)
+                        ?? throw new JsonException();
+                }
+                catch (JsonException)
+                {
+                    throw new AccessLocalReviewException(
+                        "AccessReviewInputMismatch",
+                        "indexed fact metadata does not match the NDJSON artifact.");
+                }
+
+                var indexedFact = new CodeFact(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.GetString(3),
+                    NullableString(reader, 4),
+                    reader.GetString(5),
+                    reader.GetString(6),
+                    reader.GetString(7),
+                    NullableString(reader, 8),
+                    NullableString(reader, 9),
+                    NullableString(reader, 10),
+                    new EvidenceSpan(
+                        reader.GetString(11),
+                        reader.GetInt32(12),
+                        reader.GetInt32(13),
+                        NullableString(reader, 14),
+                        reader.GetString(15),
+                        reader.GetString(16)),
+                    properties);
+                if (!indexedFactFingerprints.TryAdd(indexedFact.FactId, FactFingerprint(indexedFact)))
+                {
+                    throw new AccessLocalReviewException(
+                        "AccessReviewInputMismatch",
+                        "indexed facts are not unique.");
+                }
             }
         }
 
-        var artifactFactIds = factIds.OrderBy(value => value, StringComparer.Ordinal).ToArray();
-        if (!artifactFactIds.SequenceEqual(indexedFactIds, StringComparer.Ordinal))
+        if (factFingerprints.Count != indexedFactFingerprints.Count
+            || factFingerprints.Any(pair =>
+                !indexedFactFingerprints.TryGetValue(pair.Key, out var indexed)
+                || !string.Equals(pair.Value, indexed, StringComparison.Ordinal)))
         {
             throw new AccessLocalReviewException(
                 "AccessReviewInputMismatch",
-                "index facts do not match the NDJSON fact inventory.");
+                "index facts do not match the NDJSON evidence content.");
         }
+    }
+
+    private static string? NullableString(SqliteDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
+
+    private static string FactFingerprint(CodeFact fact)
+    {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (var pair in fact.Properties)
+            properties[pair.Key] = pair.Value;
+        return JsonSerializer.Serialize(
+            new
+            {
+                fact.ProjectPath,
+                fact.FactType,
+                fact.RuleId,
+                fact.EvidenceTier,
+                fact.SourceSymbol,
+                fact.TargetSymbol,
+                fact.ContractElement,
+                Evidence = new
+                {
+                    fact.Evidence.FilePath,
+                    fact.Evidence.StartLine,
+                    fact.Evidence.EndLine,
+                    fact.Evidence.SnippetHash,
+                    fact.Evidence.ExtractorId,
+                    fact.Evidence.ExtractorVersion
+                },
+                Properties = properties
+            },
+            JsonOptions);
     }
 
     private static bool SameScanIdentity(

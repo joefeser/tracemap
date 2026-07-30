@@ -32,19 +32,19 @@ public static class ScanEngine
             .ToArray();
         var semanticResult = CSharpSemanticExtractor.Extract(repoPath, inventory, options);
 
-        var knownGaps = git.KnownGaps
+        var semanticKnownGaps = git.KnownGaps
             .Concat(semanticResult.GapFacts.Select(GetGapMessage))
             .OrderBy(gap => gap, StringComparer.Ordinal)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var buildStatus = semanticResult.Attempted
+        var semanticBuildStatus = semanticResult.Attempted
             ? semanticResult.ReducedCoverage ? "FailedOrPartial" : "Succeeded"
             : "NotRun";
-        var analysisLevel = semanticResult.Attempted
+        var semanticAnalysisLevel = semanticResult.Attempted
             ? semanticResult.ReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
             : "Level3SyntaxAnalysis";
 
-        var manifest = new ScanManifest(
+        var provisionalManifest = new ScanManifest(
             CreateScanId(git, inventory, options),
             git.RepoName,
             git.RemoteUrl,
@@ -52,17 +52,41 @@ public static class ScanEngine
             git.CommitSha,
             ScannerVersions.TraceMap,
             DateTimeOffset.UtcNow,
-            analysisLevel,
-            buildStatus,
+            semanticAnalysisLevel,
+            semanticBuildStatus,
             solutions,
             projects,
             targetFrameworks,
-            knownGaps,
+            semanticKnownGaps,
             GetScanRootRelativePath(repoPath, git),
             FactFactory.Hash(repoPath, 32),
             string.IsNullOrWhiteSpace(git.GitRootPath) ? null : FactFactory.Hash(Path.GetFullPath(git.GitRootPath), 32));
 
-        var facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult, options);
+        var binlogFacts = MsBuildBinlogExtractor.Extract(repoPath, provisionalManifest, options.BinlogPaths);
+        var binlogGaps = binlogFacts
+            .Where(fact => fact.FactType == FactTypes.AnalysisGap)
+            .Select(fact => $"MSBuild binlog analysis reported `{fact.Properties.GetValueOrDefault("gapKind") ?? "binlog-gap"}`.")
+            .ToArray();
+        var binlogRecordedFailure = binlogFacts.Any(fact =>
+            fact.FactType == FactTypes.MsBuildBinlogObserved
+            && fact.Properties.GetValueOrDefault("recordedBuildResult") == "failed");
+        var binlogReducedCoverage = binlogRecordedFailure || binlogGaps.Length > 0;
+        var knownGaps = semanticKnownGaps
+            .Concat(binlogGaps)
+            .Concat(binlogRecordedFailure ? ["An explicitly supplied MSBuild binlog recorded a failed build."] : [])
+            .OrderBy(gap => gap, StringComparer.Ordinal)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var manifest = provisionalManifest with
+        {
+            AnalysisLevel = binlogReducedCoverage && !semanticResult.ReducedCoverage
+                ? semanticResult.Attempted ? "Level1SemanticAnalysisReduced" : "Level3SyntaxAnalysisReduced"
+                : semanticAnalysisLevel,
+            BuildStatus = binlogReducedCoverage ? "FailedOrPartial" : semanticBuildStatus,
+            KnownGaps = knownGaps
+        };
+
+        var facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult, options, binlogFacts);
         return new ScanResult(manifest, facts, inventory);
     }
 
@@ -102,7 +126,8 @@ public static class ScanEngine
         IReadOnlyList<string> knownGaps,
         string repoPath,
         SemanticExtractionResult semanticResult,
-        ScanOptions options)
+        ScanOptions options,
+        IReadOnlyList<CodeFact> binlogFacts)
     {
         var facts = new List<CodeFact>
         {
@@ -285,7 +310,7 @@ public static class ScanEngine
             manifest,
             inventory,
             includeUnreferencedLogGaps: options.ProjectPaths is null || options.ProjectPaths.Count == 0));
-        facts.AddRange(MsBuildBinlogExtractor.Extract(repoPath, manifest, options.BinlogPaths));
+        facts.AddRange(binlogFacts);
         facts.AddRange(ConfigExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.GapFacts));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.Facts));
