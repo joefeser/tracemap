@@ -51,6 +51,12 @@ The full-repository smoke also exposed a pre-existing absolute-path boundary in
 compiler-generated semantic evidence. It does not originate in binlog ingestion
 and is tracked separately as #546.
 
+Exact-head review fixes on PR #547 tightened diagnostic codes to recognized
+tool prefixes, rejected relative diagnostic files when their nonempty project
+identity is outside-root, preserved bounded artifact hashes for parser-runtime
+gaps, aggregated identical pre-hash gaps with accurate omitted counts, and made
+nullable diagnostic ordering explicit. Focused regressions cover each case.
+
 ## Deferred
 
 - Evaluated framework/configuration evidence.

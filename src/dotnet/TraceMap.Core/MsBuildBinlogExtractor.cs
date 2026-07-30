@@ -73,19 +73,15 @@ public static partial class MsBuildBinlogExtractor
         string repoPath,
         ScanManifest manifest,
         IReadOnlyList<string>? binlogPaths,
-        MsBuildBinlogLimits limits)
+        MsBuildBinlogLimits limits,
+        bool? runtimeAvailableOverride = null)
     {
         if (binlogPaths is not { Count: > 0 })
             return [];
-        if (!MsBuildRuntimeRegistration.TryRegister(out _))
-        {
-            return binlogPaths
-                .Where(path => !string.IsNullOrWhiteSpace(path))
-                .Select(_ => Gap(manifest, "unavailable", "binlog-parser-runtime-unavailable", 1))
-                .ToArray();
-        }
 
         var root = Path.GetFullPath(repoPath);
+        var runtimeAvailable = runtimeAvailableOverride
+            ?? MsBuildRuntimeRegistration.TryRegister(out _);
         var facts = new List<CodeFact>();
         foreach (var inputPath in binlogPaths
                      .Where(path => !string.IsNullOrWhiteSpace(path))
@@ -93,12 +89,12 @@ public static partial class MsBuildBinlogExtractor
                      .Distinct(PathComparer())
                      .OrderBy(path => path, PathComparer()))
         {
-            facts.AddRange(ExtractOne(root, manifest, inputPath, limits));
+            facts.AddRange(ExtractOne(root, manifest, inputPath, limits, runtimeAvailable));
         }
 
         return facts
             .GroupBy(fact => fact.FactId, StringComparer.Ordinal)
-            .Select(group => group.First())
+            .Select(group => AggregateEquivalentFacts(manifest, group))
             .OrderBy(fact => fact.FactType, StringComparer.Ordinal)
             .ThenBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
             .ThenBy(fact => fact.Evidence.StartLine)
@@ -112,7 +108,8 @@ public static partial class MsBuildBinlogExtractor
         string repoPath,
         ScanManifest manifest,
         string inputPath,
-        MsBuildBinlogLimits limits)
+        MsBuildBinlogLimits limits,
+        bool runtimeAvailable)
     {
         if (!Path.GetExtension(inputPath).Equals(".binlog", StringComparison.OrdinalIgnoreCase))
             return [Gap(manifest, "unavailable", "binlog-extension-unsupported", 1)];
@@ -136,6 +133,8 @@ public static partial class MsBuildBinlogExtractor
         }
 
         var artifactSha256 = Convert.ToHexString(SHA256.HashData(artifactBytes)).ToLowerInvariant();
+        if (!runtimeAvailable)
+            return [Gap(manifest, artifactSha256, "binlog-parser-runtime-unavailable", 1)];
 
         if (!TryMeasureExpandedSize(artifactBytes, limits.MaxExpandedBytes, out var expandedBytes, out var expandedLimitReached))
             return [Gap(manifest, artifactSha256, "binlog-malformed-or-unsupported", 1)];
@@ -353,8 +352,13 @@ public static partial class MsBuildBinlogExtractor
 
         string? safeProject = null;
         var baseDirectory = repoPath;
-        if (TryNormalizeRepoPath(repoPath, projectFile, repoPath, limits.MaxSafeStringLength, out var normalizedProject))
+        if (!string.IsNullOrWhiteSpace(projectFile))
         {
+            if (!TryNormalizeRepoPath(repoPath, projectFile, repoPath, limits.MaxSafeStringLength, out var normalizedProject))
+            {
+                Increment(gaps, "binlog-diagnostic-path-omitted");
+                return;
+            }
             safeProject = normalizedProject;
             baseDirectory = Path.GetDirectoryName(Path.Combine(repoPath, normalizedProject.Replace('/', Path.DirectorySeparatorChar))) ?? repoPath;
         }
@@ -440,6 +444,21 @@ public static partial class MsBuildBinlogExtractor
                 ["omittedCount"] = count.ToString(),
                 ["limitations"] = Limitations
             });
+
+    private static CodeFact AggregateEquivalentFacts(ScanManifest manifest, IGrouping<string, CodeFact> group)
+    {
+        var first = group.First();
+        if (first.FactType != FactTypes.AnalysisGap)
+            return first;
+
+        var omittedCount = group.Sum(fact =>
+            int.TryParse(fact.Properties.GetValueOrDefault("omittedCount"), out var count) ? count : 1);
+        return Gap(
+            manifest,
+            first.Properties.GetValueOrDefault("artifactSha256") ?? "unavailable",
+            first.Properties.GetValueOrDefault("gapKind") ?? "binlog-gap",
+            omittedCount);
+    }
 
     private static EvidenceSpan ArtifactSpan(string artifactSha256) =>
         new(
@@ -563,7 +582,7 @@ public static partial class MsBuildBinlogExtractor
                 x.Column.CompareTo(y.Column),
                 StringComparer.Ordinal.Compare(x.Severity, y.Severity),
                 StringComparer.Ordinal.Compare(x.Code, y.Code),
-                StringComparer.Ordinal.Compare(x.ProjectPath, y.ProjectPath)
+                StringComparer.Ordinal.Compare(x.ProjectPath ?? string.Empty, y.ProjectPath ?? string.Empty)
             };
             return values.FirstOrDefault(value => value != 0);
         }
@@ -572,7 +591,7 @@ public static partial class MsBuildBinlogExtractor
     [GeneratedRegex("^[0-9a-fA-F]{40}([0-9a-fA-F]{24})?$", RegexOptions.CultureInvariant)]
     private static partial Regex CommitShaRegex();
 
-    [GeneratedRegex("^[A-Za-z][A-Za-z0-9._-]{0,63}$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex("^(?:MSB|CS|BC|FS|NU|NETSDK|CA|IDE|IL|RZ|SYSLIB|ASP)[0-9]{3,7}$", RegexOptions.CultureInvariant)]
     private static partial Regex DiagnosticCodeRegex();
 
     [GeneratedRegex("^[A-Za-z]:[\\\\/]", RegexOptions.CultureInvariant)]
