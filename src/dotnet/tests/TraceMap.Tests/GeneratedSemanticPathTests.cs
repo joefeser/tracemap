@@ -29,16 +29,67 @@ public sealed class GeneratedSemanticPathTests
             foreach (var outputPath in fixture.StandardOutputs)
             {
                 var output = Encoding.UTF8.GetString(await File.ReadAllBytesAsync(outputPath));
-                Assert.DoesNotContain(temp.Path, output, StringComparison.Ordinal);
-                Assert.DoesNotContain(fixture.ExternalRoot, output, StringComparison.Ordinal);
-                Assert.DoesNotContain(fixture.ExternalFile, output, StringComparison.Ordinal);
+                AssertPathAbsent(temp.Path, output);
+                AssertPathAbsent(fixture.ExternalRoot, output);
+                AssertPathAbsent(fixture.ExternalFile, output);
                 Assert.DoesNotContain("example.generator", output, StringComparison.OrdinalIgnoreCase);
                 var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
                 if (!string.IsNullOrWhiteSpace(home))
                 {
-                    Assert.DoesNotContain(home, output, StringComparison.Ordinal);
+                    AssertPathAbsent(home, output);
                 }
             }
+        }
+    }
+
+    [Fact]
+    public void Every_semantic_rule_documents_external_source_path_projection()
+    {
+        var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
+        var ruleIds = new[]
+        {
+            "csharp.semantic.propertyaccess.v1",
+            "csharp.semantic.methodinvocation.v1",
+            "csharp.semantic.callgraph.v1",
+            "csharp.semantic.objectcreation.v1",
+            "csharp.semantic.valueflow.v1",
+            "csharp.semantic.localalias.v1",
+            "csharp.semantic.fieldalias.v1",
+            "csharp.semantic.parameterforwarding.v1",
+            "csharp.semantic.symbolidentity.v1",
+            "csharp.semantic.symbolrelationship.v1",
+            "csharp.semantic.flowboundary.v1",
+            "csharp.semantic.runtimeevidence.v1",
+            "csharp.semantic.contractmapping.v1",
+            "csharp.semantic.declarations.v1"
+        };
+
+        foreach (var ruleId in ruleIds)
+        {
+            var start = catalog.IndexOf($"  - id: {ruleId}\n", StringComparison.Ordinal);
+            Assert.True(start >= 0, $"Missing rule catalog entry for {ruleId}.");
+            var end = catalog.IndexOf("\n  - id: ", start + 1, StringComparison.Ordinal);
+            var section = catalog[start..(end < 0 ? catalog.Length : end)];
+            Assert.Contains("External Roslyn source paths use deterministic synthetic identities", section, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void External_windows_drive_and_unc_paths_are_always_projected()
+    {
+        var repoPath = OperatingSystem.IsWindows() ? @"C:\repository" : "/repository";
+        foreach (var externalPath in new[]
+        {
+            @"D:\sdk\10.0.100\GeneratedContract.cs",
+            @"\\external-host\package-cache\GeneratedContract.cs"
+        })
+        {
+            var projected = CSharpSemanticExtractor.ToRelativePath(repoPath, externalPath);
+
+            Assert.StartsWith("__external__/csharp-", projected, StringComparison.Ordinal);
+            Assert.False(Path.IsPathRooted(projected), projected);
+            Assert.DoesNotMatch(@"^[A-Za-z]:[\\/]", projected);
+            Assert.False(projected.StartsWith("//", StringComparison.Ordinal), projected);
         }
     }
 
@@ -113,6 +164,28 @@ public sealed class GeneratedSemanticPathTests
                 Path.Combine(outputPath, "report.md"),
                 Path.Combine(outputPath, "logs", "analyzer.log")
             ]);
+    }
+
+    private static void AssertPathAbsent(string path, string output)
+    {
+        Assert.DoesNotContain(path, output, StringComparison.Ordinal);
+        Assert.DoesNotContain(path.Replace('\\', '/'), output, StringComparison.Ordinal);
+        Assert.DoesNotContain(path.Replace('/', '\\'), output, StringComparison.Ordinal);
+    }
+
+    private static string FindRepoRoot()
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "rules", "rule-catalog.yml")))
+            {
+                return current.FullName;
+            }
+            current = current.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root.");
     }
 
     private sealed record FixtureResult(

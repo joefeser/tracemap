@@ -4670,7 +4670,7 @@ public static class CSharpSemanticExtractor
             : ".";
     }
 
-    private static string ToRelativePath(string repoPath, string? path)
+    internal static string ToRelativePath(string repoPath, string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -4685,8 +4685,19 @@ public static class CSharpSemanticExtractor
         {
             var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(repoPath));
             var fullPath = Path.GetFullPath(path, root);
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            if (!fullPath.Equals(root, comparison)
+                && !fullPath.StartsWith(root + Path.DirectorySeparatorChar, comparison))
+            {
+                return CreateSyntheticExternalSourcePath(path);
+            }
+
             var relativePath = FileInventory.NormalizeRelativePath(Path.GetRelativePath(root, fullPath));
-            if (relativePath is not ".." && !relativePath.StartsWith("../", StringComparison.Ordinal))
+            if (!Path.IsPathRooted(relativePath)
+                && !WindowsRootedPathRegex.IsMatch(relativePath)
+                && !relativePath.StartsWith("//", StringComparison.Ordinal)
+                && relativePath is not ".."
+                && !relativePath.StartsWith("../", StringComparison.Ordinal))
             {
                 return relativePath is "" ? "." : relativePath;
             }
