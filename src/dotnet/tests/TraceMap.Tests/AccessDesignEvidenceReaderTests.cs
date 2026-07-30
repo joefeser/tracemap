@@ -101,6 +101,59 @@ public sealed class AccessDesignEvidenceReaderTests
         Assert.Empty(result.Gaps);
     }
 
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("catalog")]
+    public void Ui_controls_require_a_ui_surface_parent(string parentShape)
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, parentShape);
+        var records = new List<string>();
+        if (parentShape == "catalog")
+        {
+            records.Add(Record("catalog-object", "owner", null, "catalog-export", "container-only", null, null, null, "complete",
+                Ordered(("objectRole", "form"), ("identity", "NotASurface"), ("ordinal", 0))));
+        }
+        records.Add(Record("ui-control", "control", parentShape == "catalog" ? "owner" : null,
+            "form-design-export", "container-only", null, null, null, "complete",
+            Ordered(("identity", "Button"), ("ordinal", 0), ("controlType", 104))));
+        WriteBundle(path, records);
+
+        var exception = Assert.Throws<AccessScanException>(() => AccessDesignEvidenceReader.Read(path, Binding()));
+
+        Assert.Equal("AccessDesignInputParentUnavailable", exception.Classification);
+    }
+
+    [Fact]
+    public void Catalog_objects_require_an_identity_and_hash_an_existing_stable_key()
+    {
+        using var temp = new TempDirectory();
+        var missingPath = Path.Combine(temp.Path, "missing");
+        WriteBundle(missingPath,
+        [
+            Record("catalog-object", "catalog", null, "catalog-export", "container-only", null, null, null, "complete",
+                Ordered(("objectRole", "table"), ("ordinal", 0)))
+        ]);
+
+        var missing = Assert.Throws<AccessScanException>(() => AccessDesignEvidenceReader.Read(missingPath, Binding()));
+
+        Assert.Equal("AccessDesignInputRecordMalformed", missing.Classification);
+
+        var stableKeyPath = Path.Combine(temp.Path, "stable-key");
+        const string stableKey = "access-table-protected-key";
+        WriteBundle(stableKeyPath,
+        [
+            Record("catalog-object", "catalog", null, "catalog-export", "container-only", null, null, null, "complete",
+                Ordered(("objectRole", "table"), ("stableKey", stableKey), ("ordinal", 0)))
+        ]);
+
+        using var accepted = AccessDesignEvidenceReader.Read(stableKeyPath, Binding());
+
+        var record = Assert.Single(accepted.Records);
+        Assert.DoesNotContain(stableKey, record.CanonicalRecordId, StringComparison.Ordinal);
+        Assert.StartsWith("access-design-record-", record.CanonicalRecordId, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Owner_attested_copy_is_accepted_only_with_lineage_gap()
     {
@@ -398,6 +451,23 @@ public sealed class AccessDesignEvidenceReaderTests
 
         Assert.Equal("AccessDesignInputManifestLimitReached", manifest.Classification);
         Assert.Equal("AccessDesignInputBundleLimitReached", records.Classification);
+    }
+
+    [Fact]
+    public void Initial_file_size_probe_failures_are_classification_only()
+    {
+        using var temp = new TempDirectory();
+        var protectedPath = Path.Combine(temp.Path, ProtectedMarker, "missing.ndjson");
+
+        var exception = Assert.Throws<AccessScanException>(() =>
+            AccessDesignEvidenceReader.ReadBoundedFile(
+                protectedPath,
+                AccessLimits.Default.MaxDesignBundleBytes,
+                "AccessDesignInputBundleLimitReached"));
+
+        Assert.Equal("AccessDesignInputReadFailed", exception.Classification);
+        Assert.Equal(exception.Classification, exception.Message);
+        Assert.DoesNotContain(ProtectedMarker, exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
