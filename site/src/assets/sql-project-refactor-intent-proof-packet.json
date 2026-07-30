@@ -1,0 +1,162 @@
+{
+  "schemaVersion": "tracemap-public-sql-project-refactor-intent/v1",
+  "publicClaimLevel": "demo",
+  "purpose": "Show how bounded checked-in SQL project refactor intent can travel into design and release review without becoming deployment or database-state proof.",
+  "source": {
+    "repository": "joefeser/tracemap",
+    "commitSha": "26189d1dd8d97d5741005ae7cbd033840099f216",
+    "fixtureRoot": "samples/sql-project-refactor",
+    "scanId": "scan-bc301542ac1a5995396c",
+    "coverageLabel": "bounded-static-evidence"
+  },
+  "extractor": {
+    "family": "SqlProjectRefactorExtractor",
+    "version": "sql-project-refactor/0.1.0"
+  },
+  "ruleIds": [
+    "database.sql-project.refactor-intent.v1",
+    "database.sql-project.refactor-intent.gap.v1"
+  ],
+  "supportedOperationCategories": [
+    {
+      "operationKind": "rename-table",
+      "objectKind": "table",
+      "exampleKind": "fixture-evidence",
+      "safeSource": "dbo.InventoryItem",
+      "safeTarget": "dbo.CatalogItem"
+    },
+    {
+      "operationKind": "rename-column",
+      "objectKind": "column",
+      "exampleKind": "illustrative-supported-category",
+      "safeSource": "dbo.InventoryItem.DisplayName",
+      "safeTarget": "dbo.InventoryItem.ItemName"
+    },
+    {
+      "operationKind": "move-schema",
+      "objectKind": "table",
+      "exampleKind": "fixture-evidence",
+      "safeSource": "dbo.CatalogItem",
+      "safeTarget": "catalog.CatalogItem"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "project-log-link",
+      "sourceFactId": "fact-37e5fc9f9eabe1c68db6",
+      "factType": "SqlProjectRefactorLogDeclared",
+      "ruleId": "database.sql-project.refactor-intent.v1",
+      "evidenceTier": "Tier2Structural",
+      "coverageLabel": "bounded-static-evidence",
+      "projectPath": "samples/sql-project-refactor/Inventory.sqlproj",
+      "safeSource": "Inventory.sqlproj",
+      "safeTarget": "Inventory.refactorlog",
+      "span": {
+        "filePath": "samples/sql-project-refactor/Inventory.sqlproj",
+        "startLine": 3,
+        "endLine": 3
+      },
+      "commitSha": "26189d1dd8d97d5741005ae7cbd033840099f216",
+      "extractorFamily": "SqlProjectRefactorExtractor",
+      "extractorVersion": "sql-project-refactor/0.1.0",
+      "limitation": "Literal checked-in project linkage only."
+    },
+    {
+      "id": "table-rename-intent",
+      "sourceFactId": "fact-58e4a0e819b64afe7430",
+      "factType": "SqlProjectRefactorOperation",
+      "operationKind": "rename-table",
+      "ruleId": "database.sql-project.refactor-intent.v1",
+      "evidenceTier": "Tier2Structural",
+      "coverageLabel": "bounded-static-evidence",
+      "projectPath": "samples/sql-project-refactor/Inventory.sqlproj",
+      "safeSource": "dbo.InventoryItem",
+      "safeTarget": "dbo.CatalogItem",
+      "span": {
+        "filePath": "samples/sql-project-refactor/Inventory.refactorlog",
+        "startLine": 2,
+        "endLine": 2
+      },
+      "commitSha": "26189d1dd8d97d5741005ae7cbd033840099f216",
+      "extractorFamily": "SqlProjectRefactorExtractor",
+      "extractorVersion": "sql-project-refactor/0.1.0",
+      "limitation": "Checked-in rename intent only; applied state is not established."
+    },
+    {
+      "id": "table-schema-move-intent",
+      "sourceFactId": "fact-b4dea22f53654c5c9cfe",
+      "factType": "SqlProjectRefactorOperation",
+      "operationKind": "move-schema",
+      "ruleId": "database.sql-project.refactor-intent.v1",
+      "evidenceTier": "Tier2Structural",
+      "coverageLabel": "bounded-static-evidence",
+      "projectPath": "samples/sql-project-refactor/Inventory.sqlproj",
+      "safeSource": "dbo.CatalogItem",
+      "safeTarget": "catalog.CatalogItem",
+      "span": {
+        "filePath": "samples/sql-project-refactor/Inventory.refactorlog",
+        "startLine": 7,
+        "endLine": 7
+      },
+      "commitSha": "26189d1dd8d97d5741005ae7cbd033840099f216",
+      "extractorFamily": "SqlProjectRefactorExtractor",
+      "extractorVersion": "sql-project-refactor/0.1.0",
+      "limitation": "Checked-in schema-move intent only; target schema state is not established."
+    }
+  ],
+  "gaps": [
+    {
+      "id": "unsupported-or-unsafe-shape",
+      "exampleKind": "illustrative-gap-shape",
+      "classification": "RefactorOperationUnsupported",
+      "ruleId": "database.sql-project.refactor-intent.gap.v1",
+      "evidenceTier": "Tier4Unknown",
+      "coverageLabel": "reduced",
+      "limitation": "Unsupported, ambiguous, or unsafe operation shapes remain gaps rather than clean absence."
+    },
+    {
+      "id": "missing-project-link",
+      "exampleKind": "illustrative-gap-shape",
+      "classification": "RefactorLogReferenceMissing",
+      "ruleId": "database.sql-project.refactor-intent.gap.v1",
+      "evidenceTier": "Tier4Unknown",
+      "coverageLabel": "reduced",
+      "limitation": "A missing referenced log reduces coverage and does not establish that refactor intent is absent."
+    },
+    {
+      "id": "bounded-operation-cap",
+      "exampleKind": "illustrative-gap-shape",
+      "classification": "RefactorOperationLimitExceeded",
+      "ruleId": "database.sql-project.refactor-intent.gap.v1",
+      "evidenceTier": "Tier4Unknown",
+      "coverageLabel": "partial",
+      "limitation": "Truncated operation inventory stays visibly partial."
+    }
+  ],
+  "downstreamReviewSurfaces": [
+    {
+      "surface": "database-design-review",
+      "classification": "ReviewRecommended"
+    },
+    {
+      "surface": "release-review",
+      "classification": "ReviewRecommended"
+    },
+    {
+      "surface": "sql-runbook",
+      "state": "intended-by-project-refactor-log"
+    }
+  ],
+  "reviewerQuestions": [
+    "Does the proposed application change align with the checked-in source and target identity?",
+    "Are unsupported or missing refactor-log shapes hiding additional intent?",
+    "Who owns build, deployment-plan, compatibility, runtime validation, and release approval evidence?",
+    "Which database owner or DBA must review the change before any operational decision?"
+  ],
+  "limitations": [
+    "No SQL project build, DACPAC creation or inspection, deployment-plan inspection, generated-script inspection, or SqlPackage invocation.",
+    "No database connection, SQL execution, target refactor-log table inspection, deployment, applied-state, compatibility, success, reversibility, approval, or execution-safety conclusion.",
+    "No replacement for database owners, DBAs, runtime validation, tests, telemetry, change control, or release approval.",
+    "Raw SQL, raw XML, operation keys, credentials, connection strings, local paths, private infrastructure names, analyzer output, and copyable deployment commands are omitted."
+  ]
+}
