@@ -308,20 +308,30 @@ public sealed class AccessDesignEvidenceReaderTests
     public void Equivalent_canonical_duplicates_collapse_after_canonicalization()
     {
         using var temp = new TempDirectory();
-        var path = Path.Combine(temp.Path, "bundle");
-        var payload = Ordered(("surfaceRole", "form"), ("identity", "SameForm"), ("ordinal", 0),
+        var forwardPath = Path.Combine(temp.Path, "forward");
+        var reversePath = Path.Combine(temp.Path, "reverse");
+        var firstPayload = Ordered(("surfaceRole", "form"), ("identity", "SameForm"), ("ordinal", 0),
             ("modulePresence", "present"), ("boundState", "bound"));
-        WriteBundle(path,
+        var secondPayload = Ordered(("surfaceRole", "form"), ("identity", " sameform "), ("ordinal", 0),
+            ("modulePresence", "present"), ("boundState", "bound"));
+        string[] records =
         [
-            Record("ui-surface", "surface-1", null, "form-design-export", "container-only", null, null, null, "complete", payload),
-            Record("ui-surface", "surface-2", null, "form-design-export", "container-only", null, null, null, "complete", payload)
-        ]);
+            Record("ui-surface", "surface-1", null, "form-design-export", "container-only", null, null, null, "complete", firstPayload),
+            Record("ui-surface", "surface-2", null, "form-design-export", "container-only", null, null, null, "complete", secondPayload)
+        ];
+        WriteBundle(forwardPath, records);
+        WriteBundle(reversePath, records.Reverse().ToArray());
 
-        using var result = AccessDesignEvidenceReader.Read(path, Binding());
+        using var forward = AccessDesignEvidenceReader.Read(forwardPath, Binding());
+        using var reverse = AccessDesignEvidenceReader.Read(reversePath, Binding());
 
-        Assert.True(result.AcceptedForProjection);
-        Assert.Single(result.Records);
-        Assert.Empty(result.Gaps);
+        Assert.True(forward.AcceptedForProjection);
+        Assert.True(reverse.AcceptedForProjection);
+        Assert.Equal(
+            Assert.Single(forward.Records).Payload.GetProperty("identity").GetString(),
+            Assert.Single(reverse.Records).Payload.GetProperty("identity").GetString());
+        Assert.Empty(forward.Gaps);
+        Assert.Empty(reverse.Gaps);
     }
 
     [Fact]

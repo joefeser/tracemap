@@ -168,7 +168,7 @@ public static class AccessDesignEvidenceReader
                     rejectedIds.Add(group.Key);
                     continue;
                 }
-                acceptedRecords.Add(eligible.OrderBy(item => item.CanonicalContentHash, StringComparer.Ordinal).First().Record);
+                acceptedRecords.Add(eligible.OrderBy(item => item.DeterministicSelectionKey, StringComparer.Ordinal).First().Record);
             }
 
             RejectInvalidCoordinates(acceptedRecords, rejectedIds, gaps);
@@ -695,10 +695,12 @@ public static class AccessDesignEvidenceReader
                 string.Join('|', record.Kind, parentCanonical, record.Source.DocumentRole, record.Source.CoordinateStatus,
                     record.Source.DocumentSha256, record.Source.StartLine, record.Source.EndLine,
                     record.Completeness, CanonicalJson(record.Payload, PayloadShapes[record.Kind].IdentityProperties)));
+            var deterministicSelectionKey = CanonicalJson(record.Payload, []);
             result.Add(new(
                 new(record.Kind, canonicalId, parentCanonical, record.Source, record.Completeness, record.Payload),
                 canonicalId,
                 contentHash,
+                deterministicSelectionKey,
                 record.RejectionClassifications));
         }
         return result;
@@ -1079,6 +1081,7 @@ public static class AccessDesignEvidenceReader
         AccessDesignEvidenceRecord Record,
         string CanonicalRecordId,
         string CanonicalContentHash,
+        string DeterministicSelectionKey,
         IReadOnlyList<string> RejectionClassifications);
 
     private sealed record ValidatedSourceDocument(
