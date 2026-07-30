@@ -255,6 +255,11 @@ fields reject null or blank values, and control types use the exact closed
 vocabulary supported by `AccessUiTextParser`. Directory member enumeration and
 attribute races are classification-only as well.
 
+Canonical numeric identity components use classified `Int32` parsing even when
+an earlier scoped rejection bypassed ordinary payload validation. Parsed
+manifest documents enter disposal tracking before duplicate-property checks, so
+classified manifest failures release their pooled buffers.
+
 The public reader API can be consumed by the next composition slice without
 duplicating validation. Callers must dispose the returned bundle; its raw
 payload is protected material and exists only while the bundle is alive.
@@ -309,6 +314,9 @@ Mac-only synthetic tests cover:
 - nonblank required protected identities;
 - exact supported Access UI control-type vocabulary;
 - classification-only directory enumeration and member-attribute failures;
+- classification-only numeric canonical-identity failures after scoped record
+  rejection;
+- immediate manifest document disposal tracking on duplicate-property failures;
 - suppression of protected markers from canonical record IDs and failure
   classifications.
 
@@ -319,10 +327,10 @@ Validation on the implementation head:
 
 - locked solution restore: passed, with the separately tracked
   `SQLitePCLRaw.lib.e_sqlite3` 2.1.11 advisory only;
-- focused strict reader tests: 42/42 passed after review fixes;
-- all Access-focused tests: 114/114 passed after review fixes;
+- focused strict reader tests: 45/45 passed after review fixes;
+- all Access-focused tests: 117/117 passed after review fixes;
 - full solution build: passed with 0 errors;
-- full solution tests: 981/981 passed after review fixes;
+- full solution tests: 984/984 passed after review fixes;
 - targeted rerun of one initially flaky restore-diagnostic test: passed; the
   unchanged full suite then passed;
 - focused `dotnet format --verify-no-changes`: passed;

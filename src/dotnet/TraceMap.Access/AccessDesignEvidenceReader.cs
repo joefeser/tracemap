@@ -106,22 +106,27 @@ public static class AccessDesignEvidenceReader
         var manifestBytes = ReadBoundedFile(manifestPath, limits.MaxDesignManifestBytes, "AccessDesignInputManifestLimitReached");
         var recordsBytes = ReadBoundedFile(recordsPath, limits.MaxDesignBundleBytes, "AccessDesignInputBundleLimitReached", allowEmpty: true);
 
+        var documents = new List<JsonDocument>();
         JsonDocument manifestDocument;
         try
         {
             manifestDocument = JsonDocument.Parse(manifestBytes, DocumentOptions());
+            documents.Add(manifestDocument);
             RejectDuplicateProperties(manifestDocument.RootElement);
         }
         catch (AccessScanException)
         {
+            foreach (var document in documents)
+                document.Dispose();
             throw;
         }
         catch
         {
+            foreach (var document in documents)
+                document.Dispose();
             throw new AccessScanException("AccessDesignInputManifestInvalid");
         }
 
-        var documents = new List<JsonDocument> { manifestDocument };
         try
         {
             var manifest = ParseManifest(manifestDocument.RootElement);
@@ -706,9 +711,16 @@ public static class AccessDesignEvidenceReader
         return value.ValueKind switch
         {
             JsonValueKind.String => $"{name}:hash:{AccessSafeValues.RoleHash($"access-design-{name}", NormalizeIdentityString(name, value.GetString()))}",
-            JsonValueKind.Number => $"{name}:int:{value.GetInt32()}",
+            JsonValueKind.Number => $"{name}:int:{RequireIdentityInt(value)}",
             _ => throw new AccessScanException("AccessDesignInputRecordMalformed")
         };
+    }
+
+    private static int RequireIdentityInt(JsonElement value)
+    {
+        if (!value.TryGetInt32(out var number))
+            throw new AccessScanException("AccessDesignInputRecordMalformed");
+        return number;
     }
 
     private static string CanonicalJson(JsonElement element, IReadOnlyList<string> identityProperties)
