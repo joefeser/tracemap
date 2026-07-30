@@ -444,6 +444,25 @@ public sealed class AccessDesignEvidenceReaderTests
         Assert.Equal("AccessDesignInputDuplicateProperty", duplicate.Classification);
     }
 
+    [Fact]
+    public void Duplicate_manifest_properties_use_the_classified_disposal_path()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "duplicate-manifest");
+        WriteBundle(path, []);
+        var manifestPath = Path.Combine(path, AccessDesignEvidenceReader.ManifestFileName);
+        var manifest = File.ReadAllText(manifestPath);
+        var schemaProperty = $"\"schema\":\"{AccessDesignEvidenceReader.ManifestSchema}\",";
+        File.WriteAllText(
+            manifestPath,
+            manifest.Replace(schemaProperty, schemaProperty + schemaProperty, StringComparison.Ordinal),
+            new UTF8Encoding(false));
+
+        var exception = Assert.Throws<AccessScanException>(() => AccessDesignEvidenceReader.Read(path, Binding()));
+
+        Assert.Equal("AccessDesignInputDuplicateProperty", exception.Classification);
+    }
+
     [Theory]
     [InlineData("missing", "AccessDesignInputParentUnavailable")]
     [InlineData("cycle", "AccessDesignInputParentCycle")]
@@ -633,6 +652,25 @@ public sealed class AccessDesignEvidenceReaderTests
         Assert.True(result.AcceptedForProjection);
         Assert.Single(result.Records);
         Assert.Equal("AccessDesignInputFieldRejected", Assert.Single(result.Gaps).Classification);
+    }
+
+    [Theory]
+    [InlineData(1.5)]
+    [InlineData(1e30)]
+    public void Scoped_rejections_cannot_leak_numeric_identity_format_exceptions(double ordinal)
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, ordinal.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+        var record = MutateRecord(
+            Record("catalog-object", "invalid", null, "catalog-export", "container-only", null, null, null, "complete",
+                Ordered(("objectRole", "table"), ("identity", "ProtectedTable"), ("ordinal", ordinal))),
+            root => root["source"]!.AsObject()["unexpected"] = true);
+        WriteBundle(path, [record]);
+
+        var exception = Assert.Throws<AccessScanException>(() => AccessDesignEvidenceReader.Read(path, Binding()));
+
+        Assert.Equal("AccessDesignInputRecordMalformed", exception.Classification);
+        Assert.Equal(exception.Classification, exception.Message);
     }
 
     [Fact]
