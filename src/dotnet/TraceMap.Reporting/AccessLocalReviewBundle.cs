@@ -75,7 +75,7 @@ public static class AccessLocalReviewBundle
     [
         "This local bundle contains bounded static Microsoft Access design evidence only.",
         "It does not prove row contents, execution, runtime reachability, effective permissions, production state, correctness, compatibility, operational safety, release approval, or DBA approval.",
-        "Form/report, VBA-module, and macro evidence remains count-only; identities, source, bodies, expressions, and runtime behavior are unavailable.",
+        "Form/report, VBA-module, and macro evidence may be count-only or bounded source-neutral static evidence; raw identities, source, bodies, expressions, and runtime behavior are not included.",
         "Raw SQL, connections, credentials, private object names, captions, expressions, VBA, macro bodies, infrastructure identities, and local paths are omitted."
     ];
 

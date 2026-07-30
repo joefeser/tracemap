@@ -279,8 +279,9 @@ public sealed class AccessMacroReportingTests
             Path.Combine(itemOutput, "index.sqlite"),
             Path.Combine(temp.Path, "item-release-review.md"),
             Scope: "access-evidence"));
-        Assert.Contains(itemReview.AccessEvidence.Gaps, item => item.GapKind == "AccessItemEvidenceOutsideCountOnlyBoundary");
-        Assert.DoesNotContain(itemReview.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Value == "macro"));
+        Assert.DoesNotContain(itemReview.AccessEvidence.Gaps, item => item.GapKind == "AccessItemEvidenceOutsideCountOnlyBoundary");
+        Assert.Contains(itemReview.AccessEvidence.Findings, item =>
+            item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "macro-inventory"));
 
         var combinedReview = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
             combined,

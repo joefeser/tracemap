@@ -1471,7 +1471,7 @@ rules:
     name: Microsoft Access form and report design surface
     description: Records safe form, report, and control design metadata obtained without rendering, invoking, or executing the surface.
     evidenceTier: Tier2Structural
-    possibleEvidenceTiers: [Tier2Structural, Tier4Unknown]
+    possibleEvidenceTiers: [Tier2Structural, Tier3SyntaxOrTextual, Tier4Unknown]
     emits:
       - AccessFormDeclared
       - AccessReportDeclared
@@ -1549,6 +1549,19 @@ rules:
     limitations:
       - A gap records an unable-to-prove boundary and never proves absence, safety, runtime behavior, data state, query execution, linked-source availability, permissions, deployment, or production use.
       - Diagnostics are classification-only; raw exceptions, local paths, SQL, connections, VBA, macro content, source values, and secrets are omitted.
+
+  - id: legacy.access.design-input.v1
+    name: Microsoft Access source-neutral design input
+    description: Records acceptance and bounded gaps for an explicitly supplied, versioned Access design-evidence bundle bound to an existing completed Access scan.
+    evidenceTier: Tier2Structural
+    possibleEvidenceTiers: [Tier2Structural, Tier4Unknown]
+    emits:
+      - AnalyzerCapabilityDiagnostic
+      - AnalysisGap
+    limitations:
+      - Bundle acceptance proves only that the declared schema, hashes, base-scan binding, bounds, and closed vocabulary were validated; it does not prove exporter safety, database-copy equivalence beyond the declared binding, catalog completeness, runtime reachability, execution, business intent, correctness, deployment, or production use.
+      - Protected input exists only transiently in the composing process. Standard artifacts retain only hashes, categorical provenance, canonical TraceMap record IDs, validated spans, coverage labels, limitations, and explicit non-claims.
+      - Source-neutral composition never launches Access, widens COM, reads database rows, executes queries, VBA, macros, forms, or reports, or persists raw identities, source, design text, expressions, local paths, or connection material.
 
   - id: legacy.data.dbml.v1
     name: Legacy LINQ to SQL DBML metadata

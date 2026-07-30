@@ -30,15 +30,15 @@
 ## Future implementation — not authorized by this PR
 
 - [x] Add strict manifest/NDJSON models and bounded streaming validation.
-- [ ] Add explicit CLI input and bind it to the matched base Access scan.
-- [ ] Add hash-only identity disclosure for source-neutral projection.
-- [ ] Add validated optional source-coordinate provenance.
-- [ ] Normalize supported records into existing pure projectors.
-- [ ] Add ingestion provenance rules/gaps and update existing rule-catalog
+- [x] Add explicit CLI input and bind it to the matched base Access scan.
+- [x] Add hash-only identity disclosure for source-neutral projection.
+- [x] Add validated optional source-coordinate provenance.
+- [x] Normalize supported records into existing pure projectors.
+- [x] Add ingestion provenance rules/gaps and update existing rule-catalog
       possible tiers where required.
-- [ ] Preserve provenance through facts, indexes, combine, reports, evidence
+- [x] Preserve provenance through facts, indexes, combine, reports, evidence
       docs, vault, release review, and local review bundle.
-- [ ] Add synthetic determinism, mismatch, gap, cap, and protected-marker tests.
+- [x] Add synthetic determinism, mismatch, gap, cap, and protected-marker tests.
 - [x] Run focused/full Mac validation.
 - [ ] Propose a separate threat-reviewed Windows exporter only if the owner
       selects a candidate mechanism.

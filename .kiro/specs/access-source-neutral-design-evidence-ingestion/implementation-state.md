@@ -1,6 +1,6 @@
 # Source-Neutral Access Design-Evidence Ingestion Implementation State
 
-Status: specification approved; bounded reader foundation implemented
+Status: implementation complete; validation and PR review in progress
 
 Issue: #550
 
@@ -8,22 +8,22 @@ Parent epic: #549
 
 Dependent issues: #551, then #552
 
-Branch: `codex/implement-access-design-evidence-ingestion`
+Branch: `codex/access-design-evidence-enrichment`
 
 Base: `origin/dev`
 
-Base SHA: `50fb96258d63b43cbc5d88984215ac197174f262`
+Base SHA: `9a252f12f781ae2a0aab52b5faa53601440a2a3b`
 
-Base merge-base with `origin/main` at implementation start:
-`736c9f1e3ad692ecce8bea2a668fd52f0d8e2f20`
+Base merge-base with `origin/dev` at implementation start:
+`9a252f12f781ae2a0aab52b5faa53601440a2a3b`
 
 ## Scope decision
 
-Specify a protected, source-neutral local artifact boundary that can feed
+Implement the protected, source-neutral local composition boundary using
 TraceMap's existing pure Access UI, VBA, event, navigation, and macro
-projectors. Do not implement the importer or an exporter. Do not change the
-production count-only COM reader. Do not work on screen-to-data flow or
-copy/clone classification.
+projectors. Keep the production count-only COM reader unchanged. Do not
+implement an exporter, screen-to-data flow, or copy/clone classification in
+this PR.
 
 ## Non-duplication decision
 
@@ -108,7 +108,18 @@ contradictions:
   `AccessUiTextParser`;
 - provenance wording allowed safe-token producer-local record IDs to persist;
 - requirements conflated the manifest and record-envelope schemas and called
-  otherwise order-independent NDJSON records ordered.
+otherwise order-independent NDJSON records ordered.
+
+The implementation review then identified four composition gaps. The composer
+now resolves hash-only base fields through parented `table-field` catalog
+records, marks conflicting structured/textual control observations partial,
+derives exact Access event-procedure references for the existing VBA projector,
+and preserves projected surface/control ownership for UI and embedded macro
+inventory. Regression coverage proves these paths without persisting protected
+identities or widening the Access COM boundary. Root UI/VBA exact-line sources
+were also re-audited: `ParseRecord` already rejects payload/source hash mismatch
+and ranges beyond the validated document line count before records are accepted
+for projection.
 
 The specification now rejects envelope-wide byte/record overflow before any
 design conclusion, applies narrower caps after canonical ordering, defines an
@@ -169,6 +180,52 @@ required or authorized.
 
 The repository's existing `SQLitePCLRaw.lib.e_sqlite3` 2.1.11 advisory remains
 separate dependency work and shall not be duplicated here.
+
+Phase 1 composition validation on branch
+`codex/access-design-evidence-enrichment`:
+
+- locked solution restore: passed with only the separately tracked
+  `SQLitePCLRaw.lib.e_sqlite3` 2.1.11 advisory;
+- source-neutral composition lifecycle tests: 2/2 passed;
+- all Access-focused tests: 119/119 passed;
+- full solution build: passed with 0 errors;
+- full solution tests: 993/993 passed;
+- focused `dotnet format --verify-no-changes`: passed;
+- standard artifact structure, SQLite/facts agreement, combine, evidence docs,
+  vault, release review, and local review bundle: passed in the synthetic
+  end-to-end composition test;
+- `./scripts/check-private-paths.sh`: passed;
+- `git diff --check`: passed.
+
+Exact-head PR #557 review corrections:
+
+- bounded artifact reads now reject lengths beyond both the configured ceiling
+  and the CLR byte-array limit before checked allocation;
+- Mac output/input overlap checks use case-folded path semantics, canonicalize
+  existing ancestors, and reject output-only reparse-point ancestors;
+- protected catalog identities first match name/name-hash evidence already in
+  the immutable base scan and reuse its stable key;
+- validated structured `boundState`, `startupRole`, and `bodyStatus`
+  observations flow through projection instead of being inferred again from
+  omitted protected text;
+- equivalent textual and structured surface evidence is merged before
+  projection, with all canonical support records retained; conflicting
+  observations become an explicit `AccessDesignInputSurfaceConflict` gap
+  rather than selecting first or last.
+
+Focused regressions cover oversized sparse artifacts, case aliases, symlinked
+output ancestors, base stable-key reuse, declared bound/macro observations,
+and dual-format surface evidence.
+
+Post-review validation:
+
+- focused composition tests: 3/3 passed;
+- all Access-focused tests: 120/120 passed;
+- full solution tests: 994/994 passed;
+- full solution build: passed with 0 errors;
+- focused `dotnet format --verify-no-changes`: passed;
+- `./scripts/check-private-paths.sh`: passed;
+- `git diff --check`: passed.
 
 ## Owner decisions required before implementation
 
@@ -269,8 +326,35 @@ The public reader API can be consumed by the next composition slice without
 duplicating validation. Callers must dispose the returned bundle; its raw
 payload is protected material and exists only while the bundle is alive.
 
-This slice deliberately does not add a CLI option or project records into
-facts. A partially wired input must not be exposed as product evidence.
+The implementation now exposes the separate Mac-only composition seam:
+
+```text
+tracemap-access enrich-design
+  --base-scan <completed-output>
+  --design-evidence <protected-directory>
+  --out <new-directory>
+```
+
+The command hashes the exact base manifest bytes, reconstructs the single
+Access database path/hash/stable key from the completed facts, recomputes that
+stable key from the bundle repository hash plus base commit/path/hash, and
+rejects mismatches before projection. It does not require the database file,
+Windows, Access, or COM. Base and design directories cannot overlap the new
+output path.
+
+Accepted payload remains inside the disposable reader bundle. Existing UI,
+VBA, and macro projectors receive an explicit hash-only identity policy. The
+composer adds validated document spans, canonical record support, bundle
+provenance, completeness/coordinate status, limitations, and non-claims to
+every design fact and gap. The enriched scan ID is deterministic from the base
+manifest hash and canonical safe design-contract identity; the immutable base
+timestamp is retained. No normalized sidecar or protected source is written.
+
+Standard artifacts are created through the existing staging/atomic-publish
+writer. Release review now composes bounded item-level design findings rather
+than categorically downgrading them as outside the count-only product lane.
+Report, SQLite, combine, evidence docs, vault, release review, and local review
+bundle preservation are covered by the synthetic end-to-end test.
 
 ## Integration seam requiring follow-up design
 
@@ -352,9 +436,6 @@ Validation on the implementation head:
 
 ## Deferred
 
-- CLI/base-scan integration and all fact projection;
-- hash-only projector wiring and validated span propagation;
-- ingestion provenance rules and downstream persistence;
 - #551 screen-to-data composition;
 - #552 copy/clone candidate evidence;
 - any Windows exporter or probe;

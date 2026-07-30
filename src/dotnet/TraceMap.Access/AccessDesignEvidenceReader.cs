@@ -211,6 +211,27 @@ public static class AccessDesignEvidenceReader
         }
     }
 
+    internal static AccessDesignEvidenceManifestProjection InspectManifest(
+        string inputDirectory,
+        AccessLimits? limits = null)
+    {
+        limits ??= AccessLimits.Default;
+        ValidateLimits(limits);
+        var directory = ValidateDirectory(inputDirectory);
+        var manifestPath = Path.Combine(directory, ManifestFileName);
+        var recordsPath = Path.Combine(directory, RecordsFileName);
+        ValidateMembers(directory, manifestPath, recordsPath);
+        var bytes = ReadBoundedFile(manifestPath, limits.MaxDesignManifestBytes, "AccessDesignInputManifestLimitReached");
+        try
+        {
+            using var document = JsonDocument.Parse(bytes, DocumentOptions());
+            RejectDuplicateProperties(document.RootElement);
+            return ParseManifest(document.RootElement);
+        }
+        catch (AccessScanException) { throw; }
+        catch { throw new AccessScanException("AccessDesignInputManifestInvalid"); }
+    }
+
     private static AccessDesignEvidenceManifestProjection ParseManifest(JsonElement root)
     {
         RequireObject(root, "AccessDesignInputManifestInvalid");
