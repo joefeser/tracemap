@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A public-safe TraceMap proof page for checked-in SQL project table renames, column renames, and schema moves with provenance and explicit gaps.">
+    <meta name="robots" content="index,follow">
+    <meta name="author" content="Joe Feser">
+    <title>SQL Project Refactor Intent Evidence | TraceMap</title>
+    <link rel="canonical" href="https://tracemap.tools/sql/project-refactor-intent/">
+    <meta property="og:type" content="article">
+    <meta property="og:site_name" content="TraceMap">
+    <meta property="og:title" content="TraceMap SQL Project Refactor Intent Evidence">
+    <meta property="og:description" content="Inspect demo-level checked-in SQL project rename and schema-move intent with rule IDs, tiers, spans, coverage, gaps, and limitations.">
+    <meta property="og:url" content="https://tracemap.tools/sql/project-refactor-intent/">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="TraceMap home"><span class="brand-mark" aria-hidden="true">T</span><span>TraceMap</span></a>
+      <nav class="top-nav" aria-label="Primary navigation">
+        <a href="/evidence/">Evidence</a><a href="/outputs/">Outputs</a><a href="/workflows/">Workflows</a><a href="/examples/">Examples</a><a href="/blog/">Blog</a><a href="/capabilities/">Capabilities</a><a href="/docs/">Docs</a><a href="/validation/">Validation</a><a href="/limitations/">Limitations</a><a href="/demo/">Demo</a><a href="https://github.com/joefeser/tracemap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero" data-sql-project-refactor-section="hero">
+        <p class="eyebrow">Checked-in SQL project intent</p>
+        <h1>Review a database rename before anyone treats it as applied.</h1>
+        <p class="hero-subhead">TraceMap can deterministically surface supported checked-in SQL project refactor intent, with provenance and explicit limitations, for design and release review.</p>
+        <p class="hero-note">Public claim level: demo. This static proof page is grounded in a checked-in synthetic sample at commit <code>26189d1dd8d97d5741005ae7cbd033840099f216</code>. It is not build, deployment, or database-state evidence.</p>
+        <nav class="hero-actions" aria-label="SQL project refactor intent links"><a class="button primary" href="/assets/sql-project-refactor-intent-proof-packet.json">Inspect the JSON packet</a><a class="button secondary" href="/blog/sql-project-refactor-intent-evidence/">Read the story</a><a class="button secondary" href="#evidence-rows">Review the rows</a><a class="button secondary" href="#gaps">See the gaps</a></nav>
+      </section>
+
+      <section class="section split-section" data-sql-project-refactor-section="identity">
+        <div><p class="section-kicker">Proof identity</p><h2>Two rules keep supported intent and unknowns separate.</h2></div>
+        <div class="detail-list">
+          <div><strong>Supported intent rule</strong><span><code>database.sql-project.refactor-intent.v1</code></span></div>
+          <div><strong>Gap rule</strong><span><code>database.sql-project.refactor-intent.gap.v1</code></span></div>
+          <div><strong>Extractor family</strong><span><code>SqlProjectRefactorExtractor</code> · <code>sql-project-refactor/0.1.0</code></span></div>
+          <div><strong>Supported tier</strong><span><code>Tier2Structural</code> for bounded literal project linkage and supported operation identities.</span></div>
+          <div><strong>Gap tier</strong><span><code>Tier4Unknown</code> for unsupported, ambiguous, unsafe, missing, or truncated evidence.</span></div>
+          <div><strong>Coverage labels</strong><span><code>bounded-static-evidence</code>, <code>reduced</code>, and <code>partial</code>.</span></div>
+        </div>
+      </section>
+
+      <section class="section" data-sql-project-refactor-section="flow">
+        <div class="section-header"><p class="section-kicker">Public-safe flow</p><h2>Project declaration becomes a review question, not an operational conclusion.</h2></div>
+        <div class="path-grid">
+          <a href="#evidence-rows"><span>1</span><strong><code>.sqlproj</code></strong><p>A literal checked-in reference identifies the bounded refactor-log surface.</p></a>
+          <a href="#operations"><span>2</span><strong><code>.refactorlog</code></strong><p>Supported table, column, and schema identities express static project intent.</p></a>
+          <a href="/evidence/"><span>3</span><strong>TraceMap evidence</strong><p>Rule ID, tier, relative span, commit SHA, extractor version, coverage, and limitations stay attached.</p></a>
+          <a href="/database/design-review/"><span>4</span><strong>Human review</strong><p>Design and release reviewers decide what additional owner, build, runtime, and approval evidence is required.</p></a>
+        </div>
+      </section>
+
+      <section class="section" id="operations" data-sql-project-refactor-section="operations">
+        <div class="section-header"><p class="section-kicker">Supported categories</p><h2>Three bounded operation shapes are visible.</h2><p>The table rename and schema move below are fixture-backed. The column rename is labeled as an illustrative supported category so it is not mistaken for a third fixture fact.</p></div>
+        <div class="output-list">
+          <div><code>rename-table</code><span><strong>dbo.InventoryItem → dbo.CatalogItem</strong> · fixture evidence · checked-in intent only</span></div>
+          <div><code>rename-column</code><span><strong>dbo.InventoryItem.DisplayName → dbo.InventoryItem.ItemName</strong> · illustrative supported category · not a fact from this fixture</span></div>
+          <div><code>move-schema</code><span><strong>dbo.CatalogItem → catalog.CatalogItem</strong> · fixture evidence · checked-in intent only</span></div>
+        </div>
+      </section>
+
+      <section class="section" id="evidence-rows" data-sql-project-refactor-section="rows">
+        <div class="section-header"><p class="section-kicker">Representative evidence</p><h2>Provenance travels with every fixture-backed row.</h2></div>
+        <div class="output-list">
+          <div><code>project-log-link</code><span><strong>Inventory.sqlproj → Inventory.refactorlog</strong> · <code>Tier2Structural</code> · line <code>3</code> · <code>bounded-static-evidence</code></span></div>
+          <div><code>table-rename-intent</code><span><strong>dbo.InventoryItem → dbo.CatalogItem</strong> · <code>Tier2Structural</code> · refactor-log line <code>2</code> · source fact ID retained in the packet</span></div>
+          <div><code>table-schema-move-intent</code><span><strong>dbo.CatalogItem → catalog.CatalogItem</strong> · <code>Tier2Structural</code> · refactor-log line <code>7</code> · source fact ID retained in the packet</span></div>
+        </div>
+        <p class="section-note">All paths in the JSON packet are repository-relative. Raw XML, raw SQL, source snippets, and operation keys are omitted.</p>
+      </section>
+
+      <section class="section split-section" id="gaps" data-sql-project-refactor-section="gaps">
+        <div><p class="section-kicker">Tier 4 stays visible</p><h2>A gap is reduced coverage, not clean absence.</h2></div>
+        <div class="detail-list">
+          <div><strong>Unsupported or unsafe shape</strong><span><code>RefactorOperationUnsupported</code> · <code>Tier4Unknown</code> · review the source with an owner.</span></div>
+          <div><strong>Missing project link</strong><span><code>RefactorLogReferenceMissing</code> · <code>Tier4Unknown</code> · do not infer that refactor intent is absent.</span></div>
+          <div><strong>Bounded operation cap</strong><span><code>RefactorOperationLimitExceeded</code> · <code>Tier4Unknown</code> · truncated inventory remains partial.</span></div>
+          <div><strong>Other bounded gaps</strong><span>Malformed, oversized, ambiguous, property-driven, globbed, conditional, path-escaping, and unreferenced surfaces remain explicit unknowns.</span></div>
+        </div>
+      </section>
+
+      <section class="section" data-sql-project-refactor-section="review-surfaces">
+        <div class="section-header"><p class="section-kicker">Downstream handoff</p><h2>The same intent can route three review conversations.</h2></div>
+        <div class="audience-grid">
+          <article><h3>Database design review</h3><p>Supported operations appear as <code>ReviewRecommended</code> global evidence without becoming PostgreSQL schema state.</p></article>
+          <article><h3>Release review</h3><p>Source and target identity, supporting fact IDs, provenance, and limitations help reviewers ask whether the proposed change is aligned.</p></article>
+          <article><h3>Operator runbook</h3><p>The milestone state is <code>intended-by-project-refactor-log</code>; build, validation, deployment, and approval remain owner evidence.</p></article>
+        </div>
+      </section>
+
+      <section class="section boundary-section" data-sql-project-refactor-boundary="non-claims">
+        <div><p class="section-kicker">Static boundary</p><h2>What this proof does not establish.</h2></div>
+        <ul>
+          <li>No SQL project build, DACPAC creation or inspection, deployment-plan or generated-script inspection, or SqlPackage invocation.</li>
+          <li>No database connection, SQL execution, or target <code>dbo.__RefactorLog</code> inspection.</li>
+          <li>No claim that a refactor was deployed, applied, compatible, successful, reversible, approved, or safe to run.</li>
+          <li>No replacement for database owners, DBAs, runtime validation, tests, change control, or release approval.</li>
+        </ul>
+      </section>
+
+      <section class="section" data-sql-project-refactor-section="questions">
+        <div class="section-header"><p class="section-kicker">Reviewer questions</p><h2>End with ownership, not approval.</h2></div>
+        <ol class="checklist">
+          <li><strong>Identity:</strong> Does the proposed application change align with the checked-in source and target identity?</li>
+          <li><strong>Coverage:</strong> Are unsupported, missing, ambiguous, or truncated refactor-log shapes hiding additional intent?</li>
+          <li><strong>Validation:</strong> Who owns build, deployment-plan, compatibility, and runtime evidence?</li>
+          <li><strong>Approval:</strong> Which database owner or DBA must review the change before an operational decision?</li>
+        </ol>
+      </section>
+
+      <section class="section link-section" data-sql-project-refactor-section="links">
+        <div><p class="section-kicker">Follow the proof path</p><h2>Keep intent, gaps, and owners together.</h2></div>
+        <div class="link-grid"><a href="/blog/sql-project-refactor-intent-evidence/">Full article</a><a href="/assets/sql-project-refactor-intent-proof-packet.json">Public JSON packet</a><a href="/database/design-review/">Database design review</a><a href="/sql/operator-handoff/">SQL operator handoff</a><a href="/outputs/">Output artifacts</a><a href="/evidence/">Evidence tiers</a><a href="/limitations/">Limitations</a><a href="/capabilities/">Capabilities</a><a href="https://github.com/joefeser/tracemap/blob/dev/rules/rule-catalog.yml">Rule catalog</a></div>
+      </section>
+    </main>
+
+    <footer class="site-footer"><p>Checked-in refactor intent can sharpen review questions without pretending deployment happened.</p><p class="copyright">© 2026 Joe Feser.</p></footer>
+  </body>
+</html>

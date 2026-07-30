@@ -2,6 +2,12 @@ using TraceMap.Core;
 
 namespace TraceMap.Access;
 
+public enum AccessIdentityDisclosurePolicy
+{
+    SafeIdentifier,
+    HashOnly
+}
+
 public static class AccessSafeValues
 {
     public static string DatabaseIdentitySeed(string repositoryIdentityHash, string commitSha, string relativePath, string databaseHash) =>
@@ -9,11 +15,19 @@ public static class AccessSafeValues
 
     public static string DatabaseStableKey(string identitySeed) => $"access-database-{FactFactory.Hash($"access-database/v1|{identitySeed}", 32)}";
 
-    public static AccessSafeIdentity Identity(string databaseIdentitySeed, string objectKind, string? value, int occurrence = 0)
+    public static AccessSafeIdentity Identity(
+        string databaseIdentitySeed,
+        string objectKind,
+        string? value,
+        int occurrence = 0,
+        AccessIdentityDisclosurePolicy disclosurePolicy = AccessIdentityDisclosurePolicy.SafeIdentifier)
     {
         var raw = string.IsNullOrWhiteSpace(value) ? "unknown" : value.Trim();
         var nameHash = RoleHash($"access-{objectKind}-name", raw);
-        var display = LegacyDataSafeValues.IsSafeIdentifier(raw) ? raw : null;
+        var display = disclosurePolicy == AccessIdentityDisclosurePolicy.SafeIdentifier
+            && LegacyDataSafeValues.IsSafeIdentifier(raw)
+                ? raw
+                : null;
         var keyMaterial = string.Join('|', "access-object/v1", databaseIdentitySeed, objectKind, display ?? $"hash:{nameHash}", occurrence);
         return new AccessSafeIdentity(display, nameHash, $"access-{objectKind}-{FactFactory.Hash(keyMaterial, 32)}");
     }

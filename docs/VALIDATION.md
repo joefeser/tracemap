@@ -78,6 +78,38 @@ Troubleshooting:
 - If the demo refuses an in-repo output directory, use `.tracemap-demo/` or add a generic ignored output path before running the script.
 - If .NET or TypeScript build restore fails, run the build/test commands above directly to restore local toolchain dependencies and inspect their native diagnostics.
 - Reduced sample scan and report coverage is expected for samples that intentionally rely on syntax fallback or missing framework packages. The summary labels those sections as partial while preserving rule-backed evidence counts.
+
+## MSBuild Binary-Log Evidence
+
+For changes to explicit `.binlog` ingestion, run the focused synthetic suite:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~MsBuildBinlogExtractorTests
+```
+
+For a pinned local product smoke, generate a binary log from the checked-in
+modern sample and supply it explicitly with the current commit:
+
+```bash
+smoke_root="$(mktemp -d)"
+dotnet build samples/modern-sample/ModernSample.csproj \
+  -bl:"$smoke_root/modern-sample.binlog"
+dotnet run --project src/dotnet/TraceMap.Cli -- scan \
+  --repo samples/modern-sample \
+  --out "$smoke_root/scan" \
+  --binlog "$smoke_root/modern-sample.binlog" \
+  --binlog-commit-sha "$(git rev-parse HEAD)"
+```
+
+Confirm `facts.ndjson`, `index.sqlite`, `report.md`, and `logs/analyzer.log`
+contain only the TraceMap-owned allowlist: artifact SHA-256, recorded build
+result, repository-relative project/graph identities, safe diagnostic
+code/severity/location, aggregate counts, provenance, limitations, and
+categorical gaps. Do not publish or retain the raw binlog. The smoke observes
+artifact contents only; it does not authenticate the artifact, prove the build
+ran at the declared commit, prove tests passed, or grant deployment/release
+approval.
 - If endpoint, path, reverse, or portfolio assertions fail, inspect the generated JSON reports under `reports/`; accepted evidence rows must include rule IDs, evidence tiers, source labels, commit SHAs, and supporting fact or edge IDs where the report exposes them.
 - If the generated public-report sentinel fails, inspect the relative file paths and category it prints. Keep scan manifests, SQLite files, facts, and logs local-only; public summaries and reports must use hashes, labels, or relative paths.
 
@@ -151,6 +183,81 @@ python3 scripts/validate-adapter-artifacts.py <scan-output>
 ```
 
 ## Microsoft Access Adapter Smoke
+
+Source-neutral Access design-evidence contract changes can be validated on
+macOS with synthetic bundles and do not require Access, COM, or a real
+database:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~AccessDesignEvidenceReaderTests
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~AccessDesignEvidenceCompositionTests
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~Access
+```
+
+These tests validate the protected local input contract, immutable base-scan
+binding, hash-only projection, deterministic enriched artifacts, validated
+coordinates, explicit gaps, and downstream report/combine/docs/vault/release
+review/local-review preservation. They do not prove that any Windows exporter
+is safe or complete, and they do not claim that Access behavior, forms,
+reports, VBA, or macros were executed or runtime-reachable.
+
+A conforming owner-controlled bundle can be composed on macOS without the
+database file:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Access.Cli -- enrich-design \
+  --base-scan <completed-access-scan> \
+  --design-evidence <protected-owner-controlled-directory> \
+  --out <new-enriched-output-directory>
+python3 scripts/validate-adapter-artifacts.py <new-enriched-output-directory>
+```
+
+The base scan and protected input are immutable inputs. The output must be a
+new, non-overlapping path. Protected source and identities are consumed only
+in-process; the standard output remains hash-only.
+
+Source-neutral screen-to-data composition is also Mac-only and reads only the
+completed enriched index:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Access.Cli -- flow \
+  --index <new-enriched-output-directory>/index.sqlite \
+  --out <new-flow-output-directory>
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~AccessScreenDataFlowTests
+```
+
+Verify `access-flow.md` and `access-flow.json` contain deterministic bounded
+candidate paths with supporting fact/rule/tier/commit/span/extractor/coverage/
+limitation provenance. Missing startup identity, item-level evidence, dynamic
+targets, unresolved declarations, cycles, and limits must remain explicit
+gaps. Raw names, SQL, VBA, expressions, macro bodies, connections, credentials,
+local paths, and customer identities must remain absent. This report does not
+prove startup selection, event firing, user navigation, runtime reachability,
+execution, row access, connectivity, correctness, completeness, or approval.
+
+Conservative copy/clone candidate composition is also Mac-only and reuses the
+same completed index and flow evidence:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Access.Cli -- copy-clone \
+  --index <new-enriched-output-directory>/index.sqlite \
+  --out <new-copy-clone-output-directory>
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~AccessCopyCloneCandidateTests
+```
+
+Verify `access-copy-clone.md` and `access-copy-clone.json` classify only
+supported action-query shapes as `Candidate` or `NeedsReview`, never infer from
+names, and preserve exact safe provenance. Source/target direction, field
+correspondence, parent/child sequencing, generated keys, dynamic behavior, and
+flow absence remain explicit gaps. The output must omit raw SQL, names, VBA,
+macro bodies, values, row counts, connection material, customer identity, and
+local paths. A candidate does not prove copying, cloning, business intent,
+execution, row equivalence, correctness, completeness, or safety to run.
 
 Access extraction requires Windows with installed Microsoft Access/DAO. Run it
 in an isolated local VM with networking and broad host sharing disabled. Stage
@@ -235,6 +342,17 @@ name, hash, object identities, SQL, VBA, macro bodies, expressions, connections,
 or exception text in its checkpoint. Raw scratch remains disposable; retain the
 sanitized checkpoint family until its issue result is confirmed posted.
 
+For source builds in an isolated local Parallels Windows VM, follow
+[`ACCESS_PARALLELS_SOURCE_RUNNER.md`](ACCESS_PARALLELS_SOURCE_RUNNER.md).
+The host runner requires every configured VM network adapter to be disabled
+and exactly two enabled host shares: read-only `access_input` and read/write
+`access_output`. The guest attests an exact clean checkout with no Git remote,
+pinned Git/.NET launcher hashes, reparse-free required path chains, and an
+offline toolchain/package cache. Guest attestations are not independent host
+proof of an uncompromised Windows runtime or complete SDK tree. The runner
+supports only `doctor`, `build`, and synthetic validation. It does not accept a
+representative database or change the Access extraction boundary.
+
 For Access design-review composition changes, run the focused Access and
 release-review tests and verify both single and combined indexes produce an
 `Access Design Evidence` section with `available` status, upstream rule/tier/
@@ -244,6 +362,27 @@ the section. Protected names, SQL, hashes, connections, VBA, macro bodies,
 captions, expressions, local paths, and infrastructure identities must remain
 absent. These read-side composition changes do not require a new Windows probe
 when Access COM, the product reader, and fixture generation are unchanged.
+
+For Access local-review bundle changes, also run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter AccessLocalReviewBundleTests
+```
+
+Verify `access-review create` produces the Access-only release review,
+`hidden-local` explorer, deterministic `access-review-manifest.json`, and
+relative-link README. Repeat to two output directories and compare every file.
+Verify manifest hashes, explicit count-only UI/VBA/macro gaps, protected-value
+suppression, overlap rejection, non-Access rejection, and guarded `--force`.
+
+When the isolated Windows + Access VM is available, run the synthetic smoke
+with `-ReviewBundlePath <new-durable-local-review-directory>` outside the
+disposable smoke root. The harness must validate the bundle, include it in the
+protected-marker scan, preserve false canaries and the original hash, and leave
+the extraction boundary unchanged. A representative run additionally requires
+`-InputExplicitlyAuthorized`; see
+`docs/ACCESS_LOCAL_REVIEW_BUNDLE.md`.
 
 The repository CI runs the existing .NET, TypeScript, Python, JVM, and Swift
 test suites, validates one real output per adapter, and combines all five
@@ -975,6 +1114,29 @@ or unsupported identifiers, connection material, and local paths must not
 appear. Static facts must not claim migration execution, live objects, index
 selection, uniqueness, referential integrity, compatibility, rollback, or
 release safety.
+
+## SQL Project Refactor Intent Smoke
+
+SQL project refactor-intent changes should run the focused tests and scan the
+checked-in static fixture without building the project, opening a DACPAC,
+invoking SqlPackage, or connecting to SQL Server:
+
+```bash
+dotnet test src/dotnet/TraceMap.sln --filter FullyQualifiedName~SqlProjectRefactorTests
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/sql-project-refactor --out /tmp/tracemap-sql-project-refactor-smoke
+```
+
+Expected output includes `SqlProjectRefactorLogDeclared` and bounded
+`SqlProjectRefactorOperation` facts under
+`database.sql-project.refactor-intent.v1`. Inspect generated output for rule
+IDs, Tier 2 structural evidence, repository-relative spans, commit SHA,
+extractor version, coverage, hashed operation keys, and limitations. Raw XML,
+SQL, local absolute paths, connection material, and unhashed operation keys
+must not appear. The facts must not claim project build, DACPAC packaging,
+deployment-plan generation, target `__RefactorLog` state, execution,
+application, compatibility, rollback, production state, release approval, or
+execution safety.
+
 # SQL operator runbook packet smoke
 
 Run the deterministic public-safe fixture and verify standard scan artifacts plus
@@ -1090,6 +1252,28 @@ strings, scheduled command bodies, local paths, private server identities, or
 validation output. It must not claim SQL execution, runtime reachability,
 production state, design correctness, release approval, or that a script is
 safe to run.
+
+### Generated C# semantic source paths
+
+For changes to C# semantic source-location projection, run the focused generated
+source test and the complete .NET suite:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter "FullyQualifiedName~GeneratedSemanticPathTests|FullyQualifiedName~CSharpSemanticExtractorTests"
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+```
+
+The focused fixture loads a source document from a synthetic SDK/package-cache
+shape outside the repository. Confirm semantic evidence is preserved under the
+same deterministic `__external__/csharp-<kind>-<hash>` identity across distinct
+host roots and that `csharp.semantic.workspace.v1` emits an
+`ExternalSourcePathProjected` gap. All five standard scan outputs must exclude
+the temporary root, home directory, SDK/package-cache root, raw external source
+path, and package identity. The synthetic fallback intentionally does not prove
+that external source is checked in, immutable, complete, or available on another
+machine; unrecognized same-named external files can share an identity.
 
 ### EF Core mapping evidence
 

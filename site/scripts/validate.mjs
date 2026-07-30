@@ -36,6 +36,7 @@ import { validateLegacyStorySafety } from "./legacy-story-safety.mjs";
 import { validateManagerBriefDist } from "./manager-brief.mjs";
 import { validateManagerDemoScriptDist } from "./manager-demo-script.mjs";
 import { validateManagerFaqDist } from "./manager-faq.mjs";
+import { validateMsbuildBinlogEvidenceDist } from "./msbuild-binlog-evidence.mjs";
 import { validateOwnerFollowupMapDist } from "./owner-followup-map.mjs";
 import { validateProofPathFaqDist } from "./proof-path-faq.mjs";
 import { validateProofPathsForManagersDist } from "./proof-paths-for-managers.mjs";
@@ -58,6 +59,7 @@ import { validateSiteClaimGuardrailsDist } from "./site-claim-guardrails.mjs";
 import { validateStaticTriageDist } from "./static-triage.mjs";
 import { validateStaticVsRuntimeDist } from "./static-vs-runtime.mjs";
 import { validateSqlOperatorHandoffDist } from "./sql-operator-handoff.mjs";
+import { validateSqlProjectRefactorIntentStoryDist } from "./sql-project-refactor-intent-story.mjs";
 import { validateSqlRunbookProofPacketDist } from "./sql-runbook-proof-packet.mjs";
 import { validateSqlStaticObservedValidationDist } from "./sql-static-observed-validation.mjs";
 import { validateStakeholderObjectionGuideDist } from "./stakeholder-objection-guide.mjs";
@@ -93,7 +95,11 @@ export async function validateSite(options = {}) {
   return result;
 }
 
-export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoot } = {}) {
+export async function validateDist({
+  baseUrl = defaultBaseUrl,
+  requireMsbuildBinlogEvidence = true,
+  root = defaultRoot
+} = {}) {
   const dist = resolve(root, "dist");
   const errors = [];
   const normalizedBaseUrl = normalizeBaseUrl(baseUrl, errors);
@@ -129,6 +135,9 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateDemoTroubleshootingDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateChangeRiskLanguageGuideDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateDatabaseDesignReviewShowcaseDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    if (requireMsbuildBinlogEvidence) {
+      await validateMsbuildBinlogEvidenceDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    }
     await validateEvidenceHandoffTemplateDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateEvidenceDecisionRecordDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateEvidenceGapRegisterDist({ baseUrl: normalizedBaseUrl, dist, errors });
@@ -174,6 +183,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateStaticTriageDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticVsRuntimeDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateSqlOperatorHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateSqlProjectRefactorIntentStoryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateSqlRunbookProofPacketDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateSqlStaticObservedValidationDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStakeholderObjectionGuideDist({ baseUrl: normalizedBaseUrl, dist, errors });

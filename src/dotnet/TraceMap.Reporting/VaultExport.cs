@@ -583,7 +583,7 @@ public static class VaultExporter
                     EvidenceTiers.Tier4Unknown,
                     "Microsoft Access facts are present, but vault export has no dedicated Access evidence projection; source provenance remains available and no Access absence or behavior conclusion is made.",
                     null,
-                    ["Count-only and gap evidence is not converted into Access identity or flow nodes."],
+                    ["Count-only or bounded source-neutral static design evidence is not converted into Access identity or flow nodes."],
                     accessEvidence.SupportingFactIds));
             }
         }

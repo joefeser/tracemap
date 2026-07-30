@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.Build.Sql/2.0.0">
+  <ItemGroup>
+    <RefactorLog Include="Inventory.refactorlog" />
+  </ItemGroup>
+</Project>
