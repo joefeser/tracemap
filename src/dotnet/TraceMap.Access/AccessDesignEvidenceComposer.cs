@@ -59,7 +59,7 @@ public static class AccessDesignEvidenceComposer
             baseScan.DatabaseHash);
         using var bundle = AccessDesignEvidenceReader.Read(designEvidenceDirectory, binding, limits);
         if (!bundle.AcceptedForProjection)
-            throw new AccessScanException(bundle.Gaps.SingleOrDefault()?.Classification ?? "AccessDesignInputDatabaseUnbound");
+            throw new AccessScanException(bundle.Gaps.FirstOrDefault()?.Classification ?? "AccessDesignInputDatabaseUnbound");
 
         var projected = Project(bundle, databaseSeed, baseScan.Facts, limits);
         var projection = new AccessDatabaseProjection(
