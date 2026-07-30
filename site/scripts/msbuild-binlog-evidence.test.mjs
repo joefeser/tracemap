@@ -180,8 +180,9 @@ test("MSBuild binlog private-material scan catches values split across markup", 
 
 test("MSBuild binlog private-material scan catches percent-encoded values", async (t) => {
   for (const value of [
-    "%252FUsers%252Fexample%252Fprivate.binlog",
-    "Host%253Dexample.invalid%253BPassword%253Dfixture"
+    "%25252FUsers%25252Fexample%25252Fprivate.binlog",
+    "Host%25253Dexample.invalid%25253BPassword%25253Dfixture",
+    "&amp;#x2f;Users&amp;#x2f;example&amp;#x2f;private.binlog"
   ]) {
     await t.test(value.split("%")[0] || "path", async (subtest) => {
       const root = await createFixture(subtest);

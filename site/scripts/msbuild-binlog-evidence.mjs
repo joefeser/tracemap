@@ -273,7 +273,7 @@ function scanUnsupportedClaims(text, label, errors) {
 }
 
 function scanPrivateMaterial(text, label, errors) {
-  const decoded = decodePercentEncoding(text);
+  const decoded = decodeForScanning(text);
   for (const pattern of forbiddenMaterial) {
     if (pattern.test(text) || pattern.test(decoded)) {
       errors.push(`MSBuild binlog ${label} contains forbidden private or executable material: ${pattern}`);
@@ -281,10 +281,11 @@ function scanPrivateMaterial(text, label, errors) {
   }
 }
 
-function decodePercentEncoding(value) {
+function decodeForScanning(value) {
   let decoded = String(value);
-  for (let pass = 0; pass < 2; pass += 1) {
-    const next = decoded.replace(/(?:%[0-9a-f]{2})+/gi, (segment) => {
+  for (let pass = 0; pass < 8; pass += 1) {
+    const entityDecoded = decodeHtmlEntities(decoded);
+    const next = entityDecoded.replace(/(?:%[0-9a-f]{2})+/gi, (segment) => {
       try {
         return decodeURIComponent(segment);
       } catch {
