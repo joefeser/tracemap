@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 using TraceMap.Access;
 using TraceMap.Access.Cli;
@@ -291,6 +292,26 @@ public sealed class AccessLocalReviewBundleTests
             () => AccessLocalReviewBundle.CreateAsync(new(
                 scanOutput,
                 Path.Combine(temp.Path, "modified-fact-bundle"))));
+
+        Assert.Equal("AccessReviewInputMismatch", exception.Code);
+        Assert.DoesNotContain(temp.Path, exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Modified_manifest_coverage_with_the_same_identity_fails_closed()
+    {
+        using var temp = new TempDirectory();
+        var scanOutput = await WriteCountOnlyAccessScanAsync(temp.Path, "modified-manifest-scan");
+        var manifestPath = Path.Combine(scanOutput, "scan-manifest.json");
+        var manifest = JsonNode.Parse(await File.ReadAllTextAsync(manifestPath))!.AsObject();
+        var currentStatus = manifest["buildStatus"]!.GetValue<string>();
+        manifest["buildStatus"] = currentStatus == "Succeeded" ? "FailedOrPartial" : "Succeeded";
+        await File.WriteAllTextAsync(manifestPath, manifest.ToJsonString());
+
+        var exception = await Assert.ThrowsAsync<AccessLocalReviewException>(
+            () => AccessLocalReviewBundle.CreateAsync(new(
+                scanOutput,
+                Path.Combine(temp.Path, "modified-manifest-bundle"))));
 
         Assert.Equal("AccessReviewInputMismatch", exception.Code);
         Assert.DoesNotContain(temp.Path, exception.Message, StringComparison.OrdinalIgnoreCase);
