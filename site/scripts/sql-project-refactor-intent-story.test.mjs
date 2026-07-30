@@ -28,6 +28,9 @@ test("SQL project refactor-intent validator rejects planted private, raw, comman
     ["operation key", "8e1d9dd1-93d4-45d9-aa3b-172dd15585e2"],
     ["copyable command", "SqlPackage /Action:Publish"],
     ["raw SQL", "ALTER TABLE InventoryItem DROP COLUMN DisplayName"],
+    ["truncate SQL", "TRUNCATE TABLE InventoryItem"],
+    ["execute SQL", "EXEC dbo.ApplyInventoryChange"],
+    ["permission SQL", "GRANT SELECT ON dbo.InventoryItem TO fixture_user"],
     ["raw XML", "<Operation Name=\"Rename Refactor\">"]
   ];
 
@@ -113,6 +116,25 @@ test("SQL project refactor-intent validator applies positive-claim guardrails to
   assert.match(errors.join("\n"), /forbidden positive deployment, approval, or safety claim/);
 });
 
+test("SQL project refactor-intent validator rejects direct compatibility and applied-state claims", async (t) => {
+  for (const claim of [
+    "The database rename is compatible with production.",
+    "The rename was applied successfully."
+  ]) {
+    await t.test(claim, async (subtest) => {
+      const root = await createSiteFixture(subtest);
+      const assetPath = join(root, "src", "assets", "sql-project-refactor-intent-proof-packet.json");
+      const packet = JSON.parse(await readFile(assetPath, "utf8"));
+      packet.purpose = claim;
+      await writeFile(assetPath, `${JSON.stringify(packet, null, 2)}\n`);
+      await buildSite({ root, log() {} });
+      const errors = [];
+      await validateSqlProjectRefactorIntentStoryDist({ dist: join(root, "dist"), errors });
+      assert.match(errors.join("\n"), /forbidden positive deployment, approval, or safety claim/);
+    });
+  }
+});
+
 test("SQL project refactor-intent validator rejects invalid provenance and invented fixture column evidence", async (t) => {
   const root = await createSiteFixture(t);
   const assetPath = join(root, "src", "assets", "sql-project-refactor-intent-proof-packet.json");
@@ -166,6 +188,27 @@ test("SQL project refactor-intent validator pins scan, gap, and downstream hando
   assert.match(joined, /does not match pinned gap shape: unsupported-or-unsafe-shape/);
   assert.match(joined, /does not match pinned downstream review surface: database-design-review/);
   assert.match(joined, /does not match pinned downstream review surface: sql-runbook/);
+});
+
+test("SQL project refactor-intent validator pins supported operation categories", async (t) => {
+  const root = await createSiteFixture(t);
+  const assetPath = join(root, "src", "assets", "sql-project-refactor-intent-proof-packet.json");
+  const packet = JSON.parse(await readFile(assetPath, "utf8"));
+  packet.supportedOperationCategories[0].safeSource = "dbo.Fabricated";
+  packet.supportedOperationCategories.push({
+    operationKind: "drop-table",
+    objectKind: "table",
+    exampleKind: "fixture-evidence",
+    safeSource: "dbo.Legacy",
+    safeTarget: "removed"
+  });
+  await writeFile(assetPath, `${JSON.stringify(packet, null, 2)}\n`);
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateSqlProjectRefactorIntentStoryDist({ dist: join(root, "dist"), errors });
+  const joined = errors.join("\n");
+  assert.match(joined, /exactly the three pinned supported operation categories/);
+  assert.match(joined, /does not match pinned supported category: rename-table/);
 });
 
 test("SQL project refactor-intent validator reports missing bidirectional, inbound, and discovery links", async (t) => {
