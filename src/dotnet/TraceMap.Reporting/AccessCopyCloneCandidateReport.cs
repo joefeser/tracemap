@@ -160,6 +160,7 @@ public static class AccessCopyCloneCandidateReporter
         int maxGaps)
     {
         var safeFacts = facts.Where(IsSafeAccessFact).OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray();
+        var safeFactsById = safeFacts.ToDictionary(fact => fact.FactId, StringComparer.Ordinal);
         var flow = AccessScreenDataFlowReporter.Build(repository, commitSha, safeFacts, 12, maxFlowPaths, maxGaps);
         var dependencies = safeFacts
             .Where(fact => fact.FactType == FactTypes.AccessQueryDependencyCandidate && SafeStableKey(fact.SourceSymbol))
@@ -171,15 +172,25 @@ public static class AccessCopyCloneCandidateReporter
             .ToHashSet(StringComparer.Ordinal);
         var gaps = new List<AccessCopyCloneGap>();
         var candidates = new List<AccessCopyCloneCandidate>();
-        var truncated = false;
+        var truncated = flow.Summary.Truncated;
         var flowPathsByStableKey = flow.Paths
-            .SelectMany(path => path.Nodes.Select(node => (node.StableKey, path.PathId)))
+            .SelectMany(path => path.Nodes.Select(node => (node.StableKey, Path: path)))
             .GroupBy(item => item.StableKey, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
-                group => group.Select(item => item.PathId).Distinct(StringComparer.Ordinal)
-                    .OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                group => group.Select(item => item.Path).DistinctBy(path => path.PathId)
+                    .OrderBy(path => path.PathId, StringComparer.Ordinal).ToArray(),
                 StringComparer.Ordinal);
+        if (flow.Summary.Truncated)
+            AddGap(
+                gaps,
+                maxGaps,
+                ref truncated,
+                Gap(
+                    "AccessCopyCloneFlowPathLimitReached",
+                    "flow",
+                    null,
+                    flow.Paths.SelectMany(path => path.SupportingFactIds).ToArray()));
 
         foreach (var fact in safeFacts.Where(fact => fact.FactType == FactTypes.AccessQueryDeclared))
         {
@@ -210,11 +221,18 @@ public static class AccessCopyCloneCandidateReporter
                 .OrderBy(participant => participant.NodeId, StringComparer.Ordinal)
                 .ThenBy(participant => participant.Evidence.FactId, StringComparer.Ordinal)
                 .ToArray();
-            var paths = flowPathsByStableKey.GetValueOrDefault(fact.TargetSymbol!) ?? [];
+            var flowPaths = flowPathsByStableKey.GetValueOrDefault(fact.TargetSymbol!) ?? [];
+            var paths = flowPaths.Select(path => path.PathId).ToArray();
             var primaryEvidence = Evidence(fact);
             var evidence = queryDependencies
-                .Select(Evidence)
-                .Append(primaryEvidence)
+                .Concat(flowPaths
+                    .SelectMany(path => path.SupportingFactIds)
+                    .Distinct(StringComparer.Ordinal)
+                    .Where(safeFactsById.ContainsKey)
+                    .Select(factId => safeFactsById[factId]))
+                .Append(fact)
+                .GroupBy(item => item.FactId, StringComparer.Ordinal)
+                .Select(group => Evidence(group.First()))
                 .OrderBy(item => item.FactId, StringComparer.Ordinal)
                 .ToArray();
             var supportingFacts = evidence.Select(item => item.FactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
@@ -267,7 +285,7 @@ public static class AccessCopyCloneCandidateReporter
             if (participants.Length > 1)
                 AddGap(gaps, maxGaps, ref truncated, Gap("AccessCopyCloneDependencyFanOutNeedsReview", "candidate", candidate.CandidateId, supportingFacts));
             if (queryDependencies.Any(dependency => dependency.TargetSymbol is not null && externalObjects.Contains(dependency.TargetSymbol)))
-                AddGap(gaps, maxGaps, ref truncated, Gap("AccessCopyCloneExternalSourcePartial", "candidate", candidate.CandidateId, supportingFacts));
+                AddGap(gaps, maxGaps, ref truncated, Gap("AccessCopyCloneExternalParticipantPartial", "candidate", candidate.CandidateId, supportingFacts));
         }
 
         foreach (var fact in safeFacts.Where(fact => fact.FactType == FactTypes.AnalysisGap))

@@ -50,6 +50,8 @@ public sealed class AccessCopyCloneCandidateTests
         Assert.All(append.Participants, participant => Assert.Equal("dependency-role-unknown", participant.Role));
         Assert.Contains(append.RuleIds, rule => rule == RuleIds.LegacyAccessCopyCloneCandidate);
         Assert.Contains(append.SupportingFactIds, id => id == "fact-append");
+        Assert.Contains(append.SupportingFactIds, id => id == "fact-form");
+        Assert.Contains(append.SupportingFactIds, id => id == "fact-form-append");
         Assert.All(append.Evidence, evidence =>
         {
             Assert.Equal(Commit, evidence.CommitSha);
@@ -62,7 +64,8 @@ public sealed class AccessCopyCloneCandidateTests
         Assert.Contains(first.Gaps, gap => gap.Classification == "AccessCopyCloneRoleDirectionUnavailable");
         Assert.Contains(first.Gaps, gap => gap.Classification == "AccessCopyCloneFieldCorrespondenceUnavailable");
         Assert.Contains(first.Gaps, gap => gap.Classification == "AccessCopyCloneDependencyFanOutNeedsReview");
-        Assert.Contains(first.Gaps, gap => gap.Classification == "AccessCopyCloneExternalSourcePartial");
+        Assert.Contains(first.Gaps, gap => gap.Classification == "AccessCopyCloneExternalParticipantPartial");
+        Assert.DoesNotContain(first.Gaps, gap => gap.Classification == "AccessCopyCloneExternalSourcePartial");
         Assert.Contains(first.Gaps, gap => gap.Classification == "AccessCopyCloneParentChildSequenceUnavailable");
         Assert.Contains(first.Gaps, gap => gap.Classification == "AccessCopyCloneUpstreamEvidenceGap");
     }
@@ -89,6 +92,16 @@ public sealed class AccessCopyCloneCandidateTests
         Assert.Single(bounded.Candidates);
         Assert.Single(bounded.Gaps);
         Assert.Equal("AccessCopyCloneGapLimitReached", bounded.Gaps[0].Classification);
+    }
+
+    [Fact]
+    public void Builder_propagates_flow_path_truncation_as_an_explicit_composition_gap()
+    {
+        var report = AccessCopyCloneCandidateReporter.Build("synthetic", Commit, CandidateFacts(), 100, 1, 100);
+
+        Assert.True(report.Summary.Truncated);
+        Assert.Equal("partial", report.Coverage);
+        Assert.Contains(report.Gaps, gap => gap.Classification == "AccessCopyCloneFlowPathLimitReached");
     }
 
     [Fact]
