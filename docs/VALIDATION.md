@@ -1178,6 +1178,28 @@ validation output. It must not claim SQL execution, runtime reachability,
 production state, design correctness, release approval, or that a script is
 safe to run.
 
+### Generated C# semantic source paths
+
+For changes to C# semantic source-location projection, run the focused generated
+source test and the complete .NET suite:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter "FullyQualifiedName~GeneratedSemanticPathTests|FullyQualifiedName~CSharpSemanticExtractorTests"
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+```
+
+The focused fixture loads a source document from a synthetic SDK/package-cache
+shape outside the repository. Confirm semantic evidence is preserved under the
+same deterministic `__external__/csharp-<kind>-<hash>` identity across distinct
+host roots and that `csharp.semantic.workspace.v1` emits an
+`ExternalSourcePathProjected` gap. All five standard scan outputs must exclude
+the temporary root, home directory, SDK/package-cache root, raw external source
+path, and package identity. The synthetic fallback intentionally does not prove
+that external source is checked in, immutable, complete, or available on another
+machine; unrecognized same-named external files can share an identity.
+
 ### EF Core mapping evidence
 
 For changes to EF/EF Core model mapping extraction or design-review

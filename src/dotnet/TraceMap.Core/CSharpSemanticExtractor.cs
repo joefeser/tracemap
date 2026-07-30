@@ -27,8 +27,13 @@ public sealed record SemanticExtractionResult(
 
 public static class CSharpSemanticExtractor
 {
+    private const string SyntheticExternalSourcePrefix = "__external__/csharp-";
+
     private static readonly Regex SafeCompilerTokenRegex = new(
         "'([A-Za-z_][A-Za-z0-9_]{0,127})'",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex WindowsRootedPathRegex = new(
+        @"^(?:[A-Za-z]:[\\/]|\\\\)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private sealed record CallbackConversionInfo(
@@ -409,6 +414,14 @@ public static class CSharpSemanticExtractor
         }
 
         var filePath = ToRelativePath(repoPath, document.FilePath);
+        if (IsSyntheticExternalSourcePath(filePath))
+        {
+            gaps.Add(CreateGap(
+                filePath,
+                "Roslyn loaded a source document outside the repository. TraceMap retained semantic evidence under a deterministic synthetic identity; the original host-local path was omitted.",
+                "ExternalSourcePathProjected",
+                projectPath));
+        }
         SyntaxTree? tree;
         SyntaxNode? root;
         try
@@ -4663,13 +4676,66 @@ public static class CSharpSemanticExtractor
         {
             return ".";
         }
+        if (!OperatingSystem.IsWindows() && WindowsRootedPathRegex.IsMatch(path))
+        {
+            return CreateSyntheticExternalSourcePath(path);
+        }
 
-        var fullPath = Path.GetFullPath(path);
-        var root = Path.GetFullPath(repoPath);
-        var relativePath = Path.GetRelativePath(root, fullPath);
-        return relativePath.StartsWith("..", StringComparison.Ordinal)
-            ? FileInventory.NormalizeRelativePath(path)
-            : FileInventory.NormalizeRelativePath(relativePath);
+        try
+        {
+            var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(repoPath));
+            var fullPath = Path.GetFullPath(path, root);
+            var relativePath = FileInventory.NormalizeRelativePath(Path.GetRelativePath(root, fullPath));
+            if (relativePath is not ".." && !relativePath.StartsWith("../", StringComparison.Ordinal))
+            {
+                return relativePath is "" ? "." : relativePath;
+            }
+        }
+        catch (Exception exception) when (exception is ArgumentException or IOException or NotSupportedException)
+        {
+            // Project the unusable path to the same safe boundary as any other
+            // Roslyn source identity outside the repository.
+        }
+
+        return CreateSyntheticExternalSourcePath(path);
+    }
+
+    private static string CreateSyntheticExternalSourcePath(string path)
+    {
+        var normalized = path.Replace('\\', '/').TrimEnd('/');
+        var (kind, stableDescriptor) = GetExternalSourceDescriptor(normalized);
+        var extension = Path.GetExtension(normalized);
+        var safeExtension = extension.Length is > 0 and <= 10
+            && extension.Skip(1).All(character => char.IsLetterOrDigit(character))
+            ? extension.ToLowerInvariant()
+            : string.Empty;
+        return $"{SyntheticExternalSourcePrefix}{kind}-{FactFactory.Hash(stableDescriptor, 20)}{safeExtension}";
+    }
+
+    private static (string Kind, string Descriptor) GetExternalSourceDescriptor(string normalizedPath)
+    {
+        foreach (var (marker, kind) in new[]
+        {
+            ("/.nuget/packages/", "package"),
+            ("/packages/", "package"),
+            ("/sdk/", "sdk"),
+            ("/packs/", "sdk")
+        })
+        {
+            var markerIndex = normalizedPath.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (markerIndex >= 0)
+            {
+                return (kind, normalizedPath[(markerIndex + marker.Length)..].ToLowerInvariant());
+            }
+        }
+
+        var fileName = normalizedPath[(normalizedPath.LastIndexOf('/') + 1)..];
+        return ("source", string.IsNullOrWhiteSpace(fileName) ? "unknown" : fileName.ToLowerInvariant());
+    }
+
+    private static bool IsSyntheticExternalSourcePath(string path)
+    {
+        return path.StartsWith(SyntheticExternalSourcePrefix, StringComparison.Ordinal);
     }
 
     private static bool IsGeneratedSource(string? fullPath)

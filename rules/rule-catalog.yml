@@ -3065,6 +3065,7 @@ rules:
     limitations:
       - Requires project load and enough references to create a Roslyn compilation.
       - Generated source excluded from inventory is not reported.
+      - When Roslyn loads a source document outside the repository, evidence keeps a deterministic synthetic path and a `csharp.semantic.workspace.v1` gap; the host-local SDK, package-cache, or linked-source path is omitted and same-named external files can share a synthetic identity.
 
   - id: csharp.semantic.workspace.v1
     name: C# semantic workspace gaps
@@ -3076,6 +3077,7 @@ rules:
       - Workspace diagnostics can be environment-specific because they depend on installed SDKs and available project references.
       - Compilation gaps do not prevent syntax fallback facts from being emitted.
       - Native workspace messages are sanitized to stable categories before shareable artifacts are written; raw local paths, remotes, package sources, config values, credentials, and source-like snippets are omitted.
+      - Source documents outside the repository use deterministic synthetic evidence paths derived from bounded non-host descriptors. The original path is not retained, and same-named unrecognized external sources can share an identity.
 
   - id: build.environment.target-framework.v1
     name: Build environment target framework diagnostics
