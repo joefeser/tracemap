@@ -4702,7 +4702,6 @@ public static class CSharpSemanticExtractor
 
             var relativePath = FileInventory.NormalizeRelativePath(Path.GetRelativePath(root, fullPath));
             if (!Path.IsPathRooted(relativePath)
-                && !WindowsRootedPathRegex.IsMatch(relativePath)
                 && !relativePath.StartsWith("//", StringComparison.Ordinal)
                 && relativePath is not ".."
                 && !relativePath.StartsWith("../", StringComparison.Ordinal))
