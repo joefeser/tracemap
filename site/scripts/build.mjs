@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -111,7 +111,7 @@ async function readArticles(context) {
 
   const slugs = new Set();
   for (const [index, article] of articles.entries()) {
-    validateArticle(article, slugs, index);
+    await validateArticle(context, article, slugs, index);
     slugs.add(article.slug);
   }
 
@@ -183,7 +183,7 @@ async function readSiteSourceFile(context, relativePath, missingMessage) {
   }
 }
 
-function validateArticle(article, slugs, index) {
+async function validateArticle(context, article, slugs, index) {
   if (!isPlainObject(article)) {
     throw new Error(`Blog article at index ${index} must be an object.`);
   }
@@ -232,6 +232,25 @@ function validateArticle(article, slugs, index) {
     throw new Error(
       `Blog article published date must use YYYY-MM-DD for ${formatArticleContext(article, index)}: ${article.published}`
     );
+  }
+
+  if (
+    article.ogImage !== undefined &&
+    (typeof article.ogImage !== "string" || !/^\/assets\/[a-z0-9-]+\.png$/.test(article.ogImage))
+  ) {
+    throw new Error(
+      `Blog article Open Graph image path is invalid for ${formatArticleContext(article, index)}: ${article.ogImage}`
+    );
+  }
+
+  if (article.ogImage !== undefined) {
+    try {
+      await access(resolve(context.src, article.ogImage.slice(1)));
+    } catch {
+      throw new Error(
+        `Blog article Open Graph image is missing for ${formatArticleContext(article, index)}: ${article.ogImage}`
+      );
+    }
   }
 }
 
@@ -355,6 +374,7 @@ function renderBlogArticle(article, body) {
     ogType: "article",
     ogTitle: article.title,
     ogDescription: article.ogDescription,
+    ogImage: article.ogImage,
     articlePublished: article.published,
     main: `<article class="article">
         <header class="article-header">
@@ -408,6 +428,7 @@ function renderPage({
   footer,
   main,
   ogDescription,
+  ogImage,
   ogTitle,
   ogType,
   title
@@ -415,6 +436,9 @@ function renderPage({
   const canonicalUrl = `https://tracemap.tools${canonicalPath}`;
   const articleMeta = articlePublished
     ? `    <meta property="article:published_time" content="${escapeHtml(articlePublished)}">\n`
+    : "";
+  const socialImageMeta = ogImage
+    ? `    <meta property="og:image" content="${escapeHtml(`https://tracemap.tools${ogImage}`)}">\n    <meta name="twitter:card" content="summary_large_image">\n    <meta name="twitter:image" content="${escapeHtml(`https://tracemap.tools${ogImage}`)}">\n`
     : "";
   const header = renderHeader(canonicalPath);
 
@@ -439,7 +463,7 @@ function renderPage({
       content="${escapeHtml(ogDescription)}"
     >
     <meta property="og:url" content="${escapeHtml(canonicalUrl)}">
-${articleMeta}    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+${socialImageMeta}${articleMeta}    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
