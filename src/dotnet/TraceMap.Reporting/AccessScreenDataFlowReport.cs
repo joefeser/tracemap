@@ -215,11 +215,16 @@ public static class AccessScreenDataFlowReporter
             node => node.NodeId,
             node => new AccessFlowNode(node.NodeId, node.Kind, node.StableKey, node.SupportingFactIds.OrderBy(value => value, StringComparer.Ordinal).ToArray()),
             StringComparer.Ordinal);
+        var partialNodeIds = nodes.Values
+            .Where(node => !node.Declared || node.Kind == "unresolved-target")
+            .Select(node => node.NodeId)
+            .ToHashSet(StringComparer.Ordinal);
         var outgoing = edges.GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.OrderBy(edge => edge.EdgeId, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
         var paths = Traverse(
             roots.OrderBy(root => root.RootId, StringComparer.Ordinal).ToArray(),
             immutableNodes,
+            partialNodeIds,
             outgoing,
             maxDepth,
             maxPaths,
@@ -314,6 +319,7 @@ public static class AccessScreenDataFlowReporter
     private static IReadOnlyList<AccessFlowPath> Traverse(
         IReadOnlyList<AccessFlowRoot> roots,
         IReadOnlyDictionary<string, AccessFlowNode> nodes,
+        IReadOnlySet<string> partialNodeIds,
         IReadOnlyDictionary<string, AccessFlowEdge[]> outgoing,
         int maxDepth,
         int maxPaths,
@@ -325,7 +331,8 @@ public static class AccessScreenDataFlowReporter
         var paths = new List<AccessFlowPath>();
         var edgeLookup = outgoing.Values.SelectMany(value => value)
             .ToDictionary(edge => edge.EdgeId, StringComparer.Ordinal);
-        var queue = new Queue<PathState>(roots.Select(root => new PathState(root, [root.NodeId], [])));
+        var queue = new Queue<PathState>(roots.Take(maxPaths).Select(root => new PathState(root, [root.NodeId], [])));
+        var pathLimitReached = roots.Count > maxPaths;
         while (queue.Count > 0 && paths.Count < maxPaths)
         {
             var state = queue.Dequeue();
@@ -346,6 +353,11 @@ public static class AccessScreenDataFlowReporter
             }
             foreach (var edge in next)
             {
+                if (paths.Count + queue.Count >= maxPaths)
+                {
+                    pathLimitReached = true;
+                    break;
+                }
                 if (state.NodeIds.Contains(edge.ToNodeId, StringComparer.Ordinal))
                 {
                     AddGap(gaps, maxGaps, ref truncated, Gap(
@@ -364,7 +376,7 @@ public static class AccessScreenDataFlowReporter
                 });
             }
         }
-        if (queue.Count > 0)
+        if (queue.Count > 0 || pathLimitReached)
         {
             truncated = true;
             AddGap(gaps, maxGaps, ref truncated, Gap("AccessFlowPathLimitReached", "report", null, commitSha));
@@ -377,6 +389,7 @@ public static class AccessScreenDataFlowReporter
             var pathNodes = state.NodeIds.Select(id => nodeLookup[id]).ToArray();
             var evidence = pathEdges.Select(edge => edge.Evidence).Append(state.Root.Evidence).ToArray();
             var partial = evidence.Any(item => item.CoverageLabel is "partial" or "unknown")
+                || state.NodeIds.Any(partialNodeIds.Contains)
                 || terminalKind is "cycle" or "depth-limit";
             return new(
                 Id("path", state.Root.RootId, string.Join('>', state.NodeIds), string.Join('>', state.EdgeIds)),
@@ -521,10 +534,17 @@ public static class AccessScreenDataFlowReporter
         var normalized = value.Replace('\\', '/');
         return !string.IsNullOrWhiteSpace(normalized)
             && !Path.IsPathFullyQualified(normalized)
+            && !IsWindowsAbsolutePath(normalized)
             && !normalized.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment is "." or "..")
                 ? normalized
                 : "unavailable";
     }
+    private static bool IsWindowsAbsolutePath(string value) =>
+        value.StartsWith("//", StringComparison.Ordinal)
+        || (value.Length >= 3
+            && char.IsAsciiLetter(value[0])
+            && value[1] == ':'
+            && value[2] == '/');
     private static string SafeCategory(string? value, string fallback) =>
         !string.IsNullOrWhiteSpace(value)
         && value.Length <= 128
