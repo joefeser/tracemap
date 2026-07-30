@@ -192,13 +192,32 @@ database:
 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
   --filter FullyQualifiedName~AccessDesignEvidenceReaderTests
 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~AccessDesignEvidenceCompositionTests
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
   --filter FullyQualifiedName~Access
 ```
 
-These tests validate only the protected local input contract, binding,
-canonicalization, bounds, and failure classifications. They do not prove that
-any Windows exporter is safe or complete, and they do not claim that Access
-behavior, source, forms, reports, VBA, or macros were executed or observed.
+These tests validate the protected local input contract, immutable base-scan
+binding, hash-only projection, deterministic enriched artifacts, validated
+coordinates, explicit gaps, and downstream report/combine/docs/vault/release
+review/local-review preservation. They do not prove that any Windows exporter
+is safe or complete, and they do not claim that Access behavior, forms,
+reports, VBA, or macros were executed or runtime-reachable.
+
+A conforming owner-controlled bundle can be composed on macOS without the
+database file:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Access.Cli -- enrich-design \
+  --base-scan <completed-access-scan> \
+  --design-evidence <protected-owner-controlled-directory> \
+  --out <new-enriched-output-directory>
+python3 scripts/validate-adapter-artifacts.py <new-enriched-output-directory>
+```
+
+The base scan and protected input are immutable inputs. The output must be a
+new, non-overlapping path. Protected source and identities are consumed only
+in-process; the standard output remains hash-only.
 
 Access extraction requires Windows with installed Microsoft Access/DAO. Run it
 in an isolated local VM with networking and broad host sharing disabled. Stage
