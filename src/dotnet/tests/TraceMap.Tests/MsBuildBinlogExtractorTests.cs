@@ -65,6 +65,10 @@ public sealed class MsBuildBinlogExtractorTests
             && fact.Properties["gapKind"] == "binlog-project-path-omitted");
         Assert.Contains(facts, fact => fact.RuleId == RuleIds.BuildMsBuildBinlogGap
             && fact.Properties["gapKind"] == "binlog-diagnostic-path-omitted");
+        Assert.Contains(facts, fact => fact.RuleId == RuleIds.BuildMsBuildBinlogGap
+            && fact.Properties["gapKind"] == "binlog-diagnostic-code-omitted");
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.MsBuildDiagnosticObserved
+            && fact.Properties.GetValueOrDefault("code") is "CS1001" or "ghp_never_render");
         var serialized = JsonSerializer.Serialize(facts);
         Assert.DoesNotContain(Secret, serialized, StringComparison.Ordinal);
         Assert.DoesNotContain(Command, serialized, StringComparison.Ordinal);
@@ -106,6 +110,19 @@ public sealed class MsBuildBinlogExtractorTests
             Manifest(),
             [busy],
             new MsBuildBinlogLimits(MaxEdges: 0));
+        var missingFacts = MsBuildBinlogExtractor.Extract(
+            repo,
+            Manifest(),
+            [Path.Combine(temp.Path, "missing-a.binlog"), Path.Combine(temp.Path, "missing-b.binlog")],
+            new MsBuildBinlogLimits());
+        var secondBusy = Path.Combine(temp.Path, "busy-second.binlog");
+        PrepareBinlog(secondBusy, repo, succeeded: false, includeOutsideRoot: false, extraMessages: 1);
+        var runtimeUnavailableFacts = MsBuildBinlogExtractor.Extract(
+            repo,
+            Manifest(),
+            [busy, secondBusy],
+            new MsBuildBinlogLimits(),
+            runtimeAvailableOverride: false);
 
         Assert.Contains(malformedFacts, fact => fact.Properties.GetValueOrDefault("gapKind") == "binlog-malformed-or-unsupported");
         Assert.Contains(cappedFacts, fact => fact.Properties.GetValueOrDefault("gapKind") == "binlog-record-cap-reached");
@@ -114,6 +131,18 @@ public sealed class MsBuildBinlogExtractorTests
         Assert.Contains(projectionCappedFacts, fact => fact.Properties.GetValueOrDefault("gapKind") == "binlog-project-cap-reached");
         Assert.Contains(projectionCappedFacts, fact => fact.Properties.GetValueOrDefault("gapKind") == "binlog-diagnostic-cap-reached");
         Assert.Contains(edgeCappedFacts, fact => fact.Properties.GetValueOrDefault("gapKind") == "binlog-edge-cap-reached");
+        var missingGap = Assert.Single(missingFacts);
+        Assert.Equal("binlog-unavailable", missingGap.Properties["gapKind"]);
+        Assert.Equal("2", missingGap.Properties["omittedCount"]);
+        Assert.Equal(2, runtimeUnavailableFacts.Count);
+        Assert.All(runtimeUnavailableFacts, fact =>
+        {
+            Assert.Equal("binlog-parser-runtime-unavailable", fact.Properties["gapKind"]);
+            Assert.NotEqual("unavailable", fact.Properties["artifactSha256"]);
+        });
+        Assert.Equal(
+            runtimeUnavailableFacts.Count,
+            runtimeUnavailableFacts.Select(fact => fact.FactId).Distinct(StringComparer.Ordinal).Count());
         Assert.All(cappedFacts.Where(fact => fact.FactType == FactTypes.MsBuildBinlogObserved),
             fact => Assert.Equal("true", fact.Properties["partial"]));
     }
@@ -310,7 +339,7 @@ public sealed class MsBuildBinlogExtractorTests
             dispatcher.Dispatch(new BuildErrorEventArgs(
                 "compiler",
                 "CS1001",
-                Path.Combine(Path.GetDirectoryName(repo)!, "outside", "Secret.cs"),
+                "Secret.cs",
                 1,
                 1,
                 1,
@@ -321,6 +350,21 @@ public sealed class MsBuildBinlogExtractorTests
             {
                 BuildEventContext = outsideContext,
                 ProjectFile = Path.Combine(Path.GetDirectoryName(repo)!, "outside", "Secret.csproj")
+            });
+            dispatcher.Dispatch(new BuildWarningEventArgs(
+                "custom",
+                "ghp_never_render",
+                Path.Combine(repo, "src", "Child", "Child.cs"),
+                1,
+                1,
+                1,
+                1,
+                Secret,
+                string.Empty,
+                "custom")
+            {
+                BuildEventContext = childContext,
+                ProjectFile = Path.Combine(repo, "src", "Child", "Child.csproj")
             });
         }
 

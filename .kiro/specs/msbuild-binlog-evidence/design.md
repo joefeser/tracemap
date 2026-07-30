@@ -36,9 +36,10 @@ stored only after canonical resolution inside the declared repository and
 normalization to repository-relative `/` paths.
 
 The recorded build outcome is `succeeded`, `failed`, or `unknown`. Diagnostics
-contain only `error|warning`, a conservative alphanumeric diagnostic code, safe
-relative file/line/column, and artifact provenance. Raw messages are never read
-into output properties.
+contain only `error|warning`, a conservative recognized MSBuild/compiler/analyzer
+diagnostic-code shape, safe relative file/line/column, and artifact provenance.
+Unknown/custom code strings are omitted with a gap rather than rendered. Raw
+messages are never read into output properties.
 
 ## Bounds
 
