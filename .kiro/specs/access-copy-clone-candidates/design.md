@@ -52,8 +52,11 @@ identity. Raw property bags are never serialized.
 
 Query declarations retain Tier2 structural evidence. Dependency and flow
 evidence retain their upstream tiers. The candidate lists all supporting fact
-IDs and adds `legacy.access.copy-clone-candidate.v1` to its rule set.
-Composition uncertainty is Tier4.
+IDs and adds `legacy.access.copy-clone-candidate.v1` to its rule set. Every
+candidate also carries that rule, weakest tier, real commit SHA,
+repository-relative primary span, and extractor/version as first-class
+metadata. The report carries the same hashed repository identity and commit as
+the flow input. Composition uncertainty is Tier4.
 
 ## Deferred richer evidence
 
@@ -65,7 +68,8 @@ dependencies and are not reasons to widen Access COM.
 
 ## Privacy
 
-Only closed categories, opaque stable IDs, safe relative spans, and validated
-provenance are rendered. The reporter ignores raw SQL/name/source properties
+Only closed categories, opaque stable IDs, portable safe relative spans, and
+validated provenance are rendered. POSIX, Windows-drive, and UNC paths are
+rejected on every host. The reporter ignores raw SQL/name/source properties
 even if malicious synthetic facts contain them. Failure text exposed by the
 CLI remains classification-only.

@@ -46,11 +46,18 @@ honest usable result without reopening the extraction boundary.
 - false-positive protection for ordinary select and name-only evidence;
 - rule-catalog limitations and Mac-only synthetic tests.
 
+Exact-head review corrections add the inherited hashed repository/real-commit
+contract, first-class rule/tier/span/commit/extractor candidate metadata,
+host-independent Windows/POSIX/UNC path rejection, one precomputed
+stable-key-to-flow-path lookup, and incremental hashing for gap-support
+identity. The branch also merges the repaired #551 parent API so the stacked
+result is validated as one coherent head.
+
 ## Validation
 
-- focused `AccessCopyCloneCandidateTests`: 3/3 passed.
-- all Access-focused tests: 126/126 passed;
-- full solution tests: 1000/1000 passed;
+- focused `AccessCopyCloneCandidateTests`: 4/4 passed.
+- all Access-focused tests: 130/130 passed;
+- full solution tests: 1004/1004 passed;
 - full solution build: passed with 0 errors;
 - focused `dotnet format --verify-no-changes`: passed;
 - `./scripts/check-private-paths.sh`: passed;
