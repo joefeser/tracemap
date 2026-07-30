@@ -99,6 +99,10 @@
         <h2>SQL handoff evidence keeps execution and runtime state outside the claim.</h2>
         <p>The <a href="/sql/operator-handoff/">SQL operator handoff</a> and <a href="/sql/operator-handoff/proof-packet/">synthetic proof packet</a> show expected categorical context and static prerequisite candidates. They cannot observe the active database client, effective permissions, scheduled execution, validation results, or rollback completion.</p>
       </section>
+      <section class="section callout-section">
+        <h2>Checked-in refactor intent is not applied database state.</h2>
+        <p>The <a href="/sql/project-refactor-intent/">SQL project refactor-intent proof</a> can surface supported static table renames, column renames, and schema moves. It cannot prove project build, DACPAC content, deployment planning, target refactor-log state, compatibility, successful application, reversibility, approval, or execution safety.</p>
+      </section>
     </main>
 
     <footer class="site-footer">

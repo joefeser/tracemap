@@ -35,7 +35,8 @@ internal static partial class AccessVbaProjector
         IReadOnlyList<AccessRawVbaModule> rawModules,
         IReadOnlyList<AccessRawEventProcedureReference>? eventReferences = null,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? knownObjects = null,
-        AccessLimits? limits = null)
+        AccessLimits? limits = null,
+        AccessIdentityDisclosurePolicy disclosurePolicy = AccessIdentityDisclosurePolicy.SafeIdentifier)
     {
         limits ??= AccessLimits.Default;
         var gaps = new List<AccessGapProjection>();
@@ -58,13 +59,13 @@ internal static partial class AccessVbaProjector
                 continue;
             }
 
-            var moduleIdentity = AccessSafeValues.Identity(databaseIdentitySeed, "vba-module", raw.Name);
+            var moduleIdentity = AccessSafeValues.Identity(databaseIdentitySeed, "vba-module", raw.Name, disclosurePolicy: disclosurePolicy);
             var moduleGapStart = gaps.Count;
-            var procedureWork = ParseProcedureDeclarations(databaseIdentitySeed, moduleIdentity, lines, limits, gaps);
+            var procedureWork = ParseProcedureDeclarations(databaseIdentitySeed, moduleIdentity, lines, limits, gaps, disclosurePolicy);
             var procedures = procedureWork
                 .Select(work => work.Projection with
                 {
-                    Calls = ProjectCalls(databaseIdentitySeed, moduleIdentity, work, procedureWork, lines, knownObjects, limits, gaps)
+                    Calls = ProjectCalls(databaseIdentitySeed, moduleIdentity, work, procedureWork, lines, knownObjects, limits, gaps, disclosurePolicy)
                 })
                 .ToArray();
             var updatedWork = procedureWork.Zip(procedures, (work, projection) => work with { Projection = projection }).ToArray();
@@ -86,7 +87,7 @@ internal static partial class AccessVbaProjector
         if (rawModules.Count > limits.MaxObjectsPerCollection)
             gaps.Add(new("AccessVbaModuleCollectionLimitReached", "vba-project", null, RuleIds.LegacyAccessVba));
 
-        var bindings = MapEventProcedures(databaseIdentitySeed, modules, eventReferences ?? [], gaps);
+        var bindings = MapEventProcedures(databaseIdentitySeed, modules, eventReferences ?? [], gaps, disclosurePolicy);
         return new(
             modules.Select(item => item.Projection).OrderBy(item => item.Identity.StableKey, StringComparer.Ordinal).ToArray(),
             bindings,
@@ -100,7 +101,8 @@ internal static partial class AccessVbaProjector
         AccessSafeIdentity moduleIdentity,
         string[] lines,
         AccessLimits limits,
-        List<AccessGapProjection> gaps)
+        List<AccessGapProjection> gaps,
+        AccessIdentityDisclosurePolicy disclosurePolicy)
     {
         var declarations = new List<(string Name, string Kind, int StartIndex)>();
         for (var index = 0; index < lines.Length; index++)
@@ -119,7 +121,7 @@ internal static partial class AccessVbaProjector
         for (var ordinal = 0; ordinal < declarations.Count; ordinal++)
         {
             var declaration = declarations[ordinal];
-            var identity = AccessSafeValues.Identity(databaseIdentitySeed, $"vba-procedure-{moduleIdentity.StableKey}", declaration.Name, ordinal);
+            var identity = AccessSafeValues.Identity(databaseIdentitySeed, $"vba-procedure-{moduleIdentity.StableKey}", declaration.Name, ordinal, disclosurePolicy);
             var searchEnd = ordinal + 1 < declarations.Count ? declarations[ordinal + 1].StartIndex - 1 : lines.Length - 1;
             var endIndex = -1;
             for (var index = declaration.StartIndex + 1; index <= searchEnd; index++)
@@ -152,7 +154,8 @@ internal static partial class AccessVbaProjector
         string[] lines,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? knownObjects,
         AccessLimits limits,
-        List<AccessGapProjection> gaps)
+        List<AccessGapProjection> gaps,
+        AccessIdentityDisclosurePolicy disclosurePolicy)
     {
         var calls = new List<AccessVbaCallProjection>();
         for (var index = procedure.BodyStartIndex; index <= procedure.BodyEndIndex && index < lines.Length; index++)
@@ -165,7 +168,7 @@ internal static partial class AccessVbaProjector
 
             foreach (Match match in DynamicDispatchPattern().Matches(masked))
             {
-                AddDynamicCall(databaseIdentitySeed, moduleIdentity, procedure, lineNumber, sourceLine, calls, gaps);
+                AddDynamicCall(databaseIdentitySeed, moduleIdentity, procedure, lineNumber, sourceLine, calls, gaps, disclosurePolicy);
                 if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
             }
             if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
@@ -174,7 +177,7 @@ internal static partial class AccessVbaProjector
             {
                 var callKind = "open-" + match.Groups["kind"].Value.ToLowerInvariant();
                 AddLiteralTargetCall(databaseIdentitySeed, procedure, lineNumber, callKind, sourceLine, match.Index + match.Length,
-                    0, knownObjects, calls, gaps);
+                    0, knownObjects, calls, gaps, disclosurePolicy);
                 if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
             }
             if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
@@ -183,7 +186,7 @@ internal static partial class AccessVbaProjector
             {
                 var collection = match.Groups["kind"].Value.ToLowerInvariant();
                 AddLiteralTargetCall(databaseIdentitySeed, procedure, lineNumber, collection == "querydefs" ? "dao-query-reference" : "dao-table-reference",
-                    sourceLine, match.Index + match.Length, 0, knownObjects, calls, gaps);
+                    sourceLine, match.Index + match.Length, 0, knownObjects, calls, gaps, disclosurePolicy);
                 if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
             }
             if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
@@ -191,7 +194,7 @@ internal static partial class AccessVbaProjector
             foreach (Match match in OpenRecordsetPattern().Matches(masked))
             {
                 AddLiteralTargetCall(databaseIdentitySeed, procedure, lineNumber, "open-recordset-reference", sourceLine,
-                    match.Index + match.Length, 0, knownObjects, calls, gaps);
+                    match.Index + match.Length, 0, knownObjects, calls, gaps, disclosurePolicy);
                 if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
             }
             if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
@@ -199,7 +202,7 @@ internal static partial class AccessVbaProjector
             foreach (Match match in DomainFunctionPattern().Matches(masked))
             {
                 AddLiteralTargetCall(databaseIdentitySeed, procedure, lineNumber, "domain-function-reference", sourceLine,
-                    match.Index + match.Length, 1, knownObjects, calls, gaps);
+                    match.Index + match.Length, 1, knownObjects, calls, gaps, disclosurePolicy);
                 if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
             }
             if (calls.Count > limits.MaxVbaCallsPerProcedure) break;
@@ -208,8 +211,8 @@ internal static partial class AccessVbaProjector
             {
                 var targetName = match.Groups["name"].Value;
                 var candidates = moduleProcedures.Where(item => string.Equals(item.RawName, targetName, StringComparison.OrdinalIgnoreCase)).ToArray();
-                var identity = AccessSafeValues.Identity(databaseIdentitySeed, $"vba-call-{procedure.Projection.Identity.StableKey}", $"local-call-{lineNumber}", calls.Count);
-                var literalTarget = AccessSafeValues.Identity(databaseIdentitySeed, "vba-procedure-target", targetName);
+                var identity = AccessSafeValues.Identity(databaseIdentitySeed, $"vba-call-{procedure.Projection.Identity.StableKey}", $"local-call-{lineNumber}", calls.Count, disclosurePolicy);
+                var literalTarget = AccessSafeValues.Identity(databaseIdentitySeed, "vba-procedure-target", targetName, disclosurePolicy: disclosurePolicy);
                 var target = candidates.Length == 1 ? candidates[0].Projection.Identity.StableKey : null;
                 var coverage = candidates.Length == 1 ? "complete" : "partial";
                 calls.Add(new(identity, procedure.Projection.Identity.StableKey, "local-procedure-call", lineNumber, lineNumber,
@@ -246,9 +249,10 @@ internal static partial class AccessVbaProjector
         int argumentIndex,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? knownObjects,
         List<AccessVbaCallProjection> calls,
-        List<AccessGapProjection> gaps)
+        List<AccessGapProjection> gaps,
+        AccessIdentityDisclosurePolicy disclosurePolicy)
     {
-        var identity = AccessSafeValues.Identity(databaseIdentitySeed, $"vba-call-{procedure.Projection.Identity.StableKey}", $"{callKind}-{lineNumber}", calls.Count);
+        var identity = AccessSafeValues.Identity(databaseIdentitySeed, $"vba-call-{procedure.Projection.Identity.StableKey}", $"{callKind}-{lineNumber}", calls.Count, disclosurePolicy);
         var argument = ArgumentAt(sourceLine, argumentsStart, argumentIndex);
         if (!TryExactStringLiteral(argument, out var literal))
         {
@@ -259,7 +263,7 @@ internal static partial class AccessVbaProjector
             return;
         }
 
-        var literalIdentity = AccessSafeValues.Identity(databaseIdentitySeed, $"vba-{callKind}-target", literal);
+        var literalIdentity = AccessSafeValues.Identity(databaseIdentitySeed, $"vba-{callKind}-target", literal, disclosurePolicy: disclosurePolicy);
         var catalogCandidates = knownObjects is not null && knownObjects.TryGetValue(literal, out var values) ? values : [];
         var expectedKinds = ExpectedTargetKinds(callKind);
         var candidates = expectedKinds is null
@@ -296,9 +300,10 @@ internal static partial class AccessVbaProjector
         int lineNumber,
         string sourceLine,
         List<AccessVbaCallProjection> calls,
-        List<AccessGapProjection> gaps)
+        List<AccessGapProjection> gaps,
+        AccessIdentityDisclosurePolicy disclosurePolicy)
     {
-        var identity = AccessSafeValues.Identity(databaseIdentitySeed, $"vba-call-{procedure.Projection.Identity.StableKey}", $"dynamic-{lineNumber}", calls.Count);
+        var identity = AccessSafeValues.Identity(databaseIdentitySeed, $"vba-call-{procedure.Projection.Identity.StableKey}", $"dynamic-{lineNumber}", calls.Count, disclosurePolicy);
         calls.Add(new(identity, procedure.Projection.Identity.StableKey, "dynamic-dispatch", lineNumber, lineNumber, null, null,
             "unknown", AccessSafeValues.RoleHash("access-vba-dynamic-expression", sourceLine), sourceLine.Length, "partial"));
         gaps.Add(new("AccessVbaDynamicDispatch", "vba-call", identity.StableKey ?? moduleIdentity.StableKey, RuleIds.LegacyAccessVba));
@@ -308,7 +313,8 @@ internal static partial class AccessVbaProjector
         string databaseIdentitySeed,
         IReadOnlyList<ModuleWork> modules,
         IReadOnlyList<AccessRawEventProcedureReference> references,
-        List<AccessGapProjection> gaps)
+        List<AccessGapProjection> gaps,
+        AccessIdentityDisclosurePolicy disclosurePolicy)
     {
         var result = new List<AccessEventBindingProjection>();
         var modulesByRawName = modules
@@ -330,7 +336,7 @@ internal static partial class AccessVbaProjector
                 .ToArray();
             var moduleStableKey = moduleCandidates.Length == 1
                 ? moduleCandidates[0].Projection.Identity.StableKey
-                : AccessSafeValues.Identity(databaseIdentitySeed, "vba-event-module-target", reference.ModuleName).StableKey;
+                : AccessSafeValues.Identity(databaseIdentitySeed, "vba-event-module-target", reference.ModuleName, disclosurePolicy: disclosurePolicy).StableKey;
             var procedureStableKey = procedureCandidates.Length == 1 ? procedureCandidates[0].Procedure.Projection.Identity.StableKey : null;
             result.Add(new(reference.OwnerStableKey, reference.EventRole, moduleStableKey, procedureStableKey,
                 procedureCandidates.Length == 1 ? "complete" : "partial"));

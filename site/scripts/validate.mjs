@@ -59,6 +59,7 @@ import { validateSiteClaimGuardrailsDist } from "./site-claim-guardrails.mjs";
 import { validateStaticTriageDist } from "./static-triage.mjs";
 import { validateStaticVsRuntimeDist } from "./static-vs-runtime.mjs";
 import { validateSqlOperatorHandoffDist } from "./sql-operator-handoff.mjs";
+import { validateSqlProjectRefactorIntentStoryDist } from "./sql-project-refactor-intent-story.mjs";
 import { validateSqlRunbookProofPacketDist } from "./sql-runbook-proof-packet.mjs";
 import { validateSqlStaticObservedValidationDist } from "./sql-static-observed-validation.mjs";
 import { validateStakeholderObjectionGuideDist } from "./stakeholder-objection-guide.mjs";
@@ -176,6 +177,7 @@ export async function validateDist({ baseUrl = defaultBaseUrl, root = defaultRoo
     await validateStaticTriageDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStaticVsRuntimeDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateSqlOperatorHandoffDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    await validateSqlProjectRefactorIntentStoryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateSqlRunbookProofPacketDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateSqlStaticObservedValidationDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateStakeholderObjectionGuideDist({ baseUrl: normalizedBaseUrl, dist, errors });

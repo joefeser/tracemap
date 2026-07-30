@@ -2,6 +2,7 @@
   <ItemGroup>
     <ProjectReference Include="..\TraceMap.Access\TraceMap.Access.csproj" />
     <ProjectReference Include="..\TraceMap.Core\TraceMap.Core.csproj" />
+    <ProjectReference Include="..\TraceMap.Reporting\TraceMap.Reporting.csproj" />
     <ProjectReference Include="..\TraceMap.Storage\TraceMap.Storage.csproj" />
   </ItemGroup>
   <PropertyGroup>
