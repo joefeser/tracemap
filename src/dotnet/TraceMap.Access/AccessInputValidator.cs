@@ -78,7 +78,8 @@ public static partial class AccessInputValidator
             hash,
             extension,
             outputFullPath,
-            isLfs);
+            isLfs,
+            fileInfo.Length);
     }
 
     public static IReadOnlyList<string> NormalizeRelativeSegments(string value)

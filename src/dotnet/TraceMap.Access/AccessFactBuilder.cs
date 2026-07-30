@@ -61,7 +61,7 @@ public static class AccessFactBuilder
                 ("databaseHash", input.DatabaseHash),
                 ("databaseExtension", input.DatabaseExtension),
                 ("databaseStableKey", databaseStableKey),
-                ("sizeBytes", new FileInfo(input.DatabaseFullPath).Length.ToString(System.Globalization.CultureInfo.InvariantCulture)))));
+                ("sizeBytes", DatabaseSize(input).ToString(System.Globalization.CultureInfo.InvariantCulture)))));
         facts.Add(Create(manifest, FactTypes.LegacyDataMetadataDeclared, RuleIds.LegacyAccessDatabaseInventory, EvidenceTiers.Tier2Structural, span,
             targetSymbol: databaseStableKey,
             properties: Props(
@@ -304,8 +304,13 @@ public static class AccessFactBuilder
                 .ToList();
         }
         var ordered = facts.OrderBy(fact => fact.FactType, StringComparer.Ordinal).ThenBy(fact => fact.FactId, StringComparer.Ordinal).ToArray();
-        return new ScanResult(manifest, ordered, [new FileInventoryItem(input.DatabaseRelativePath, "MicrosoftAccessDatabase", new FileInfo(input.DatabaseFullPath).Length)]);
+        return new ScanResult(manifest, ordered, [new FileInventoryItem(input.DatabaseRelativePath, "MicrosoftAccessDatabase", DatabaseSize(input))]);
     }
+
+    private static long DatabaseSize(AccessValidatedInput input) =>
+        input.DatabaseSizeBytes is > 0
+            ? input.DatabaseSizeBytes.Value
+            : new FileInfo(input.DatabaseFullPath).Length;
 
     private static CodeFact Create(ScanManifest manifest, string type, string rule, string tier, EvidenceSpan span,
         string? sourceSymbol = null, string? targetSymbol = null, IReadOnlyDictionary<string, string>? properties = null) =>

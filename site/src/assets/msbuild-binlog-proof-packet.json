@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "tracemap-public-msbuild-binlog-proof-packet/v1",
+  "publicClaimLevel": "demo",
+  "purpose": "A public-safe categorical projection of one synthetic local MSBuild binlog dogfood run.",
+  "source": {
+    "repositoryId": "joefeser/tracemap",
+    "commitSha": "e8021921d18be6fa0c53959fa8860455c1af1d49",
+    "sourceKind": "checked-in-sample-local-product-smoke",
+    "repeatedScanCount": 2
+  },
+  "artifactBoundary": {
+    "suppliedExplicitly": true,
+    "declaredCommitMatched": true,
+    "rawArtifactRetained": false,
+    "artifactAuthentication": "not-established",
+    "artifactLocation": "synthetic-identity-only"
+  },
+  "observation": {
+    "ruleId": "build.msbuild-binlog.observation.v1",
+    "evidenceTier": "Tier2Structural",
+    "coverageLabel": "observed-bounded",
+    "extractorId": "MsBuildBinlogExtractor",
+    "extractorVersion": "msbuild-binlog/0.1.0",
+    "recordedBuildResult": "succeeded",
+    "artifactObservationCount": 1,
+    "projectObservationCount": 1,
+    "projectReferenceObservationCount": 0,
+    "diagnosticObservationCount": 0,
+    "gapCount": 0
+  },
+  "validation": {
+    "deterministicAcrossRepeatedScans": true,
+    "commitBoundOnEveryProjectedFact": true,
+    "syntheticArtifactSpanOnEveryProjectedFact": true,
+    "protectedOutputMatchCount": 0,
+    "standardOutputCount": 5,
+    "standardOutputs": [
+      "scan-manifest.json",
+      "facts.ndjson",
+      "index.sqlite",
+      "report.md",
+      "logs/analyzer.log"
+    ]
+  },
+  "limitations": [
+    "This is one synthetic checked-in sample and is not a completeness, compatibility, or performance benchmark.",
+    "The projection does not authenticate or attest the binary log or prove that it was produced from the declared commit.",
+    "A recorded successful result does not prove tests passed, the repository was clean, deployment occurred, runtime behavior was correct, or release approval exists.",
+    "Project observations and graph edges do not prove runtime reachability.",
+    "Diagnostic evidence may be partial, and no diagnostic observation is not proof that no defect exists.",
+    "The public packet omits the raw binary log, artifact digest, raw messages, properties, items, tasks, commands, environment values, URLs, credentials, connection material, private hosts, usernames, and machine-local paths."
+  ],
+  "nonClaims": [
+    "No artifact authenticity or commit provenance attestation.",
+    "No test-pass, clean-repository, package-use, deployment, runtime-correctness, release-approval, or safe-to-release conclusion.",
+    "No complete diagnostic, project graph, target, task, property, item, package, or performance analysis.",
+    "No LLM, MCP, embedding, vector-database, or prompt-classification analysis in the TraceMap scanner or reducer."
+  ]
+}

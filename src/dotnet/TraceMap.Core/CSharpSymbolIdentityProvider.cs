@@ -110,7 +110,7 @@ public static class CSharpSymbolIdentityProvider
         var location = local.Locations.FirstOrDefault(location => location.IsInSource);
         var sourceKey = location is null
             ? "metadata"
-            : $"{Path.GetFileName(location.SourceTree?.FilePath ?? string.Empty)}:{location.GetLineSpan().StartLinePosition.Line + 1}:{location.GetLineSpan().StartLinePosition.Character + 1}";
+            : $"source-{FactFactory.Hash(Path.GetFileName(location.SourceTree?.FilePath ?? string.Empty), 20)}:{location.GetLineSpan().StartLinePosition.Line + 1}:{location.GetLineSpan().StartLinePosition.Character + 1}";
         return $"csharp local {Escape(containing)} {Escape(local.Name)}:{Escape(TypeKey(local.Type))}@{Escape(sourceKey)}";
     }
 

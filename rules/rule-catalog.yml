@@ -1471,7 +1471,7 @@ rules:
     name: Microsoft Access form and report design surface
     description: Records safe form, report, and control design metadata obtained without rendering, invoking, or executing the surface.
     evidenceTier: Tier2Structural
-    possibleEvidenceTiers: [Tier2Structural, Tier4Unknown]
+    possibleEvidenceTiers: [Tier2Structural, Tier3SyntaxOrTextual, Tier4Unknown]
     emits:
       - AccessFormDeclared
       - AccessReportDeclared
@@ -1549,6 +1549,43 @@ rules:
     limitations:
       - A gap records an unable-to-prove boundary and never proves absence, safety, runtime behavior, data state, query execution, linked-source availability, permissions, deployment, or production use.
       - Diagnostics are classification-only; raw exceptions, local paths, SQL, connections, VBA, macro content, source values, and secrets are omitted.
+
+  - id: legacy.access.design-input.v1
+    name: Microsoft Access source-neutral design input
+    description: Records acceptance and bounded gaps for an explicitly supplied, versioned Access design-evidence bundle bound to an existing completed Access scan.
+    evidenceTier: Tier2Structural
+    possibleEvidenceTiers: [Tier2Structural, Tier4Unknown]
+    emits:
+      - AnalyzerCapabilityDiagnostic
+      - AnalysisGap
+    limitations:
+      - Bundle acceptance proves only that the declared schema, hashes, base-scan binding, bounds, and closed vocabulary were validated; it does not prove exporter safety, database-copy equivalence beyond the declared binding, catalog completeness, runtime reachability, execution, business intent, correctness, deployment, or production use.
+      - Protected input exists only transiently in the composing process. Standard artifacts retain only hashes, categorical provenance, canonical TraceMap record IDs, validated spans, coverage labels, limitations, and explicit non-claims.
+      - Source-neutral composition never launches Access, widens COM, reads database rows, executes queries, VBA, macros, forms, or reports, or persists raw identities, source, design text, expressions, local paths, or connection material.
+
+  - id: legacy.access.screen-data-flow.v1
+    name: Microsoft Access screen-to-data static flow composition
+    description: Composes bounded candidate trails from already-persisted Access UI, VBA, query, schema, macro, and external-boundary facts.
+    evidenceTier: Tier4Unknown
+    possibleEvidenceTiers: [Tier2Structural, Tier3SyntaxOrTextual, Tier4Unknown]
+    emits:
+      - AnalysisGap
+    limitations:
+      - Candidate roots, edges, and paths are static evidence composition only and do not prove startup selection, event firing, user navigation, branch feasibility, runtime reachability, execution, row access, external connectivity, production use, correctness, completeness, or release approval.
+      - Missing item-level source-neutral evidence, unresolved or dynamic targets, cycles, and traversal limits remain explicit gaps; an empty report does not prove the Access application has no behavior.
+      - Output uses opaque stable identities and allowlisted categorical metadata. Raw object names, SQL, VBA, expressions, macro bodies, connections, credentials, local paths, and customer identity are not rendered.
+
+  - id: legacy.access.copy-clone-candidate.v1
+    name: Microsoft Access copy and clone static candidate composition
+    description: Composes conservative candidate or needs-review evidence from persisted Access action-query shapes, opaque dependencies, and bounded screen-to-data flow references.
+    evidenceTier: Tier4Unknown
+    possibleEvidenceTiers: [Tier2Structural, Tier3SyntaxOrTextual, Tier4Unknown]
+    emits:
+      - AnalysisGap
+    limitations:
+      - Append, make-table, update, bulk, and compound query shapes are mutation candidates only. They do not prove copying, cloning, business intent, source-to-target direction, row equivalence, transactionality, execution, or production use.
+      - Persisted v1 Access query facts do not retain role-specific source/target or field-correspondence evidence. Generated-key handling, parent/child sequencing, loops, callbacks, domain functions, dynamic SQL, external-link behavior, and late-bound dispatch remain explicit gaps.
+      - Names such as Clone, Copy, Duplicate, or New are never evidence. Output uses opaque stable identities and excludes raw names, SQL, VBA, literals, values, row counts, connections, customer identity, and local paths.
 
   - id: legacy.data.dbml.v1
     name: Legacy LINQ to SQL DBML metadata
@@ -2875,6 +2912,7 @@ rules:
       - Requires project load and enough references to resolve symbols.
       - Does not detect reflection-only access.
       - Member access syntax that does not bind to an IPropertySymbol is not emitted by this rule.
+      - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
 
   - id: csharp.semantic.methodinvocation.v1
     name: C# semantic method invocation
@@ -2885,6 +2923,7 @@ rules:
     limitations:
       - Requires project load and enough references to resolve symbols.
       - Dynamic dispatch, reflection, and unresolved overload candidates are not emitted by this rule.
+      - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
 
   - id: csharp.semantic.callgraph.v1
     name: C# semantic call graph
@@ -2896,6 +2935,7 @@ rules:
       - Requires project load and enough references to resolve method symbols.
       - Does not model runtime polymorphism, delegate invocation targets, event subscribers, reflection, or async continuation flow.
       - A call edge records a syntactic call site, not proof that the path executes at runtime.
+      - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
 
   - id: csharp.semantic.objectcreation.v1
     name: C# semantic object creation
@@ -2907,6 +2947,7 @@ rules:
       - Requires project load and enough references to resolve created type symbols.
       - Does not model dependency injection container activations, reflection, deserialization-created instances, or factory-returned runtime types.
       - Assembly version is sourced from Roslyn assembly identity and may be 0.0.0.0 when a project does not set explicit version metadata.
+      - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
 
   - id: csharp.semantic.valueflow.v1
     name: C# semantic argument value flow
@@ -2919,6 +2960,7 @@ rules:
       - Tracks direct call-site argument expressions only; it does not perform interprocedural alias analysis, mutation tracking, or runtime branch feasibility.
       - Raw argument expressions are not stored; expression hashes, expression kinds, resolved symbols, and declaration spans are emitted.
       - Lambda bodies, delegates, reflection, dynamic dispatch, dependency injection, and serializer-created values require later specialized flow rules.
+      - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
 
   - id: csharp.semantic.localalias.v1
     name: C# semantic local alias
@@ -2931,6 +2973,7 @@ rules:
       - Tracks direct local declarations and simple assignments only, such as `var alias = value` and `alias = value`.
       - Does not model mutation of object contents, collection membership, tuple/deconstruction flow, property aliases, ref/out effects, closures, runtime branches, or alias invalidation after complex control flow.
       - Raw alias expressions are not stored; expression hashes, expression kinds, resolved symbols, and declaration spans are emitted.
+      - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
 
   - id: csharp.semantic.fieldalias.v1
     name: C# semantic field alias
@@ -2944,6 +2987,7 @@ rules:
       - Parameter forwarding uses field aliases when the assignment and later argument usage are in the same containing method, or when exactly one constructor in the same containing type assigns the field from a parameter.
       - Does not infer arbitrary cross-method field lifetime, ambiguous multiple-constructor field initialization, dependency injection state, object mutation, property aliases, collection membership, ref/out effects, closures, runtime branches, or alias invalidation after complex control flow.
       - Raw assignment expressions are not stored; expression hashes, expression kinds, resolved symbols, and declaration spans are emitted.
+      - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
 
   - id: csharp.semantic.parameterforwarding.v1
     name: C# semantic parameter forwarding
@@ -2957,6 +3001,7 @@ rules:
       - Constructor field forwarding requires exactly one visible constructor assignment from a parameter in the analyzed containing type; multiple visible assignments or constructors suppress the derived edge.
       - Path reports are bounded by max depth and max path count, so large or cyclic graphs can be intentionally truncated.
       - Paths are evidence chains, not proof that a runtime request always reaches the terminal method.
+      - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
 
   - id: csharp.semantic.symbolidentity.v1
     name: C# semantic symbol identity
@@ -2978,6 +3023,7 @@ rules:
       - IDs are deterministic for the same source, project load, target framework, and dependency graph, but may change when references, target frameworks, generated source, or compiler binding change.
       - These rows are derived indexes over facts, not independent conclusions; the originating fact rule ID and evidence span remain authoritative.
       - Relationship rows for inheritance, interface implementation, and overrides are emitted by `csharp.semantic.symbolrelationship.v1`.
+      - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
 
   - id: csharp.semantic.symbolrelationship.v1
     name: C# semantic symbol relationships
@@ -2993,6 +3039,7 @@ rules:
       - Override relationships record direct overridden members exposed by Roslyn; deeper override chains require graph traversal.
       - Generic substitutions, default interface methods, explicit interface implementations, and partial types follow Roslyn binding for the loaded project/target framework and may differ when project references or target frameworks change.
       - These relationships prove compiler binding, not runtime reachability, branch execution, object allocation, or dependency injection dispatch.
+      - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
 
   - id: csharp.semantic.flowboundary.v1
     name: C# semantic flow boundary
@@ -3016,6 +3063,7 @@ rules:
       - Use `csharp.semantic.runtimeevidence.v1` facts for statically visible registrations, reflection targets, serializer member names, collection element inputs, mutation semantics, and simple branch feasibility evidence.
       - Raw expressions are not stored; expression hashes, expression kinds, resolved symbols, and line spans are emitted.
       - Specialized flow rules are still required before TraceMap can carry value provenance across these boundaries.
+      - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
 
   - id: csharp.semantic.runtimeevidence.v1
     name: C# semantic runtime evidence
@@ -3039,6 +3087,7 @@ rules:
       - Mutation semantics classify direct property/field assignments and increment/decrement operations; they do not model aliasing, thread interleavings, setter side effects, or downstream object state.
       - Branch feasibility is limited to compiler constant boolean expressions, direct null equality checks, and direct null patterns; it does not perform symbolic execution, path feasibility, range analysis, or branch probability.
       - Raw expressions are not stored; expression hashes, expression kinds, resolved symbols, and line spans are emitted.
+      - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
 
   - id: csharp.semantic.contractmapping.v1
     name: C# semantic contract mapping
@@ -3055,6 +3104,7 @@ rules:
       - EF fluent configuration is emitted separately under database.ef.v1; conventions, migrations, provider-specific naming policies, and runtime model mutation are not resolved by this rule.
       - Config binding is limited to direct `GetSection(\"...\").Bind(...)` and `GetSection(\"...\").Get<T>()` call chains with literal section names. Options registration, named options, validation, reload behavior, and provider precedence are not inferred.
       - These facts prove source mapping declarations or calls, not runtime request routing, database schema existence, config availability, or branch reachability.
+      - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
 
   - id: csharp.semantic.declarations.v1
     name: C# semantic declarations
@@ -3065,6 +3115,8 @@ rules:
     limitations:
       - Requires project load and enough references to create a Roslyn compilation.
       - Generated source excluded from inventory is not reported.
+      - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
+      - Each external source document also emits a `csharp.semantic.workspace.v1` gap because repository presence and immutable source identity are not established.
 
   - id: csharp.semantic.workspace.v1
     name: C# semantic workspace gaps
@@ -3076,6 +3128,7 @@ rules:
       - Workspace diagnostics can be environment-specific because they depend on installed SDKs and available project references.
       - Compilation gaps do not prevent syntax fallback facts from being emitted.
       - Native workspace messages are sanitized to stable categories before shareable artifacts are written; raw local paths, remotes, package sources, config values, credentials, and source-like snippets are omitted.
+      - Source documents outside the repository use deterministic synthetic evidence paths derived from bounded non-host descriptors. The original path is not retained, and same-named unrecognized external sources can share an identity.
 
   - id: build.environment.target-framework.v1
     name: Build environment target framework diagnostics
@@ -3142,6 +3195,33 @@ rules:
       - Workspace diagnostics are sanitized categories and do not include raw native output, local paths, private repository names, remotes, package sources, config values, credentials, or source snippets.
       - Categories explain why semantic coverage was reduced; they do not prove runtime compatibility or absence of repository evidence.
       - Syntax, config, SQL, WCF, and WebForms fallback facts remain valid within their own evidence tiers.
+
+  - id: build.msbuild-binlog.observation.v1
+    name: Bounded MSBuild binary-log observation
+    description: Projects an explicitly supplied local MSBuild binary log into an allowlisted build result, repository-relative project and build-graph identity, and diagnostic code/severity/location schema.
+    evidenceTier: Tier2Structural
+    emits:
+      - MsBuildBinlogObserved
+      - MsBuildProjectObserved
+      - MsBuildProjectReferenceObserved
+      - MsBuildDiagnosticObserved
+    limitations:
+      - The artifact SHA-256 identifies the supplied bytes but does not authenticate them, prove the build ran at the declared commit, or prove the repository was clean.
+      - Recorded build success does not prove tests passed, deployment safety, runtime correctness, or release approval; graph edges do not prove runtime reachability.
+      - Only repository-relative project paths, bounded diagnostic codes/severity/locations, aggregate counts, and the recorded build result are projected.
+      - Raw messages, properties, items, environment values, task parameters, commands, embedded files, source content, package sources, URLs, credentials, tokens, connection strings, private hosts, usernames, absolute paths, and outside-root paths are omitted.
+      - Absence of a diagnostic is not evidence that a defect is absent, and diagnostic coverage may be partial when caps or parser gaps are present.
+
+  - id: build.msbuild-binlog.gap.v1
+    name: Bounded MSBuild binary-log gap
+    description: Records categorical unavailable, malformed, unsupported, unsafe-path, symlink, and bounded-cap outcomes without rendering parser text or sensitive artifact content.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - A gap reports reduced observation coverage; it does not prove a project, diagnostic, build edge, defect, test, deployment, or runtime behavior is absent.
+      - Gap properties contain only an artifact digest when available, a stable gap kind, aggregate omitted count, coverage label, and documented limitations.
+      - The in-process parser is protected by an input-size and record-count boundary, but out-of-process wall-clock and memory isolation are deferred.
 
   - id: analyzer.capability.semantic.v1
     name: Analyzer semantic capability diagnostics
@@ -3341,6 +3421,28 @@ rules:
     limitations:
       - A gap reports reduced static coverage for one checked-in surface; it does not establish that a live object or migration is absent, invalid, unapplied, or unsafe.
       - Gap properties contain categorical classifications and statement ordinals only; raw SQL and unsafe identifiers are omitted.
+
+  - id: database.sql-project.refactor-intent.v1
+    name: SQL project refactor intent
+    description: Extracts bounded checked-in SQL project refactor-log linkage and supported rename or schema-move intent from safe static XML.
+    evidenceTier: Tier2Structural
+    emits:
+      - SqlProjectRefactorLogDeclared
+      - SqlProjectRefactorOperation
+    limitations:
+      - Only literal RefactorLog Include items and bounded table/column rename or table schema-move identities are recognized; MSBuild properties, globs, conditions, imports, and broader refactor kinds are not evaluated.
+      - Evidence records checked-in intent only and does not prove SQL project build, DACPAC packaging, deployment-plan generation, SQL execution, target __RefactorLog state, deployment, application, compatibility, rollback, production state, release approval, or safe execution.
+      - Operation keys are hashed; raw XML, SQL, source snippets, connection material, local absolute paths, private infrastructure identities, and arbitrary XML values are not stored.
+
+  - id: database.sql-project.refactor-intent.gap.v1
+    name: SQL project refactor intent gap
+    description: Records unsafe, missing, malformed, oversized, unsupported, ambiguous, unreferenced, or truncated SQL project refactor-log evidence.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - A gap reports reduced bounded static coverage and does not establish that a refactor is absent, invalid, unapplied, incompatible, or unsafe.
+      - Gap properties contain categorical classifications and bounded counts only; raw XML, SQL, identifiers rejected as unsafe, operation bodies, connection material, and local absolute paths are omitted.
 
   - id: database.design-review.packet.v1
     name: Database design-review packet composition
