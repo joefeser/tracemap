@@ -415,6 +415,7 @@ public static class RuleIds
     public const string LegacyAccessMacroGap = "legacy.access.macro-gap.v1";
     public const string LegacyAccessCoverageGap = "legacy.access.coverage-gap.v1";
     public const string LegacyAccessDesignInput = "legacy.access.design-input.v1";
+    public const string LegacyAccessScreenDataFlow = "legacy.access.screen-data-flow.v1";
     public const string LegacyFlowInputAvailability = "legacy.flow.input-availability.v1";
     public const string LegacyFlowRootSelection = "legacy.flow.root-selection.v1";
     public const string LegacyFlowStaticTraversal = "legacy.flow.static-traversal.v1";
