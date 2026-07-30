@@ -24,12 +24,12 @@
       copy/clone implementations.
 - [x] Complete independent adversarial specification review and disposition all
       P1/P2 findings.
-- [ ] Obtain owner decisions recorded in `implementation-state.md`.
-- [ ] Approve or revise the specification for implementation.
+- [x] Obtain owner decisions recorded in `implementation-state.md`.
+- [x] Approve or revise the specification for implementation.
 
 ## Future implementation — not authorized by this PR
 
-- [ ] Add strict manifest/NDJSON models and bounded streaming validation.
+- [x] Add strict manifest/NDJSON models and bounded streaming validation.
 - [ ] Add explicit CLI input and bind it to the matched base Access scan.
 - [ ] Add hash-only identity disclosure for source-neutral projection.
 - [ ] Add validated optional source-coordinate provenance.
@@ -39,6 +39,6 @@
 - [ ] Preserve provenance through facts, indexes, combine, reports, evidence
       docs, vault, release review, and local review bundle.
 - [ ] Add synthetic determinism, mismatch, gap, cap, and protected-marker tests.
-- [ ] Run focused/full Mac validation.
+- [x] Run focused/full Mac validation.
 - [ ] Propose a separate threat-reviewed Windows exporter only if the owner
       selects a candidate mechanism.
