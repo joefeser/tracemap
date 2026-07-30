@@ -51,13 +51,19 @@ facts, rule IDs, tiers, provenance, coverage, and limitations.
   extractor/version, coverage, and limitations;
 - opaque stable-key and categorical allowlists plus protected-marker tests.
 
+Exact-head review corrections add a hashed repository identifier and require a
+real commit SHA, give every gap file/span/commit/extractor provenance, make
+report coverage partial when any path is partial, normalize unexpected tiers to
+Tier4, drop non-categorical limitation text, and reuse one traversal edge
+lookup. The already-completed PR checkbox was confirmed current.
+
 ## Validation
 
 - locked restore: passed, with only the separately tracked
   `SQLitePCLRaw.lib.e_sqlite3` 2.1.11 advisory;
-- focused `AccessScreenDataFlowTests`: 3/3 passed;
-- all Access-focused tests: 123/123 passed;
-- full solution tests: 997/997 passed;
+- focused `AccessScreenDataFlowTests`: 6/6 passed;
+- all Access-focused tests: 126/126 passed;
+- full solution tests: 1000/1000 passed;
 - full solution build: passed with 0 errors;
 - focused `dotnet format --verify-no-changes`: passed;
 - `./scripts/check-private-paths.sh`: passed;
