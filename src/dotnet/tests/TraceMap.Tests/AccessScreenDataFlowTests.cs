@@ -1,0 +1,213 @@
+using System.Text;
+using System.Text.Json;
+using System.Security.Cryptography;
+using TraceMap.Access.Cli;
+using TraceMap.Core;
+using TraceMap.Reporting;
+using TraceMap.Storage;
+
+namespace TraceMap.Tests;
+
+public sealed class AccessScreenDataFlowTests
+{
+    private const string Commit = "2222222222222222222222222222222222222222";
+    private const string ProtectedMarker = "Customer_Secret_Form_91827";
+
+    [Fact]
+    public void Builder_composes_bounded_branching_cycle_and_gap_evidence_deterministically()
+    {
+        var facts = FlowFacts();
+
+        var first = AccessScreenDataFlowReporter.Build(Commit, facts, 12, 100, 100);
+        var second = AccessScreenDataFlowReporter.Build(Commit, facts.Reverse().ToArray(), 12, 100, 100);
+
+        Assert.Equal(JsonSerializer.Serialize(first), JsonSerializer.Serialize(second));
+        Assert.Contains(first.Roots, root => root.RootKind == "ui-root-candidate");
+        Assert.Contains(first.Gaps, gap => gap.Classification == "AccessStartupIdentityUnavailable");
+        Assert.Contains(first.Gaps, gap => gap.Classification == "AccessFlowCycleDetected");
+        Assert.Contains(first.Gaps, gap => gap.Classification == "AccessFlowDynamicOrUnresolvedTarget");
+        Assert.Contains(first.Gaps, gap => gap.Classification == "AccessFlowTargetDeclarationMissing");
+        Assert.Contains(first.Paths, path => path.TerminalKind == "report");
+        Assert.Contains(first.Paths, path => path.TerminalKind == "external-boundary");
+        Assert.Contains(first.Paths, path => path.TerminalKind == "cycle");
+        Assert.All(first.Paths.SelectMany(path => path.Edges), edge =>
+        {
+            Assert.StartsWith("fact-", edge.Evidence.FactId, StringComparison.Ordinal);
+            Assert.StartsWith("legacy.access.", edge.Evidence.RuleId, StringComparison.Ordinal);
+            Assert.Equal(Commit, edge.Evidence.CommitSha);
+            Assert.Equal("fixture.accdb", edge.Evidence.FilePath);
+            Assert.NotEmpty(edge.Evidence.ExtractorVersion);
+        });
+        Assert.All(first.Paths, path =>
+        {
+            Assert.NotEmpty(path.SupportingFactIds);
+            Assert.NotEmpty(path.RuleIds);
+            Assert.Contains(path.EvidenceTier, new[]
+            {
+                EvidenceTiers.Tier2Structural,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                EvidenceTiers.Tier4Unknown
+            });
+        });
+        var depthBounded = AccessScreenDataFlowReporter.Build(Commit, facts, 1, 100, 100);
+        Assert.True(depthBounded.Summary.Truncated);
+        Assert.Contains(depthBounded.Gaps, gap => gap.Classification == "AccessFlowDepthLimitReached");
+        var pathBounded = AccessScreenDataFlowReporter.Build(Commit, facts, 12, 1, 100);
+        Assert.True(pathBounded.Summary.Truncated);
+        Assert.Contains(pathBounded.Gaps, gap => gap.Classification == "AccessFlowPathLimitReached");
+    }
+
+    [Fact]
+    public void Builder_labels_count_only_input_and_bounds_as_partial()
+    {
+        var countOnly = new[]
+        {
+            Fact(
+                "fact-count-only",
+                FactTypes.AnalyzerCapabilityDiagnostic,
+                RuleIds.LegacyAccessCoverageGap,
+                EvidenceTiers.Tier4Unknown,
+                null,
+                "access-database-count-only",
+                ("coverageLabel", "count-observed-source-unavailable"))
+        };
+
+        var report = AccessScreenDataFlowReporter.Build(Commit, countOnly, 1, 1, 2);
+
+        Assert.Equal("partial", report.Coverage);
+        Assert.Empty(report.Paths);
+        Assert.Contains(report.Gaps, gap => gap.Classification == "AccessDesignFlowEvidenceUnavailable");
+        Assert.Contains(report.Gaps, gap => gap.Classification == "AccessFlowGapLimitReached");
+        Assert.True(report.Summary.Truncated);
+    }
+
+    [Fact]
+    public async Task Cli_writes_safe_deterministic_markdown_and_json_from_standard_index()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var manifest = new ScanManifest(
+            "scan-access-flow",
+            "synthetic",
+            null,
+            "dev",
+            Commit,
+            "tracemap-access/0.1.0",
+            DateTimeOffset.UnixEpoch,
+            "Level1SemanticAnalysisReduced",
+            "FailedOrPartial",
+            [],
+            [],
+            [],
+            []);
+        SqliteIndexWriter.Write(index, manifest, FlowFacts());
+        var indexHash = Sha256(File.ReadAllBytes(index));
+        var output = Path.Combine(temp.Path, "flow");
+        var secondOutput = Path.Combine(temp.Path, "flow-second");
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        var exit = await AccessCommand.RunAsync(
+            ["flow", "--index", index, "--out", output, "--max-depth", "12", "--max-paths", "100"],
+            stdout,
+            stderr);
+
+        Assert.Equal(0, exit);
+        var secondExit = await AccessCommand.RunAsync(
+            ["flow", "--index", index, "--out", secondOutput, "--max-depth", "12", "--max-paths", "100"],
+            TextWriter.Null,
+            stderr);
+        Assert.Equal(0, secondExit);
+        Assert.Equal(indexHash, Sha256(File.ReadAllBytes(index)));
+        Assert.Equal(
+            Directory.EnumerateFiles(output).OrderBy(Path.GetFileName).Select(file => Sha256(File.ReadAllBytes(file))),
+            Directory.EnumerateFiles(secondOutput).OrderBy(Path.GetFileName).Select(file => Sha256(File.ReadAllBytes(file))));
+        Assert.True(File.Exists(Path.Combine(output, "access-flow.md")));
+        Assert.True(File.Exists(Path.Combine(output, "access-flow.json")));
+        Assert.Contains("Candidate paths:", stdout.ToString(), StringComparison.Ordinal);
+        Assert.Empty(stderr.ToString());
+        foreach (var file in Directory.EnumerateFiles(output))
+        {
+            var text = Encoding.UTF8.GetString(File.ReadAllBytes(file));
+            Assert.DoesNotContain(ProtectedMarker, text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(temp.Path, text, StringComparison.Ordinal);
+            Assert.DoesNotContain("SELECT * FROM Customers", text, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("no", text, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private static CodeFact[] FlowFacts()
+    {
+        const string form = "access-form-11111111111111111111111111111111";
+        const string control = "access-control-22222222222222222222222222222222";
+        const string procedure = "access-vba-procedure-33333333333333333333333333333333";
+        const string missingProcedure = "access-vba-procedure-99999999999999999999999999999999";
+        const string query = "access-query-44444444444444444444444444444444";
+        const string table = "access-table-55555555555555555555555555555555";
+        const string report = "access-report-66666666666666666666666666666666";
+        return
+        [
+            Fact("fact-form", FactTypes.AccessFormDeclared, RuleIds.LegacyAccessUiSurface, EvidenceTiers.Tier2Structural, null, form,
+                ("coverageLabel", "structured-design-observed"), ("objectName", ProtectedMarker)),
+            Fact("fact-control", FactTypes.AccessControlDeclared, RuleIds.LegacyAccessUiSurface, EvidenceTiers.Tier2Structural, form, control,
+                ("coverageLabel", "structured-design-observed")),
+            Fact("fact-procedure", FactTypes.AccessVbaProcedureDeclared, RuleIds.LegacyAccessVba, EvidenceTiers.Tier3SyntaxOrTextual, "access-vba-module-77777777777777777777777777777777", procedure,
+                ("coverageLabel", "bounded-textual-design")),
+            Fact("fact-query", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, null, query,
+                ("coverageLabel", "complete"), ("rawSql", "SELECT * FROM Customers")),
+            Fact("fact-table", FactTypes.LegacyDataEntityDeclared, RuleIds.LegacyAccessSchema, EvidenceTiers.Tier2Structural, null, table,
+                ("coverageLabel", "complete")),
+            Fact("fact-report", FactTypes.AccessReportDeclared, RuleIds.LegacyAccessUiSurface, EvidenceTiers.Tier2Structural, null, report,
+                ("coverageLabel", "structured-design-observed")),
+            Fact("fact-event", FactTypes.AccessEventBindingCandidate, RuleIds.LegacyAccessEventBinding, EvidenceTiers.Tier3SyntaxOrTextual, control, procedure,
+                ("coverageLabel", "exact-same-module")),
+            Fact("fact-missing-event", FactTypes.AccessEventBindingCandidate, RuleIds.LegacyAccessEventBinding, EvidenceTiers.Tier3SyntaxOrTextual, form, missingProcedure,
+                ("coverageLabel", "partial")),
+            Fact("fact-navigation-query", FactTypes.AccessNavigationCandidate, RuleIds.LegacyAccessVba, EvidenceTiers.Tier3SyntaxOrTextual, procedure, query,
+                ("targetKind", "query"), ("coverageLabel", "bounded-static-candidate")),
+            Fact("fact-navigation-report", FactTypes.AccessNavigationCandidate, RuleIds.LegacyAccessVba, EvidenceTiers.Tier3SyntaxOrTextual, procedure, report,
+                ("targetKind", "report"), ("coverageLabel", "bounded-static-candidate")),
+            Fact("fact-navigation-cycle", FactTypes.AccessNavigationCandidate, RuleIds.LegacyAccessVba, EvidenceTiers.Tier3SyntaxOrTextual, procedure, procedure,
+                ("targetKind", "procedure"), ("coverageLabel", "bounded-static-candidate")),
+            Fact("fact-navigation-dynamic", FactTypes.AccessNavigationCandidate, RuleIds.LegacyAccessVba, EvidenceTiers.Tier3SyntaxOrTextual, procedure, null,
+                ("targetKind", "unknown"), ("coverageLabel", "partial")),
+            Fact("fact-query-table", FactTypes.AccessQueryDependencyCandidate, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier3SyntaxOrTextual, query, table,
+                ("targetKind", "table"), ("coverageLabel", "complete")),
+            Fact("fact-external", FactTypes.AccessExternalLinkDeclared, RuleIds.LegacyAccessExternalLink, EvidenceTiers.Tier2Structural, table, null,
+                ("boundaryKind", "odbc"), ("coverageLabel", "hash-only-boundary"))
+        ];
+    }
+
+    private static CodeFact Fact(
+        string id,
+        string factType,
+        string ruleId,
+        string tier,
+        string? source,
+        string? target,
+        params (string Key, string Value)[] values)
+    {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["limitations"] = "static-evidence-only;no-execution"
+        };
+        foreach (var (key, value) in values) properties[key] = value;
+        return new(
+            id,
+            "scan-access-flow",
+            "synthetic",
+            Commit,
+            null,
+            factType,
+            ruleId,
+            tier,
+            source,
+            target,
+            null,
+            new("fixture.accdb", 1, 1, null, "AccessSourceNeutralDesignEvidence", "access-design-evidence/0.1.0"),
+            properties);
+    }
+
+    private static string Sha256(byte[] value) =>
+        Convert.ToHexString(SHA256.HashData(value)).ToLowerInvariant();
+}
