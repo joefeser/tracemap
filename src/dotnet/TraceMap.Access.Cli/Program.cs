@@ -26,8 +26,13 @@ public static class AccessCommand
         var rest = args.Skip(1).ToArray();
         if (rest.Any(IsHelp))
         {
-            await output.WriteLineAsync(command == "scan" ? ScanHelp() : RootHelp());
-            return command == "scan" ? 0 : 1;
+            await output.WriteLineAsync(command switch
+            {
+                "scan" => ScanHelp(),
+                "enrich-design" => EnrichDesignHelp(),
+                _ => RootHelp()
+            });
+            return command is "scan" or "enrich-design" ? 0 : 1;
         }
 
         try
@@ -35,6 +40,7 @@ public static class AccessCommand
             return command switch
             {
                 "scan" => await RunScanAsync(ParseOptions(rest), output, cancellationToken),
+                "enrich-design" => await RunEnrichDesignAsync(ParseOptions(rest), output, cancellationToken),
                 "worker" => await AccessWorkerHost.RunAsync(ParseOptions(rest), output, cancellationToken),
                 _ => await UnknownAsync(error)
             };
@@ -51,6 +57,51 @@ public static class AccessCommand
             return 1;
         }
     }
+
+    private static async Task<int> RunEnrichDesignAsync(
+        IReadOnlyDictionary<string, string> values,
+        TextWriter output,
+        CancellationToken cancellationToken)
+    {
+        var baseScan = Required(values, "--base-scan", "AccessBaseScanPathMissing");
+        var designEvidence = Required(values, "--design-evidence", "AccessDesignInputPathMissing");
+        var outPath = Required(values, "--out", "AccessOutputMissing");
+        var unexpected = values.Keys.Except(["--base-scan", "--design-evidence", "--out"], StringComparer.Ordinal).Any();
+        if (unexpected) throw new AccessScanException("AccessInvalidArguments");
+        ValidateEnrichmentOutputPath(baseScan, designEvidence, outPath);
+        var result = await AccessDesignEvidenceComposer.ComposeAsync(baseScan, designEvidence, AccessLimits.Default, cancellationToken);
+        try { await AccessArtifactWriter.WriteAsync(outPath, result, AccessLimits.Default, cancellationToken); }
+        catch (AccessScanException) { throw; }
+        catch { throw new AccessScanException("AccessArtifactWriteFailed"); }
+        await output.WriteLineAsync("TraceMap Access design evidence enrichment completed.");
+        await output.WriteLineAsync($"Facts written: {result.Facts.Count}");
+        await output.WriteLineAsync($"Analysis level: {result.Manifest.AnalysisLevel}");
+        return 0;
+    }
+
+    private static void ValidateEnrichmentOutputPath(string baseScan, string designEvidence, string output)
+    {
+        var target = Path.GetFullPath(output);
+        foreach (var input in new[] { Path.GetFullPath(baseScan), Path.GetFullPath(designEvidence) })
+        {
+            if (PathsEqual(target, input) || IsAncestor(target, input) || IsAncestor(input, target))
+                throw new AccessScanException("AccessUnsafeOutputPath");
+        }
+    }
+
+    private static bool IsAncestor(string ancestor, string path)
+    {
+        var relative = Path.GetRelativePath(ancestor, path);
+        return relative != ".."
+            && !relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+            && !Path.IsPathFullyQualified(relative);
+    }
+
+    private static bool PathsEqual(string left, string right) =>
+        string.Equals(
+            Path.TrimEndingDirectorySeparator(left),
+            Path.TrimEndingDirectorySeparator(right),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     private static async Task<int> RunScanAsync(IReadOnlyDictionary<string, string> values, TextWriter output, CancellationToken cancellationToken)
     {
@@ -96,15 +147,26 @@ public static class AccessCommand
 
         Usage:
           tracemap-access scan --repo <git-worktree> --database <repo-relative.accdb-or-mdb> --out <new-directory> [--timeout-seconds <30-3600>]
+          tracemap-access enrich-design --base-scan <completed-output> --design-evidence <protected-directory> --out <new-directory>
           tracemap-access --version
 
-        The adapter reads static design metadata only. It does not read rows or execute queries, macros, forms, reports, or VBA.
+        The adapter reads static design metadata only. Design enrichment is Mac-compatible and never opens the database or launches Access.
+        It does not read rows or execute queries, macros, forms, reports, or VBA.
         """;
 
     private static string ScanHelp() => """
         Usage: tracemap-access scan --repo <git-worktree> --database <repo-relative.accdb-or-mdb> --out <new-directory> [--timeout-seconds <30-3600>]
 
         Requirements: Windows, installed Microsoft Access/DAO, clean tracked database at checked-out HEAD, and a non-existing output directory.
+        Outputs: scan-manifest.json, facts.ndjson, index.sqlite, report.md, logs/analyzer.log.
+        """;
+
+    private static string EnrichDesignHelp() => """
+        Usage: tracemap-access enrich-design --base-scan <completed-output> --design-evidence <protected-directory> --out <new-directory>
+
+        Composes an explicitly supplied source-neutral design bundle with an immutable completed Access scan.
+        The command does not require Windows, Microsoft Access, COM, or the original database file.
+        Protected design input is read transiently and is never copied into the output.
         Outputs: scan-manifest.json, facts.ndjson, index.sqlite, report.md, logs/analyzer.log.
         """;
 }

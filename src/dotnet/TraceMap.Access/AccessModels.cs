@@ -43,7 +43,8 @@ public sealed record AccessValidatedInput(
     string DatabaseHash,
     string DatabaseExtension,
     string OutputFullPath,
-    bool IsGitLfs);
+    bool IsGitLfs,
+    long? DatabaseSizeBytes = null);
 
 public sealed record AccessSafeIdentity(string? DisplayName, string NameHash, string StableKey);
 

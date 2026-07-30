@@ -17,7 +17,8 @@ internal static class AccessMacroProjector
     public static AccessMacroProjectionResult Project(
         string databaseIdentitySeed,
         IReadOnlyList<AccessRawMacro> rawMacros,
-        AccessLimits? limits = null)
+        AccessLimits? limits = null,
+        AccessIdentityDisclosurePolicy disclosurePolicy = AccessIdentityDisclosurePolicy.SafeIdentifier)
     {
         limits ??= AccessLimits.Default;
         var macros = new List<AccessMacroProjection>();
@@ -37,7 +38,8 @@ internal static class AccessMacroProjector
                 databaseIdentitySeed,
                 $"macro-{kind}-{ownerStableKey ?? "database"}",
                 raw.Name,
-                raw.Ordinal);
+                raw.Ordinal,
+                disclosurePolicy);
             if (raw.OwnerStableKey is not null && ownerStableKey is null)
                 gaps.Add(new("AccessMacroOwnerUnavailable", $"macro-{kind}", identity.StableKey, RuleIds.LegacyAccessMacroGap));
             macros.Add(new(
