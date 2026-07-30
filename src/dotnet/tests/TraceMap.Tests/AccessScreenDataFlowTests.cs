@@ -117,6 +117,83 @@ public sealed class AccessScreenDataFlowTests
         Assert.DoesNotContain(report.Paths.SelectMany(path => path.Limitations), value => value.Contains("private", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void Builder_bounds_queued_branches_before_terminal_paths_are_emitted()
+    {
+        const string form = "access-form-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        var facts = new List<CodeFact>
+        {
+            Fact("fact-form-root", FactTypes.AccessFormDeclared, RuleIds.LegacyAccessUiSurface, EvidenceTiers.Tier2Structural, null, form,
+                ("coverageLabel", "complete"))
+        };
+        var source = form;
+        for (var level = 1; level <= 64; level++)
+        {
+            var target = level == 64
+                ? "access-report-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                : $"access-vba-procedure-{level:x32}";
+            facts.Add(Fact(
+                $"fact-declaration-{level}",
+                level == 64 ? FactTypes.AccessReportDeclared : FactTypes.AccessVbaProcedureDeclared,
+                level == 64 ? RuleIds.LegacyAccessUiSurface : RuleIds.LegacyAccessVba,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                null,
+                target,
+                ("coverageLabel", "complete")));
+            facts.Add(Fact($"fact-branch-{level}-a", FactTypes.AccessNavigationCandidate, RuleIds.LegacyAccessVba, EvidenceTiers.Tier3SyntaxOrTextual, source, target,
+                ("targetKind", level == 64 ? "report" : "procedure"), ("coverageLabel", "complete")));
+            facts.Add(Fact($"fact-branch-{level}-b", FactTypes.AccessNavigationCandidate, RuleIds.LegacyAccessVba, EvidenceTiers.Tier3SyntaxOrTextual, source, target,
+                ("targetKind", level == 64 ? "report" : "procedure"), ("coverageLabel", "complete")));
+            source = target;
+        }
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 64, 1, 100);
+
+        Assert.Single(report.Paths);
+        Assert.Equal(64, report.Paths[0].Depth);
+        Assert.True(report.Summary.Truncated);
+        Assert.Contains(report.Gaps, gap => gap.Classification == "AccessFlowPathLimitReached");
+    }
+
+    [Fact]
+    public void Builder_marks_paths_through_missing_declarations_partial()
+    {
+        const string form = "access-form-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string missing = "access-vba-procedure-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        var facts = new[]
+        {
+            Fact("fact-form-root", FactTypes.AccessFormDeclared, RuleIds.LegacyAccessUiSurface, EvidenceTiers.Tier2Structural, null, form,
+                ("coverageLabel", "complete")),
+            Fact("fact-missing-target", FactTypes.AccessEventBindingCandidate, RuleIds.LegacyAccessEventBinding, EvidenceTiers.Tier3SyntaxOrTextual, form, missing,
+                ("targetKind", "procedure"), ("coverageLabel", "complete"))
+        };
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
+
+        var path = Assert.Single(report.Paths);
+        Assert.Equal("PartialStaticCandidateTrail", path.Classification);
+        Assert.Contains(report.Gaps, gap => gap.Classification == "AccessFlowTargetDeclarationMissing");
+    }
+
+    [Theory]
+    [InlineData(@"C:\SecretDriveMarker91827\db.accdb", "SecretDriveMarker91827")]
+    [InlineData(@"\\SecretServerMarker91827\share\db.accdb", "SecretServerMarker91827")]
+    public void Builder_redacts_windows_absolute_evidence_paths_cross_platform(string unsafePath, string protectedMarker)
+    {
+        var facts = FlowFacts()
+            .Select(fact => fact.FactId == "fact-event"
+                ? fact with { Evidence = fact.Evidence with { FilePath = unsafePath } }
+                : fact)
+            .ToArray();
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
+
+        Assert.Contains(
+            report.Paths.SelectMany(path => path.Edges),
+            edge => edge.Evidence.FactId == "fact-event" && edge.Evidence.FilePath == "unavailable");
+        Assert.DoesNotContain(protectedMarker, JsonSerializer.Serialize(report), StringComparison.OrdinalIgnoreCase);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("not-a-commit")]

@@ -18,6 +18,7 @@ public sealed class AccessDesignEvidenceCompositionTests
     private const string ProtectedControl = "Password_Reset_Private_Button_81274";
     private const string ProtectedModule = "Private_Server_Module_71923";
     private const string ProtectedMacro = "Credential_Rotation_Macro_61922";
+    private const string ProtectedField = "Private Field 51729";
 
     [Fact]
     public async Task Enrichment_is_deterministic_hash_only_immutable_and_preserved_by_downstream_consumers()
@@ -183,6 +184,52 @@ public sealed class AccessDesignEvidenceCompositionTests
         Assert.Equal("AccessBaseScanArtifactLimitReached", error.Classification);
     }
 
+    [Fact]
+    public async Task Enrichment_accumulates_support_when_distinct_records_share_a_projection_identity()
+    {
+        using var temp = new TempDirectory();
+        var baseScan = await WriteBaseScanAsync(temp.Path);
+        var design = WriteDesignBundle(temp.Path, baseScan, includeProjectionIdentityDuplicates: true);
+
+        var result = await AccessDesignEvidenceComposer.ComposeAsync(baseScan, design);
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AccessVbaModuleDeclared
+            && fact.Properties["sourceCanonicalRecordIds"].Split(';').Length == 2);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AccessMacroDeclared
+            && fact.Properties["sourceCanonicalRecordIds"].Split(';').Length == 2);
+    }
+
+    [Fact]
+    public async Task Enrichment_resolves_hash_only_fields_flags_control_conflicts_and_preserves_event_and_macro_owners()
+    {
+        using var temp = new TempDirectory();
+        var baseScan = await WriteBaseScanAsync(temp.Path);
+        var design = WriteDesignBundle(temp.Path, baseScan, includeReviewRegressions: true);
+
+        var result = await AccessDesignEvidenceComposer.ComposeAsync(baseScan, design);
+
+        var field = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.LegacyDataColumnDeclared);
+        Assert.DoesNotContain("objectName", field.Properties.Keys);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AccessBindingDeclared
+            && fact.Properties.GetValueOrDefault("bindingKind") == "control-source"
+            && fact.TargetSymbol == field.TargetSymbol);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("classification") == "AccessDesignInputSurfaceConflict");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AccessFormDeclared
+            && fact.Properties.GetValueOrDefault("projectorCoverage") == "partial");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AccessEventBindingCandidate
+            && fact.Properties.GetValueOrDefault("projectorCoverage") == "complete"
+            && fact.Properties.ContainsKey("procedureStableKey"));
+        var macros = result.Facts.Where(fact => fact.FactType == FactTypes.AccessMacroDeclared
+            && fact.Properties.GetValueOrDefault("macroKind") == "embedded").ToArray();
+        Assert.Equal(2, macros.Length);
+        Assert.Equal(2, macros.Select(fact => fact.TargetSymbol).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(2, macros.Select(fact => fact.Properties["ownerStableKey"]).Distinct(StringComparer.Ordinal).Count());
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("classification") == "AccessMacroOwnerUnavailable");
+        AssertNoProtectedMaterial(await WriteResultAsync(temp.Path, result));
+    }
+
     private static async Task<string> WriteBaseScanAsync(string root)
     {
         var database = Path.Combine(root, "fixture.accdb");
@@ -205,6 +252,8 @@ public sealed class AccessDesignEvidenceCompositionTests
         var databaseSeed = AccessSafeValues.DatabaseIdentitySeed(
             RepositoryHash, CommitSha, "fixtures/synthetic.accdb", DatabaseHash);
         var sharedQuery = AccessSafeValues.Identity(databaseSeed, "query", "SharedQuery");
+        var table = AccessSafeValues.Identity(databaseSeed, "table", "BaseTable");
+        var field = AccessSafeValues.Identity(databaseSeed, $"field-{table.StableKey}", ProtectedField);
         var projection = new AccessDatabaseProjection(
             "tracemap.access-projection.v1",
             DatabaseHash,
@@ -214,7 +263,7 @@ public sealed class AccessDesignEvidenceCompositionTests
             false,
             false,
             0,
-            [],
+            [new(table, [new(field, 0, "text", 255, false)], [])],
             [],
             [new(
                 sharedQuery,
@@ -238,29 +287,36 @@ public sealed class AccessDesignEvidenceCompositionTests
     private static string WriteDesignBundle(
         string root,
         string baseScan,
-        string? databaseIdentityOverride = null)
+        string? databaseIdentityOverride = null,
+        bool includeProjectionIdentityDuplicates = false,
+        bool includeReviewRegressions = false)
     {
         var directory = Path.Combine(root, "protected-design-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         var vba = $"' {ProtectedForm}\nPublic Sub HandleClick()\nDoCmd.OpenForm \"{ProtectedForm}\"\nEnd Sub";
         var vbaHash = Sha256(Encoding.UTF8.GetBytes(vba));
-        var designText = "Begin Form\n    HasModule = -1\nEnd";
+        var designText = includeReviewRegressions
+            ? $"Begin Form\n    HasModule = -1\n    Begin TextBox\n        Name =\"{ProtectedControl}\"\n        ControlSource =\"Different Field 51729\"\n    End\nEnd"
+            : "Begin Form\n    HasModule = -1\nEnd";
         var designTextHash = Sha256(Encoding.UTF8.GetBytes(designText));
-        var records = new[]
+        var records = new List<string>
         {
             Record("catalog-object", "catalog-query", null, "catalog-export", "container-only", null, null, null, "complete",
                 Object(("objectRole", "saved-query"), ("identity", "SharedQuery"), ("ordinal", 0))),
             Record("catalog-object", "catalog-form", null, "catalog-export", "container-only", null, null, null, "complete",
                 Object(("objectRole", "form"), ("identity", ProtectedForm), ("ordinal", 0))),
             Record("ui-design-document", "ui-design-document", "catalog-form", "form-design-export", "exact-lines", designTextHash, 1, 3, "complete",
-                Object(("documentRole", "form"), ("designText", designText), ("designSha256", designTextHash), ("lineCount", 3))),
+                Object(("documentRole", "form"), ("designText", designText),
+                    (includeReviewRegressions ? "documentSha256" : "designSha256", designTextHash),
+                    ("lineCount", designText.Count(character => character == '\n') + 1))),
             Record("ui-surface", "surface", "catalog-form", "form-design-export", "container-only", null, null, null, "complete",
                 Object(("surfaceRole", "form"), ("identity", ProtectedForm), ("ordinal", 0),
                     ("modulePresence", "present"), ("boundState", "bound"),
-                    ("recordSource", "SharedQuery"),
+                    ("recordSource", includeReviewRegressions ? "BaseTable" : "SharedQuery"),
                     ("events", Object(("on-load", "[Event Procedure]"))))),
             Record("ui-control", "control", "surface", "form-design-export", "container-only", null, null, null, "complete",
                 Object(("identity", ProtectedControl), ("ordinal", 0), ("controlType", 104),
+                    ("controlSource", includeReviewRegressions ? ProtectedField : null),
                     ("events", Object(("on-click", "[Event Procedure]"))))),
             Record("vba-module", "module", null, "vba-module-export", "exact-lines", vbaHash, 1, 4, "complete",
                 Object(("moduleRole", "standard"), ("identity", ProtectedModule), ("moduleKind", "standard"),
@@ -271,6 +327,70 @@ public sealed class AccessDesignEvidenceCompositionTests
             Record("source-gap", "gap", null, "producer-gap", "unavailable", null, null, null, "partial",
                 Object(("classification", "source-unavailable"), ("affectedScope", "macro"), ("coverageCategory", "source-unavailable")))
         };
+        if (includeReviewRegressions)
+        {
+            var eventVba = $"Private Sub {ProtectedControl}_Click()\nEnd Sub";
+            var eventVbaHash = Sha256(Encoding.UTF8.GetBytes(eventVba));
+            records.Add(Record(
+                "catalog-object", "catalog-table", null, "catalog-export", "container-only", null, null, null, "complete",
+                Object(("objectRole", "table"), ("identity", "BaseTable"), ("ordinal", 0))));
+            records.Add(Record(
+                "catalog-object", "catalog-field", "catalog-table", "catalog-export", "container-only", null, null, null, "complete",
+                Object(("objectRole", "table-field"), ("identity", ProtectedField), ("ordinal", 0))));
+            records.Add(Record(
+                "event-reference", "control-event", "control", "form-design-export", "container-only", null, null, null, "complete",
+                Object(("eventRole", "on-click"), ("value", "[Event Procedure]"), ("ordinal", 0))));
+            records.Add(Record(
+                "vba-module", "form-module", null, "vba-module-export", "exact-lines", eventVbaHash, 1, 2, "complete",
+                Object(("moduleRole", "form"), ("identity", $"Form_{ProtectedForm}"), ("moduleKind", "form"),
+                    ("sourceText", eventVba), ("sourceSha256", eventVbaHash), ("lineCount", 2), ("coordinateBasis", "module-relative"))));
+            records.Add(Record(
+                "macro-inventory", "surface-macro", "surface", "macro-inventory-export", "unavailable", null, null, null, "partial",
+                Object(("macroCategory", "embedded"), ("identity", ProtectedMacro), ("ownerRole", "form"), ("ordinal", 1),
+                    ("startupRole", "not-autoexec"), ("bodyStatus", "protected-omitted"))));
+            records.Add(Record(
+                "macro-inventory", "control-macro", "control", "macro-inventory-export", "unavailable", null, null, null, "partial",
+                Object(("macroCategory", "embedded"), ("identity", ProtectedMacro), ("ownerRole", "control"), ("ordinal", 1),
+                    ("startupRole", "not-autoexec"), ("bodyStatus", "protected-omitted"))));
+        }
+        if (includeProjectionIdentityDuplicates)
+        {
+            records.Add(Record(
+                "vba-module",
+                "module-alternate-role",
+                null,
+                "vba-module-export",
+                "exact-lines",
+                vbaHash,
+                1,
+                4,
+                "complete",
+                Object(
+                    ("moduleRole", "document"),
+                    ("identity", ProtectedModule),
+                    ("moduleKind", "standard"),
+                    ("sourceText", vba),
+                    ("sourceSha256", vbaHash),
+                    ("lineCount", 4),
+                    ("coordinateBasis", "module-relative"))));
+            records.Add(Record(
+                "macro-inventory",
+                "macro-owner",
+                null,
+                "macro-inventory-export",
+                "unavailable",
+                null,
+                null,
+                null,
+                "partial",
+                Object(
+                    ("macroCategory", "named"),
+                    ("identity", ProtectedMacro),
+                    ("ownerRole", "database"),
+                    ("ordinal", 0),
+                    ("startupRole", "autoexec"),
+                    ("bodyStatus", "unavailable"))));
+        }
         var recordsBytes = Encoding.UTF8.GetBytes(string.Join('\n', records) + "\n");
         File.WriteAllBytes(Path.Combine(directory, AccessDesignEvidenceReader.RecordsFileName), recordsBytes);
         var baseManifestBytes = File.ReadAllBytes(Path.Combine(baseScan, "scan-manifest.json"));
@@ -287,7 +407,7 @@ public sealed class AccessDesignEvidenceCompositionTests
                 ("manifestSha256", Sha256(baseManifestBytes)),
                 ("databaseIdentityHash", databaseIdentityOverride ?? databaseSeed))),
             ("sourceCopy", Object(("sha256", DatabaseHash), ("binding", "hash-identical"))),
-            ("records", Object(("sha256", Sha256(recordsBytes)), ("count", records.Length), ("countsByKind", counts))),
+            ("records", Object(("sha256", Sha256(recordsBytes)), ("count", records.Count), ("countsByKind", counts))),
             ("capabilities", Object(("coordinates", "mixed"), ("catalogCompleteness", "declared-partial"), ("identityDisclosure", "hash-only"))),
             ("exportedAtUtc", "2026-07-29T10:00:00Z"));
         File.WriteAllText(
@@ -336,6 +456,13 @@ public sealed class AccessDesignEvidenceCompositionTests
                 path => Sha256(File.ReadAllBytes(path)),
                 StringComparer.Ordinal);
 
+    private static async Task<string> WriteResultAsync(string root, ScanResult result)
+    {
+        var output = Path.Combine(root, "review-regression-output");
+        await AccessArtifactWriter.WriteAsync(output, result, AccessLimits.Default);
+        return output;
+    }
+
     private static void AssertDirectoriesEqual(string first, string second)
     {
         var left = Snapshot(first);
@@ -352,7 +479,11 @@ public sealed class AccessDesignEvidenceCompositionTests
         foreach (var file in files)
         {
             var text = Encoding.UTF8.GetString(File.ReadAllBytes(file));
-            foreach (var marker in new[] { ProtectedForm, ProtectedControl, ProtectedModule, ProtectedMacro, "Password_Reset" })
+            foreach (var marker in new[]
+                     {
+                         ProtectedForm, ProtectedControl, ProtectedModule, ProtectedMacro, ProtectedField,
+                         "Password_Reset", "Different Field 51729"
+                     })
                 Assert.DoesNotContain(marker, text, StringComparison.OrdinalIgnoreCase);
         }
     }
