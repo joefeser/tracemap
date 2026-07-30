@@ -6,13 +6,16 @@ import {
   fileExists,
   normalizeBaseUrl,
   normalizeRenderedText,
-  readSitemapLocSet
+  readSitemapLocSet,
+  stripTagsQuoteAware
 } from "./validate-utils.mjs";
 
 export const msbuildBinlogArticleSlug = "what-an-msbuild-binlog-knows-that-a-source-diff-does-not";
 export const msbuildBinlogArticleRoute = `/blog/${msbuildBinlogArticleSlug}/`;
 export const msbuildBinlogProofRoute = "/build/msbuild-binlog/proof-packet/";
 export const msbuildBinlogProofAsset = "/assets/msbuild-binlog-proof-packet.json";
+export const msbuildBinlogSocialAsset = "/assets/msbuild-binlog-evidence-social-card.png";
+const evidencedSmokeCommit = "e8021921d18be6fa0c53959fa8860455c1af1d49";
 
 const articleBlocks = [
   "different-evidence",
@@ -68,14 +71,14 @@ export async function validateMsbuildBinlogEvidenceDist({
   const articlePath = resolve(dist, "blog", msbuildBinlogArticleSlug, "index.html");
   const proofPath = resolve(dist, "build", "msbuild-binlog", "proof-packet", "index.html");
   const assetPath = resolve(dist, "assets", "msbuild-binlog-proof-packet.json");
+  const socialAssetPath = resolve(dist, "assets", "msbuild-binlog-evidence-social-card.png");
   const artifacts = [
     [articlePath, msbuildBinlogArticleRoute],
     [proofPath, msbuildBinlogProofRoute],
-    [assetPath, msbuildBinlogProofAsset]
+    [assetPath, msbuildBinlogProofAsset],
+    [socialAssetPath, msbuildBinlogSocialAsset]
   ];
   const presence = await Promise.all(artifacts.map(([path]) => fileExists(path)));
-
-  if (presence.every((present) => !present)) return;
 
   for (const [[, label], present] of artifacts.map((artifact, index) => [artifact, presence[index]])) {
     if (!present) localErrors.push(`MSBuild binlog evidence is missing required artifact: ${label}`);
@@ -83,8 +86,8 @@ export async function validateMsbuildBinlogEvidenceDist({
 
   if (localErrors.length === 0) {
     await validateSitemap({ baseUrl: cleanBaseUrl, dist, errors: localErrors });
-    await validateArticle({ articlePath, errors: localErrors });
-    await validateProofPage({ proofPath, errors: localErrors });
+    await validateArticle({ articlePath, baseUrl: cleanBaseUrl, errors: localErrors });
+    await validateProofPage({ proofPath, baseUrl: cleanBaseUrl, errors: localErrors });
     await validatePacket({ assetPath, errors: localErrors });
     await validateDiscovery({ dist, errors: localErrors });
   }
@@ -99,13 +102,14 @@ async function validateSitemap({ baseUrl, dist, errors }) {
   }
 }
 
-async function validateArticle({ articlePath, errors }) {
+async function validateArticle({ articlePath, baseUrl, errors }) {
   const html = await readFile(articlePath, "utf8");
   const text = normalizeRenderedText(html);
   const decoded = decodeHtmlEntities(html);
-  requireIncludes(html, `<link rel="canonical" href="https://tracemap.tools${msbuildBinlogArticleRoute}">`, "article canonical", errors);
+  const collapsed = decodeHtmlEntities(stripTagsQuoteAware(html));
+  requireIncludes(html, `<link rel="canonical" href="${baseUrl}${msbuildBinlogArticleRoute}">`, "article canonical", errors);
   requireIncludes(html, `<meta property="og:type" content="article">`, "article Open Graph type", errors);
-  requireIncludes(html, `<meta property="og:image" content="https://tracemap.tools/assets/msbuild-binlog-evidence-social-card.png">`, "article social image", errors);
+  requireIncludes(html, `<meta property="og:image" content="${baseUrl}${msbuildBinlogSocialAsset}">`, "article social image", errors);
   requireIncludes(html, `<meta name="twitter:card" content="summary_large_image">`, "article large social card", errors);
   requireIncludes(html, `href="${msbuildBinlogProofRoute}"`, "article proof link", errors);
   requireIncludes(html, "Public claim level: demo", "article claim level", errors);
@@ -122,13 +126,15 @@ async function validateArticle({ articlePath, errors }) {
   const words = text.split(/\s+/).filter(Boolean).length;
   if (words < 700 || words > 1600) errors.push(`MSBuild binlog article word count must be between 700 and 1600, got ${words}`);
   scanUnsupportedClaims(text, "article", errors);
-  scanPrivateMaterial(decoded, "article", errors);
+  scanPrivateMaterial(`${decoded}\n${text}\n${collapsed}`, "article", errors);
 }
 
-async function validateProofPage({ proofPath, errors }) {
+async function validateProofPage({ proofPath, baseUrl, errors }) {
   const html = await readFile(proofPath, "utf8");
   const text = normalizeRenderedText(html);
-  requireIncludes(html, `<link rel="canonical" href="https://tracemap.tools${msbuildBinlogProofRoute}">`, "proof canonical", errors);
+  const decoded = decodeHtmlEntities(html);
+  const collapsed = decodeHtmlEntities(stripTagsQuoteAware(html));
+  requireIncludes(html, `<link rel="canonical" href="${baseUrl}${msbuildBinlogProofRoute}">`, "proof canonical", errors);
   requireIncludes(html, `href="${msbuildBinlogProofAsset}"`, "proof asset link", errors);
   requireIncludes(html, `href="${msbuildBinlogArticleRoute}"`, "proof article link", errors);
   for (const section of proofSections) {
@@ -139,7 +145,9 @@ async function validateProofPage({ proofPath, errors }) {
     "build.msbuild-binlog.observation.v1",
     "build.msbuild-binlog.gap.v1",
     "Tier2Structural",
+    "Tier4Unknown",
     "observed-bounded",
+    "observed-partial",
     "MsBuildBinlogExtractor",
     "msbuild-binlog/0.1.0",
     "recorded succeeded result"
@@ -147,7 +155,7 @@ async function validateProofPage({ proofPath, errors }) {
     requireIncludes(text, phrase, `proof text ${phrase}`, errors);
   }
   scanUnsupportedClaims(text, "proof page", errors);
-  scanPrivateMaterial(decodeHtmlEntities(html), "proof page", errors);
+  scanPrivateMaterial(`${decoded}\n${text}\n${collapsed}`, "proof page", errors);
 }
 
 async function validatePacket({ assetPath, errors }) {
@@ -160,6 +168,7 @@ async function validatePacket({ assetPath, errors }) {
   }
 
   requireExactKeys(packet, ["schemaVersion", "publicClaimLevel", "purpose", "source", "artifactBoundary", "observation", "validation", "limitations", "nonClaims"], "packet", errors);
+  if (!packet || typeof packet !== "object" || Array.isArray(packet)) return;
   requireExactKeys(packet.source, ["repositoryId", "commitSha", "sourceKind", "repeatedScanCount"], "source", errors);
   requireExactKeys(packet.artifactBoundary, ["suppliedExplicitly", "declaredCommitMatched", "rawArtifactRetained", "artifactAuthentication", "artifactLocation"], "artifact boundary", errors);
   requireExactKeys(packet.observation, ["ruleId", "evidenceTier", "coverageLabel", "extractorId", "extractorVersion", "recordedBuildResult", "artifactObservationCount", "projectObservationCount", "projectReferenceObservationCount", "diagnosticObservationCount", "gapCount"], "observation", errors);
@@ -168,7 +177,7 @@ async function validatePacket({ assetPath, errors }) {
   if (packet.schemaVersion !== "tracemap-public-msbuild-binlog-proof-packet/v1") errors.push("MSBuild binlog packet schemaVersion is unsupported");
   if (packet.publicClaimLevel !== "demo") errors.push("MSBuild binlog packet publicClaimLevel must remain demo");
   if (packet.source?.repositoryId !== "joefeser/tracemap") errors.push("MSBuild binlog packet repository identity is unexpected");
-  if (!/^[0-9a-f]{40}$/.test(packet.source?.commitSha ?? "")) errors.push("MSBuild binlog packet requires a full lowercase commit SHA");
+  if (packet.source?.commitSha !== evidencedSmokeCommit) errors.push("MSBuild binlog packet commit SHA does not match the evidenced smoke commit");
   if (packet.source?.sourceKind !== "checked-in-sample-local-product-smoke" || packet.source?.repeatedScanCount !== 2) errors.push("MSBuild binlog packet source contract is unexpected");
 
   const boundary = packet.artifactBoundary ?? {};
@@ -208,13 +217,25 @@ async function validatePacket({ assetPath, errors }) {
   if (!sameArray(packet.limitations, expectedLimitations)) errors.push("MSBuild binlog packet limitations must match the reviewed set");
   if (!sameArray(packet.nonClaims, expectedNonClaims)) errors.push("MSBuild binlog packet nonClaims must match the reviewed set");
 
-  scanPrivateMaterial(JSON.stringify(packet), "proof packet", errors);
+  const serializedPacket = JSON.stringify(packet);
+  scanUnsupportedClaims(serializedPacket, "proof packet", errors);
+  scanPrivateMaterial(serializedPacket, "proof packet", errors);
 }
 
 async function validateDiscovery({ dist, errors }) {
-  const routes = JSON.parse(await readFile(resolve(dist, "routes-index.json"), "utf8"));
-  const entries = Array.isArray(routes) ? routes : routes.entries;
-  const entry = entries?.find((candidate) => candidate.path === msbuildBinlogProofRoute);
+  let routes;
+  try {
+    routes = JSON.parse(await readFile(resolve(dist, "routes-index.json"), "utf8"));
+  } catch (error) {
+    errors.push(`MSBuild binlog discovery metadata is unavailable or invalid: ${error.message}`);
+    return;
+  }
+  const entries = Array.isArray(routes) ? routes : routes?.entries;
+  if (!Array.isArray(entries)) {
+    errors.push("MSBuild binlog discovery metadata entries must be an array");
+    return;
+  }
+  const entry = entries.find((candidate) => candidate.path === msbuildBinlogProofRoute);
   if (!entry) {
     errors.push("MSBuild binlog proof route is missing from discovery metadata");
     return;

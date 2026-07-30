@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -111,7 +111,7 @@ async function readArticles(context) {
 
   const slugs = new Set();
   for (const [index, article] of articles.entries()) {
-    validateArticle(article, slugs, index);
+    await validateArticle(context, article, slugs, index);
     slugs.add(article.slug);
   }
 
@@ -183,7 +183,7 @@ async function readSiteSourceFile(context, relativePath, missingMessage) {
   }
 }
 
-function validateArticle(article, slugs, index) {
+async function validateArticle(context, article, slugs, index) {
   if (!isPlainObject(article)) {
     throw new Error(`Blog article at index ${index} must be an object.`);
   }
@@ -241,6 +241,16 @@ function validateArticle(article, slugs, index) {
     throw new Error(
       `Blog article Open Graph image path is invalid for ${formatArticleContext(article, index)}: ${article.ogImage}`
     );
+  }
+
+  if (article.ogImage !== undefined) {
+    try {
+      await access(resolve(context.src, article.ogImage.slice(1)));
+    } catch {
+      throw new Error(
+        `Blog article Open Graph image is missing for ${formatArticleContext(article, index)}: ${article.ogImage}`
+      );
+    }
   }
 }
 
