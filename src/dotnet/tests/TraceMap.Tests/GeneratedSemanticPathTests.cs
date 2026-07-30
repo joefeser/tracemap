@@ -106,6 +106,46 @@ public sealed class GeneratedSemanticPathTests
         Assert.False(projected.StartsWith("__external__/", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task Checked_in_external_namespace_path_does_not_emit_projection_gap()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var sourceDirectory = Path.Combine(repo, "__external__");
+        var outputPath = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(sourceDirectory);
+        await File.WriteAllTextAsync(Path.Combine(repo, "Sample.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        await File.WriteAllTextAsync(Path.Combine(sourceDirectory, "csharp-contract.cs"), """
+            namespace Sample;
+            public sealed class CheckedInContract { }
+            """);
+
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var exitCode = await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", outputPath], output, error);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(string.Empty, error.ToString());
+        var facts = (await File.ReadAllLinesAsync(Path.Combine(outputPath, "facts.ndjson")))
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(line => JsonDocument.Parse(line).RootElement.Clone())
+            .ToArray();
+        Assert.Contains(facts, fact =>
+            fact.GetProperty("factType").GetString() == FactTypes.TypeDeclared
+            && fact.GetProperty("targetSymbol").GetString() == "global::Sample.CheckedInContract"
+            && fact.GetProperty("evidence").GetProperty("filePath").GetString() == "__external__/csharp-contract.cs");
+        Assert.DoesNotContain(facts, fact =>
+            fact.GetProperty("factType").GetString() == FactTypes.AnalysisGap
+            && fact.GetProperty("properties").TryGetProperty("gapKind", out var gapKind)
+            && gapKind.GetString() == "ExternalSourcePathProjected");
+    }
+
     private static async Task<FixtureResult> ScanFixtureAsync(string root, string name)
     {
         var repo = Path.Combine(root, $"{name}-repo");

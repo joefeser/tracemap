@@ -413,8 +413,9 @@ public static class CSharpSemanticExtractor
             return;
         }
 
-        var filePath = ToRelativePath(repoPath, document.FilePath);
-        if (IsSyntheticExternalSourcePath(filePath))
+        var pathProjection = ToRelativePathProjection(repoPath, document.FilePath);
+        var filePath = pathProjection.Path;
+        if (pathProjection.IsExternal)
         {
             gaps.Add(CreateGap(
                 filePath,
@@ -4670,15 +4671,18 @@ public static class CSharpSemanticExtractor
             : ".";
     }
 
-    internal static string ToRelativePath(string repoPath, string? path)
+    internal static string ToRelativePath(string repoPath, string? path) =>
+        ToRelativePathProjection(repoPath, path).Path;
+
+    private static RelativePathProjection ToRelativePathProjection(string repoPath, string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            return ".";
+            return new(".", false);
         }
         if (!OperatingSystem.IsWindows() && WindowsRootedPathRegex.IsMatch(path))
         {
-            return CreateSyntheticExternalSourcePath(path);
+            return new(CreateSyntheticExternalSourcePath(path), true);
         }
 
         try
@@ -4693,7 +4697,7 @@ public static class CSharpSemanticExtractor
             if (!fullPath.Equals(root, comparison)
                 && !fullPath.StartsWith(containmentPrefix, comparison))
             {
-                return CreateSyntheticExternalSourcePath(path);
+                return new(CreateSyntheticExternalSourcePath(path), true);
             }
 
             var relativePath = FileInventory.NormalizeRelativePath(Path.GetRelativePath(root, fullPath));
@@ -4703,7 +4707,7 @@ public static class CSharpSemanticExtractor
                 && relativePath is not ".."
                 && !relativePath.StartsWith("../", StringComparison.Ordinal))
             {
-                return relativePath is "" ? "." : relativePath;
+                return new(relativePath is "" ? "." : relativePath, false);
             }
         }
         catch (Exception exception) when (exception is ArgumentException or IOException or NotSupportedException)
@@ -4712,8 +4716,10 @@ public static class CSharpSemanticExtractor
             // Roslyn source identity outside the repository.
         }
 
-        return CreateSyntheticExternalSourcePath(path);
+        return new(CreateSyntheticExternalSourcePath(path), true);
     }
+
+    private readonly record struct RelativePathProjection(string Path, bool IsExternal);
 
     private static string CreateSyntheticExternalSourcePath(string path)
     {
@@ -4746,11 +4752,6 @@ public static class CSharpSemanticExtractor
 
         var fileName = normalizedPath[(normalizedPath.LastIndexOf('/') + 1)..];
         return ("source", string.IsNullOrWhiteSpace(fileName) ? "unknown" : fileName.ToLowerInvariant());
-    }
-
-    private static bool IsSyntheticExternalSourcePath(string path)
-    {
-        return path.StartsWith(SyntheticExternalSourcePrefix, StringComparison.Ordinal);
     }
 
     private static bool IsGeneratedSource(string? fullPath)
