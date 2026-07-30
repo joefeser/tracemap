@@ -28,6 +28,7 @@ test("SQL project refactor-intent validator rejects planted private, raw, comman
     ["operation key", "8e1d9dd1-93d4-45d9-aa3b-172dd15585e2"],
     ["copyable command", "SqlPackage /Action:Publish"],
     ["raw SQL", "ALTER TABLE InventoryItem DROP COLUMN DisplayName"],
+    ["merge SQL", "MERGE INTO InventoryItem USING StagingItem WHEN MATCHED THEN UPDATE SET DisplayName = source.DisplayName"],
     ["truncate SQL", "TRUNCATE TABLE InventoryItem"],
     ["execute SQL", "EXEC dbo.ApplyInventoryChange"],
     ["permission SQL", "GRANT SELECT ON dbo.InventoryItem TO fixture_user"],
@@ -119,7 +120,9 @@ test("SQL project refactor-intent validator applies positive-claim guardrails to
 test("SQL project refactor-intent validator rejects direct compatibility and applied-state claims", async (t) => {
   for (const claim of [
     "The database rename is compatible with production.",
-    "The rename was applied successfully."
+    "The rename was applied successfully.",
+    "The deployment was successful.",
+    "The schema move is reversible."
   ]) {
     await t.test(claim, async (subtest) => {
       const root = await createSiteFixture(subtest);
@@ -162,6 +165,7 @@ test("SQL project refactor-intent validator pins fixture evidence to exact check
   const rename = packet.evidence.find((row) => row.id === "table-rename-intent");
   rename.sourceFactId = "fact-fabricated";
   rename.safeSource = "dbo.Fabricated";
+  rename.limitation = "Fabricated boundary.";
   rename.span.startLine = 99;
   rename.span.endLine = 99;
   await writeFile(assetPath, `${JSON.stringify(packet, null, 2)}\n`);

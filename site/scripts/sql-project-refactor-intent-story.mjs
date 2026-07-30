@@ -149,6 +149,7 @@ const expectedFixtureEvidence = [
     projectPath: "samples/sql-project-refactor/Inventory.sqlproj",
     safeSource: "Inventory.sqlproj",
     safeTarget: "Inventory.refactorlog",
+    limitation: "Literal checked-in project linkage only.",
     span: {
       filePath: "samples/sql-project-refactor/Inventory.sqlproj",
       startLine: 3,
@@ -163,6 +164,7 @@ const expectedFixtureEvidence = [
     projectPath: "samples/sql-project-refactor/Inventory.sqlproj",
     safeSource: "dbo.InventoryItem",
     safeTarget: "dbo.CatalogItem",
+    limitation: "Checked-in rename intent only; applied state is not established.",
     span: {
       filePath: "samples/sql-project-refactor/Inventory.refactorlog",
       startLine: 2,
@@ -177,6 +179,7 @@ const expectedFixtureEvidence = [
     projectPath: "samples/sql-project-refactor/Inventory.sqlproj",
     safeSource: "dbo.CatalogItem",
     safeTarget: "catalog.CatalogItem",
+    limitation: "Checked-in schema-move intent only; target schema state is not established.",
     span: {
       filePath: "samples/sql-project-refactor/Inventory.refactorlog",
       startLine: 7,
@@ -196,6 +199,7 @@ const hardLeakPatterns = [
 ];
 const rawMaterialPatterns = [
   /\b(?:SELECT\s+.+?\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE)\b/i,
+  /\bMERGE\s+INTO\s+(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_.$]*)\s+USING\b/i,
   /\bTRUNCATE\s+TABLE\s+(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_.$]*)\b/i,
   /\b(?:EXEC\s+(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_.$]*)|EXECUTE\s+(?:\[[^\]]+\](?:\.\[[^\]]+\])?|[A-Za-z_][A-Za-z0-9_$]*\.[A-Za-z_][A-Za-z0-9_$]*))\b/i,
   /\b(?:GRANT|DENY|REVOKE)\s+[A-Za-z][A-Za-z0-9_ ]{0,40}\s+(?:ON\s+\S+\s+)?(?:TO|FROM)\s+\S+/i,
@@ -205,6 +209,7 @@ const positiveOverclaimPatterns = [
   /\b(?:deployment|refactor|rename|schema move)\s+(?:succeeded|completed successfully|is safe|was approved)\b/i,
   /\b(?:database\s+)?(?:change|deployment|refactor|rename|schema move)\s+(?:is|was)\s+compatible\b/i,
   /\b(?:change|deployment|refactor|rename|schema move)\s+(?:is|was|has been)\s+applied(?:\s+successfully)?\b/i,
+  /\b(?:change|deployment|refactor|rename|schema move)\s+(?:is|was|has been)\s+(?:successful|reversible)\b/i,
   /\b(?:proves|confirms|guarantees|certifies)\b[^.]{0,100}\b(?:deployed|applied|compatible|successful|reversible|approved|safe to run)\b/i,
   /\b(?:it|this|the (?:change|deployment|refactor|release|rename|schema move|script))\s+(?:is|was)\s+(?:ready|approved|safe)\s+(?:for|to)\s+(?:deploy|deployment|release|run)\b/i
 ];
@@ -483,6 +488,7 @@ function fixtureEvidenceMatches(row, expected) {
     && row.projectPath === expected.projectPath
     && row.safeSource === expected.safeSource
     && row.safeTarget === expected.safeTarget
+    && row.limitation === expected.limitation
     && row.span?.filePath === expected.span.filePath
     && row.span?.startLine === expected.span.startLine
     && row.span?.endLine === expected.span.endLine;
