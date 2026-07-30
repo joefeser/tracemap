@@ -1,5 +1,8 @@
 using System.Text;
 using System.Text.Json;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using TraceMap.Cli;
 using TraceMap.Core;
 
@@ -189,6 +192,28 @@ public sealed class GeneratedSemanticPathTests
             fact.GetProperty("factType").GetString() == FactTypes.AnalysisGap
             && fact.GetProperty("properties").TryGetProperty("gapKind", out var gapKind)
             && gapKind.GetString() == "ExternalSourcePathProjected");
+    }
+
+    [Fact]
+    public void Local_symbol_identity_hashes_the_source_leaf_name()
+    {
+        const string sourceLeaf = "PrivateExternalSdkSource.cs";
+        var tree = CSharpSyntaxTree.ParseText(
+            "public sealed class Contract { public void Run() { var value = 1; } }",
+            path: sourceLeaf);
+        var compilation = CSharpCompilation.Create(
+            "Fixture",
+            [tree],
+            [MetadataReference.CreateFromFile(typeof(object).Assembly.Location)]);
+        var model = compilation.GetSemanticModel(tree);
+        var declarator = tree.GetRoot().DescendantNodes().OfType<VariableDeclaratorSyntax>().Single();
+        var local = Assert.IsAssignableFrom<ILocalSymbol>(model.GetDeclaredSymbol(declarator));
+
+        var identity = CSharpSymbolIdentityProvider.TryCreate(local);
+
+        Assert.NotNull(identity);
+        Assert.DoesNotContain(sourceLeaf, identity.SymbolId, StringComparison.Ordinal);
+        Assert.Contains($"source-{FactFactory.Hash(sourceLeaf, 20)}", Uri.UnescapeDataString(identity.SymbolId), StringComparison.Ordinal);
     }
 
     private static async Task<FixtureResult> ScanFixtureAsync(string root, string name)
