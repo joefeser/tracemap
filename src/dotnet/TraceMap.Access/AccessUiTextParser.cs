@@ -191,6 +191,11 @@ internal static partial class AccessUiTextParser
         return value >= 0;
     }
 
+    internal static bool IsSupportedControlType(int value) => value is
+        100 or 101 or 102 or 103 or 104 or 105 or 106 or 107 or 108 or 109
+        or 110 or 111 or 112 or 114 or 118 or 122 or 123 or 124 or 126 or 128
+        or 129 or 130;
+
     private sealed class ControlBuilder(int controlType, int ordinal)
     {
         public string? Name { get; set; }

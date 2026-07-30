@@ -23,6 +23,7 @@ public sealed record AccessDesignEvidenceManifestProjection(
     public required string DatabaseIdentityHash { get; init; }
     public required string SourceCopySha256 { get; init; }
     public required string CatalogCompleteness { get; init; }
+    public required string CoordinateCapability { get; init; }
 }
 
 public sealed record AccessDesignEvidenceGap(
