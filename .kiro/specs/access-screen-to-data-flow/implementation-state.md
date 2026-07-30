@@ -2,6 +2,12 @@
 
 Status: implementation complete; PR handoff in progress
 
+PR: #558
+
+PR URL: https://github.com/joefeser/tracemap/pull/558
+
+PR base: `codex/access-design-evidence-enrichment`
+
 Issue: #551
 
 Parent: #549
