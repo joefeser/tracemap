@@ -12,6 +12,7 @@ public static class ScanEngine
         }
 
         var git = GitMetadataProvider.Detect(repoPath);
+        MsBuildBinlogExtractor.ValidateCommitBinding(git.CommitSha, options.BinlogPaths, options.BinlogCommitSha);
         var inventory = ApplyScope(FileInventory.Collect(repoPath, outputPath), repoPath, options);
         var solutions = inventory
             .Where(item => item.Kind == "Solution")
@@ -19,7 +20,7 @@ public static class ScanEngine
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
         var projects = inventory
-            .Where(item => item.Kind == "Project")
+            .Where(item => item.Kind is "Project" or "SqlProject")
             .Select(item => item.RelativePath)
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
@@ -44,7 +45,7 @@ public static class ScanEngine
             : "Level3SyntaxAnalysis";
 
         var manifest = new ScanManifest(
-            CreateScanId(git, inventory),
+            CreateScanId(git, inventory, options),
             git.RepoName,
             git.RemoteUrl,
             git.Branch,
@@ -65,11 +66,12 @@ public static class ScanEngine
         return new ScanResult(manifest, facts, inventory);
     }
 
-    private static string CreateScanId(GitMetadata git, IReadOnlyList<FileInventoryItem> inventory)
+    private static string CreateScanId(GitMetadata git, IReadOnlyList<FileInventoryItem> inventory, ScanOptions options)
     {
         var signature = string.Join('\n', inventory.Select(item => $"{item.RelativePath}|{item.Kind}|{item.SizeBytes}"));
+        var binlogSignature = MsBuildBinlogExtractor.CreateInputSignature(options.BinlogPaths, repoPath: options.RepoPath);
         var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
-        return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{signature}", 20);
+        return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{signature}|{binlogSignature}", 20);
     }
 
     private static string GetScanRootRelativePath(string repoPath, GitMetadata git)
@@ -79,10 +81,17 @@ public static class ScanEngine
             return ".";
         }
 
+        if (git.ScanRootRelativePath is not null)
+        {
+            var gitRelative = FileInventory.NormalizeRelativePath(git.ScanRootRelativePath);
+            return gitRelative is "." or "" ? "." : gitRelative;
+        }
+
         var relative = Path.GetRelativePath(git.GitRootPath, repoPath);
-        return relative is "." or ""
+        var normalized = FileInventory.NormalizeRelativePath(relative);
+        return normalized is "." or "" || normalized == ".." || normalized.StartsWith("../", StringComparison.Ordinal)
             ? "."
-            : FileInventory.NormalizeRelativePath(relative);
+            : normalized;
     }
 
     private static IReadOnlyList<CodeFact> CreateFacts(
@@ -271,6 +280,12 @@ public static class ScanEngine
         facts.AddRange(SqlFileExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(SqlExecutionContextExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(PostgresSchemaMigrationExtractor.Extract(repoPath, manifest, inventory));
+        facts.AddRange(SqlProjectRefactorExtractor.Extract(
+            repoPath,
+            manifest,
+            inventory,
+            includeUnreferencedLogGaps: options.ProjectPaths is null || options.ProjectPaths.Count == 0));
+        facts.AddRange(MsBuildBinlogExtractor.Extract(repoPath, manifest, options.BinlogPaths));
         facts.AddRange(ConfigExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.GapFacts));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.Facts));
@@ -356,7 +371,7 @@ public static class ScanEngine
             .Where(item => includeGlobs.Length == 0 || includeGlobs.Any(glob => GlobMatches(item.RelativePath, glob)))
             .Where(item => excludeGlobs.Length == 0 || !excludeGlobs.Any(glob => GlobMatches(item.RelativePath, glob)))
             .Where(item => solutionPaths.Count == 0 || item.Kind != "Solution" || solutionPaths.Contains(item.RelativePath))
-            .Where(item => projectPaths.Count == 0 || item.Kind != "Project" || projectPaths.Contains(item.RelativePath))
+            .Where(item => projectPaths.Count == 0 || item.Kind is not ("Project" or "SqlProject") || projectPaths.Contains(item.RelativePath))
             .Where(item => projectDirectories.Length == 0
                 || item.Kind is "Solution"
                 || projectPaths.Contains(item.RelativePath)

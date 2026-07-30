@@ -34,10 +34,14 @@ public static class GitMetadataProvider
             remoteUrl = null;
         }
 
-        return new GitMetadata(repoName, remoteUrl, branch, commitSha, gaps, gitRoot);
+        var scanRootRelativePath = RunGit(root, allowEmpty: true, "rev-parse", "--show-prefix")?.TrimEnd('/', '\\');
+        return new GitMetadata(repoName, remoteUrl, branch, commitSha, gaps, gitRoot, scanRootRelativePath);
     }
 
-    private static string? RunGit(string workingDirectory, params string[] arguments)
+    private static string? RunGit(string workingDirectory, params string[] arguments) =>
+        RunGit(workingDirectory, allowEmpty: false, arguments);
+
+    private static string? RunGit(string workingDirectory, bool allowEmpty, params string[] arguments)
     {
         try
         {
@@ -83,7 +87,7 @@ public static class GitMetadataProvider
 
             Task.WaitAll([outputTask, errorTask], TimeSpan.FromSeconds(1));
             var output = outputTask.IsCompletedSuccessfully ? outputTask.Result.Trim() : string.Empty;
-            return string.IsNullOrWhiteSpace(output) ? null : output;
+            return allowEmpty || !string.IsNullOrWhiteSpace(output) ? output : null;
         }
         catch
         {
