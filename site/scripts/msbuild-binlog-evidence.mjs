@@ -264,13 +264,35 @@ function requireIncludes(text, expected, label, errors) {
 }
 
 function scanUnsupportedClaims(text, label, errors) {
+  const normalized = String(text)
+    .replace(/[.!?;:]+/g, " ")
+    .replace(/\s+/g, " ");
   for (const pattern of unsupportedClaims) {
-    if (pattern.test(text)) errors.push(`MSBuild binlog ${label} contains an unsupported public claim: ${pattern}`);
+    if (pattern.test(normalized)) errors.push(`MSBuild binlog ${label} contains an unsupported public claim: ${pattern}`);
   }
 }
 
 function scanPrivateMaterial(text, label, errors) {
+  const decoded = decodePercentEncoding(text);
   for (const pattern of forbiddenMaterial) {
-    if (pattern.test(text)) errors.push(`MSBuild binlog ${label} contains forbidden private or executable material: ${pattern}`);
+    if (pattern.test(text) || pattern.test(decoded)) {
+      errors.push(`MSBuild binlog ${label} contains forbidden private or executable material: ${pattern}`);
+    }
   }
+}
+
+function decodePercentEncoding(value) {
+  let decoded = String(value);
+  for (let pass = 0; pass < 2; pass += 1) {
+    const next = decoded.replace(/(?:%[0-9a-f]{2})+/gi, (segment) => {
+      try {
+        return decodeURIComponent(segment);
+      } catch {
+        return segment;
+      }
+    });
+    if (next === decoded) break;
+    decoded = next;
+  }
+  return decoded;
 }
