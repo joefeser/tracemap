@@ -68,6 +68,19 @@ public sealed class AccessCopyCloneCandidateTests
         Assert.DoesNotContain(first.Gaps, gap => gap.Classification == "AccessCopyCloneExternalSourcePartial");
         Assert.Contains(first.Gaps, gap => gap.Classification == "AccessCopyCloneParentChildSequenceUnavailable");
         Assert.Contains(first.Gaps, gap => gap.Classification == "AccessCopyCloneUpstreamEvidenceGap");
+        Assert.All(first.Gaps, gap =>
+        {
+            Assert.Equal(Commit, gap.CommitSha);
+            Assert.NotEmpty(gap.FilePath);
+            Assert.True(gap.StartLine > 0);
+            Assert.True(gap.EndLine >= gap.StartLine);
+            Assert.NotEmpty(gap.ExtractorId);
+            Assert.NotEmpty(gap.ExtractorVersion);
+        });
+        var upstreamGap = Assert.Single(first.Gaps, gap => gap.Classification == "AccessCopyCloneUpstreamEvidenceGap");
+        Assert.Equal("fixture.accdb", upstreamGap.FilePath);
+        Assert.Equal("AccessSourceNeutralDesignEvidence", upstreamGap.ExtractorId);
+        Assert.Contains("fact-dynamic", upstreamGap.SupportingFactIds);
     }
 
     [Fact]
@@ -102,6 +115,68 @@ public sealed class AccessCopyCloneCandidateTests
         Assert.True(report.Summary.Truncated);
         Assert.Equal("partial", report.Coverage);
         Assert.Contains(report.Gaps, gap => gap.Classification == "AccessCopyCloneFlowPathLimitReached");
+    }
+
+    [Fact]
+    public void Builder_preserves_declaration_level_partial_reference_coverage()
+    {
+        var facts = CandidateFacts();
+        var append = facts.Single(fact => fact.FactId == "fact-append");
+        append = append with
+        {
+            Properties = new SortedDictionary<string, string>(
+                append.Properties.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["referenceCoverage"] = "partial"
+            }
+        };
+        facts = facts.Where(fact => fact.FactId != append.FactId).Append(append).ToArray();
+
+        var report = AccessCopyCloneCandidateReporter.Build("synthetic", Commit, facts, 100, 100, 100);
+
+        var candidate = Assert.Single(report.Candidates, item => item.Shape == "bulk-append-shape");
+        Assert.Contains("partial", candidate.CoverageLabels);
+        Assert.Contains(report.Gaps, gap =>
+            gap.Classification == "AccessCopyCloneDependencyPartial"
+            && gap.ScopeId == candidate.CandidateId
+            && gap.SupportingFactIds.Contains("fact-append", StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Builder_preserves_flow_depth_truncation_without_claiming_a_path_limit()
+    {
+        var facts = CandidateFacts().ToList();
+        var source = Form;
+        for (var level = 1; level <= 13; level++)
+        {
+            var target = $"access-vba-procedure-{level:x32}";
+            facts.Add(Fact(
+                $"fact-depth-declaration-{level}",
+                FactTypes.AccessVbaProcedureDeclared,
+                RuleIds.LegacyAccessVba,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                null,
+                target,
+                ("coverageLabel", "complete")));
+            facts.Add(Fact(
+                $"fact-depth-edge-{level}",
+                FactTypes.AccessNavigationCandidate,
+                RuleIds.LegacyAccessVba,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                source,
+                target,
+                ("targetKind", "procedure"),
+                ("coverageLabel", "complete")));
+            source = target;
+        }
+
+        var report = AccessCopyCloneCandidateReporter.Build("synthetic", Commit, facts, 100, 100, 100);
+
+        Assert.True(report.Summary.Truncated);
+        var depthGap = Assert.Single(report.Gaps, gap => gap.Classification == "AccessCopyCloneFlowDepthLimitReached");
+        Assert.Equal("AccessScreenDataFlowReporter", depthGap.ExtractorId);
+        Assert.DoesNotContain(report.Gaps, gap => gap.Classification == "AccessCopyCloneFlowPathLimitReached");
     }
 
     [Fact]
@@ -198,11 +273,11 @@ public sealed class AccessCopyCloneCandidateTests
         Fact("fact-form", FactTypes.AccessFormDeclared, RuleIds.LegacyAccessUiSurface, EvidenceTiers.Tier2Structural, null, Form,
             ("coverageLabel", "structured-design-observed")),
         Fact("fact-append", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, null, AppendQuery,
-            ("queryKind", "append"), ("coverageLabel", "complete"), ("displayName", ProtectedMarker), ("rawSql", "INSERT INTO Secret SELECT * FROM Private")),
+            ("queryKind", "append"), ("coverageLabel", "complete"), ("referenceCoverage", "complete"), ("displayName", ProtectedMarker), ("rawSql", "INSERT INTO Secret SELECT * FROM Private")),
         Fact("fact-make-table", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, null, MakeTableQuery,
-            ("queryKind", "make-table"), ("coverageLabel", "complete")),
+            ("queryKind", "make-table"), ("coverageLabel", "complete"), ("referenceCoverage", "partial")),
         Fact("fact-select", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, null, SelectQuery,
-            ("queryKind", "select"), ("coverageLabel", "complete"), ("displayName", "CloneEverything")),
+            ("queryKind", "select"), ("coverageLabel", "complete"), ("referenceCoverage", "complete"), ("displayName", "CloneEverything")),
         Fact("fact-table-a", FactTypes.LegacyDataEntityDeclared, RuleIds.LegacyAccessSchema, EvidenceTiers.Tier2Structural, null, TableA,
             ("coverageLabel", "complete")),
         Fact("fact-table-b", FactTypes.LegacyDataEntityDeclared, RuleIds.LegacyAccessSchema, EvidenceTiers.Tier2Structural, null, TableB,
