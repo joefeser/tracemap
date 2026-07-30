@@ -237,6 +237,12 @@ reader:
 - keeps raw payload values only in disposable in-process `JsonDocument`
   storage.
 
+Exact-line claims are accepted only when they resolve to an accepted,
+hash-validated UI design document or VBA module and fit both that document and
+any exact-line parent bounds. Manifest projection also retains the declared
+catalog-completeness capability so later projection can distinguish complete,
+partial, and unavailable catalogs.
+
 The public reader API can be consumed by the next composition slice without
 duplicating validation. Callers must dispose the returned bundle; its raw
 payload is protected material and exists only while the bundle is alive.
@@ -278,6 +284,11 @@ Mac-only synthetic tests cover:
 - whole-envelope record caps in forward and reverse order;
 - protected source hash and coordinate validation;
 - unknown fields, duplicate JSON properties, and macro-body rejection;
+- scoped source-object rejection without aborting otherwise-valid records;
+- validated document and parent bounds for exact-line child records;
+- accepted duplicate parents remaining available when another equivalent
+  producer record is rejected;
+- retained manifest catalog-completeness capability;
 - suppression of protected markers from canonical record IDs and failure
   classifications.
 
@@ -288,10 +299,10 @@ Validation on the implementation head:
 
 - locked solution restore: passed, with the separately tracked
   `SQLitePCLRaw.lib.e_sqlite3` 2.1.11 advisory only;
-- focused strict reader tests: 19/19 passed;
-- all Access-focused tests: 90/90 passed;
+- focused strict reader tests: 23/23 passed after review fixes;
+- all Access-focused tests: 95/95 passed after review fixes;
 - full solution build: passed with 0 errors;
-- full solution tests: 958/958 passed;
+- full solution tests: 962/962 passed after review fixes;
 - targeted rerun of one initially flaky restore-diagnostic test: passed; the
   unchanged full suite then passed;
 - focused `dotnet format --verify-no-changes`: passed;
