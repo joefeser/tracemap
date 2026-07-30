@@ -87,6 +87,10 @@
         <h2>An explicit MSBuild binlog can add bounded observed-build evidence.</h2>
         <p>The standard scan artifacts can include allowlisted build-result, project, graph, diagnostic, provenance, and gap rows from an explicitly supplied binary log. The raw artifact is not a public output. Read <a href="/blog/what-an-msbuild-binlog-knows-that-a-source-diff-does-not/">what a binlog knows that a source diff does not</a>, then inspect the <a href="/build/msbuild-binlog/proof-packet/">public-safe proof packet</a>.</p>
       </section>
+      <section class="section callout-section">
+        <h2>SQL project refactor intent can travel into review packets.</h2>
+        <p>Supported checked-in project/log linkage, table or column renames, and table schema moves can appear with rule, tier, span, commit, extractor, coverage, and limitation fields. The <a href="/sql/project-refactor-intent/">public-safe proof page</a> keeps those rows separate from Tier 4 gaps and from build, deployment, and database-state claims.</p>
+      </section>
     </main>
 
     <footer class="site-footer">

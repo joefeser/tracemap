@@ -31,7 +31,9 @@ test("MSBuild binlog proof packet rejects arbitrary fields", async (t) => {
 });
 
 test("MSBuild binlog proof packet rejects local paths and connection material", async (t) => {
-  for (const value of ["/Users/example/private.binlog", "Host=private-db.invalid;Password=fixture"]) {
+  const plantedLocalPath = ["", "Users", "example", "private.binlog"].join("/");
+  const plantedConnection = ["Host=example.invalid", "Password=fixture"].join(";");
+  for (const value of [plantedLocalPath, plantedConnection]) {
     await t.test(value.split("=")[0], async (subtest) => {
       const root = await createFixture(subtest);
       const assetPath = join(root, "src", "assets", "msbuild-binlog-proof-packet.json");

@@ -414,6 +414,9 @@ public static class RuleIds
     public const string LegacyAccessEventBinding = "legacy.access.event-binding.v1";
     public const string LegacyAccessMacroGap = "legacy.access.macro-gap.v1";
     public const string LegacyAccessCoverageGap = "legacy.access.coverage-gap.v1";
+    public const string LegacyAccessDesignInput = "legacy.access.design-input.v1";
+    public const string LegacyAccessScreenDataFlow = "legacy.access.screen-data-flow.v1";
+    public const string LegacyAccessCopyCloneCandidate = "legacy.access.copy-clone-candidate.v1";
     public const string LegacyFlowInputAvailability = "legacy.flow.input-availability.v1";
     public const string LegacyFlowRootSelection = "legacy.flow.root-selection.v1";
     public const string LegacyFlowStaticTraversal = "legacy.flow.static-traversal.v1";
@@ -455,7 +458,7 @@ public static class ScannerVersions
     public const string CSharpSyntaxExtractor = "csharp-syntax/0.3.0";
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.2.0";
-    public const string CSharpSemanticExtractor = "csharp-semantic/0.14.0";
+    public const string CSharpSemanticExtractor = "csharp-semantic/0.15.0";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
     public const string SqlShapeExtractor = "sql-shape/0.1.0";

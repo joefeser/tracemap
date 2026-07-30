@@ -184,6 +184,81 @@ python3 scripts/validate-adapter-artifacts.py <scan-output>
 
 ## Microsoft Access Adapter Smoke
 
+Source-neutral Access design-evidence contract changes can be validated on
+macOS with synthetic bundles and do not require Access, COM, or a real
+database:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~AccessDesignEvidenceReaderTests
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~AccessDesignEvidenceCompositionTests
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~Access
+```
+
+These tests validate the protected local input contract, immutable base-scan
+binding, hash-only projection, deterministic enriched artifacts, validated
+coordinates, explicit gaps, and downstream report/combine/docs/vault/release
+review/local-review preservation. They do not prove that any Windows exporter
+is safe or complete, and they do not claim that Access behavior, forms,
+reports, VBA, or macros were executed or runtime-reachable.
+
+A conforming owner-controlled bundle can be composed on macOS without the
+database file:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Access.Cli -- enrich-design \
+  --base-scan <completed-access-scan> \
+  --design-evidence <protected-owner-controlled-directory> \
+  --out <new-enriched-output-directory>
+python3 scripts/validate-adapter-artifacts.py <new-enriched-output-directory>
+```
+
+The base scan and protected input are immutable inputs. The output must be a
+new, non-overlapping path. Protected source and identities are consumed only
+in-process; the standard output remains hash-only.
+
+Source-neutral screen-to-data composition is also Mac-only and reads only the
+completed enriched index:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Access.Cli -- flow \
+  --index <new-enriched-output-directory>/index.sqlite \
+  --out <new-flow-output-directory>
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~AccessScreenDataFlowTests
+```
+
+Verify `access-flow.md` and `access-flow.json` contain deterministic bounded
+candidate paths with supporting fact/rule/tier/commit/span/extractor/coverage/
+limitation provenance. Missing startup identity, item-level evidence, dynamic
+targets, unresolved declarations, cycles, and limits must remain explicit
+gaps. Raw names, SQL, VBA, expressions, macro bodies, connections, credentials,
+local paths, and customer identities must remain absent. This report does not
+prove startup selection, event firing, user navigation, runtime reachability,
+execution, row access, connectivity, correctness, completeness, or approval.
+
+Conservative copy/clone candidate composition is also Mac-only and reuses the
+same completed index and flow evidence:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Access.Cli -- copy-clone \
+  --index <new-enriched-output-directory>/index.sqlite \
+  --out <new-copy-clone-output-directory>
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~AccessCopyCloneCandidateTests
+```
+
+Verify `access-copy-clone.md` and `access-copy-clone.json` classify only
+supported action-query shapes as `Candidate` or `NeedsReview`, never infer from
+names, and preserve exact safe provenance. Source/target direction, field
+correspondence, parent/child sequencing, generated keys, dynamic behavior, and
+flow absence remain explicit gaps. The output must omit raw SQL, names, VBA,
+macro bodies, values, row counts, connection material, customer identity, and
+local paths. A candidate does not prove copying, cloning, business intent,
+execution, row equivalence, correctness, completeness, or safety to run.
+
 Access extraction requires Windows with installed Microsoft Access/DAO. Run it
 in an isolated local VM with networking and broad host sharing disabled. Stage
 only the self-contained CLI binaries and checked-in validation scripts through
@@ -1177,6 +1252,28 @@ strings, scheduled command bodies, local paths, private server identities, or
 validation output. It must not claim SQL execution, runtime reachability,
 production state, design correctness, release approval, or that a script is
 safe to run.
+
+### Generated C# semantic source paths
+
+For changes to C# semantic source-location projection, run the focused generated
+source test and the complete .NET suite:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter "FullyQualifiedName~GeneratedSemanticPathTests|FullyQualifiedName~CSharpSemanticExtractorTests"
+dotnet test src/dotnet/TraceMap.sln
+./scripts/check-private-paths.sh
+```
+
+The focused fixture loads a source document from a synthetic SDK/package-cache
+shape outside the repository. Confirm semantic evidence is preserved under the
+same deterministic `__external__/csharp-<kind>-<hash>` identity across distinct
+host roots and that `csharp.semantic.workspace.v1` emits an
+`ExternalSourcePathProjected` gap. All five standard scan outputs must exclude
+the temporary root, home directory, SDK/package-cache root, raw external source
+path, and package identity. The synthetic fallback intentionally does not prove
+that external source is checked in, immutable, complete, or available on another
+machine; unrecognized same-named external files can share an identity.
 
 ### EF Core mapping evidence
 

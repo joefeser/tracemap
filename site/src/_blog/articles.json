@@ -16,6 +16,21 @@
     "calloutHtml": "Inspect the <a href=\"/build/msbuild-binlog/proof-packet/\">public-safe proof packet</a>, then read the <a href=\"/evidence/\">TraceMap evidence model</a> and <a href=\"/limitations/\">limitations</a>."
   },
   {
+    "slug": "sql-project-refactor-intent-evidence",
+    "category": "SQL evidence",
+    "title": "What a Database Rename Can Prove Before Deployment",
+    "h1": "What a database rename can prove before deployment",
+    "description": "How checked-in SQL project refactor artifacts can surface evidence-backed rename and schema-move intent before deployment without claiming build or database state.",
+    "ogDescription": "TraceMap surfaces bounded checked-in SQL project rename and schema-move intent with provenance, gaps, and explicit deployment non-claims.",
+    "cardDescription": "A public-safe guide to reading checked-in SQL project refactor intent before anyone treats it as applied database state.",
+    "hero": "A checked-in rename can sharpen design and release review when its provenance, coverage, gaps, and operational limits stay attached.",
+    "published": "2026-07-29",
+    "publishedDisplay": "July 29, 2026",
+    "body": "articles/sql-project-refactor-intent-evidence.html",
+    "calloutHeading": "Want the compact proof surface?",
+    "calloutHtml": "Open the <a href=\"/sql/project-refactor-intent/\">SQL project refactor-intent proof page</a>, then keep the <a href=\"/database/design-review/\">database design review</a> and <a href=\"/sql/operator-handoff/\">operator handoff</a> boundaries attached."
+  },
+  {
     "slug": "rag-vs-agentic-retrieval-for-code-review",
     "category": "Review retrieval",
     "title": "RAG vs Agentic Retrieval for Code Review: A TraceMap Perspective",

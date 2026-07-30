@@ -19,23 +19,10 @@ internal static class AccessDesignReviewComposer
     private static readonly IReadOnlyList<string> Limitations =
     [
         "Access design evidence is an after-snapshot static inventory, not a before/after change conclusion.",
-        "Count-only form/report, VBA, and macro coverage does not establish item identities, bindings, procedures, calls, command bodies, or runtime reachability.",
-        "The section does not read rows, execute queries, open or render UI, inspect VBA source or macro bodies, prove effective permissions or external connectivity, approve a release, or certify migration safety.",
+        "Count-only coverage does not establish item identities; source-neutral item evidence, when present, proves only bounded static design or textual shapes.",
+        "The section does not read rows, execute queries, open or render UI, execute VBA or macro bodies, prove effective permissions or external connectivity, approve a release, or certify migration safety.",
         "Raw SQL, query and external-source hashes, connection material, credentials, private object names, captions, expressions, local paths, and infrastructure identities are not rendered."
     ];
-
-    private static readonly HashSet<string> ItemLevelFactTypes = new(StringComparer.Ordinal)
-    {
-        FactTypes.AccessFormDeclared,
-        FactTypes.AccessReportDeclared,
-        FactTypes.AccessControlDeclared,
-        FactTypes.AccessBindingDeclared,
-        FactTypes.AccessVbaModuleDeclared,
-        FactTypes.AccessVbaProcedureDeclared,
-        FactTypes.AccessNavigationCandidate,
-        FactTypes.AccessEventBindingCandidate,
-        FactTypes.AccessMacroDeclared
-    };
 
     public static async Task<ReleaseReviewSection> BuildSectionAsync(
         string path,
@@ -108,11 +95,6 @@ internal static class AccessDesignReviewComposer
                 continue;
             }
 
-            if (ItemLevelFactTypes.Contains(row.Fact.FactType))
-            {
-                continue;
-            }
-
             var finding = FromFact(row);
             if (finding is not null)
             {
@@ -140,36 +122,6 @@ internal static class AccessDesignReviewComposer
                      .ThenBy(group => group.Key.ScopeStableKey, StringComparer.Ordinal))
         {
             gaps.Add(FromAnalysisGap(group));
-        }
-
-        foreach (var group in rows.Where(row => ItemLevelFactTypes.Contains(row.Fact.FactType))
-                     .GroupBy(row => (
-                         row.SourceLabel,
-                         row.Fact.FactType,
-                         row.Fact.Evidence.FilePath,
-                         row.Fact.Evidence.StartLine,
-                         row.Fact.Evidence.EndLine))
-                     .OrderBy(group => group.Key.SourceLabel, StringComparer.Ordinal)
-                     .ThenBy(group => group.Key.FactType, StringComparer.Ordinal)
-                     .ThenBy(group => group.Key.FilePath, StringComparer.Ordinal)
-                     .ThenBy(group => group.Key.StartLine)
-                     .ThenBy(group => group.Key.EndLine))
-        {
-            var first = group.OrderBy(row => row.Fact.FactId, StringComparer.Ordinal).First();
-            gaps.Add(Gap(
-                "AccessItemEvidenceOutsideCountOnlyBoundary",
-                first.SourceLabel,
-                SectionRuleId,
-                EvidenceTiers.Tier4Unknown,
-                ReleaseReviewClassifications.PartialAnalysis,
-                $"`{first.Fact.FactType}` rows are not composed because the shipped Access product boundary is count-only for UI, VBA, and macro capabilities.",
-                group.Select(row => row.Fact.FactId).OrderBy(value => value, StringComparer.Ordinal).Take(24).ToArray(),
-                [
-                    Pair("factType", first.Fact.FactType),
-                    Pair("factCount", group.Count().ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                    Pair("upstreamRuleId", first.Fact.RuleId),
-                    Pair("upstreamEvidenceTier", first.Fact.EvidenceTier)
-                ]));
         }
 
         var orderedFindings = findings
@@ -203,6 +155,15 @@ internal static class AccessDesignReviewComposer
             FactTypes.AccessQueryDeclared => ("saved-query", Select(fact.Properties, "queryKind", "referenceCoverage", "parameterCount", "isPassThrough"), QueryClassification(fact.Properties)),
             FactTypes.AccessQueryDependencyCandidate => ("query-dependency", Select(fact.Properties, "targetKind", "coverageLabel"), ReleaseReviewClassifications.NoActionableEvidence),
             FactTypes.AccessExternalLinkDeclared => ("external-boundary", Select(fact.Properties, "boundaryKind", "sourceKind", "coverageLabel"), ReleaseReviewClassifications.ReviewRecommended),
+            FactTypes.AccessFormDeclared => ("form", DesignMetadata(fact.Properties, "surfaceKind", "modulePresence", "boundState", "controlCount", "coverageLabel"), ReleaseReviewClassifications.NoActionableEvidence),
+            FactTypes.AccessReportDeclared => ("report", DesignMetadata(fact.Properties, "surfaceKind", "modulePresence", "boundState", "controlCount", "coverageLabel"), ReleaseReviewClassifications.NoActionableEvidence),
+            FactTypes.AccessControlDeclared => ("control", DesignMetadata(fact.Properties, "controlType", "ordinal", "coverageLabel"), ReleaseReviewClassifications.NoActionableEvidence),
+            FactTypes.AccessBindingDeclared => ("binding", DesignMetadata(fact.Properties, "bindingKind", "sourceKind", "targetKind", "coverageLabel"), DesignClassification(fact.Properties)),
+            FactTypes.AccessVbaModuleDeclared => ("vba-module", DesignMetadata(fact.Properties, "moduleKind", "lineCount", "procedureCount", "coverageLabel"), DesignClassification(fact.Properties)),
+            FactTypes.AccessVbaProcedureDeclared => ("vba-procedure", DesignMetadata(fact.Properties, "procedureKind", "callCount", "coverageLabel"), ReleaseReviewClassifications.NoActionableEvidence),
+            FactTypes.AccessNavigationCandidate => ("navigation-candidate", DesignMetadata(fact.Properties, "callKind", "targetKind", "coverageLabel"), DesignClassification(fact.Properties)),
+            FactTypes.AccessEventBindingCandidate => ("event-binding-candidate", DesignMetadata(fact.Properties, "eventRole", "coverageLabel"), DesignClassification(fact.Properties)),
+            FactTypes.AccessMacroDeclared => ("macro-inventory", DesignMetadata(fact.Properties, "macroKind", "ordinal", "startupRole", "bodyStatus", "coverageLabel"), DesignClassification(fact.Properties)),
             _ => (null, [], ReleaseReviewClassifications.NoActionableEvidence)
         };
         if (kind is null)
@@ -327,6 +288,14 @@ internal static class AccessDesignReviewComposer
     private static IReadOnlyList<KeyValuePair<string, string>> Select(IReadOnlyDictionary<string, string> properties, params string[] keys) =>
         Sorted(keys.Where(properties.ContainsKey).Select(key => Pair(key, properties[key])));
 
+    private static IReadOnlyList<KeyValuePair<string, string>> DesignMetadata(
+        IReadOnlyDictionary<string, string> properties,
+        params string[] keys) =>
+        Select(properties, [.. keys,
+            "designInputHash", "designInputContractHash", "designProducerId", "designProducerVersion",
+            "designMechanism", "copyBinding", "sourceCanonicalRecordIds",
+            "coordinateStatus", "completenessStatus"]);
+
     private static IReadOnlyList<KeyValuePair<string, string>> IdentityMetadata(CodeFact fact, string kind)
     {
         var values = new List<KeyValuePair<string, string>>();
@@ -366,6 +335,11 @@ internal static class AccessDesignReviewComposer
             || properties.GetValueOrDefault("referenceCoverage") is "partial" or "unknown"
             ? ReleaseReviewClassifications.ReviewRecommended
             : ReleaseReviewClassifications.NoActionableEvidence;
+
+    private static string DesignClassification(IReadOnlyDictionary<string, string> properties) =>
+        properties.GetValueOrDefault("coverageLabel") is "complete" or "structured-design-observed"
+            ? ReleaseReviewClassifications.NoActionableEvidence
+            : ReleaseReviewClassifications.ReviewRecommended;
 
     private static string Coverage(CodeFact fact, IReadOnlyList<KeyValuePair<string, string>> metadata) =>
         metadata.FirstOrDefault(pair => pair.Key is "coverageLabel" or "referenceCoverage").Value

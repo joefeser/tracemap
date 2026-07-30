@@ -24,7 +24,8 @@ internal sealed record AccessRawUiSurface(
     IReadOnlyList<AccessRawUiEvent> Events,
     string Coverage = "complete",
     string? Filter = null,
-    string? OrderBy = null);
+    string? OrderBy = null,
+    string? DeclaredBoundState = null);
 
 internal sealed record AccessUiProjectionResult(
     IReadOnlyList<AccessUiSurfaceProjection> Surfaces,
@@ -36,7 +37,8 @@ internal static partial class AccessUiProjector
         string databaseIdentitySeed,
         IReadOnlyList<AccessRawUiSurface> rawSurfaces,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> knownObjects,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fieldsByTable)
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fieldsByTable,
+        AccessIdentityDisclosurePolicy disclosurePolicy = AccessIdentityDisclosurePolicy.SafeIdentifier)
     {
         var surfaces = new List<AccessUiSurfaceProjection>();
         var gaps = new List<AccessGapProjection>();
@@ -44,34 +46,34 @@ internal static partial class AccessUiProjector
                      .ThenBy(item => AccessSafeValues.RoleHash("access-ui-sort-name", item.Name), StringComparer.Ordinal))
         {
             var kind = raw.SurfaceKind is "form" or "report" ? raw.SurfaceKind : "unknown";
-            var identity = AccessSafeValues.Identity(databaseIdentitySeed, kind, raw.Name);
+            var identity = AccessSafeValues.Identity(databaseIdentitySeed, kind, raw.Name, disclosurePolicy: disclosurePolicy);
             var bindings = new List<AccessBindingProjection>();
-            var recordBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "record-source", raw.RecordSource, 0, knownObjects, null, gaps);
+            var recordBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "record-source", raw.RecordSource, 0, knownObjects, null, gaps, disclosurePolicy);
             if (recordBinding is not null) bindings.Add(recordBinding);
 
             IReadOnlyDictionary<string, IReadOnlyList<string>>? scopedFields = null;
             if (recordBinding is { SourceKind: "direct-object", TargetStableKeys.Count: 1 }
                 && fieldsByTable.TryGetValue(recordBinding.TargetStableKeys[0], out var fieldLookup))
                 scopedFields = fieldLookup;
-            var filterBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "filter", raw.Filter, 0, null, scopedFields, gaps);
+            var filterBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "filter", raw.Filter, 0, null, scopedFields, gaps, disclosurePolicy);
             if (filterBinding is not null) bindings.Add(filterBinding);
-            var orderByBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "order-by", raw.OrderBy, 0, null, scopedFields, gaps);
+            var orderByBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "order-by", raw.OrderBy, 0, null, scopedFields, gaps, disclosurePolicy);
             if (orderByBinding is not null) bindings.Add(orderByBinding);
 
             var controls = new List<AccessControlProjection>();
             foreach (var rawControl in raw.Controls.OrderBy(item => item.Ordinal)
                          .ThenBy(item => AccessSafeValues.RoleHash("access-control-sort-name", item.Name), StringComparer.Ordinal))
             {
-                var controlIdentity = AccessSafeValues.Identity(databaseIdentitySeed, $"control-{identity.StableKey}", rawControl.Name, rawControl.Ordinal);
+                var controlIdentity = AccessSafeValues.Identity(databaseIdentitySeed, $"control-{identity.StableKey}", rawControl.Name, rawControl.Ordinal, disclosurePolicy);
                 var controlBindings = new List<AccessBindingProjection>();
                 var controlSource = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "control-source", rawControl.ControlSource,
-                    rawControl.Ordinal, null, scopedFields, gaps);
+                    rawControl.Ordinal, null, scopedFields, gaps, disclosurePolicy);
                 if (controlSource is not null) controlBindings.Add(controlSource);
                 var rowSource = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "row-source", rawControl.RowSource,
-                    rawControl.Ordinal, knownObjects, null, gaps);
+                    rawControl.Ordinal, knownObjects, null, gaps, disclosurePolicy);
                 if (rowSource is not null) controlBindings.Add(rowSource);
                 var validation = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "validation-rule", rawControl.ValidationRule,
-                    rawControl.Ordinal, null, scopedFields, gaps);
+                    rawControl.Ordinal, null, scopedFields, gaps, disclosurePolicy);
                 if (validation is not null) controlBindings.Add(validation);
                 controls.Add(new(
                     controlIdentity,
@@ -88,9 +90,15 @@ internal static partial class AccessUiProjector
                 identity,
                 kind,
                 raw.HasModule switch { true => "present", false => "absent", null => "unknown" },
-                string.IsNullOrWhiteSpace(raw.RecordSource)
-                    ? raw.Coverage == "complete" ? "unbound" : "unknown"
-                    : "bound-declared",
+                raw.DeclaredBoundState switch
+                {
+                    "bound" => "bound-declared",
+                    "unbound" => "unbound",
+                    "unknown" => "unknown",
+                    _ => string.IsNullOrWhiteSpace(raw.RecordSource)
+                        ? raw.Coverage == "complete" ? "unbound" : "unknown"
+                        : "bound-declared"
+                },
                 designHash,
                 bindings,
                 controls,
@@ -136,11 +144,12 @@ internal static partial class AccessUiProjector
         int ordinal,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? objects,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? fields,
-        List<AccessGapProjection> gaps)
+        List<AccessGapProjection> gaps,
+        AccessIdentityDisclosurePolicy disclosurePolicy)
     {
         var trimmed = value?.Trim() ?? string.Empty;
         if (trimmed.Length == 0) return null;
-        var identity = AccessSafeValues.Identity(databaseIdentitySeed, $"binding-{ownerStableKey}-{bindingKind}", bindingKind, ordinal);
+        var identity = AccessSafeValues.Identity(databaseIdentitySeed, $"binding-{ownerStableKey}-{bindingKind}", bindingKind, ordinal, disclosurePolicy);
 
         if (TryDirectName(trimmed, out var directName))
         {
