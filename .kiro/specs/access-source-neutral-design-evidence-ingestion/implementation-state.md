@@ -249,6 +249,12 @@ catalog object supplies either a protected local identity or a validated
 existing stable key. Initial file-size probe failures are translated into the
 same classification-only read boundary as later filesystem races.
 
+The manifest projection retains the declared coordinate capability. Event
+references resolve only to UI surfaces or controls, required protected identity
+fields reject null or blank values, and control types use the exact closed
+vocabulary supported by `AccessUiTextParser`. Directory member enumeration and
+attribute races are classification-only as well.
+
 The public reader API can be consumed by the next composition slice without
 duplicating validation. Callers must dispose the returned bundle; its raw
 payload is protected material and exists only while the bundle is alive.
@@ -298,6 +304,11 @@ Mac-only synthetic tests cover:
 - required UI-surface ownership for UI controls;
 - required protected identity or validated stable key for catalog objects;
 - classification-only initial file-size probe failures;
+- retained manifest coordinate capability;
+- required UI owner for event references;
+- nonblank required protected identities;
+- exact supported Access UI control-type vocabulary;
+- classification-only directory enumeration and member-attribute failures;
 - suppression of protected markers from canonical record IDs and failure
   classifications.
 
@@ -308,10 +319,10 @@ Validation on the implementation head:
 
 - locked solution restore: passed, with the separately tracked
   `SQLitePCLRaw.lib.e_sqlite3` 2.1.11 advisory only;
-- focused strict reader tests: 27/27 passed after review fixes;
-- all Access-focused tests: 99/99 passed after review fixes;
+- focused strict reader tests: 42/42 passed after review fixes;
+- all Access-focused tests: 114/114 passed after review fixes;
 - full solution build: passed with 0 errors;
-- full solution tests: 966/966 passed after review fixes;
+- full solution tests: 981/981 passed after review fixes;
 - targeted rerun of one initially flaky restore-diagnostic test: passed; the
   unchanged full suite then passed;
 - focused `dotnet format --verify-no-changes`: passed;

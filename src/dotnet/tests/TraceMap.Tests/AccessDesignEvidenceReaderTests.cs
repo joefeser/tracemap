@@ -124,6 +124,92 @@ public sealed class AccessDesignEvidenceReaderTests
         Assert.Equal("AccessDesignInputParentUnavailable", exception.Classification);
     }
 
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("catalog")]
+    public void Event_references_require_a_ui_surface_or_control_parent(string parentShape)
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, parentShape);
+        var records = new List<string>();
+        if (parentShape == "catalog")
+        {
+            records.Add(Record("catalog-object", "owner", null, "catalog-export", "container-only", null, null, null, "complete",
+                Ordered(("objectRole", "form"), ("identity", "NotAUiOwner"), ("ordinal", 0))));
+        }
+        records.Add(Record("event-reference", "event", parentShape == "catalog" ? "owner" : null,
+            "form-design-export", "container-only", null, null, null, "complete",
+            Ordered(("eventRole", "on-click"), ("value", "[Event Procedure]"), ("ordinal", 0))));
+        WriteBundle(path, records);
+
+        var exception = Assert.Throws<AccessScanException>(() => AccessDesignEvidenceReader.Read(path, Binding()));
+
+        Assert.Equal("AccessDesignInputParentUnavailable", exception.Classification);
+    }
+
+    [Theory]
+    [InlineData("ui-surface", null)]
+    [InlineData("ui-surface", "  ")]
+    [InlineData("ui-control", null)]
+    [InlineData("ui-control", "")]
+    [InlineData("vba-module", null)]
+    [InlineData("vba-module", "\t")]
+    [InlineData("macro-inventory", null)]
+    [InlineData("macro-inventory", " ")]
+    public void Required_protected_identities_must_be_nonblank(string kind, string? identity)
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, $"{kind}-{(identity is null ? "null" : "blank")}");
+        var records = new List<string>();
+        if (kind == "ui-control")
+        {
+            records.Add(Record("ui-surface", "surface", null, "form-design-export", "container-only", null, null, null, "complete",
+                Ordered(("surfaceRole", "form"), ("identity", "ValidSurface"), ("ordinal", 0))));
+        }
+        var source = "Public Sub Example()\nEnd Sub";
+        var sourceHash = Sha256(source);
+        records.Add(kind switch
+        {
+            "ui-surface" => Record(kind, "subject", null, "form-design-export", "container-only", null, null, null, "complete",
+                Ordered(("surfaceRole", "form"), ("identity", identity), ("ordinal", 0))),
+            "ui-control" => Record(kind, "subject", "surface", "form-design-export", "container-only", null, null, null, "complete",
+                Ordered(("identity", identity), ("ordinal", 0), ("controlType", 104))),
+            "vba-module" => Record(kind, "subject", null, "vba-module-export", "exact-lines", sourceHash, 1, 2, "complete",
+                Ordered(("moduleRole", "standard"), ("identity", identity), ("moduleKind", "standard"),
+                    ("sourceText", source), ("sourceSha256", sourceHash), ("lineCount", 2), ("coordinateBasis", "module-relative"))),
+            "macro-inventory" => Record(kind, "subject", null, "macro-inventory-export", "unavailable", null, null, null, "partial",
+                Ordered(("macroCategory", "named"), ("identity", identity), ("ordinal", 0),
+                    ("startupRole", "not-autoexec"), ("bodyStatus", "protected-omitted"))),
+            _ => throw new InvalidOperationException()
+        });
+        WriteBundle(path, records);
+
+        var exception = Assert.Throws<AccessScanException>(() => AccessDesignEvidenceReader.Read(path, Binding()));
+
+        Assert.Equal("AccessDesignInputRecordMalformed", exception.Classification);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(113)]
+    [InlineData(999)]
+    public void Ui_controls_reject_control_types_outside_the_parser_vocabulary(int controlType)
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, controlType.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        WriteBundle(path,
+        [
+            Record("ui-surface", "surface", null, "form-design-export", "container-only", null, null, null, "complete",
+                Ordered(("surfaceRole", "form"), ("identity", "ValidSurface"), ("ordinal", 0))),
+            Record("ui-control", "control", "surface", "form-design-export", "container-only", null, null, null, "complete",
+                Ordered(("identity", "ValidControl"), ("ordinal", 0), ("controlType", controlType)))
+        ]);
+
+        var exception = Assert.Throws<AccessScanException>(() => AccessDesignEvidenceReader.Read(path, Binding()));
+
+        Assert.Equal("AccessDesignInputRecordMalformed", exception.Classification);
+    }
+
     [Fact]
     public void Catalog_objects_require_an_identity_and_hash_an_existing_stable_key()
     {
@@ -471,6 +557,23 @@ public sealed class AccessDesignEvidenceReaderTests
     }
 
     [Fact]
+    public void Member_enumeration_failures_are_classification_only()
+    {
+        using var temp = new TempDirectory();
+        var protectedDirectory = Path.Combine(temp.Path, ProtectedMarker, "missing");
+
+        var exception = Assert.Throws<AccessScanException>(() =>
+            AccessDesignEvidenceReader.ValidateMembers(
+                protectedDirectory,
+                Path.Combine(protectedDirectory, AccessDesignEvidenceReader.ManifestFileName),
+                Path.Combine(protectedDirectory, AccessDesignEvidenceReader.RecordsFileName)));
+
+        Assert.Equal("AccessDesignInputReadFailed", exception.Classification);
+        Assert.Equal(exception.Classification, exception.Message);
+        Assert.DoesNotContain(ProtectedMarker, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Malformed_utf8_is_rejected_after_exact_file_hash_validation()
     {
         using var temp = new TempDirectory();
@@ -579,6 +682,19 @@ public sealed class AccessDesignEvidenceReaderTests
         using var result = AccessDesignEvidenceReader.Read(path, Binding());
 
         Assert.Equal("declared-partial", result.Manifest.CatalogCompleteness);
+    }
+
+    [Fact]
+    public void Manifest_preserves_declared_coordinate_capability()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "bundle");
+        WriteBundle(path, []);
+        MutateManifest(path, root => root["capabilities"]!["coordinates"] = "unavailable");
+
+        using var result = AccessDesignEvidenceReader.Read(path, Binding());
+
+        Assert.Equal("unavailable", result.Manifest.CoordinateCapability);
     }
 
     [Fact]

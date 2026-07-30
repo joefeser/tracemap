@@ -252,7 +252,11 @@ public static class AccessDesignEvidenceReader
 
         var capabilities = RequireObjectProperty(root, "capabilities", "AccessDesignInputManifestInvalid");
         RequireOnlyProperties(capabilities, ["coordinates", "catalogCompleteness", "identityDisclosure"], "AccessDesignInputManifestInvalid");
-        RequireClosedString(capabilities, "coordinates", ["exact-lines", "container-only", "unavailable", "mixed"], "AccessDesignInputManifestInvalid");
+        var coordinateCapability = RequireClosedString(
+            capabilities,
+            "coordinates",
+            ["exact-lines", "container-only", "unavailable", "mixed"],
+            "AccessDesignInputManifestInvalid");
         var catalogCompleteness = RequireClosedString(
             capabilities,
             "catalogCompleteness",
@@ -282,7 +286,8 @@ public static class AccessDesignEvidenceReader
             BaseScanManifestSha256 = baseManifestHash,
             DatabaseIdentityHash = databaseIdentityHash,
             SourceCopySha256 = sourceCopyHash,
-            CatalogCompleteness = catalogCompleteness
+            CatalogCompleteness = catalogCompleteness,
+            CoordinateCapability = coordinateCapability
         };
     }
 
@@ -460,6 +465,9 @@ public static class AccessDesignEvidenceReader
         foreach (var required in shape.Required)
             if (!payload.TryGetProperty(required, out _))
                 throw new AccessScanException("AccessDesignInputRecordMalformed");
+        if (shape.Required.Contains("identity", StringComparer.Ordinal)
+            && string.IsNullOrWhiteSpace(RequireStringValue(payload, "identity", "AccessDesignInputRecordMalformed")))
+            throw new AccessScanException("AccessDesignInputRecordMalformed");
 
         foreach (var property in payload.EnumerateObject())
         {
@@ -527,7 +535,7 @@ public static class AccessDesignEvidenceReader
         {
             if (!payload.TryGetProperty("controlType", out var controlType)
                 || !controlType.TryGetInt32(out var controlTypeValue)
-                || controlTypeValue is < 0 or > 1024)
+                || !AccessUiTextParser.IsSupportedControlType(controlTypeValue))
                 throw new AccessScanException("AccessDesignInputRecordMalformed");
         }
         if (kind == "event-reference")
@@ -632,6 +640,13 @@ public static class AccessDesignEvidenceReader
             if (control.ParentRecordId is null
                 || !byProducerId.TryGetValue(control.ParentRecordId, out var parent)
                 || parent.Kind != "ui-surface")
+                throw new AccessScanException("AccessDesignInputParentUnavailable");
+        }
+        foreach (var eventReference in records.Where(record => record.Kind == "event-reference"))
+        {
+            if (eventReference.ParentRecordId is null
+                || !byProducerId.TryGetValue(eventReference.ParentRecordId, out var parent)
+                || parent.Kind is not ("ui-surface" or "ui-control"))
                 throw new AccessScanException("AccessDesignInputParentUnavailable");
         }
 
@@ -798,17 +813,25 @@ public static class AccessDesignEvidenceReader
         return fullPath;
     }
 
-    private static void ValidateMembers(string directory, string manifestPath, string recordsPath)
+    internal static void ValidateMembers(string directory, string manifestPath, string recordsPath)
     {
-        var entries = Directory.EnumerateFileSystemEntries(directory).Select(Path.GetFileName)
-            .OrderBy(value => value, StringComparer.Ordinal).ToArray();
-        if (!entries.SequenceEqual([ManifestFileName, RecordsFileName], StringComparer.Ordinal))
-            throw new AccessScanException("AccessDesignInputMembersInvalid");
-        foreach (var path in new[] { manifestPath, recordsPath })
+        try
         {
-            if (!File.Exists(path) || (File.GetAttributes(path) & FileAttributes.Directory) != 0)
-                throw new AccessScanException("AccessDesignInputUnavailable");
-            RejectReparsePoint(path);
+            var entries = Directory.EnumerateFileSystemEntries(directory).Select(Path.GetFileName)
+                .OrderBy(value => value, StringComparer.Ordinal).ToArray();
+            if (!entries.SequenceEqual([ManifestFileName, RecordsFileName], StringComparer.Ordinal))
+                throw new AccessScanException("AccessDesignInputMembersInvalid");
+            foreach (var path in new[] { manifestPath, recordsPath })
+            {
+                if (!File.Exists(path) || (File.GetAttributes(path) & FileAttributes.Directory) != 0)
+                    throw new AccessScanException("AccessDesignInputUnavailable");
+                RejectReparsePoint(path);
+            }
+        }
+        catch (AccessScanException) { throw; }
+        catch
+        {
+            throw new AccessScanException("AccessDesignInputReadFailed");
         }
     }
 
