@@ -1,6 +1,6 @@
 # Site SQL Project Refactor Intent Story Implementation State
 
-- Status: implementation and validation complete; PR #544 open; second
+- Status: implementation and validation complete; PR #544 open; third
   ACK-authorized validator hardening pass complete
 - Branch: `codex/site-sql-project-refactor-intent`
 - Base: `origin/dev`
@@ -32,10 +32,12 @@ compatibility claim, approval claim, or safety claim.
 - `cd site && npm run build`: passed.
 - `cd site && npm run validate`: passed for 98 HTML files, 3,369 internal
   references, and 97 sitemap URLs.
-- `cd site && npm test`: 738 passed, 0 failed.
-- Focused story tests: 21 passed, 0 failed, including ACK-authorized
+- `cd site && npm test`: 745 passed, 0 failed.
+- Focused story tests: 28 passed, 0 failed, including ACK-authorized
   attribute/obfuscation leak, full-boundary/JSON overclaim, and exact fixture
-  fact, scan, gap-shape, and downstream-handoff pinning regressions.
+  fact, scan, gap-shape, downstream-handoff, and supported-category pinning
+  regressions, plus direct compatibility/applied-state and bounded executable
+  SQL-form rejection.
 - Aggregate validator tests: 11 passed, 0 failed.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
@@ -57,4 +59,7 @@ produced the same owner-decision result. This state does not claim merge
 readiness. A subsequently requested current-head Codex review identified three
 additional exact-value validator gaps; the scan ID, representative gap
 classifications, and downstream review classifications/states are now pinned
-with focused regressions.
+with focused regressions. A later exact-head review also required exact
+supported-category objects, direct compatibility/applied-state claim guards,
+and bounded `TRUNCATE`, `EXEC`, and permission-statement detection; those
+regressions are included in the counts above.

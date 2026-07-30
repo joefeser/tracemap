@@ -77,7 +77,29 @@ const requiredRuleIds = new Set([
   "database.sql-project.refactor-intent.v1",
   "database.sql-project.refactor-intent.gap.v1"
 ]);
-const requiredOperationKinds = new Set(["rename-table", "rename-column", "move-schema"]);
+const expectedOperationCategories = [
+  {
+    operationKind: "rename-table",
+    objectKind: "table",
+    exampleKind: "fixture-evidence",
+    safeSource: "dbo.InventoryItem",
+    safeTarget: "dbo.CatalogItem"
+  },
+  {
+    operationKind: "rename-column",
+    objectKind: "column",
+    exampleKind: "illustrative-supported-category",
+    safeSource: "dbo.InventoryItem.DisplayName",
+    safeTarget: "dbo.InventoryItem.ItemName"
+  },
+  {
+    operationKind: "move-schema",
+    objectKind: "table",
+    exampleKind: "fixture-evidence",
+    safeSource: "dbo.CatalogItem",
+    safeTarget: "catalog.CatalogItem"
+  }
+];
 const expectedGapShapes = [
   {
     id: "unsupported-or-unsafe-shape",
@@ -168,10 +190,15 @@ const hardLeakPatterns = [
 ];
 const rawMaterialPatterns = [
   /\b(?:SELECT\s+.+?\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE)\b/i,
+  /\bTRUNCATE\s+TABLE\s+(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_.$]*)\b/i,
+  /\b(?:EXEC\s+(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_.$]*)|EXECUTE\s+(?:\[[^\]]+\](?:\.\[[^\]]+\])?|[A-Za-z_][A-Za-z0-9_$]*\.[A-Za-z_][A-Za-z0-9_$]*))\b/i,
+  /\b(?:GRANT|DENY|REVOKE)\s+[A-Za-z][A-Za-z0-9_ ]{0,40}\s+(?:ON\s+\S+\s+)?(?:TO|FROM)\s+\S+/i,
   /<(?:Project|Operation|Property|RefactorLog)\b/i
 ];
 const positiveOverclaimPatterns = [
   /\b(?:deployment|refactor|rename|schema move)\s+(?:succeeded|completed successfully|is safe|was approved)\b/i,
+  /\b(?:database\s+)?(?:change|deployment|refactor|rename|schema move)\s+(?:is|was)\s+compatible\b/i,
+  /\b(?:change|deployment|refactor|rename|schema move)\s+(?:is|was|has been)\s+applied(?:\s+successfully)?\b/i,
   /\b(?:proves|confirms|guarantees|certifies)\b[^.]{0,100}\b(?:deployed|applied|compatible|successful|reversible|approved|safe to run)\b/i,
   /\b(?:it|this|the (?:change|deployment|refactor|release|rename|schema move|script))\s+(?:is|was)\s+(?:ready|approved|safe)\s+(?:for|to)\s+(?:deploy|deployment|release|run)\b/i
 ];
@@ -348,13 +375,14 @@ function validatePacket(packet, errors) {
   for (const ruleId of requiredRuleIds) if (!rules.has(ruleId)) errors.push(`SQL project refactor-intent proof asset is missing rule ID: ${ruleId}`);
 
   const categories = Array.isArray(packet.supportedOperationCategories) ? packet.supportedOperationCategories : [];
-  const categoryKinds = new Set(categories.map((row) => row?.operationKind));
-  for (const operationKind of requiredOperationKinds) {
-    if (!categoryKinds.has(operationKind)) errors.push(`SQL project refactor-intent proof asset is missing supported category: ${operationKind}`);
+  if (categories.length !== expectedOperationCategories.length) {
+    errors.push("SQL project refactor-intent proof asset must contain exactly the three pinned supported operation categories.");
   }
-  const columnExample = categories.find((row) => row?.operationKind === "rename-column");
-  if (columnExample?.exampleKind !== "illustrative-supported-category") {
-    errors.push("SQL project refactor-intent column rename must remain explicitly illustrative for this fixture.");
+  for (const expected of expectedOperationCategories) {
+    const row = categories.find((candidate) => candidate?.operationKind === expected.operationKind);
+    if (!row || !operationCategoryMatches(row, expected)) {
+      errors.push(`SQL project refactor-intent proof asset does not match pinned supported category: ${expected.operationKind}`);
+    }
   }
 
   const evidence = Array.isArray(packet.evidence) ? packet.evidence : [];
@@ -442,6 +470,13 @@ function fixtureEvidenceMatches(row, expected) {
     && row.span?.filePath === expected.span.filePath
     && row.span?.startLine === expected.span.startLine
     && row.span?.endLine === expected.span.endLine;
+}
+
+function operationCategoryMatches(row, expected) {
+  return row.objectKind === expected.objectKind
+    && row.exampleKind === expected.exampleKind
+    && row.safeSource === expected.safeSource
+    && row.safeTarget === expected.safeTarget;
 }
 
 function hasHref(html, href) {
