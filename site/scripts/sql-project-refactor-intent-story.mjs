@@ -77,6 +77,12 @@ const requiredRuleIds = new Set([
   "database.sql-project.refactor-intent.v1",
   "database.sql-project.refactor-intent.gap.v1"
 ]);
+const expectedLimitations = [
+  "No SQL project build, DACPAC creation or inspection, deployment-plan inspection, generated-script inspection, or SqlPackage invocation.",
+  "No database connection, SQL execution, target refactor-log table inspection, deployment, applied-state, compatibility, success, reversibility, approval, or execution-safety conclusion.",
+  "No replacement for database owners, DBAs, runtime validation, tests, telemetry, change control, or release approval.",
+  "Raw SQL, raw XML, operation keys, credentials, connection strings, local paths, private infrastructure names, analyzer output, and copyable deployment commands are omitted."
+];
 const expectedOperationCategories = [
   {
     operationKind: "rename-table",
@@ -364,15 +370,22 @@ function validatePacket(packet, errors) {
   }
   if (packet.publicClaimLevel !== "demo") errors.push("SQL project refactor-intent proof asset must remain demo-level.");
   if (packet.source?.repository !== "joefeser/tracemap" || packet.source?.commitSha !== expectedCommit
-    || packet.source?.fixtureRoot !== "samples/sql-project-refactor" || packet.source?.scanId !== expectedScanId) {
+    || packet.source?.fixtureRoot !== "samples/sql-project-refactor" || packet.source?.scanId !== expectedScanId
+    || packet.source?.coverageLabel !== "bounded-static-evidence") {
     errors.push("SQL project refactor-intent proof asset has invalid public source provenance.");
   }
   if (packet.extractor?.family !== "SqlProjectRefactorExtractor" || packet.extractor?.version !== "sql-project-refactor/0.1.0") {
     errors.push("SQL project refactor-intent proof asset has invalid extractor provenance.");
   }
 
-  const rules = new Set(Array.isArray(packet.ruleIds) ? packet.ruleIds : []);
-  for (const ruleId of requiredRuleIds) if (!rules.has(ruleId)) errors.push(`SQL project refactor-intent proof asset is missing rule ID: ${ruleId}`);
+  const ruleIds = Array.isArray(packet.ruleIds) ? packet.ruleIds : [];
+  const rules = new Set(ruleIds);
+  if (ruleIds.length !== requiredRuleIds.size
+    || ruleIds.some((ruleId) => typeof ruleId !== "string")
+    || rules.size !== requiredRuleIds.size
+    || [...requiredRuleIds].some((ruleId) => !rules.has(ruleId))) {
+    errors.push("SQL project refactor-intent proof asset must contain exactly the two pinned rule IDs.");
+  }
 
   const categories = Array.isArray(packet.supportedOperationCategories) ? packet.supportedOperationCategories : [];
   if (categories.length !== expectedOperationCategories.length) {
@@ -451,8 +464,11 @@ function validatePacket(packet, errors) {
       errors.push(`SQL project refactor-intent proof asset does not match pinned downstream review surface: ${expected.surface}`);
     }
   }
-  for (const field of ["reviewerQuestions", "limitations"]) {
-    if (!Array.isArray(packet[field]) || packet[field].length === 0) errors.push(`SQL project refactor-intent proof asset must include non-empty ${field}.`);
+  if (!Array.isArray(packet.reviewerQuestions) || packet.reviewerQuestions.length === 0) {
+    errors.push("SQL project refactor-intent proof asset must include non-empty reviewerQuestions.");
+  }
+  if (!arraysContainSameStrings(packet.limitations, expectedLimitations)) {
+    errors.push("SQL project refactor-intent proof asset must contain exactly the pinned documented limitations.");
   }
 }
 
@@ -485,4 +501,12 @@ function hasHref(html, href) {
 
 function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function arraysContainSameStrings(actual, expected) {
+  if (!Array.isArray(actual) || actual.length !== expected.length || actual.some((value) => typeof value !== "string")) {
+    return false;
+  }
+  const values = new Set(actual);
+  return values.size === expected.length && expected.every((value) => values.has(value));
 }
