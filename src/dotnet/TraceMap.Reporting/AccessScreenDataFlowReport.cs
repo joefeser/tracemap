@@ -586,7 +586,7 @@ public static class AccessScreenDataFlowReporter
         _ => 3
     };
 
-    private static async Task<(string Repository, string? CommitSha, IReadOnlyList<CodeFact> Facts)> ReadFactsAsync(
+    internal static async Task<(string Repository, string? CommitSha, IReadOnlyList<CodeFact> Facts)> ReadFactsAsync(
         string path,
         CancellationToken cancellationToken)
     {
