@@ -190,6 +190,30 @@ test("SQL project refactor-intent validator pins scan, gap, and downstream hando
   assert.match(joined, /does not match pinned downstream review surface: sql-runbook/);
 });
 
+test("SQL project refactor-intent validator pins source coverage, rule IDs, and documented limitations", async (t) => {
+  const cases = [
+    ["source coverage", (packet) => { packet.source.coverageLabel = "complete"; }, /invalid public source provenance/],
+    ["invented rule", (packet) => { packet.ruleIds.push("database.fabricated.v1"); }, /exactly the two pinned rule IDs/],
+    ["duplicate rule", (packet) => { packet.ruleIds[1] = packet.ruleIds[0]; }, /exactly the two pinned rule IDs/],
+    ["non-string rule", (packet) => { packet.ruleIds[1] = { id: "database.sql-project.refactor-intent.gap.v1" }; }, /exactly the two pinned rule IDs/],
+    ["empty limitation", (packet) => { packet.limitations = [""]; }, /exactly the pinned documented limitations/]
+  ];
+
+  for (const [label, mutate, expectedError] of cases) {
+    await t.test(label, async (subtest) => {
+      const root = await createSiteFixture(subtest);
+      const assetPath = join(root, "src", "assets", "sql-project-refactor-intent-proof-packet.json");
+      const packet = JSON.parse(await readFile(assetPath, "utf8"));
+      mutate(packet);
+      await writeFile(assetPath, `${JSON.stringify(packet, null, 2)}\n`);
+      await buildSite({ root, log() {} });
+      const errors = [];
+      await validateSqlProjectRefactorIntentStoryDist({ dist: join(root, "dist"), errors });
+      assert.match(errors.join("\n"), expectedError);
+    });
+  }
+});
+
 test("SQL project refactor-intent validator pins supported operation categories", async (t) => {
   const root = await createSiteFixture(t);
   const assetPath = join(root, "src", "assets", "sql-project-refactor-intent-proof-packet.json");
