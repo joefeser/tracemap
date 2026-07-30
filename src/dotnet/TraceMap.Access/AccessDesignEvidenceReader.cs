@@ -141,9 +141,7 @@ public static class AccessDesignEvidenceReader
             var normalized = NormalizeRecords(rawRecords, binding.DatabaseIdentityHash);
             var gaps = new List<AccessDesignEvidenceGap>();
             var acceptedRecords = new List<AccessDesignEvidenceRecord>();
-            var rejectedIds = normalized.Where(item => item.RejectionClassifications.Count > 0)
-                .Select(item => item.CanonicalRecordId)
-                .ToHashSet(StringComparer.Ordinal);
+            var rejectedIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (var group in normalized.GroupBy(item => item.CanonicalRecordId, StringComparer.Ordinal)
                          .OrderBy(group => group.Key, StringComparer.Ordinal))
             {
@@ -155,7 +153,10 @@ public static class AccessDesignEvidenceReader
                 var eligible = group.Where(item => item.RejectionClassifications.Count == 0).ToArray();
                 var variants = eligible.Select(item => item.CanonicalContentHash).Distinct(StringComparer.Ordinal).ToArray();
                 if (variants.Length == 0)
+                {
+                    rejectedIds.Add(group.Key);
                     continue;
+                }
                 if (variants.Length != 1)
                 {
                     gaps.Add(new("AccessDesignInputDuplicateConflict", "design-record", group.Key));
@@ -165,6 +166,7 @@ public static class AccessDesignEvidenceReader
                 acceptedRecords.Add(eligible.OrderBy(item => item.CanonicalContentHash, StringComparer.Ordinal).First().Record);
             }
 
+            RejectInvalidCoordinates(acceptedRecords, rejectedIds, gaps);
             while (true)
             {
                 var rejectedChildren = acceptedRecords
@@ -251,7 +253,11 @@ public static class AccessDesignEvidenceReader
         var capabilities = RequireObjectProperty(root, "capabilities", "AccessDesignInputManifestInvalid");
         RequireOnlyProperties(capabilities, ["coordinates", "catalogCompleteness", "identityDisclosure"], "AccessDesignInputManifestInvalid");
         RequireClosedString(capabilities, "coordinates", ["exact-lines", "container-only", "unavailable", "mixed"], "AccessDesignInputManifestInvalid");
-        RequireClosedString(capabilities, "catalogCompleteness", ["complete", "declared-partial", "unavailable"], "AccessDesignInputManifestInvalid");
+        var catalogCompleteness = RequireClosedString(
+            capabilities,
+            "catalogCompleteness",
+            ["complete", "declared-partial", "unavailable"],
+            "AccessDesignInputManifestInvalid");
         RequireString(capabilities, "identityDisclosure", "hash-only", "AccessDesignInputIdentityDisclosureUnsupported");
 
         if (root.TryGetProperty("exportedAtUtc", out var exported))
@@ -275,7 +281,8 @@ public static class AccessDesignEvidenceReader
             CommitSha = commitSha,
             BaseScanManifestSha256 = baseManifestHash,
             DatabaseIdentityHash = databaseIdentityHash,
-            SourceCopySha256 = sourceCopyHash
+            SourceCopySha256 = sourceCopyHash,
+            CatalogCompleteness = catalogCompleteness
         };
     }
 
@@ -340,11 +347,12 @@ public static class AccessDesignEvidenceReader
         var recordId = RequireSafeToken(root, "recordId", 128, "AccessDesignInputRecordMalformed");
         var parentRecordId = OptionalSafeToken(root, "parentRecordId", 128, "AccessDesignInputRecordMalformed");
         var completeness = RequireClosedString(root, "completeness", CompletenessStatuses, "AccessDesignInputRecordMalformed");
-        var source = ParseSource(RequireObjectProperty(root, "source", "AccessDesignInputRecordMalformed"));
+        var source = UnavailableSource;
         var payload = RequireObjectProperty(root, "payload", "AccessDesignInputRecordMalformed");
         var rejections = new SortedSet<string>(StringComparer.Ordinal);
         try
         {
+            source = ParseSource(RequireObjectProperty(root, "source", "AccessDesignInputRecordMalformed"));
             RequireOnlyProperties(root, ["schema", "kind", "recordId", "parentRecordId", "source", "completeness", "payload"],
                 "AccessDesignInputFieldRejected");
             ValidatePayload(kind, payload, limits);
@@ -366,6 +374,9 @@ public static class AccessDesignEvidenceReader
         }
         return new(kind, recordId, parentRecordId, source, completeness, payload, rejections.ToArray());
     }
+
+    private static AccessDesignEvidenceSource UnavailableSource =>
+        new("producer-gap", "unavailable", null, null, null);
 
     private static bool IsScopedRecordRejection(string classification) => classification is
         "AccessDesignInputFieldRejected"
@@ -392,6 +403,54 @@ public static class AccessDesignEvidenceReader
             throw new AccessScanException("AccessDesignInputCoordinateUnavailable");
         }
         return new(role, status, hash, start, end);
+    }
+
+    private static void RejectInvalidCoordinates(
+        List<AccessDesignEvidenceRecord> acceptedRecords,
+        HashSet<string> rejectedIds,
+        List<AccessDesignEvidenceGap> gaps)
+    {
+        var sources = acceptedRecords
+            .Where(record => record.Kind is "ui-design-document" or "vba-module")
+            .Select(record => new ValidatedSourceDocument(
+                record.Kind == "ui-design-document"
+                    ? $"{record.Payload.GetProperty("documentRole").GetString()}-design-export"
+                    : "vba-module-export",
+                record.Kind == "ui-design-document"
+                    ? record.Payload.GetProperty("documentSha256").GetString()!
+                    : record.Payload.GetProperty("sourceSha256").GetString()!,
+                record.Payload.GetProperty("lineCount").GetInt32()))
+            .ToArray();
+        var byCanonicalId = acceptedRecords.ToDictionary(record => record.CanonicalRecordId, StringComparer.Ordinal);
+        var invalid = new List<AccessDesignEvidenceRecord>();
+
+        foreach (var record in acceptedRecords.Where(item => item.Source.CoordinateStatus == "exact-lines"))
+        {
+            if (record.Kind is "ui-design-document" or "vba-module")
+                continue;
+
+            var source = record.Source;
+            var documentValidated = sources.Any(document =>
+                string.Equals(document.DocumentRole, source.DocumentRole, StringComparison.Ordinal)
+                && FixedHashEquals(document.DocumentSha256, source.DocumentSha256!)
+                && source.EndLine <= document.LineCount);
+            var parentValidated = record.ParentCanonicalRecordId is null
+                || !byCanonicalId.TryGetValue(record.ParentCanonicalRecordId, out var parent)
+                || parent.Source.CoordinateStatus != "exact-lines"
+                || (FixedHashEquals(parent.Source.DocumentSha256!, source.DocumentSha256!)
+                    && source.StartLine >= parent.Source.StartLine
+                    && source.EndLine <= parent.Source.EndLine);
+
+            if (!documentValidated || !parentValidated)
+                invalid.Add(record);
+        }
+
+        foreach (var record in invalid)
+        {
+            acceptedRecords.Remove(record);
+            if (rejectedIds.Add(record.CanonicalRecordId))
+                gaps.Add(new("AccessDesignInputCoordinateUnavailable", "design-record", record.CanonicalRecordId));
+        }
     }
 
     private static void ValidatePayload(string kind, JsonElement payload, AccessLimits limits)
@@ -971,4 +1030,9 @@ public static class AccessDesignEvidenceReader
         string CanonicalRecordId,
         string CanonicalContentHash,
         IReadOnlyList<string> RejectionClassifications);
+
+    private sealed record ValidatedSourceDocument(
+        string DocumentRole,
+        string DocumentSha256,
+        int LineCount);
 }

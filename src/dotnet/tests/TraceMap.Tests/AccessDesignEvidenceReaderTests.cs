@@ -186,6 +186,36 @@ public sealed class AccessDesignEvidenceReaderTests
     }
 
     [Fact]
+    public void Rejected_duplicate_does_not_poison_an_equivalent_accepted_parent()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "bundle");
+        var parent = Record("ui-surface", "surface-valid", null, "form-design-export", "container-only", null, null, null, "complete",
+            Ordered(("surfaceRole", "form"), ("identity", "SameForm"), ("ordinal", 0),
+                ("modulePresence", "present"), ("boundState", "bound")));
+        var rejectedDuplicate = MutateRecord(
+            Record("ui-surface", "surface-rejected", null, "form-design-export", "container-only", null, null, null, "complete",
+                Ordered(("surfaceRole", "form"), ("identity", "SameForm"), ("ordinal", 0),
+                    ("modulePresence", "present"), ("boundState", "bound"))),
+            root => root["source"]!.AsObject()["unexpected"] = true);
+        WriteBundle(path,
+        [
+            parent,
+            rejectedDuplicate,
+            Record("ui-control", "child", "surface-valid", "form-design-export", "container-only", null, null, null, "complete",
+                Ordered(("identity", "Button"), ("ordinal", 0), ("controlType", 104)))
+        ]);
+
+        using var result = AccessDesignEvidenceReader.Read(path, Binding());
+
+        Assert.True(result.AcceptedForProjection);
+        Assert.Equal(2, result.Records.Count);
+        Assert.Contains(result.Records, record => record.Kind == "ui-control");
+        Assert.DoesNotContain(result.Gaps, gap => gap.Classification == "AccessDesignInputParentRejected");
+        Assert.Contains(result.Gaps, gap => gap.Classification == "AccessDesignInputFieldRejected");
+    }
+
+    [Fact]
     public void Macro_body_fields_are_structurally_rejected()
     {
         using var temp = new TempDirectory();
@@ -410,6 +440,78 @@ public sealed class AccessDesignEvidenceReaderTests
     }
 
     [Fact]
+    public void Source_validation_errors_reject_only_the_scoped_record()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "bundle");
+        var invalidSource = MutateRecord(
+            Record("catalog-object", "invalid", null, "catalog-export", "container-only", null, null, null, "complete",
+                Ordered(("objectRole", "table"), ("identity", "Invalid"), ("ordinal", 0))),
+            root => root["source"]!.AsObject()["unexpected"] = true);
+        WriteBundle(path,
+        [
+            invalidSource,
+            Record("catalog-object", "valid", null, "catalog-export", "container-only", null, null, null, "complete",
+                Ordered(("objectRole", "table"), ("identity", "Valid"), ("ordinal", 1)))
+        ]);
+
+        using var result = AccessDesignEvidenceReader.Read(path, Binding());
+
+        Assert.True(result.AcceptedForProjection);
+        Assert.Single(result.Records);
+        Assert.Equal("AccessDesignInputFieldRejected", Assert.Single(result.Gaps).Classification);
+    }
+
+    [Fact]
+    public void Exact_child_coordinates_require_a_validated_document_and_parent_bounds()
+    {
+        using var temp = new TempDirectory();
+        var missingDocumentPath = Path.Combine(temp.Path, "missing-document");
+        WriteBundle(missingDocumentPath,
+        [
+            Record("ui-surface", "surface", null, "form-design-export", "exact-lines", new string('a', 64), 1, 1, "complete",
+                Ordered(("surfaceRole", "form"), ("identity", "Form"), ("ordinal", 0)))
+        ]);
+
+        using (var missingDocument = AccessDesignEvidenceReader.Read(missingDocumentPath, Binding()))
+        {
+            Assert.Empty(missingDocument.Records);
+            Assert.Equal("AccessDesignInputCoordinateUnavailable", Assert.Single(missingDocument.Gaps).Classification);
+        }
+
+        var parentBoundsPath = Path.Combine(temp.Path, "parent-bounds");
+        var text = "one\ntwo\nthree";
+        var hash = Sha256(text);
+        WriteBundle(parentBoundsPath,
+        [
+            Record("ui-design-document", "document", null, "form-design-export", "exact-lines", hash, 1, 3, "complete",
+                Ordered(("documentRole", "form"), ("designText", text), ("documentSha256", hash), ("lineCount", 3))),
+            Record("ui-surface", "surface", "document", "form-design-export", "exact-lines", hash, 1, 2, "complete",
+                Ordered(("surfaceRole", "form"), ("identity", "Form"), ("ordinal", 0))),
+            Record("ui-control", "control", "surface", "form-design-export", "exact-lines", hash, 1, 3, "complete",
+                Ordered(("identity", "Button"), ("ordinal", 0), ("controlType", 104)))
+        ]);
+
+        using var parentBounds = AccessDesignEvidenceReader.Read(parentBoundsPath, Binding());
+
+        Assert.Equal(2, parentBounds.Records.Count);
+        Assert.DoesNotContain(parentBounds.Records, record => record.Kind == "ui-control");
+        Assert.Equal("AccessDesignInputCoordinateUnavailable", Assert.Single(parentBounds.Gaps).Classification);
+    }
+
+    [Fact]
+    public void Manifest_preserves_declared_catalog_completeness()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "bundle");
+        WriteBundle(path, []);
+
+        using var result = AccessDesignEvidenceReader.Read(path, Binding());
+
+        Assert.Equal("declared-partial", result.Manifest.CatalogCompleteness);
+    }
+
+    [Fact]
     public void Per_record_text_limit_rejects_the_scope_and_its_children_without_rejecting_the_bundle()
     {
         using var temp = new TempDirectory();
@@ -535,6 +637,13 @@ public sealed class AccessDesignEvidenceReaderTests
         var root = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
         mutate(root);
         File.WriteAllText(manifestPath, root.ToJsonString(), new UTF8Encoding(false));
+    }
+
+    private static string MutateRecord(string record, Action<System.Text.Json.Nodes.JsonObject> mutate)
+    {
+        var root = System.Text.Json.Nodes.JsonNode.Parse(record)!.AsObject();
+        mutate(root);
+        return root.ToJsonString();
     }
 
     private static string Sha256(string value) => Sha256(Encoding.UTF8.GetBytes(value));
