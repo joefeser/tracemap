@@ -20,7 +20,8 @@ public sealed record AccessScreenDataFlowResult(
 
 public sealed record AccessScreenDataFlowReport(
     string SchemaVersion,
-    string? CommitSha,
+    string RepositoryId,
+    string CommitSha,
     string Coverage,
     AccessScreenDataFlowQuery Query,
     AccessScreenDataFlowSummary Summary,
@@ -67,6 +68,12 @@ public sealed record AccessFlowGap(
     string? ScopeNodeId,
     string RuleId,
     string EvidenceTier,
+    string CommitSha,
+    string FilePath,
+    int StartLine,
+    int EndLine,
+    string ExtractorId,
+    string ExtractorVersion,
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> Limitations);
 
@@ -120,18 +127,27 @@ public static class AccessScreenDataFlowReporter
         CancellationToken cancellationToken = default)
     {
         Validate(options);
-        var (commitSha, facts) = await ReadFactsAsync(options.IndexPath, cancellationToken);
-        return Build(commitSha, facts, options.MaxDepth, options.MaxPaths, options.MaxGaps);
+        var (repository, commitSha, facts) = await ReadFactsAsync(options.IndexPath, cancellationToken);
+        return Build(repository, commitSha, facts, options.MaxDepth, options.MaxPaths, options.MaxGaps);
     }
 
     internal static AccessScreenDataFlowReport Build(
+        string repository,
         string? commitSha,
         IReadOnlyList<CodeFact> facts,
         int maxDepth,
         int maxPaths,
         int maxGaps)
     {
+        var safeCommit = SafeCommit(commitSha)
+            ?? throw new InvalidDataException("AccessFlowScanIdentityUnavailable");
+        if (string.IsNullOrWhiteSpace(repository))
+            throw new InvalidDataException("AccessFlowScanIdentityUnavailable");
         var accessFacts = facts.Where(IsAccessFact).OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray();
+        if (accessFacts.Any(fact =>
+                !string.Equals(fact.Repo, repository, StringComparison.Ordinal)
+                || !string.Equals(SafeCommit(fact.CommitSha), safeCommit, StringComparison.Ordinal)))
+            throw new InvalidDataException("AccessFlowScanIdentityUnavailable");
         var nodes = new Dictionary<string, MutableNode>(StringComparer.Ordinal);
         var edges = new List<AccessFlowEdge>();
         var gaps = new List<AccessFlowGap>();
@@ -159,8 +175,14 @@ public static class AccessScreenDataFlowReporter
                     NodeId(fact.TargetSymbol),
                     fact.RuleId,
                     EvidenceTiers.Tier4Unknown,
+                    SafeCommit(fact.CommitSha)!,
+                    SafeEvidencePath(fact.Evidence.FilePath),
+                    fact.Evidence.StartLine,
+                    fact.Evidence.EndLine,
+                    SafeToken(fact.Evidence.ExtractorId),
+                    SafeToken(fact.Evidence.ExtractorVersion),
                     [fact.FactId],
-                    Split(fact.Properties.GetValueOrDefault("limitations"))));
+                    SafeLimitations(fact.Properties.GetValueOrDefault("limitations"))));
                 continue;
             }
 
@@ -173,7 +195,7 @@ public static class AccessScreenDataFlowReporter
                 or FactTypes.AccessVbaProcedureDeclared
                 or FactTypes.AccessNavigationCandidate
                 or FactTypes.AccessBindingDeclared))
-            AddGap(gaps, maxGaps, ref truncated, Gap("AccessDesignFlowEvidenceUnavailable", "database", null));
+            AddGap(gaps, maxGaps, ref truncated, Gap("AccessDesignFlowEvidenceUnavailable", "database", null, safeCommit));
 
         var roots = new List<AccessFlowRoot>();
         foreach (var fact in accessFacts.Where(fact => fact.FactType == FactTypes.AccessMacroDeclared
@@ -185,9 +207,9 @@ public static class AccessScreenDataFlowReporter
             roots.Add(new(Id("root", "form", fact.TargetSymbol!), "ui-root-candidate", NodeId(fact.TargetSymbol)!, Evidence(fact)));
 
         if (!roots.Any(root => root.RootKind == "startup-candidate"))
-            AddGap(gaps, maxGaps, ref truncated, Gap("AccessStartupIdentityUnavailable", "startup", null));
+            AddGap(gaps, maxGaps, ref truncated, Gap("AccessStartupIdentityUnavailable", "startup", null, safeCommit));
         if (roots.Count == 0)
-            AddGap(gaps, maxGaps, ref truncated, Gap("AccessFlowRootUnavailable", "root", null));
+            AddGap(gaps, maxGaps, ref truncated, Gap("AccessFlowRootUnavailable", "root", null, safeCommit));
 
         var immutableNodes = nodes.Values.ToDictionary(
             node => node.NodeId,
@@ -202,14 +224,20 @@ public static class AccessScreenDataFlowReporter
             maxDepth,
             maxPaths,
             maxGaps,
+            safeCommit,
             gaps,
             ref truncated);
         var orderedGaps = gaps.OrderBy(gap => gap.Classification, StringComparer.Ordinal)
             .ThenBy(gap => gap.GapId, StringComparer.Ordinal).Take(maxGaps).ToArray();
-        var coverage = orderedGaps.Length == 0 && !truncated ? "complete" : "partial";
+        var coverage = orderedGaps.Length == 0
+            && !truncated
+            && paths.All(path => path.Classification == "StaticCandidateTrail")
+                ? "complete"
+                : "partial";
         return new(
             SchemaVersion,
-            SafeCommit(commitSha),
+            RepositoryId(repository),
+            safeCommit,
             coverage,
             new(maxDepth, maxPaths, maxGaps),
             new(roots.Count, paths.Count, orderedGaps.Length, truncated),
@@ -245,18 +273,21 @@ public static class AccessScreenDataFlowReporter
                         : "AccessFlowTargetUnavailable",
                     "edge",
                     fact.FactId,
-                    fact.FactId));
+                    SafeCommit(fact.CommitSha)!,
+                    fact));
                 return null;
             }
             if (!SafeStableKey(fact.SourceSymbol) || !SafeStableKey(fact.TargetSymbol))
             {
-                AddGap(gaps, maxGaps, ref truncated, Gap("AccessFlowUnsafeStableIdentity", "edge", null, fact.FactId));
+                AddGap(gaps, maxGaps, ref truncated, Gap(
+                    "AccessFlowUnsafeStableIdentity", "edge", null, SafeCommit(fact.CommitSha)!, fact));
                 return null;
             }
             EnsureReferencedNode(nodes, fact.SourceSymbol!, fact, source: true);
             EnsureReferencedNode(nodes, fact.TargetSymbol!, fact, source: false);
             if (nodes[fact.TargetSymbol!].Declared == false)
-                AddGap(gaps, maxGaps, ref truncated, Gap("AccessFlowTargetDeclarationMissing", "target", NodeId(fact.TargetSymbol), fact.FactId));
+                AddGap(gaps, maxGaps, ref truncated, Gap(
+                    "AccessFlowTargetDeclarationMissing", "target", NodeId(fact.TargetSymbol), SafeCommit(fact.CommitSha)!, fact));
             return new(
                 Id("edge", kind, fact.FactId),
                 kind,
@@ -287,10 +318,13 @@ public static class AccessScreenDataFlowReporter
         int maxDepth,
         int maxPaths,
         int maxGaps,
+        string commitSha,
         List<AccessFlowGap> gaps,
         ref bool truncated)
     {
         var paths = new List<AccessFlowPath>();
+        var edgeLookup = outgoing.Values.SelectMany(value => value)
+            .ToDictionary(edge => edge.EdgeId, StringComparer.Ordinal);
         var queue = new Queue<PathState>(roots.Select(root => new PathState(root, [root.NodeId], [])));
         while (queue.Count > 0 && paths.Count < maxPaths)
         {
@@ -306,7 +340,7 @@ public static class AccessScreenDataFlowReporter
             if (state.EdgeIds.Count >= maxDepth)
             {
                 truncated = true;
-                AddGap(gaps, maxGaps, ref truncated, Gap("AccessFlowDepthLimitReached", "path", current));
+                AddGap(gaps, maxGaps, ref truncated, Gap("AccessFlowDepthLimitReached", "path", current, commitSha));
                 paths.Add(ToPath(state, nodes, "depth-limit"));
                 continue;
             }
@@ -314,7 +348,8 @@ public static class AccessScreenDataFlowReporter
             {
                 if (state.NodeIds.Contains(edge.ToNodeId, StringComparer.Ordinal))
                 {
-                    AddGap(gaps, maxGaps, ref truncated, Gap("AccessFlowCycleDetected", "path", edge.ToNodeId, edge.Evidence.FactId));
+                    AddGap(gaps, maxGaps, ref truncated, Gap(
+                        "AccessFlowCycleDetected", "path", edge.ToNodeId, commitSha, evidence: edge.Evidence));
                     paths.Add(ToPath(state with
                     {
                         NodeIds = state.NodeIds.Append(edge.ToNodeId).ToArray(),
@@ -332,13 +367,12 @@ public static class AccessScreenDataFlowReporter
         if (queue.Count > 0)
         {
             truncated = true;
-            AddGap(gaps, maxGaps, ref truncated, Gap("AccessFlowPathLimitReached", "report", null));
+            AddGap(gaps, maxGaps, ref truncated, Gap("AccessFlowPathLimitReached", "report", null, commitSha));
         }
         return paths.OrderBy(path => path.PathId, StringComparer.Ordinal).ToArray();
 
         AccessFlowPath ToPath(PathState state, IReadOnlyDictionary<string, AccessFlowNode> nodeLookup, string terminalKind)
         {
-            var edgeLookup = outgoing.Values.SelectMany(value => value).ToDictionary(edge => edge.EdgeId, StringComparer.Ordinal);
             var pathEdges = state.EdgeIds.Select(id => edgeLookup[id]).ToArray();
             var pathNodes = state.NodeIds.Select(id => nodeLookup[id]).ToArray();
             var evidence = pathEdges.Select(edge => edge.Evidence).Append(state.Root.Evidence).ToArray();
@@ -364,15 +398,15 @@ public static class AccessScreenDataFlowReporter
     private static AccessFlowEvidence Evidence(CodeFact fact) => new(
         fact.FactId,
         fact.RuleId,
-        fact.EvidenceTier,
-        SafeCommit(fact.CommitSha) ?? "unknown",
+        SafeEvidenceTier(fact.EvidenceTier),
+        SafeCommit(fact.CommitSha) ?? throw new InvalidDataException("AccessFlowScanIdentityUnavailable"),
         SafeEvidencePath(fact.Evidence.FilePath),
         fact.Evidence.StartLine,
         fact.Evidence.EndLine,
         SafeToken(fact.Evidence.ExtractorId),
         SafeToken(fact.Evidence.ExtractorVersion),
         SafeCategory(fact.Properties.GetValueOrDefault("coverageLabel"), "unknown"),
-        Split(fact.Properties.GetValueOrDefault("limitations")));
+        SafeLimitations(fact.Properties.GetValueOrDefault("limitations")));
 
     private static void EnsureReferencedNode(IDictionary<string, MutableNode> nodes, string key, CodeFact fact, bool source)
     {
@@ -437,15 +471,31 @@ public static class AccessScreenDataFlowReporter
         && fact.RuleId.Length <= 128
         && fact.RuleId.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '.');
 
-    private static AccessFlowGap Gap(string classification, string scope, string? nodeId, string? factId = null) => new(
-        Id("gap", classification, nodeId ?? "global", factId ?? "none"),
-        classification,
-        scope,
-        nodeId,
-        RuleIds.LegacyAccessScreenDataFlow,
-        EvidenceTiers.Tier4Unknown,
-        factId is null ? [] : [factId],
-        ["static-composition-gap;not-clean-absence;no-runtime-conclusion"]);
+    private static AccessFlowGap Gap(
+        string classification,
+        string scope,
+        string? nodeId,
+        string commitSha,
+        CodeFact? fact = null,
+        AccessFlowEvidence? evidence = null)
+    {
+        var factId = fact?.FactId ?? evidence?.FactId;
+        return new(
+            Id("gap", classification, nodeId ?? "global", factId ?? "none"),
+            classification,
+            scope,
+            nodeId,
+            RuleIds.LegacyAccessScreenDataFlow,
+            EvidenceTiers.Tier4Unknown,
+            fact is null ? evidence?.CommitSha ?? commitSha : SafeCommit(fact.CommitSha)!,
+            fact is null ? evidence?.FilePath ?? "access-flow-report" : SafeEvidencePath(fact.Evidence.FilePath),
+            fact is null ? evidence?.StartLine ?? 1 : fact.Evidence.StartLine,
+            fact is null ? evidence?.EndLine ?? 1 : fact.Evidence.EndLine,
+            fact is null ? evidence?.ExtractorId ?? "AccessScreenDataFlowReporter" : SafeToken(fact.Evidence.ExtractorId),
+            fact is null ? evidence?.ExtractorVersion ?? SchemaVersion : SafeToken(fact.Evidence.ExtractorVersion),
+            factId is null ? [] : [factId],
+            ["static-composition-gap", "not-clean-absence", "no-runtime-conclusion"]);
+    }
 
     private static void AddGap(List<AccessFlowGap> gaps, int maxGaps, ref bool truncated, AccessFlowGap gap)
     {
@@ -454,7 +504,7 @@ public static class AccessScreenDataFlowReporter
         {
             truncated = true;
             if (maxGaps > 0 && !gaps.Any(item => item.Classification == "AccessFlowGapLimitReached"))
-                gaps[^1] = Gap("AccessFlowGapLimitReached", "report", null);
+                gaps[^1] = Gap("AccessFlowGapLimitReached", "report", null, gap.CommitSha);
         }
     }
 
@@ -469,7 +519,8 @@ public static class AccessScreenDataFlowReporter
     private static string SafeEvidencePath(string value)
     {
         var normalized = value.Replace('\\', '/');
-        return !Path.IsPathFullyQualified(normalized)
+        return !string.IsNullOrWhiteSpace(normalized)
+            && !Path.IsPathFullyQualified(normalized)
             && !normalized.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment is "." or "..")
                 ? normalized
                 : "unavailable";
@@ -490,11 +541,23 @@ public static class AccessScreenDataFlowReporter
         value is { Length: 40 or 64 } && value.All(Uri.IsHexDigit)
             ? value.ToLowerInvariant()
             : null;
-    private static string[] Split(string? value) =>
+    private static string[] SafeLimitations(string? value) =>
         string.IsNullOrWhiteSpace(value)
             ? []
             : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(item => item.Length <= 128
+                    && item.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '.'))
                 .Distinct(StringComparer.Ordinal).OrderBy(item => item, StringComparer.Ordinal).ToArray();
+    private static string SafeEvidenceTier(string? tier) => tier switch
+    {
+        EvidenceTiers.Tier1Semantic => EvidenceTiers.Tier1Semantic,
+        EvidenceTiers.Tier2Structural => EvidenceTiers.Tier2Structural,
+        EvidenceTiers.Tier3SyntaxOrTextual => EvidenceTiers.Tier3SyntaxOrTextual,
+        EvidenceTiers.Tier4Unknown => EvidenceTiers.Tier4Unknown,
+        _ => EvidenceTiers.Tier4Unknown
+    };
+    private static string RepositoryId(string repository) =>
+        $"repo-{FactFactory.Hash($"access-flow-repository/v1\0{repository.Trim()}", 32)}";
     private static int TierRank(string tier) => tier switch
     {
         EvidenceTiers.Tier4Unknown => 0,
@@ -503,7 +566,7 @@ public static class AccessScreenDataFlowReporter
         _ => 3
     };
 
-    private static async Task<(string? CommitSha, IReadOnlyList<CodeFact> Facts)> ReadFactsAsync(
+    private static async Task<(string Repository, string? CommitSha, IReadOnlyList<CodeFact> Facts)> ReadFactsAsync(
         string path,
         CancellationToken cancellationToken)
     {
@@ -514,11 +577,16 @@ public static class AccessScreenDataFlowReporter
             Cache = SqliteCacheMode.Private
         }.ToString());
         await connection.OpenAsync(cancellationToken);
+        string? repository;
         string? commitSha;
         await using (var manifest = connection.CreateCommand())
         {
-            manifest.CommandText = "select commit_sha from scan_manifest order by scanned_at desc limit 1;";
-            commitSha = (await manifest.ExecuteScalarAsync(cancellationToken)) as string;
+            manifest.CommandText = "select repo, commit_sha from scan_manifest order by scanned_at desc limit 1;";
+            await using var manifestReader = await manifest.ExecuteReaderAsync(cancellationToken);
+            if (!await manifestReader.ReadAsync(cancellationToken))
+                throw new InvalidDataException("AccessFlowScanIdentityUnavailable");
+            repository = manifestReader.IsDBNull(0) ? null : manifestReader.GetString(0);
+            commitSha = manifestReader.IsDBNull(1) ? null : manifestReader.GetString(1);
         }
         var facts = new List<CodeFact>();
         await using var command = connection.CreateCommand();
@@ -557,7 +625,7 @@ public static class AccessScreenDataFlowReporter
                     reader.GetString(16)),
                 new SortedDictionary<string, string>(properties, StringComparer.Ordinal)));
         }
-        return (commitSha, facts);
+        return (repository ?? throw new InvalidDataException("AccessFlowScanIdentityUnavailable"), commitSha, facts);
     }
 
     private static string RenderMarkdown(AccessScreenDataFlowReport report)
@@ -566,7 +634,8 @@ public static class AccessScreenDataFlowReporter
         builder.AppendLine("# Microsoft Access Screen-to-Data Static Flow");
         builder.AppendLine();
         builder.AppendLine($"- Schema: `{report.SchemaVersion}`");
-        builder.AppendLine($"- Commit: `{report.CommitSha ?? "unknown"}`");
+        builder.AppendLine($"- Repository: `{report.RepositoryId}`");
+        builder.AppendLine($"- Commit: `{report.CommitSha}`");
         builder.AppendLine($"- Coverage: `{report.Coverage}`");
         builder.AppendLine($"- Roots: `{report.Summary.RootCount}`");
         builder.AppendLine($"- Paths: `{report.Summary.PathCount}`");
@@ -603,7 +672,7 @@ public static class AccessScreenDataFlowReporter
         builder.AppendLine("## Gaps");
         builder.AppendLine();
         foreach (var gap in report.Gaps)
-            builder.AppendLine($"- `{gap.Classification}` ({gap.ScopeKind}); rule `{gap.RuleId}`, tier `{gap.EvidenceTier}`, supporting facts {string.Join(", ", gap.SupportingFactIds.Select(id => $"`{id}`"))}.");
+            builder.AppendLine($"- `{gap.Classification}` ({gap.ScopeKind}); rule `{gap.RuleId}`, tier `{gap.EvidenceTier}`, commit `{gap.CommitSha}`, span `{gap.FilePath}:{gap.StartLine}-{gap.EndLine}`, extractor `{gap.ExtractorId}/{gap.ExtractorVersion}`, supporting facts {string.Join(", ", gap.SupportingFactIds.Select(id => $"`{id}`"))}.");
         builder.AppendLine();
         builder.AppendLine("## Limitations");
         builder.AppendLine();

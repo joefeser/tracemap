@@ -49,22 +49,24 @@ is `partial` when any edge is partial, a scoped gap exists, or a bound is hit.
 
 ## Provenance
 
-Each edge contains one exact evidence reference constructed from the supporting
-fact. Paths union and stably order fact IDs, rule IDs, tiers, coverage labels,
-and limitations. No new conclusion is inferred from adjacency alone.
-Composition gaps use `legacy.access.screen-data-flow.v1`, whose limitations
-state that roots and traversal are static candidates only.
+Each edge and gap contains exact commit, repository-relative span, extractor,
+and version evidence constructed from the supporting fact or the bounded
+report-composition context. Paths union and stably order fact IDs, rule IDs,
+allowlisted tiers, coverage labels, and categorical limitations. No new
+conclusion is inferred from adjacency alone. Composition gaps use
+`legacy.access.screen-data-flow.v1`, whose limitations state that roots and
+traversal are static candidates only.
 
 ## Presentation
 
 The command writes `<out>.json` and `<out>.md` atomically through temporary
 siblings. JSON schema is `tracemap.access-screen-data-flow.v1`. Markdown shows
-summary, roots, paths, gaps, and limitations. Opaque Access stable keys are
-allowed; display names and generic property bags are not.
+hashed repository identity, real commit SHA, summary, roots, paths, gaps, and
+limitations. Opaque Access stable keys are allowed; display names and generic
+property bags are not.
 
 ## Privacy
 
 Only allowlisted categorical properties are read. Raw SQL, source text,
 expressions, hashes that encode protected text, and display names are neither
 projected nor rendered. Failures are classification-only in the Access CLI.
-

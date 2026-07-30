@@ -18,10 +18,12 @@ public sealed class AccessScreenDataFlowTests
     {
         var facts = FlowFacts();
 
-        var first = AccessScreenDataFlowReporter.Build(Commit, facts, 12, 100, 100);
-        var second = AccessScreenDataFlowReporter.Build(Commit, facts.Reverse().ToArray(), 12, 100, 100);
+        var first = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
+        var second = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts.Reverse().ToArray(), 12, 100, 100);
 
         Assert.Equal(JsonSerializer.Serialize(first), JsonSerializer.Serialize(second));
+        Assert.StartsWith("repo-", first.RepositoryId, StringComparison.Ordinal);
+        Assert.Equal(Commit, first.CommitSha);
         Assert.Contains(first.Roots, root => root.RootKind == "ui-root-candidate");
         Assert.Contains(first.Gaps, gap => gap.Classification == "AccessStartupIdentityUnavailable");
         Assert.Contains(first.Gaps, gap => gap.Classification == "AccessFlowCycleDetected");
@@ -49,10 +51,18 @@ public sealed class AccessScreenDataFlowTests
                 EvidenceTiers.Tier4Unknown
             });
         });
-        var depthBounded = AccessScreenDataFlowReporter.Build(Commit, facts, 1, 100, 100);
+        Assert.All(first.Gaps, gap =>
+        {
+            Assert.Equal(Commit, gap.CommitSha);
+            Assert.NotEmpty(gap.FilePath);
+            Assert.True(gap.StartLine > 0);
+            Assert.True(gap.EndLine >= gap.StartLine);
+            Assert.NotEmpty(gap.ExtractorVersion);
+        });
+        var depthBounded = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 1, 100, 100);
         Assert.True(depthBounded.Summary.Truncated);
         Assert.Contains(depthBounded.Gaps, gap => gap.Classification == "AccessFlowDepthLimitReached");
-        var pathBounded = AccessScreenDataFlowReporter.Build(Commit, facts, 12, 1, 100);
+        var pathBounded = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 1, 100);
         Assert.True(pathBounded.Summary.Truncated);
         Assert.Contains(pathBounded.Gaps, gap => gap.Classification == "AccessFlowPathLimitReached");
     }
@@ -72,13 +82,50 @@ public sealed class AccessScreenDataFlowTests
                 ("coverageLabel", "count-observed-source-unavailable"))
         };
 
-        var report = AccessScreenDataFlowReporter.Build(Commit, countOnly, 1, 1, 2);
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, countOnly, 1, 1, 2);
 
         Assert.Equal("partial", report.Coverage);
         Assert.Empty(report.Paths);
         Assert.Contains(report.Gaps, gap => gap.Classification == "AccessDesignFlowEvidenceUnavailable");
         Assert.Contains(report.Gaps, gap => gap.Classification == "AccessFlowGapLimitReached");
         Assert.True(report.Summary.Truncated);
+    }
+
+    [Fact]
+    public void Builder_marks_partial_edges_normalizes_tiers_and_drops_unsafe_limitations()
+    {
+        var facts = FlowFacts();
+        var partial = facts.Single(fact => fact.FactId == "fact-event") with
+        {
+            EvidenceTier = "PrivateTierValue",
+            Properties = new SortedDictionary<string, string>(
+                facts.Single(fact => fact.FactId == "fact-event").Properties
+                    .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "partial",
+                ["limitations"] = "static-evidence-only;/private/customer/secret.sql"
+            }
+        };
+        facts = facts.Where(fact => fact.FactId != partial.FactId).Append(partial).ToArray();
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
+
+        Assert.Equal("partial", report.Coverage);
+        Assert.Contains(report.Paths, path => path.Classification == "PartialStaticCandidateTrail");
+        Assert.DoesNotContain(report.Paths.SelectMany(path => path.EvidenceTiers), tier => tier == "PrivateTierValue");
+        Assert.DoesNotContain(report.Paths.SelectMany(path => path.Limitations), value => value.Contains("private", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("not-a-commit")]
+    public void Builder_rejects_missing_scan_identity(string commit)
+    {
+        Assert.Throws<InvalidDataException>(() =>
+            AccessScreenDataFlowReporter.Build("synthetic", commit, FlowFacts(), 12, 100, 100));
+        Assert.Throws<InvalidDataException>(() =>
+            AccessScreenDataFlowReporter.Build("", Commit, FlowFacts(), 12, 100, 100));
     }
 
     [Fact]
