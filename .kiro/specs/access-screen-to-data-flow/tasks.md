@@ -9,4 +9,4 @@
 - [x] Add Mac-only synthetic acceptance, privacy, provenance, and bounds tests.
 - [x] Update validation and implementation state.
 - [x] Run focused/full validation and repository guards.
-- [ ] Commit, push, and open a ready stacked PR linked to #551.
+- [x] Commit, push, and open a ready stacked PR linked to #551.
