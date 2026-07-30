@@ -1,4 +1,5 @@
 using TraceMap.Access;
+using TraceMap.Reporting;
 
 namespace TraceMap.Access.Cli;
 
@@ -30,9 +31,10 @@ public static class AccessCommand
             {
                 "scan" => ScanHelp(),
                 "enrich-design" => EnrichDesignHelp(),
+                "flow" => FlowHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "enrich-design" ? 0 : 1;
+            return command is "scan" or "enrich-design" or "flow" ? 0 : 1;
         }
 
         try
@@ -41,6 +43,7 @@ public static class AccessCommand
             {
                 "scan" => await RunScanAsync(ParseOptions(rest), output, cancellationToken),
                 "enrich-design" => await RunEnrichDesignAsync(ParseOptions(rest), output, cancellationToken),
+                "flow" => await RunFlowAsync(ParseOptions(rest), output, cancellationToken),
                 "worker" => await AccessWorkerHost.RunAsync(ParseOptions(rest), output, cancellationToken),
                 _ => await UnknownAsync(error)
             };
@@ -76,6 +79,39 @@ public static class AccessCommand
         await output.WriteLineAsync("TraceMap Access design evidence enrichment completed.");
         await output.WriteLineAsync($"Facts written: {result.Facts.Count}");
         await output.WriteLineAsync($"Analysis level: {result.Manifest.AnalysisLevel}");
+        return 0;
+    }
+
+    private static async Task<int> RunFlowAsync(
+        IReadOnlyDictionary<string, string> values,
+        TextWriter output,
+        CancellationToken cancellationToken)
+    {
+        var index = Required(values, "--index", "AccessFlowIndexMissing");
+        var outPath = Required(values, "--out", "AccessFlowOutputMissing");
+        var maxDepth = PositiveInt(values, "--max-depth", 12, 64, "AccessFlowBoundsInvalid");
+        var maxPaths = PositiveInt(values, "--max-paths", 100, 10_000, "AccessFlowBoundsInvalid");
+        var maxGaps = PositiveInt(values, "--max-gaps", 1_000, 10_000, "AccessFlowBoundsInvalid");
+        var unexpected = values.Keys.Except(
+            ["--index", "--out", "--max-depth", "--max-paths", "--max-gaps"],
+            StringComparer.Ordinal).Any();
+        if (unexpected) throw new AccessScanException("AccessInvalidArguments");
+        AccessScreenDataFlowResult result;
+        try
+        {
+            result = await AccessScreenDataFlowReporter.WriteAsync(
+                new(index, outPath, maxDepth, maxPaths, maxGaps),
+                cancellationToken);
+        }
+        catch (InvalidDataException ex)
+        {
+            throw new AccessScanException(SafeFlowClassification(ex.Message));
+        }
+        catch (AccessScanException) { throw; }
+        catch { throw new AccessScanException("AccessFlowCompositionFailed"); }
+        await output.WriteLineAsync("TraceMap Access static flow composition completed.");
+        await output.WriteLineAsync($"Candidate paths: {result.Report.Summary.PathCount}");
+        await output.WriteLineAsync($"Coverage: {result.Report.Coverage}");
         return 0;
     }
 
@@ -175,6 +211,26 @@ public static class AccessCommand
     private static string Required(IReadOnlyDictionary<string, string> values, string key, string classification) =>
         values.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : throw new AccessScanException(classification);
 
+    private static int PositiveInt(
+        IReadOnlyDictionary<string, string> values,
+        string key,
+        int fallback,
+        int maximum,
+        string classification)
+    {
+        if (!values.TryGetValue(key, out var value)) return fallback;
+        return int.TryParse(value, out var parsed) && parsed > 0 && parsed <= maximum
+            ? parsed
+            : throw new AccessScanException(classification);
+    }
+
+    private static string SafeFlowClassification(string value) =>
+        value.StartsWith("AccessFlow", StringComparison.Ordinal)
+            && value.Length <= 128
+            && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_')
+                ? value
+                : "AccessFlowCompositionFailed";
+
     private static bool IsHelp(string value) => value is "--help" or "-h" or "help";
     private static async Task<int> UnknownAsync(TextWriter error) { await error.WriteLineAsync("error: AccessUnknownCommand"); return 1; }
 
@@ -184,6 +240,7 @@ public static class AccessCommand
         Usage:
           tracemap-access scan --repo <git-worktree> --database <repo-relative.accdb-or-mdb> --out <new-directory> [--timeout-seconds <30-3600>]
           tracemap-access enrich-design --base-scan <completed-output> --design-evidence <protected-directory> --out <new-directory>
+          tracemap-access flow --index <completed-index.sqlite> --out <new-directory> [--max-depth <1-64>] [--max-paths <1-10000>] [--max-gaps <1-10000>]
           tracemap-access --version
 
         The adapter reads static design metadata only. Design enrichment is Mac-compatible and never opens the database or launches Access.
@@ -204,5 +261,13 @@ public static class AccessCommand
         The command does not require Windows, Microsoft Access, COM, or the original database file.
         Protected design input is read transiently and is never copied into the output.
         Outputs: scan-manifest.json, facts.ndjson, index.sqlite, report.md, logs/analyzer.log.
+        """;
+
+    private static string FlowHelp() => """
+        Usage: tracemap-access flow --index <completed-index.sqlite> --out <new-directory> [--max-depth <1-64>] [--max-paths <1-10000>] [--max-gaps <1-10000>]
+
+        Composes bounded static candidate trails from already-persisted Microsoft Access evidence.
+        The command is Mac-compatible and does not open a database, launch Access, read rows, or execute queries, VBA, macros, forms, or reports.
+        Outputs: access-flow.md and access-flow.json.
         """;
 }

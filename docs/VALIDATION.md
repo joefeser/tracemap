@@ -219,6 +219,26 @@ The base scan and protected input are immutable inputs. The output must be a
 new, non-overlapping path. Protected source and identities are consumed only
 in-process; the standard output remains hash-only.
 
+Source-neutral screen-to-data composition is also Mac-only and reads only the
+completed enriched index:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Access.Cli -- flow \
+  --index <new-enriched-output-directory>/index.sqlite \
+  --out <new-flow-output-directory>
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~AccessScreenDataFlowTests
+```
+
+Verify `access-flow.md` and `access-flow.json` contain deterministic bounded
+candidate paths with supporting fact/rule/tier/commit/span/extractor/coverage/
+limitation provenance. Missing startup identity, item-level evidence, dynamic
+targets, unresolved declarations, cycles, and limits must remain explicit
+gaps. Raw names, SQL, VBA, expressions, macro bodies, connections, credentials,
+local paths, and customer identities must remain absent. This report does not
+prove startup selection, event firing, user navigation, runtime reachability,
+execution, row access, connectivity, correctness, completeness, or approval.
+
 Access extraction requires Windows with installed Microsoft Access/DAO. Run it
 in an isolated local VM with networking and broad host sharing disabled. Stage
 only the self-contained CLI binaries and checked-in validation scripts through

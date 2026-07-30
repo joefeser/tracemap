@@ -1563,6 +1563,18 @@ rules:
       - Protected input exists only transiently in the composing process. Standard artifacts retain only hashes, categorical provenance, canonical TraceMap record IDs, validated spans, coverage labels, limitations, and explicit non-claims.
       - Source-neutral composition never launches Access, widens COM, reads database rows, executes queries, VBA, macros, forms, or reports, or persists raw identities, source, design text, expressions, local paths, or connection material.
 
+  - id: legacy.access.screen-data-flow.v1
+    name: Microsoft Access screen-to-data static flow composition
+    description: Composes bounded candidate trails from already-persisted Access UI, VBA, query, schema, macro, and external-boundary facts.
+    evidenceTier: Tier4Unknown
+    possibleEvidenceTiers: [Tier2Structural, Tier3SyntaxOrTextual, Tier4Unknown]
+    emits:
+      - AnalysisGap
+    limitations:
+      - Candidate roots, edges, and paths are static evidence composition only and do not prove startup selection, event firing, user navigation, branch feasibility, runtime reachability, execution, row access, external connectivity, production use, correctness, completeness, or release approval.
+      - Missing item-level source-neutral evidence, unresolved or dynamic targets, cycles, and traversal limits remain explicit gaps; an empty report does not prove the Access application has no behavior.
+      - Output uses opaque stable identities and allowlisted categorical metadata. Raw object names, SQL, VBA, expressions, macro bodies, connections, credentials, local paths, and customer identity are not rendered.
+
   - id: legacy.data.dbml.v1
     name: Legacy LINQ to SQL DBML metadata
     description: Extracts safe DBML entity, table, column, association, and routine descriptor evidence from checked-in metadata.
