@@ -180,6 +180,20 @@ test("MSBuild binlog article rejects unsupported claims in public metadata", asy
   assert.match(errors.join("\n"), /article contains an unsupported public claim/);
 });
 
+test("MSBuild binlog article binds evidence and non-claims to their reviewed blocks", async (t) => {
+  const root = await createFixture(t);
+  const articlePath = join(root, "src", "_blog", "articles", "what-an-msbuild-binlog-knows-that-a-source-diff-does-not.html");
+  const article = await readFile(articlePath, "utf8");
+  await writeFile(
+    articlePath,
+    `${article.replace("build.msbuild-binlog.observation.v1", "build.msbuild-binlog.unreviewed.v1")}<p>build.msbuild-binlog.observation.v1</p>\n`
+  );
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateMsbuildBinlogEvidenceDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /article allowlist text build\.msbuild-binlog\.observation\.v1/);
+});
+
 test("MSBuild binlog private-material scan catches values split across markup", async (t) => {
   const root = await createFixture(t);
   const metadataPath = join(root, "src", "_blog", "articles", "what-an-msbuild-binlog-knows-that-a-source-diff-does-not.html");
@@ -242,6 +256,33 @@ test("MSBuild binlog discovery rejects unsupported public claims", async (t) => 
   const errors = [];
   await validateMsbuildBinlogEvidenceDist({ dist: join(root, "dist"), errors });
   assert.match(errors.join("\n"), /discovery entry contains an unsupported public claim/);
+});
+
+test("MSBuild binlog discovery pins the reviewed public contract", async (t) => {
+  const root = await createFixture(t);
+  const discoveryPath = join(root, "src", "_site", "discovery.json");
+  const entries = JSON.parse(await readFile(discoveryPath, "utf8"));
+  const entry = entries.find((candidate) => candidate.path === "/build/msbuild-binlog/proof-packet/");
+  entry.limitations[0] = "A different but superficially bounded limitation.";
+  await writeFile(discoveryPath, `${JSON.stringify(entries, null, 2)}\n`);
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateMsbuildBinlogEvidenceDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /discovery entry must match the reviewed public contract/);
+});
+
+test("MSBuild binlog proof page binds evidence metadata to reviewed sections", async (t) => {
+  const root = await createFixture(t);
+  const proofPath = join(root, "src", "build", "msbuild-binlog", "proof-packet", "index.html");
+  const proof = await readFile(proofPath, "utf8");
+  await writeFile(
+    proofPath,
+    `${proof.replace("Tier2Structural", "Tier1Semantic")}<p>Tier2Structural</p>\n`
+  );
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateMsbuildBinlogEvidenceDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /proof identity text Tier2Structural/);
 });
 
 test("MSBuild binlog sitemap failures are aggregated instead of thrown", async (t) => {

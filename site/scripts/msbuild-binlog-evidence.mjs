@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 
 import {
   decodeHtmlEntities,
+  escapeRegExp,
   fileExists,
   normalizeBaseUrl,
   normalizeRenderedText,
@@ -41,6 +42,20 @@ const expectedNonClaims = [
   "No complete diagnostic, project graph, target, task, property, item, package, or performance analysis.",
   "No LLM, MCP, embedding, vector-database, or prompt-classification analysis in the TraceMap scanner or reducer."
 ];
+const expectedDiscoveryEntry = {
+  title: "MSBuild Binlog Evidence Proof Packet",
+  summary: "Demo-level public-safe projection of one synthetic local MSBuild binlog smoke with explicit input, exact commit binding, bounded observed evidence, deterministic output, and non-claims.",
+  sourceType: "site-page",
+  hintCategory: "evidence",
+  limitations: [
+    "The route and JSON asset publish only a categorical allowlisted projection; the raw binary log, artifact digest, arbitrary build fields, and machine-local details are omitted.",
+    "The result covers one checked-in synthetic sample and is not a completeness, compatibility, or performance benchmark."
+  ],
+  nonClaims: [
+    "No artifact authenticity, commit attestation, test-pass, clean-repository, package-use, deployment, runtime-correctness, release-approval, safe-to-release, complete diagnostic, or runtime-reachability conclusion.",
+    "No raw messages, properties, items, tasks, commands, environment values, URLs, credentials, connection material, private hosts, usernames, machine-local paths, LLM analysis, MCP analysis, embeddings, vector databases, or prompt-based classification."
+  ]
+};
 const forbiddenMaterial = [
   /\/Users\//i,
   /\/home\/[^/]+/i,
@@ -128,6 +143,24 @@ async function validateArticle({ articlePath, baseUrl, errors }) {
   for (const block of articleBlocks) {
     requireIncludes(html, `data-msbuild-blog-block="${block}"`, `article block ${block}`, errors);
   }
+  requireBlockIncludes(html, "data-msbuild-blog-block", "allowlist", [
+    "build.msbuild-binlog.observation.v1",
+    "build.msbuild-binlog.gap.v1",
+    "not public evidence",
+    "stays labeled partial"
+  ], "article allowlist", errors);
+  requireBlockIncludes(html, "data-msbuild-blog-block", "dogfood", [
+    "recorded result was",
+    "succeeded",
+    "observed-bounded",
+    "Tier2Structural"
+  ], "article dogfood", errors);
+  requireBlockIncludes(html, "data-msbuild-blog-block", "non-claims", [
+    "does not authenticate or attest the binlog",
+    "does not prove the artifact was produced from",
+    "does not prove tests passed",
+    "do not prove runtime reachability"
+  ], "article non-claims", errors);
 
   const words = text.split(/\s+/).filter(Boolean).length;
   if (words < 700 || words > 1600) errors.push(`MSBuild binlog article word count must be between 700 and 1600, got ${words}`);
@@ -146,6 +179,28 @@ async function validateProofPage({ proofPath, baseUrl, errors }) {
   for (const section of proofSections) {
     requireIncludes(html, `data-msbuild-proof-section="${section}"`, `proof section ${section}`, errors);
   }
+  requireBlockIncludes(html, "data-msbuild-proof-section", "identity", [
+    "build.msbuild-binlog.observation.v1",
+    "Tier2Structural",
+    "observed-bounded",
+    "build.msbuild-binlog.gap.v1",
+    "Tier4Unknown",
+    "observed-partial"
+  ], "proof identity", errors);
+  requireBlockIncludes(html, "data-msbuild-proof-section", "result", [
+    "recorded result",
+    "succeeded",
+    "project-reference observations",
+    "diagnostic observations",
+    "no absence conclusion",
+    "no defect-absence conclusion"
+  ], "proof result", errors);
+  requireBlockIncludes(html, "data-msbuild-proof-section", "limitations", [
+    "does not authenticate or attest the binary log",
+    "does not prove tests passed",
+    "does not prove runtime reachability",
+    "not a completeness, compatibility, or performance benchmark"
+  ], "proof limitations", errors);
   for (const phrase of [
     "Public claim level: demo",
     "build.msbuild-binlog.observation.v1",
@@ -249,6 +304,16 @@ async function validateDiscovery({ dist, errors }) {
   if (entry.publicClaimLevel !== "demo" || entry.preferredProofPath !== msbuildBinlogArticleRoute) {
     errors.push("MSBuild binlog discovery entry has an inconsistent claim level or proof path");
   }
+  if (
+    entry.title !== expectedDiscoveryEntry.title ||
+    entry.summary !== expectedDiscoveryEntry.summary ||
+    entry.sourceType !== expectedDiscoveryEntry.sourceType ||
+    entry.hintCategory !== expectedDiscoveryEntry.hintCategory ||
+    !sameArray(entry.limitations, expectedDiscoveryEntry.limitations) ||
+    !sameArray(entry.nonClaims, expectedDiscoveryEntry.nonClaims)
+  ) {
+    errors.push("MSBuild binlog discovery entry must match the reviewed public contract");
+  }
   const serializedEntry = JSON.stringify(entry);
   scanUnsupportedClaims(serializedEntry, "discovery entry", errors);
   scanPrivateMaterial(serializedEntry, "discovery entry", errors);
@@ -270,6 +335,18 @@ function sameArray(actual, expected) {
 
 function requireIncludes(text, expected, label, errors) {
   if (!text.includes(expected)) errors.push(`MSBuild binlog evidence is missing ${label}`);
+}
+
+function requireBlockIncludes(html, attribute, value, expectedValues, label, errors) {
+  const pattern = new RegExp(
+    `<section\\b(?=[^>]*\\b${escapeRegExp(attribute)}="${escapeRegExp(value)}")[^>]*>([\\s\\S]*?)<\\/section>`,
+    "i"
+  );
+  const block = pattern.exec(html)?.[1] ?? "";
+  const text = normalizeRenderedText(block);
+  for (const expected of expectedValues) {
+    requireIncludes(text, expected, `${label} text ${expected}`, errors);
+  }
 }
 
 function scanUnsupportedClaims(text, label, errors) {
