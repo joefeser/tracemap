@@ -22,4 +22,3 @@ tiers, bounds, JSON, and Markdown.
 Verify roots are candidates, event/navigation rows are static candidates,
 missing evidence is a gap, and the report does not claim runtime reachability,
 execution, user behavior, correctness, completeness, or approval.
-
