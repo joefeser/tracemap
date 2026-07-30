@@ -6,7 +6,9 @@ internal sealed record AccessRawMacro(
     string Name,
     string MacroKind,
     string? OwnerStableKey = null,
-    int Ordinal = 0);
+    int Ordinal = 0,
+    string? StartupRole = null,
+    string? BodyStatus = null);
 
 internal sealed record AccessMacroProjectionResult(
     IReadOnlyList<AccessMacroProjection> Macros,
@@ -47,11 +49,15 @@ internal static class AccessMacroProjector
                 kind,
                 ownerStableKey,
                 raw.Ordinal,
-                kind == "named" && ownerStableKey is null
-                    && string.Equals(raw.Name.Trim(), "AutoExec", StringComparison.OrdinalIgnoreCase)
-                        ? "autoexec"
-                        : "not-autoexec",
-                "protected-omitted",
+                raw.StartupRole is "autoexec" or "not-autoexec" or "unknown"
+                    ? raw.StartupRole
+                    : kind == "named" && ownerStableKey is null
+                        && string.Equals(raw.Name.Trim(), "AutoExec", StringComparison.OrdinalIgnoreCase)
+                            ? "autoexec"
+                            : "not-autoexec",
+                raw.BodyStatus is "protected-omitted" or "unavailable"
+                    ? raw.BodyStatus
+                    : "protected-omitted",
                 "inventory-only"));
         }
 

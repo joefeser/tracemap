@@ -183,9 +183,10 @@ public static class AccessDesignEvidenceComposer
         IReadOnlyList<CodeFact> baseFacts,
         AccessLimits limits)
     {
-        var support = new Dictionary<string, AccessDesignEvidenceRecord>(StringComparer.Ordinal);
+        var support = new Dictionary<string, IReadOnlyList<AccessDesignEvidenceRecord>>(StringComparer.Ordinal);
         var normalizationGaps = new List<AccessGapProjection>();
         var knownObjects = new Dictionary<string, List<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase);
+        var knownObjectsByHash = new Dictionary<string, List<(string StableKey, string Kind)>>(StringComparer.Ordinal);
         var fieldsByTable = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
         foreach (var fact in baseFacts)
         {
@@ -200,6 +201,16 @@ public static class AccessDesignEvidenceComposer
                 };
                 if (kind.Length > 0) AddKnown(knownObjects, name, fact.TargetSymbol, kind);
             }
+            if (fact.Properties.TryGetValue("objectNameHash", out var nameHash))
+            {
+                var kind = fact.FactType switch
+                {
+                    FactTypes.LegacyDataEntityDeclared => "table",
+                    FactTypes.AccessQueryDeclared => "query",
+                    _ => ""
+                };
+                if (kind.Length > 0) AddKnown(knownObjectsByHash, nameHash, fact.TargetSymbol, kind);
+            }
             if (fact.FactType == FactTypes.LegacyDataColumnDeclared
                 && fact.SourceSymbol is not null
                 && fact.Properties.TryGetValue("objectName", out var fieldName))
@@ -211,11 +222,15 @@ public static class AccessDesignEvidenceComposer
             var role = String(record.Payload, "objectRole");
             var identity = OptionalString(record.Payload, "identity");
             var declaredStableKey = OptionalString(record.Payload, "stableKey");
+            var normalizedKind = NormalizeCatalogKind(role);
+            var baseStableKey = identity is null
+                ? null
+                : ResolveBaseStableKey(identity, normalizedKind, knownObjects, knownObjectsByHash);
             var projectedStableKey = identity is null
                 ? null
-                : AccessSafeValues.Identity(
+                : baseStableKey ?? AccessSafeValues.Identity(
                     databaseSeed,
-                    NormalizeCatalogKind(role),
+                    normalizedKind,
                     identity,
                     disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly).StableKey;
             if (declaredStableKey is not null
@@ -242,14 +257,13 @@ public static class AccessDesignEvidenceComposer
             }
             var stableKey = projectedStableKey ?? declaredStableKey;
             if (identity is not null && stableKey is not null)
-                AddKnown(knownObjects, identity, stableKey, NormalizeCatalogKind(role));
+                AddKnown(knownObjects, identity, stableKey, normalizedKind);
             if (stableKey is not null)
-                support[stableKey] = record;
+                SetSupport(support, stableKey, [record]);
         }
 
-        var rawSurfaces = new List<AccessRawUiSurface>();
+        var surfaceInputs = new List<SurfaceInput>();
         var uiParserGaps = new List<AccessGapProjection>();
-        var uiRecordByRaw = new Dictionary<AccessRawUiSurface, AccessDesignEvidenceRecord>();
         foreach (var document in bundle.Records.Where(record => record.Kind == "ui-design-document"))
         {
             var kind = String(document.Payload, "documentRole");
@@ -268,8 +282,7 @@ public static class AccessDesignEvidenceComposer
                 gap with { StableScopeKey = gap.StableScopeKey ?? document.CanonicalRecordId }));
             if (parsed.Surface is not null)
             {
-                rawSurfaces.Add(parsed.Surface with { Coverage = document.Completeness });
-                uiRecordByRaw[rawSurfaces[^1]] = document;
+                surfaceInputs.Add(new(parsed.Surface with { Coverage = document.Completeness }, document));
             }
         }
         var structured = bundle.Records.Where(record => record.Kind == "ui-surface").ToArray();
@@ -314,10 +327,16 @@ public static class AccessDesignEvidenceComposer
                     .OrderBy(item => item.Role, StringComparer.Ordinal).ToArray(),
                 surface.Completeness,
                 OptionalString(surface.Payload, "filter"),
-                OptionalString(surface.Payload, "orderBy"));
-            rawSurfaces.Add(raw);
-            uiRecordByRaw[raw] = surface;
+                OptionalString(surface.Payload, "orderBy"),
+                OptionalString(surface.Payload, "boundState"));
+            surfaceInputs.Add(new(raw, surface));
         }
+        var mergedSurfaceInputs = surfaceInputs
+            .GroupBy(input => SurfaceStableKey(databaseSeed, input.Raw), StringComparer.Ordinal)
+            .Select(group => MergeSurfaceInputs(group.Key, group.ToArray(), normalizationGaps))
+            .OrderBy(input => SurfaceStableKey(databaseSeed, input.Raw), StringComparer.Ordinal)
+            .ToArray();
+        var rawSurfaces = mergedSurfaceInputs.Select(input => input.Raw).ToArray();
         var known = knownObjects.ToDictionary(
             item => item.Key,
             item => (IReadOnlyList<(string StableKey, string Kind)>)item.Value
@@ -331,20 +350,22 @@ public static class AccessDesignEvidenceComposer
                 StringComparer.OrdinalIgnoreCase),
             StringComparer.Ordinal);
         var ui = AccessUiProjector.Project(databaseSeed, rawSurfaces, known, fields, AccessIdentityDisclosurePolicy.HashOnly);
-        foreach (var raw in rawSurfaces)
+        foreach (var input in mergedSurfaceInputs)
         {
+            var raw = input.Raw;
             var identity = AccessSafeValues.Identity(databaseSeed,
                 raw.SurfaceKind is "form" or "report" ? raw.SurfaceKind : "unknown",
                 raw.Name,
                 disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly);
-            var source = uiRecordByRaw[raw];
-            support[identity.StableKey] = source;
+            var sources = input.Records;
+            var source = sources.First();
+            SetSupport(support, identity.StableKey, sources);
             var projectedSurface = ui.Surfaces.Single(item => item.Identity.StableKey == identity.StableKey);
             foreach (var control in projectedSurface.Controls)
-                support[control.Identity.StableKey] = bundle.Records.FirstOrDefault(record =>
+                SetSupport(support, control.Identity.StableKey, bundle.Records.Where(record =>
                 {
                     if (record.Kind != "ui-control"
-                        || record.ParentCanonicalRecordId != source.CanonicalRecordId
+                        || !sources.Any(item => item.CanonicalRecordId == record.ParentCanonicalRecordId)
                         || Int(record.Payload, "ordinal") != control.Ordinal)
                         return false;
                     return AccessSafeValues.Identity(
@@ -353,8 +374,8 @@ public static class AccessDesignEvidenceComposer
                         String(record.Payload, "identity"),
                         control.Ordinal,
                         AccessIdentityDisclosurePolicy.HashOnly).StableKey == control.Identity.StableKey;
-                }) ?? source;
-            AddUiChildSupport(projectedSurface, support, source);
+                }).DefaultIfEmpty(source).ToArray());
+            AddUiChildSupport(projectedSurface, support, sources);
         }
 
         var rawModules = bundle.Records.Where(record => record.Kind == "vba-module")
@@ -377,11 +398,11 @@ public static class AccessDesignEvidenceComposer
                     "vba-module",
                     String(item.Payload, "identity"),
                     disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly).StableKey == module.Identity.StableKey);
-            support[module.Identity.StableKey] = record;
+            SetSupport(support, module.Identity.StableKey, [record]);
             foreach (var procedure in module.Procedures)
             {
-                support[procedure.Identity.StableKey] = record;
-                foreach (var call in procedure.Calls) support[call.Identity.StableKey] = record;
+                SetSupport(support, procedure.Identity.StableKey, [record]);
+                foreach (var call in procedure.Calls) SetSupport(support, call.Identity.StableKey, [record]);
             }
         }
 
@@ -390,7 +411,9 @@ public static class AccessDesignEvidenceComposer
                 String(record.Payload, "identity"),
                 String(record.Payload, "macroCategory"),
                 null,
-                Int(record.Payload, "ordinal")))
+                Int(record.Payload, "ordinal"),
+                OptionalString(record.Payload, "startupRole"),
+                OptionalString(record.Payload, "bodyStatus")))
             .ToArray();
         var macros = AccessMacroProjector.Project(databaseSeed, rawMacros, limits, AccessIdentityDisclosurePolicy.HashOnly);
         foreach (var macro in macros.Macros)
@@ -404,7 +427,7 @@ public static class AccessDesignEvidenceComposer
                     String(item.Payload, "identity"),
                     macro.Ordinal,
                     AccessIdentityDisclosurePolicy.HashOnly).StableKey == macro.Identity.StableKey);
-            support[macro.Identity.StableKey] = record;
+            SetSupport(support, macro.Identity.StableKey, [record]);
         }
 
         var gaps = bundle.Gaps.Select(gap => new AccessGapProjection(
@@ -436,31 +459,33 @@ public static class AccessDesignEvidenceComposer
             .OrderBy(gap => gap.Classification, StringComparer.Ordinal)
             .ThenBy(gap => gap.StableScopeKey, StringComparer.Ordinal)
             .ToArray();
-        foreach (var record in bundle.Records) support.TryAdd(record.CanonicalRecordId, record);
+        foreach (var record in bundle.Records) support.TryAdd(record.CanonicalRecordId, [record]);
         return new(ui, vba, macros, gaps, support);
     }
 
     private static void AddUiChildSupport(
         AccessUiSurfaceProjection surface,
-        Dictionary<string, AccessDesignEvidenceRecord> support,
-        AccessDesignEvidenceRecord fallback)
+        Dictionary<string, IReadOnlyList<AccessDesignEvidenceRecord>> support,
+        IReadOnlyList<AccessDesignEvidenceRecord> fallback)
     {
-        foreach (var binding in surface.Bindings) support[binding.Identity.StableKey] = fallback;
+        foreach (var binding in surface.Bindings) SetSupport(support, binding.Identity.StableKey, fallback);
         foreach (var control in surface.Controls)
         {
             var source = support.GetValueOrDefault(control.Identity.StableKey) ?? fallback;
-            foreach (var binding in control.Bindings) support[binding.Identity.StableKey] = source;
+            foreach (var binding in control.Bindings) SetSupport(support, binding.Identity.StableKey, source);
         }
     }
 
     private static CodeFact AddProvenance(
         CodeFact fact,
-        IReadOnlyDictionary<string, AccessDesignEvidenceRecord> support,
+        IReadOnlyDictionary<string, IReadOnlyList<AccessDesignEvidenceRecord>> support,
         AccessDesignEvidenceManifestProjection manifest,
         string designContractHash,
         string databasePath)
     {
-        var record = FindSupport(fact, support);
+        var records = FindSupport(fact, support);
+        var record = records.FirstOrDefault(item => item.Source.CoordinateStatus == "exact-lines")
+            ?? records.FirstOrDefault();
         var properties = new SortedDictionary<string, string>(
             fact.Properties.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
             StringComparer.Ordinal)
@@ -472,7 +497,9 @@ public static class AccessDesignEvidenceComposer
             ["designProducerVersion"] = manifest.ProducerVersion,
             ["designMechanism"] = manifest.Mechanism,
             ["copyBinding"] = manifest.CopyBinding,
-            ["sourceCanonicalRecordIds"] = record?.CanonicalRecordId ?? BundleSupportId(designContractHash),
+            ["sourceCanonicalRecordIds"] = records.Count > 0
+                ? string.Join(';', records.Select(item => item.CanonicalRecordId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal))
+                : BundleSupportId(designContractHash),
             ["coordinateStatus"] = record?.Source.CoordinateStatus ?? "unavailable",
             ["completenessStatus"] = record?.Completeness ?? "partial",
             ["nonClaims"] = "no-runtime-reachability;no-execution;no-row-access;no-business-intent;no-completeness;no-release-approval"
@@ -495,9 +522,9 @@ public static class AccessDesignEvidenceComposer
         return fact with { Properties = properties, Evidence = evidence, EvidenceTier = tier };
     }
 
-    private static AccessDesignEvidenceRecord? FindSupport(
+    private static IReadOnlyList<AccessDesignEvidenceRecord> FindSupport(
         CodeFact fact,
-        IReadOnlyDictionary<string, AccessDesignEvidenceRecord> support)
+        IReadOnlyDictionary<string, IReadOnlyList<AccessDesignEvidenceRecord>> support)
     {
         foreach (var key in new[] { fact.TargetSymbol, fact.SourceSymbol,
                      fact.Properties.GetValueOrDefault("scopeStableKey"),
@@ -506,7 +533,7 @@ public static class AccessDesignEvidenceComposer
                      fact.Properties.GetValueOrDefault("procedureStableKey") })
             if (key is not null && support.TryGetValue(key, out var record))
                 return record;
-        return null;
+        return [];
     }
 
     private static EvidenceSpan SpanFor(CodeFact fact, AccessDesignEvidenceRecord? record, string databasePath)
@@ -649,11 +676,12 @@ public static class AccessDesignEvidenceComposer
             size);
     }
 
-    private static async Task<byte[]> ReadBoundedAsync(string path, long maximum, CancellationToken cancellationToken)
+    internal static async Task<byte[]> ReadBoundedAsync(string path, long maximum, CancellationToken cancellationToken)
     {
         var info = new FileInfo(path);
-        if (info.Length <= 0 || info.Length > maximum) throw new AccessScanException("AccessBaseScanArtifactLimitReached");
-        var bytes = new byte[info.Length];
+        if (info.Length <= 0 || info.Length > maximum || info.Length > int.MaxValue)
+            throw new AccessScanException("AccessBaseScanArtifactLimitReached");
+        var bytes = new byte[checked((int)info.Length)];
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         var offset = 0;
         while (offset < bytes.Length)
@@ -676,6 +704,102 @@ public static class AccessDesignEvidenceComposer
     {
         if (!values.TryGetValue(name, out var entries)) values[name] = entries = [];
         entries.Add((stableKey, kind));
+    }
+
+    private static string? ResolveBaseStableKey(
+        string identity,
+        string kind,
+        IReadOnlyDictionary<string, List<(string StableKey, string Kind)>> knownByName,
+        IReadOnlyDictionary<string, List<(string StableKey, string Kind)>> knownByHash)
+    {
+        var matches = new List<string>();
+        if (knownByName.TryGetValue(identity, out var named))
+            matches.AddRange(named.Where(item => item.Kind == kind).Select(item => item.StableKey));
+        var hash = AccessSafeValues.RoleHash($"access-{kind}-name", identity);
+        if (knownByHash.TryGetValue(hash, out var hashed))
+            matches.AddRange(hashed.Where(item => item.Kind == kind).Select(item => item.StableKey));
+        var distinct = matches.Distinct(StringComparer.Ordinal).ToArray();
+        return distinct.Length == 1 ? distinct[0] : null;
+    }
+
+    private static string SurfaceStableKey(string databaseSeed, AccessRawUiSurface surface) =>
+        AccessSafeValues.Identity(
+            databaseSeed,
+            surface.SurfaceKind is "form" or "report" ? surface.SurfaceKind : "unknown",
+            surface.Name,
+            disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly).StableKey;
+
+    private static SurfaceInput MergeSurfaceInputs(
+        string stableKey,
+        IReadOnlyList<SurfaceInput> inputs,
+        List<AccessGapProjection> gaps)
+    {
+        if (inputs.Count == 1) return inputs[0];
+        var ordered = inputs
+            .OrderByDescending(item => item.Records[0].Kind == "ui-surface")
+            .ThenBy(item => item.Records[0].CanonicalRecordId, StringComparer.Ordinal)
+            .ToArray();
+        var preferred = ordered[0].Raw;
+        var conflict = false;
+        T? MergeValue<T>(Func<AccessRawUiSurface, T?> selector) where T : struct
+        {
+            var values = ordered.Select(item => selector(item.Raw)).Where(value => value.HasValue)
+                .Select(value => value!.Value).Distinct().ToArray();
+            if (values.Length > 1) conflict = true;
+            return values.Length == 1 ? values[0] : null;
+        }
+        string? MergeText(Func<AccessRawUiSurface, string?> selector)
+        {
+            var values = ordered.Select(item => selector(item.Raw))
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!.Trim()).Distinct(StringComparer.Ordinal).ToArray();
+            if (values.Length > 1) conflict = true;
+            return values.Length == 1 ? values[0] : null;
+        }
+        var controls = ordered.SelectMany(item => item.Raw.Controls)
+            .GroupBy(item => (item.Ordinal, NameHash: AccessSafeValues.RoleHash("access-control-merge-name", item.Name)))
+            .Select(group => group.First())
+            .OrderBy(item => item.Ordinal)
+            .ThenBy(item => AccessSafeValues.RoleHash("access-control-sort-name", item.Name), StringComparer.Ordinal)
+            .ToArray();
+        var events = ordered.SelectMany(item => item.Raw.Events).Distinct()
+            .OrderBy(item => item.Role, StringComparer.Ordinal)
+            .ThenBy(item => item.Value, StringComparer.Ordinal)
+            .ToArray();
+        var merged = preferred with
+        {
+            HasModule = MergeValue(surface => surface.HasModule),
+            RecordSource = MergeText(surface => surface.RecordSource),
+            Controls = controls,
+            Events = events,
+            Coverage = conflict || ordered.Any(item => item.Raw.Coverage != "complete") ? "partial" : "complete",
+            Filter = MergeText(surface => surface.Filter),
+            OrderBy = MergeText(surface => surface.OrderBy),
+            DeclaredBoundState = MergeText(surface => surface.DeclaredBoundState)
+        };
+        if (conflict)
+            gaps.Add(new(
+                "AccessDesignInputSurfaceConflict",
+                "ui-surface",
+                stableKey,
+                RuleIds.LegacyAccessDesignInput));
+        return new(merged, ordered.SelectMany(item => item.Records).ToArray());
+    }
+
+    private static void SetSupport(
+        IDictionary<string, IReadOnlyList<AccessDesignEvidenceRecord>> support,
+        string key,
+        IEnumerable<AccessDesignEvidenceRecord> records)
+    {
+        var existing = support.TryGetValue(key, out var value)
+            ? value
+            : Array.Empty<AccessDesignEvidenceRecord>();
+        var combined = existing
+            .Concat(records)
+            .DistinctBy(item => item.CanonicalRecordId, StringComparer.Ordinal)
+            .OrderBy(item => item.CanonicalRecordId, StringComparer.Ordinal)
+            .ToArray();
+        support[key] = combined;
     }
 
     private static void AddField(
@@ -736,10 +860,17 @@ public static class AccessDesignEvidenceComposer
         string DatabaseStableKey,
         long DatabaseSize);
 
+    private sealed record SurfaceInput(
+        AccessRawUiSurface Raw,
+        IReadOnlyList<AccessDesignEvidenceRecord> Records)
+    {
+        public SurfaceInput(AccessRawUiSurface raw, AccessDesignEvidenceRecord record) : this(raw, [record]) { }
+    }
+
     private sealed record ProjectionResult(
         AccessUiProjectionResult Ui,
         AccessVbaProjectionResult Vba,
         AccessMacroProjectionResult Macros,
         IReadOnlyList<AccessGapProjection> Gaps,
-        IReadOnlyDictionary<string, AccessDesignEvidenceRecord> Support);
+        IReadOnlyDictionary<string, IReadOnlyList<AccessDesignEvidenceRecord>> Support);
 }

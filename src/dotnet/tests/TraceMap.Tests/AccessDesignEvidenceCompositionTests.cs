@@ -48,7 +48,17 @@ public sealed class AccessDesignEvidenceCompositionTests
         Assert.Contains(firstResult.Facts, fact => fact.FactType == FactTypes.AccessMacroDeclared);
         Assert.Contains(firstResult.Facts, fact => fact.FactType == FactTypes.AccessFormDeclared
             && fact.EvidenceTier == EvidenceTiers.Tier2Structural
-            && fact.Properties.GetValueOrDefault("coverageLabel") == "structured-design-observed");
+            && fact.Properties.GetValueOrDefault("coverageLabel") == "structured-design-observed"
+            && fact.Properties.GetValueOrDefault("boundState") == "bound-declared"
+            && fact.Properties["sourceCanonicalRecordIds"].Split(';').Length == 2);
+        Assert.Contains(firstResult.Facts, fact => fact.FactType == FactTypes.AccessBindingDeclared
+            && fact.Properties.GetValueOrDefault("bindingKind") == "record-source"
+            && fact.TargetSymbol == firstResult.Facts.Single(item =>
+                item.FactType == FactTypes.AccessQueryDeclared
+                && item.Properties.GetValueOrDefault("objectName") == "SharedQuery").TargetSymbol);
+        Assert.Contains(firstResult.Facts, fact => fact.FactType == FactTypes.AccessMacroDeclared
+            && fact.Properties.GetValueOrDefault("startupRole") == "autoexec"
+            && fact.Properties.GetValueOrDefault("bodyStatus") == "unavailable");
         Assert.Contains(firstResult.Facts, fact => fact.FactType == FactTypes.AccessVbaModuleDeclared
             && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
             && fact.Evidence.ExtractorId == "AccessSourceNeutralDesignEvidence"
@@ -123,6 +133,54 @@ public sealed class AccessDesignEvidenceCompositionTests
         Assert.Equal(1, nestedExit);
         Assert.Contains("AccessUnsafeOutputPath", stderr.ToString(), StringComparison.Ordinal);
         Assert.False(Directory.Exists(Path.Combine(design, "output")));
+
+        if (!OperatingSystem.IsLinux())
+        {
+            stderr.GetStringBuilder().Clear();
+            var differentlyCasedDesign = string.Concat(
+                design[..^Path.GetFileName(design).Length],
+                Path.GetFileName(design).ToUpperInvariant());
+            var caseAliasExit = await AccessCommand.RunAsync(
+                ["enrich-design", "--base-scan", baseScan, "--design-evidence", design, "--out", Path.Combine(differentlyCasedDesign, "output")],
+                stdout,
+                stderr);
+            Assert.Equal(1, caseAliasExit);
+            Assert.Contains("AccessUnsafeOutputPath", stderr.ToString(), StringComparison.Ordinal);
+        }
+
+        var alias = Path.Combine(temp.Path, "design-alias");
+        try
+        {
+            Directory.CreateSymbolicLink(alias, design);
+            stderr.GetStringBuilder().Clear();
+            var symlinkExit = await AccessCommand.RunAsync(
+                ["enrich-design", "--base-scan", baseScan, "--design-evidence", design, "--out", Path.Combine(alias, "output")],
+                stdout,
+                stderr);
+            Assert.Equal(1, symlinkExit);
+            Assert.Contains("AccessUnsafeOutputPath", stderr.ToString(), StringComparison.Ordinal);
+        }
+        catch (UnauthorizedAccessException) when (OperatingSystem.IsWindows())
+        {
+            // Windows developer mode controls whether test processes may create symlinks.
+        }
+    }
+
+    [Fact]
+    public async Task Bounded_reader_rejects_lengths_that_cannot_be_safely_buffered()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "sparse.bin");
+        await using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            stream.SetLength((long)int.MaxValue + 1);
+
+        var error = await Assert.ThrowsAsync<AccessScanException>(() =>
+            AccessDesignEvidenceComposer.ReadBoundedAsync(
+                path,
+                (long)int.MaxValue + 2,
+                CancellationToken.None));
+
+        Assert.Equal("AccessBaseScanArtifactLimitReached", error.Classification);
     }
 
     private static async Task<string> WriteBaseScanAsync(string root)
@@ -144,6 +202,9 @@ public sealed class AccessDesignEvidenceCompositionTests
             output,
             false,
             4);
+        var databaseSeed = AccessSafeValues.DatabaseIdentitySeed(
+            RepositoryHash, CommitSha, "fixtures/synthetic.accdb", DatabaseHash);
+        var sharedQuery = AccessSafeValues.Identity(databaseSeed, "query", "SharedQuery");
         var projection = new AccessDatabaseProjection(
             "tracemap.access-projection.v1",
             DatabaseHash,
@@ -155,7 +216,17 @@ public sealed class AccessDesignEvidenceCompositionTests
             0,
             [],
             [],
-            [],
+            [new(
+                sharedQuery,
+                "select",
+                new string('4', 64),
+                16,
+                "complete",
+                [],
+                [],
+                false,
+                null,
+                null)],
             [],
             [new("AccessUiCatalogUnavailable", "ui-catalog", null, RuleIds.LegacyAccessCoverageGap)],
             []);
@@ -173,13 +244,20 @@ public sealed class AccessDesignEvidenceCompositionTests
         Directory.CreateDirectory(directory);
         var vba = $"' {ProtectedForm}\nPublic Sub HandleClick()\nDoCmd.OpenForm \"{ProtectedForm}\"\nEnd Sub";
         var vbaHash = Sha256(Encoding.UTF8.GetBytes(vba));
+        var designText = "Begin Form\n    HasModule = -1\nEnd";
+        var designTextHash = Sha256(Encoding.UTF8.GetBytes(designText));
         var records = new[]
         {
+            Record("catalog-object", "catalog-query", null, "catalog-export", "container-only", null, null, null, "complete",
+                Object(("objectRole", "saved-query"), ("identity", "SharedQuery"), ("ordinal", 0))),
             Record("catalog-object", "catalog-form", null, "catalog-export", "container-only", null, null, null, "complete",
                 Object(("objectRole", "form"), ("identity", ProtectedForm), ("ordinal", 0))),
+            Record("ui-design-document", "ui-design-document", "catalog-form", "form-design-export", "exact-lines", designTextHash, 1, 3, "complete",
+                Object(("documentRole", "form"), ("designText", designText), ("designSha256", designTextHash), ("lineCount", 3))),
             Record("ui-surface", "surface", "catalog-form", "form-design-export", "container-only", null, null, null, "complete",
                 Object(("surfaceRole", "form"), ("identity", ProtectedForm), ("ordinal", 0),
                     ("modulePresence", "present"), ("boundState", "bound"),
+                    ("recordSource", "SharedQuery"),
                     ("events", Object(("on-load", "[Event Procedure]"))))),
             Record("ui-control", "control", "surface", "form-design-export", "container-only", null, null, null, "complete",
                 Object(("identity", ProtectedControl), ("ordinal", 0), ("controlType", 104),
@@ -189,7 +267,7 @@ public sealed class AccessDesignEvidenceCompositionTests
                     ("sourceText", vba), ("sourceSha256", vbaHash), ("lineCount", 4), ("coordinateBasis", "module-relative"))),
             Record("macro-inventory", "macro", null, "macro-inventory-export", "unavailable", null, null, null, "partial",
                 Object(("macroCategory", "named"), ("identity", ProtectedMacro), ("ordinal", 0),
-                    ("startupRole", "not-autoexec"), ("bodyStatus", "protected-omitted"))),
+                    ("startupRole", "autoexec"), ("bodyStatus", "unavailable"))),
             Record("source-gap", "gap", null, "producer-gap", "unavailable", null, null, null, "partial",
                 Object(("classification", "source-unavailable"), ("affectedScope", "macro"), ("coverageCategory", "source-unavailable")))
         };
