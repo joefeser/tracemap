@@ -2,6 +2,10 @@
 
 Status: implementation and validation complete; PR handoff in progress
 
+PR: #559
+
+PR URL: https://github.com/joefeser/tracemap/pull/559
+
 Issue: #552
 
 Parent: #549
@@ -65,3 +69,20 @@ Locked restore and build repeated only the separately tracked
 - external-link runtime behavior;
 - hidden-local identity display;
 - any Windows exporter or richer extraction.
+
+## Runway audit
+
+- #550 / PR #557 is the source-neutral ingestion base at
+  `33602ef962dce99e2306bf5c544a763bfe9d6ee6`; its code/tests/checks are clean,
+  while its ACK handoff still requires owner disposition of outdated prior-head
+  Qodo evidence.
+- #551 / PR #558 is stacked exactly on #557 at
+  `bd29ed9cff899327d47098ccf15209dcc29d4583`; checks are green and it awaits
+  its required review/ACK process after #557.
+- #552 / PR #559 is stacked exactly on #558 and awaits CI/review/ACK after this
+  handoff.
+- Merge order is #557, #558, then #559. Retarget each surviving PR to `dev`
+  only after its parent is merged, without changing its approved head.
+- Issues #550–#552 and parent #549 remain open until their linked work is
+  merged. No Windows or representative database validation is required for
+  these Mac-only read-side slices.

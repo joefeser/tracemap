@@ -10,5 +10,5 @@
 - [x] Add Mac synthetic candidate, false-positive, dynamic, privacy, and bounds tests.
 - [x] Update validation and implementation state.
 - [x] Run focused/full validation and repository guards.
-- [ ] Commit, push, and open a ready stacked PR linked to #552.
-- [ ] Audit the complete #550 → #551 → #552 runway and owner gates.
+- [x] Commit, push, and open a ready stacked PR linked to #552.
+- [x] Audit the complete #550 → #551 → #552 runway and owner gates.
