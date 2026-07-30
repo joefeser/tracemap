@@ -83,6 +83,10 @@
         <h2>Database evidence can be composed into a design-review packet.</h2>
         <p><code>database-design-review.md</code> and <code>database-design-review.json</code> group compatible PostgreSQL design, EF mapping, application operation, query, route, provenance, cap, and gap evidence. Read the <a href="/database/design-review/">manager-facing database design review</a>, then inspect the <a href="/database/design-review/proof-packet/">synthetic public proof packet</a>.</p>
       </section>
+      <section class="section callout-section">
+        <h2>An explicit MSBuild binlog can add bounded observed-build evidence.</h2>
+        <p>The standard scan artifacts can include allowlisted build-result, project, graph, diagnostic, provenance, and gap rows from an explicitly supplied binary log. The raw artifact is not a public output. Read <a href="/blog/what-an-msbuild-binlog-knows-that-a-source-diff-does-not/">what a binlog knows that a source diff does not</a>, then inspect the <a href="/build/msbuild-binlog/proof-packet/">public-safe proof packet</a>.</p>
+      </section>
     </main>
 
     <footer class="site-footer">

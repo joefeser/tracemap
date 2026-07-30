@@ -1,5 +1,21 @@
 [
   {
+    "slug": "what-an-msbuild-binlog-knows-that-a-source-diff-does-not",
+    "category": "Build evidence",
+    "title": "What an MSBuild Binlog Knows That a Source Diff Does Not",
+    "h1": "What an MSBuild binlog knows that a source diff does not",
+    "description": "A demo-level look at bounded MSBuild binlog evidence, why build artifacts complement source diffs, and why their sensitive contents require a narrow projection boundary.",
+    "ogDescription": "How TraceMap projects a small, deterministic, public-safe evidence packet from an explicitly supplied MSBuild binlog without publishing the raw artifact.",
+    "ogImage": "/assets/msbuild-binlog-evidence-social-card.png",
+    "cardDescription": "A source diff and a recorded build artifact answer different questions. See the evidence boundary TraceMap keeps between them.",
+    "hero": "A source diff shows repository change. A supplied binary log can show what one recorded build observed. Useful review keeps those evidence sources separate and their limitations attached.",
+    "published": "2026-07-29",
+    "publishedDisplay": "July 29, 2026",
+    "body": "articles/what-an-msbuild-binlog-knows-that-a-source-diff-does-not.html",
+    "calloutHeading": "Want the bounded evidence shape?",
+    "calloutHtml": "Inspect the <a href=\"/build/msbuild-binlog/proof-packet/\">public-safe proof packet</a>, then read the <a href=\"/evidence/\">TraceMap evidence model</a> and <a href=\"/limitations/\">limitations</a>."
+  },
+  {
     "slug": "rag-vs-agentic-retrieval-for-code-review",
     "category": "Review retrieval",
     "title": "RAG vs Agentic Retrieval for Code Review: A TraceMap Perspective",
