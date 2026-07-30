@@ -148,6 +148,9 @@ Payload schemas are strict and kind-specific:
 
 - catalog objects carry object role, protected local identity, optional
   existing TraceMap stable key, parent role, and ordinal;
+- UI design documents carry bounded protected form/report design text,
+  document hash, line count, and completeness so `AccessUiTextParser` can parse
+  them transiently and coordinate claims can be validated independently;
 - UI surfaces and controls carry the raw fields already supported by
   `AccessUiProjector`;
 - VBA modules carry bounded source because the existing parser requires it;
@@ -233,12 +236,14 @@ safe properties such as:
 - `designProducerVersion`;
 - `designMechanism`;
 - `copyBinding`;
-- `sourceRecordIds`;
+- `sourceCanonicalRecordIds`;
 - `coordinateStatus`;
 - `coverageLabel`.
 
 Do not store exported timestamps, local paths, producer exception messages, or
-raw producer record IDs that fail the safe token policy.
+raw producer record IDs. Producer-local IDs are transient referential aliases
+only; even safe-token producer IDs SHALL NOT enter facts, gaps, manifests,
+indexes, reports, or artifact hashes.
 
 ## Deterministic identity and ordering
 
@@ -258,13 +263,15 @@ ordinal when meaningful
 role-separated protected identity hash
 ```
 
-Input line order and producer-local IDs do not affect output ordering. Records
-are sorted by kind, parent stable key, semantic role, ordinal, and stable record
-key before projection.
+Input line order and producer-local IDs do not affect output ordering or
+provenance. Producer parent references are resolved transiently and then
+replaced with TraceMap-derived canonical parent/record keys. Records are sorted
+by kind, parent stable key, semantic role, ordinal, and stable record key before
+projection.
 
 Equivalent duplicates collapse. Conflicting duplicates poison only the
 conflicted stable identity and emit a Tier4 gap; the importer does not choose
-first or last.
+first or last. Facts cite only the resulting canonical record keys.
 
 ## Tier and coverage decisions
 
@@ -297,9 +304,19 @@ still protect and dispose of it according to their policy.
 
 ## Bounds and failure behavior
 
-The importer streams NDJSON after hashing the bounded file. It stops reading
-before exceeding byte/record limits. Each supported collection uses the
-existing `AccessLimits` ceiling or a narrower ingestion-specific ceiling.
+The importer checks manifest and record-file byte declarations before parsing
+and hashes only a file within the byte ceiling. It then streams and validates
+the complete bounded NDJSON set without projecting facts. If the declared or
+observed record count exceeds the envelope cap, the entire design input is
+invalid and produces no design conclusions; a prefix is never retained.
+
+After a complete bounded set passes envelope validation, the importer resolves
+producer-local references, derives canonical record keys, detects conflicts,
+sorts canonically, and only then invokes projectors. Per-record text violations
+reject the scoped record. Per-collection and output limits select only from the
+canonical ordering and emit aggregate partial-coverage gaps. Each supported
+collection uses the existing `AccessLimits` ceiling or a narrower
+ingestion-specific ceiling.
 
 Failures are closed classifications, for example:
 
@@ -344,6 +361,8 @@ the future importer and existing pure projectors without Windows or COM.
 Validation must:
 
 - reverse record and property order and compare every standard artifact;
+- exceed the record envelope cap in forward and reverse order and prove both
+  inputs emit no design conclusions and the same categorical limit gap;
 - mutate hashes, commit, base scan, coordinates, enum values, and duplicate
   payloads;
 - plant protected markers in every accepted transient field and every

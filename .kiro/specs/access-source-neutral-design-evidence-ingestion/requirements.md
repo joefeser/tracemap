@@ -18,8 +18,13 @@ COM, compose screen-to-data flows, or classify copy/clone behavior.
 1. Design evidence SHALL be supplied only through an explicit future input
    option; TraceMap SHALL NOT discover exports or Access databases
    automatically.
-2. The input SHALL contain a bounded JSON manifest and ordered NDJSON records
-   using schema `tracemap.access-design-evidence.v1`.
+2. The input SHALL contain:
+   - a bounded JSON manifest using schema
+     `tracemap.access-design-evidence.v1`; and
+   - NDJSON record envelopes using schema
+     `tracemap.access-design-evidence.record.v1`.
+   NDJSON line order is semantically irrelevant; the importer SHALL validate
+   the complete bounded record set and canonicalize ordering before projection.
 3. The manifest SHALL declare:
    - schema version;
    - producer identifier and version;
@@ -59,12 +64,13 @@ COM, compose screen-to-data flows, or classify copy/clone behavior.
    - producer and producer version;
    - export-mechanism category;
    - database-copy binding classification;
-   - record kind and deterministic record identity;
+   - record kind and TraceMap-derived deterministic record identity;
    - source coordinate status;
    - completeness status.
 6. Every projected fact or gap SHALL preserve rule ID, evidence tier, coverage
-   label, repository, commit SHA, extractor version, and supporting input record
-   IDs.
+   label, repository, commit SHA, extractor version, and supporting
+   TraceMap-derived canonical record IDs. Raw producer-local record IDs SHALL
+   remain transient and SHALL NOT persist.
 
 ### R3 — Supported record vocabulary
 
@@ -74,26 +80,33 @@ The v1 contract SHALL support only these bounded record kinds:
    - table, saved-query, form, report, module, and macro catalog roles;
    - owner-local raw identity or existing TraceMap stable identity;
    - optional table-field catalog roles required for binding resolution.
-2. `ui-surface`
+2. `ui-design-document`
+   - form or report document role;
+   - protected bounded design text consumed transiently by
+     `AccessUiTextParser`;
+   - document SHA-256, line count, and completeness;
+   - no path, filename, customer identity, VBA, macro body, or binary/OLE
+     content.
+3. `ui-surface`
    - form or report role;
    - module-presence and bound-state observations;
    - record-source, filter, order, and allowlisted event-property inputs;
    - nested or separately keyed control records.
-3. `ui-control`
+4. `ui-control`
    - owner surface, ordinal, allowlisted control-type family;
    - control-source, row-source, validation, and allowlisted event-property
      inputs.
-4. `vba-module`
+5. `vba-module`
    - module role, protected module identity, bounded source text, source hash,
      line count, and coordinate basis.
-5. `event-reference`
+6. `event-reference`
    - surface/control owner, allowlisted event role, and protected reference
      value for transient classification.
-6. `macro-inventory`
+7. `macro-inventory`
    - macro category, owner role, ordinal, startup role, body status, and
      completeness;
    - no action, argument, condition, expression, SQL, or command-body field.
-7. `source-gap`
+8. `source-gap`
    - producer-issued classification, affected safe record identity or scope,
      and closed coverage category.
 
@@ -210,9 +223,15 @@ version/rule-backed gap. They SHALL NOT be interpreted heuristically.
    - calls per procedure: 10,000;
    - emitted facts: 100,000;
    - emitted gaps: 10,000.
-5. Limit hits SHALL retain already-supported evidence, label coverage partial,
-   and emit deterministic aggregate gaps.
-6. Malformed UTF-8, invalid JSON, hash mismatch, unsupported schema, invalid
+5. Envelope-wide byte or record limit violations SHALL reject the whole design
+   input before projection and emit no design conclusions. This prevents a
+   line-order-dependent retained prefix.
+6. Per-record text violations SHALL reject only that record after its canonical
+   scope can be established and SHALL emit a deterministic gap.
+7. Per-collection and output limits SHALL be applied only after canonical
+   ordering. They MAY retain the canonical bounded subset, label coverage
+   partial, and emit deterministic aggregate gaps.
+8. Malformed UTF-8, invalid JSON, hash mismatch, unsupported schema, invalid
    coordinates, and invalid closed-enum values SHALL fail closed without
    exception text.
 

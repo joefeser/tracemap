@@ -22,7 +22,7 @@
 - [x] Define Mac-only synthetic validation and leak-test requirements.
 - [x] Record dependencies on #551 and #552 without specifying their flow or
       copy/clone implementations.
-- [ ] Complete independent adversarial specification review and disposition all
+- [x] Complete independent adversarial specification review and disposition all
       P1/P2 findings.
 - [ ] Obtain owner decisions recorded in `implementation-state.md`.
 - [ ] Approve or revise the specification for implementation.

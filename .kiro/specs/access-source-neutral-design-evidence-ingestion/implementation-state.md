@@ -98,6 +98,24 @@ cross-cutting changes:
 These changes belong to the source-neutral importer/projection path and do not
 require or authorize COM changes.
 
+## Exact-head review corrections
+
+The first exact-head Codex/Qodo review identified four specification
+contradictions:
+
+- envelope record caps could retain an input-order-dependent prefix;
+- no record carried the protected UI design document consumed by
+  `AccessUiTextParser`;
+- provenance wording allowed safe-token producer-local record IDs to persist;
+- requirements conflated the manifest and record-envelope schemas and called
+  otherwise order-independent NDJSON records ordered.
+
+The specification now rejects envelope-wide byte/record overflow before any
+design conclusion, applies narrower caps after canonical ordering, defines an
+explicit bounded `ui-design-document`, persists only TraceMap-derived canonical
+record IDs, and distinguishes both schemas while making NDJSON line order
+semantically irrelevant.
+
 ## Export-mechanism decision
 
 No real exporter is selected.
