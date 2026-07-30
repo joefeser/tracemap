@@ -5,12 +5,59 @@ using TraceMap.Access.Cli;
 using TraceMap.Combine;
 using TraceMap.Core;
 using TraceMap.Reporting;
+using TraceMap.Storage;
 
 namespace TraceMap.Tests;
 
 public sealed class AccessMacroReportingTests
 {
     private const string ProtectedMacroName = "PasswordMacro_92817";
+
+    [Fact]
+    public async Task Release_review_marks_partial_item_level_design_evidence_for_review()
+    {
+        using var temp = new TempDirectory();
+        var manifest = new ScanManifest(
+            "scan-access-partial-design",
+            "repo",
+            null,
+            "test",
+            new string('a', 40),
+            ScannerVersions.TraceMap,
+            DateTimeOffset.UnixEpoch,
+            "Level1SemanticAnalysisReduced",
+            "FailedOrPartial",
+            [],
+            [],
+            [],
+            ["Access design evidence is partial."]);
+        var fact = FactFactory.Create(
+            manifest,
+            FactTypes.AccessFormDeclared,
+            RuleIds.LegacyAccessUiSurface,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan("fixture.accdb", 1, 1, null, "AccessCatalogExtractor", "1.0.0"),
+            sourceSymbol: "access-form-safe",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "partial",
+                ["surfaceKind"] = "form",
+                ["limitations"] = "Static partial evidence only."
+            });
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [fact]);
+
+        var review = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            index,
+            index,
+            Path.Combine(temp.Path, "release-review.md"),
+            Scope: "access-evidence"));
+
+        var finding = Assert.Single(review.AccessEvidence.Findings, item =>
+            item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "form"));
+        Assert.Equal(ReleaseReviewClassifications.ReviewRecommended, finding.Classification);
+        Assert.Equal("partial", finding.CoverageLabel);
+    }
 
     [Fact]
     public void Product_macro_inventory_reads_only_counts_and_never_catalog_items()

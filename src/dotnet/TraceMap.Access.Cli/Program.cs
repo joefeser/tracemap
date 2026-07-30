@@ -260,18 +260,17 @@ public static class AccessCommand
     }
 
     private static string SafeFlowClassification(string value) =>
-        value.StartsWith("AccessFlow", StringComparison.Ordinal)
-            && value.Length <= 128
-            && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_')
-                ? value
-                : "AccessFlowCompositionFailed";
+        SafeClassification(value, "AccessFlow", "AccessFlowCompositionFailed");
 
     private static string SafeCopyCloneClassification(string value) =>
-        value.StartsWith("AccessCopyClone", StringComparison.Ordinal)
+        SafeClassification(value, "AccessCopyClone", "AccessCopyCloneCompositionFailed");
+
+    private static string SafeClassification(string value, string prefix, string fallback) =>
+        value.StartsWith(prefix, StringComparison.Ordinal)
             && value.Length <= 128
             && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_')
                 ? value
-                : "AccessCopyCloneCompositionFailed";
+                : fallback;
 
     private static bool IsHelp(string value) => value is "--help" or "-h" or "help";
     private static async Task<int> UnknownAsync(TextWriter error) { await error.WriteLineAsync("error: AccessUnknownCommand"); return 1; }
@@ -318,7 +317,7 @@ public static class AccessCommand
         Usage: tracemap-access copy-clone --index <completed-index.sqlite> --out <new-directory> [--max-candidates <1-10000>] [--max-flow-paths <1-10000>] [--max-gaps <1-10000>]
 
         Composes conservative static mutation candidates from already-persisted Microsoft Access query and flow evidence.
-        Candidate never means proven copy, clone, business intent, execution, runtime reachability, or completeness.
+        A candidate never means proven copy, clone, business intent, execution, runtime reachability, or completeness.
         The command is Mac-compatible and does not open a database, launch Access, read rows, or execute queries, VBA, macros, forms, or reports.
         Outputs: access-copy-clone.md and access-copy-clone.json.
         """;

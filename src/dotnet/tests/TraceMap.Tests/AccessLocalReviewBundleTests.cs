@@ -273,6 +273,30 @@ public sealed class AccessLocalReviewBundleTests
     }
 
     [Fact]
+    public async Task Modified_ndjson_evidence_with_the_same_fact_id_fails_closed()
+    {
+        using var temp = new TempDirectory();
+        var scanOutput = await WriteCountOnlyAccessScanAsync(temp.Path, "modified-fact-scan");
+        var factsPath = Path.Combine(scanOutput, "facts.ndjson");
+        var lines = await File.ReadAllLinesAsync(factsPath);
+        using var document = JsonDocument.Parse(lines[0]);
+        var ruleId = document.RootElement.GetProperty("ruleId").GetString()!;
+        lines[0] = lines[0].Replace(
+            $"\"ruleId\":\"{ruleId}\"",
+            "\"ruleId\":\"modified.rule.v1\"",
+            StringComparison.Ordinal);
+        await File.WriteAllLinesAsync(factsPath, lines);
+
+        var exception = await Assert.ThrowsAsync<AccessLocalReviewException>(
+            () => AccessLocalReviewBundle.CreateAsync(new(
+                scanOutput,
+                Path.Combine(temp.Path, "modified-fact-bundle"))));
+
+        Assert.Equal("AccessReviewInputMismatch", exception.Code);
+        Assert.DoesNotContain(temp.Path, exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Symlinked_output_ancestor_cannot_bypass_scan_overlap()
     {
         if (OperatingSystem.IsWindows())

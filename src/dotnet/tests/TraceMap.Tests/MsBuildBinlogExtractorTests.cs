@@ -239,6 +239,51 @@ public sealed class MsBuildBinlogExtractorTests
         }
     }
 
+    [Fact]
+    public void Invalid_input_path_is_deterministic_and_emits_a_gap_instead_of_throwing()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepo(temp.Path);
+        const string invalidPath = "invalid\0.binlog";
+
+        var firstSignature = MsBuildBinlogExtractor.CreateInputSignature([invalidPath], repo);
+        var secondSignature = MsBuildBinlogExtractor.CreateInputSignature([invalidPath], repo);
+        var facts = MsBuildBinlogExtractor.Extract(repo, Manifest(), [invalidPath]);
+
+        Assert.Equal(firstSignature, secondSignature);
+        Assert.StartsWith("invalid-path:", firstSignature, StringComparison.Ordinal);
+        var gap = Assert.Single(facts);
+        Assert.Equal(FactTypes.AnalysisGap, gap.FactType);
+        Assert.Equal("binlog-path-invalid", gap.Properties["gapKind"]);
+        Assert.Equal("1", gap.Properties["omittedCount"]);
+    }
+
+    [Fact]
+    public void Failed_binlog_downgrades_scan_manifest_and_records_the_gap()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepo(temp.Path);
+        InitializeGit(repo);
+        var commit = GitMetadataProvider.Detect(repo).CommitSha;
+        var binlog = Path.Combine(temp.Path, "failed-scan.binlog");
+        PrepareBinlog(binlog, repo, succeeded: false, includeOutsideRoot: false, extraMessages: 0);
+
+        var result = ScanEngine.Scan(new ScanOptions(
+            repo,
+            Path.Combine(temp.Path, "output"),
+            BinlogPaths: [binlog],
+            BinlogCommitSha: commit));
+
+        Assert.Equal("FailedOrPartial", result.Manifest.BuildStatus);
+        Assert.EndsWith("Reduced", result.Manifest.AnalysisLevel, StringComparison.Ordinal);
+        Assert.Contains(
+            "An explicitly supplied MSBuild binlog recorded a failed build.",
+            result.Manifest.KnownGaps);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.BuildStatus
+            && fact.Properties.GetValueOrDefault("status") == "FailedOrPartial");
+    }
+
     private static string CreateRepo(string root)
     {
         var repo = Path.Combine(root, "repo");
@@ -365,8 +410,8 @@ public sealed class MsBuildBinlogExtractorTests
             {
                 BuildEventContext = childContext,
                 ProjectFile = Path.Combine(repo, "src", "Child", "Child.csproj")
-            });
-        }
+        });
+    }
 
         for (var index = 0; index < extraMessages; index++)
             dispatcher.Dispatch(new BuildMessageEventArgs($"{Secret} {Command} {Source} {index}", string.Empty, "test", MessageImportance.High));

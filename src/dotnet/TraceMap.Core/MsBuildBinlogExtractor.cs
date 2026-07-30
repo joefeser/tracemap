@@ -57,7 +57,9 @@ public static partial class MsBuildBinlogExtractor
 
         var signatures = paths
             .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Select(path => InputSignature(ResolveInputPath(repoPath, path)))
+            .Select(path => TryResolveInputPath(repoPath, path, out var fullPath)
+                ? InputSignature(fullPath)
+                : $"invalid-path:{FactFactory.Hash(path, 16)}")
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
         return string.Join("|", signatures);
@@ -83,11 +85,19 @@ public static partial class MsBuildBinlogExtractor
         var runtimeAvailable = runtimeAvailableOverride
             ?? MsBuildRuntimeRegistration.TryRegister(out _);
         var facts = new List<CodeFact>();
-        foreach (var inputPath in binlogPaths
-                     .Where(path => !string.IsNullOrWhiteSpace(path))
-                     .Select(path => ResolveInputPath(root, path))
-                     .Distinct(PathComparer())
-                     .OrderBy(path => path, PathComparer()))
+        var inputPaths = new HashSet<string>(PathComparer());
+        var invalidPathCount = 0;
+        foreach (var path in binlogPaths.Where(path => !string.IsNullOrWhiteSpace(path)))
+        {
+            if (TryResolveInputPath(root, path, out var fullPath))
+                inputPaths.Add(fullPath);
+            else
+                invalidPathCount++;
+        }
+        if (invalidPathCount > 0)
+            facts.Add(Gap(manifest, "unavailable", "binlog-path-invalid", invalidPathCount));
+
+        foreach (var inputPath in inputPaths.OrderBy(path => path, PathComparer()))
         {
             facts.AddRange(ExtractOne(root, manifest, inputPath, limits, runtimeAvailable));
         }
@@ -475,8 +485,19 @@ public static partial class MsBuildBinlogExtractor
         counts[key] = current + 1;
     }
 
-    private static string ResolveInputPath(string repoPath, string path) =>
-        Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(repoPath, path));
+    private static bool TryResolveInputPath(string repoPath, string path, out string fullPath)
+    {
+        try
+        {
+            fullPath = Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(repoPath, path));
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            fullPath = string.Empty;
+            return false;
+        }
+    }
 
     private static string InputSignature(string path)
     {
