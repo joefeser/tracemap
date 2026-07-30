@@ -380,6 +380,11 @@
     "priority": "0.7"
   },
   {
+    "path": "/build/msbuild-binlog/proof-packet/",
+    "changefreq": "monthly",
+    "priority": "0.7"
+  },
+  {
     "path": "/sql/operator-handoff/",
     "changefreq": "monthly",
     "priority": "0.8"
