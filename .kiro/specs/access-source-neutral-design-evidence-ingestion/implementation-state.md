@@ -260,6 +260,11 @@ an earlier scoped rejection bypassed ordinary payload validation. Parsed
 manifest documents enter disposal tracking before duplicate-property checks, so
 classified manifest failures release their pooled buffers.
 
+Equivalent canonical duplicates select their transient raw payload with a
+property-order-independent raw canonical key, so the payload exposed to future
+in-process projectors does not depend on NDJSON order. The UI parser and design
+reader now share one control-name-to-type vocabulary.
+
 The public reader API can be consumed by the next composition slice without
 duplicating validation. Callers must dispose the returned bundle; its raw
 payload is protected material and exists only while the bundle is alive.
@@ -317,8 +322,15 @@ Mac-only synthetic tests cover:
 - classification-only numeric canonical-identity failures after scoped record
   rejection;
 - immediate manifest document disposal tracking on duplicate-property failures;
+- deterministic transient payload selection for equivalent duplicates;
+- one shared supported UI control-type vocabulary;
 - suppression of protected markers from canonical record IDs and failure
   classifications.
+
+The input is an explicit owner-controlled local directory. Member reparse-point
+checks remain check-then-open; the reader does not claim protection against a
+malicious same-user process that swaps a validated member between the attribute
+check and file open.
 
 No Windows VM, Microsoft Access, COM, customer database, exporter, row read, or
 execution is used.

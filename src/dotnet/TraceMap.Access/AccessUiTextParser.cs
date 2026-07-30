@@ -161,40 +161,9 @@ internal static partial class AccessUiTextParser
     };
 
     private static bool TryControlType(string block, out int value)
-    {
-        value = block.ToLowerInvariant() switch
-        {
-            "label" => 100,
-            "rectangle" => 101,
-            "line" => 102,
-            "image" => 103,
-            "commandbutton" => 104,
-            "optionbutton" => 105,
-            "checkbox" => 106,
-            "optiongroup" => 107,
-            "boundobjectframe" => 108,
-            "textbox" => 109,
-            "listbox" => 110,
-            "combobox" => 111,
-            "subform" or "subreport" => 112,
-            "objectframe" => 114,
-            "pagebreak" => 118,
-            "togglebutton" => 122,
-            "tabcontrol" => 123,
-            "page" => 124,
-            "attachment" => 126,
-            "webbrowsercontrol" => 128,
-            "navigationcontrol" => 129,
-            "navigationbutton" => 130,
-            _ => -1
-        };
-        return value >= 0;
-    }
+        => ControlTypes.TryGetValue(block, out value);
 
-    internal static bool IsSupportedControlType(int value) => value is
-        100 or 101 or 102 or 103 or 104 or 105 or 106 or 107 or 108 or 109
-        or 110 or 111 or 112 or 114 or 118 or 122 or 123 or 124 or 126 or 128
-        or 129 or 130;
+    internal static bool IsSupportedControlType(int value) => SupportedControlTypes.Contains(value);
 
     private sealed class ControlBuilder(int controlType, int ordinal)
     {
@@ -220,6 +189,37 @@ internal static partial class AccessUiTextParser
         ["OnNoData"] = "on-no-data",
         ["OnOpen"] = "on-open"
     };
+
+    private static readonly IReadOnlyDictionary<string, int> ControlTypes =
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["label"] = 100,
+            ["rectangle"] = 101,
+            ["line"] = 102,
+            ["image"] = 103,
+            ["commandbutton"] = 104,
+            ["optionbutton"] = 105,
+            ["checkbox"] = 106,
+            ["optiongroup"] = 107,
+            ["boundobjectframe"] = 108,
+            ["textbox"] = 109,
+            ["listbox"] = 110,
+            ["combobox"] = 111,
+            ["subform"] = 112,
+            ["subreport"] = 112,
+            ["objectframe"] = 114,
+            ["pagebreak"] = 118,
+            ["togglebutton"] = 122,
+            ["tabcontrol"] = 123,
+            ["page"] = 124,
+            ["attachment"] = 126,
+            ["webbrowsercontrol"] = 128,
+            ["navigationcontrol"] = 129,
+            ["navigationbutton"] = 130
+        };
+
+    private static readonly IReadOnlySet<int> SupportedControlTypes =
+        ControlTypes.Values.ToHashSet();
 
     private static readonly HashSet<string> ProtectedPropertyNames = new(StringComparer.Ordinal)
     {
