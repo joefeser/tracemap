@@ -239,6 +239,26 @@ local paths, and customer identities must remain absent. This report does not
 prove startup selection, event firing, user navigation, runtime reachability,
 execution, row access, connectivity, correctness, completeness, or approval.
 
+Conservative copy/clone candidate composition is also Mac-only and reuses the
+same completed index and flow evidence:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Access.Cli -- copy-clone \
+  --index <new-enriched-output-directory>/index.sqlite \
+  --out <new-copy-clone-output-directory>
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~AccessCopyCloneCandidateTests
+```
+
+Verify `access-copy-clone.md` and `access-copy-clone.json` classify only
+supported action-query shapes as `Candidate` or `NeedsReview`, never infer from
+names, and preserve exact safe provenance. Source/target direction, field
+correspondence, parent/child sequencing, generated keys, dynamic behavior, and
+flow absence remain explicit gaps. The output must omit raw SQL, names, VBA,
+macro bodies, values, row counts, connection material, customer identity, and
+local paths. A candidate does not prove copying, cloning, business intent,
+execution, row equivalence, correctness, completeness, or safety to run.
+
 Access extraction requires Windows with installed Microsoft Access/DAO. Run it
 in an isolated local VM with networking and broad host sharing disabled. Stage
 only the self-contained CLI binaries and checked-in validation scripts through
