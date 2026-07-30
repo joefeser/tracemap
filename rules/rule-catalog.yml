@@ -3143,6 +3143,33 @@ rules:
       - Categories explain why semantic coverage was reduced; they do not prove runtime compatibility or absence of repository evidence.
       - Syntax, config, SQL, WCF, and WebForms fallback facts remain valid within their own evidence tiers.
 
+  - id: build.msbuild-binlog.observation.v1
+    name: Bounded MSBuild binary-log observation
+    description: Projects an explicitly supplied local MSBuild binary log into an allowlisted build result, repository-relative project and build-graph identity, and diagnostic code/severity/location schema.
+    evidenceTier: Tier2Structural
+    emits:
+      - MsBuildBinlogObserved
+      - MsBuildProjectObserved
+      - MsBuildProjectReferenceObserved
+      - MsBuildDiagnosticObserved
+    limitations:
+      - The artifact SHA-256 identifies the supplied bytes but does not authenticate them, prove the build ran at the declared commit, or prove the repository was clean.
+      - Recorded build success does not prove tests passed, deployment safety, runtime correctness, or release approval; graph edges do not prove runtime reachability.
+      - Only repository-relative project paths, bounded diagnostic codes/severity/locations, aggregate counts, and the recorded build result are projected.
+      - Raw messages, properties, items, environment values, task parameters, commands, embedded files, source content, package sources, URLs, credentials, tokens, connection strings, private hosts, usernames, absolute paths, and outside-root paths are omitted.
+      - Absence of a diagnostic is not evidence that a defect is absent, and diagnostic coverage may be partial when caps or parser gaps are present.
+
+  - id: build.msbuild-binlog.gap.v1
+    name: Bounded MSBuild binary-log gap
+    description: Records categorical unavailable, malformed, unsupported, unsafe-path, symlink, and bounded-cap outcomes without rendering parser text or sensitive artifact content.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - A gap reports reduced observation coverage; it does not prove a project, diagnostic, build edge, defect, test, deployment, or runtime behavior is absent.
+      - Gap properties contain only an artifact digest when available, a stable gap kind, aggregate omitted count, coverage label, and documented limitations.
+      - The in-process parser is protected by an input-size and record-count boundary, but out-of-process wall-clock and memory isolation are deferred.
+
   - id: analyzer.capability.semantic.v1
     name: Analyzer semantic capability diagnostics
     description: Summarizes semantic compilation, MSBuild project load, and reference assembly capability from scan status and sanitized workspace evidence.
