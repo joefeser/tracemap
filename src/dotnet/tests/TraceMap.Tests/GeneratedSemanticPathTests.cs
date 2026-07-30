@@ -93,6 +93,19 @@ public sealed class GeneratedSemanticPathTests
         }
     }
 
+    [Fact]
+    public void Filesystem_root_repository_preserves_child_paths()
+    {
+        var root = Path.GetPathRoot(Path.GetFullPath(Path.GetTempPath()));
+        Assert.False(string.IsNullOrWhiteSpace(root));
+        var child = Path.Combine(root, "tracemap-root-child", "GeneratedContract.cs");
+
+        var projected = CSharpSemanticExtractor.ToRelativePath(root, child);
+
+        Assert.Equal("tracemap-root-child/GeneratedContract.cs", projected);
+        Assert.False(projected.StartsWith("__external__/", StringComparison.Ordinal));
+    }
+
     private static async Task<FixtureResult> ScanFixtureAsync(string root, string name)
     {
         var repo = Path.Combine(root, $"{name}-repo");

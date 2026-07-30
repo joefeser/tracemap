@@ -4686,8 +4686,12 @@ public static class CSharpSemanticExtractor
             var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(repoPath));
             var fullPath = Path.GetFullPath(path, root);
             var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            var containmentPrefix = root.EndsWith(Path.DirectorySeparatorChar)
+                || root.EndsWith(Path.AltDirectorySeparatorChar)
+                ? root
+                : root + Path.DirectorySeparatorChar;
             if (!fullPath.Equals(root, comparison)
-                && !fullPath.StartsWith(root + Path.DirectorySeparatorChar, comparison))
+                && !fullPath.StartsWith(containmentPrefix, comparison))
             {
                 return CreateSyntheticExternalSourcePath(path);
             }
