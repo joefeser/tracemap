@@ -184,6 +184,22 @@ python3 scripts/validate-adapter-artifacts.py <scan-output>
 
 ## Microsoft Access Adapter Smoke
 
+Source-neutral Access design-evidence contract changes can be validated on
+macOS with synthetic bundles and do not require Access, COM, or a real
+database:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~AccessDesignEvidenceReaderTests
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~Access
+```
+
+These tests validate only the protected local input contract, binding,
+canonicalization, bounds, and failure classifications. They do not prove that
+any Windows exporter is safe or complete, and they do not claim that Access
+behavior, source, forms, reports, VBA, or macros were executed or observed.
+
 Access extraction requires Windows with installed Microsoft Access/DAO. Run it
 in an isolated local VM with networking and broad host sharing disabled. Stage
 only the self-contained CLI binaries and checked-in validation scripts through

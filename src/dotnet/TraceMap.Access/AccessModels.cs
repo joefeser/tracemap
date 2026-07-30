@@ -23,7 +23,10 @@ public sealed record AccessLimits(
     int MaxFacts = 100_000,
     int MaxGaps = 10_000,
     long MaxProjectionBytes = 64L * 1024 * 1024,
-    long MaxArtifactBytes = 512L * 1024 * 1024)
+    long MaxArtifactBytes = 512L * 1024 * 1024,
+    long MaxDesignManifestBytes = 1L * 1024 * 1024,
+    long MaxDesignBundleBytes = 64L * 1024 * 1024,
+    int MaxDesignRecords = 100_000)
 {
     public static AccessLimits Default { get; } = new();
 }
