@@ -43,7 +43,7 @@ public sealed class AccessFileScanRunner
         Func<string> createScratchDirectory,
         Action<string> deleteScratchDirectory,
         CancellationToken cancellationToken,
-        Action? cleanupRetryDelay = null)
+        Func<Task>? cleanupRetryDelay = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var validated = Validate(options, _limits);
@@ -90,10 +90,10 @@ public sealed class AccessFileScanRunner
             {
                 try
                 {
-                    DeleteScratchDirectoryWithRetry(
+                    await DeleteScratchDirectoryWithRetryAsync(
                         scratchDirectory,
                         deleteScratchDirectory,
-                        cleanupRetryDelay ?? (() => Thread.Sleep(CleanupRetryDelayMilliseconds)));
+                        cleanupRetryDelay ?? (() => Task.Delay(CleanupRetryDelayMilliseconds)));
                 }
                 catch
                 {
@@ -103,16 +103,19 @@ public sealed class AccessFileScanRunner
         }
     }
 
-    internal static void DeleteScratchDirectoryWithRetry(
+    internal static async Task DeleteScratchDirectoryWithRetryAsync(
         string scratchDirectory,
         Action<string> deleteScratchDirectory,
-        Action retryDelay)
+        Func<Task> retryDelay)
     {
         for (var attempt = 1; attempt <= CleanupAttemptCount; attempt++)
         {
+            if (!Directory.Exists(scratchDirectory)) return;
+
             try
             {
                 ClearReadOnlyAttributes(scratchDirectory);
+                if (!Directory.Exists(scratchDirectory)) return;
                 deleteScratchDirectory(scratchDirectory);
                 if (!Directory.Exists(scratchDirectory)) return;
             }
@@ -122,7 +125,8 @@ public sealed class AccessFileScanRunner
                 // Retry only this known disposable directory and verify removal below.
             }
 
-            if (attempt < CleanupAttemptCount) retryDelay();
+            if (!Directory.Exists(scratchDirectory)) return;
+            if (attempt < CleanupAttemptCount) await retryDelay();
         }
 
         throw new AccessScanException("AccessFileSnapshotCleanupFailed");
@@ -130,6 +134,8 @@ public sealed class AccessFileScanRunner
 
     internal static void ClearReadOnlyAttributes(string scratchDirectory)
     {
+        if (!Directory.Exists(scratchDirectory)) return;
+
         var options = new EnumerationOptions
         {
             RecurseSubdirectories = true,
