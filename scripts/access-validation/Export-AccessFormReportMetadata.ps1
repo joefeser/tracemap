@@ -350,13 +350,13 @@ try {
         Stop-Export "AccessMetadataSourceChanged"
     }
 
-    $orderedRecords = @($records | Sort-Object kind, recordId)
+    $orderedRecords = @($records | Sort-Object { $_["kind"] }, { $_["recordId"] })
     $recordLines = @($orderedRecords | ForEach-Object { $_ | ConvertTo-Json -Compress -Depth 20 })
     $recordsText = if ($recordLines.Count -eq 0) { "" } else { ($recordLines -join "`n") + "`n" }
     $recordsBytes = $Utf8NoBom.GetBytes($recordsText)
     $recordsHash = Get-BytesSha256 $recordsBytes
     $counts = [ordered]@{}
-    foreach ($group in $orderedRecords | Group-Object kind | Sort-Object Name) {
+    foreach ($group in $orderedRecords | Group-Object { $_["kind"] } | Sort-Object Name) {
         $counts[$group.Name] = $group.Count
     }
     New-Item -ItemType Directory -Path $output | Out-Null
