@@ -383,23 +383,109 @@ function Get-UnquotedSqlExpression([string]$Expression, [ref]$Complete) {
     return $builder.ToString()
 }
 
+function Get-StaticQuerySelectList([string]$Sql, [ref]$Complete) {
+    $Complete.Value = $false
+    $unquotedComplete = $false
+    $unquotedSql = Get-UnquotedSqlExpression $Sql ([ref]$unquotedComplete)
+    if (-not $unquotedComplete) { return "" }
+
+    $prefix = [regex]::Match(
+        $unquotedSql,
+        "(?is)^\s*(?:PARAMETERS\b.*?;\s*)?SELECT\b")
+    if (-not $prefix.Success) { return "" }
+
+    $listStart = $prefix.Index + $prefix.Length
+    while ($listStart -lt $Sql.Length -and [char]::IsWhiteSpace($Sql[$listStart])) { $listStart++ }
+    while ($listStart -lt $Sql.Length) {
+        $modifier = [regex]::Match(
+            $Sql.Substring($listStart),
+            "(?is)^(?:(?:DISTINCT|DISTINCTROW)\b|TOP\s+\d+(?:\s+PERCENT)?\b)\s+")
+        if (-not $modifier.Success) { break }
+        $listStart += $modifier.Length
+    }
+    if ($listStart -ge $Sql.Length) { return "" }
+
+    $inBracket = $false
+    $parenthesisDepth = 0
+    for ($index = $listStart; $index -lt $unquotedSql.Length; $index++) {
+        $character = $unquotedSql[$index]
+        if ($inBracket) {
+            if ($character -eq ']') {
+                if ($index + 1 -lt $unquotedSql.Length -and $unquotedSql[$index + 1] -eq ']') { $index++ }
+                else { $inBracket = $false }
+            }
+            continue
+        }
+        if ($character -eq '[') {
+            $inBracket = $true
+            continue
+        }
+        if ($character -eq '(') {
+            $parenthesisDepth++
+            continue
+        }
+        if ($character -eq ')') {
+            if ($parenthesisDepth -eq 0) { return "" }
+            $parenthesisDepth--
+            continue
+        }
+        if ($parenthesisDepth -ne 0 -or $index + 4 -gt $unquotedSql.Length) { continue }
+        if (-not [string]::Equals($unquotedSql.Substring($index, 4), "FROM", [StringComparison]::OrdinalIgnoreCase)) {
+            continue
+        }
+
+        $beforeIsWord = $index -gt $listStart -and
+            ([char]::IsLetterOrDigit($unquotedSql[$index - 1]) -or $unquotedSql[$index - 1] -eq '_')
+        $afterIndex = $index + 4
+        $afterIsWord = $afterIndex -lt $unquotedSql.Length -and
+            ([char]::IsLetterOrDigit($unquotedSql[$afterIndex]) -or $unquotedSql[$afterIndex] -eq '_')
+        if ($beforeIsWord -or $afterIsWord) { continue }
+
+        $selectList = $Sql.Substring($listStart, $index - $listStart).Trim()
+        if ([string]::IsNullOrWhiteSpace($selectList)) { return "" }
+        $Complete.Value = $true
+        return $selectList
+    }
+    return ""
+}
+
+function Test-UnquotedSqlContainsStructuralParenthesis([string]$Expression) {
+    $inBracket = $false
+    for ($index = 0; $index -lt $Expression.Length; $index++) {
+        $character = $Expression[$index]
+        if ($inBracket) {
+            if ($character -eq ']') {
+                if ($index + 1 -lt $Expression.Length -and $Expression[$index + 1] -eq ']') { $index++ }
+                else { $inBracket = $false }
+            }
+            continue
+        }
+        if ($character -eq '[') { $inBracket = $true }
+        elseif ($character -eq '(') { return $true }
+    }
+    return $false
+}
+
 function Get-StaticQueryOutputNames([string]$Sql, [ref]$Complete) {
     $Complete.Value = $false
     if ($Sql.Length -gt $MaxTextBytes) { return @() }
-    $match = [regex]::Match(
-        $Sql,
-        "(?is)^\s*(?:PARAMETERS\b.*?;\s*)?SELECT\s+(?:(?:DISTINCT|DISTINCTROW|TOP\s+\d+(?:\s+PERCENT)?)\s+)*(?<list>.*?)\s+\bFROM\b")
-    if (-not $match.Success -or $match.Groups["list"].Value.Contains("*")) { return @() }
+    $boundaryComplete = $false
+    $selectList = Get-StaticQuerySelectList $Sql ([ref]$boundaryComplete)
+    if (-not $boundaryComplete) { return @() }
+    $unquotedListComplete = $false
+    $unquotedSelectList = Get-UnquotedSqlExpression $selectList ([ref]$unquotedListComplete)
+    if (-not $unquotedListComplete -or $unquotedSelectList.Contains("*")) { return @() }
     $result = [System.Collections.Generic.List[string]]::new()
     $splitComplete = $false
-    $projectionItems = @(Split-StaticQueryProjectionList $match.Groups["list"].Value ([ref]$splitComplete))
+    $projectionItems = @(Split-StaticQueryProjectionList $selectList ([ref]$splitComplete))
     $parsedCount = 0
     foreach ($rawItem in $projectionItems) {
         $item = $rawItem.Trim()
         $expressionComplete = $false
         $unquotedItem = Get-UnquotedSqlExpression $item ([ref]$expressionComplete)
         if (-not $expressionComplete) { continue }
-        if ($unquotedItem.Contains("(") -and $unquotedItem -notmatch "(?is)\s+AS\s+(?:\[(?<alias>[^\]]+)\]|(?<alias>[A-Za-z_][A-Za-z0-9_ ]*))\s*$") {
+        if ((Test-UnquotedSqlContainsStructuralParenthesis $unquotedItem) -and
+            $unquotedItem -notmatch "(?is)\s+AS\s+(?:\[(?<alias>[^\]]+)\]|(?<alias>[A-Za-z_][A-Za-z0-9_ ]*))\s*$") {
             continue
         }
         $alias = [regex]::Match($unquotedItem, "(?is)\s+AS\s+(?:\[(?<name>[^\]]+)\]|(?<name>[A-Za-z_][A-Za-z0-9_ ]*))\s*$")
@@ -417,7 +503,8 @@ function Get-StaticQueryOutputNames([string]$Sql, [ref]$Complete) {
         }
     }
     $unique = @($result | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
-    $Complete.Value = $splitComplete -and $parsedCount -eq $projectionItems.Count -and $unique.Count -eq $parsedCount
+    $Complete.Value = $boundaryComplete -and $splitComplete -and
+        $parsedCount -eq $projectionItems.Count -and $unique.Count -eq $parsedCount
     return $unique
 }
 

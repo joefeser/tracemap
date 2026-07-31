@@ -190,8 +190,11 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("if (-not $outputNamesComplete)", producer, StringComparison.Ordinal);
         Assert.Contains("function Split-StaticQueryProjectionList", producer, StringComparison.Ordinal);
         Assert.Contains("function Get-UnquotedSqlExpression", producer, StringComparison.Ordinal);
+        Assert.Contains("function Get-StaticQuerySelectList", producer, StringComparison.Ordinal);
+        Assert.Contains("function Test-UnquotedSqlContainsStructuralParenthesis", producer, StringComparison.Ordinal);
         Assert.Contains("$outputCompleteness = if ($outputNamesComplete) { \"complete\" } else { \"partial\" }", producer, StringComparison.Ordinal);
         Assert.DoesNotContain(".Value.Split(\",\")", producer, StringComparison.Ordinal);
+        Assert.DoesNotContain("(?<list>.*?)\\s+\\bFROM\\b", producer, StringComparison.Ordinal);
         Assert.Contains("Test-SourceHashesUnchanged", producer, StringComparison.Ordinal);
         Assert.Contains("if (-not [string]::IsNullOrWhiteSpace($workerFailure)) {\n        Remove-PathChecked $output", producer, StringComparison.Ordinal);
         Assert.Contains("if ($workerErrors.Count -gt 0) {\n        Remove-PathChecked $output", producer, StringComparison.Ordinal);
