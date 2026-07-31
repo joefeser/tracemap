@@ -167,7 +167,7 @@ public sealed class AccessFileScanRunner
         if (IsNetworkHostedPath(options.DatabasePath))
             throw new AccessScanException("AccessNetworkDatabasePathRejected");
 
-        var fullPath = Path.GetFullPath(options.DatabasePath);
+        var fullPath = GetFullPath(options.DatabasePath, "AccessDatabasePathInvalid");
         if (IsNetworkHostedPath(fullPath))
             throw new AccessScanException("AccessNetworkDatabasePathRejected");
         RejectReparsePath(fullPath, "AccessDatabaseReparsePointRejected");
@@ -181,7 +181,7 @@ public sealed class AccessFileScanRunner
         if (size <= 0 || size > limits.MaxDatabaseBytes)
             throw new AccessScanException("AccessDatabaseSizeLimit");
 
-        var output = Path.GetFullPath(options.OutputPath);
+        var output = GetFullPath(options.OutputPath, "AccessUnsafeOutputPath");
         var outputRoot = Path.GetPathRoot(output);
         if (string.IsNullOrWhiteSpace(outputRoot)
             || PathsEqual(output, outputRoot)
@@ -420,7 +420,7 @@ public sealed class AccessFileScanRunner
             current = Path.Combine(current, segments[index]);
             if (!File.Exists(current) && !Directory.Exists(current))
             {
-                if (allowMissingLeaf)
+                if (CanAllowMissingLeaf(allowMissingLeaf, index, segments.Length))
                     return;
                 throw new AccessScanException(classification);
             }
@@ -437,11 +437,26 @@ public sealed class AccessFileScanRunner
             && !Path.IsPathFullyQualified(relative);
     }
 
+    internal static bool CanAllowMissingLeaf(bool allowMissingLeaf, int segmentIndex, int segmentCount) =>
+        allowMissingLeaf && segmentIndex == segmentCount - 1;
+
     private static bool PathsEqual(string left, string right) =>
         string.Equals(
             Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)),
             Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    private static string GetFullPath(string path, string classification)
+    {
+        try
+        {
+            return Path.GetFullPath(path);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            throw new AccessScanException(classification);
+        }
+    }
 
     private sealed record AccessFileValidatedInput(
         string FullPath,

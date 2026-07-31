@@ -534,6 +534,56 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public async Task File_first_snapshot_classifies_malformed_input_paths_before_creating_scratch()
+    {
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "fixture.accdb");
+        await File.WriteAllBytesAsync(database, [1, 2, 3, 4]);
+        var scratchCreated = false;
+        var runner = new AccessFileScanRunner();
+
+        var databasePath = await Assert.ThrowsAsync<AccessScanException>(() => runner.RunCoreAsync(
+            new("invalid\0database.accdb", Path.Combine(temp.Path, "out")),
+            (_, _) => throw new InvalidOperationException("scan should not run"),
+            () =>
+            {
+                scratchCreated = true;
+                return Path.Combine(temp.Path, "unexpected-scratch");
+            },
+            _ => { },
+            CancellationToken.None));
+        Assert.Equal("AccessDatabasePathInvalid", databasePath.Classification);
+
+        var outputPath = await Assert.ThrowsAsync<AccessScanException>(() => runner.RunCoreAsync(
+            new(database, "invalid\0output"),
+            (_, _) => throw new InvalidOperationException("scan should not run"),
+            () =>
+            {
+                scratchCreated = true;
+                return Path.Combine(temp.Path, "unexpected-scratch");
+            },
+            _ => { },
+            CancellationToken.None));
+        Assert.Equal("AccessUnsafeOutputPath", outputPath.Classification);
+        Assert.False(scratchCreated);
+    }
+
+    [Theory]
+    [InlineData(false, 1, 2, false)]
+    [InlineData(true, 0, 2, false)]
+    [InlineData(true, 1, 2, true)]
+    public void File_first_snapshot_only_allows_a_missing_final_output_leaf(
+        bool allowMissingLeaf,
+        int segmentIndex,
+        int segmentCount,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            AccessFileScanRunner.CanAllowMissingLeaf(allowMissingLeaf, segmentIndex, segmentCount));
+    }
+
+    [Fact]
     public async Task File_first_snapshot_fails_closed_when_internal_repository_cleanup_fails()
     {
         using var temp = new TempDirectory();
