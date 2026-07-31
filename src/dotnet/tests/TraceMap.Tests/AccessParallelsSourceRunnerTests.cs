@@ -171,6 +171,10 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("$workerScratchDirectory", producer, StringComparison.Ordinal);
         Assert.Contains("$workerParameters[\"WorkerScratchDirectoryPath\"] = $workerScratchDirectory", producer, StringComparison.Ordinal);
         Assert.DoesNotContain("$scratchPattern", producer, StringComparison.Ordinal);
+        Assert.Contains("[IO.FileMode]::CreateNew", producer, StringComparison.Ordinal);
+        Assert.Contains("[IO.FileShare]::None", producer, StringComparison.Ordinal);
+        Assert.Contains("AccessMetadataOutputClaimUnavailable", producer, StringComparison.Ordinal);
+        Assert.Contains("Remove-PathChecked $outputClaimPath $false", producer, StringComparison.Ordinal);
         Assert.Contains("function Remove-DirectoryWithRetry", producer, StringComparison.Ordinal);
         Assert.Contains("Clear-ReadOnlyAttributes $Path", producer, StringComparison.Ordinal);
         Assert.Contains("Start-Sleep -Milliseconds 200", producer, StringComparison.Ordinal);

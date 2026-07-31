@@ -327,6 +327,21 @@ if (-not $InternalWorker) {
     }
     $outputParent = Split-Path -Parent $output
     New-Item -ItemType Directory -Path $outputParent -Force | Out-Null
+    $outputClaimPath = Join-Path $outputParent ".$([IO.Path]::GetFileName($output)).claim"
+    $outputClaimStream = $null
+    $outputClaimCreated = $false
+    try {
+        try {
+            $outputClaimStream = [IO.File]::Open(
+                $outputClaimPath,
+                [IO.FileMode]::CreateNew,
+                [IO.FileAccess]::Write,
+                [IO.FileShare]::None)
+            $outputClaimCreated = $true
+        }
+        catch {
+            Stop-Export "AccessMetadataOutputClaimUnavailable"
+        }
     $workerProcessMarker = Join-Path $outputParent ".$([IO.Path]::GetFileName($output)).worker-$([Guid]::NewGuid().ToString('N')).process.json"
     $workerHostMarker = "$workerProcessMarker.host"
     $workerScratchDirectory = Join-Path $outputParent ".$([IO.Path]::GetFileName($output)).metadata-$([Guid]::NewGuid().ToString('N'))"
@@ -486,6 +501,15 @@ if (-not $InternalWorker) {
     }
     $workerOutput | Write-Output
     return
+    }
+    finally {
+        if ($null -ne $outputClaimStream) {
+            try { $outputClaimStream.Dispose() } catch { }
+        }
+        if ($outputClaimCreated) {
+            Remove-PathChecked $outputClaimPath $false "AccessMetadataOutputClaimCleanupFailed"
+        }
+    }
 }
 
 $outputParent = Split-Path -Parent $output
