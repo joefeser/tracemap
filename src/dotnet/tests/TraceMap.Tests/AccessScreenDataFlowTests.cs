@@ -175,6 +175,50 @@ public sealed class AccessScreenDataFlowTests
         Assert.Contains(report.Gaps, gap => gap.Classification == "AccessFlowTargetDeclarationMissing");
     }
 
+    [Fact]
+    public void Builder_grounds_query_output_gaps_with_the_declared_output_chain()
+    {
+        const string query = "access-query-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string output = "access-query-field-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        var facts = new[]
+        {
+            Fact(
+                "fact-query-declaration",
+                FactTypes.AccessQueryDeclared,
+                RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural,
+                null,
+                query,
+                ("coverageLabel", "partial")),
+            Fact(
+                "fact-output-declaration",
+                FactTypes.AccessQueryOutputDeclared,
+                RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural,
+                query,
+                output,
+                ("coverageLabel", "partial")),
+            Fact(
+                "fact-output-gap",
+                FactTypes.AnalysisGap,
+                RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier4Unknown,
+                null,
+                output,
+                ("classification", "AccessQueryOutputSourceUnavailable"),
+                ("scopeKind", "query-output-field"))
+        };
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
+
+        var gap = Assert.Single(
+            report.Gaps,
+            item => item.Classification == "AccessQueryOutputSourceUnavailable");
+        Assert.Equal(
+            ["fact-output-declaration", "fact-output-gap", "fact-query-declaration"],
+            gap.SupportingFactIds);
+    }
+
     [Theory]
     [InlineData(@"C:\SecretDriveMarker91827\db.accdb", "SecretDriveMarker91827")]
     [InlineData(@"\\SecretServerMarker91827\share\db.accdb", "SecretServerMarker91827")]

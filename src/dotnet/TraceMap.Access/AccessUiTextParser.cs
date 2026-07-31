@@ -29,6 +29,7 @@ internal static partial class AccessUiTextParser
         var controlDepth = -1;
         ReportGroupBuilder? reportGroup = null;
         var reportGroupDepth = -1;
+        var reportGroupContainerDepth = -1;
         string? recordSource = null;
         string? filter = null;
         string? orderBy = null;
@@ -68,6 +69,8 @@ internal static partial class AccessUiTextParser
                     reportGroup = null;
                     reportGroupDepth = -1;
                 }
+                if (blocks.Count == reportGroupContainerDepth)
+                    reportGroupContainerDepth = -1;
                 if (control is not null && blocks.Count == controlDepth)
                 {
                     if (string.IsNullOrWhiteSpace(control.Name))
@@ -82,6 +85,27 @@ internal static partial class AccessUiTextParser
                 continue;
             }
 
+            var indexedGroup = IndexedGroupPattern().Match(line);
+            if (surfaceKind == "report"
+                && control is null
+                && reportGroup is null
+                && reportGroupContainerDepth == blocks.Count
+                && indexedGroup.Success)
+            {
+                blocks.Push("report-group");
+                var ordinal = ReadBoundedNonNegativeInt(indexedGroup.Groups["ordinal"].Value);
+                if (ordinal is null)
+                {
+                    gaps.Add(new("AccessUiDesignTextMalformed", "ui-surface", null, RuleIds.LegacyAccessUiSurface));
+                }
+                else
+                {
+                    reportGroup = new(ordinal.Value);
+                    reportGroupDepth = blocks.Count;
+                }
+                continue;
+            }
+
             var property = PropertyPattern().Match(line);
             if (!property.Success) continue;
             var name = property.Groups["name"].Value;
@@ -91,8 +115,7 @@ internal static partial class AccessUiTextParser
                 blocks.Push("property-value");
                 if (surfaceKind == "report" && control is null && name == "GroupLevel")
                 {
-                    reportGroup = new(reportGroups.Count);
-                    reportGroupDepth = blocks.Count;
+                    reportGroupContainerDepth = blocks.Count;
                 }
                 if (ProtectedPropertyNames.Contains(name))
                     gaps.Add(new("AccessUiProtectedPropertyShapeUnsupported", control is null ? "ui-surface" : "control", null, RuleIds.LegacyAccessUiSurface));
@@ -104,6 +127,16 @@ internal static partial class AccessUiTextParser
                 if (ProtectedPropertyNames.Contains(name))
                     gaps.Add(new("AccessUiProtectedPropertyShapeUnsupported", control is null ? "ui-surface" : "control", null, RuleIds.LegacyAccessUiSurface));
                 continue;
+            }
+
+            if (surfaceKind == "report"
+                && control is null
+                && reportGroup is null
+                && reportGroupContainerDepth == blocks.Count
+                && ReportGroupPropertyNames.Contains(name))
+            {
+                reportGroup = new(reportGroups.Count);
+                reportGroupDepth = blocks.Count;
             }
 
             if (control is not null)
@@ -282,8 +315,16 @@ internal static partial class AccessUiTextParser
         "SourceObject", "LinkMasterFields", "LinkChildFields", "Expression"
     };
 
+    private static readonly HashSet<string> ReportGroupPropertyNames = new(StringComparer.Ordinal)
+    {
+        "ControlSource", "Expression", "SortOrder", "GroupOn"
+    };
+
     [GeneratedRegex(@"^Begin(?:\s+(?<block>[A-Za-z][A-Za-z0-9]*))?$", RegexOptions.CultureInvariant)]
     private static partial Regex BeginPattern();
+
+    [GeneratedRegex(@"^\s*(?<ordinal>[0-9]+)\s*=\s*Begin\s*$", RegexOptions.CultureInvariant)]
+    private static partial Regex IndexedGroupPattern();
 
     [GeneratedRegex(@"^\s*(?<name>[A-Za-z][A-Za-z0-9]*)\s*=\s*(?<value>.*)$", RegexOptions.CultureInvariant)]
     private static partial Regex PropertyPattern();

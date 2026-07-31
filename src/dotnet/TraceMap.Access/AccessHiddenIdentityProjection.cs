@@ -35,6 +35,12 @@ public static class AccessHiddenIdentityProjection
             baseScan.Manifest.CommitSha,
             baseScan.DatabasePath,
             baseScan.DatabaseHash);
+        if (!FixedHashEquals(databaseSeed, declared.DatabaseIdentityHash)
+            || !string.Equals(
+                AccessSafeValues.DatabaseStableKey(databaseSeed),
+                baseScan.DatabaseStableKey,
+                StringComparison.Ordinal))
+            throw new AccessScanException("AccessDesignInputDatabaseUnbound");
         var binding = new AccessDesignEvidenceBinding(
             declared.RepositoryIdentityHash,
             baseScan.Manifest.CommitSha,
@@ -111,6 +117,7 @@ public static class AccessHiddenIdentityProjection
     {
         var rows = new List<object>();
         var stableByRecord = new Dictionary<string, string>(StringComparer.Ordinal);
+        var emittedUiStableKeys = new HashSet<string>(StringComparer.Ordinal);
         var catalogRecords = bundle.Records.Where(record => record.Kind == "catalog-object").ToArray();
         foreach (var record in catalogRecords.Where(record =>
                      String(record, "objectRole") is not ("table-field" or "query-field")))
@@ -170,6 +177,7 @@ public static class AccessHiddenIdentityProjection
             var name = String(surface, "identity");
             var stable = AccessSafeValues.Identity(databaseSeed, role, name, disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly).StableKey;
             stableByRecord[surface.CanonicalRecordId] = stable;
+            emittedUiStableKeys.Add(stable);
             rows.Add(new
             {
                 recordKind = surface.Kind,
@@ -190,6 +198,7 @@ public static class AccessHiddenIdentityProjection
                     controlName,
                     ordinal,
                     AccessIdentityDisclosurePolicy.HashOnly).StableKey;
+                emittedUiStableKeys.Add(controlStable);
                 rows.Add(new
                 {
                     recordKind = control.Kind,
@@ -221,7 +230,7 @@ public static class AccessHiddenIdentityProjection
                 role,
                 surfaceName,
                 disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly).StableKey;
-            if (!rows.Any(row => JsonSerializer.Serialize(row).Contains($"\"stableKey\":\"{surfaceStable}\"", StringComparison.Ordinal)))
+            if (emittedUiStableKeys.Add(surfaceStable))
             {
                 rows.Add(new
                 {
@@ -245,6 +254,7 @@ public static class AccessHiddenIdentityProjection
                     control.Name,
                     control.Ordinal,
                     AccessIdentityDisclosurePolicy.HashOnly).StableKey;
+                if (!emittedUiStableKeys.Add(controlStable)) continue;
                 rows.Add(new
                 {
                     recordKind = "ui-design-document-control",
@@ -274,28 +284,12 @@ public static class AccessHiddenIdentityProjection
 
     private static IReadOnlyDictionary<string, object> DirectBindings(
         AccessDesignEvidenceRecord record,
-        IReadOnlyList<string> properties)
-    {
-        var values = new SortedDictionary<string, object>(StringComparer.Ordinal);
-        foreach (var property in properties)
-        {
-            var raw = Optional(record, property);
-            if (string.IsNullOrWhiteSpace(raw)) continue;
-            if (IsDirectBinding(property, raw))
-                values[property] = raw;
-            else
-                values[property] = new
-                {
-                    category = "protected-expression",
-                    length = raw.Length,
-                    sha256 = AccessSafeValues.RoleHash($"access-hidden-{property}", raw)
-                };
-        }
-        return values;
-    }
+        IReadOnlyList<string> properties) =>
+        DirectBindings(properties.Select(property =>
+            new KeyValuePair<string, string?>(property, Optional(record, property))));
 
     private static IReadOnlyDictionary<string, object> DirectBindings(
-        IReadOnlyDictionary<string, string?> source)
+        IEnumerable<KeyValuePair<string, string?>> source)
     {
         var values = new SortedDictionary<string, object>(StringComparer.Ordinal);
         foreach (var item in source)
@@ -312,6 +306,21 @@ public static class AccessHiddenIdentityProjection
                 };
         }
         return values;
+    }
+
+    private static bool FixedHashEquals(string left, string right)
+    {
+        if (left.Length != 64 || right.Length != 64) return false;
+        try
+        {
+            return CryptographicOperations.FixedTimeEquals(
+                Convert.FromHexString(left),
+                Convert.FromHexString(right));
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static bool IsDirectBinding(string property, string value)

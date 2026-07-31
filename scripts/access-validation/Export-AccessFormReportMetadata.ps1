@@ -25,7 +25,12 @@ param(
 
     [Parameter(Mandatory = $true)]
     [ValidatePattern("^[0-9a-f]{64}$")]
-    [string]$DatabaseIdentityHash
+    [string]$DatabaseIdentityHash,
+
+    [ValidateRange(30, 3600)]
+    [int]$TimeoutSeconds = 300,
+
+    [switch]$InternalWorker
 )
 
 $ErrorActionPreference = "Stop"
@@ -169,6 +174,68 @@ if (Test-Path -LiteralPath $output) {
 if (Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue) {
     Stop-Export "AccessMetadataPreexistingProcess"
 }
+
+# Keep the public producer invocation bounded even when Access blocks inside a
+# synchronous COM call such as SaveAsText. The internal worker owns the normal
+# COM cleanup path; the supervising invocation additionally kills a timed-out
+# Access process and removes any partial output/scratch state before failing.
+if (-not $InternalWorker) {
+    $originalBeforeSupervision = Get-Sha256 $original
+    $copyBeforeSupervision = Get-Sha256 $copy
+    $workerParameters = @{}
+    foreach ($entry in $PSBoundParameters.GetEnumerator()) {
+        if ($entry.Key -ne "InternalWorker") {
+            $workerParameters[$entry.Key] = $entry.Value
+        }
+    }
+    $workerJob = Start-Job -ScriptBlock {
+        param([string]$ScriptPath, [hashtable]$Parameters)
+        & $ScriptPath @Parameters -InternalWorker
+    } -ArgumentList $PSCommandPath, $workerParameters
+    $completedJob = Wait-Job -Job $workerJob -Timeout $TimeoutSeconds
+    if ($null -eq $completedJob) {
+        Stop-Job -Job $workerJob -ErrorAction SilentlyContinue
+        $remainingAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
+        if ($remainingAccess.Count -gt 0) {
+            $remainingAccess | Stop-Process -Force -ErrorAction SilentlyContinue
+        }
+        $outputParent = Split-Path -Parent $output
+        $scratchPattern = ".$([IO.Path]::GetFileName($output)).metadata-*"
+        try {
+            if (Test-Path -LiteralPath $output) {
+                Remove-Item -LiteralPath $output -Recurse -Force -ErrorAction Stop
+            }
+            Get-ChildItem -LiteralPath $outputParent -Directory -Filter $scratchPattern -ErrorAction SilentlyContinue |
+                Remove-Item -Recurse -Force -ErrorAction Stop
+        }
+        catch {
+            Remove-Job -Job $workerJob -Force -ErrorAction SilentlyContinue
+            Stop-Export "AccessMetadataTimeoutCleanupFailed"
+        }
+        Remove-Job -Job $workerJob -Force -ErrorAction SilentlyContinue
+        if ((Get-Sha256 $original) -ne $originalBeforeSupervision -or
+            (Get-Sha256 $copy) -ne $copyBeforeSupervision) {
+            Stop-Export "AccessMetadataSourceChanged"
+        }
+        Stop-Export "AccessMetadataTimeout"
+    }
+
+    $workerErrors = @()
+    $workerOutput = @(
+        Receive-Job -Job $workerJob -ErrorVariable +workerErrors -ErrorAction SilentlyContinue
+    )
+    $workerFailure = [string]$workerJob.ChildJobs[0].JobStateInfo.Reason.Message
+    Remove-Job -Job $workerJob -Force -ErrorAction SilentlyContinue
+    if (-not [string]::IsNullOrWhiteSpace($workerFailure)) {
+        Stop-Export $workerFailure
+    }
+    if ($workerErrors.Count -gt 0) {
+        Stop-Export ([string]$workerErrors[0].Exception.Message)
+    }
+    $workerOutput | Write-Output
+    return
+}
+
 $outputParent = Split-Path -Parent $output
 New-Item -ItemType Directory -Path $outputParent -Force | Out-Null
 $scratch = Join-Path $outputParent ".$([IO.Path]::GetFileName($output)).metadata-$([Guid]::NewGuid().ToString('N'))"

@@ -141,6 +141,9 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("$access.AutomationSecurity = 3", producer, StringComparison.Ordinal);
         Assert.Contains("$access.Visible = $false", producer, StringComparison.Ordinal);
         Assert.Contains("$access.SaveAsText(", producer, StringComparison.Ordinal);
+        Assert.Contains("[int]$TimeoutSeconds = 300", producer, StringComparison.Ordinal);
+        Assert.Contains("Wait-Job -Job $workerJob -Timeout $TimeoutSeconds", producer, StringComparison.Ordinal);
+        Assert.Contains("AccessMetadataTimeout", producer, StringComparison.Ordinal);
         Assert.Contains("Get-LoadedState $access", producer, StringComparison.Ordinal);
         Assert.Contains("AccessMetadataSourceChanged", producer, StringComparison.Ordinal);
         Assert.Contains("$guardDatabase.Properties.Delete(\"StartupForm\")", producer, StringComparison.Ordinal);
@@ -157,6 +160,7 @@ public sealed class AccessParallelsSourceRunnerTests
             "scripts",
             "access-validation",
             "Invoke-AccessMetadataProducerSmoke.ps1"));
+        Assert.Contains("-TimeoutSeconds 240", metadataHarness, StringComparison.Ordinal);
         Assert.Contains("Wait-Job -Job $producerJob -Timeout 300", metadataHarness, StringComparison.Ordinal);
         Assert.Contains("Stop-Process -Force", metadataHarness, StringComparison.Ordinal);
 

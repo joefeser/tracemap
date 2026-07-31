@@ -62,6 +62,52 @@ public sealed class AccessDesignEvidenceCompositionTests
     }
 
     [Fact]
+    public async Task Hidden_identity_projection_deduplicates_controls_observed_in_structured_and_text_evidence()
+    {
+        using var temp = new TempDirectory();
+        var baseScan = await WriteBaseScanAsync(temp.Path);
+        var design = WriteDesignBundle(temp.Path, baseScan, includeReviewRegressions: true);
+        var output = Path.Combine(temp.Path, "hidden-identities");
+
+        var result = await AccessHiddenIdentityProjection.WriteAsync(baseScan, design, output);
+
+        using var payload = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(output, "access-identities.json")));
+        var identities = payload.RootElement.GetProperty("identities").EnumerateArray().ToArray();
+        var controls = identities.Where(item =>
+            item.GetProperty("role").GetString() == "control"
+            && item.GetProperty("identity").GetString() == ProtectedControl).ToArray();
+        var control = Assert.Single(controls);
+        Assert.Equal("ui-control", control.GetProperty("recordKind").GetString());
+        Assert.Equal(identities.Length, result.IdentityCount);
+    }
+
+    [Fact]
+    public async Task Hidden_identity_projection_rejects_a_base_scan_with_an_inconsistent_database_stable_key()
+    {
+        using var temp = new TempDirectory();
+        var baseScan = await WriteBaseScanAsync(temp.Path);
+        var design = WriteDesignBundle(temp.Path, baseScan);
+        var factsPath = Path.Combine(baseScan, "facts.ndjson");
+        var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var facts = File.ReadLines(factsPath)
+            .Select(line => JsonSerializer.Deserialize<CodeFact>(line, jsonOptions)!)
+            .Select(fact => fact.FactType == FactTypes.LegacyDataMetadataDeclared
+                && fact.RuleId == RuleIds.LegacyAccessDatabaseInventory
+                    ? fact with { TargetSymbol = "access-database-inconsistent" }
+                    : fact)
+            .Select(fact => JsonSerializer.Serialize(fact, jsonOptions));
+        await File.WriteAllTextAsync(factsPath, string.Join('\n', facts) + "\n", new UTF8Encoding(false));
+        var output = Path.Combine(temp.Path, "hidden-identities");
+
+        var error = await Assert.ThrowsAsync<AccessScanException>(() =>
+            AccessHiddenIdentityProjection.WriteAsync(baseScan, design, output));
+
+        Assert.Equal("AccessDesignInputDatabaseUnbound", error.Classification);
+        Assert.False(Directory.Exists(output));
+    }
+
+    [Fact]
     public async Task Enrichment_is_deterministic_hash_only_immutable_and_preserved_by_downstream_consumers()
     {
         using var temp = new TempDirectory();
