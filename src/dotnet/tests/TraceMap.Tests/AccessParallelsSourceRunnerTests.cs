@@ -145,6 +145,9 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("Wait-Job -Job $workerJob -Timeout $TimeoutSeconds", producer, StringComparison.Ordinal);
         Assert.Contains("AccessMetadataTimeout", producer, StringComparison.Ordinal);
         Assert.Contains("$workerProcessMarker", producer, StringComparison.Ordinal);
+        Assert.Contains("$workerHostMarker", producer, StringComparison.Ordinal);
+        Assert.Contains("Get-CimInstance -ClassName Win32_Process", producer, StringComparison.Ordinal);
+        Assert.Contains("Get-OwnedAccessProcesses", producer, StringComparison.Ordinal);
         Assert.Contains("Get-Process -Id $_", producer, StringComparison.Ordinal);
         Assert.Contains("AccessMetadataProcessOwnershipAmbiguous", producer, StringComparison.Ordinal);
         Assert.Contains("Get-LoadedState $access", producer, StringComparison.Ordinal);
