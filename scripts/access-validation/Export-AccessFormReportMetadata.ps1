@@ -269,6 +269,120 @@ function Add-Record(
     })
 }
 
+function Split-StaticQueryProjectionList([string]$ProjectionList, [ref]$Complete) {
+    $Complete.Value = $false
+    $items = [System.Collections.Generic.List[string]]::new()
+    $builder = [Text.StringBuilder]::new()
+    $singleQuote = [char]39
+    $doubleQuote = [char]34
+    $inSingleQuote = $false
+    $inDoubleQuote = $false
+    $inBracket = $false
+    $parenthesisDepth = 0
+    $invalid = $false
+
+    for ($index = 0; $index -lt $ProjectionList.Length; $index++) {
+        $character = $ProjectionList[$index]
+        if ($inSingleQuote) {
+            [void]$builder.Append($character)
+            if ($character -eq $singleQuote) {
+                if ($index + 1 -lt $ProjectionList.Length -and $ProjectionList[$index + 1] -eq $singleQuote) {
+                    [void]$builder.Append($ProjectionList[++$index])
+                }
+                else { $inSingleQuote = $false }
+            }
+            continue
+        }
+        if ($inDoubleQuote) {
+            [void]$builder.Append($character)
+            if ($character -eq $doubleQuote) {
+                if ($index + 1 -lt $ProjectionList.Length -and $ProjectionList[$index + 1] -eq $doubleQuote) {
+                    [void]$builder.Append($ProjectionList[++$index])
+                }
+                else { $inDoubleQuote = $false }
+            }
+            continue
+        }
+        if ($inBracket) {
+            [void]$builder.Append($character)
+            if ($character -eq ']') { $inBracket = $false }
+            continue
+        }
+
+        if ($character -eq $singleQuote) { $inSingleQuote = $true }
+        elseif ($character -eq $doubleQuote) { $inDoubleQuote = $true }
+        elseif ($character -eq '[') { $inBracket = $true }
+        elseif ($character -eq '(') { $parenthesisDepth++ }
+        elseif ($character -eq ')') {
+            if ($parenthesisDepth -eq 0) { $invalid = $true }
+            else { $parenthesisDepth-- }
+        }
+        elseif ($character -eq ',' -and $parenthesisDepth -eq 0) {
+            $item = $builder.ToString().Trim()
+            if ([string]::IsNullOrWhiteSpace($item)) { $invalid = $true }
+            else { $items.Add($item) }
+            [void]$builder.Clear()
+            continue
+        }
+        [void]$builder.Append($character)
+    }
+
+    $finalItem = $builder.ToString().Trim()
+    if ([string]::IsNullOrWhiteSpace($finalItem)) { $invalid = $true }
+    else { $items.Add($finalItem) }
+    $Complete.Value = -not $invalid -and -not $inSingleQuote -and -not $inDoubleQuote -and
+        -not $inBracket -and $parenthesisDepth -eq 0 -and $items.Count -gt 0
+    return @($items)
+}
+
+function Get-UnquotedSqlExpression([string]$Expression, [ref]$Complete) {
+    $Complete.Value = $false
+    $builder = [Text.StringBuilder]::new()
+    $singleQuote = [char]39
+    $doubleQuote = [char]34
+    $inSingleQuote = $false
+    $inDoubleQuote = $false
+
+    for ($index = 0; $index -lt $Expression.Length; $index++) {
+        $character = $Expression[$index]
+        if ($inSingleQuote) {
+            [void]$builder.Append(' ')
+            if ($character -eq $singleQuote) {
+                if ($index + 1 -lt $Expression.Length -and $Expression[$index + 1] -eq $singleQuote) {
+                    [void]$builder.Append(' ')
+                    $index++
+                }
+                else { $inSingleQuote = $false }
+            }
+            continue
+        }
+        if ($inDoubleQuote) {
+            [void]$builder.Append(' ')
+            if ($character -eq $doubleQuote) {
+                if ($index + 1 -lt $Expression.Length -and $Expression[$index + 1] -eq $doubleQuote) {
+                    [void]$builder.Append(' ')
+                    $index++
+                }
+                else { $inDoubleQuote = $false }
+            }
+            continue
+        }
+
+        if ($character -eq $singleQuote) {
+            $inSingleQuote = $true
+            [void]$builder.Append(' ')
+        }
+        elseif ($character -eq $doubleQuote) {
+            $inDoubleQuote = $true
+            [void]$builder.Append(' ')
+        }
+        else { [void]$builder.Append($character) }
+    }
+
+    $Complete.Value = -not $inSingleQuote -and -not $inDoubleQuote
+    return $builder.ToString()
+}
+
 function Get-StaticQueryOutputNames([string]$Sql, [ref]$Complete) {
     $Complete.Value = $false
     if ($Sql.Length -gt $MaxTextBytes) { return @() }
@@ -277,21 +391,25 @@ function Get-StaticQueryOutputNames([string]$Sql, [ref]$Complete) {
         "(?is)^\s*(?:PARAMETERS\b.*?;\s*)?SELECT\s+(?:(?:DISTINCT|DISTINCTROW|TOP\s+\d+(?:\s+PERCENT)?)\s+)*(?<list>.*?)\s+\bFROM\b")
     if (-not $match.Success -or $match.Groups["list"].Value.Contains("*")) { return @() }
     $result = [System.Collections.Generic.List[string]]::new()
-    $rawItems = @($match.Groups["list"].Value.Split(","))
+    $splitComplete = $false
+    $projectionItems = @(Split-StaticQueryProjectionList $match.Groups["list"].Value ([ref]$splitComplete))
     $parsedCount = 0
-    foreach ($rawItem in $rawItems) {
+    foreach ($rawItem in $projectionItems) {
         $item = $rawItem.Trim()
-        if ($item.Contains("(") -and $item -notmatch "(?is)\s+AS\s+(?:\[(?<alias>[^\]]+)\]|(?<alias>[A-Za-z_][A-Za-z0-9_ ]*))\s*$") {
+        $expressionComplete = $false
+        $unquotedItem = Get-UnquotedSqlExpression $item ([ref]$expressionComplete)
+        if (-not $expressionComplete) { continue }
+        if ($unquotedItem.Contains("(") -and $unquotedItem -notmatch "(?is)\s+AS\s+(?:\[(?<alias>[^\]]+)\]|(?<alias>[A-Za-z_][A-Za-z0-9_ ]*))\s*$") {
             continue
         }
-        $alias = [regex]::Match($item, "(?is)\s+AS\s+(?:\[(?<name>[^\]]+)\]|(?<name>[A-Za-z_][A-Za-z0-9_ ]*))\s*$")
+        $alias = [regex]::Match($unquotedItem, "(?is)\s+AS\s+(?:\[(?<name>[^\]]+)\]|(?<name>[A-Za-z_][A-Za-z0-9_ ]*))\s*$")
         if ($alias.Success) {
             $result.Add($alias.Groups["name"].Value.Trim())
             $parsedCount++
             continue
         }
         $direct = [regex]::Match(
-            $item,
+            $unquotedItem,
             "(?is)^(?:(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_.$]*)\s*\.\s*)?(?:\[(?<name>[^\]]+)\]|(?<name>[A-Za-z_][A-Za-z0-9_ ]*))$")
         if ($direct.Success) {
             $result.Add($direct.Groups["name"].Value.Trim())
@@ -299,7 +417,7 @@ function Get-StaticQueryOutputNames([string]$Sql, [ref]$Complete) {
         }
     }
     $unique = @($result | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
-    $Complete.Value = $parsedCount -eq $rawItems.Count -and $unique.Count -eq $parsedCount
+    $Complete.Value = $splitComplete -and $parsedCount -eq $projectionItems.Count -and $unique.Count -eq $parsedCount
     return $unique
 }
 
@@ -678,6 +796,7 @@ try {
                 if ([int]$query.Type -eq 0) {
                     $outputNamesComplete = $false
                     $outputNames = @(Get-StaticQueryOutputNames ([string]$query.SQL) ([ref]$outputNamesComplete))
+                    $outputCompleteness = if ($outputNamesComplete) { "complete" } else { "partial" }
                     if (-not $outputNamesComplete) {
                         $catalogPartial = $true
                         Add-Record $records "source-gap" "gap-query-$($index.ToString('D6'))" "" "producer-gap" "unavailable" "" 0 0 "partial" ([ordered]@{
@@ -687,7 +806,7 @@ try {
                         })
                     }
                     for ($fieldIndex = 0; $fieldIndex -lt $outputNames.Count; $fieldIndex++) {
-                        Add-Record $records "catalog-object" "$queryId-field-$($fieldIndex.ToString('D6'))" $queryId "catalog-export" "container-only" "" 0 0 "complete" ([ordered]@{
+                        Add-Record $records "catalog-object" "$queryId-field-$($fieldIndex.ToString('D6'))" $queryId "catalog-export" "container-only" "" 0 0 $outputCompleteness ([ordered]@{
                             objectRole = "query-field"
                             identity = $outputNames[$fieldIndex]
                             parentRole = "saved-query"
