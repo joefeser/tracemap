@@ -56,7 +56,7 @@ public sealed class AccessComReader
         var queryIdentities = ReadQueryIdentities(databaseObject, databaseIdentitySeed, gaps);
         var known = BuildKnownObjects(tables, tableLookup, queryIdentities);
         var relationships = ReadRelationships(databaseObject, databaseIdentitySeed, tableLookup, fieldLookups, gaps, ref systemCount);
-        var queries = ReadQueries(databaseObject, databaseIdentitySeed, queryIdentities, known, gaps, external);
+        var queries = ReadQueries(databaseObject, databaseIdentitySeed, queryIdentities, known, tableLookup, fieldLookups, gaps, external);
         var uiInventory = ReadUiInventoryCounts(application, gaps);
         var vbaInventory = ReadVbaInventoryCounts(application, gaps);
         var macroInventory = ReadMacroInventoryCounts(application, gaps);
@@ -538,11 +538,13 @@ public sealed class AccessComReader
         return result;
     }
 
-    private IReadOnlyList<AccessQueryProjection> ReadQueries(
+    internal IReadOnlyList<AccessQueryProjection> ReadQueries(
         dynamic database,
         string databaseIdentitySeed,
         IReadOnlyDictionary<string, AccessSafeIdentity> identities,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> known,
+        IReadOnlyDictionary<string, List<AccessTableProjection>> tableLookup,
+        IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fieldLookups,
         List<AccessGapProjection> gaps,
         List<AccessExternalLinkProjection> external)
     {
@@ -556,6 +558,7 @@ public sealed class AccessComReader
             {
                 dynamic? query = null;
                 dynamic? parameters = null;
+                dynamic? outputFields = null;
                 try
                 {
                     query = queries[index];
@@ -591,6 +594,99 @@ public sealed class AccessComReader
                     }
 
                     var isPassThrough = type == 112;
+                    var outputRows = new List<AccessQueryOutputFieldProjection>();
+                    if (!isPassThrough && type == 0)
+                    {
+                        try
+                        {
+                            outputFields = query.Fields;
+                            var outputCount = BoundedChildCount(outputFields, "AccessQueryOutputFieldCollectionLimit");
+                            for (var ordinal = 0; ordinal < outputCount; ordinal++)
+                            {
+                                dynamic? field = null;
+                                AccessSafeIdentity? outputIdentity = null;
+                                try
+                                {
+                                    field = outputFields[ordinal];
+                                    var outputName = BoundedString(() => (string)field.Name, 512, "AccessQueryOutputFieldNameUnavailable");
+                                    outputIdentity = AccessSafeValues.Identity(databaseIdentitySeed, $"query-field-{identity.StableKey}", outputName, ordinal);
+                                    var sources = new List<string>();
+                                    string? sourceTable = null;
+                                    string? sourceField = null;
+                                    try
+                                    {
+                                        sourceTable = BoundedOptionalString(() => (string)field.SourceTable, 512, "AccessQueryOutputSourceUnavailable");
+                                        sourceField = BoundedOptionalString(() => (string)field.SourceField, 512, "AccessQueryOutputSourceUnavailable");
+                                    }
+                                    catch (AccessScanException)
+                                    {
+                                        // Output declaration remains useful even when DAO cannot
+                                        // prove a unique source table/field for an alias or expression.
+                                    }
+                                    if (!string.IsNullOrWhiteSpace(sourceTable)
+                                        && !string.IsNullOrWhiteSpace(sourceField)
+                                        && tableLookup.TryGetValue(sourceTable, out var tableCandidates))
+                                    {
+                                        foreach (var tableCandidate in tableCandidates)
+                                        {
+                                            if (fieldLookups.TryGetValue(tableCandidate.Identity.StableKey, out var fields)
+                                                && fields.TryGetValue(sourceField, out var fieldCandidates))
+                                                sources.AddRange(fieldCandidates.Select(candidate => candidate.Identity.StableKey));
+                                        }
+                                    }
+                                    var distinctSources = sources.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+                                    var directOutput = AccessQueryProjector.IsDirectOutputField(sql, outputName);
+                                    var isComplete = distinctSources.Length == 1
+                                        && directOutput
+                                        && dependencyProjection.Coverage == "complete";
+                                    var coverage = isComplete ? "complete" : "partial";
+                                    if (coverage == "partial")
+                                        gaps.Add(new(
+                                            distinctSources.Length > 1
+                                                ? "AccessQueryOutputSourceAmbiguous"
+                                                : !directOutput
+                                                    ? "AccessQueryOutputExpressionPartial"
+                                                    : dependencyProjection.Coverage != "complete"
+                                                        ? "AccessQueryOutputDependencyPartial"
+                                                        : "AccessQueryOutputSourceUnavailable",
+                                            "query-output-field",
+                                            outputIdentity.StableKey,
+                                            RuleIds.LegacyAccessQuery));
+                                    outputRows.Add(new(
+                                        outputIdentity,
+                                        ordinal,
+                                        AccessSafeValues.DaoTypeFamily(SafeInt(() => (int)field.Type)),
+                                        distinctSources,
+                                        coverage));
+                                }
+                                catch (AccessScanException ex)
+                                {
+                                    gaps.Add(new(
+                                        ex.Classification,
+                                        outputIdentity is null ? "query" : "query-output-field",
+                                        outputIdentity?.StableKey ?? identity.StableKey,
+                                        RuleIds.LegacyAccessQuery));
+                                }
+                                catch
+                                {
+                                    gaps.Add(new(
+                                        "AccessQueryOutputMetadataUnavailable",
+                                        outputIdentity is null ? "query" : "query-output-field",
+                                        outputIdentity?.StableKey ?? identity.StableKey,
+                                        RuleIds.LegacyAccessQuery));
+                                }
+                                finally { Release(field); }
+                            }
+                        }
+                        catch (AccessScanException ex)
+                        {
+                            gaps.Add(new(ex.Classification, "query", identity.StableKey, RuleIds.LegacyAccessQuery));
+                        }
+                        catch
+                        {
+                            gaps.Add(new("AccessQueryOutputMetadataUnavailable", "query", identity.StableKey, RuleIds.LegacyAccessQuery));
+                        }
+                    }
                     string? connectHash = null;
                     string? provider = null;
                     if (isPassThrough)
@@ -605,11 +701,11 @@ public sealed class AccessComReader
                     }
 
                     result.Add(new(identity, kind, sqlHash, sql.Length, referenceCoverage, parameterRows,
-                        isPassThrough ? [] : dependencyProjection.Dependencies, isPassThrough, connectHash, provider));
+                        isPassThrough ? [] : dependencyProjection.Dependencies, isPassThrough, connectHash, provider, outputRows));
                 }
                 catch (AccessScanException ex) { gaps.Add(new(ex.Classification, "query", null)); }
                 catch { gaps.Add(new("AccessObjectMetadataUnavailable", "query", null)); }
-                finally { Release(parameters); Release(query); }
+                finally { Release(outputFields); Release(parameters); Release(query); }
             }
         }
         catch (AccessScanException ex) { gaps.Add(new(ex.Classification, "database-queries", null)); }

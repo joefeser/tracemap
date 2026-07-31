@@ -72,6 +72,7 @@ $startupForm = $null
 $customerForm = $null
 $customerFormModule = $null
 $ordersReport = $null
+$reportGroup = $null
 $fixtureControls = [System.Collections.Generic.List[object]]::new()
 try {
     $access = New-Object -ComObject Access.Application
@@ -156,8 +157,13 @@ SELECT 'ACTION_QUERY_CANARY_92817', Orders.OrderId, Now() FROM Orders;
     # representative surface/control fixtures and extraction assertions.
     $startupForm = $access.CreateForm()
     $temporaryName = $startupForm.Name
+    $startupForm.RecordSource = "Orders"
     $startupForm.HasModule = $true
     $startupForm.OnOpen = "[Event Procedure]"
+    $detailStatus = $access.CreateControl($temporaryName, 109, 0, "", "", 200, 200, 1800, 300)
+    $fixtureControls.Add($detailStatus)
+    $detailStatus.Name = "txtDetailStatus"
+    $detailStatus.ControlSource = "OrderStatus"
     $escapedCanaryPath = $CanaryPath.Replace('"', '""')
     $startupForm.Module.InsertLines(1, @"
 Option Compare Database
@@ -173,6 +179,8 @@ End Sub
     $access.DoCmd.Save(2, $temporaryName)
     $access.DoCmd.Close(2, $temporaryName, 1)
     $access.DoCmd.Rename("frmStartupCanary_92817", 2, $temporaryName)
+    foreach ($control in $fixtureControls) { Close-ComObject $control }
+    $fixtureControls.Clear()
     Close-ComObject $startupForm
     $startupForm = $null
 
@@ -196,6 +204,8 @@ End Sub
     $orderSelector.Name = "cboOrderStatus"
     $orderSelector.RowSourceType = "Table/Query"
     $orderSelector.RowSource = "qryOrdersByStatus"
+    $orderSelector.BoundColumn = 2
+    $orderSelector.ColumnCount = 3
     $calculatedControl = $access.CreateControl($customerFormTemporaryName, 109, 0, "", "", 1800, 1400, 2400, 300)
     $fixtureControls.Add($calculatedControl)
     $calculatedControl.Name = "txtCalculatedCustomer"
@@ -220,6 +230,12 @@ End Sub
     $embeddedMacroButton.Name = "cmdEmbeddedMacro"
     $embeddedMacroButton.Caption = "EMBEDDED_MACRO_CAPTION_MARKER_92817"
     $embeddedMacroButton.OnClick = "[Embedded Macro]"
+    $detailSubform = $access.CreateControl($customerFormTemporaryName, 112, 0, "", "", 1800, 3400, 4800, 1200)
+    $fixtureControls.Add($detailSubform)
+    $detailSubform.Name = "subOrders"
+    $detailSubform.SourceObject = "Form.frmStartupCanary_92817"
+    $detailSubform.LinkMasterFields = "CustomerId"
+    $detailSubform.LinkChildFields = "CustomerId"
     $escapedPhase8CanaryPath = $CanaryPath.Replace('"', '""')
     $customerFormModule = $customerForm.Module
     $customerFormModule.InsertLines(1, @"
@@ -282,11 +298,16 @@ End Sub
     $fixtureControls.Add($reportCalculated)
     $reportCalculated.Name = "txtCalculatedOrder"
     $reportCalculated.ControlSource = '=[OrderId] & "REPORT_EXPRESSION_MARKER_92817"'
+    $reportGroupIndex = $access.CreateGroupLevel($ordersReportTemporaryName, "OrderStatus", $true, $false)
+    $reportGroup = $ordersReport.GroupLevel($reportGroupIndex)
+    $reportGroup.SortOrder = $true
     $access.DoCmd.Save(3, $ordersReportTemporaryName)
     $access.DoCmd.Close(3, $ordersReportTemporaryName, 1)
     $access.DoCmd.Rename("rptOrders", 3, $ordersReportTemporaryName)
     Close-ComObject $ordersReport
     $ordersReport = $null
+    Close-ComObject $reportGroup
+    $reportGroup = $null
     foreach ($control in $fixtureControls) { Close-ComObject $control }
     $fixtureControls.Clear()
 
@@ -315,9 +336,9 @@ End Sub
         StartupCanary = "configured"
         Forms = 2
         Reports = 1
-        Phase7Controls = 8
+        Phase7Controls = 10
         Phase8Controls = 2
-        TotalFormReportControls = 10
+        TotalFormReportControls = 12
         FormReportCoverage = "phase7-design-fixture"
         VbaCoverage = "phase8-form-code-behind-fixture"
         MacroCoverage = "phase9-embedded-event-marker-only;named-data-deferred"
@@ -326,6 +347,7 @@ End Sub
 finally {
     foreach ($control in $fixtureControls) { Close-ComObject $control }
     Close-ComObject $ordersReport
+    Close-ComObject $reportGroup
     Close-ComObject $customerFormModule
     Close-ComObject $customerForm
     Close-ComObject $startupForm

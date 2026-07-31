@@ -31,7 +31,7 @@ public sealed class AccessParallelsSourceRunnerTests
             "access-validation",
             "Invoke-AccessGuestSource.ps1"));
 
-        Assert.Contains("ValidateSet(\"doctor\", \"build\", \"synthetic\")", host, StringComparison.Ordinal);
+        Assert.Contains("ValidateSet(\"doctor\", \"build\", \"synthetic\", \"metadata\")", host, StringComparison.Ordinal);
         Assert.Contains("net0\\s+\\(-\\)", host, StringComparison.Ordinal);
         Assert.Contains("$ExpectedInputSharePath", host, StringComparison.Ordinal);
         Assert.Contains("$ExpectedOutputSharePath", host, StringComparison.Ordinal);
@@ -131,6 +131,50 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("AccessGuestSyntheticCleanupFailed", guest, StringComparison.Ordinal);
         Assert.DoesNotContain("--filter \"Access\"", guest, StringComparison.Ordinal);
         Assert.DoesNotContain("Invoke-AccessRepresentativeSmoke.ps1", guest, StringComparison.Ordinal);
+        Assert.Contains("Invoke-AccessMetadataProducerSmoke.ps1", guest, StringComparison.Ordinal);
+        Assert.Contains("access-parallels-metadata=completed", host, StringComparison.Ordinal);
+        var producer = await File.ReadAllTextAsync(Path.Combine(
+            root,
+            "scripts",
+            "access-validation",
+            "Export-AccessFormReportMetadata.ps1"));
+        Assert.Contains("$access.AutomationSecurity = 3", producer, StringComparison.Ordinal);
+        Assert.Contains("$access.Visible = $false", producer, StringComparison.Ordinal);
+        Assert.Contains("$access.SaveAsText(", producer, StringComparison.Ordinal);
+        Assert.Contains("AccessMetadataCopyBindingMismatch", producer, StringComparison.Ordinal);
+        Assert.Contains("[int]$TimeoutSeconds = 300", producer, StringComparison.Ordinal);
+        Assert.Contains("Wait-Job -Job $workerJob -Timeout $TimeoutSeconds", producer, StringComparison.Ordinal);
+        Assert.Contains("AccessMetadataTimeout", producer, StringComparison.Ordinal);
+        Assert.Contains("$workerProcessMarker", producer, StringComparison.Ordinal);
+        Assert.Contains("$workerHostMarker", producer, StringComparison.Ordinal);
+        Assert.Contains("Get-CimInstance -ClassName Win32_Process", producer, StringComparison.Ordinal);
+        Assert.Contains("Get-OwnedAccessProcesses", producer, StringComparison.Ordinal);
+        Assert.Contains("ConvertTo-AccessProcessIdentities", producer, StringComparison.Ordinal);
+        Assert.Contains("GetWindowThreadProcessId", producer, StringComparison.Ordinal);
+        Assert.Contains("hWndAccessApp", producer, StringComparison.Ordinal);
+        Assert.Contains("[uint32]([int]::MaxValue)", producer, StringComparison.Ordinal);
+        Assert.Contains("startTimeUtcTicks", producer, StringComparison.Ordinal);
+        Assert.Contains("ProcessName, \"MSACCESS\"", producer, StringComparison.Ordinal);
+        Assert.Contains("AccessMetadataProcessOwnershipAmbiguous", producer, StringComparison.Ordinal);
+        Assert.Contains("Get-LoadedState $access", producer, StringComparison.Ordinal);
+        Assert.Contains("AccessMetadataSourceChanged", producer, StringComparison.Ordinal);
+        Assert.Contains("$guardDatabase.Properties.Delete(\"StartupForm\")", producer, StringComparison.Ordinal);
+        Assert.Contains("Remove-Item -LiteralPath $scratch -Recurse -Force", producer, StringComparison.Ordinal);
+        Assert.Contains("AccessMetadataProcessCleanupFailed", producer, StringComparison.Ordinal);
+        Assert.Contains("AccessMetadataScratchCleanupFailed", producer, StringComparison.Ordinal);
+        Assert.DoesNotContain("OpenForm", producer, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("OpenReport", producer, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("OpenQuery", producer, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("OpenRecordset", producer, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(".Module", producer, StringComparison.OrdinalIgnoreCase);
+        var metadataHarness = await File.ReadAllTextAsync(Path.Combine(
+            root,
+            "scripts",
+            "access-validation",
+            "Invoke-AccessMetadataProducerSmoke.ps1"));
+        Assert.Contains("-TimeoutSeconds 240", metadataHarness, StringComparison.Ordinal);
+        Assert.Contains("Wait-Job -Job $producerJob -Timeout 300", metadataHarness, StringComparison.Ordinal);
+        Assert.Contains("Stop-Process -Force", metadataHarness, StringComparison.Ordinal);
 
         foreach (var source in new[] { host, guest })
         {
@@ -139,7 +183,6 @@ public sealed class AccessParallelsSourceRunnerTests
             Assert.DoesNotContain("RunMacro", source, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("OpenRecordset", source, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("OpenQuery", source, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("SaveAsText", source, StringComparison.OrdinalIgnoreCase);
         }
     }
 

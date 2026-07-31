@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("doctor", "build", "synthetic")]
+    [ValidateSet("doctor", "build", "synthetic", "metadata")]
     [string]$Action,
 
     [Parameter(Mandatory = $true)]
@@ -115,6 +115,9 @@ $expectedOutput = switch ($Action) {
     }
     "synthetic" {
         "access-parallels-synthetic=completed;head=$ExpectedHead;consumerContracts=completed;reviewBundleRetained=true;processCleanup=true;sourceClean=true"
+    }
+    "metadata" {
+        "access-parallels-metadata=completed;head=$ExpectedHead;saveAsTextCompleted=true;loadedStateUnchanged=true;canariesClear=true;sourceUnchanged=true;scratchClean=true;processCleanup=true;sourceClean=true"
     }
 }
 if (-not [string]::Equals($guestOutput, $expectedOutput, [StringComparison]::Ordinal) -or
