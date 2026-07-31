@@ -555,10 +555,48 @@ public sealed class AccessFoundationTests
                 return scratch;
             },
             _ => throw new IOException("synthetic cleanup failure"),
-            CancellationToken.None));
+            CancellationToken.None,
+            () => { }));
 
         Assert.Equal("AccessFileSnapshotCleanupFailed", exception.Classification);
         Directory.Delete(scratch, recursive: true);
+    }
+
+    [Fact]
+    public async Task File_first_snapshot_retries_transient_internal_repository_cleanup_failure()
+    {
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "fixture.accdb");
+        await File.WriteAllBytesAsync(database, [1, 2, 3, 4]);
+        var scratch = Path.Combine(temp.Path, "transient-cleanup-failure");
+        var cleanupAttempts = 0;
+        var retryDelays = 0;
+
+        var result = await new AccessFileScanRunner().RunCoreAsync(
+            new(database, Path.Combine(temp.Path, "out")),
+            (options, _) =>
+            {
+                var input = AccessInputValidator.Validate(options);
+                return Task.FromResult(AccessFactBuilder.Build(input, Projection(input), options));
+            },
+            () =>
+            {
+                Directory.CreateDirectory(scratch);
+                return scratch;
+            },
+            path =>
+            {
+                cleanupAttempts++;
+                if (cleanupAttempts < 3) throw new IOException("synthetic transient cleanup failure");
+                Directory.Delete(path, recursive: true);
+            },
+            CancellationToken.None,
+            () => retryDelays++);
+
+        Assert.NotEmpty(result.Facts);
+        Assert.Equal(3, cleanupAttempts);
+        Assert.Equal(2, retryDelays);
+        Assert.False(Directory.Exists(scratch));
     }
 
     [Fact]
