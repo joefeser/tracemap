@@ -192,10 +192,10 @@ End Sub
     $access.DoCmd.Save(2, $detailFormTemporaryName)
     $access.DoCmd.Close(2, $detailFormTemporaryName, 1)
     $access.DoCmd.Rename("frmOrderDetails", 2, $detailFormTemporaryName)
-    Close-ComObject $detailForm
-    $detailForm = $null
     foreach ($control in $fixtureControls) { Close-ComObject $control }
     $fixtureControls.Clear()
+    Close-ComObject $detailForm
+    $detailForm = $null
 
     $customerForm = $access.CreateForm()
     $customerFormTemporaryName = [string]$customerForm.Name
