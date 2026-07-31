@@ -169,7 +169,7 @@ $database = $null
 $records = [System.Collections.Generic.List[object]]::new()
 $catalogPartial = $false
 $succeeded = $false
-$cleanupFailed = $false
+$cleanupFailure = ""
 try {
     New-Item -ItemType Directory -Path $scratch | Out-Null
     $access = New-Object -ComObject Access.Application
@@ -379,7 +379,7 @@ finally {
     Close-ComObject $database
     if ($null -ne $access) {
         try { $access.CloseCurrentDatabase() } catch { }
-        try { $access.Quit(2) } catch { $cleanupFailed = $true }
+        try { $access.Quit(2) } catch { $cleanupFailure = "AccessMetadataQuitFailed" }
     }
     Close-ComObject $access
     [GC]::Collect()
@@ -390,7 +390,7 @@ finally {
         $remainingAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
     }
     if ($remainingAccess.Count -gt 0) {
-        $cleanupFailed = $true
+        $cleanupFailure = "AccessMetadataProcessCleanupFailed"
         $remainingAccess | Stop-Process -Force -ErrorAction SilentlyContinue
     }
     try {
@@ -399,15 +399,15 @@ finally {
         }
     }
     catch {
-        $cleanupFailed = $true
+        $cleanupFailure = "AccessMetadataScratchCleanupFailed"
     }
-    if (Test-Path -LiteralPath $scratch) { $cleanupFailed = $true }
-    if ((-not $succeeded -or $cleanupFailed) -and (Test-Path -LiteralPath $output)) {
+    if (Test-Path -LiteralPath $scratch) { $cleanupFailure = "AccessMetadataScratchCleanupFailed" }
+    if ((-not $succeeded -or $cleanupFailure) -and (Test-Path -LiteralPath $output)) {
         try { Remove-Item -LiteralPath $output -Recurse -Force -ErrorAction Stop }
-        catch { $cleanupFailed = $true }
+        catch { $cleanupFailure = "AccessMetadataOutputCleanupFailed" }
     }
-    if ($cleanupFailed) {
-        throw "AccessMetadataCleanupFailed"
+    if ($cleanupFailure) {
+        throw $cleanupFailure
     }
 }
 
