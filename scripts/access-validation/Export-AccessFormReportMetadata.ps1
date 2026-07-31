@@ -32,7 +32,9 @@ param(
 
     [switch]$InternalWorker,
 
-    [string]$WorkerProcessMarkerPath = ""
+    [string]$WorkerProcessMarkerPath = "",
+
+    [string]$WorkerScratchDirectoryPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -75,6 +77,67 @@ function Get-BytesSha256([byte[]]$Bytes) {
     }
     finally {
         $algorithm.Dispose()
+    }
+}
+
+function Remove-PathChecked(
+    [string]$Path,
+    [bool]$Recurse,
+    [string]$FailureClassification
+) {
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    $failed = $false
+    try {
+        Remove-Item -LiteralPath $Path -Force -Recurse:$Recurse -ErrorAction Stop
+        if (Test-Path -LiteralPath $Path) { $failed = $true }
+    }
+    catch {
+        $failed = $true
+    }
+    if ($failed) { Stop-Export $FailureClassification }
+}
+
+function Clear-ReadOnlyAttributes([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    foreach ($item in @(Get-ChildItem -LiteralPath $Path -Recurse -Force -ErrorAction Stop)) {
+        if ($item.Attributes -band [IO.FileAttributes]::ReadOnly) {
+            $item.Attributes = $item.Attributes -band (-bnot [IO.FileAttributes]::ReadOnly)
+        }
+    }
+    $rootItem = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if ($rootItem.Attributes -band [IO.FileAttributes]::ReadOnly) {
+        $rootItem.Attributes = $rootItem.Attributes -band (-bnot [IO.FileAttributes]::ReadOnly)
+    }
+}
+
+function Remove-DirectoryWithRetry([string]$Path) {
+    for ($attempt = 1; $attempt -le 30; $attempt++) {
+        if (-not (Test-Path -LiteralPath $Path)) { return $true }
+        try {
+            Clear-ReadOnlyAttributes $Path
+            if (Test-Path -LiteralPath $Path) {
+                Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+            }
+        }
+        catch { }
+        if (-not (Test-Path -LiteralPath $Path)) { return $true }
+        if ($attempt -lt 30) { Start-Sleep -Milliseconds 200 }
+    }
+    return $false
+}
+
+function Test-SourceHashesUnchanged(
+    [string]$OriginalPath,
+    [string]$OriginalHash,
+    [string]$CopyPath,
+    [string]$CopyHash
+) {
+    try {
+        return (Get-Sha256 $OriginalPath) -eq $OriginalHash -and
+            (Get-Sha256 $CopyPath) -eq $CopyHash
+    }
+    catch {
+        return $false
     }
 }
 
@@ -125,7 +188,10 @@ function Get-OwnedAccessProcesses([object[]]$ProcessIdentities) {
 
 function Get-AccessApplicationProcess([object]$Application) {
     $processId = [uint32]0
-    $windowHandle = [IntPtr][long]$Application.hWndAccessApp
+    # Access exposes hWndAccessApp as a method. PowerShell 7 returns a PSMethod
+    # object when it is read like a property, which cannot be converted to the
+    # native window handle expected by GetWindowThreadProcessId.
+    $windowHandle = [IntPtr][long]$Application.hWndAccessApp()
     [void][TraceMapAccessWindowProcess]::GetWindowThreadProcessId($windowHandle, [ref]$processId)
     if ($processId -eq 0 -or $processId -gt [uint32]([int]::MaxValue)) { return $null }
     return Get-Process -Id ([int]$processId) -ErrorAction SilentlyContinue
@@ -134,10 +200,12 @@ function Get-AccessApplicationProcess([object]$Application) {
 function Get-LoadedState([object]$Application) {
     $forms = 0
     $reports = 0
+    $currentProject = $null
     $allForms = $null
     $allReports = $null
     try {
-        $allForms = $Application.CurrentProject.AllForms
+        $currentProject = $Application.CurrentProject
+        $allForms = $currentProject.AllForms
         if ([int]$allForms.Count -gt $MaxObjects) { Stop-Export "AccessMetadataObjectLimitReached" }
         for ($index = 0; $index -lt [int]$allForms.Count; $index++) {
             $item = $null
@@ -147,7 +215,7 @@ function Get-LoadedState([object]$Application) {
             }
             finally { Close-ComObject $item }
         }
-        $allReports = $Application.CurrentProject.AllReports
+        $allReports = $currentProject.AllReports
         if ([int]$allReports.Count -gt $MaxObjects) { Stop-Export "AccessMetadataObjectLimitReached" }
         for ($index = 0; $index -lt [int]$allReports.Count; $index++) {
             $item = $null
@@ -162,6 +230,7 @@ function Get-LoadedState([object]$Application) {
     finally {
         Close-ComObject $allReports
         Close-ComObject $allForms
+        Close-ComObject $currentProject
     }
 }
 
@@ -258,15 +327,35 @@ if (-not $InternalWorker) {
     }
     $outputParent = Split-Path -Parent $output
     New-Item -ItemType Directory -Path $outputParent -Force | Out-Null
+    $outputClaimPath = Join-Path $outputParent ".$([IO.Path]::GetFileName($output)).claim"
+    $outputClaimStream = $null
+    $outputClaimCreated = $false
+    try {
+        try {
+            $outputClaimStream = [IO.File]::Open(
+                $outputClaimPath,
+                [IO.FileMode]::CreateNew,
+                [IO.FileAccess]::Write,
+                [IO.FileShare]::None)
+            $outputClaimCreated = $true
+        }
+        catch {
+            Stop-Export "AccessMetadataOutputClaimUnavailable"
+        }
+        if (Test-Path -LiteralPath $output) {
+            Stop-Export "AccessMetadataOutputExists"
+        }
     $workerProcessMarker = Join-Path $outputParent ".$([IO.Path]::GetFileName($output)).worker-$([Guid]::NewGuid().ToString('N')).process.json"
     $workerHostMarker = "$workerProcessMarker.host"
+    $workerScratchDirectory = Join-Path $outputParent ".$([IO.Path]::GetFileName($output)).metadata-$([Guid]::NewGuid().ToString('N'))"
     $workerParameters = @{}
     foreach ($entry in $PSBoundParameters.GetEnumerator()) {
-        if ($entry.Key -notin @("InternalWorker", "WorkerProcessMarkerPath")) {
+        if ($entry.Key -notin @("InternalWorker", "WorkerProcessMarkerPath", "WorkerScratchDirectoryPath")) {
             $workerParameters[$entry.Key] = $entry.Value
         }
     }
     $workerParameters["WorkerProcessMarkerPath"] = $workerProcessMarker
+    $workerParameters["WorkerScratchDirectoryPath"] = $workerScratchDirectory
     $workerJob = Start-Job -ScriptBlock {
         param([string]$ScriptPath, [hashtable]$Parameters, [string]$HostMarkerPath)
         [IO.File]::WriteAllText($HostMarkerPath, [string]$PID)
@@ -309,13 +398,13 @@ if (-not $InternalWorker) {
         $remainingOwnedAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
         $unattributedAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
         $processCleanupFailed = $remainingOwnedAccess.Count -gt 0 -or $unattributedAccess.Count -gt 0
-        $scratchPattern = ".$([IO.Path]::GetFileName($output)).metadata-*"
         try {
             if (Test-Path -LiteralPath $output) {
                 Remove-Item -LiteralPath $output -Recurse -Force -ErrorAction Stop
             }
-            Get-ChildItem -LiteralPath $outputParent -Directory -Filter $scratchPattern -ErrorAction SilentlyContinue |
-                Remove-Item -Recurse -Force -ErrorAction Stop
+            if (-not (Remove-DirectoryWithRetry $workerScratchDirectory)) {
+                throw "AccessMetadataTimeoutCleanupFailed"
+            }
             if (Test-Path -LiteralPath $workerProcessMarker) {
                 Remove-Item -LiteralPath $workerProcessMarker -Force -ErrorAction Stop
             }
@@ -331,8 +420,7 @@ if (-not $InternalWorker) {
         if ($processCleanupFailed) {
             Stop-Export "AccessMetadataTimeoutCleanupFailed"
         }
-        if ((Get-Sha256 $original) -ne $originalBeforeSupervision -or
-            (Get-Sha256 $copy) -ne $copyBeforeSupervision) {
+        if (-not (Test-SourceHashesUnchanged $original $originalBeforeSupervision $copy $copyBeforeSupervision)) {
             Stop-Export "AccessMetadataSourceChanged"
         }
         Stop-Export "AccessMetadataTimeout"
@@ -343,26 +431,123 @@ if (-not $InternalWorker) {
         Receive-Job -Job $workerJob -ErrorVariable +workerErrors -ErrorAction SilentlyContinue
     )
     $workerFailure = [string]$workerJob.ChildJobs[0].JobStateInfo.Reason.Message
+    $ownedAccessProcessIdentities = @()
+    if (Test-Path -LiteralPath $workerProcessMarker) {
+        try {
+            $parsedIdentities = @(
+                [IO.File]::ReadAllText($workerProcessMarker) | ConvertFrom-Json
+            )
+            $ownedAccessProcessIdentities = @(
+                ConvertTo-AccessProcessIdentities $parsedIdentities
+            )
+        }
+        catch {
+            $ownedAccessProcessIdentities = @()
+        }
+    }
     Remove-Job -Job $workerJob -Force -ErrorAction SilentlyContinue
+    try { $workerJob.Dispose() } catch { }
+    $completedJob = $null
+    $workerJob = $null
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
+    $remainingOwnedAccess = @()
+    for ($attempt = 0; $attempt -lt 120; $attempt++) {
+        $remainingOwnedAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
+        $observedAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
+        if ($observedAccess.Count -eq 0) { break }
+        Start-Sleep -Milliseconds 250
+    }
+    if ($remainingOwnedAccess.Count -gt 0) {
+        try {
+            $remainingOwnedAccess | Stop-Process -Force -ErrorAction Stop
+        }
+        catch { }
+        for ($attempt = 0; $attempt -lt 20; $attempt++) {
+            $remainingOwnedAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
+            if ($remainingOwnedAccess.Count -eq 0) { break }
+            Start-Sleep -Milliseconds 250
+        }
+    }
+    $unattributedAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
+    $processCleanupFailed = $remainingOwnedAccess.Count -gt 0 -or $unattributedAccess.Count -gt 0
+    $scratchCleanupFailed = $false
+    try {
+        if (-not (Remove-DirectoryWithRetry $workerScratchDirectory)) {
+            $scratchCleanupFailed = $true
+        }
+    }
+    catch {
+        $scratchCleanupFailed = $true
+    }
     if (Test-Path -LiteralPath $workerProcessMarker) {
         Remove-Item -LiteralPath $workerProcessMarker -Force -ErrorAction SilentlyContinue
     }
     if (Test-Path -LiteralPath $workerHostMarker) {
         Remove-Item -LiteralPath $workerHostMarker -Force -ErrorAction SilentlyContinue
     }
+    if ($processCleanupFailed -or $scratchCleanupFailed) {
+        Remove-PathChecked $output $true "AccessMetadataOutputCleanupFailed"
+        Stop-Export "AccessMetadataProcessCleanupFailed"
+    }
+    if (-not (Test-SourceHashesUnchanged $original $originalBeforeSupervision $copy $copyBeforeSupervision)) {
+        Remove-PathChecked $output $true "AccessMetadataOutputCleanupFailed"
+        Stop-Export "AccessMetadataSourceChanged"
+    }
     if (-not [string]::IsNullOrWhiteSpace($workerFailure)) {
+        Remove-PathChecked $output $true "AccessMetadataOutputCleanupFailed"
         Stop-Export $workerFailure
     }
     if ($workerErrors.Count -gt 0) {
+        Remove-PathChecked $output $true "AccessMetadataOutputCleanupFailed"
         Stop-Export ([string]$workerErrors[0].Exception.Message)
     }
     $workerOutput | Write-Output
     return
+    }
+    finally {
+        if ($null -ne $outputClaimStream) {
+            try { $outputClaimStream.Dispose() } catch { }
+        }
+        if ($outputClaimCreated) {
+            Remove-PathChecked $outputClaimPath $false "AccessMetadataOutputClaimCleanupFailed"
+        }
+    }
 }
 
 $outputParent = Split-Path -Parent $output
 New-Item -ItemType Directory -Path $outputParent -Force | Out-Null
-$scratch = Join-Path $outputParent ".$([IO.Path]::GetFileName($output)).metadata-$([Guid]::NewGuid().ToString('N'))"
+if ([string]::IsNullOrWhiteSpace($WorkerScratchDirectoryPath)) {
+    Stop-Export "AccessMetadataScratchBindingMissing"
+}
+$scratch = [IO.Path]::GetFullPath($WorkerScratchDirectoryPath)
+$expectedScratchPrefix = ".$([IO.Path]::GetFileName($output)).metadata-"
+if (-not [string]::Equals(
+        [IO.Path]::GetDirectoryName($scratch),
+        $outputParent,
+        [StringComparison]::OrdinalIgnoreCase) -or
+    -not [IO.Path]::GetFileName($scratch).StartsWith(
+        $expectedScratchPrefix,
+        [StringComparison]::OrdinalIgnoreCase)) {
+    Stop-Export "AccessMetadataScratchBindingMismatch"
+}
+if ([string]::IsNullOrWhiteSpace($WorkerProcessMarkerPath)) {
+    Stop-Export "AccessMetadataProcessMarkerBindingMissing"
+}
+$workerProcessMarkerFullPath = [IO.Path]::GetFullPath($WorkerProcessMarkerPath)
+$expectedProcessMarkerPrefix = ".$([IO.Path]::GetFileName($output)).worker-"
+if (-not [string]::Equals(
+        [IO.Path]::GetDirectoryName($workerProcessMarkerFullPath),
+        $outputParent,
+        [StringComparison]::OrdinalIgnoreCase) -or
+    -not [IO.Path]::GetFileName($workerProcessMarkerFullPath).StartsWith(
+        $expectedProcessMarkerPrefix,
+        [StringComparison]::OrdinalIgnoreCase) -or
+    -not [IO.Path]::GetFileName($workerProcessMarkerFullPath).EndsWith(
+        ".process.json",
+        [StringComparison]::OrdinalIgnoreCase)) {
+    Stop-Export "AccessMetadataProcessMarkerBindingMismatch"
+}
 $originalBefore = Get-Sha256 $original
 $copyBefore = Get-Sha256 $copy
 if (-not [string]::Equals($copyBefore, $originalBefore, [StringComparison]::OrdinalIgnoreCase)) {
@@ -375,6 +560,7 @@ $ownedAccessProcessIdentities = @()
 $records = [System.Collections.Generic.List[object]]::new()
 $catalogPartial = $false
 $succeeded = $false
+$createdOutput = $false
 $cleanupFailure = ""
 try {
     New-Item -ItemType Directory -Path $scratch | Out-Null
@@ -388,21 +574,23 @@ try {
     $ownedAccessProcessIdentities = @(
         New-AccessProcessIdentity $ownedAccessProcess
     )
-    if (-not [string]::IsNullOrWhiteSpace($WorkerProcessMarkerPath)) {
-        [IO.File]::WriteAllText(
-            [IO.Path]::GetFullPath($WorkerProcessMarkerPath),
-            ($ownedAccessProcessIdentities | ConvertTo-Json -Compress))
-    }
+    [IO.File]::WriteAllText(
+        $workerProcessMarkerFullPath,
+        ($ownedAccessProcessIdentities | ConvertTo-Json -Compress))
     $access.AutomationSecurity = 3
     $access.Visible = $false
+    $dbEngine = $null
     try {
-        $guardDatabase = $access.DBEngine.OpenDatabase($workingCopy)
+        $dbEngine = $access.DBEngine
+        $guardDatabase = $dbEngine.OpenDatabase($workingCopy)
         try { $guardDatabase.Properties.Delete("StartupForm") } catch { }
         $guardDatabase.Close()
     }
     finally {
         Close-ComObject $guardDatabase
+        Close-ComObject $dbEngine
         $guardDatabase = $null
+        $dbEngine = $null
     }
     $access.OpenCurrentDatabase($workingCopy, $true)
     if ([bool]$access.Visible -or (Test-Path -LiteralPath $canary)) {
@@ -505,12 +693,18 @@ try {
     }
     finally { Close-ComObject $queryDefs }
 
-    foreach ($surfaceSpec in @(
-        [pscustomobject]@{ Kind = "form"; ObjectType = 2; Collection = $access.CurrentProject.AllForms; Role = "form-design-export" },
-        [pscustomobject]@{ Kind = "report"; ObjectType = 3; Collection = $access.CurrentProject.AllReports; Role = "report-design-export" }
-    )) {
-        $collection = $surfaceSpec.Collection
-        try {
+    $surfaceProject = $null
+    $formCollection = $null
+    $reportCollection = $null
+    try {
+        $surfaceProject = $access.CurrentProject
+        $formCollection = $surfaceProject.AllForms
+        $reportCollection = $surfaceProject.AllReports
+        foreach ($surfaceSpec in @(
+            [pscustomobject]@{ Kind = "form"; ObjectType = 2; Collection = $formCollection; Role = "form-design-export" },
+            [pscustomobject]@{ Kind = "report"; ObjectType = 3; Collection = $reportCollection; Role = "report-design-export" }
+        )) {
+            $collection = $surfaceSpec.Collection
             if ([int]$collection.Count -gt $MaxObjects) { Stop-Export "AccessMetadataObjectLimitReached" }
             for ($index = 0; $index -lt [int]$collection.Count; $index++) {
                 $item = $null
@@ -548,7 +742,11 @@ try {
                 finally { Close-ComObject $item }
             }
         }
-        finally { Close-ComObject $collection }
+    }
+    finally {
+        Close-ComObject $reportCollection
+        Close-ComObject $formCollection
+        Close-ComObject $surfaceProject
     }
 
     $access.CloseCurrentDatabase()
@@ -567,6 +765,7 @@ try {
         $counts[$group.Name] = $group.Count
     }
     New-Item -ItemType Directory -Path $output | Out-Null
+    $createdOutput = $true
     [IO.File]::WriteAllBytes((Join-Path $output "access-design-records.ndjson"), $recordsBytes)
     $manifest = [ordered]@{
         schema = "tracemap.access-design-evidence.v1"
@@ -614,44 +813,11 @@ finally {
     Close-ComObject $access
     [GC]::Collect()
     [GC]::WaitForPendingFinalizers()
-    $remainingAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
-    if ($remainingAccess.Count -gt 0) {
-        $remainingAccess | Wait-Process -Timeout 30 -ErrorAction SilentlyContinue
-        $remainingAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
-    }
-    if ($remainingAccess.Count -gt 0) {
-        try {
-            $remainingAccess | Stop-Process -Force -ErrorAction Stop
-        }
-        catch {
-            $cleanupFailure = "AccessMetadataProcessCleanupFailed"
-        }
-        for ($attempt = 0; $attempt -lt 20; $attempt++) {
-            $remainingAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
-            if ($remainingAccess.Count -eq 0) {
-                break
-            }
-            Start-Sleep -Milliseconds 250
-        }
-        $remainingAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
-        if ($remainingAccess.Count -gt 0) {
-            $cleanupFailure = "AccessMetadataProcessCleanupFailed"
-        }
-    }
-    $unattributedAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
-    if ($unattributedAccess.Count -gt 0) {
-        $cleanupFailure = "AccessMetadataProcessCleanupFailed"
-    }
-    try {
-        if (Test-Path -LiteralPath $scratch) {
-            Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction Stop
-        }
-    }
-    catch {
-        $cleanupFailure = "AccessMetadataScratchCleanupFailed"
-    }
-    if (Test-Path -LiteralPath $scratch) { $cleanupFailure = "AccessMetadataScratchCleanupFailed" }
-    if ((-not $succeeded -or $cleanupFailure) -and (Test-Path -LiteralPath $output)) {
+    # PowerShell's out-of-process job can retain the Access COM apartment until
+    # its worker host exits. Leave process and scratch verification to the
+    # supervising invocation, which removes the worker first and then verifies
+    # the exact recorded Access process identity before publishing the output.
+    if ($createdOutput -and (-not $succeeded -or $cleanupFailure) -and (Test-Path -LiteralPath $output)) {
         try { Remove-Item -LiteralPath $output -Recurse -Force -ErrorAction Stop }
         catch { $cleanupFailure = "AccessMetadataOutputCleanupFailed" }
     }
