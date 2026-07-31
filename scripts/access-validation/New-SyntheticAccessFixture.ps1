@@ -71,7 +71,6 @@ $passThrough = $null
 $startupForm = $null
 $customerForm = $null
 $customerFormModule = $null
-$detailForm = $null
 $ordersReport = $null
 $reportGroup = $null
 $fixtureControls = [System.Collections.Generic.List[object]]::new()
@@ -158,8 +157,13 @@ SELECT 'ACTION_QUERY_CANARY_92817', Orders.OrderId, Now() FROM Orders;
     # representative surface/control fixtures and extraction assertions.
     $startupForm = $access.CreateForm()
     $temporaryName = $startupForm.Name
+    $startupForm.RecordSource = "Orders"
     $startupForm.HasModule = $true
     $startupForm.OnOpen = "[Event Procedure]"
+    $detailStatus = $access.CreateControl($temporaryName, 109, 0, "", "", 200, 200, 1800, 300)
+    $fixtureControls.Add($detailStatus)
+    $detailStatus.Name = "txtDetailStatus"
+    $detailStatus.ControlSource = "OrderStatus"
     $escapedCanaryPath = $CanaryPath.Replace('"', '""')
     $startupForm.Module.InsertLines(1, @"
 Option Compare Database
@@ -175,28 +179,14 @@ End Sub
     $access.DoCmd.Save(2, $temporaryName)
     $access.DoCmd.Close(2, $temporaryName, 1)
     $access.DoCmd.Rename("frmStartupCanary_92817", 2, $temporaryName)
+    foreach ($control in $fixtureControls) { Close-ComObject $control }
+    $fixtureControls.Clear()
     Close-ComObject $startupForm
     $startupForm = $null
 
     # Phase 7 disposable design fixture. Generator-only CreateForm/CreateReport
     # calls are allowed here; the scanner must never open or render these saved
     # surfaces. Protected values make accidental export immediately observable.
-    $detailForm = $access.CreateForm()
-    $detailFormTemporaryName = [string]$detailForm.Name
-    $detailForm.RecordSource = "Orders"
-    $detailForm.HasModule = $false
-    $detailStatus = $access.CreateControl($detailFormTemporaryName, 109, 0, "", "", 200, 200, 1800, 300)
-    $fixtureControls.Add($detailStatus)
-    $detailStatus.Name = "txtDetailStatus"
-    $detailStatus.ControlSource = "OrderStatus"
-    $access.DoCmd.Save(2, $detailFormTemporaryName)
-    $access.DoCmd.Close(2, $detailFormTemporaryName, 1)
-    $access.DoCmd.Rename("frmOrderDetails", 2, $detailFormTemporaryName)
-    foreach ($control in $fixtureControls) { Close-ComObject $control }
-    $fixtureControls.Clear()
-    Close-ComObject $detailForm
-    $detailForm = $null
-
     $customerForm = $access.CreateForm()
     $customerFormTemporaryName = [string]$customerForm.Name
     $customerForm.RecordSource = "Customers"
@@ -243,7 +233,7 @@ End Sub
     $detailSubform = $access.CreateControl($customerFormTemporaryName, 112, 0, "", "", 1800, 3400, 4800, 1200)
     $fixtureControls.Add($detailSubform)
     $detailSubform.Name = "subOrders"
-    $detailSubform.SourceObject = "Form.frmOrderDetails"
+    $detailSubform.SourceObject = "Form.frmStartupCanary_92817"
     $detailSubform.LinkMasterFields = "CustomerId"
     $detailSubform.LinkChildFields = "CustomerId"
     $escapedPhase8CanaryPath = $CanaryPath.Replace('"', '""')
@@ -344,7 +334,7 @@ End Sub
         MdbCreated = $mdbCreated
         RowsInserted = 0
         StartupCanary = "configured"
-        Forms = 3
+        Forms = 2
         Reports = 1
         Phase7Controls = 10
         Phase8Controls = 2
@@ -358,7 +348,6 @@ finally {
     foreach ($control in $fixtureControls) { Close-ComObject $control }
     Close-ComObject $ordersReport
     Close-ComObject $reportGroup
-    Close-ComObject $detailForm
     Close-ComObject $customerFormModule
     Close-ComObject $customerForm
     Close-ComObject $startupForm
