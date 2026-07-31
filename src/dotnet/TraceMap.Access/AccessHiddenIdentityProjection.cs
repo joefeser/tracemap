@@ -35,7 +35,7 @@ public static class AccessHiddenIdentityProjection
             baseScan.Manifest.CommitSha,
             baseScan.DatabasePath,
             baseScan.DatabaseHash);
-        if (!FixedHashEquals(databaseSeed, declared.DatabaseIdentityHash)
+        if (!AccessSafeValues.FixedHashEquals(databaseSeed, declared.DatabaseIdentityHash)
             || !string.Equals(
                 AccessSafeValues.DatabaseStableKey(databaseSeed),
                 baseScan.DatabaseStableKey,
@@ -306,21 +306,6 @@ public static class AccessHiddenIdentityProjection
                 };
         }
         return values;
-    }
-
-    private static bool FixedHashEquals(string left, string right)
-    {
-        if (left.Length != 64 || right.Length != 64) return false;
-        try
-        {
-            return CryptographicOperations.FixedTimeEquals(
-                Convert.FromHexString(left),
-                Convert.FromHexString(right));
-        }
-        catch
-        {
-            return false;
-        }
     }
 
     private static bool IsDirectBinding(string property, string value)

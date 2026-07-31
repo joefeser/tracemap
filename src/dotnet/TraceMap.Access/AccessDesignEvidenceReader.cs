@@ -140,7 +140,7 @@ public static class AccessDesignEvidenceReader
             if (manifest.CountsByKind.Values.Sum(value => (long)value) > limits.MaxDesignRecords)
                 throw new AccessScanException("AccessDesignInputRecordLimitReached");
             var recordsHash = HashBytes(recordsBytes);
-            if (!FixedHashEquals(manifest.BundleSha256, recordsHash))
+            if (!AccessSafeValues.FixedHashEquals(manifest.BundleSha256, recordsHash))
                 throw new AccessScanException("AccessDesignInputHashMismatch");
 
             var rawRecords = ReadRecords(recordsBytes, limits, documents);
@@ -399,7 +399,7 @@ public static class AccessDesignEvidenceReader
             {
                 var hashProperty = kind == "ui-design-document" ? "documentSha256" : "sourceSha256";
                 var payloadHash = RequireSha256(payload, hashProperty, "AccessDesignInputRecordMalformed");
-                if (source.DocumentSha256 is not null && !FixedHashEquals(source.DocumentSha256, payloadHash))
+                if (source.DocumentSha256 is not null && !AccessSafeValues.FixedHashEquals(source.DocumentSha256, payloadHash))
                     throw new AccessScanException("AccessDesignInputCoordinateUnavailable");
                 var lineCount = RequireNonNegativeInt(payload, "lineCount", "AccessDesignInputRecordMalformed");
                 if (source.EndLine is int endLine && endLine > lineCount)
@@ -470,12 +470,12 @@ public static class AccessDesignEvidenceReader
             var source = record.Source;
             var documentValidated = sources.Any(document =>
                 string.Equals(document.DocumentRole, source.DocumentRole, StringComparison.Ordinal)
-                && FixedHashEquals(document.DocumentSha256, source.DocumentSha256!)
+                && AccessSafeValues.FixedHashEquals(document.DocumentSha256, source.DocumentSha256!)
                 && source.EndLine <= document.LineCount);
             var parentValidated = record.ParentCanonicalRecordId is null
                 || !byCanonicalId.TryGetValue(record.ParentCanonicalRecordId, out var parent)
                 || parent.Source.CoordinateStatus != "exact-lines"
-                || (FixedHashEquals(parent.Source.DocumentSha256!, source.DocumentSha256!)
+                || (AccessSafeValues.FixedHashEquals(parent.Source.DocumentSha256!, source.DocumentSha256!)
                     && source.StartLine >= parent.Source.StartLine
                     && source.EndLine <= parent.Source.EndLine);
 
@@ -666,7 +666,7 @@ public static class AccessDesignEvidenceReader
             throw new AccessScanException("AccessDesignInputRecordLimitReached");
         var expectedHash = RequireSha256(payload, hashProperty, "AccessDesignInputRecordMalformed");
         var actualHash = Convert.ToHexString(SHA256.HashData(StrictUtf8.GetBytes(text))).ToLowerInvariant();
-        if (!FixedHashEquals(expectedHash, actualHash))
+        if (!AccessSafeValues.FixedHashEquals(expectedHash, actualHash))
             throw new AccessScanException("AccessDesignInputHashMismatch");
         var actualLines = text.Length == 0 ? 0 : text.Count(character => character == '\n') + 1;
         var declaredLines = RequireNonNegativeInt(payload, linesProperty, "AccessDesignInputRecordMalformed");
@@ -854,18 +854,18 @@ public static class AccessDesignEvidenceReader
         AccessDesignEvidenceManifestProjection manifest,
         AccessDesignEvidenceBinding binding)
     {
-        if (!FixedHashEquals(manifest.RepositoryIdentityHash, binding.RepositoryIdentityHash))
+        if (!AccessSafeValues.FixedHashEquals(manifest.RepositoryIdentityHash, binding.RepositoryIdentityHash))
             return new("AccessDesignInputRepositoryMismatch", "design-bundle");
         if (!string.Equals(manifest.CommitSha, binding.CommitSha, StringComparison.OrdinalIgnoreCase))
             return new("AccessDesignInputCommitMismatch", "design-bundle");
-        if (!FixedHashEquals(manifest.BaseScanManifestSha256, binding.BaseScanManifestSha256))
+        if (!AccessSafeValues.FixedHashEquals(manifest.BaseScanManifestSha256, binding.BaseScanManifestSha256))
             return new("AccessDesignInputBaseScanMismatch", "design-bundle");
-        if (!FixedHashEquals(manifest.DatabaseIdentityHash, binding.DatabaseIdentityHash))
+        if (!AccessSafeValues.FixedHashEquals(manifest.DatabaseIdentityHash, binding.DatabaseIdentityHash))
             return new("AccessDesignInputDatabaseUnbound", "design-bundle");
         if (manifest.CopyBinding == "unbound")
             return new("AccessDesignInputDatabaseUnbound", "design-bundle");
         if (manifest.CopyBinding == "hash-identical"
-            && (!FixedHashEquals(manifest.SourceCopySha256, binding.DatabaseSha256)))
+            && (!AccessSafeValues.FixedHashEquals(manifest.SourceCopySha256, binding.DatabaseSha256)))
             return new("AccessDesignInputDatabaseUnbound", "design-bundle");
         return null;
     }
@@ -1103,15 +1103,6 @@ public static class AccessDesignEvidenceReader
 
     private static bool IsHex(string? value, int length) =>
         value?.Length == length && value.All(Uri.IsHexDigit);
-
-    private static bool FixedHashEquals(string left, string right)
-    {
-        if (!IsHex(left, 64) || !IsHex(right, 64))
-            return false;
-        return CryptographicOperations.FixedTimeEquals(
-            Convert.FromHexString(left),
-            Convert.FromHexString(right));
-    }
 
     private static int RequireNonNegativeInt(JsonElement parent, string name, string classification)
     {

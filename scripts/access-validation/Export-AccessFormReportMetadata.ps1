@@ -30,7 +30,9 @@ param(
     [ValidateRange(30, 3600)]
     [int]$TimeoutSeconds = 300,
 
-    [switch]$InternalWorker
+    [switch]$InternalWorker,
+
+    [string]$WorkerProcessMarkerPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -182,12 +184,16 @@ if (Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue) {
 if (-not $InternalWorker) {
     $originalBeforeSupervision = Get-Sha256 $original
     $copyBeforeSupervision = Get-Sha256 $copy
+    $outputParent = Split-Path -Parent $output
+    New-Item -ItemType Directory -Path $outputParent -Force | Out-Null
+    $workerProcessMarker = Join-Path $outputParent ".$([IO.Path]::GetFileName($output)).worker-$([Guid]::NewGuid().ToString('N')).pid"
     $workerParameters = @{}
     foreach ($entry in $PSBoundParameters.GetEnumerator()) {
-        if ($entry.Key -ne "InternalWorker") {
+        if ($entry.Key -notin @("InternalWorker", "WorkerProcessMarkerPath")) {
             $workerParameters[$entry.Key] = $entry.Value
         }
     }
+    $workerParameters["WorkerProcessMarkerPath"] = $workerProcessMarker
     $workerJob = Start-Job -ScriptBlock {
         param([string]$ScriptPath, [hashtable]$Parameters)
         & $ScriptPath @Parameters -InternalWorker
@@ -195,11 +201,25 @@ if (-not $InternalWorker) {
     $completedJob = Wait-Job -Job $workerJob -Timeout $TimeoutSeconds
     if ($null -eq $completedJob) {
         Stop-Job -Job $workerJob -ErrorAction SilentlyContinue
-        $remainingAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
-        if ($remainingAccess.Count -gt 0) {
-            $remainingAccess | Stop-Process -Force -ErrorAction SilentlyContinue
+        $ownedAccessIds = @()
+        if (Test-Path -LiteralPath $workerProcessMarker) {
+            $ownedAccessIds = @(
+                [IO.File]::ReadAllLines($workerProcessMarker) |
+                    Where-Object { $_ -match "^[0-9]+$" } |
+                    ForEach-Object { [int]$_ }
+            )
         }
-        $outputParent = Split-Path -Parent $output
+        $remainingOwnedAccess = @(
+            $ownedAccessIds |
+                ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }
+        )
+        if ($remainingOwnedAccess.Count -gt 0) {
+            $remainingOwnedAccess | Stop-Process -Force -ErrorAction SilentlyContinue
+        }
+        $processCleanupFailed = @(
+            $ownedAccessIds |
+                ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }
+        ).Count -gt 0
         $scratchPattern = ".$([IO.Path]::GetFileName($output)).metadata-*"
         try {
             if (Test-Path -LiteralPath $output) {
@@ -207,12 +227,18 @@ if (-not $InternalWorker) {
             }
             Get-ChildItem -LiteralPath $outputParent -Directory -Filter $scratchPattern -ErrorAction SilentlyContinue |
                 Remove-Item -Recurse -Force -ErrorAction Stop
+            if (Test-Path -LiteralPath $workerProcessMarker) {
+                Remove-Item -LiteralPath $workerProcessMarker -Force -ErrorAction Stop
+            }
         }
         catch {
             Remove-Job -Job $workerJob -Force -ErrorAction SilentlyContinue
             Stop-Export "AccessMetadataTimeoutCleanupFailed"
         }
         Remove-Job -Job $workerJob -Force -ErrorAction SilentlyContinue
+        if ($processCleanupFailed) {
+            Stop-Export "AccessMetadataTimeoutCleanupFailed"
+        }
         if ((Get-Sha256 $original) -ne $originalBeforeSupervision -or
             (Get-Sha256 $copy) -ne $copyBeforeSupervision) {
             Stop-Export "AccessMetadataSourceChanged"
@@ -226,6 +252,9 @@ if (-not $InternalWorker) {
     )
     $workerFailure = [string]$workerJob.ChildJobs[0].JobStateInfo.Reason.Message
     Remove-Job -Job $workerJob -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $workerProcessMarker) {
+        Remove-Item -LiteralPath $workerProcessMarker -Force -ErrorAction SilentlyContinue
+    }
     if (-not [string]::IsNullOrWhiteSpace($workerFailure)) {
         Stop-Export $workerFailure
     }
@@ -244,6 +273,7 @@ $copyBefore = Get-Sha256 $copy
 $access = $null
 $database = $null
 $guardDatabase = $null
+$ownedAccessProcessIds = @()
 $records = [System.Collections.Generic.List[object]]::new()
 $catalogPartial = $false
 $succeeded = $false
@@ -253,6 +283,19 @@ try {
     $workingCopy = Join-Path $scratch "working.accdb"
     Copy-Item -LiteralPath $copy -Destination $workingCopy
     $access = New-Object -ComObject Access.Application
+    $observedAccessProcessIds = @(
+        Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty Id
+    )
+    if ($observedAccessProcessIds.Count -ne 1) {
+        Stop-Export "AccessMetadataProcessOwnershipAmbiguous"
+    }
+    $ownedAccessProcessIds = $observedAccessProcessIds
+    if (-not [string]::IsNullOrWhiteSpace($WorkerProcessMarkerPath)) {
+        [IO.File]::WriteAllLines(
+            [IO.Path]::GetFullPath($WorkerProcessMarkerPath),
+            [string[]]$ownedAccessProcessIds)
+    }
     $access.AutomationSecurity = 3
     $access.Visible = $false
     try {
@@ -474,10 +517,16 @@ finally {
     Close-ComObject $access
     [GC]::Collect()
     [GC]::WaitForPendingFinalizers()
-    $remainingAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
+    $remainingAccess = @(
+        $ownedAccessProcessIds |
+            ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }
+    )
     if ($remainingAccess.Count -gt 0) {
         $remainingAccess | Wait-Process -Timeout 30 -ErrorAction SilentlyContinue
-        $remainingAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
+        $remainingAccess = @(
+            $ownedAccessProcessIds |
+                ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }
+        )
     }
     if ($remainingAccess.Count -gt 0) {
         try {
@@ -487,12 +536,20 @@ finally {
             $cleanupFailure = "AccessMetadataProcessCleanupFailed"
         }
         for ($attempt = 0; $attempt -lt 20; $attempt++) {
-            if (-not (Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)) {
+            $remainingAccess = @(
+                $ownedAccessProcessIds |
+                    ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }
+            )
+            if ($remainingAccess.Count -eq 0) {
                 break
             }
             Start-Sleep -Milliseconds 250
         }
-        if (Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue) {
+        $remainingAccess = @(
+            $ownedAccessProcessIds |
+                ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }
+        )
+        if ($remainingAccess.Count -gt 0) {
             $cleanupFailure = "AccessMetadataProcessCleanupFailed"
         }
     }

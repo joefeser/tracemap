@@ -636,11 +636,10 @@ public sealed class AccessComReader
                                     }
                                     var distinctSources = sources.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
                                     var directOutput = AccessQueryProjector.IsDirectOutputField(sql, outputName);
-                                    var coverage = distinctSources.Length == 1
+                                    var isComplete = distinctSources.Length == 1
                                         && directOutput
-                                        && dependencyProjection.Coverage == "complete"
-                                            ? "complete"
-                                            : "partial";
+                                        && dependencyProjection.Coverage == "complete";
+                                    var coverage = isComplete ? "complete" : "partial";
                                     if (coverage == "partial")
                                         gaps.Add(new(
                                             distinctSources.Length > 1

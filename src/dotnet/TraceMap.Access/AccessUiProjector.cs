@@ -137,26 +137,29 @@ internal static partial class AccessUiProjector
                 .OrderBy(group => group.Ordinal)
                 .Select(group =>
                 {
-                    var binding = ProjectBinding(
-                        databaseIdentitySeed,
-                        identity.StableKey,
-                        "report-group-sort",
-                        group.Expression,
-                        group.Ordinal,
-                        null,
-                        scopedFields,
-                        gaps,
-                        disclosurePolicy);
-                    return binding is null
-                        ? null
-                        : new AccessReportGroupProjection(
+                    var binding = string.IsNullOrWhiteSpace(group.Expression)
+                        ? MissingReportGroupBinding(
+                            databaseIdentitySeed,
+                            identity.StableKey,
                             group.Ordinal,
-                            binding,
-                            NormalizeSortOrder(group.SortOrder),
-                            NormalizeGroupOn(group.GroupOn));
+                            gaps,
+                            disclosurePolicy)
+                        : ProjectBinding(
+                            databaseIdentitySeed,
+                            identity.StableKey,
+                            "report-group-sort",
+                            group.Expression,
+                            group.Ordinal,
+                            null,
+                            scopedFields,
+                            gaps,
+                            disclosurePolicy)!;
+                    return new AccessReportGroupProjection(
+                        group.Ordinal,
+                        binding,
+                        NormalizeSortOrder(group.SortOrder),
+                        NormalizeGroupOn(group.GroupOn));
                 })
-                .Where(group => group is not null)
-                .Cast<AccessReportGroupProjection>()
                 .ToArray();
             bindings.AddRange(groupBindings.Select(group => group.Binding));
             var designHash = DesignHash(identity, kind, raw.HasModule, raw.RecordSource, raw.Filter, raw.OrderBy, raw.Controls, raw.Events, raw.ReportGroups ?? []);
@@ -253,6 +256,37 @@ internal static partial class AccessUiProjector
         return new(identity, ownerStableKey, bindingKind, "expression",
             AccessSafeValues.RoleHash($"access-{bindingKind}-expression", trimmed), trimmed.Length,
             candidates, fields is not null ? "field" : "object", "partial");
+    }
+
+    private static AccessBindingProjection MissingReportGroupBinding(
+        string databaseIdentitySeed,
+        string ownerStableKey,
+        int ordinal,
+        List<AccessGapProjection> gaps,
+        AccessIdentityDisclosurePolicy disclosurePolicy)
+    {
+        const string bindingKind = "report-group-sort";
+        var identity = AccessSafeValues.Identity(
+            databaseIdentitySeed,
+            $"binding-{ownerStableKey}-{bindingKind}",
+            bindingKind,
+            ordinal,
+            disclosurePolicy);
+        gaps.Add(new(
+            "AccessReportGroupExpressionUnavailable",
+            "binding",
+            identity.StableKey,
+            RuleIds.LegacyAccessBinding));
+        return new(
+            identity,
+            ownerStableKey,
+            bindingKind,
+            "unresolved",
+            null,
+            0,
+            [],
+            "field",
+            "partial");
     }
 
     private static AccessBindingProjection Ambiguous(

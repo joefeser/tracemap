@@ -47,7 +47,7 @@ public static class AccessDesignEvidenceComposer
             baseScan.Manifest.CommitSha,
             baseScan.DatabasePath,
             baseScan.DatabaseHash);
-        if (!FixedHashEquals(databaseSeed, declared.DatabaseIdentityHash)
+        if (!AccessSafeValues.FixedHashEquals(databaseSeed, declared.DatabaseIdentityHash)
             || !string.Equals(AccessSafeValues.DatabaseStableKey(databaseSeed), baseScan.DatabaseStableKey, StringComparison.Ordinal))
             throw new AccessScanException("AccessDesignInputDatabaseUnbound");
 
@@ -1036,16 +1036,6 @@ public static class AccessDesignEvidenceComposer
         payload.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
             ? value.GetInt32()
             : null;
-
-    private static bool FixedHashEquals(string left, string right)
-    {
-        if (left.Length != 64 || right.Length != 64) return false;
-        try
-        {
-            return CryptographicOperations.FixedTimeEquals(Convert.FromHexString(left), Convert.FromHexString(right));
-        }
-        catch { return false; }
-    }
 
     internal sealed record BaseScan(
         ScanManifest Manifest,
