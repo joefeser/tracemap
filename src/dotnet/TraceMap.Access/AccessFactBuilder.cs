@@ -340,9 +340,13 @@ public static class AccessFactBuilder
                 && queryDeclarationFactIds.TryGetValue(supportingQueryStableKey, out var queryFactId)
                     ? queryFactId
                     : null;
+            var emittedScopeKind = gap.ScopeKind == "query-output-field"
+                && supportingQueryStableKey is null
+                    ? "query-output-field-owner-unknown"
+                    : gap.ScopeKind;
             facts.Add(Create(manifest, FactTypes.AnalysisGap, gap.RuleId ?? RuleIds.LegacyAccessCoverageGap, EvidenceTiers.Tier4Unknown, span,
                 targetSymbol: gap.StableScopeKey,
-                properties: Props(("classification", gap.Classification), ("gapKind", "access-design"), ("scopeKind", gap.ScopeKind),
+                properties: Props(("classification", gap.Classification), ("gapKind", "access-design"), ("scopeKind", emittedScopeKind),
                     ("scopeStableKey", gap.StableScopeKey), ("supportingFactIds", supportingFactId),
                     ("limitations", "unable-to-prove;not-clean-absence"))));
         }

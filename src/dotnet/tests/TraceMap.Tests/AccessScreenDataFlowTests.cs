@@ -219,6 +219,35 @@ public sealed class AccessScreenDataFlowTests
             gap.SupportingFactIds);
     }
 
+    [Fact]
+    public void Builder_does_not_reconstruct_query_owners_for_ambiguous_output_gaps()
+    {
+        const string firstQuery = "access-query-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string secondQuery = "access-query-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        const string output = "access-query-field-cccccccccccccccccccccccccccccccc";
+        var facts = new[]
+        {
+            Fact("fact-query-one", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural, null, firstQuery, ("coverageLabel", "partial")),
+            Fact("fact-query-two", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural, null, secondQuery, ("coverageLabel", "partial")),
+            Fact("fact-output-one", FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural, firstQuery, output, ("coverageLabel", "partial")),
+            Fact("fact-output-two", FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural, secondQuery, output, ("coverageLabel", "partial")),
+            Fact("fact-output-gap", FactTypes.AnalysisGap, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier4Unknown, null, output,
+                ("classification", "AccessQueryOutputSourceUnavailable"),
+                ("scopeKind", "query-output-field-owner-unknown"))
+        };
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
+
+        var gap = Assert.Single(report.Gaps, item =>
+            item.Classification == "AccessQueryOutputSourceUnavailable");
+        Assert.Equal(["fact-output-gap"], gap.SupportingFactIds);
+    }
+
     [Theory]
     [InlineData(@"C:\SecretDriveMarker91827\db.accdb", "SecretDriveMarker91827")]
     [InlineData(@"\\SecretServerMarker91827\share\db.accdb", "SecretServerMarker91827")]

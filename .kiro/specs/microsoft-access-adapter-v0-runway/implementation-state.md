@@ -64,7 +64,8 @@ unchanged, and no private database is an allowed fixture.
 
 Exact-head review hardening isolates every local-snapshot Git process from
 system/global/injected configuration, including inherited repository-routing
-variables such as `GIT_DIR`, `GIT_WORK_TREE`, and `GIT_INDEX_FILE`; disables prompting and optional locks,
+variables such as `GIT_DIR`, `GIT_WORK_TREE`, and `GIT_INDEX_FILE`; disables
+prompting and optional locks,
 uses explicit no-filter attributes for the generic database name, and pins
 `git init --object-format=sha1`. A malicious global clean-filter regression
 proves the filter is not invoked and the commit remains a 40-character SHA-1.
@@ -81,7 +82,8 @@ Review follow-up validation after merging the latest `origin/dev`:
 
 - Access foundation tests: 41/41 passed;
 - full solution build: passed with 0 warnings and 0 errors;
-- full solution tests: 1038/1038 passed;
+- focused Access foundation and screen-flow tests: 53/53 passed;
+- full solution tests: 1039/1039 passed;
 - focused changed-file formatting verification: passed;
 - private-path guard and `git diff --check`: passed.
 
@@ -92,6 +94,9 @@ also required query-output-field gaps to preserve the owning query declaration
 as a supporting fact. Both findings are patched with focused regressions.
 If duplicate query-output stable keys claim different owning queries, supporting
 fact attribution now fails closed instead of silently selecting either query.
+The emitted gap is explicitly scoped as `query-output-field-owner-unknown`, so
+downstream screen-flow composition does not reconstruct either possible owner
+from the shared child identity.
 
 ## Why This Runway Exists
 
