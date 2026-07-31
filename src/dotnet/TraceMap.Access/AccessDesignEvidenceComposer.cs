@@ -911,6 +911,17 @@ public static class AccessDesignEvidenceComposer
             .OrderBy(item => item.Role, StringComparer.Ordinal)
             .ThenBy(item => item.Value, StringComparer.Ordinal)
             .ToArray();
+        var reportGroups = ordered.SelectMany(item => item.Raw.ReportGroups ?? [])
+            .GroupBy(item => item.Ordinal)
+            .Select(group =>
+            {
+                var observations = group.ToArray();
+                if (observations.Skip(1).Any(item => item != observations[0]))
+                    conflict = true;
+                return observations[0];
+            })
+            .OrderBy(item => item.Ordinal)
+            .ToArray();
         var merged = preferred with
         {
             HasModule = MergeValue(surface => surface.HasModule),
@@ -920,19 +931,8 @@ public static class AccessDesignEvidenceComposer
             Coverage = conflict || ordered.Any(item => item.Raw.Coverage != "complete") ? "partial" : "complete",
             Filter = MergeText(surface => surface.Filter),
             OrderBy = MergeText(surface => surface.OrderBy),
-            DeclaredBoundState = MergeText(surface => surface.DeclaredBoundState)
-            ,
-            ReportGroups = ordered.SelectMany(item => item.Raw.ReportGroups ?? [])
-                .GroupBy(item => item.Ordinal)
-                .Select(group =>
-                {
-                    var observations = group.ToArray();
-                    if (observations.Skip(1).Any(item => item != observations[0]))
-                        conflict = true;
-                    return observations[0];
-                })
-                .OrderBy(item => item.Ordinal)
-                .ToArray()
+            DeclaredBoundState = MergeText(surface => surface.DeclaredBoundState),
+            ReportGroups = reportGroups
         };
         if (conflict)
             gaps.Add(new(

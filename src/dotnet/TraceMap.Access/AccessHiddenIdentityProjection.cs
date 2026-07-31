@@ -117,10 +117,12 @@ public static class AccessHiddenIdentityProjection
     {
         var rows = new List<object>();
         var stableByRecord = new Dictionary<string, string>(StringComparer.Ordinal);
+        var emittedCatalogRecords = new HashSet<string>(StringComparer.Ordinal);
         var emittedUiStableKeys = new HashSet<string>(StringComparer.Ordinal);
         var catalogRecords = bundle.Records.Where(record => record.Kind == "catalog-object").ToArray();
+        var directBindingIdentifiers = CollectDirectBindingIdentifiers(bundle, catalogRecords);
         foreach (var record in catalogRecords.Where(record =>
-                     String(record, "objectRole") is not ("table-field" or "query-field")))
+                     String(record, "objectRole") is "form" or "report" or "table" or "saved-query"))
         {
             var role = String(record, "objectRole");
             var identity = Optional(record, "identity");
@@ -133,6 +135,10 @@ public static class AccessHiddenIdentityProjection
             var stable = ResolveBaseStableKey(baseFacts, role, identity, null, calculated)
                 ?? calculated;
             stableByRecord[record.CanonicalRecordId] = stable;
+            if (role is not ("form" or "report")
+                && !directBindingIdentifiers.Contains(identity))
+                continue;
+            emittedCatalogRecords.Add(record.CanonicalRecordId);
             rows.Add(new
             {
                 recordKind = record.Kind,
@@ -150,6 +156,7 @@ public static class AccessHiddenIdentityProjection
             var role = String(record, "objectRole");
             var identity = Optional(record, "identity");
             if (identity is null
+                || !directBindingIdentifiers.Contains(identity)
                 || record.ParentCanonicalRecordId is null
                 || !stableByRecord.TryGetValue(record.ParentCanonicalRecordId, out var parentStable))
                 continue;
@@ -167,7 +174,9 @@ public static class AccessHiddenIdentityProjection
                 recordKind = record.Kind,
                 role,
                 stableKey = stable,
-                parentStableKey = parentStable,
+                parentStableKey = emittedCatalogRecords.Contains(record.ParentCanonicalRecordId)
+                    ? parentStable
+                    : null,
                 identity
             });
         }
@@ -306,6 +315,81 @@ public static class AccessHiddenIdentityProjection
                 };
         }
         return values;
+    }
+
+    private static HashSet<string> CollectDirectBindingIdentifiers(
+        AccessDesignEvidenceBundle bundle,
+        IReadOnlyList<AccessDesignEvidenceRecord> catalogRecords)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Add(IReadOnlyDictionary<string, object> bindings)
+        {
+            foreach (var value in bindings.Values.OfType<string>())
+            {
+                foreach (var part in value.Split(
+                             [',', ';'],
+                             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    var candidate = part;
+                    if (candidate.StartsWith("Form.", StringComparison.OrdinalIgnoreCase))
+                        candidate = candidate[5..];
+                    else if (candidate.StartsWith("Report.", StringComparison.OrdinalIgnoreCase))
+                        candidate = candidate[7..];
+                    candidate = candidate.Trim();
+                    if (candidate.StartsWith('[') && candidate.EndsWith(']'))
+                        candidate = candidate[1..^1];
+                    if (candidate.Length == 0) continue;
+                    result.Add(candidate);
+                    var separator = candidate.LastIndexOf('.');
+                    if (separator >= 0 && separator + 1 < candidate.Length)
+                    {
+                        var terminal = candidate[(separator + 1)..].Trim('[', ']');
+                        if (terminal.Length > 0) result.Add(terminal);
+                    }
+                }
+            }
+        }
+
+        foreach (var surface in bundle.Records.Where(record => record.Kind == "ui-surface"))
+        {
+            Add(DirectBindings(surface, ["recordSource", "filter", "orderBy"]));
+            foreach (var control in bundle.Records.Where(record =>
+                         record.Kind == "ui-control"
+                         && record.ParentCanonicalRecordId == surface.CanonicalRecordId))
+            {
+                Add(DirectBindings(control,
+                    ["controlSource", "rowSource", "sourceObject", "linkMasterFields", "linkChildFields"]));
+            }
+        }
+        foreach (var document in bundle.Records.Where(record => record.Kind == "ui-design-document"))
+        {
+            var parent = catalogRecords.FirstOrDefault(record =>
+                record.CanonicalRecordId == document.ParentCanonicalRecordId);
+            if (parent is null) continue;
+            var parsed = AccessUiTextParser.Parse(
+                new StringReader(String(document, "designText")),
+                String(parent, "identity"),
+                String(document, "documentRole"));
+            if (parsed.Surface is not { } raw) continue;
+            Add(DirectBindings(new Dictionary<string, string?>
+            {
+                ["recordSource"] = raw.RecordSource,
+                ["filter"] = raw.Filter,
+                ["orderBy"] = raw.OrderBy
+            }));
+            foreach (var control in raw.Controls)
+            {
+                Add(DirectBindings(new Dictionary<string, string?>
+                {
+                    ["controlSource"] = control.ControlSource,
+                    ["rowSource"] = control.RowSource,
+                    ["sourceObject"] = control.SourceObject,
+                    ["linkMasterFields"] = control.LinkMasterFields,
+                    ["linkChildFields"] = control.LinkChildFields
+                }));
+            }
+        }
+        return result;
     }
 
     private static bool IsDirectBinding(string property, string value)

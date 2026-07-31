@@ -250,6 +250,12 @@ if (Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue) {
 if (-not $InternalWorker) {
     $originalBeforeSupervision = Get-Sha256 $original
     $copyBeforeSupervision = Get-Sha256 $copy
+    if (-not [string]::Equals(
+        $copyBeforeSupervision,
+        $originalBeforeSupervision,
+        [StringComparison]::OrdinalIgnoreCase)) {
+        Stop-Export "AccessMetadataCopyBindingMismatch"
+    }
     $outputParent = Split-Path -Parent $output
     New-Item -ItemType Directory -Path $outputParent -Force | Out-Null
     $workerProcessMarker = Join-Path $outputParent ".$([IO.Path]::GetFileName($output)).worker-$([Guid]::NewGuid().ToString('N')).process.json"
@@ -359,6 +365,9 @@ New-Item -ItemType Directory -Path $outputParent -Force | Out-Null
 $scratch = Join-Path $outputParent ".$([IO.Path]::GetFileName($output)).metadata-$([Guid]::NewGuid().ToString('N'))"
 $originalBefore = Get-Sha256 $original
 $copyBefore = Get-Sha256 $copy
+if (-not [string]::Equals($copyBefore, $originalBefore, [StringComparison]::OrdinalIgnoreCase)) {
+    Stop-Export "AccessMetadataCopyBindingMismatch"
+}
 $access = $null
 $database = $null
 $guardDatabase = $null
