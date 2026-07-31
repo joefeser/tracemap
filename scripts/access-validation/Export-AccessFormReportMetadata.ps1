@@ -349,12 +349,67 @@ if (-not $InternalWorker) {
         Receive-Job -Job $workerJob -ErrorVariable +workerErrors -ErrorAction SilentlyContinue
     )
     $workerFailure = [string]$workerJob.ChildJobs[0].JobStateInfo.Reason.Message
+    $ownedAccessProcessIdentities = @()
+    if (Test-Path -LiteralPath $workerProcessMarker) {
+        try {
+            $parsedIdentities = @(
+                [IO.File]::ReadAllText($workerProcessMarker) | ConvertFrom-Json
+            )
+            $ownedAccessProcessIdentities = @(
+                ConvertTo-AccessProcessIdentities $parsedIdentities
+            )
+        }
+        catch {
+            $ownedAccessProcessIdentities = @()
+        }
+    }
     Remove-Job -Job $workerJob -Force -ErrorAction SilentlyContinue
+    $remainingOwnedAccess = @()
+    for ($attempt = 0; $attempt -lt 120; $attempt++) {
+        $remainingOwnedAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
+        if ($remainingOwnedAccess.Count -eq 0) { break }
+        Start-Sleep -Milliseconds 250
+    }
+    if ($remainingOwnedAccess.Count -gt 0) {
+        try {
+            $remainingOwnedAccess | Stop-Process -Force -ErrorAction Stop
+        }
+        catch { }
+        for ($attempt = 0; $attempt -lt 20; $attempt++) {
+            $remainingOwnedAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
+            if ($remainingOwnedAccess.Count -eq 0) { break }
+            Start-Sleep -Milliseconds 250
+        }
+    }
+    $unattributedAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
+    $processCleanupFailed = $remainingOwnedAccess.Count -gt 0 -or $unattributedAccess.Count -gt 0
+    $scratchPattern = ".$([IO.Path]::GetFileName($output)).metadata-*"
+    $scratchCleanupFailed = $false
+    try {
+        Get-ChildItem -LiteralPath $outputParent -Directory -Filter $scratchPattern -ErrorAction SilentlyContinue |
+            Remove-Item -Recurse -Force -ErrorAction Stop
+    }
+    catch {
+        $scratchCleanupFailed = $true
+    }
     if (Test-Path -LiteralPath $workerProcessMarker) {
         Remove-Item -LiteralPath $workerProcessMarker -Force -ErrorAction SilentlyContinue
     }
     if (Test-Path -LiteralPath $workerHostMarker) {
         Remove-Item -LiteralPath $workerHostMarker -Force -ErrorAction SilentlyContinue
+    }
+    if ($processCleanupFailed -or $scratchCleanupFailed) {
+        if (Test-Path -LiteralPath $output) {
+            Remove-Item -LiteralPath $output -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        Stop-Export "AccessMetadataProcessCleanupFailed"
+    }
+    if ((Get-Sha256 $original) -ne $originalBeforeSupervision -or
+        (Get-Sha256 $copy) -ne $copyBeforeSupervision) {
+        if (Test-Path -LiteralPath $output) {
+            Remove-Item -LiteralPath $output -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        Stop-Export "AccessMetadataSourceChanged"
     }
     if (-not [string]::IsNullOrWhiteSpace($workerFailure)) {
         Stop-Export $workerFailure
@@ -634,43 +689,10 @@ finally {
     Close-ComObject $access
     [GC]::Collect()
     [GC]::WaitForPendingFinalizers()
-    $remainingAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
-    if ($remainingAccess.Count -gt 0) {
-        $remainingAccess | Wait-Process -Timeout 30 -ErrorAction SilentlyContinue
-        $remainingAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
-    }
-    if ($remainingAccess.Count -gt 0) {
-        try {
-            $remainingAccess | Stop-Process -Force -ErrorAction Stop
-        }
-        catch {
-            $cleanupFailure = "AccessMetadataProcessCleanupFailed"
-        }
-        for ($attempt = 0; $attempt -lt 20; $attempt++) {
-            $remainingAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
-            if ($remainingAccess.Count -eq 0) {
-                break
-            }
-            Start-Sleep -Milliseconds 250
-        }
-        $remainingAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
-        if ($remainingAccess.Count -gt 0) {
-            $cleanupFailure = "AccessMetadataProcessCleanupFailed"
-        }
-    }
-    $unattributedAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
-    if ($unattributedAccess.Count -gt 0) {
-        $cleanupFailure = "AccessMetadataProcessCleanupFailed"
-    }
-    try {
-        if (Test-Path -LiteralPath $scratch) {
-            Remove-Item -LiteralPath $scratch -Recurse -Force -ErrorAction Stop
-        }
-    }
-    catch {
-        $cleanupFailure = "AccessMetadataScratchCleanupFailed"
-    }
-    if (Test-Path -LiteralPath $scratch) { $cleanupFailure = "AccessMetadataScratchCleanupFailed" }
+    # PowerShell's out-of-process job can retain the Access COM apartment until
+    # its worker host exits. Leave process and scratch verification to the
+    # supervising invocation, which removes the worker first and then verifies
+    # the exact recorded Access process identity before publishing the output.
     if ((-not $succeeded -or $cleanupFailure) -and (Test-Path -LiteralPath $output)) {
         try { Remove-Item -LiteralPath $output -Recurse -Force -ErrorAction Stop }
         catch { $cleanupFailure = "AccessMetadataOutputCleanupFailed" }

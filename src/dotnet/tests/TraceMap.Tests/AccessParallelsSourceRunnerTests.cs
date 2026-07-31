@@ -150,6 +150,9 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("Get-CimInstance -ClassName Win32_Process", producer, StringComparison.Ordinal);
         Assert.Contains("Get-OwnedAccessProcesses", producer, StringComparison.Ordinal);
         Assert.Contains("ConvertTo-AccessProcessIdentities", producer, StringComparison.Ordinal);
+        Assert.Contains("Remove-Job -Job $workerJob -Force", producer, StringComparison.Ordinal);
+        Assert.Contains("$remainingOwnedAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)", producer, StringComparison.Ordinal);
+        Assert.Contains("$processCleanupFailed = $remainingOwnedAccess.Count -gt 0 -or $unattributedAccess.Count -gt 0", producer, StringComparison.Ordinal);
         Assert.Contains("GetWindowThreadProcessId", producer, StringComparison.Ordinal);
         Assert.Contains("$Application.hWndAccessApp()", producer, StringComparison.Ordinal);
         Assert.Contains("Close-ComObject $dbEngine", producer, StringComparison.Ordinal);
@@ -162,9 +165,10 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("Get-LoadedState $access", producer, StringComparison.Ordinal);
         Assert.Contains("AccessMetadataSourceChanged", producer, StringComparison.Ordinal);
         Assert.Contains("$guardDatabase.Properties.Delete(\"StartupForm\")", producer, StringComparison.Ordinal);
-        Assert.Contains("Remove-Item -LiteralPath $scratch -Recurse -Force", producer, StringComparison.Ordinal);
+        Assert.Contains("$scratchPattern = \".$([IO.Path]::GetFileName($output)).metadata-*\"", producer, StringComparison.Ordinal);
+        Assert.Contains("Remove-Item -Recurse -Force -ErrorAction Stop", producer, StringComparison.Ordinal);
         Assert.Contains("AccessMetadataProcessCleanupFailed", producer, StringComparison.Ordinal);
-        Assert.Contains("AccessMetadataScratchCleanupFailed", producer, StringComparison.Ordinal);
+        Assert.Contains("$scratchCleanupFailed = $true", producer, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenForm", producer, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("OpenReport", producer, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("OpenQuery", producer, StringComparison.OrdinalIgnoreCase);
