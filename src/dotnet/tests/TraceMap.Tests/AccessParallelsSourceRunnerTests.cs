@@ -141,6 +141,7 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("$access.AutomationSecurity = 3", producer, StringComparison.Ordinal);
         Assert.Contains("$access.Visible = $false", producer, StringComparison.Ordinal);
         Assert.Contains("$access.SaveAsText(", producer, StringComparison.Ordinal);
+        Assert.Contains("AccessMetadataCopyBindingMismatch", producer, StringComparison.Ordinal);
         Assert.Contains("[int]$TimeoutSeconds = 300", producer, StringComparison.Ordinal);
         Assert.Contains("Wait-Job -Job $workerJob -Timeout $TimeoutSeconds", producer, StringComparison.Ordinal);
         Assert.Contains("AccessMetadataTimeout", producer, StringComparison.Ordinal);
