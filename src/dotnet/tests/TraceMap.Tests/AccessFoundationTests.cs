@@ -7,6 +7,7 @@ using TraceMap.Core;
 
 namespace TraceMap.Tests;
 
+[Collection("AccessGitEnvironment")]
 public sealed class AccessFoundationTests
 {
     private const string SecretMarker = "Password_ProdVault_92817";
@@ -169,6 +170,12 @@ public sealed class AccessFoundationTests
         var error = new StringWriter();
         Assert.Equal(0, await AccessCommand.RunAsync(["--help"], output, error));
         Assert.Contains("static design metadata only", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("scan-file --database <local.accdb-or-mdb>", output.ToString(), StringComparison.Ordinal);
+
+        output.GetStringBuilder().Clear();
+        Assert.Equal(0, await AccessCommand.RunAsync(["scan-file", "--help"], output, error));
+        Assert.Contains("local file snapshot", output.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("original file is never opened by Access", output.ToString(), StringComparison.Ordinal);
 
         output.GetStringBuilder().Clear();
         Assert.Equal(0, await AccessCommand.RunAsync(["--version"], output, error));
@@ -179,7 +186,236 @@ public sealed class AccessFoundationTests
             Assert.Equal(1, await AccessCommand.RunAsync(
                 ["scan", "--repo", ".", "--database", "fixture.accdb", "--out", "out"], output, error));
             Assert.Contains("AccessUnsupportedPlatform", error.ToString(), StringComparison.Ordinal);
+            error.GetStringBuilder().Clear();
+            Assert.Equal(1, await AccessCommand.RunAsync(
+                ["scan-file", "--database", "fixture.accdb", "--out", "out"], output, error));
+            Assert.Contains("AccessUnsupportedPlatform", error.ToString(), StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public async Task File_first_snapshot_is_deterministic_private_no_remote_and_cleaned_after_success()
+    {
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "private-name.accdb");
+        await File.WriteAllBytesAsync(database, [1, 2, 3, 4]);
+        var commits = new List<string>();
+        var scratchPaths = new List<string>();
+        var runner = new AccessFileScanRunner();
+
+        async Task<ScanResult> RunOnceAsync(string output)
+        {
+            return await runner.RunCoreAsync(
+                new(database, output),
+                (options, _) =>
+                {
+                    var input = AccessInputValidator.Validate(options);
+                    commits.Add(input.CommitSha);
+                    Assert.Equal(AccessProvenanceKinds.LocalFileSnapshot, input.ProvenanceKind);
+                    Assert.Equal("database.accdb", input.DatabaseRelativePath);
+                    Assert.Equal("localfilesnapshot", input.RepoName);
+                    Assert.Null(input.RemoteUrl);
+                    Assert.Empty(RunGitCapture(input.GitRoot, "remote"));
+                    return Task.FromResult(AccessFactBuilder.Build(input, Projection(input), options));
+                },
+                () =>
+                {
+                    var path = Path.Combine(temp.Path, $"scratch-{scratchPaths.Count}");
+                    Directory.CreateDirectory(path);
+                    scratchPaths.Add(path);
+                    return path;
+                },
+                path => Directory.Delete(path, recursive: true),
+                CancellationToken.None);
+        }
+
+        var first = await RunOnceAsync(Path.Combine(temp.Path, "out-one"));
+        var second = await RunOnceAsync(Path.Combine(temp.Path, "out-two"));
+
+        Assert.Equal(commits[0], commits[1]);
+        Assert.All(scratchPaths, path => Assert.False(Directory.Exists(path)));
+        Assert.Equal([1, 2, 3, 4], await File.ReadAllBytesAsync(database));
+        Assert.Contains(first.Facts, fact => fact.Properties.GetValueOrDefault("provenanceKind") == AccessProvenanceKinds.LocalFileSnapshot);
+        Assert.Equal(
+            first.Facts.Select(fact => fact.FactId),
+            second.Facts.Select(fact => fact.FactId));
+        var serialized = JsonSerializer.Serialize(first);
+        Assert.DoesNotContain(database, serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("private-name.accdb", serialized, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task File_first_snapshot_ignores_host_git_configuration_and_pins_sha1()
+    {
+        if (OperatingSystem.IsWindows()) return;
+
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "fixture.accdb");
+        var marker = Path.Combine(temp.Path, "filter-ran");
+        var script = Path.Combine(temp.Path, "leak-filter.sh");
+        var attributes = Path.Combine(temp.Path, "global-attributes");
+        var globalConfig = Path.Combine(temp.Path, "global-gitconfig");
+        await File.WriteAllBytesAsync(database, [1, 2, 3, 4]);
+        await File.WriteAllTextAsync(script, $"#!/bin/sh\nprintf ran > '{marker}'\ncat\n");
+        File.SetUnixFileMode(script, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        await File.WriteAllTextAsync(attributes, "*.accdb filter=leak\n");
+        await File.WriteAllTextAsync(
+            globalConfig,
+            $"[core]\n\tattributesFile = {attributes}\n[filter \"leak\"]\n\tclean = {script}\n\trequired = true\n[init]\n\tdefaultObjectFormat = sha256\n");
+
+        var previousGlobalConfig = Environment.GetEnvironmentVariable("GIT_CONFIG_GLOBAL");
+        var previousConfigCount = Environment.GetEnvironmentVariable("GIT_CONFIG_COUNT");
+        try
+        {
+            Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", globalConfig);
+            Environment.SetEnvironmentVariable("GIT_CONFIG_COUNT", "0");
+            var runner = new AccessFileScanRunner();
+            var result = await runner.RunCoreAsync(
+                new(database, Path.Combine(temp.Path, "out")),
+                (options, _) =>
+                {
+                    var input = AccessInputValidator.Validate(options);
+                    Assert.Equal(40, input.CommitSha.Length);
+                    return Task.FromResult(AccessFactBuilder.Build(input, Projection(input), options));
+                },
+                () =>
+                {
+                    var path = Path.Combine(temp.Path, "scratch");
+                    Directory.CreateDirectory(path);
+                    return path;
+                },
+                path => Directory.Delete(path, recursive: true),
+                CancellationToken.None);
+
+            Assert.NotEmpty(result.Facts);
+            Assert.False(File.Exists(marker));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", previousGlobalConfig);
+            Environment.SetEnvironmentVariable("GIT_CONFIG_COUNT", previousConfigCount);
+        }
+    }
+
+    [Fact]
+    public async Task File_first_snapshot_rechecks_original_and_cleans_scratch_on_failure_and_cancellation()
+    {
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "fixture.accdb");
+        await File.WriteAllBytesAsync(database, [1, 2, 3, 4]);
+        var runner = new AccessFileScanRunner();
+        var scratchIndex = 0;
+        var scratchPaths = new List<string>();
+        string NewScratch()
+        {
+            var path = Path.Combine(temp.Path, $"snapshot-{scratchIndex++}");
+            Directory.CreateDirectory(path);
+            scratchPaths.Add(path);
+            return path;
+        }
+
+        var failed = await Assert.ThrowsAsync<AccessScanException>(() => runner.RunCoreAsync(
+            new(database, Path.Combine(temp.Path, "failed-out")),
+            (_, _) => throw new AccessScanException("SyntheticScanFailure"),
+            NewScratch,
+            path => Directory.Delete(path, recursive: true),
+            CancellationToken.None));
+        Assert.Equal("SyntheticScanFailure", failed.Classification);
+
+        var canceled = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.RunCoreAsync(
+            new(database, Path.Combine(temp.Path, "canceled-out")),
+            (_, _) => throw new OperationCanceledException(),
+            NewScratch,
+            path => Directory.Delete(path, recursive: true),
+            CancellationToken.None));
+        Assert.NotNull(canceled);
+
+        var changed = await Assert.ThrowsAsync<AccessScanException>(() => runner.RunCoreAsync(
+            new(database, Path.Combine(temp.Path, "changed-out")),
+            (options, _) =>
+            {
+                var input = AccessInputValidator.Validate(options);
+                File.WriteAllBytes(database, [4, 3, 2, 1]);
+                return Task.FromResult(AccessFactBuilder.Build(input, Projection(input), options));
+            },
+            NewScratch,
+            path => Directory.Delete(path, recursive: true),
+            CancellationToken.None));
+        Assert.Equal("AccessOriginalInputChangedDuringScan", changed.Classification);
+        Assert.All(scratchPaths, path => Assert.False(Directory.Exists(path)));
+    }
+
+    [Fact]
+    public async Task File_first_snapshot_fails_closed_when_internal_repository_cleanup_fails()
+    {
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "fixture.accdb");
+        await File.WriteAllBytesAsync(database, [1, 2, 3, 4]);
+        var scratch = Path.Combine(temp.Path, "cleanup-failure");
+        var runner = new AccessFileScanRunner();
+
+        var exception = await Assert.ThrowsAsync<AccessScanException>(() => runner.RunCoreAsync(
+            new(database, Path.Combine(temp.Path, "out")),
+            (options, _) =>
+            {
+                var input = AccessInputValidator.Validate(options);
+                return Task.FromResult(AccessFactBuilder.Build(input, Projection(input), options));
+            },
+            () =>
+            {
+                Directory.CreateDirectory(scratch);
+                return scratch;
+            },
+            _ => throw new IOException("synthetic cleanup failure"),
+            CancellationToken.None));
+
+        Assert.Equal("AccessFileSnapshotCleanupFailed", exception.Classification);
+        Directory.Delete(scratch, recursive: true);
+    }
+
+    [Fact]
+    public async Task File_first_validation_rejects_unsupported_reparse_and_caller_owned_paths_before_snapshot_creation()
+    {
+        using var temp = new TempDirectory();
+        var runner = new AccessFileScanRunner();
+        var scratchCreated = false;
+        Task<ScanResult> RunAsync(string database, string output) => runner.RunCoreAsync(
+            new(database, output),
+            (_, _) => throw new InvalidOperationException("scan should not run"),
+            () =>
+            {
+                scratchCreated = true;
+                return Path.Combine(temp.Path, "unexpected-scratch");
+            },
+            _ => { },
+            CancellationToken.None);
+
+        var unsupported = Path.Combine(temp.Path, "fixture.txt");
+        await File.WriteAllBytesAsync(unsupported, [1]);
+        var unsupportedError = await Assert.ThrowsAsync<AccessScanException>(
+            () => RunAsync(unsupported, Path.Combine(temp.Path, "unsupported-out")));
+        Assert.Equal("AccessUnsupportedDatabaseExtension", unsupportedError.Classification);
+
+        var database = Path.Combine(temp.Path, "fixture.accdb");
+        await File.WriteAllBytesAsync(database, [1]);
+        var existingOutput = Path.Combine(temp.Path, "existing-output");
+        Directory.CreateDirectory(existingOutput);
+        await File.WriteAllTextAsync(Path.Combine(existingOutput, "sentinel.txt"), "preserve");
+        var existingError = await Assert.ThrowsAsync<AccessScanException>(
+            () => RunAsync(database, existingOutput));
+        Assert.Equal("AccessOutputAlreadyExists", existingError.Classification);
+        Assert.Equal("preserve", await File.ReadAllTextAsync(Path.Combine(existingOutput, "sentinel.txt")));
+
+        if (!OperatingSystem.IsWindows())
+        {
+            var link = Path.Combine(temp.Path, "fixture-link.accdb");
+            File.CreateSymbolicLink(link, database);
+            var linkError = await Assert.ThrowsAsync<AccessScanException>(
+                () => RunAsync(link, Path.Combine(temp.Path, "link-out")));
+            Assert.Equal("AccessDatabaseReparsePointRejected", linkError.Classification);
+        }
+
+        Assert.False(scratchCreated);
     }
 
     [Fact]
@@ -396,6 +632,92 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Relationship_masks_are_normalized_without_losing_raw_or_unknown_bits()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        File.WriteAllBytes(databasePath, [1, 2, 3, 4]);
+        var input = Input(databasePath, Path.Combine(temp.Path, "out"));
+        var seed = AccessSafeValues.DatabaseIdentitySeed(input.RepositoryIdentityHash, input.CommitSha, input.DatabaseRelativePath, input.DatabaseHash);
+        const int attributes = 1 | 2 | 4 | 8 | 256 | 4096 | 16_777_216 | 33_554_432;
+        var relationship = new AccessRelationshipProjection(
+            AccessSafeValues.Identity(seed, "relationship", "SyntheticRelationship"),
+            "source-table",
+            "target-table",
+            attributes,
+            []);
+        var projection = Projection(input) with { Relationships = [relationship] };
+
+        var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath));
+        var fact = Assert.Single(result.Facts, candidate =>
+            candidate.Properties.GetValueOrDefault("mappingKind") == "declared-relationship");
+
+        Assert.Equal(attributes.ToString(), fact.Properties["relationshipAttributes"]);
+        Assert.Equal(
+            "unique-one-to-one;not-enforced;inherited;update-cascade;delete-cascade;left-default-join;right-default-join",
+            fact.Properties["relationshipAttributeFlags"]);
+        Assert.Equal("8", fact.Properties["relationshipUnknownAttributeBits"]);
+        Assert.Contains("no-runtime-enforcement", fact.Properties["limitations"], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Query_owned_gaps_preserve_stable_owner_and_supporting_declaration_fact()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        File.WriteAllBytes(databasePath, [1, 2, 3, 4]);
+        var input = Input(databasePath, Path.Combine(temp.Path, "out"));
+        var projection = Projection(input);
+
+        var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath));
+        var query = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessQueryDeclared);
+        var gap = Assert.Single(result.Facts, fact =>
+            fact.Properties.GetValueOrDefault("classification") == "AccessQueryDependencyPartial");
+
+        Assert.Equal(query.TargetSymbol, gap.TargetSymbol);
+        Assert.Equal(query.TargetSymbol, gap.Properties["scopeStableKey"]);
+        Assert.Equal(query.FactId, gap.Properties["supportingFactIds"]);
+    }
+
+    [Fact]
+    public void Query_parameter_limit_preserves_query_declaration_and_attributes_the_gap()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        File.WriteAllBytes(databasePath, [1, 2, 3, 4]);
+        var input = Input(databasePath, Path.Combine(temp.Path, "out"));
+        var seed = AccessSafeValues.DatabaseIdentitySeed(input.RepositoryIdentityHash, input.CommitSha, input.DatabaseRelativePath, input.DatabaseHash);
+        var identity = AccessSafeValues.Identity(seed, "query", "LimitedQuery");
+        var identities = new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["LimitedQuery"] = identity
+        };
+        var gaps = new List<AccessGapProjection>();
+        var external = new List<AccessExternalLinkProjection>();
+        var reader = new AccessComReader(AccessLimits.Default with { MaxChildrenPerObject = 1 });
+
+        var queries = reader.ReadQueries(
+            new FakeQueryDatabase(),
+            seed,
+            identities,
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase),
+            gaps,
+            external);
+
+        var query = Assert.Single(queries);
+        Assert.Equal(identity.StableKey, query.Identity.StableKey);
+        var ownedGap = Assert.Single(gaps, gap => gap.Classification == "AccessQueryParameterCollectionLimit");
+        Assert.Equal(identity.StableKey, ownedGap.StableScopeKey);
+
+        var projection = Projection(input) with { Queries = queries, Gaps = gaps };
+        var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath));
+        var declaration = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessQueryDeclared);
+        var gapFact = Assert.Single(result.Facts, fact =>
+            fact.Properties.GetValueOrDefault("classification") == "AccessQueryParameterCollectionLimit");
+        Assert.Equal(declaration.FactId, gapFact.Properties["supportingFactIds"]);
+    }
+
+    [Fact]
     public void Internal_raw_field_lookup_supports_redacted_names_and_index_scopes_are_table_specific()
     {
         var databaseSeed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
@@ -559,6 +881,24 @@ public sealed class AccessFoundationTests
         Assert.True(process.ExitCode == 0, $"git {string.Join(' ', args)} failed: {output} {error}");
     }
 
+    private static string RunGitCapture(string workingDirectory, params string[] args)
+    {
+        var start = new ProcessStartInfo("git")
+        {
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        foreach (var arg in args) start.ArgumentList.Add(arg);
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("git unavailable");
+        var output = process.StandardOutput.ReadToEnd();
+        _ = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        Assert.Equal(0, process.ExitCode);
+        return output.Trim();
+    }
+
     private static string FindRepoRoot()
     {
         var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
@@ -589,4 +929,32 @@ public sealed class AccessFoundationTests
             return _frame;
         }
     }
+
+    public sealed class FakeQueryDatabase
+    {
+        public FakeQueryCollection QueryDefs { get; } = new();
+    }
+
+    public sealed class FakeQueryCollection
+    {
+        public int Count => 1;
+        public FakeQuery this[int index] => index == 0 ? new() : throw new IndexOutOfRangeException();
+    }
+
+    public sealed class FakeQuery
+    {
+        public string Name => "LimitedQuery";
+        public int Type => 0;
+        public string SQL => "SELECT 1";
+        public FakeParameterCollection Parameters { get; } = new();
+    }
+
+    public sealed class FakeParameterCollection
+    {
+        public int Count => 2;
+        public object this[int index] => throw new InvalidOperationException($"Unexpected parameter access {index}.");
+    }
 }
+
+[CollectionDefinition("AccessGitEnvironment", DisableParallelization = true)]
+public sealed class AccessGitEnvironmentCollection;

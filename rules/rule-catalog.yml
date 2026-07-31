@@ -1408,7 +1408,7 @@ rules:
 
   - id: legacy.access.database.inventory.v1
     name: Microsoft Access database inventory
-    description: Records a clean Git-bound Access database and safe local extractor capability evidence.
+    description: Records a repository-commit or verified disposable local-file-snapshot Access database and safe local extractor capability evidence.
     evidenceTier: Tier2Structural
     possibleEvidenceTiers: [Tier2Structural, Tier4Unknown]
     emits:
@@ -1418,7 +1418,8 @@ rules:
       - AnalysisGap
     limitations:
       - Inventory and capability rows describe static local extraction only and do not prove database integrity, runtime behavior, record contents, query or macro execution, linked-source access, deployment, or production use.
-      - The database must be a clean tracked file at the checked-out commit and is opened only through a verified private working copy on Windows with installed Microsoft Access.
+      - Repository scans require a clean tracked file at the checked-out commit; file-first scans create a deterministic no-remote local snapshot over a verified generic-name copy. Both paths open only a further verified private working copy on Windows with installed Microsoft Access.
+      - Local-file-snapshot provenance is not an upstream repository commit and omits the original absolute path, filename, username, scratch path, and command text.
       - Binary catalog objects use the owning database path at span 1:1; this anchors the container and is not a fabricated source line.
       - Raw rows, SQL, connection strings, VBA, macro bodies, form/report expressions, URLs, hosts, credentials, and local absolute paths are omitted or role-hashed.
 
@@ -1437,6 +1438,7 @@ rules:
       - Catalog evidence does not prove live constraints, row contents, query execution, calculated values, linked schema freshness, provider behavior, permissions, runtime reachability, or production use.
       - System, temporary, hidden, linked-result, attachment, OLE, and value-bearing content is not inspected as record data.
       - Ambiguous, unavailable, unsafe, or limit-truncated metadata is a gap rather than an inferred schema conclusion.
+      - DAO relationship flags describe declared static configuration only; the raw mask and unknown bits remain explicit, and flags do not prove enforcement, operations, permissions, or data validity.
       - Unsafe object names, private paths, connections, source values, SQL, snippets, and secrets are omitted or role-hashed.
 
   - id: legacy.access.query.v1
@@ -1452,6 +1454,7 @@ rules:
       - Query evidence does not prove execution, result shape, parameter values, branch selection, provider behavior, linked-source availability, permissions, runtime reachability, or production use.
       - Raw query SQL never persists; only a full SHA-256, length, safe kind, parameters, and deterministically parsed local-object candidates may be emitted.
       - Dynamic, malformed, ambiguous, unsupported, action, DDL, union, crosstab, and pass-through shapes remain partial or gaps where dependency projection is not credible.
+      - Query-specific gaps retain the owning stable query key and declaration fact only when identity was established before the failure; no owner is invented otherwise.
       - Query result fields and recordsets are never enumerated for pass-through, action, DDL, or unsafe query kinds.
 
   - id: legacy.access.external-link.v1

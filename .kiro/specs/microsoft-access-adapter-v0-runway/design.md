@@ -122,6 +122,22 @@ tracemap-access scan \
   --out <output-directory>
 ```
 
+For an explicitly selected standalone local file, the supported wrapper is:
+
+```text
+tracemap-access scan-file \
+  --database <local.accdb-or-mdb> \
+  --out <output-directory>
+```
+
+`scan-file` validates and hashes the original, streams it under the generic
+name `database.accdb` or `database.mdb` into restricted scratch, verifies the
+copy, and creates a deterministic local commit in a no-remote disposable
+repository. It then delegates to the existing `scan` path, re-hashes the
+original, and removes the whole snapshot repository in a `finally` path.
+Artifacts use `provenanceKind=local-file-snapshot`; the commit is never
+described as upstream repository history.
+
 The implementation must:
 
 - resolve and canonicalize the Git root;
@@ -148,9 +164,10 @@ working file contains materialized database bytes and clean-input verification
 can prove those bytes correspond to the `HEAD` LFS object. Pointer-only,
 smudged-but-unverifiable, or unavailable LFS content fails before Access opens.
 
-For a standalone customer file, the documented operator workflow is to create a
-local restricted Git evidence workspace, copy the file into it, commit locally,
-and scan that commit. TraceMap must not upload or push that workspace.
+The repository-oriented command remains available for already tracked inputs.
+The caller no longer needs to create a Git workspace for a standalone file;
+the private snapshot is an internal implementation detail and has no remote or
+network requirement.
 
 ## Working-Copy and COM Safety
 
@@ -293,6 +310,12 @@ Allowed safe properties include object kind, safe/hash identity, field ordinal,
 Access type family, declared size, required/nullability flag, index kind,
 relationship attributes, endpoint stable keys, and supporting fact IDs.
 
+Relationship attributes preserve the raw DAO integer and normalized flags in
+stable order: unique/one-to-one, not-enforced, inherited, update cascade, delete
+cascade, left default join, and right default join. Bits outside the supported
+mask remain an explicit numeric unknown-bit value. These properties describe
+declared configuration only.
+
 Never inspect or persist row values, defaults requiring evaluation, validation
 messages, captions/descriptions that may contain business prose, attachment/OLE
 contents, or lookup result values in v0.
@@ -317,6 +340,11 @@ URLs/hosts/paths, credential fragments, scheduled commands, and query results.
 The query projector must tokenize only supported Access SQL identifier contexts
 and ignore comments/string values except while computing the whole-text hash.
 Dynamic/ambiguous shapes emit gaps.
+
+When the reader established a query identity before a dependency or parameter
+collection failure, its gap carries that stable query key. Fact projection adds
+the query declaration fact ID as support. Failures before identity acquisition
+remain honestly unattributed.
 
 ### Forms, Reports, and Controls
 

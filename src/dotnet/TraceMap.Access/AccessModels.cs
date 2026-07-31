@@ -6,7 +6,14 @@ public sealed record AccessScanOptions(
     string RepoPath,
     string DatabasePath,
     string OutputPath,
-    int TimeoutSeconds = 600);
+    int TimeoutSeconds = 600,
+    string ProvenanceKind = AccessProvenanceKinds.RepositoryCommit);
+
+public static class AccessProvenanceKinds
+{
+    public const string RepositoryCommit = "repository-commit";
+    public const string LocalFileSnapshot = "local-file-snapshot";
+}
 
 public sealed record AccessLimits(
     long MaxDatabaseBytes = 2L * 1024 * 1024 * 1024,
@@ -44,7 +51,8 @@ public sealed record AccessValidatedInput(
     string DatabaseExtension,
     string OutputFullPath,
     bool IsGitLfs,
-    long? DatabaseSizeBytes = null);
+    long? DatabaseSizeBytes = null,
+    string ProvenanceKind = AccessProvenanceKinds.RepositoryCommit);
 
 public sealed record AccessSafeIdentity(string? DisplayName, string NameHash, string StableKey);
 

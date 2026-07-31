@@ -41,7 +41,7 @@ public sealed class AccessWorkingCopy : IDisposable
         }
     }
 
-    private static void RestrictDirectory(string directory)
+    internal static void RestrictDirectory(string directory)
     {
         if (!OperatingSystem.IsWindows())
         {
