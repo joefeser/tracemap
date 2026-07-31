@@ -558,12 +558,13 @@ public sealed class AccessComReader
             {
                 dynamic? query = null;
                 dynamic? parameters = null;
+                AccessSafeIdentity? identity = null;
                 dynamic? outputFields = null;
                 try
                 {
                     query = queries[index];
                     var name = BoundedString(() => (string)query.Name, 512, "AccessQueryNameUnavailable");
-                    if (!identities.TryGetValue(name, out var identity)) continue;
+                    if (!identities.TryGetValue(name, out identity)) continue;
                     var type = SafeInt(() => (int)query.Type);
                     var kind = AccessSafeValues.QueryKind(type);
                     var sql = BoundedString(() => (string)query.SQL, _limits.MaxQueryTextLength, "AccessQueryTextLimitReached");
@@ -578,19 +579,35 @@ public sealed class AccessComReader
                     if (dependencyProjection.UnsupportedShape || type != 0)
                         gaps.Add(new(type == 112 ? "AccessQueryDependencyUnknown" : "AccessQueryDependencyPartial", "query", identity.StableKey));
 
-                    parameters = query.Parameters;
-                    var parameterCount = BoundedChildCount(parameters, "AccessQueryParameterCollectionLimit");
                     var parameterRows = new List<AccessQueryParameterProjection>();
-                    for (var ordinal = 0; ordinal < parameterCount; ordinal++)
+                    try
                     {
-                        dynamic? parameter = null;
-                        try
+                        parameters = query.Parameters;
+                        var parameterCount = BoundedChildCount(parameters, "AccessQueryParameterCollectionLimit");
+                        for (var ordinal = 0; ordinal < parameterCount; ordinal++)
                         {
-                            parameter = parameters[ordinal];
-                            var parameterName = BoundedString(() => (string)parameter.Name, 512, "AccessQueryParameterNameUnavailable");
-                            parameterRows.Add(new(AccessSafeValues.Identity(databaseIdentitySeed, $"parameter-{identity.StableKey}", parameterName), ordinal, AccessSafeValues.DaoTypeFamily(SafeInt(() => (int)parameter.Type))));
+                            dynamic? parameter = null;
+                            try
+                            {
+                                parameter = parameters[ordinal];
+                                var parameterName = BoundedString(() => (string)parameter.Name, 512, "AccessQueryParameterNameUnavailable");
+                                parameterRows.Add(new(AccessSafeValues.Identity(databaseIdentitySeed, $"parameter-{identity.StableKey}", parameterName), ordinal, AccessSafeValues.DaoTypeFamily(SafeInt(() => (int)parameter.Type))));
+                            }
+                            finally { Release(parameter); }
                         }
-                        finally { Release(parameter); }
+                    }
+                    catch (AccessScanException ex)
+                    {
+                        gaps.Add(new(ex.Classification, "query", identity.StableKey));
+                    }
+                    catch
+                    {
+                        gaps.Add(new("AccessObjectMetadataUnavailable", "query", identity.StableKey));
+                    }
+                    finally
+                    {
+                        Release(parameters);
+                        parameters = null;
                     }
 
                     var isPassThrough = type == 112;
@@ -691,20 +708,31 @@ public sealed class AccessComReader
                     string? provider = null;
                     if (isPassThrough)
                     {
-                        var connect = BoundedOptionalString(() => (string)query.Connect, _limits.MaxStringLength, "AccessExternalSourceMetadataUnavailable");
-                        if (!string.IsNullOrWhiteSpace(connect))
+                        try
                         {
-                            connectHash = AccessSafeValues.RoleHash("access-pass-through-connection", connect);
-                            provider = AccessSafeValues.ProviderFamily(connect);
-                            external.Add(new(identity, provider, connectHash, "pass-through-query"));
+                            var connect = BoundedOptionalString(() => (string)query.Connect, _limits.MaxStringLength, "AccessExternalSourceMetadataUnavailable");
+                            if (!string.IsNullOrWhiteSpace(connect))
+                            {
+                                connectHash = AccessSafeValues.RoleHash("access-pass-through-connection", connect);
+                                provider = AccessSafeValues.ProviderFamily(connect);
+                                external.Add(new(identity, provider, connectHash, "pass-through-query"));
+                            }
+                        }
+                        catch (AccessScanException ex)
+                        {
+                            gaps.Add(new(ex.Classification, "query", identity.StableKey));
+                        }
+                        catch
+                        {
+                            gaps.Add(new("AccessObjectMetadataUnavailable", "query", identity.StableKey));
                         }
                     }
 
                     result.Add(new(identity, kind, sqlHash, sql.Length, referenceCoverage, parameterRows,
                         isPassThrough ? [] : dependencyProjection.Dependencies, isPassThrough, connectHash, provider, outputRows));
                 }
-                catch (AccessScanException ex) { gaps.Add(new(ex.Classification, "query", null)); }
-                catch { gaps.Add(new("AccessObjectMetadataUnavailable", "query", null)); }
+                catch (AccessScanException ex) { gaps.Add(new(ex.Classification, "query", identity?.StableKey)); }
+                catch { gaps.Add(new("AccessObjectMetadataUnavailable", "query", identity?.StableKey)); }
                 finally { Release(outputFields); Release(parameters); Release(query); }
             }
         }

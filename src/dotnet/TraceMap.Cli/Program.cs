@@ -880,7 +880,8 @@ public static class TraceMapCommand
             new AccessLocalReviewBundleOptions(
                 scanOutputPath,
                 outputPath,
-                values.HasFlag("--force")),
+                values.HasFlag("--force"),
+                ParsePositiveInt(values, "--max-findings", 1_000)),
             cancellationToken);
 
         await output.WriteLineAsync("TraceMap access-review create completed.");
@@ -2309,7 +2310,7 @@ public static class TraceMapCommand
     {
         return """
             Usage:
-              tracemap access-review create --scan-output <access-scan-directory> --out <bundle-directory> [--force]
+              tracemap access-review create --scan-output <access-scan-directory> --out <bundle-directory> [--force] [--max-findings <1-10000>]
 
             Required:
               --scan-output <path>       Existing Microsoft Access scan output with the five standard TraceMap artifacts.
@@ -2317,6 +2318,7 @@ public static class TraceMapCommand
 
             Optional:
               --force                    Replace only a compatible TraceMap-generated Access review bundle.
+              --max-findings <n>         Bounded Access findings. Default: 1000; maximum: 10000.
 
             Outputs:
               README.md

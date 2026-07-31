@@ -11,7 +11,8 @@ namespace TraceMap.Reporting;
 public sealed record AccessLocalReviewBundleOptions(
     string ScanOutputPath,
     string OutputPath,
-    bool Force = false);
+    bool Force = false,
+    int MaxFindings = 1_000);
 
 public sealed record AccessLocalReviewBundleResult(
     AccessLocalReviewBundleManifest Manifest,
@@ -131,6 +132,12 @@ public static class AccessLocalReviewBundle
                 "AccessReviewOutputRequired",
                 "access-review create requires --out <bundle-directory>.");
         }
+        if (options.MaxFindings is < 1 or > 10_000)
+        {
+            throw new AccessLocalReviewException(
+                "AccessReviewFindingLimitInvalid",
+                "--max-findings must be between 1 and 10000.");
+        }
 
         var inputDirectory = NormalizeDirectory(options.ScanOutputPath);
         var outputDirectory = NormalizeDirectory(options.OutputPath);
@@ -170,7 +177,8 @@ public static class AccessLocalReviewBundle
                     indexPath,
                     indexPath,
                     Path.Combine(stagingDirectory, "release-review"),
-                    Scope: "access-evidence"),
+                    Scope: "access-evidence",
+                    MaxFindings: options.MaxFindings),
                 cancellationToken);
             if (releaseReview.Report.AccessEvidence.Status is not ReleaseReviewStatuses.Available
                 and not ReleaseReviewStatuses.Truncated)

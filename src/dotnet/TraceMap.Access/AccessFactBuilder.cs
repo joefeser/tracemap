@@ -4,7 +4,7 @@ namespace TraceMap.Access;
 
 public static class AccessFactBuilder
 {
-    public const string ScannerVersion = "tracemap-access/0.1.0";
+    public const string ScannerVersion = "tracemap-access/0.2.0";
     private const string ExtractorId = "AccessCatalogExtractor";
 
     public static ScanResult Build(AccessValidatedInput input, AccessDatabaseProjection projection, AccessScanOptions options, AccessLimits? limits = null)
@@ -31,6 +31,7 @@ public static class AccessFactBuilder
             input.DatabaseHash,
             projection.AccessVersion,
             options.TimeoutSeconds,
+            input.ProvenanceKind,
             ScannerVersions.AccessExtractor), 32);
         var manifest = new ScanManifest(
             scanId,
@@ -61,6 +62,7 @@ public static class AccessFactBuilder
                 ("databaseHash", input.DatabaseHash),
                 ("databaseExtension", input.DatabaseExtension),
                 ("databaseStableKey", databaseStableKey),
+                ("provenanceKind", input.ProvenanceKind),
                 ("sizeBytes", DatabaseSize(input).ToString(System.Globalization.CultureInfo.InvariantCulture)))));
         facts.Add(Create(manifest, FactTypes.LegacyDataMetadataDeclared, RuleIds.LegacyAccessDatabaseInventory, EvidenceTiers.Tier2Structural, span,
             targetSymbol: databaseStableKey,
@@ -70,6 +72,7 @@ public static class AccessFactBuilder
                 ("descriptorRole", "database-catalog"),
                 ("metadataHash", input.DatabaseHash),
                 ("stableModelKey", databaseStableKey),
+                ("provenanceKind", input.ProvenanceKind),
                 ("omittedSystemObjectCount", projection.OmittedSystemObjectCount.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 ("formCount", projection.UiInventory?.FormCount?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 ("reportCount", projection.UiInventory?.ReportCount?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
@@ -133,6 +136,7 @@ public static class AccessFactBuilder
 
         foreach (var relationship in projection.Relationships)
         {
+            var decodedAttributes = AccessRelationshipAttributes.Decode(relationship.Attributes);
             facts.Add(Create(manifest, FactTypes.LegacyDataMappingDeclared, RuleIds.LegacyAccessSchema, EvidenceTiers.Tier2Structural, span,
                 sourceSymbol: relationship.SourceTableStableKey,
                 targetSymbol: relationship.TargetTableStableKey,
@@ -140,12 +144,17 @@ public static class AccessFactBuilder
                     ("mappingKind", "declared-relationship"), ("stableModelKey", relationship.Identity.StableKey),
                     ("sourceStableKey", relationship.SourceTableStableKey), ("targetStableKey", relationship.TargetTableStableKey),
                     ("relationshipAttributes", relationship.Attributes.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    ("relationshipAttributeFlags", string.Join(';', decodedAttributes.Flags)),
+                    ("relationshipUnknownAttributeBits", decodedAttributes.UnknownBits.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    ("limitations", "declared-static-configuration;no-runtime-enforcement-or-operation-proof"),
                     ("fieldPairs", string.Join(';', relationship.Fields.OrderBy(field => field.Ordinal).Select(field => $"{field.SourceFieldStableKey}>{field.TargetFieldStableKey}"))))));
         }
 
+        var queryDeclarationFactIds = new Dictionary<string, string>(StringComparer.Ordinal);
+        var queryOutputOwnerStableKeys = new Dictionary<string, string?>(StringComparer.Ordinal);
         foreach (var query in projection.Queries)
         {
-            facts.Add(Create(manifest, FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, span,
+            var queryFact = Create(manifest, FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, span,
                 targetSymbol: query.Identity.StableKey,
                 properties: IdentityProps(query.Identity,
                     ("queryKind", query.QueryKind), ("sqlHash", query.SqlHash), ("sqlLength", query.SqlLength.ToString(System.Globalization.CultureInfo.InvariantCulture)),
@@ -153,7 +162,9 @@ public static class AccessFactBuilder
                     ("parameterDescriptors", string.Join(';', query.Parameters.OrderBy(parameter => parameter.Ordinal)
                         .Select(parameter => $"{parameter.Ordinal}:{parameter.Identity.StableKey}:{parameter.TypeFamily}"))),
                     ("isPassThrough", query.IsPassThrough.ToString().ToLowerInvariant()),
-                    ("stableQueryKey", query.Identity.StableKey))));
+                    ("stableQueryKey", query.Identity.StableKey)));
+            facts.Add(queryFact);
+            queryDeclarationFactIds[query.Identity.StableKey] = queryFact.FactId;
 
             foreach (var dependency in query.Dependencies)
             {
@@ -165,6 +176,15 @@ public static class AccessFactBuilder
             }
             foreach (var output in query.OutputFields ?? [])
             {
+                if (queryOutputOwnerStableKeys.TryGetValue(output.Identity.StableKey, out var existingOwner)
+                    && !string.Equals(existingOwner, query.Identity.StableKey, StringComparison.Ordinal))
+                {
+                    queryOutputOwnerStableKeys[output.Identity.StableKey] = null;
+                }
+                else if (!queryOutputOwnerStableKeys.ContainsKey(output.Identity.StableKey))
+                {
+                    queryOutputOwnerStableKeys.Add(output.Identity.StableKey, query.Identity.StableKey);
+                }
                 facts.Add(Create(manifest, FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, span,
                     sourceSymbol: query.Identity.StableKey,
                     targetSymbol: output.Identity.StableKey,
@@ -309,10 +329,26 @@ public static class AccessFactBuilder
 
         foreach (var gap in projectedGaps)
         {
+            var supportingQueryStableKey = gap.ScopeKind switch
+            {
+                "query" => gap.StableScopeKey,
+                "query-output-field" when gap.StableScopeKey is not null
+                    && queryOutputOwnerStableKeys.TryGetValue(gap.StableScopeKey, out var ownerStableKey) => ownerStableKey,
+                _ => null
+            };
+            var supportingFactId = supportingQueryStableKey is not null
+                && queryDeclarationFactIds.TryGetValue(supportingQueryStableKey, out var queryFactId)
+                    ? queryFactId
+                    : null;
+            var emittedScopeKind = gap.ScopeKind == "query-output-field"
+                && supportingQueryStableKey is null
+                    ? "query-output-field-owner-unknown"
+                    : gap.ScopeKind;
             facts.Add(Create(manifest, FactTypes.AnalysisGap, gap.RuleId ?? RuleIds.LegacyAccessCoverageGap, EvidenceTiers.Tier4Unknown, span,
                 targetSymbol: gap.StableScopeKey,
-                properties: Props(("classification", gap.Classification), ("gapKind", "access-design"), ("scopeKind", gap.ScopeKind),
-                    ("scopeStableKey", gap.StableScopeKey), ("limitations", "unable-to-prove;not-clean-absence"))));
+                properties: Props(("classification", gap.Classification), ("gapKind", "access-design"), ("scopeKind", emittedScopeKind),
+                    ("scopeStableKey", gap.StableScopeKey), ("supportingFactIds", supportingFactId),
+                    ("limitations", "unable-to-prove;not-clean-absence"))));
         }
 
         facts = facts
