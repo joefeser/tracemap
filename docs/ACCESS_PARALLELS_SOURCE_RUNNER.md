@@ -5,7 +5,8 @@ source build and synthetic Access validation inside an isolated local Windows
 VM. Codex and network access are not required inside the guest.
 
 This workflow orchestrates the existing Access adapter and validation harness.
-It adds no extraction capability.
+The `metadata` action additionally validates the separately bounded synthetic
+form/report metadata producer. It does not widen representative scanning.
 
 ## Host-verified boundary
 
@@ -95,7 +96,17 @@ PowerShell 7 and Parallels `prlctl` must be available on the host.
 ./scripts/access-validation/Invoke-AccessParallelsSource.ps1 `
   -Action synthetic `
   -ExpectedHead <40-character-commit-sha>
+
+./scripts/access-validation/Invoke-AccessParallelsSource.ps1 `
+  -Action metadata `
+  -ExpectedHead <40-character-commit-sha>
 ```
+
+The metadata action creates only the checked-in synthetic zero-row fixture,
+serializes saved form/report definitions with invisible force-disabled
+`SaveAsText`, verifies unchanged loaded state/source hashes and clear canaries,
+then deletes the protected bundle and all scratch. No protected output crosses
+the host runner.
 
 Override `-VmName` and `-GuestRoot` only when the VM uses different
 operator-local names. The default expected share targets are

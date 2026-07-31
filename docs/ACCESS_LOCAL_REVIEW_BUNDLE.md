@@ -6,11 +6,18 @@ review directory:
 ```bash
 tracemap access-review create \
   --scan-output <access-scan-directory> \
-  --out <new-local-review-directory>
+  --out <new-local-review-directory> \
+  --max-findings 1000
 ```
 
 The command is cross-platform and read-side only. It does not invoke Microsoft
 Access, COM, a scanner, queries, forms, reports, VBA, or macros.
+
+The finding bound defaults to 1,000 and accepts values from 1 through 10,000.
+Ordering is deterministic. When the selected bound omits findings, the release
+review and Access section report `truncated`, record the omitted count, and emit
+a `TruncatedByLimit` gap instead of silently treating omitted evidence as
+absent.
 
 ## Contents
 
@@ -86,7 +93,23 @@ the disposable smoke root.
 ## Representative local review
 
 Only the local operator may choose and authorize a representative database.
-Keep its path and identity local:
+For an ordinary product scan, use the file-first command documented in
+[ACCESS_FILE_FIRST_SCAN.md](ACCESS_FILE_FIRST_SCAN.md). Keep the path and
+identity local:
+
+```powershell
+tracemap-access scan-file `
+  --database <explicitly-authorized-local-database> `
+  --out <new-local-scan-directory>
+
+tracemap access-review create `
+  --scan-output <new-local-scan-directory> `
+  --out <new-local-review-directory> `
+  --max-findings 1000
+```
+
+The validation harness remains available when exercising the complete
+representative canary/checkpoint contract:
 
 ```powershell
 .\scripts\access-validation\Invoke-AccessRepresentativeSmoke.ps1 `

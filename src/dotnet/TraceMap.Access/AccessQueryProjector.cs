@@ -5,6 +5,49 @@ namespace TraceMap.Access;
 
 public static partial class AccessQueryProjector
 {
+    public static bool IsDirectOutputField(string sql, string outputName)
+    {
+        if (string.IsNullOrWhiteSpace(sql) || string.IsNullOrWhiteSpace(outputName))
+            return false;
+        var masked = MaskLiteralsAndComments(sql);
+        var match = SelectListPattern().Match(masked);
+        if (!match.Success) return false;
+        var fields = new List<string>();
+        foreach (var item in SplitSelectItems(match.Groups["list"].Value))
+        {
+            if (item.Contains('*')) return false;
+            var direct = DirectSelectFieldPattern().Match(item.Trim());
+            if (!direct.Success) continue;
+            fields.Add((direct.Groups["bracketed"].Success
+                ? direct.Groups["bracketed"].Value
+                : direct.Groups["plain"].Value).Trim());
+        }
+        return fields.Count(field => string.Equals(field, outputName.Trim(), StringComparison.OrdinalIgnoreCase)) == 1;
+    }
+
+    private static IReadOnlyList<string> SplitSelectItems(string value)
+    {
+        var result = new List<string>();
+        var start = 0;
+        var parentheses = 0;
+        var bracket = false;
+        for (var index = 0; index < value.Length; index++)
+        {
+            var current = value[index];
+            if (current == '[') bracket = true;
+            else if (current == ']') bracket = false;
+            else if (!bracket && current == '(') parentheses++;
+            else if (!bracket && current == ')' && parentheses > 0) parentheses--;
+            else if (!bracket && parentheses == 0 && current == ',')
+            {
+                result.Add(value[start..index]);
+                start = index + 1;
+            }
+        }
+        result.Add(value[start..]);
+        return result;
+    }
+
     public static (IReadOnlyList<AccessQueryDependencyProjection> Dependencies, string Coverage, bool UnsupportedShape) ProjectDependencies(
         string sql,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> knownObjects)
@@ -121,4 +164,10 @@ public static partial class AccessQueryProjector
 
     [GeneratedRegex(@"(?ix)\b(?:transform\b|union\b|in\s+\#|parameters\s+[^;]+\s+(?:text|long|short|datetime)\b)", RegexOptions.CultureInvariant)]
     private static partial Regex UnsupportedPattern();
+
+    [GeneratedRegex(@"(?is)\bselect\s+(?:(?:distinct|distinctrow|top\s+\d+(?:\s+percent)?)\s+)*(?<list>.*?)\s+\bfrom\b", RegexOptions.CultureInvariant)]
+    private static partial Regex SelectListPattern();
+
+    [GeneratedRegex(@"^(?:(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_.$]*)\s*\.\s*)?(?:\[(?<bracketed>[^\]]+)\]|(?<plain>[A-Za-z_][A-Za-z0-9_ ]*))$", RegexOptions.CultureInvariant)]
+    private static partial Regex DirectSelectFieldPattern();
 }
