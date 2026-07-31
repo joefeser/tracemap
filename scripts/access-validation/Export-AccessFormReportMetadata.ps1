@@ -65,6 +65,13 @@ function Get-BytesSha256([byte[]]$Bytes) {
     }
 }
 
+function Get-OwnedAccessProcesses([int[]]$ProcessIds) {
+    return @(
+        $ProcessIds |
+            ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }
+    )
+}
+
 function Get-LoadedState([object]$Application) {
     $forms = 0
     $reports = 0
@@ -187,6 +194,7 @@ if (-not $InternalWorker) {
     $outputParent = Split-Path -Parent $output
     New-Item -ItemType Directory -Path $outputParent -Force | Out-Null
     $workerProcessMarker = Join-Path $outputParent ".$([IO.Path]::GetFileName($output)).worker-$([Guid]::NewGuid().ToString('N')).pid"
+    $workerHostMarker = "$workerProcessMarker.host"
     $workerParameters = @{}
     foreach ($entry in $PSBoundParameters.GetEnumerator()) {
         if ($entry.Key -notin @("InternalWorker", "WorkerProcessMarkerPath")) {
@@ -195,9 +203,10 @@ if (-not $InternalWorker) {
     }
     $workerParameters["WorkerProcessMarkerPath"] = $workerProcessMarker
     $workerJob = Start-Job -ScriptBlock {
-        param([string]$ScriptPath, [hashtable]$Parameters)
+        param([string]$ScriptPath, [hashtable]$Parameters, [string]$HostMarkerPath)
+        [IO.File]::WriteAllText($HostMarkerPath, [string]$PID)
         & $ScriptPath @Parameters -InternalWorker
-    } -ArgumentList $PSCommandPath, $workerParameters
+    } -ArgumentList $PSCommandPath, $workerParameters, $workerHostMarker
     $completedJob = Wait-Job -Job $workerJob -Timeout $TimeoutSeconds
     if ($null -eq $completedJob) {
         Stop-Job -Job $workerJob -ErrorAction SilentlyContinue
@@ -209,17 +218,27 @@ if (-not $InternalWorker) {
                     ForEach-Object { [int]$_ }
             )
         }
-        $remainingOwnedAccess = @(
-            $ownedAccessIds |
-                ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }
-        )
+        if ($ownedAccessIds.Count -eq 0 -and (Test-Path -LiteralPath $workerHostMarker)) {
+            $workerHostId = 0
+            if ([int]::TryParse(
+                [IO.File]::ReadAllText($workerHostMarker),
+                [ref]$workerHostId)) {
+                $ownedAccessIds = @(
+                    Get-CimInstance -ClassName Win32_Process -Filter "Name = 'MSACCESS.EXE'" -ErrorAction SilentlyContinue |
+                        Where-Object { [int]$_.ParentProcessId -eq $workerHostId } |
+                        Select-Object -ExpandProperty ProcessId
+                )
+            }
+        }
+        $remainingOwnedAccess = @(Get-OwnedAccessProcesses $ownedAccessIds)
         if ($remainingOwnedAccess.Count -gt 0) {
             $remainingOwnedAccess | Stop-Process -Force -ErrorAction SilentlyContinue
         }
-        $processCleanupFailed = @(
-            $ownedAccessIds |
-                ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }
-        ).Count -gt 0
+        $processCleanupFailed = @(Get-OwnedAccessProcesses $ownedAccessIds).Count -gt 0
+        $unattributedAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
+        if ($ownedAccessIds.Count -eq 0 -and $unattributedAccess.Count -gt 0) {
+            $processCleanupFailed = $true
+        }
         $scratchPattern = ".$([IO.Path]::GetFileName($output)).metadata-*"
         try {
             if (Test-Path -LiteralPath $output) {
@@ -229,6 +248,9 @@ if (-not $InternalWorker) {
                 Remove-Item -Recurse -Force -ErrorAction Stop
             if (Test-Path -LiteralPath $workerProcessMarker) {
                 Remove-Item -LiteralPath $workerProcessMarker -Force -ErrorAction Stop
+            }
+            if (Test-Path -LiteralPath $workerHostMarker) {
+                Remove-Item -LiteralPath $workerHostMarker -Force -ErrorAction Stop
             }
         }
         catch {
@@ -254,6 +276,9 @@ if (-not $InternalWorker) {
     Remove-Job -Job $workerJob -Force -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $workerProcessMarker) {
         Remove-Item -LiteralPath $workerProcessMarker -Force -ErrorAction SilentlyContinue
+    }
+    if (Test-Path -LiteralPath $workerHostMarker) {
+        Remove-Item -LiteralPath $workerHostMarker -Force -ErrorAction SilentlyContinue
     }
     if (-not [string]::IsNullOrWhiteSpace($workerFailure)) {
         Stop-Export $workerFailure
@@ -517,16 +542,10 @@ finally {
     Close-ComObject $access
     [GC]::Collect()
     [GC]::WaitForPendingFinalizers()
-    $remainingAccess = @(
-        $ownedAccessProcessIds |
-            ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }
-    )
+    $remainingAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIds)
     if ($remainingAccess.Count -gt 0) {
         $remainingAccess | Wait-Process -Timeout 30 -ErrorAction SilentlyContinue
-        $remainingAccess = @(
-            $ownedAccessProcessIds |
-                ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }
-        )
+        $remainingAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIds)
     }
     if ($remainingAccess.Count -gt 0) {
         try {
@@ -536,19 +555,13 @@ finally {
             $cleanupFailure = "AccessMetadataProcessCleanupFailed"
         }
         for ($attempt = 0; $attempt -lt 20; $attempt++) {
-            $remainingAccess = @(
-                $ownedAccessProcessIds |
-                    ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }
-            )
+            $remainingAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIds)
             if ($remainingAccess.Count -eq 0) {
                 break
             }
             Start-Sleep -Milliseconds 250
         }
-        $remainingAccess = @(
-            $ownedAccessProcessIds |
-                ForEach-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue }
-        )
+        $remainingAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIds)
         if ($remainingAccess.Count -gt 0) {
             $cleanupFailure = "AccessMetadataProcessCleanupFailed"
         }
