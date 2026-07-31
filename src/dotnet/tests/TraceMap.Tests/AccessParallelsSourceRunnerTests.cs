@@ -143,8 +143,10 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("$access.SaveAsText(", producer, StringComparison.Ordinal);
         Assert.Contains("Get-LoadedState $access", producer, StringComparison.Ordinal);
         Assert.Contains("AccessMetadataSourceChanged", producer, StringComparison.Ordinal);
+        Assert.Contains("$guardDatabase.Properties.Delete(\"StartupForm\")", producer, StringComparison.Ordinal);
         Assert.Contains("Remove-Item -LiteralPath $scratch -Recurse -Force", producer, StringComparison.Ordinal);
-        Assert.Contains("throw \"AccessMetadataCleanupFailed\"", producer, StringComparison.Ordinal);
+        Assert.Contains("AccessMetadataProcessCleanupFailed", producer, StringComparison.Ordinal);
+        Assert.Contains("AccessMetadataScratchCleanupFailed", producer, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenForm", producer, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("OpenReport", producer, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("OpenQuery", producer, StringComparison.OrdinalIgnoreCase);
