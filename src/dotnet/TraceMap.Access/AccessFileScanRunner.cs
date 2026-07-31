@@ -49,6 +49,7 @@ public sealed class AccessFileScanRunner
         {
             cancellationToken.ThrowIfCancellationRequested();
             scratchDirectory = createScratchDirectory();
+            ValidateScratchDirectory(scratchDirectory);
             AccessWorkingCopy.RestrictDirectory(scratchDirectory);
 
             var snapshotRepository = Path.Combine(scratchDirectory, SnapshotRepositoryName);
@@ -279,6 +280,20 @@ public sealed class AccessFileScanRunner
     }
 
     internal static int GitTimeoutMilliseconds(int timeoutSeconds) => checked(timeoutSeconds * 1000);
+
+    internal static void ValidateScratchDirectory(
+        string path,
+        Func<string, DriveType>? driveType = null)
+    {
+        if (IsNetworkHostedPath(path, driveType))
+            throw new AccessScanException("AccessFileSnapshotNetworkScratchRejected");
+        var fullPath = Path.GetFullPath(path);
+        if (IsNetworkHostedPath(fullPath, driveType))
+            throw new AccessScanException("AccessFileSnapshotNetworkScratchRejected");
+        RejectReparsePath(fullPath, "AccessFileSnapshotUnsafeScratchRejected");
+        if (!Directory.Exists(fullPath))
+            throw new AccessScanException("AccessFileSnapshotUnsafeScratchRejected");
+    }
 
     internal static bool IsNetworkHostedPath(
         string path,

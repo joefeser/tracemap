@@ -151,6 +151,7 @@ public static class AccessFactBuilder
         }
 
         var queryDeclarationFactIds = new Dictionary<string, string>(StringComparer.Ordinal);
+        var queryOutputOwnerStableKeys = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var query in projection.Queries)
         {
             var queryFact = Create(manifest, FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, span,
@@ -175,6 +176,7 @@ public static class AccessFactBuilder
             }
             foreach (var output in query.OutputFields ?? [])
             {
+                queryOutputOwnerStableKeys[output.Identity.StableKey] = query.Identity.StableKey;
                 facts.Add(Create(manifest, FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, span,
                     sourceSymbol: query.Identity.StableKey,
                     targetSymbol: output.Identity.StableKey,
@@ -319,9 +321,15 @@ public static class AccessFactBuilder
 
         foreach (var gap in projectedGaps)
         {
-            var supportingFactId = gap.ScopeKind == "query"
-                && gap.StableScopeKey is not null
-                && queryDeclarationFactIds.TryGetValue(gap.StableScopeKey, out var queryFactId)
+            var supportingQueryStableKey = gap.ScopeKind == "query"
+                ? gap.StableScopeKey
+                : gap.ScopeKind == "query-output-field"
+                    && gap.StableScopeKey is not null
+                    && queryOutputOwnerStableKeys.TryGetValue(gap.StableScopeKey, out var ownerStableKey)
+                        ? ownerStableKey
+                        : null;
+            var supportingFactId = supportingQueryStableKey is not null
+                && queryDeclarationFactIds.TryGetValue(supportingQueryStableKey, out var queryFactId)
                     ? queryFactId
                     : null;
             facts.Add(Create(manifest, FactTypes.AnalysisGap, gap.RuleId ?? RuleIds.LegacyAccessCoverageGap, EvidenceTiers.Tier4Unknown, span,

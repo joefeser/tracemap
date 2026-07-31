@@ -455,7 +455,34 @@ public sealed class AccessFoundationTests
         Assert.False(AccessFileScanRunner.IsNetworkHostedPath(
             Path.Combine(temp.Path, "local.accdb"),
             _ => DriveType.Fixed));
+        var scratchError = Assert.Throws<AccessScanException>(() =>
+            AccessFileScanRunner.ValidateScratchDirectory(temp.Path, _ => DriveType.Network));
+        Assert.Equal("AccessFileSnapshotNetworkScratchRejected", scratchError.Classification);
         Assert.Equal(47_000, AccessFileScanRunner.GitTimeoutMilliseconds(47));
+    }
+
+    [Fact]
+    public async Task File_first_snapshot_rejects_network_scratch_before_copy_or_scan()
+    {
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "fixture.accdb");
+        await File.WriteAllBytesAsync(database, [1, 2, 3, 4]);
+        var scanCalled = false;
+
+        var exception = await Assert.ThrowsAsync<AccessScanException>(() => new AccessFileScanRunner().RunCoreAsync(
+            new(database, Path.Combine(temp.Path, "out")),
+            (_, _) =>
+            {
+                scanCalled = true;
+                throw new InvalidOperationException("scan should not run");
+            },
+            () => @"\\server\share\tracemap-access-scratch",
+            _ => { },
+            CancellationToken.None));
+
+        Assert.Equal("AccessFileSnapshotNetworkScratchRejected", exception.Classification);
+        Assert.False(scanCalled);
+        Assert.Equal([1, 2, 3, 4], await File.ReadAllBytesAsync(database));
     }
 
     [Fact]
@@ -838,6 +865,36 @@ public sealed class AccessFoundationTests
         Assert.Equal(query.TargetSymbol, gap.TargetSymbol);
         Assert.Equal(query.TargetSymbol, gap.Properties["scopeStableKey"]);
         Assert.Equal(query.FactId, gap.Properties["supportingFactIds"]);
+    }
+
+    [Fact]
+    public void Query_output_gaps_reference_the_owning_query_declaration_fact()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        File.WriteAllBytes(databasePath, [1, 2, 3, 4]);
+        var input = Input(databasePath, Path.Combine(temp.Path, "out"));
+        var projection = Projection(input);
+        var query = Assert.Single(projection.Queries);
+        var outputIdentity = AccessSafeValues.Identity(
+            AccessSafeValues.DatabaseIdentitySeed(input.RepositoryIdentityHash, input.CommitSha, input.DatabaseRelativePath, input.DatabaseHash),
+            $"query-field-{query.Identity.StableKey}",
+            "OutputField",
+            0);
+        var output = new AccessQueryOutputFieldProjection(outputIdentity, 0, "long", [], "partial");
+        projection = projection with
+        {
+            Queries = [query with { OutputFields = [output] }],
+            Gaps = [new("AccessQueryOutputSourceUnavailable", "query-output-field", outputIdentity.StableKey, RuleIds.LegacyAccessQuery)]
+        };
+
+        var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath));
+        var declaration = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessQueryDeclared);
+        var gap = Assert.Single(result.Facts, fact =>
+            fact.Properties.GetValueOrDefault("classification") == "AccessQueryOutputSourceUnavailable");
+
+        Assert.Equal(outputIdentity.StableKey, gap.TargetSymbol);
+        Assert.Equal(declaration.FactId, gap.Properties["supportingFactIds"]);
     }
 
     [Fact]
