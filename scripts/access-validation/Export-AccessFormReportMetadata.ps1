@@ -166,7 +166,6 @@ $originalBefore = Get-Sha256 $original
 $copyBefore = Get-Sha256 $copy
 $access = $null
 $database = $null
-$daoEngine = $null
 $guardDatabase = $null
 $records = [System.Collections.Generic.List[object]]::new()
 $catalogPartial = $false
@@ -176,21 +175,18 @@ try {
     New-Item -ItemType Directory -Path $scratch | Out-Null
     $workingCopy = Join-Path $scratch "working.accdb"
     Copy-Item -LiteralPath $copy -Destination $workingCopy
+    $access = New-Object -ComObject Access.Application
+    $access.AutomationSecurity = 3
+    $access.Visible = $false
     try {
-        $daoEngine = New-Object -ComObject DAO.DBEngine.120
-        $guardDatabase = $daoEngine.OpenDatabase($workingCopy)
+        $guardDatabase = $access.DBEngine.OpenDatabase($workingCopy)
         try { $guardDatabase.Properties.Delete("StartupForm") } catch { }
         $guardDatabase.Close()
     }
     finally {
         Close-ComObject $guardDatabase
         $guardDatabase = $null
-        Close-ComObject $daoEngine
-        $daoEngine = $null
     }
-    $access = New-Object -ComObject Access.Application
-    $access.AutomationSecurity = 3
-    $access.Visible = $false
     $access.OpenCurrentDatabase($workingCopy, $true)
     if ([bool]$access.Visible -or (Test-Path -LiteralPath $canary)) {
         Stop-Export "AccessMetadataStartupCanaryFired"
@@ -393,7 +389,6 @@ try {
 }
 finally {
     Close-ComObject $guardDatabase
-    Close-ComObject $daoEngine
     Close-ComObject $database
     if ($null -ne $access) {
         try { $access.CloseCurrentDatabase() } catch { }
