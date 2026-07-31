@@ -390,8 +390,16 @@ finally {
         $remainingAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
     }
     if ($remainingAccess.Count -gt 0) {
-        $cleanupFailure = "AccessMetadataProcessCleanupFailed"
-        $remainingAccess | Stop-Process -Force -ErrorAction SilentlyContinue
+        try {
+            $remainingAccess | Stop-Process -Force -ErrorAction Stop
+            $remainingAccess | Wait-Process -Timeout 5 -ErrorAction SilentlyContinue
+        }
+        catch {
+            $cleanupFailure = "AccessMetadataProcessCleanupFailed"
+        }
+        if (Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue) {
+            $cleanupFailure = "AccessMetadataProcessCleanupFailed"
+        }
     }
     try {
         if (Test-Path -LiteralPath $scratch) {
