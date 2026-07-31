@@ -600,6 +600,24 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void File_first_snapshot_cleanup_clears_read_only_members_before_deletion()
+    {
+        using var temp = new TempDirectory();
+        var scratch = Path.Combine(temp.Path, "read-only-cleanup");
+        var objects = Path.Combine(scratch, ".git", "objects", "ab");
+        Directory.CreateDirectory(objects);
+        var gitObject = Path.Combine(objects, "synthetic-object");
+        File.WriteAllBytes(gitObject, [1, 2, 3, 4]);
+        File.SetAttributes(gitObject, File.GetAttributes(gitObject) | FileAttributes.ReadOnly);
+
+        AccessFileScanRunner.ClearReadOnlyAttributes(scratch);
+
+        Assert.Equal(FileAttributes.None, File.GetAttributes(gitObject) & FileAttributes.ReadOnly);
+        Directory.Delete(scratch, recursive: true);
+        Assert.False(Directory.Exists(scratch));
+    }
+
+    [Fact]
     public async Task File_first_validation_rejects_unsupported_reparse_and_caller_owned_paths_before_snapshot_creation()
     {
         using var temp = new TempDirectory();

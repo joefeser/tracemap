@@ -112,6 +112,7 @@ public sealed class AccessFileScanRunner
         {
             try
             {
+                ClearReadOnlyAttributes(scratchDirectory);
                 deleteScratchDirectory(scratchDirectory);
                 if (!Directory.Exists(scratchDirectory)) return;
             }
@@ -125,6 +126,27 @@ public sealed class AccessFileScanRunner
         }
 
         throw new AccessScanException("AccessFileSnapshotCleanupFailed");
+    }
+
+    internal static void ClearReadOnlyAttributes(string scratchDirectory)
+    {
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = false,
+            ReturnSpecialDirectories = false,
+            AttributesToSkip = FileAttributes.ReparsePoint
+        };
+        foreach (var path in Directory.EnumerateFileSystemEntries(scratchDirectory, "*", options))
+        {
+            var attributes = File.GetAttributes(path);
+            if ((attributes & FileAttributes.ReadOnly) != 0)
+                File.SetAttributes(path, attributes & ~FileAttributes.ReadOnly);
+        }
+
+        var rootAttributes = File.GetAttributes(scratchDirectory);
+        if ((rootAttributes & FileAttributes.ReadOnly) != 0)
+            File.SetAttributes(scratchDirectory, rootAttributes & ~FileAttributes.ReadOnly);
     }
 
     private static AccessFileValidatedInput Validate(AccessFileScanOptions options, AccessLimits limits)
