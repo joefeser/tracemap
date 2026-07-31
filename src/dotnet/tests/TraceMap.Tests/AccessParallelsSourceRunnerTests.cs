@@ -168,9 +168,13 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("Get-LoadedState $access", producer, StringComparison.Ordinal);
         Assert.Contains("AccessMetadataSourceChanged", producer, StringComparison.Ordinal);
         Assert.Contains("$guardDatabase.Properties.Delete(\"StartupForm\")", producer, StringComparison.Ordinal);
-        Assert.Contains("$scratchPattern = \".$([IO.Path]::GetFileName($output)).metadata-*\"", producer, StringComparison.Ordinal);
-        Assert.Contains("Remove-Item -Recurse -Force -ErrorAction Stop", producer, StringComparison.Ordinal);
+        Assert.Contains("$workerScratchDirectory", producer, StringComparison.Ordinal);
+        Assert.Contains("$workerParameters[\"WorkerScratchDirectoryPath\"] = $workerScratchDirectory", producer, StringComparison.Ordinal);
+        Assert.DoesNotContain("$scratchPattern", producer, StringComparison.Ordinal);
+        Assert.Contains("Remove-Item -LiteralPath $workerScratchDirectory -Recurse -Force -ErrorAction Stop", producer, StringComparison.Ordinal);
         Assert.Contains("AccessMetadataProcessCleanupFailed", producer, StringComparison.Ordinal);
+        Assert.Contains("AccessMetadataOutputCleanupFailed", producer, StringComparison.Ordinal);
+        Assert.Contains("Test-SourceHashesUnchanged", producer, StringComparison.Ordinal);
         Assert.Contains("$scratchCleanupFailed = $true", producer, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenForm", producer, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("OpenReport", producer, StringComparison.OrdinalIgnoreCase);

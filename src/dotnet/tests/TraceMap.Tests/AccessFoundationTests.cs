@@ -556,7 +556,7 @@ public sealed class AccessFoundationTests
             },
             _ => throw new IOException("synthetic cleanup failure"),
             CancellationToken.None,
-            () => { }));
+            () => Task.CompletedTask));
 
         Assert.Equal("AccessFileSnapshotCleanupFailed", exception.Classification);
         Directory.Delete(scratch, recursive: true);
@@ -591,7 +591,11 @@ public sealed class AccessFoundationTests
                 Directory.Delete(path, recursive: true);
             },
             CancellationToken.None,
-            () => retryDelays++);
+            () =>
+            {
+                retryDelays++;
+                return Task.CompletedTask;
+            });
 
         Assert.NotEmpty(result.Facts);
         Assert.Equal(3, cleanupAttempts);
@@ -615,6 +619,22 @@ public sealed class AccessFoundationTests
         Assert.Equal(FileAttributes.None, File.GetAttributes(gitObject) & FileAttributes.ReadOnly);
         Directory.Delete(scratch, recursive: true);
         Assert.False(Directory.Exists(scratch));
+    }
+
+    [Fact]
+    public async Task File_first_snapshot_cleanup_is_idempotent_when_scratch_is_already_absent()
+    {
+        using var temp = new TempDirectory();
+        var scratch = Path.Combine(temp.Path, "already-removed");
+        var deleteCalled = false;
+
+        AccessFileScanRunner.ClearReadOnlyAttributes(scratch);
+        await AccessFileScanRunner.DeleteScratchDirectoryWithRetryAsync(
+            scratch,
+            _ => deleteCalled = true,
+            () => Task.CompletedTask);
+
+        Assert.False(deleteCalled);
     }
 
     [Fact]

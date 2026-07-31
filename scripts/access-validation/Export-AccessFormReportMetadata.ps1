@@ -32,7 +32,9 @@ param(
 
     [switch]$InternalWorker,
 
-    [string]$WorkerProcessMarkerPath = ""
+    [string]$WorkerProcessMarkerPath = "",
+
+    [string]$WorkerScratchDirectoryPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -75,6 +77,38 @@ function Get-BytesSha256([byte[]]$Bytes) {
     }
     finally {
         $algorithm.Dispose()
+    }
+}
+
+function Remove-PathChecked(
+    [string]$Path,
+    [bool]$Recurse,
+    [string]$FailureClassification
+) {
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    $failed = $false
+    try {
+        Remove-Item -LiteralPath $Path -Force -Recurse:$Recurse -ErrorAction Stop
+        if (Test-Path -LiteralPath $Path) { $failed = $true }
+    }
+    catch {
+        $failed = $true
+    }
+    if ($failed) { Stop-Export $FailureClassification }
+}
+
+function Test-SourceHashesUnchanged(
+    [string]$OriginalPath,
+    [string]$OriginalHash,
+    [string]$CopyPath,
+    [string]$CopyHash
+) {
+    try {
+        return (Get-Sha256 $OriginalPath) -eq $OriginalHash -and
+            (Get-Sha256 $CopyPath) -eq $CopyHash
+    }
+    catch {
+        return $false
     }
 }
 
@@ -266,13 +300,15 @@ if (-not $InternalWorker) {
     New-Item -ItemType Directory -Path $outputParent -Force | Out-Null
     $workerProcessMarker = Join-Path $outputParent ".$([IO.Path]::GetFileName($output)).worker-$([Guid]::NewGuid().ToString('N')).process.json"
     $workerHostMarker = "$workerProcessMarker.host"
+    $workerScratchDirectory = Join-Path $outputParent ".$([IO.Path]::GetFileName($output)).metadata-$([Guid]::NewGuid().ToString('N'))"
     $workerParameters = @{}
     foreach ($entry in $PSBoundParameters.GetEnumerator()) {
-        if ($entry.Key -notin @("InternalWorker", "WorkerProcessMarkerPath")) {
+        if ($entry.Key -notin @("InternalWorker", "WorkerProcessMarkerPath", "WorkerScratchDirectoryPath")) {
             $workerParameters[$entry.Key] = $entry.Value
         }
     }
     $workerParameters["WorkerProcessMarkerPath"] = $workerProcessMarker
+    $workerParameters["WorkerScratchDirectoryPath"] = $workerScratchDirectory
     $workerJob = Start-Job -ScriptBlock {
         param([string]$ScriptPath, [hashtable]$Parameters, [string]$HostMarkerPath)
         [IO.File]::WriteAllText($HostMarkerPath, [string]$PID)
@@ -315,13 +351,13 @@ if (-not $InternalWorker) {
         $remainingOwnedAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
         $unattributedAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
         $processCleanupFailed = $remainingOwnedAccess.Count -gt 0 -or $unattributedAccess.Count -gt 0
-        $scratchPattern = ".$([IO.Path]::GetFileName($output)).metadata-*"
         try {
             if (Test-Path -LiteralPath $output) {
                 Remove-Item -LiteralPath $output -Recurse -Force -ErrorAction Stop
             }
-            Get-ChildItem -LiteralPath $outputParent -Directory -Filter $scratchPattern -ErrorAction SilentlyContinue |
-                Remove-Item -Recurse -Force -ErrorAction Stop
+            if (Test-Path -LiteralPath $workerScratchDirectory) {
+                Remove-Item -LiteralPath $workerScratchDirectory -Recurse -Force -ErrorAction Stop
+            }
             if (Test-Path -LiteralPath $workerProcessMarker) {
                 Remove-Item -LiteralPath $workerProcessMarker -Force -ErrorAction Stop
             }
@@ -337,8 +373,7 @@ if (-not $InternalWorker) {
         if ($processCleanupFailed) {
             Stop-Export "AccessMetadataTimeoutCleanupFailed"
         }
-        if ((Get-Sha256 $original) -ne $originalBeforeSupervision -or
-            (Get-Sha256 $copy) -ne $copyBeforeSupervision) {
+        if (-not (Test-SourceHashesUnchanged $original $originalBeforeSupervision $copy $copyBeforeSupervision)) {
             Stop-Export "AccessMetadataSourceChanged"
         }
         Stop-Export "AccessMetadataTimeout"
@@ -389,11 +424,14 @@ if (-not $InternalWorker) {
     }
     $unattributedAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
     $processCleanupFailed = $remainingOwnedAccess.Count -gt 0 -or $unattributedAccess.Count -gt 0
-    $scratchPattern = ".$([IO.Path]::GetFileName($output)).metadata-*"
     $scratchCleanupFailed = $false
     try {
-        Get-ChildItem -LiteralPath $outputParent -Directory -Filter $scratchPattern -ErrorAction SilentlyContinue |
-            Remove-Item -Recurse -Force -ErrorAction Stop
+        if (Test-Path -LiteralPath $workerScratchDirectory) {
+            Remove-Item -LiteralPath $workerScratchDirectory -Recurse -Force -ErrorAction Stop
+        }
+        if (Test-Path -LiteralPath $workerScratchDirectory) {
+            $scratchCleanupFailed = $true
+        }
     }
     catch {
         $scratchCleanupFailed = $true
@@ -405,16 +443,11 @@ if (-not $InternalWorker) {
         Remove-Item -LiteralPath $workerHostMarker -Force -ErrorAction SilentlyContinue
     }
     if ($processCleanupFailed -or $scratchCleanupFailed) {
-        if (Test-Path -LiteralPath $output) {
-            Remove-Item -LiteralPath $output -Recurse -Force -ErrorAction SilentlyContinue
-        }
+        Remove-PathChecked $output $true "AccessMetadataOutputCleanupFailed"
         Stop-Export "AccessMetadataProcessCleanupFailed"
     }
-    if ((Get-Sha256 $original) -ne $originalBeforeSupervision -or
-        (Get-Sha256 $copy) -ne $copyBeforeSupervision) {
-        if (Test-Path -LiteralPath $output) {
-            Remove-Item -LiteralPath $output -Recurse -Force -ErrorAction SilentlyContinue
-        }
+    if (-not (Test-SourceHashesUnchanged $original $originalBeforeSupervision $copy $copyBeforeSupervision)) {
+        Remove-PathChecked $output $true "AccessMetadataOutputCleanupFailed"
         Stop-Export "AccessMetadataSourceChanged"
     }
     if (-not [string]::IsNullOrWhiteSpace($workerFailure)) {
@@ -429,7 +462,20 @@ if (-not $InternalWorker) {
 
 $outputParent = Split-Path -Parent $output
 New-Item -ItemType Directory -Path $outputParent -Force | Out-Null
-$scratch = Join-Path $outputParent ".$([IO.Path]::GetFileName($output)).metadata-$([Guid]::NewGuid().ToString('N'))"
+if ([string]::IsNullOrWhiteSpace($WorkerScratchDirectoryPath)) {
+    Stop-Export "AccessMetadataScratchBindingMissing"
+}
+$scratch = [IO.Path]::GetFullPath($WorkerScratchDirectoryPath)
+$expectedScratchPrefix = ".$([IO.Path]::GetFileName($output)).metadata-"
+if (-not [string]::Equals(
+        [IO.Path]::GetDirectoryName($scratch),
+        $outputParent,
+        [StringComparison]::OrdinalIgnoreCase) -or
+    -not [IO.Path]::GetFileName($scratch).StartsWith(
+        $expectedScratchPrefix,
+        [StringComparison]::OrdinalIgnoreCase)) {
+    Stop-Export "AccessMetadataScratchBindingMismatch"
+}
 $originalBefore = Get-Sha256 $original
 $copyBefore = Get-Sha256 $copy
 if (-not [string]::Equals($copyBefore, $originalBefore, [StringComparison]::OrdinalIgnoreCase)) {
