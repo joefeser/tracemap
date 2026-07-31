@@ -392,10 +392,15 @@ finally {
     if ($remainingAccess.Count -gt 0) {
         try {
             $remainingAccess | Stop-Process -Force -ErrorAction Stop
-            $remainingAccess | Wait-Process -Timeout 5 -ErrorAction SilentlyContinue
         }
         catch {
             $cleanupFailure = "AccessMetadataProcessCleanupFailed"
+        }
+        for ($attempt = 0; $attempt -lt 20; $attempt++) {
+            if (-not (Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)) {
+                break
+            }
+            Start-Sleep -Milliseconds 250
         }
         if (Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue) {
             $cleanupFailure = "AccessMetadataProcessCleanupFailed"
