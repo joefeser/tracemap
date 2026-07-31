@@ -48,6 +48,16 @@ function Get-Sha256([string]$Path) {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
+function Get-BytesSha256([byte[]]$Bytes) {
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    try {
+        return (($algorithm.ComputeHash($Bytes) | ForEach-Object { $_.ToString("x2") }) -join "")
+    }
+    finally {
+        $algorithm.Dispose()
+    }
+}
+
 function Get-LoadedState([object]$Application) {
     $forms = 0
     $reports = 0
@@ -319,7 +329,7 @@ try {
                     $text = [IO.File]::ReadAllText($textPath)
                     $lineCount = if ($text.Length -eq 0) { 0 } else { [regex]::Matches($text, "`n").Count + 1 }
                     if ($lineCount -gt $MaxTextLines) { Stop-Export "AccessMetadataTextLimitReached" }
-                    $documentHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($Utf8NoBom.GetBytes($text))).ToLowerInvariant()
+                    $documentHash = Get-BytesSha256 ($Utf8NoBom.GetBytes($text))
                     Add-Record $records "ui-design-document" "$surfaceId-document" $surfaceId $surfaceSpec.Role "exact-lines" $documentHash 1 $lineCount "complete" ([ordered]@{
                         documentRole = $surfaceSpec.Kind
                         designText = $text
@@ -344,7 +354,7 @@ try {
     $recordLines = @($orderedRecords | ForEach-Object { $_ | ConvertTo-Json -Compress -Depth 20 })
     $recordsText = if ($recordLines.Count -eq 0) { "" } else { ($recordLines -join "`n") + "`n" }
     $recordsBytes = $Utf8NoBom.GetBytes($recordsText)
-    $recordsHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($recordsBytes)).ToLowerInvariant()
+    $recordsHash = Get-BytesSha256 $recordsBytes
     $counts = [ordered]@{}
     foreach ($group in $orderedRecords | Group-Object kind | Sort-Object Name) {
         $counts[$group.Name] = $group.Count
