@@ -898,6 +898,41 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Query_output_gap_owner_collisions_fail_closed_without_a_supporting_query_fact()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        File.WriteAllBytes(databasePath, [1, 2, 3, 4]);
+        var input = Input(databasePath, Path.Combine(temp.Path, "out"));
+        var projection = Projection(input);
+        var firstQuery = Assert.Single(projection.Queries);
+        var seed = AccessSafeValues.DatabaseIdentitySeed(
+            input.RepositoryIdentityHash,
+            input.CommitSha,
+            input.DatabaseRelativePath,
+            input.DatabaseHash);
+        var secondQuery = firstQuery with { Identity = AccessSafeValues.Identity(seed, "query", "SecondQuery") };
+        var sharedOutputIdentity = AccessSafeValues.Identity(seed, "query-field-shared", "OutputField", 0);
+        var sharedOutput = new AccessQueryOutputFieldProjection(sharedOutputIdentity, 0, "long", [], "partial");
+        projection = projection with
+        {
+            Queries =
+            [
+                firstQuery with { OutputFields = [sharedOutput] },
+                secondQuery with { OutputFields = [sharedOutput] }
+            ],
+            Gaps = [new("AccessQueryOutputSourceUnavailable", "query-output-field", sharedOutputIdentity.StableKey, RuleIds.LegacyAccessQuery)]
+        };
+
+        var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath));
+        var gap = Assert.Single(result.Facts, fact =>
+            fact.Properties.GetValueOrDefault("classification") == "AccessQueryOutputSourceUnavailable");
+
+        Assert.Equal(sharedOutputIdentity.StableKey, gap.TargetSymbol);
+        Assert.False(gap.Properties.ContainsKey("supportingFactIds"));
+    }
+
+    [Fact]
     public void Query_parameter_limit_preserves_query_declaration_and_attributes_the_gap()
     {
         using var temp = new TempDirectory();

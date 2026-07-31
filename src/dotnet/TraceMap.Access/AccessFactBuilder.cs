@@ -151,7 +151,7 @@ public static class AccessFactBuilder
         }
 
         var queryDeclarationFactIds = new Dictionary<string, string>(StringComparer.Ordinal);
-        var queryOutputOwnerStableKeys = new Dictionary<string, string>(StringComparer.Ordinal);
+        var queryOutputOwnerStableKeys = new Dictionary<string, string?>(StringComparer.Ordinal);
         foreach (var query in projection.Queries)
         {
             var queryFact = Create(manifest, FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, span,
@@ -176,7 +176,15 @@ public static class AccessFactBuilder
             }
             foreach (var output in query.OutputFields ?? [])
             {
-                queryOutputOwnerStableKeys[output.Identity.StableKey] = query.Identity.StableKey;
+                if (queryOutputOwnerStableKeys.TryGetValue(output.Identity.StableKey, out var existingOwner)
+                    && !string.Equals(existingOwner, query.Identity.StableKey, StringComparison.Ordinal))
+                {
+                    queryOutputOwnerStableKeys[output.Identity.StableKey] = null;
+                }
+                else if (!queryOutputOwnerStableKeys.ContainsKey(output.Identity.StableKey))
+                {
+                    queryOutputOwnerStableKeys.Add(output.Identity.StableKey, query.Identity.StableKey);
+                }
                 facts.Add(Create(manifest, FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, span,
                     sourceSymbol: query.Identity.StableKey,
                     targetSymbol: output.Identity.StableKey,
@@ -321,13 +329,13 @@ public static class AccessFactBuilder
 
         foreach (var gap in projectedGaps)
         {
-            var supportingQueryStableKey = gap.ScopeKind == "query"
-                ? gap.StableScopeKey
-                : gap.ScopeKind == "query-output-field"
-                    && gap.StableScopeKey is not null
-                    && queryOutputOwnerStableKeys.TryGetValue(gap.StableScopeKey, out var ownerStableKey)
-                        ? ownerStableKey
-                        : null;
+            var supportingQueryStableKey = gap.ScopeKind switch
+            {
+                "query" => gap.StableScopeKey,
+                "query-output-field" when gap.StableScopeKey is not null
+                    && queryOutputOwnerStableKeys.TryGetValue(gap.StableScopeKey, out var ownerStableKey) => ownerStableKey,
+                _ => null
+            };
             var supportingFactId = supportingQueryStableKey is not null
                 && queryDeclarationFactIds.TryGetValue(supportingQueryStableKey, out var queryFactId)
                     ? queryFactId

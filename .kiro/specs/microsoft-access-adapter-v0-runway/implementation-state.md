@@ -79,9 +79,9 @@ field evidence preserved.
 
 Review follow-up validation after merging the latest `origin/dev`:
 
-- Access foundation tests: 40/40 passed;
+- Access foundation tests: 41/41 passed;
 - full solution build: passed with 0 warnings and 0 errors;
-- full solution tests: 1037/1037 passed;
+- full solution tests: 1038/1038 passed;
 - focused changed-file formatting verification: passed;
 - private-path guard and `git diff --check`: passed.
 
@@ -90,6 +90,8 @@ to be verified as local and non-reparse before copying database bytes, covering
 host configurations whose temporary directory points to network storage. It
 also required query-output-field gaps to preserve the owning query declaration
 as a supporting fact. Both findings are patched with focused regressions.
+If duplicate query-output stable keys claim different owning queries, supporting
+fact attribution now fails closed instead of silently selecting either query.
 
 ## Why This Runway Exists
 
