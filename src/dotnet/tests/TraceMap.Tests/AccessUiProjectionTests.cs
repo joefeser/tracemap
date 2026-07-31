@@ -61,6 +61,39 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Projector_preserves_a_declared_report_group_with_an_unavailable_expression()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed(
+            "repo",
+            new string('a', 40),
+            "fixture.accdb",
+            "hash");
+        var raw = new AccessRawUiSurface(
+            "rptMissingGroupExpression",
+            "report",
+            false,
+            null,
+            [],
+            [],
+            ReportGroups: [new(0, null, "1", "0")]);
+
+        var result = AccessUiProjector.Project(
+            seed,
+            [raw],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal));
+
+        var group = Assert.Single(Assert.Single(result.Surfaces).ReportGroups!);
+        Assert.Equal(0, group.Ordinal);
+        Assert.Equal("unresolved", group.Binding.SourceKind);
+        Assert.Equal("partial", group.Binding.Coverage);
+        Assert.Contains(result.Gaps, gap =>
+            gap.Classification == "AccessReportGroupExpressionUnavailable"
+            && gap.ScopeKind == "binding"
+            && gap.StableScopeKey == group.Binding.Identity.StableKey);
+    }
+
+    [Fact]
     public void Functional_metadata_parser_projects_lookup_subform_and_report_group_bindings_without_layout()
     {
         const string formDesign = """
