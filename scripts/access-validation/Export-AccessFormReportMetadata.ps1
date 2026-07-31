@@ -16,7 +16,7 @@ param(
     [string]$RepositoryIdentityHash,
 
     [Parameter(Mandatory = $true)]
-    [ValidatePattern("^[0-9a-f]{40}$")]
+    [ValidatePattern("^(?:[0-9a-f]{40}|[0-9a-f]{64})$")]
     [string]$CommitSha,
 
     [Parameter(Mandatory = $true)]
@@ -269,14 +269,17 @@ function Add-Record(
     })
 }
 
-function Get-StaticQueryOutputNames([string]$Sql) {
+function Get-StaticQueryOutputNames([string]$Sql, [ref]$Complete) {
+    $Complete.Value = $false
     if ($Sql.Length -gt $MaxTextBytes) { return @() }
     $match = [regex]::Match(
         $Sql,
         "(?is)^\s*(?:PARAMETERS\b.*?;\s*)?SELECT\s+(?:(?:DISTINCT|DISTINCTROW|TOP\s+\d+(?:\s+PERCENT)?)\s+)*(?<list>.*?)\s+\bFROM\b")
     if (-not $match.Success -or $match.Groups["list"].Value.Contains("*")) { return @() }
     $result = [System.Collections.Generic.List[string]]::new()
-    foreach ($rawItem in $match.Groups["list"].Value.Split(",")) {
+    $rawItems = @($match.Groups["list"].Value.Split(","))
+    $parsedCount = 0
+    foreach ($rawItem in $rawItems) {
         $item = $rawItem.Trim()
         if ($item.Contains("(") -and $item -notmatch "(?is)\s+AS\s+(?:\[(?<alias>[^\]]+)\]|(?<alias>[A-Za-z_][A-Za-z0-9_ ]*))\s*$") {
             continue
@@ -284,14 +287,20 @@ function Get-StaticQueryOutputNames([string]$Sql) {
         $alias = [regex]::Match($item, "(?is)\s+AS\s+(?:\[(?<name>[^\]]+)\]|(?<name>[A-Za-z_][A-Za-z0-9_ ]*))\s*$")
         if ($alias.Success) {
             $result.Add($alias.Groups["name"].Value.Trim())
+            $parsedCount++
             continue
         }
         $direct = [regex]::Match(
             $item,
             "(?is)^(?:(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_.$]*)\s*\.\s*)?(?:\[(?<name>[^\]]+)\]|(?<name>[A-Za-z_][A-Za-z0-9_ ]*))$")
-        if ($direct.Success) { $result.Add($direct.Groups["name"].Value.Trim()) }
+        if ($direct.Success) {
+            $result.Add($direct.Groups["name"].Value.Trim())
+            $parsedCount++
+        }
     }
-    return @($result | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+    $unique = @($result | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+    $Complete.Value = $parsedCount -eq $rawItems.Count -and $unique.Count -eq $parsedCount
+    return $unique
 }
 
 $copy = [IO.Path]::GetFullPath($DatabaseCopyPath)
@@ -667,8 +676,9 @@ try {
                     ordinal = $index
                 })
                 if ([int]$query.Type -eq 0) {
-                    $outputNames = @(Get-StaticQueryOutputNames ([string]$query.SQL))
-                    if ($outputNames.Count -eq 0) {
+                    $outputNamesComplete = $false
+                    $outputNames = @(Get-StaticQueryOutputNames ([string]$query.SQL) ([ref]$outputNamesComplete))
+                    if (-not $outputNamesComplete) {
                         $catalogPartial = $true
                         Add-Record $records "source-gap" "gap-query-$($index.ToString('D6'))" "" "producer-gap" "unavailable" "" 0 0 "partial" ([ordered]@{
                             classification = "source-unavailable"
