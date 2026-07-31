@@ -79,11 +79,17 @@ field evidence preserved.
 
 Review follow-up validation after merging the latest `origin/dev`:
 
-- Access foundation tests: 38/38 passed;
+- Access foundation tests: 40/40 passed;
 - full solution build: passed with 0 warnings and 0 errors;
-- full solution tests: 1035/1035 passed;
+- full solution tests: 1037/1037 passed;
 - focused changed-file formatting verification: passed;
 - private-path guard and `git diff --check`: passed.
+
+Fresh exact-head review additionally required the generated scratch directory
+to be verified as local and non-reparse before copying database bytes, covering
+host configurations whose temporary directory points to network storage. It
+also required query-output-field gaps to preserve the owning query declaration
+as a supporting fact. Both findings are patched with focused regressions.
 
 ## Why This Runway Exists
 
