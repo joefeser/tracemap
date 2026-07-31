@@ -152,6 +152,9 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("ConvertTo-AccessProcessIdentities", producer, StringComparison.Ordinal);
         Assert.Contains("GetWindowThreadProcessId", producer, StringComparison.Ordinal);
         Assert.Contains("$Application.hWndAccessApp()", producer, StringComparison.Ordinal);
+        Assert.Contains("Close-ComObject $dbEngine", producer, StringComparison.Ordinal);
+        Assert.Contains("Close-ComObject $currentProject", producer, StringComparison.Ordinal);
+        Assert.Contains("Close-ComObject $surfaceProject", producer, StringComparison.Ordinal);
         Assert.Contains("[uint32]([int]::MaxValue)", producer, StringComparison.Ordinal);
         Assert.Contains("startTimeUtcTicks", producer, StringComparison.Ordinal);
         Assert.Contains("ProcessName, \"MSACCESS\"", producer, StringComparison.Ordinal);

@@ -137,10 +137,12 @@ function Get-AccessApplicationProcess([object]$Application) {
 function Get-LoadedState([object]$Application) {
     $forms = 0
     $reports = 0
+    $currentProject = $null
     $allForms = $null
     $allReports = $null
     try {
-        $allForms = $Application.CurrentProject.AllForms
+        $currentProject = $Application.CurrentProject
+        $allForms = $currentProject.AllForms
         if ([int]$allForms.Count -gt $MaxObjects) { Stop-Export "AccessMetadataObjectLimitReached" }
         for ($index = 0; $index -lt [int]$allForms.Count; $index++) {
             $item = $null
@@ -150,7 +152,7 @@ function Get-LoadedState([object]$Application) {
             }
             finally { Close-ComObject $item }
         }
-        $allReports = $Application.CurrentProject.AllReports
+        $allReports = $currentProject.AllReports
         if ([int]$allReports.Count -gt $MaxObjects) { Stop-Export "AccessMetadataObjectLimitReached" }
         for ($index = 0; $index -lt [int]$allReports.Count; $index++) {
             $item = $null
@@ -165,6 +167,7 @@ function Get-LoadedState([object]$Application) {
     finally {
         Close-ComObject $allReports
         Close-ComObject $allForms
+        Close-ComObject $currentProject
     }
 }
 
@@ -398,14 +401,18 @@ try {
     }
     $access.AutomationSecurity = 3
     $access.Visible = $false
+    $dbEngine = $null
     try {
-        $guardDatabase = $access.DBEngine.OpenDatabase($workingCopy)
+        $dbEngine = $access.DBEngine
+        $guardDatabase = $dbEngine.OpenDatabase($workingCopy)
         try { $guardDatabase.Properties.Delete("StartupForm") } catch { }
         $guardDatabase.Close()
     }
     finally {
         Close-ComObject $guardDatabase
+        Close-ComObject $dbEngine
         $guardDatabase = $null
+        $dbEngine = $null
     }
     $access.OpenCurrentDatabase($workingCopy, $true)
     if ([bool]$access.Visible -or (Test-Path -LiteralPath $canary)) {
@@ -508,12 +515,18 @@ try {
     }
     finally { Close-ComObject $queryDefs }
 
-    foreach ($surfaceSpec in @(
-        [pscustomobject]@{ Kind = "form"; ObjectType = 2; Collection = $access.CurrentProject.AllForms; Role = "form-design-export" },
-        [pscustomobject]@{ Kind = "report"; ObjectType = 3; Collection = $access.CurrentProject.AllReports; Role = "report-design-export" }
-    )) {
-        $collection = $surfaceSpec.Collection
-        try {
+    $surfaceProject = $null
+    $formCollection = $null
+    $reportCollection = $null
+    try {
+        $surfaceProject = $access.CurrentProject
+        $formCollection = $surfaceProject.AllForms
+        $reportCollection = $surfaceProject.AllReports
+        foreach ($surfaceSpec in @(
+            [pscustomobject]@{ Kind = "form"; ObjectType = 2; Collection = $formCollection; Role = "form-design-export" },
+            [pscustomobject]@{ Kind = "report"; ObjectType = 3; Collection = $reportCollection; Role = "report-design-export" }
+        )) {
+            $collection = $surfaceSpec.Collection
             if ([int]$collection.Count -gt $MaxObjects) { Stop-Export "AccessMetadataObjectLimitReached" }
             for ($index = 0; $index -lt [int]$collection.Count; $index++) {
                 $item = $null
@@ -551,7 +564,11 @@ try {
                 finally { Close-ComObject $item }
             }
         }
-        finally { Close-ComObject $collection }
+    }
+    finally {
+        Close-ComObject $reportCollection
+        Close-ComObject $formCollection
+        Close-ComObject $surfaceProject
     }
 
     $access.CloseCurrentDatabase()
