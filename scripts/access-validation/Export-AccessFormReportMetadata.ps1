@@ -342,6 +342,9 @@ if (-not $InternalWorker) {
         catch {
             Stop-Export "AccessMetadataOutputClaimUnavailable"
         }
+        if (Test-Path -LiteralPath $output) {
+            Stop-Export "AccessMetadataOutputExists"
+        }
     $workerProcessMarker = Join-Path $outputParent ".$([IO.Path]::GetFileName($output)).worker-$([Guid]::NewGuid().ToString('N')).process.json"
     $workerHostMarker = "$workerProcessMarker.host"
     $workerScratchDirectory = Join-Path $outputParent ".$([IO.Path]::GetFileName($output)).metadata-$([Guid]::NewGuid().ToString('N'))"

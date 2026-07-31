@@ -174,6 +174,7 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("[IO.FileMode]::CreateNew", producer, StringComparison.Ordinal);
         Assert.Contains("[IO.FileShare]::None", producer, StringComparison.Ordinal);
         Assert.Contains("AccessMetadataOutputClaimUnavailable", producer, StringComparison.Ordinal);
+        Assert.Contains("if (Test-Path -LiteralPath $output) {\n            Stop-Export \"AccessMetadataOutputExists\"", producer, StringComparison.Ordinal);
         Assert.Contains("Remove-PathChecked $outputClaimPath $false", producer, StringComparison.Ordinal);
         Assert.Contains("function Remove-DirectoryWithRetry", producer, StringComparison.Ordinal);
         Assert.Contains("Clear-ReadOnlyAttributes $Path", producer, StringComparison.Ordinal);
