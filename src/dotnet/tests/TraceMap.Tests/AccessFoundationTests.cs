@@ -542,7 +542,7 @@ public sealed class AccessFoundationTests
         var scratchCreated = false;
         var runner = new AccessFileScanRunner();
 
-        var databasePath = await Assert.ThrowsAsync<AccessScanException>(() => runner.RunCoreAsync(
+        var databaseException = await Assert.ThrowsAsync<AccessScanException>(() => runner.RunCoreAsync(
             new("invalid\0database.accdb", Path.Combine(temp.Path, "out")),
             (_, _) => throw new InvalidOperationException("scan should not run"),
             () =>
@@ -552,9 +552,9 @@ public sealed class AccessFoundationTests
             },
             _ => { },
             CancellationToken.None));
-        Assert.Equal("AccessDatabasePathInvalid", databasePath.Classification);
+        Assert.Equal("AccessDatabasePathInvalid", databaseException.Classification);
 
-        var outputPath = await Assert.ThrowsAsync<AccessScanException>(() => runner.RunCoreAsync(
+        var outputException = await Assert.ThrowsAsync<AccessScanException>(() => runner.RunCoreAsync(
             new(database, "invalid\0output"),
             (_, _) => throw new InvalidOperationException("scan should not run"),
             () =>
@@ -564,7 +564,7 @@ public sealed class AccessFoundationTests
             },
             _ => { },
             CancellationToken.None));
-        Assert.Equal("AccessUnsafeOutputPath", outputPath.Classification);
+        Assert.Equal("AccessUnsafeOutputPath", outputException.Classification);
         Assert.False(scratchCreated);
     }
 
