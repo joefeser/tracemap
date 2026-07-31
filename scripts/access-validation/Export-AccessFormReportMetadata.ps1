@@ -166,16 +166,28 @@ $originalBefore = Get-Sha256 $original
 $copyBefore = Get-Sha256 $copy
 $access = $null
 $database = $null
+$guardDatabase = $null
 $records = [System.Collections.Generic.List[object]]::new()
 $catalogPartial = $false
 $succeeded = $false
 $cleanupFailure = ""
 try {
     New-Item -ItemType Directory -Path $scratch | Out-Null
+    $workingCopy = Join-Path $scratch "working.accdb"
+    Copy-Item -LiteralPath $copy -Destination $workingCopy
     $access = New-Object -ComObject Access.Application
     $access.AutomationSecurity = 3
     $access.Visible = $false
-    $access.OpenCurrentDatabase($copy, $true)
+    try {
+        $guardDatabase = $access.DBEngine.OpenDatabase($workingCopy)
+        try { $guardDatabase.Properties.Item("StartupForm").Value = "" } catch { }
+        $guardDatabase.Close()
+    }
+    finally {
+        Close-ComObject $guardDatabase
+        $guardDatabase = $null
+    }
+    $access.OpenCurrentDatabase($workingCopy, $true)
     if ([bool]$access.Visible -or (Test-Path -LiteralPath $canary)) {
         Stop-Export "AccessMetadataCanaryFired"
     }
@@ -376,6 +388,7 @@ try {
     $succeeded = $true
 }
 finally {
+    Close-ComObject $guardDatabase
     Close-ComObject $database
     if ($null -ne $access) {
         try { $access.CloseCurrentDatabase() } catch { }
