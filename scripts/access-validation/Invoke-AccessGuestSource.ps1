@@ -199,7 +199,9 @@ if ($Action -eq "metadata") {
     if (-not (Test-TrustedPath $metadataParent $GuestRoot)) {
         Stop-Guest "AccessGuestMetadataOutputBoundaryInvalid"
     }
-    $metadataRoot = Join-Path $metadataParent "metadata-$([Guid]::NewGuid().ToString('N'))"
+    # Keep the disposable path short. Access design APIs can fail with
+    # RPC_E_SERVERFAULT when a database path is needlessly long.
+    $metadataRoot = Join-Path $metadataParent "m-$([Guid]::NewGuid().ToString('N').Substring(0, 8))"
     $metadataSucceeded = $false
     try {
         & $metadataHarness `
