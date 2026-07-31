@@ -308,7 +308,8 @@ End Sub
     $fixtureControls.Add($reportCalculated)
     $reportCalculated.Name = "txtCalculatedOrder"
     $reportCalculated.ControlSource = '=[OrderId] & "REPORT_EXPRESSION_MARKER_92817"'
-    $reportGroup = $access.CreateGroupLevel($ordersReportTemporaryName, "OrderStatus", $true, $false)
+    $reportGroupIndex = $access.CreateGroupLevel($ordersReportTemporaryName, "OrderStatus", $true, $false)
+    $reportGroup = $ordersReport.GroupLevel($reportGroupIndex)
     $reportGroup.SortOrder = $true
     $access.DoCmd.Save(3, $ordersReportTemporaryName)
     $access.DoCmd.Close(3, $ordersReportTemporaryName, 1)
