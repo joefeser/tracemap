@@ -15,5 +15,7 @@
 - [x] Run focused/full macOS validation, private-path guard, and diff check.
 - [x] Run the unchanged-boundary synthetic Windows smoke using the established
       Phase 9.5 isolation procedure.
+- [x] Make the finding cap configurable and explicitly bounded while preserving
+      deterministic truncation evidence.
 - [ ] Update implementation state, commit, push, open a ready PR to `dev`, and
       run ACK to a terminal handoff.

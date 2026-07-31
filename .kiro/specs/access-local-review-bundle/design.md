@@ -14,6 +14,7 @@ tracemap access-review create
   --scan-output <access-scan-directory>
   --out <new-bundle-directory>
   [--force]
+  [--max-findings <1-10000>]
 ```
 
 The command validates the five standard scan artifacts and requires compatible
@@ -37,6 +38,9 @@ explorer/README.md
 - `ReleaseReviewReporter` receives the scan `index.sqlite` as both before and
   after, scope `access-evidence`, and no path, reverse, priority, contract,
   SQL, package, or identity-mismatch options.
+- The finding cap defaults to 1,000 and is configurable from 1 through 10,000.
+  Existing release-review deterministic ordering, `truncated` status, omitted
+  count, and `TruncatedByLimit` gap remain authoritative.
 - `StaticHtmlEvidenceExplorer` receives the scan directory with safety profile
   `hidden-local`.
 - The bundle manifest projects only safe report status/counts and hashes the

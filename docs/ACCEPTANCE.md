@@ -311,6 +311,9 @@ For every successful `tracemap release-review --before <before.sqlite> --after <
 - Access design findings preserve upstream rule ID, evidence tier, coverage label, repository-relative span, commit SHA, extractor ID/version, supporting fact IDs, and limitations while rendering only allowlisted categorical/count metadata.
 - Access analysis gaps remain structured `ReleaseReviewGap` rows; item-level UI/VBA/event/navigation/macro facts are not upgraded beyond the shipped count-only product boundary.
 - Access release-review output does not render raw SQL, query/external-source hashes, connections, credentials, private object names, captions, expressions, VBA, macro bodies, local paths, or private infrastructure identities.
+- `tracemap-access scan-file` creates a verified deterministic no-remote local snapshot commit over a generic-name copy, labels `local-file-snapshot` provenance, verifies the original before/after, and removes internal snapshot state without requiring caller-managed Git.
+- Access declared relationships retain their raw DAO mask plus normalized supported flags and explicit unknown bits; query-owned gaps retain a stable query key and declaration-fact support when available.
+- `access-review create --max-findings <1-10000>` defaults to 1,000 and preserves deterministic `truncated` status, omitted counts, and a `TruncatedByLimit` gap when bounded.
 - `--include-paths` and `--include-reverse` are off by default; single-index mode renders requested path/reverse context as unavailable with a rule-backed gap.
 - `--include-priority` is off by default; when omitted, release-review Markdown and JSON remain unscored and do not include `reviewPriority` or `reviewPriorityRows`.
 - when `--include-priority` is supplied, Markdown includes a Review Priority section and JSON includes top-level `reviewPriority` plus sidecar `reviewPriorityRows` keyed by stable row IDs.

@@ -204,6 +204,13 @@ internal static class AccessDesignReviewComposer
         var row = rows[0];
         var fact = row.Fact;
         var kind = SafeToken(fact.Properties.GetValueOrDefault("classification"), "AccessAnalysisGap");
+        var supportingFactIds = rows
+            .SelectMany(item => new[] { item.Fact.FactId }
+                .Concat(SplitSupportingFactIds(item.Fact.Properties.GetValueOrDefault("supportingFactIds"))))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .Take(24)
+            .ToArray();
         var classification = kind.Contains("Limit", StringComparison.Ordinal)
             ? ReleaseReviewClassifications.TruncatedByLimit
             : ReleaseReviewClassifications.PartialAnalysis;
@@ -227,7 +234,7 @@ internal static class AccessDesignReviewComposer
             classification,
             $"Upstream Microsoft Access evidence recorded the bounded `{kind}` coverage gap.",
             [],
-            rows.Select(item => item.Fact.FactId).Take(24).ToArray(),
+            supportingFactIds,
             [],
             Sorted([
                 Pair("coverageLabel", "reduced"),
@@ -271,11 +278,18 @@ internal static class AccessDesignReviewComposer
             "formCount", "reportCount", "formsReportsCoverage",
             "vbaModuleCount", "vbaLoadedModuleCountUnchanged", "vbaCoverage",
             "namedMacroCount", "macroLoadedCountUnchanged", "macroCoverage",
-            "coverageLabel");
+            "coverageLabel", "provenanceKind");
 
     private static IReadOnlyList<KeyValuePair<string, string>> MappingMetadata(IReadOnlyDictionary<string, string> properties)
     {
-        var values = Select(properties, "mappingKind", "indexPrimary", "indexUnique").ToList();
+        var values = Select(
+            properties,
+            "mappingKind",
+            "indexPrimary",
+            "indexUnique",
+            "relationshipAttributes",
+            "relationshipAttributeFlags",
+            "relationshipUnknownAttributeBits").ToList();
         if (SafeOpaqueKey(properties.GetValueOrDefault("stableModelKey")) is { } mappingDesignKey)
             values.Add(Pair("mappingDesignKey", mappingDesignKey));
         if (properties.TryGetValue("fieldStableKeys", out var fields))
@@ -356,6 +370,15 @@ internal static class AccessDesignReviewComposer
             ? []
             : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Where(item => item.All(character => char.IsLetterOrDigit(character) || character is '-' or '_'))
+                .OrderBy(item => item, StringComparer.Ordinal)
+                .ToArray();
+
+    private static IReadOnlyList<string> SplitSupportingFactIds(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : value.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(item => item.Length <= 160
+                    && item.All(character => char.IsLetterOrDigit(character) || character is '-' or '_' or ':'))
                 .OrderBy(item => item, StringComparer.Ordinal)
                 .ToArray();
 

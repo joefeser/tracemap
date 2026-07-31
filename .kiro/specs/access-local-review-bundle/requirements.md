@@ -51,6 +51,9 @@ strengthen the adapter's count-only UI, VBA, or macro boundary.
 4. Form/report, VBA-module, and macro counts SHALL remain count-only with
    explicit identity/source-unavailable gaps.
 5. Partial analysis SHALL remain labeled partial.
+6. The finding cap SHALL be configurable within a documented finite bound,
+   ordered deterministically, and SHALL retain explicit truncated status,
+   omitted counts, and a truncation gap whenever findings are omitted.
 
 ### 4. Output ownership and determinism
 
