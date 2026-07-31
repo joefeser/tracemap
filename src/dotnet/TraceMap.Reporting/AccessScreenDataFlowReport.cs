@@ -168,6 +168,7 @@ public static class AccessScreenDataFlowReporter
                 var classification = SafeCategory(
                     fact.Properties.GetValueOrDefault("classification"),
                     "AccessAnalysisGap");
+                var supportingFactIds = SupportingGapFactIds(fact, accessFacts);
                 AddGap(gaps, maxGaps, ref truncated, new(
                     Id("gap", classification, fact.FactId),
                     classification,
@@ -181,7 +182,7 @@ public static class AccessScreenDataFlowReporter
                     fact.Evidence.EndLine,
                     SafeToken(fact.Evidence.ExtractorId),
                     SafeToken(fact.Evidence.ExtractorVersion),
-                    [fact.FactId],
+                    supportingFactIds,
                     SafeLimitations(fact.Properties.GetValueOrDefault("limitations"))));
                 continue;
             }
@@ -266,6 +267,8 @@ public static class AccessScreenDataFlowReporter
             FactTypes.AccessNavigationCandidate => "static-vba-call-navigation-candidate",
             FactTypes.AccessBindingDeclared => "declared-data-binding",
             FactTypes.AccessQueryDependencyCandidate => "static-query-dependency-candidate",
+            FactTypes.AccessQueryOutputDeclared => "declared-query-output",
+            FactTypes.AccessQueryOutputSourceCandidate => "static-query-output-source-candidate",
             _ => null
         };
         if (kind is not null)
@@ -421,6 +424,39 @@ public static class AccessScreenDataFlowReporter
         SafeCategory(fact.Properties.GetValueOrDefault("coverageLabel"), "unknown"),
         SafeLimitations(fact.Properties.GetValueOrDefault("limitations")));
 
+    private static IReadOnlyList<string> SupportingGapFactIds(CodeFact gap, IReadOnlyList<CodeFact> facts)
+    {
+        var supporting = new SortedSet<string>(StringComparer.Ordinal) { gap.FactId };
+        if (!SafeStableKey(gap.TargetSymbol))
+            return supporting.ToArray();
+
+        var scope = gap.Properties.GetValueOrDefault("scopeKind");
+        if (scope == "query-output-field")
+        {
+            foreach (var output in facts.Where(candidate =>
+                         candidate.TargetSymbol == gap.TargetSymbol
+                         && candidate.FactType == FactTypes.AccessQueryOutputDeclared))
+            {
+                supporting.Add(output.FactId);
+                foreach (var query in facts.Where(candidate =>
+                             candidate.TargetSymbol == output.SourceSymbol
+                             && candidate.FactType == FactTypes.AccessQueryDeclared))
+                    supporting.Add(query.FactId);
+            }
+        }
+        else if (scope == "query"
+                 && gap.Properties.GetValueOrDefault("classification")?.StartsWith(
+                     "AccessQueryOutput",
+                     StringComparison.Ordinal) == true)
+        {
+            foreach (var query in facts.Where(candidate =>
+                         candidate.TargetSymbol == gap.TargetSymbol
+                         && candidate.FactType == FactTypes.AccessQueryDeclared))
+                supporting.Add(query.FactId);
+        }
+        return supporting.ToArray();
+    }
+
     private static void EnsureReferencedNode(IDictionary<string, MutableNode> nodes, string key, CodeFact fact, bool source)
     {
         if (nodes.TryGetValue(key, out var existing))
@@ -451,6 +487,7 @@ public static class AccessScreenDataFlowReporter
         FactTypes.AccessControlDeclared => "control",
         FactTypes.AccessVbaProcedureDeclared => "procedure",
         FactTypes.AccessQueryDeclared => "saved-query",
+        FactTypes.AccessQueryOutputDeclared => "query-output-field",
         FactTypes.LegacyDataEntityDeclared => "table",
         FactTypes.LegacyDataColumnDeclared => "field",
         FactTypes.AccessMacroDeclared => "macro",

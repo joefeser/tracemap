@@ -47,7 +47,7 @@ public static class AccessDesignEvidenceComposer
             baseScan.Manifest.CommitSha,
             baseScan.DatabasePath,
             baseScan.DatabaseHash);
-        if (!FixedHashEquals(databaseSeed, declared.DatabaseIdentityHash)
+        if (!AccessSafeValues.FixedHashEquals(databaseSeed, declared.DatabaseIdentityHash)
             || !string.Equals(AccessSafeValues.DatabaseStableKey(databaseSeed), baseScan.DatabaseStableKey, StringComparison.Ordinal))
             throw new AccessScanException("AccessDesignInputDatabaseUnbound");
 
@@ -221,11 +221,19 @@ public static class AccessDesignEvidenceComposer
                 if (fact.Properties.TryGetValue("objectNameHash", out var fieldHash))
                     AddField(fieldsByTableAndHash, fact.SourceSymbol, fieldHash, fact.TargetSymbol);
             }
+            if (fact.FactType == FactTypes.AccessQueryOutputDeclared
+                && fact.SourceSymbol is not null)
+            {
+                if (fact.Properties.TryGetValue("objectName", out var outputName))
+                    AddField(fieldsByTable, fact.SourceSymbol, outputName, fact.TargetSymbol);
+                if (fact.Properties.TryGetValue("objectNameHash", out var outputHash))
+                    AddField(fieldsByTableAndHash, fact.SourceSymbol, outputHash, fact.TargetSymbol);
+            }
         }
 
         foreach (var record in bundle.Records.Where(record =>
                      record.Kind == "catalog-object"
-                     && String(record.Payload, "objectRole") != "table-field"))
+                     && String(record.Payload, "objectRole") is not ("table-field" or "query-field")))
         {
             var role = String(record.Payload, "objectRole");
             var identity = OptionalString(record.Payload, "identity");
@@ -275,8 +283,9 @@ public static class AccessDesignEvidenceComposer
 
         foreach (var record in bundle.Records.Where(record =>
                      record.Kind == "catalog-object"
-                     && String(record.Payload, "objectRole") == "table-field"))
+                     && String(record.Payload, "objectRole") is "table-field" or "query-field"))
         {
+            var fieldRole = String(record.Payload, "objectRole");
             var identity = OptionalString(record.Payload, "identity");
             var declaredStableKey = OptionalString(record.Payload, "stableKey");
             var tableStableKey = record.ParentCanonicalRecordId is not null
@@ -286,7 +295,8 @@ public static class AccessDesignEvidenceComposer
             string? projectedStableKey = null;
             if (identity is not null && tableStableKey is not null)
             {
-                var fieldHash = AccessSafeValues.RoleHash($"access-field-{tableStableKey}-name", identity);
+                var identityRole = fieldRole == "query-field" ? "query-field" : "field";
+                var fieldHash = AccessSafeValues.RoleHash($"access-{identityRole}-{tableStableKey}-name", identity);
                 if (fieldsByTableAndHash.TryGetValue(tableStableKey, out var fieldsByHash)
                     && fieldsByHash.TryGetValue(fieldHash, out var matches)
                     && matches.Distinct(StringComparer.Ordinal).ToArray() is { Length: 1 } distinct)
@@ -301,7 +311,7 @@ public static class AccessDesignEvidenceComposer
             {
                 normalizationGaps.Add(new(
                     "AccessDesignInputCatalogIdentityMismatch",
-                    "table-field",
+                    fieldRole,
                     record.CanonicalRecordId,
                     RuleIds.LegacyAccessDesignInput));
                 continue;
@@ -309,11 +319,13 @@ public static class AccessDesignEvidenceComposer
             var stableKey = projectedStableKey ?? declaredStableKey;
             if (stableKey is null
                 || !baseFacts.Any(fact => fact.TargetSymbol == stableKey
-                    && fact.FactType == FactTypes.LegacyDataColumnDeclared))
+                    && fact.FactType == (fieldRole == "query-field"
+                        ? FactTypes.AccessQueryOutputDeclared
+                        : FactTypes.LegacyDataColumnDeclared)))
             {
                 normalizationGaps.Add(new(
                     "AccessDesignInputCatalogStableKeyUnmatched",
-                    "table-field",
+                    fieldRole,
                     record.CanonicalRecordId,
                     RuleIds.LegacyAccessDesignInput));
                 continue;
@@ -370,7 +382,25 @@ public static class AccessDesignEvidenceComposer
                             String(item.Payload, "eventRole"),
                             String(item.Payload, "value"))))
                         .OrderBy(item => item.Role, StringComparer.Ordinal).ToArray(),
-                    OptionalString(record.Payload, "validationRule")))
+                    OptionalString(record.Payload, "validationRule"),
+                    OptionalString(record.Payload, "rowSourceType"),
+                    OptionalInt(record.Payload, "boundColumn"),
+                    OptionalInt(record.Payload, "columnCount"),
+                    OptionalString(record.Payload, "sourceObject"),
+                    OptionalString(record.Payload, "linkMasterFields"),
+                    OptionalString(record.Payload, "linkChildFields")))
+                .ToArray();
+            var reportGroupRecords = bundle.Records
+                .Where(record => record.Kind == "report-group"
+                    && record.ParentCanonicalRecordId == surface.CanonicalRecordId)
+                .ToArray();
+            var reportGroups = reportGroupRecords
+                .Select(record => new AccessRawReportGroup(
+                    Int(record.Payload, "ordinal"),
+                    OptionalString(record.Payload, "expression"),
+                    OptionalString(record.Payload, "sortOrder"),
+                    OptionalString(record.Payload, "groupOn")))
+                .OrderBy(group => group.Ordinal)
                 .ToArray();
             var raw = new AccessRawUiSurface(
                 String(surface.Payload, "identity"),
@@ -388,8 +418,9 @@ public static class AccessDesignEvidenceComposer
                 surface.Completeness,
                 OptionalString(surface.Payload, "filter"),
                 OptionalString(surface.Payload, "orderBy"),
-                OptionalString(surface.Payload, "boundState"));
-            surfaceInputs.Add(new(raw, surface));
+                OptionalString(surface.Payload, "boundState"),
+                reportGroups);
+            surfaceInputs.Add(new(raw, new[] { surface }.Concat(reportGroupRecords).ToArray()));
         }
         var mergedSurfaceInputs = surfaceInputs
             .GroupBy(input => SurfaceStableKey(databaseSeed, input.Raw), StringComparer.Ordinal)
@@ -707,7 +738,7 @@ public static class AccessDesignEvidenceComposer
             fact.ContractElement,
             fact.Properties);
 
-    private static async Task<BaseScan> ReadBaseScanAsync(
+    internal static async Task<BaseScan> ReadBaseScanAsync(
         string directory,
         AccessLimits limits,
         CancellationToken cancellationToken)
@@ -864,22 +895,40 @@ public static class AccessDesignEvidenceComposer
             if (values.Length > 1) conflict = true;
             return values.Length == 1 ? values[0] : null;
         }
-        var controls = ordered.SelectMany(item => item.Raw.Controls)
-            .GroupBy(item => (item.Ordinal, NameHash: AccessSafeValues.RoleHash("access-control-merge-name", item.Name)))
+        T[] MergeGrouped<T, TKey>(
+            IEnumerable<T> values,
+            Func<T, TKey> keySelector,
+            Func<T, T, bool> equivalent,
+            Func<IEnumerable<T>, IOrderedEnumerable<T>> order)
+            where TKey : notnull
+        {
+            var selected = values.GroupBy(keySelector)
             .Select(group =>
             {
                 var observations = group.ToArray();
-                if (observations.Skip(1).Any(item => !EquivalentControl(observations[0], item)))
+                if (observations.Skip(1).Any(item => !equivalent(observations[0], item)))
                     conflict = true;
                 return observations[0];
             })
-            .OrderBy(item => item.Ordinal)
-            .ThenBy(item => AccessSafeValues.RoleHash("access-control-sort-name", item.Name), StringComparer.Ordinal)
             .ToArray();
+            return order(selected).ToArray();
+        }
+        var controls = MergeGrouped(
+            ordered.SelectMany(item => item.Raw.Controls),
+            item => (item.Ordinal, NameHash: AccessSafeValues.RoleHash("access-control-merge-name", item.Name)),
+            EquivalentControl,
+            values => values
+                .OrderBy(item => item.Ordinal)
+                .ThenBy(item => AccessSafeValues.RoleHash("access-control-sort-name", item.Name), StringComparer.Ordinal));
         var events = ordered.SelectMany(item => item.Raw.Events).Distinct()
             .OrderBy(item => item.Role, StringComparer.Ordinal)
             .ThenBy(item => item.Value, StringComparer.Ordinal)
             .ToArray();
+        var reportGroups = MergeGrouped(
+            ordered.SelectMany(item => item.Raw.ReportGroups ?? []),
+            item => item.Ordinal,
+            (left, right) => left == right,
+            values => values.OrderBy(item => item.Ordinal));
         var merged = preferred with
         {
             HasModule = MergeValue(surface => surface.HasModule),
@@ -889,7 +938,8 @@ public static class AccessDesignEvidenceComposer
             Coverage = conflict || ordered.Any(item => item.Raw.Coverage != "complete") ? "partial" : "complete",
             Filter = MergeText(surface => surface.Filter),
             OrderBy = MergeText(surface => surface.OrderBy),
-            DeclaredBoundState = MergeText(surface => surface.DeclaredBoundState)
+            DeclaredBoundState = MergeText(surface => surface.DeclaredBoundState),
+            ReportGroups = reportGroups
         };
         if (conflict)
             gaps.Add(new(
@@ -907,6 +957,12 @@ public static class AccessDesignEvidenceComposer
         && string.Equals(left.ControlSource?.Trim(), right.ControlSource?.Trim(), StringComparison.Ordinal)
         && string.Equals(left.RowSource?.Trim(), right.RowSource?.Trim(), StringComparison.Ordinal)
         && string.Equals(left.ValidationRule?.Trim(), right.ValidationRule?.Trim(), StringComparison.Ordinal)
+        && string.Equals(left.RowSourceType?.Trim(), right.RowSourceType?.Trim(), StringComparison.Ordinal)
+        && left.BoundColumn == right.BoundColumn
+        && left.ColumnCount == right.ColumnCount
+        && string.Equals(left.SourceObject?.Trim(), right.SourceObject?.Trim(), StringComparison.Ordinal)
+        && string.Equals(left.LinkMasterFields?.Trim(), right.LinkMasterFields?.Trim(), StringComparison.Ordinal)
+        && string.Equals(left.LinkChildFields?.Trim(), right.LinkChildFields?.Trim(), StringComparison.Ordinal)
         && left.Events
             .OrderBy(item => item.Role, StringComparer.Ordinal)
             .ThenBy(item => item.Value, StringComparer.Ordinal)
@@ -959,6 +1015,7 @@ public static class AccessDesignEvidenceComposer
     {
         "saved-query" => "query",
         "table-field" => "field",
+        "query-field" => "field",
         _ => value
     };
 
@@ -982,17 +1039,12 @@ public static class AccessDesignEvidenceComposer
     private static int Int(JsonElement payload, string name) =>
         payload.GetProperty(name).GetInt32();
 
-    private static bool FixedHashEquals(string left, string right)
-    {
-        if (left.Length != 64 || right.Length != 64) return false;
-        try
-        {
-            return CryptographicOperations.FixedTimeEquals(Convert.FromHexString(left), Convert.FromHexString(right));
-        }
-        catch { return false; }
-    }
+    private static int? OptionalInt(JsonElement payload, string name) =>
+        payload.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
+            ? value.GetInt32()
+            : null;
 
-    private sealed record BaseScan(
+    internal sealed record BaseScan(
         ScanManifest Manifest,
         IReadOnlyList<CodeFact> Facts,
         string ManifestSha256,

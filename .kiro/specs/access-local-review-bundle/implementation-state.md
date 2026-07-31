@@ -107,6 +107,21 @@ categorical diagnostics, and acceptance of an already-supported `truncated`
 status; it adds no COM read, projector fact, fixture behavior, or execution
 surface.
 
+## Issue #563 finding-cap hardening
+
+Branch: `codex/issue-563-access-hardening`
+
+- `access-review create` now accepts `--max-findings <1-10000>`.
+- The default is 1,000 so a representative medium scan is not silently bounded
+  by the general release-review default of 100.
+- Release-review ordering remains deterministic. If the selected cap is
+  exceeded, the Access section and packet remain `truncated`, the omitted count
+  is retained, and a `TruncatedByLimit` gap is emitted.
+- This remains read-side composition only. It does not open Access, add COM
+  reads, or change count-only UI/VBA/macro acquisition.
+- Synthetic bundle tests cover deterministic custom-cap output, explicit
+  truncation, and invalid-bound rejection.
+
 ## Deferred
 
 - richer UI/VBA/macro extraction or identity;

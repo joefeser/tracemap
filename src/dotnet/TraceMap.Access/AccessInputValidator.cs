@@ -12,19 +12,22 @@ public static partial class AccessInputValidator
     public static AccessValidatedInput Validate(AccessScanOptions options, AccessLimits? limits = null)
     {
         limits ??= AccessLimits.Default;
+        if (options.ProvenanceKind is not (AccessProvenanceKinds.RepositoryCommit or AccessProvenanceKinds.LocalFileSnapshot))
+            throw new AccessScanException("AccessInvalidProvenanceKind");
         if (Path.IsPathFullyQualified(options.DatabasePath))
             throw new AccessScanException("AccessDatabasePathMustBeRelative");
         if (options.TimeoutSeconds is < 30 or > 3600)
             throw new AccessScanException("AccessInvalidTimeout");
 
+        var isolateGit = options.ProvenanceKind == AccessProvenanceKinds.LocalFileSnapshot;
         var repoCandidate = Path.GetFullPath(options.RepoPath);
-        var rootResult = RunGit(repoCandidate, "rev-parse", "--show-toplevel");
+        var rootResult = RunGit(repoCandidate, isolateGit, "rev-parse", "--show-toplevel");
         if (rootResult.ExitCode != 0 || string.IsNullOrWhiteSpace(rootResult.Output))
             throw new AccessScanException("AccessGitRootUnavailable");
 
         var gitRoot = Path.GetFullPath(rootResult.Output.Trim());
         var logicalGitRoot = FindLogicalGitRoot(repoCandidate) ?? gitRoot;
-        var gitDirectory = Path.GetFullPath(RunGit(repoCandidate, "rev-parse", "--absolute-git-dir").Required("AccessGitRootUnavailable").Trim());
+        var gitDirectory = Path.GetFullPath(RunGit(repoCandidate, isolateGit, "rev-parse", "--absolute-git-dir").Required("AccessGitRootUnavailable").Trim());
         var relativeSegments = NormalizeRelativeSegments(options.DatabasePath);
         var databaseRelativePath = string.Join('/', relativeSegments);
         var databaseFullPath = Path.GetFullPath(Path.Combine(gitRoot, Path.Combine(relativeSegments.ToArray())));
@@ -42,21 +45,21 @@ public static partial class AccessInputValidator
         if (fileInfo.Length <= 0 || fileInfo.Length > limits.MaxDatabaseBytes)
             throw new AccessScanException("AccessDatabaseSizeLimit");
 
-        RequireGitSuccess(gitRoot, "AccessCommitUnavailable", "rev-parse", "--verify", "HEAD^{commit}");
-        var commit = RunGit(gitRoot, "rev-parse", "HEAD").Required("AccessCommitUnavailable");
-        RequireGitSuccess(gitRoot, "AccessInputNotTracked", "cat-file", "-e", $"HEAD:{databaseRelativePath}");
-        RequireGitQuiet(gitRoot, "AccessInputNotAtCommit", "diff", "--quiet", "HEAD", "--", databaseRelativePath);
-        RequireGitQuiet(gitRoot, "AccessInputNotAtCommit", "diff", "--cached", "--quiet", "HEAD", "--", databaseRelativePath);
+        RequireGitSuccess(gitRoot, isolateGit, "AccessCommitUnavailable", "rev-parse", "--verify", "HEAD^{commit}");
+        var commit = RunGit(gitRoot, isolateGit, "rev-parse", "HEAD").Required("AccessCommitUnavailable");
+        RequireGitSuccess(gitRoot, isolateGit, "AccessInputNotTracked", "cat-file", "-e", $"HEAD:{databaseRelativePath}");
+        RequireGitQuiet(gitRoot, isolateGit, "AccessInputNotAtCommit", "diff", "--quiet", "HEAD", "--", databaseRelativePath);
+        RequireGitQuiet(gitRoot, isolateGit, "AccessInputNotAtCommit", "diff", "--cached", "--quiet", "HEAD", "--", databaseRelativePath);
 
         var hash = HashFile(databaseFullPath);
-        var attr = RunGit(gitRoot, "check-attr", "filter", "--", databaseRelativePath);
+        var attr = RunGit(gitRoot, isolateGit, "check-attr", "filter", "--", databaseRelativePath);
         var isLfs = attr.ExitCode == 0 && attr.Output.TrimEnd().EndsWith("filter: lfs", StringComparison.OrdinalIgnoreCase);
-        if (isLfs) ValidateLfs(gitRoot, databaseRelativePath, hash);
-        else ValidateHeadBytes(gitRoot, databaseRelativePath, databaseFullPath);
+        if (isLfs) ValidateLfs(gitRoot, databaseRelativePath, hash, isolateGit);
+        else ValidateHeadBytes(gitRoot, databaseRelativePath, databaseFullPath, isolateGit);
 
         var rawRepoName = Path.GetFileName(gitRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        var remote = RunGit(gitRoot, "config", "--get", "remote.origin.url");
-        var branch = RunGit(gitRoot, "symbolic-ref", "--short", "-q", "HEAD");
+        var remote = RunGit(gitRoot, isolateGit, "config", "--get", "remote.origin.url");
+        var branch = RunGit(gitRoot, isolateGit, "symbolic-ref", "--short", "-q", "HEAD");
         var remoteValue = remote.ExitCode == 0 ? NullIfWhiteSpace(remote.Output.Trim()) : null;
         var repositoryIdentityHash = AccessSafeValues.RoleHash("access-repository-identity", remoteValue ?? rawRepoName);
         var repoName = LegacyDataSafeValues.IsSafeIdentifier(rawRepoName) ? rawRepoName : $"repo-{repositoryIdentityHash[..16]}";
@@ -79,7 +82,8 @@ public static partial class AccessInputValidator
             extension,
             outputFullPath,
             isLfs,
-            fileInfo.Length);
+            fileInfo.Length,
+            options.ProvenanceKind);
     }
 
     public static IReadOnlyList<string> NormalizeRelativeSegments(string value)
@@ -97,22 +101,22 @@ public static partial class AccessInputValidator
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 
-    private static void ValidateLfs(string gitRoot, string relativePath, string workingHash)
+    private static void ValidateLfs(string gitRoot, string relativePath, string workingHash, bool isolateGit)
     {
-        var size = RunGit(gitRoot, "cat-file", "-s", $"HEAD:{relativePath}");
+        var size = RunGit(gitRoot, isolateGit, "cat-file", "-s", $"HEAD:{relativePath}");
         if (size.ExitCode != 0 || !long.TryParse(size.Output.Trim(), out var blobBytes) || blobBytes > 1024)
             throw new AccessScanException("AccessGitLfsPointerUnavailable");
-        var pointer = RunGit(gitRoot, "show", $"HEAD:{relativePath}");
+        var pointer = RunGit(gitRoot, isolateGit, "show", $"HEAD:{relativePath}");
         var match = LfsOidPattern().Match(pointer.Output);
         if (!match.Success) throw new AccessScanException("AccessGitLfsPointerUnavailable");
         if (!string.Equals(match.Groups[1].Value, workingHash, StringComparison.OrdinalIgnoreCase))
             throw new AccessScanException("AccessGitLfsContentMismatch");
     }
 
-    private static void ValidateHeadBytes(string gitRoot, string relativePath, string fullPath)
+    private static void ValidateHeadBytes(string gitRoot, string relativePath, string fullPath, bool isolateGit)
     {
-        var committedObject = RunGit(gitRoot, "rev-parse", $"HEAD:{relativePath}").Required("AccessInputNotAtCommit");
-        var workingObject = RunGit(gitRoot, "hash-object", "--no-filters", "--", fullPath).Required("AccessInputNotAtCommit");
+        var committedObject = RunGit(gitRoot, isolateGit, "rev-parse", $"HEAD:{relativePath}").Required("AccessInputNotAtCommit");
+        var workingObject = RunGit(gitRoot, isolateGit, "hash-object", "--no-filters", "--", fullPath).Required("AccessInputNotAtCommit");
         if (!string.Equals(committedObject.Trim(), workingObject.Trim(), StringComparison.OrdinalIgnoreCase))
             throw new AccessScanException("AccessInputNotAtCommit");
     }
@@ -198,18 +202,18 @@ public static partial class AccessInputValidator
         Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)),
         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
-    private static void RequireGitSuccess(string cwd, string classification, params string[] args)
+    private static void RequireGitSuccess(string cwd, bool isolateGit, string classification, params string[] args)
     {
-        if (RunGit(cwd, args).ExitCode != 0) throw new AccessScanException(classification);
+        if (RunGit(cwd, isolateGit, args).ExitCode != 0) throw new AccessScanException(classification);
     }
 
-    private static void RequireGitQuiet(string cwd, string classification, params string[] args)
+    private static void RequireGitQuiet(string cwd, bool isolateGit, string classification, params string[] args)
     {
-        var result = RunGit(cwd, args);
+        var result = RunGit(cwd, isolateGit, args);
         if (result.ExitCode != 0) throw new AccessScanException(classification);
     }
 
-    private static GitResult RunGit(string cwd, params string[] args)
+    private static GitResult RunGit(string cwd, bool isolateGit, params string[] args)
     {
         var start = new ProcessStartInfo("git")
         {
@@ -220,6 +224,8 @@ public static partial class AccessInputValidator
             CreateNoWindow = true
         };
         foreach (var arg in args) start.ArgumentList.Add(arg);
+        if (isolateGit)
+            AccessGitIsolation.Configure(start, cwd);
         using var process = Process.Start(start) ?? throw new AccessScanException("AccessGitUnavailable");
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();

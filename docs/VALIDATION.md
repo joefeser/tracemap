@@ -219,6 +219,29 @@ The base scan and protected input are immutable inputs. The output must be a
 new, non-overlapping path. Protected source and identities are consumed only
 in-process; the standard output remains hash-only.
 
+Functional form/report metadata changes additionally validate lookup,
+subform/subreport, report group/sort, and query-output-field candidates:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter "FullyQualifiedName~AccessUiProjectionTests|FullyQualifiedName~AccessScreenDataFlowTests|FullyQualifiedName~AccessDesignEvidence"
+```
+
+An owner may explicitly create a separately deletable hidden-local identity
+projection:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Access.Cli -- identity-project \
+  --base-scan <completed-access-scan> \
+  --design-evidence <protected-owner-controlled-directory> \
+  --out <new-hidden-local-directory>
+```
+
+This output is not a standard artifact and is not accepted by combine, vault,
+public-site, or release-publication workflows. It may contain owner-local
+direct identifiers, but never raw design text, inline SQL, VBA, macro bodies,
+credentials, or local paths.
+
 Source-neutral screen-to-data composition is also Mac-only and reads only the
 completed enriched index:
 
@@ -342,6 +365,16 @@ name, hash, object identities, SQL, VBA, macro bodies, expressions, connections,
 or exception text in its checkpoint. Raw scratch remains disposable; retain the
 sanitized checkpoint family until its issue result is confirmed posted.
 
+For ordinary single-file product use, `tracemap-access scan-file` owns the same
+verified generic-copy and disposable local-commit ceremony internally; see
+[`ACCESS_FILE_FIRST_SCAN.md`](ACCESS_FILE_FIRST_SCAN.md). Platform-neutral tests
+must compare the deterministic internal commit and fact IDs across two synthetic
+byte inputs, prove no remote, verify local-snapshot labeling and original
+path/name suppression, and cover original mutation plus success, failure,
+cancellation, and cleanup paths. A Windows smoke must use only the generated
+zero-row synthetic fixture unless a representative input is separately
+authorized.
+
 For source builds in an isolated local Parallels Windows VM, follow
 [`ACCESS_PARALLELS_SOURCE_RUNNER.md`](ACCESS_PARALLELS_SOURCE_RUNNER.md).
 The host runner requires every configured VM network adapter to be disabled
@@ -350,7 +383,7 @@ and exactly two enabled host shares: read-only `access_input` and read/write
 pinned Git/.NET launcher hashes, reparse-free required path chains, and an
 offline toolchain/package cache. Guest attestations are not independent host
 proof of an uncompromised Windows runtime or complete SDK tree. The runner
-supports only `doctor`, `build`, and synthetic validation. It does not accept a
+supports `doctor`, `build`, `synthetic`, and metadata-producer validation. It does not accept a
 representative database or change the Access extraction boundary.
 
 For Access design-review composition changes, run the focused Access and
@@ -374,7 +407,9 @@ Verify `access-review create` produces the Access-only release review,
 `hidden-local` explorer, deterministic `access-review-manifest.json`, and
 relative-link README. Repeat to two output directories and compare every file.
 Verify manifest hashes, explicit count-only UI/VBA/macro gaps, protected-value
-suppression, overlap rejection, non-Access rejection, and guarded `--force`.
+suppression, overlap rejection, non-Access rejection, guarded `--force`, a
+custom `--max-findings` bound, and explicit deterministic truncation when that
+bound is reached.
 
 When the isolated Windows + Access VM is available, run the synthetic smoke
 with `-ReviewBundlePath <new-durable-local-review-directory>` outside the

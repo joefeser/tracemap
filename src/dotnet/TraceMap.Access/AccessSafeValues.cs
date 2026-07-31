@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using TraceMap.Core;
 
 namespace TraceMap.Access;
@@ -33,6 +34,21 @@ public static class AccessSafeValues
     }
 
     public static string RoleHash(string role, string value) => FactFactory.Hash($"{role}\0{value}", 64);
+
+    internal static bool FixedHashEquals(string left, string right)
+    {
+        if (left.Length != 64 || right.Length != 64) return false;
+        try
+        {
+            return CryptographicOperations.FixedTimeEquals(
+                Convert.FromHexString(left),
+                Convert.FromHexString(right));
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     public static string ProviderFamily(string? connection)
     {

@@ -175,6 +175,79 @@ public sealed class AccessScreenDataFlowTests
         Assert.Contains(report.Gaps, gap => gap.Classification == "AccessFlowTargetDeclarationMissing");
     }
 
+    [Fact]
+    public void Builder_grounds_query_output_gaps_with_the_declared_output_chain()
+    {
+        const string query = "access-query-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string output = "access-query-field-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        var facts = new[]
+        {
+            Fact(
+                "fact-query-declaration",
+                FactTypes.AccessQueryDeclared,
+                RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural,
+                null,
+                query,
+                ("coverageLabel", "partial")),
+            Fact(
+                "fact-output-declaration",
+                FactTypes.AccessQueryOutputDeclared,
+                RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural,
+                query,
+                output,
+                ("coverageLabel", "partial")),
+            Fact(
+                "fact-output-gap",
+                FactTypes.AnalysisGap,
+                RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier4Unknown,
+                null,
+                output,
+                ("classification", "AccessQueryOutputSourceUnavailable"),
+                ("scopeKind", "query-output-field"))
+        };
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
+
+        var gap = Assert.Single(
+            report.Gaps,
+            item => item.Classification == "AccessQueryOutputSourceUnavailable");
+        Assert.Equal(
+            ["fact-output-declaration", "fact-output-gap", "fact-query-declaration"],
+            gap.SupportingFactIds);
+    }
+
+    [Fact]
+    public void Builder_does_not_reconstruct_query_owners_for_ambiguous_output_gaps()
+    {
+        const string firstQuery = "access-query-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string secondQuery = "access-query-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        const string output = "access-query-field-cccccccccccccccccccccccccccccccc";
+        var facts = new[]
+        {
+            Fact("fact-query-one", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural, null, firstQuery, ("coverageLabel", "partial")),
+            Fact("fact-query-two", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural, null, secondQuery, ("coverageLabel", "partial")),
+            Fact("fact-output-one", FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural, firstQuery, output, ("coverageLabel", "partial")),
+            Fact("fact-output-two", FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural, secondQuery, output, ("coverageLabel", "partial")),
+            Fact("fact-output-gap", FactTypes.AnalysisGap, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier4Unknown, null, output,
+                ("classification", "AccessQueryOutputSourceUnavailable"),
+                ("scopeKind", "query-output-field-owner-unknown"))
+        };
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
+
+        var gap = Assert.Single(report.Gaps, item =>
+            item.Classification == "AccessQueryOutputSourceUnavailable");
+        Assert.Equal(["fact-output-gap"], gap.SupportingFactIds);
+    }
+
     [Theory]
     [InlineData(@"C:\SecretDriveMarker91827\db.accdb", "SecretDriveMarker91827")]
     [InlineData(@"\\SecretServerMarker91827\share\db.accdb", "SecretServerMarker91827")]
@@ -268,6 +341,8 @@ public sealed class AccessScreenDataFlowTests
         const string missingProcedure = "access-vba-procedure-99999999999999999999999999999999";
         const string query = "access-query-44444444444444444444444444444444";
         const string table = "access-table-55555555555555555555555555555555";
+        const string tableField = "access-field-12121212121212121212121212121212";
+        const string queryOutput = "access-query-field-13131313131313131313131313131313";
         const string report = "access-report-66666666666666666666666666666666";
         return
         [
@@ -281,6 +356,14 @@ public sealed class AccessScreenDataFlowTests
                 ("coverageLabel", "complete"), ("rawSql", "SELECT * FROM Customers")),
             Fact("fact-table", FactTypes.LegacyDataEntityDeclared, RuleIds.LegacyAccessSchema, EvidenceTiers.Tier2Structural, null, table,
                 ("coverageLabel", "complete")),
+            Fact("fact-table-field", FactTypes.LegacyDataColumnDeclared, RuleIds.LegacyAccessSchema, EvidenceTiers.Tier2Structural, table, tableField,
+                ("coverageLabel", "complete")),
+            Fact("fact-query-output", FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, query, queryOutput,
+                ("coverageLabel", "complete")),
+            Fact("fact-query-output-source", FactTypes.AccessQueryOutputSourceCandidate, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier3SyntaxOrTextual, queryOutput, tableField,
+                ("targetKind", "field"), ("coverageLabel", "complete")),
+            Fact("fact-control-output", FactTypes.AccessBindingDeclared, RuleIds.LegacyAccessBinding, EvidenceTiers.Tier2Structural, control, queryOutput,
+                ("targetKind", "field"), ("coverageLabel", "complete")),
             Fact("fact-report", FactTypes.AccessReportDeclared, RuleIds.LegacyAccessUiSurface, EvidenceTiers.Tier2Structural, null, report,
                 ("coverageLabel", "structured-design-observed")),
             Fact("fact-event", FactTypes.AccessEventBindingCandidate, RuleIds.LegacyAccessEventBinding, EvidenceTiers.Tier3SyntaxOrTextual, control, procedure,

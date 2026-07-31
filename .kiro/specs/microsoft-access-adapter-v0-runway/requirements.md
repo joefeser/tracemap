@@ -28,10 +28,11 @@ limitations, and no scan without repository and commit SHA.
 - Run extraction locally on Windows with a supported installed Microsoft Access
   version. macOS and Linux callers receive a deterministic unsupported-platform
   diagnostic and no successful scan artifact set.
-- Require every selected database to be inside the selected Git worktree at a
-  concrete commit. A customer database that is not already in a repository must
-  first be copied into a local, access-controlled evidence workspace and committed
-  there. TraceMap does not silently invent non-repository provenance.
+- Preserve repository and commit provenance for every scan. Repository-oriented
+  scans require a clean tracked database at a concrete commit. File-first scans
+  create a restricted, no-remote disposable snapshot repository over a verified
+  generic-name copy and label that commit as local-file-snapshot provenance
+  rather than implying an upstream source-control commit.
 - Inspect a controlled temporary copy, not the selected original file. Startup
   macros and automation code must be disabled before opening the copy.
 - Do not read table rows, row counts, attachment contents, OLE values, field
@@ -83,6 +84,14 @@ leave my controlled environment.
    database path, database SHA-256, Access version, and provider capabilities
    SHALL be preserved in rule-backed inventory/capability facts rather than new
    adapter-specific manifest fields.
+9. WHEN the user runs `scan-file` with one explicitly selected local `.accdb`
+   or `.mdb` THEN the adapter SHALL validate and hash the original, create and
+   commit a verified generic-name copy in a restricted no-remote disposable
+   repository, scan only through the existing conservative reader, re-hash the
+   original, and remove all internal snapshot state on success or failure.
+10. File-first artifacts SHALL retain a deterministic commit SHA and explicit
+    `local-file-snapshot` provenance while omitting the original absolute path,
+    filename, username, scratch path, and command text.
 
 ### Requirement 2: Non-Executing Input Safety
 
@@ -174,6 +183,10 @@ without exposing its records.
    text or row values.
 7. Schema facts SHALL be `Tier2Structural`; the adapter SHALL NOT describe Access
    catalog metadata as compiler-resolved semantic evidence.
+8. Declared relationship facts SHALL retain the raw DAO attribute mask, add
+   deterministic normalized supported flags, retain unknown bits explicitly,
+   and SHALL NOT convert static flags into runtime enforcement or operation
+   claims.
 
 ### Requirement 5: Saved Query Evidence and Secret Safety
 
@@ -205,6 +218,9 @@ shapes without leaking SQL or causing external execution.
 7. Query evidence SHALL NOT claim execution success, runtime parameter values,
    branch selection, linked-source availability, provider behavior, permissions,
    result shape, or production use.
+8. Query-specific dependency, parameter-limit, and related gaps SHALL retain
+   the owning query stable key and supporting declaration fact when that owner
+   was established before the failure.
 
 ### Requirement 6: Forms, Reports, Controls, and Bindings
 
