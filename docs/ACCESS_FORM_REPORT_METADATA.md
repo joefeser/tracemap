@@ -20,13 +20,20 @@ Raw object names and serialized definitions remain protected input.
 On Windows, the producer
 `scripts/access-validation/Export-AccessFormReportMetadata.ps1` uses invisible,
 force-disabled Microsoft Access automation and `SaveAsText` against an
-explicit disposable copy. It fails closed if loaded surface state changes,
-Access becomes visible, a canary fires, either source hash changes, or scratch
-cleanup fails. It never opens a recordset, executes a query, opens/renders a
-form or report, invokes an event, reads VBA source, or exports a macro body.
+explicit disposable copy. Before Access opens the database, the producer makes
+a second scratch copy and removes its startup-form setting through DAO, so
+startup UI cannot be part of extraction. It fails closed if loaded surface
+state changes, Access becomes visible, a canary fires, either caller-owned
+source hash changes, or scratch/process cleanup cannot be verified. It never
+opens a recordset, executes a query, opens/renders a form or report, invokes an
+event, reads VBA source, or exports a macro body.
 
-On macOS or Windows, compose the protected bundle with an immutable completed
-base scan:
+Microsoft Access automation itself requires Windows. The deterministic
+parsing, composition, reporting, and hidden-local identity projection run on
+macOS or Windows, so a Mac can perform the normal analysis after a protected
+bundle is produced in an isolated Windows VM.
+
+Compose the protected bundle with an immutable completed base scan:
 
 ```bash
 dotnet run --project src/dotnet/TraceMap.Access.Cli -- enrich-design \
@@ -42,6 +49,7 @@ standard combine/vault/public/release workflows.
 
 Visual coordinates, dimensions, colors, fonts, borders, images, captions,
 themes, formatting, tab order, accessibility reconstruction, screenshots, and
-OCR are deferred. The metadata does not prove rendering, event firing,
+OCR are explicitly deferred to a later layout phase. The metadata does not
+prove rendering, event firing,
 navigation, query execution, row state, runtime reachability, correctness,
 completeness, production use, or release approval.

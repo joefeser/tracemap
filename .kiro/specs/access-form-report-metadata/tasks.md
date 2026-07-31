@@ -7,6 +7,6 @@
 - [x] Add explicit hidden-local identity projection.
 - [x] Add bounded SaveAsText producer and static boundary guards.
 - [x] Validate pure paths on macOS with synthetic fixtures.
-- [ ] Validate the producer with the isolated Parallels synthetic workflow.
-- [ ] Update documentation and implementation state.
+- [x] Validate the producer with the isolated Parallels synthetic workflow.
+- [x] Update documentation and implementation state.
 - [ ] Commit, push, and open a ready PR to `dev` linked to #565.
