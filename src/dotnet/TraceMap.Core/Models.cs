@@ -476,7 +476,7 @@ public static class ScannerVersions
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.1.0";
     public const string LegacyDataExtractor = "legacy-data/0.1.0";
-    public const string AccessExtractor = "legacy-access/0.1.0";
+    public const string AccessExtractor = "legacy-access/0.2.0";
     public const string EndpointAlignment = "endpoint-alignment/0.1.0";
     public const string RazorBindingExtractor = "csharp-razor-binding/0.1.0";
 }

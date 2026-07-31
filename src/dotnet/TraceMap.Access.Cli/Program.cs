@@ -30,12 +30,13 @@ public static class AccessCommand
             await output.WriteLineAsync(command switch
             {
                 "scan" => ScanHelp(),
+                "scan-file" => ScanFileHelp(),
                 "enrich-design" => EnrichDesignHelp(),
                 "flow" => FlowHelp(),
                 "copy-clone" => CopyCloneHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "enrich-design" or "flow" or "copy-clone" ? 0 : 1;
+            return command is "scan" or "scan-file" or "enrich-design" or "flow" or "copy-clone" ? 0 : 1;
         }
 
         try
@@ -43,6 +44,7 @@ public static class AccessCommand
             return command switch
             {
                 "scan" => await RunScanAsync(ParseOptions(rest), output, cancellationToken),
+                "scan-file" => await RunScanFileAsync(ParseOptions(rest), output, cancellationToken),
                 "enrich-design" => await RunEnrichDesignAsync(ParseOptions(rest), output, cancellationToken),
                 "flow" => await RunFlowAsync(ParseOptions(rest), output, cancellationToken),
                 "copy-clone" => await RunCopyCloneAsync(ParseOptions(rest), output, cancellationToken),
@@ -230,6 +232,31 @@ public static class AccessCommand
         return 0;
     }
 
+    private static async Task<int> RunScanFileAsync(
+        IReadOnlyDictionary<string, string> values,
+        TextWriter output,
+        CancellationToken cancellationToken)
+    {
+        var database = Required(values, "--database", "AccessDatabasePathMissing");
+        var outPath = Required(values, "--out", "AccessOutputMissing");
+        var timeout = 600;
+        if (values.TryGetValue("--timeout-seconds", out var timeoutValue) && !int.TryParse(timeoutValue, out timeout))
+            throw new AccessScanException("AccessInvalidTimeout");
+        if (values.Keys.Except(["--database", "--out", "--timeout-seconds"], StringComparer.Ordinal).Any())
+            throw new AccessScanException("AccessInvalidArguments");
+
+        var result = await new AccessFileScanRunner().RunAsync(
+            new AccessFileScanOptions(database, outPath, timeout),
+            cancellationToken);
+        try { await AccessArtifactWriter.WriteAsync(outPath, result, AccessLimits.Default, cancellationToken); }
+        catch (AccessScanException) { throw; }
+        catch { throw new AccessScanException("AccessArtifactWriteFailed"); }
+        await output.WriteLineAsync("TraceMap Access local file snapshot scan completed.");
+        await output.WriteLineAsync($"Facts written: {result.Facts.Count}");
+        await output.WriteLineAsync($"Analysis level: {result.Manifest.AnalysisLevel}");
+        return 0;
+    }
+
     internal static IReadOnlyDictionary<string, string> ParseOptions(string[] args)
     {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -281,6 +308,7 @@ public static class AccessCommand
 
         Usage:
           tracemap-access scan --repo <git-worktree> --database <repo-relative.accdb-or-mdb> --out <new-directory> [--timeout-seconds <30-3600>]
+          tracemap-access scan-file --database <local.accdb-or-mdb> --out <new-directory> [--timeout-seconds <30-3600>]
           tracemap-access enrich-design --base-scan <completed-output> --design-evidence <protected-directory> --out <new-directory>
           tracemap-access flow --index <completed-index.sqlite> --out <new-directory> [--max-depth <1-64>] [--max-paths <1-10000>] [--max-gaps <1-10000>]
           tracemap-access copy-clone --index <completed-index.sqlite> --out <new-directory> [--max-candidates <1-10000>] [--max-flow-paths <1-10000>] [--max-gaps <1-10000>]
@@ -294,6 +322,15 @@ public static class AccessCommand
         Usage: tracemap-access scan --repo <git-worktree> --database <repo-relative.accdb-or-mdb> --out <new-directory> [--timeout-seconds <30-3600>]
 
         Requirements: Windows, installed Microsoft Access/DAO, clean tracked database at checked-out HEAD, and a non-existing output directory.
+        Outputs: scan-manifest.json, facts.ndjson, index.sqlite, report.md, logs/analyzer.log.
+        """;
+
+    private static string ScanFileHelp() => """
+        Usage: tracemap-access scan-file --database <local.accdb-or-mdb> --out <new-directory> [--timeout-seconds <30-3600>]
+
+        Requirements: Windows, installed Microsoft Access/DAO, a regular local database file, and a non-existing output directory.
+        TraceMap creates and removes a private no-remote snapshot repository internally. Evidence is labeled as a local file snapshot with a deterministic local commit.
+        The original file is never opened by Access and is hash-verified before and after the scan.
         Outputs: scan-manifest.json, facts.ndjson, index.sqlite, report.md, logs/analyzer.log.
         """;
 

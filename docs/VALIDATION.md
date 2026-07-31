@@ -342,6 +342,16 @@ name, hash, object identities, SQL, VBA, macro bodies, expressions, connections,
 or exception text in its checkpoint. Raw scratch remains disposable; retain the
 sanitized checkpoint family until its issue result is confirmed posted.
 
+For ordinary single-file product use, `tracemap-access scan-file` owns the same
+verified generic-copy and disposable local-commit ceremony internally; see
+[`ACCESS_FILE_FIRST_SCAN.md`](ACCESS_FILE_FIRST_SCAN.md). Platform-neutral tests
+must compare the deterministic internal commit and fact IDs across two synthetic
+byte inputs, prove no remote, verify local-snapshot labeling and original
+path/name suppression, and cover original mutation plus success, failure,
+cancellation, and cleanup paths. A Windows smoke must use only the generated
+zero-row synthetic fixture unless a representative input is separately
+authorized.
+
 For source builds in an isolated local Parallels Windows VM, follow
 [`ACCESS_PARALLELS_SOURCE_RUNNER.md`](ACCESS_PARALLELS_SOURCE_RUNNER.md).
 The host runner requires every configured VM network adapter to be disabled
@@ -374,7 +384,9 @@ Verify `access-review create` produces the Access-only release review,
 `hidden-local` explorer, deterministic `access-review-manifest.json`, and
 relative-link README. Repeat to two output directories and compare every file.
 Verify manifest hashes, explicit count-only UI/VBA/macro gaps, protected-value
-suppression, overlap rejection, non-Access rejection, and guarded `--force`.
+suppression, overlap rejection, non-Access rejection, guarded `--force`, a
+custom `--max-findings` bound, and explicit deterministic truncation when that
+bound is reached.
 
 When the isolated Windows + Access VM is available, run the synthetic smoke
 with `-ReviewBundlePath <new-durable-local-review-directory>` outside the

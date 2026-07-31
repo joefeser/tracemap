@@ -1,8 +1,8 @@
 # Microsoft Access Adapter v0 Runway Implementation State
 
 Status: Phase 0 through Phase 9.5 are complete, merged, and promoted to `main`;
-synthetic, representative local-only, and exact-merge post-review Windows
-validation are complete
+Phase 10 file-first and dogfood evidence hardening is implemented on
+`codex/issue-563-access-hardening` for issue #563
 
 Spec branch: `codex/microsoft-access-adapter-runway`
 
@@ -17,6 +17,58 @@ Main promotion PR: #505, merged as
 Phase 7 branch: `codex/microsoft-access-adapter-v0-ui-bindings`
 
 Public claim level: hidden
+
+## Phase 10 Issue #563 State
+
+- Added `tracemap-access scan-file --database <local.accdb-or-mdb> --out
+  <new-directory>`.
+- The wrapper validates the original and output, creates a restricted generic
+  copy, verifies its hash, creates a deterministic no-remote local commit,
+  delegates to the existing conservative scanner, re-verifies the original,
+  and removes scratch on every exit path.
+- File-first facts use `provenanceKind=local-file-snapshot`; original absolute
+  path, filename, username, scratch path, and command text do not enter output.
+- Declared relationships retain raw DAO masks plus deterministic normalized
+  flags and explicit unknown bits with static-configuration limitations.
+- Query-owned gaps retain the known owner stable key; fact projection adds the
+  owning query declaration fact ID when available.
+- `access-review create` defaults to 1,000 findings and accepts a bounded
+  `--max-findings 1..10000`; the existing release-review truncation status,
+  omitted count, and gap remain authoritative.
+- No Access COM collection surface widened. Query parameter/connect child
+  failures now retain the already-known query declaration and emit an owned
+  gap. Form/report, VBA, and macro evidence remains count-only, and all
+  row/execution/runtime boundaries remain intact.
+- Validation uses synthetic bytes and constructed evidence only. Private Access
+  artifacts are neither read nor copied.
+
+Phase 10 validation on macOS:
+
+- focused file-first/foundation and local-review tests: 45/45 passed;
+- all Access-named tests: 148/148 passed;
+- full solution build: passed with 0 warnings and 0 errors;
+- full solution tests: 1022/1022 passed;
+- adapter artifact validator: 7/7 passed;
+- changed-file formatting verification passed for every changed C# file except
+  `TraceMap.Cli/Program.cs`, whose repository-pre-existing unrelated whitespace
+  findings remain outside this issue; the changed hunks are conventionally
+  formatted;
+- private-path guard and `git diff --check`: passed.
+
+The file-first lifecycle is covered with synthetic bytes and an injected
+scanner boundary on macOS, including deterministic commits/fact IDs, no remote,
+original-name/path suppression, mutation detection, and cleanup after success,
+failure, cancellation, and cleanup failure. A new Windows representative scan
+is intentionally not used for issue #563; the existing Windows COM reader is
+unchanged, and no private database is an allowed fixture.
+
+Exact-head review hardening isolates every local-snapshot Git process from
+system/global/injected configuration, disables prompting and optional locks,
+uses explicit no-filter attributes for the generic database name, and pins
+`git init --object-format=sha1`. A malicious global clean-filter regression
+proves the filter is not invoked and the commit remains a 40-character SHA-1.
+The real query-reader path also proves a bounded parameter-collection failure
+retains the query projection and links its gap to the declaration fact.
 
 ## Why This Runway Exists
 
