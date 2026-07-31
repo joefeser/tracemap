@@ -930,6 +930,7 @@ public sealed class AccessFoundationTests
 
         Assert.Equal(sharedOutputIdentity.StableKey, gap.TargetSymbol);
         Assert.False(gap.Properties.ContainsKey("supportingFactIds"));
+        Assert.Equal("query-output-field-owner-unknown", gap.Properties["scopeKind"]);
     }
 
     [Fact]
