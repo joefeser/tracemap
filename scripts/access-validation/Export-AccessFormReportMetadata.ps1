@@ -476,6 +476,23 @@ if (-not [string]::Equals(
         [StringComparison]::OrdinalIgnoreCase)) {
     Stop-Export "AccessMetadataScratchBindingMismatch"
 }
+if ([string]::IsNullOrWhiteSpace($WorkerProcessMarkerPath)) {
+    Stop-Export "AccessMetadataProcessMarkerBindingMissing"
+}
+$workerProcessMarkerFullPath = [IO.Path]::GetFullPath($WorkerProcessMarkerPath)
+$expectedProcessMarkerPrefix = ".$([IO.Path]::GetFileName($output)).worker-"
+if (-not [string]::Equals(
+        [IO.Path]::GetDirectoryName($workerProcessMarkerFullPath),
+        $outputParent,
+        [StringComparison]::OrdinalIgnoreCase) -or
+    -not [IO.Path]::GetFileName($workerProcessMarkerFullPath).StartsWith(
+        $expectedProcessMarkerPrefix,
+        [StringComparison]::OrdinalIgnoreCase) -or
+    -not [IO.Path]::GetFileName($workerProcessMarkerFullPath).EndsWith(
+        ".process.json",
+        [StringComparison]::OrdinalIgnoreCase)) {
+    Stop-Export "AccessMetadataProcessMarkerBindingMismatch"
+}
 $originalBefore = Get-Sha256 $original
 $copyBefore = Get-Sha256 $copy
 if (-not [string]::Equals($copyBefore, $originalBefore, [StringComparison]::OrdinalIgnoreCase)) {
@@ -488,6 +505,7 @@ $ownedAccessProcessIdentities = @()
 $records = [System.Collections.Generic.List[object]]::new()
 $catalogPartial = $false
 $succeeded = $false
+$createdOutput = $false
 $cleanupFailure = ""
 try {
     New-Item -ItemType Directory -Path $scratch | Out-Null
@@ -501,11 +519,9 @@ try {
     $ownedAccessProcessIdentities = @(
         New-AccessProcessIdentity $ownedAccessProcess
     )
-    if (-not [string]::IsNullOrWhiteSpace($WorkerProcessMarkerPath)) {
-        [IO.File]::WriteAllText(
-            [IO.Path]::GetFullPath($WorkerProcessMarkerPath),
-            ($ownedAccessProcessIdentities | ConvertTo-Json -Compress))
-    }
+    [IO.File]::WriteAllText(
+        $workerProcessMarkerFullPath,
+        ($ownedAccessProcessIdentities | ConvertTo-Json -Compress))
     $access.AutomationSecurity = 3
     $access.Visible = $false
     $dbEngine = $null
@@ -694,6 +710,7 @@ try {
         $counts[$group.Name] = $group.Count
     }
     New-Item -ItemType Directory -Path $output | Out-Null
+    $createdOutput = $true
     [IO.File]::WriteAllBytes((Join-Path $output "access-design-records.ndjson"), $recordsBytes)
     $manifest = [ordered]@{
         schema = "tracemap.access-design-evidence.v1"
@@ -745,7 +762,7 @@ finally {
     # its worker host exits. Leave process and scratch verification to the
     # supervising invocation, which removes the worker first and then verifies
     # the exact recorded Access process identity before publishing the output.
-    if ((-not $succeeded -or $cleanupFailure) -and (Test-Path -LiteralPath $output)) {
+    if ($createdOutput -and (-not $succeeded -or $cleanupFailure) -and (Test-Path -LiteralPath $output)) {
         try { Remove-Item -LiteralPath $output -Recurse -Force -ErrorAction Stop }
         catch { $cleanupFailure = "AccessMetadataOutputCleanupFailed" }
     }
