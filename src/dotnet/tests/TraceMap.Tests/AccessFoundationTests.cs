@@ -555,10 +555,86 @@ public sealed class AccessFoundationTests
                 return scratch;
             },
             _ => throw new IOException("synthetic cleanup failure"),
-            CancellationToken.None));
+            CancellationToken.None,
+            () => Task.CompletedTask));
 
         Assert.Equal("AccessFileSnapshotCleanupFailed", exception.Classification);
         Directory.Delete(scratch, recursive: true);
+    }
+
+    [Fact]
+    public async Task File_first_snapshot_retries_transient_internal_repository_cleanup_failure()
+    {
+        using var temp = new TempDirectory();
+        var database = Path.Combine(temp.Path, "fixture.accdb");
+        await File.WriteAllBytesAsync(database, [1, 2, 3, 4]);
+        var scratch = Path.Combine(temp.Path, "transient-cleanup-failure");
+        var cleanupAttempts = 0;
+        var retryDelays = 0;
+
+        var result = await new AccessFileScanRunner().RunCoreAsync(
+            new(database, Path.Combine(temp.Path, "out")),
+            (options, _) =>
+            {
+                var input = AccessInputValidator.Validate(options);
+                return Task.FromResult(AccessFactBuilder.Build(input, Projection(input), options));
+            },
+            () =>
+            {
+                Directory.CreateDirectory(scratch);
+                return scratch;
+            },
+            path =>
+            {
+                cleanupAttempts++;
+                if (cleanupAttempts < 3) throw new IOException("synthetic transient cleanup failure");
+                Directory.Delete(path, recursive: true);
+            },
+            CancellationToken.None,
+            () =>
+            {
+                retryDelays++;
+                return Task.CompletedTask;
+            });
+
+        Assert.NotEmpty(result.Facts);
+        Assert.Equal(3, cleanupAttempts);
+        Assert.Equal(2, retryDelays);
+        Assert.False(Directory.Exists(scratch));
+    }
+
+    [Fact]
+    public void File_first_snapshot_cleanup_clears_read_only_members_before_deletion()
+    {
+        using var temp = new TempDirectory();
+        var scratch = Path.Combine(temp.Path, "read-only-cleanup");
+        var objects = Path.Combine(scratch, ".git", "objects", "ab");
+        Directory.CreateDirectory(objects);
+        var gitObject = Path.Combine(objects, "synthetic-object");
+        File.WriteAllBytes(gitObject, [1, 2, 3, 4]);
+        File.SetAttributes(gitObject, File.GetAttributes(gitObject) | FileAttributes.ReadOnly);
+
+        AccessFileScanRunner.ClearReadOnlyAttributes(scratch);
+
+        Assert.Equal(FileAttributes.None, File.GetAttributes(gitObject) & FileAttributes.ReadOnly);
+        Directory.Delete(scratch, recursive: true);
+        Assert.False(Directory.Exists(scratch));
+    }
+
+    [Fact]
+    public async Task File_first_snapshot_cleanup_is_idempotent_when_scratch_is_already_absent()
+    {
+        using var temp = new TempDirectory();
+        var scratch = Path.Combine(temp.Path, "already-removed");
+        var deleteCalled = false;
+
+        AccessFileScanRunner.ClearReadOnlyAttributes(scratch);
+        await AccessFileScanRunner.DeleteScratchDirectoryWithRetryAsync(
+            scratch,
+            _ => deleteCalled = true,
+            () => Task.CompletedTask);
+
+        Assert.False(deleteCalled);
     }
 
     [Fact]

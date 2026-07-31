@@ -13,6 +13,8 @@ public sealed record AccessFileScanOptions(
 public sealed class AccessFileScanRunner
 {
     private const string SnapshotRepositoryName = "localfilesnapshot";
+    private const int CleanupAttemptCount = 30;
+    private const int CleanupRetryDelayMilliseconds = 200;
     private readonly AccessLimits _limits;
 
     public AccessFileScanRunner(AccessLimits? limits = null)
@@ -40,7 +42,8 @@ public sealed class AccessFileScanRunner
         Func<AccessScanOptions, CancellationToken, Task<ScanResult>> scan,
         Func<string> createScratchDirectory,
         Action<string> deleteScratchDirectory,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<Task>? cleanupRetryDelay = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var validated = Validate(options, _limits);
@@ -87,9 +90,10 @@ public sealed class AccessFileScanRunner
             {
                 try
                 {
-                    deleteScratchDirectory(scratchDirectory);
-                    if (Directory.Exists(scratchDirectory))
-                        throw new AccessScanException("AccessFileSnapshotCleanupFailed");
+                    await DeleteScratchDirectoryWithRetryAsync(
+                        scratchDirectory,
+                        deleteScratchDirectory,
+                        cleanupRetryDelay ?? (() => Task.Delay(CleanupRetryDelayMilliseconds)));
                 }
                 catch
                 {
@@ -97,6 +101,58 @@ public sealed class AccessFileScanRunner
                 }
             }
         }
+    }
+
+    internal static async Task DeleteScratchDirectoryWithRetryAsync(
+        string scratchDirectory,
+        Action<string> deleteScratchDirectory,
+        Func<Task> retryDelay)
+    {
+        for (var attempt = 1; attempt <= CleanupAttemptCount; attempt++)
+        {
+            if (!Directory.Exists(scratchDirectory)) return;
+
+            try
+            {
+                ClearReadOnlyAttributes(scratchDirectory);
+                if (!Directory.Exists(scratchDirectory)) return;
+                deleteScratchDirectory(scratchDirectory);
+                if (!Directory.Exists(scratchDirectory)) return;
+            }
+            catch when (attempt < CleanupAttemptCount)
+            {
+                // Windows can retain a short-lived handle after Git or Access exits.
+                // Retry only this known disposable directory and verify removal below.
+            }
+
+            if (!Directory.Exists(scratchDirectory)) return;
+            if (attempt < CleanupAttemptCount) await retryDelay();
+        }
+
+        throw new AccessScanException("AccessFileSnapshotCleanupFailed");
+    }
+
+    internal static void ClearReadOnlyAttributes(string scratchDirectory)
+    {
+        if (!Directory.Exists(scratchDirectory)) return;
+
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = false,
+            ReturnSpecialDirectories = false,
+            AttributesToSkip = FileAttributes.ReparsePoint
+        };
+        foreach (var path in Directory.EnumerateFileSystemEntries(scratchDirectory, "*", options))
+        {
+            var attributes = File.GetAttributes(path);
+            if ((attributes & FileAttributes.ReadOnly) != 0)
+                File.SetAttributes(path, attributes & ~FileAttributes.ReadOnly);
+        }
+
+        var rootAttributes = File.GetAttributes(scratchDirectory);
+        if ((rootAttributes & FileAttributes.ReadOnly) != 0)
+            File.SetAttributes(scratchDirectory, rootAttributes & ~FileAttributes.ReadOnly);
     }
 
     private static AccessFileValidatedInput Validate(AccessFileScanOptions options, AccessLimits limits)
