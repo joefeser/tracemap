@@ -10,6 +10,11 @@ tracemap-access scan-file `
   --out <new-scan-directory>
 ```
 
+The selected database must be on a local filesystem. UNC paths and mapped
+network drives are rejected before copying or launching Access. Snapshot Git
+operations use the same bounded `--timeout-seconds` value as the scan and run
+with inherited `GIT_*` routing and repository variables removed.
+
 The output is the standard TraceMap artifact set:
 
 ```text

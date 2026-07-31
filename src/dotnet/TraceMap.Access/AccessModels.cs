@@ -96,6 +96,13 @@ public sealed record AccessQueryDependencyProjection(
     string TargetKind,
     string Coverage);
 
+public sealed record AccessQueryOutputFieldProjection(
+    AccessSafeIdentity Identity,
+    int Ordinal,
+    string TypeFamily,
+    IReadOnlyList<string> SourceFieldStableKeys,
+    string Coverage);
+
 public sealed record AccessQueryProjection(
     AccessSafeIdentity Identity,
     string QueryKind,
@@ -106,7 +113,8 @@ public sealed record AccessQueryProjection(
     IReadOnlyList<AccessQueryDependencyProjection> Dependencies,
     bool IsPassThrough,
     string? ConnectionHash,
-    string? ProviderFamily);
+    string? ProviderFamily,
+    IReadOnlyList<AccessQueryOutputFieldProjection>? OutputFields = null);
 
 public sealed record AccessExternalLinkProjection(
     AccessSafeIdentity Identity,
@@ -137,7 +145,16 @@ public sealed record AccessControlProjection(
     int Ordinal,
     string ControlType,
     IReadOnlyList<AccessBindingProjection> Bindings,
-    IReadOnlyList<AccessUiEventProjection> Events);
+    IReadOnlyList<AccessUiEventProjection> Events,
+    string RowSourceType = "unspecified",
+    int? BoundColumn = null,
+    int? ColumnCount = null);
+
+public sealed record AccessReportGroupProjection(
+    int Ordinal,
+    AccessBindingProjection Binding,
+    string SortOrder,
+    string GroupOn);
 
 public sealed record AccessUiSurfaceProjection(
     AccessSafeIdentity Identity,
@@ -148,7 +165,8 @@ public sealed record AccessUiSurfaceProjection(
     IReadOnlyList<AccessBindingProjection> Bindings,
     IReadOnlyList<AccessControlProjection> Controls,
     IReadOnlyList<AccessUiEventProjection> Events,
-    string Coverage = "complete");
+    string Coverage = "complete",
+    IReadOnlyList<AccessReportGroupProjection>? ReportGroups = null);
 
 public sealed record AccessVbaCallProjection(
     AccessSafeIdentity Identity,

@@ -32,11 +32,12 @@ public static class AccessCommand
                 "scan" => ScanHelp(),
                 "scan-file" => ScanFileHelp(),
                 "enrich-design" => EnrichDesignHelp(),
+                "identity-project" => IdentityProjectHelp(),
                 "flow" => FlowHelp(),
                 "copy-clone" => CopyCloneHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "scan-file" or "enrich-design" or "flow" or "copy-clone" ? 0 : 1;
+            return command is "scan" or "scan-file" or "enrich-design" or "identity-project" or "flow" or "copy-clone" ? 0 : 1;
         }
 
         try
@@ -46,6 +47,7 @@ public static class AccessCommand
                 "scan" => await RunScanAsync(ParseOptions(rest), output, cancellationToken),
                 "scan-file" => await RunScanFileAsync(ParseOptions(rest), output, cancellationToken),
                 "enrich-design" => await RunEnrichDesignAsync(ParseOptions(rest), output, cancellationToken),
+                "identity-project" => await RunIdentityProjectAsync(ParseOptions(rest), output, cancellationToken),
                 "flow" => await RunFlowAsync(ParseOptions(rest), output, cancellationToken),
                 "copy-clone" => await RunCopyCloneAsync(ParseOptions(rest), output, cancellationToken),
                 "worker" => await AccessWorkerHost.RunAsync(ParseOptions(rest), output, cancellationToken),
@@ -63,6 +65,29 @@ public static class AccessCommand
             await error.WriteLineAsync($"error: AccessUnhandledFailure-{(typeToken.Length == 0 ? "Exception" : typeToken)}");
             return 1;
         }
+    }
+
+    private static async Task<int> RunIdentityProjectAsync(
+        IReadOnlyDictionary<string, string> values,
+        TextWriter output,
+        CancellationToken cancellationToken)
+    {
+        var baseScan = Required(values, "--base-scan", "AccessBaseScanPathMissing");
+        var designEvidence = Required(values, "--design-evidence", "AccessDesignInputPathMissing");
+        var outPath = Required(values, "--out", "AccessHiddenIdentityOutputMissing");
+        if (values.Keys.Except(["--base-scan", "--design-evidence", "--out"], StringComparer.Ordinal).Any())
+            throw new AccessScanException("AccessInvalidArguments");
+        ValidateEnrichmentOutputPath(baseScan, designEvidence, outPath);
+        var result = await AccessHiddenIdentityProjection.WriteAsync(
+            baseScan,
+            designEvidence,
+            outPath,
+            AccessLimits.Default,
+            cancellationToken);
+        await output.WriteLineAsync("TraceMap Access hidden-local identity projection completed.");
+        await output.WriteLineAsync($"Identities written: {result.IdentityCount}");
+        await output.WriteLineAsync("Claim level: hidden");
+        return 0;
     }
 
     private static async Task<int> RunEnrichDesignAsync(
@@ -310,12 +335,21 @@ public static class AccessCommand
           tracemap-access scan --repo <git-worktree> --database <repo-relative.accdb-or-mdb> --out <new-directory> [--timeout-seconds <30-3600>]
           tracemap-access scan-file --database <local.accdb-or-mdb> --out <new-directory> [--timeout-seconds <30-3600>]
           tracemap-access enrich-design --base-scan <completed-output> --design-evidence <protected-directory> --out <new-directory>
+          tracemap-access identity-project --base-scan <completed-output> --design-evidence <protected-directory> --out <new-directory>
           tracemap-access flow --index <completed-index.sqlite> --out <new-directory> [--max-depth <1-64>] [--max-paths <1-10000>] [--max-gaps <1-10000>]
           tracemap-access copy-clone --index <completed-index.sqlite> --out <new-directory> [--max-candidates <1-10000>] [--max-flow-paths <1-10000>] [--max-gaps <1-10000>]
           tracemap-access --version
 
         The adapter reads static design metadata only. Design enrichment is Mac-compatible and never opens the database or launches Access.
         It does not read rows or execute queries, macros, forms, reports, or VBA.
+        """;
+
+    private static string IdentityProjectHelp() => """
+        Usage: tracemap-access identity-project --base-scan <completed-output> --design-evidence <protected-directory> --out <new-directory>
+
+        Writes an independently deletable hidden-local identity projection for owner review.
+        The output is not a standard scan artifact and is not accepted by combine, vault, public-site, or release-publication workflows.
+        Raw design text, inline SQL, expressions, VBA, macro bodies, credentials, and local paths are omitted.
         """;
 
     private static string ScanHelp() => """
