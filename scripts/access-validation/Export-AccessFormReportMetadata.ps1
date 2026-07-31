@@ -97,6 +97,35 @@ function Remove-PathChecked(
     if ($failed) { Stop-Export $FailureClassification }
 }
 
+function Clear-ReadOnlyAttributes([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    foreach ($item in @(Get-ChildItem -LiteralPath $Path -Recurse -Force -ErrorAction Stop)) {
+        if ($item.Attributes -band [IO.FileAttributes]::ReadOnly) {
+            $item.Attributes = $item.Attributes -band (-bnot [IO.FileAttributes]::ReadOnly)
+        }
+    }
+    $rootItem = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if ($rootItem.Attributes -band [IO.FileAttributes]::ReadOnly) {
+        $rootItem.Attributes = $rootItem.Attributes -band (-bnot [IO.FileAttributes]::ReadOnly)
+    }
+}
+
+function Remove-DirectoryWithRetry([string]$Path) {
+    for ($attempt = 1; $attempt -le 30; $attempt++) {
+        if (-not (Test-Path -LiteralPath $Path)) { return $true }
+        try {
+            Clear-ReadOnlyAttributes $Path
+            if (Test-Path -LiteralPath $Path) {
+                Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+            }
+        }
+        catch { }
+        if (-not (Test-Path -LiteralPath $Path)) { return $true }
+        if ($attempt -lt 30) { Start-Sleep -Milliseconds 200 }
+    }
+    return $false
+}
+
 function Test-SourceHashesUnchanged(
     [string]$OriginalPath,
     [string]$OriginalHash,
@@ -355,8 +384,8 @@ if (-not $InternalWorker) {
             if (Test-Path -LiteralPath $output) {
                 Remove-Item -LiteralPath $output -Recurse -Force -ErrorAction Stop
             }
-            if (Test-Path -LiteralPath $workerScratchDirectory) {
-                Remove-Item -LiteralPath $workerScratchDirectory -Recurse -Force -ErrorAction Stop
+            if (-not (Remove-DirectoryWithRetry $workerScratchDirectory)) {
+                throw "AccessMetadataTimeoutCleanupFailed"
             }
             if (Test-Path -LiteralPath $workerProcessMarker) {
                 Remove-Item -LiteralPath $workerProcessMarker -Force -ErrorAction Stop
@@ -426,10 +455,7 @@ if (-not $InternalWorker) {
     $processCleanupFailed = $remainingOwnedAccess.Count -gt 0 -or $unattributedAccess.Count -gt 0
     $scratchCleanupFailed = $false
     try {
-        if (Test-Path -LiteralPath $workerScratchDirectory) {
-            Remove-Item -LiteralPath $workerScratchDirectory -Recurse -Force -ErrorAction Stop
-        }
-        if (Test-Path -LiteralPath $workerScratchDirectory) {
+        if (-not (Remove-DirectoryWithRetry $workerScratchDirectory)) {
             $scratchCleanupFailed = $true
         }
     }
