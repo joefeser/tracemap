@@ -23,9 +23,13 @@ internal static partial class AccessUiTextParser
         var gaps = new List<AccessGapProjection>();
         var controls = new List<AccessRawControl>();
         var surfaceEvents = new List<AccessRawUiEvent>();
+        var reportGroups = new List<AccessRawReportGroup>();
         var blocks = new Stack<string>();
         ControlBuilder? control = null;
         var controlDepth = -1;
+        ReportGroupBuilder? reportGroup = null;
+        var reportGroupDepth = -1;
+        var reportGroupContainerDepth = -1;
         string? recordSource = null;
         string? filter = null;
         string? orderBy = null;
@@ -59,6 +63,14 @@ internal static partial class AccessUiTextParser
             }
             if (trimmed == "End")
             {
+                if (reportGroup is not null && blocks.Count == reportGroupDepth)
+                {
+                    reportGroups.Add(reportGroup.Build());
+                    reportGroup = null;
+                    reportGroupDepth = -1;
+                }
+                if (blocks.Count == reportGroupContainerDepth)
+                    reportGroupContainerDepth = -1;
                 if (control is not null && blocks.Count == controlDepth)
                 {
                     if (string.IsNullOrWhiteSpace(control.Name))
@@ -73,6 +85,27 @@ internal static partial class AccessUiTextParser
                 continue;
             }
 
+            var indexedGroup = IndexedGroupPattern().Match(line);
+            if (surfaceKind == "report"
+                && control is null
+                && reportGroup is null
+                && reportGroupContainerDepth == blocks.Count
+                && indexedGroup.Success)
+            {
+                blocks.Push("report-group");
+                var ordinal = ReadBoundedNonNegativeInt(indexedGroup.Groups["ordinal"].Value);
+                if (ordinal is null)
+                {
+                    gaps.Add(new("AccessUiDesignTextMalformed", "ui-surface", null, RuleIds.LegacyAccessUiSurface));
+                }
+                else
+                {
+                    reportGroup = new(ordinal.Value);
+                    reportGroupDepth = blocks.Count;
+                }
+                continue;
+            }
+
             var property = PropertyPattern().Match(line);
             if (!property.Success) continue;
             var name = property.Groups["name"].Value;
@@ -80,6 +113,10 @@ internal static partial class AccessUiTextParser
             if (sourceValue.Trim().Equals("Begin", StringComparison.Ordinal))
             {
                 blocks.Push("property-value");
+                if (surfaceKind == "report" && control is null && name == "GroupLevel")
+                {
+                    reportGroupContainerDepth = blocks.Count;
+                }
                 if (ProtectedPropertyNames.Contains(name))
                     gaps.Add(new("AccessUiProtectedPropertyShapeUnsupported", control is null ? "ui-surface" : "control", null, RuleIds.LegacyAccessUiSurface));
                 continue;
@@ -92,18 +129,50 @@ internal static partial class AccessUiTextParser
                 continue;
             }
 
+            if (surfaceKind == "report"
+                && control is null
+                && reportGroup is null
+                && reportGroupContainerDepth == blocks.Count
+                && ReportGroupPropertyNames.Contains(name))
+            {
+                reportGroup = new(reportGroups.Count);
+                reportGroupDepth = blocks.Count;
+            }
+
             if (control is not null)
             {
+                if (blocks.Count != controlDepth) continue;
                 switch (name)
                 {
                     case "Name": control.Name = value; break;
                     case "ControlSource": control.ControlSource = value; break;
                     case "RowSource": control.RowSource = value; break;
+                    case "RowSourceType": control.RowSourceType = value; break;
                     case "ValidationRule": control.ValidationRule = value; break;
+                    case "BoundColumn": control.BoundColumn = ReadBoundedNonNegativeInt(value); break;
+                    case "ColumnCount": control.ColumnCount = ReadBoundedNonNegativeInt(value); break;
+                    case "SourceObject": control.SourceObject = value; break;
+                    case "LinkMasterFields": control.LinkMasterFields = value; break;
+                    case "LinkChildFields": control.LinkChildFields = value; break;
                     default:
                         if (EventRoles.TryGetValue(name, out var controlEventRole))
                             control.Events.Add(new(controlEventRole, value));
                         break;
+                }
+                continue;
+            }
+
+            if (reportGroup is not null)
+            {
+                if (blocks.Count != reportGroupDepth) continue;
+                switch (name)
+                {
+                    case "ControlSource":
+                    case "Expression":
+                        reportGroup.Expression = value;
+                        break;
+                    case "SortOrder": reportGroup.SortOrder = value; break;
+                    case "GroupOn": reportGroup.GroupOn = value; break;
                 }
                 continue;
             }
@@ -131,7 +200,8 @@ internal static partial class AccessUiTextParser
                 surfaceEvents.OrderBy(item => item.Role, StringComparer.Ordinal).ToArray(),
                 Coverage: malformed ? "partial" : "complete",
                 Filter: filter,
-                OrderBy: orderBy),
+                OrderBy: orderBy,
+                ReportGroups: reportGroups.OrderBy(item => item.Ordinal).ToArray()),
             gaps.OrderBy(item => item.Classification, StringComparer.Ordinal).ToArray());
     }
 
@@ -160,6 +230,9 @@ internal static partial class AccessUiTextParser
         _ => null
     };
 
+    private static int? ReadBoundedNonNegativeInt(string value) =>
+        int.TryParse(value.Trim(), out var parsed) && parsed is >= 0 and <= 10_000 ? parsed : null;
+
     private static bool TryControlType(string block, out int value)
         => ControlTypes.TryGetValue(block, out value);
 
@@ -171,11 +244,26 @@ internal static partial class AccessUiTextParser
         public string? ControlSource { get; set; }
         public string? RowSource { get; set; }
         public string? ValidationRule { get; set; }
+        public string? RowSourceType { get; set; }
+        public int? BoundColumn { get; set; }
+        public int? ColumnCount { get; set; }
+        public string? SourceObject { get; set; }
+        public string? LinkMasterFields { get; set; }
+        public string? LinkChildFields { get; set; }
         public List<AccessRawUiEvent> Events { get; } = [];
 
         public AccessRawControl Build() => new(
             Name!, ordinal, controlType, ControlSource, RowSource,
-            Events.OrderBy(item => item.Role, StringComparer.Ordinal).ToArray(), ValidationRule);
+            Events.OrderBy(item => item.Role, StringComparer.Ordinal).ToArray(), ValidationRule,
+            RowSourceType, BoundColumn, ColumnCount, SourceObject, LinkMasterFields, LinkChildFields);
+    }
+
+    private sealed class ReportGroupBuilder(int ordinal)
+    {
+        public string? Expression { get; set; }
+        public string? SortOrder { get; set; }
+        public string? GroupOn { get; set; }
+        public AccessRawReportGroup Build() => new(ordinal, Expression, SortOrder, GroupOn);
     }
 
     private static readonly Dictionary<string, string> EventRoles = new(StringComparer.Ordinal)
@@ -223,11 +311,20 @@ internal static partial class AccessUiTextParser
 
     private static readonly HashSet<string> ProtectedPropertyNames = new(StringComparer.Ordinal)
     {
-        "ControlSource", "Filter", "OrderBy", "RecordSource", "RowSource", "ValidationRule"
+        "ControlSource", "Filter", "OrderBy", "RecordSource", "RowSource", "ValidationRule",
+        "SourceObject", "LinkMasterFields", "LinkChildFields", "Expression"
+    };
+
+    private static readonly HashSet<string> ReportGroupPropertyNames = new(StringComparer.Ordinal)
+    {
+        "ControlSource", "Expression", "SortOrder", "GroupOn"
     };
 
     [GeneratedRegex(@"^Begin(?:\s+(?<block>[A-Za-z][A-Za-z0-9]*))?$", RegexOptions.CultureInvariant)]
     private static partial Regex BeginPattern();
+
+    [GeneratedRegex(@"^\s*(?<ordinal>[0-9]+)\s*=\s*Begin\s*$", RegexOptions.CultureInvariant)]
+    private static partial Regex IndexedGroupPattern();
 
     [GeneratedRegex(@"^\s*(?<name>[A-Za-z][A-Za-z0-9]*)\s*=\s*(?<value>.*)$", RegexOptions.CultureInvariant)]
     private static partial Regex PropertyPattern();

@@ -33,6 +33,7 @@ public sealed class AccessLocalReviewBundleTests
             "tracemap access-review create --scan-output <access-scan-directory> --out <bundle-directory>",
             output.ToString(),
             StringComparison.Ordinal);
+        Assert.Contains("--max-findings <1-10000>", output.ToString(), StringComparison.Ordinal);
         Assert.Contains("does not invoke Microsoft Access", output.ToString(), StringComparison.Ordinal);
     }
 
@@ -115,6 +116,39 @@ public sealed class AccessLocalReviewBundleTests
             ProtectedField,
             ProtectedQuery,
             ProtectedServer);
+    }
+
+    [Fact]
+    public async Task Bundle_finding_limit_is_configurable_deterministic_and_explicitly_truncated()
+    {
+        using var temp = new TempDirectory();
+        var scanOutput = await WriteCountOnlyAccessScanAsync(temp.Path);
+        var firstOutput = Path.Combine(temp.Path, "bounded-one");
+        var secondOutput = Path.Combine(temp.Path, "bounded-two");
+
+        var first = await AccessLocalReviewBundle.CreateAsync(new(scanOutput, firstOutput, MaxFindings: 2));
+        var second = await AccessLocalReviewBundle.CreateAsync(new(scanOutput, secondOutput, MaxFindings: 2));
+
+        Assert.Equal(ReleaseReviewStatuses.Truncated, first.Manifest.AccessEvidenceStatus);
+        Assert.Equal(2, first.Manifest.Counts.AccessFindingCount);
+        Assert.Equal(
+            JsonSerializer.Serialize(first.Manifest),
+            JsonSerializer.Serialize(second.Manifest));
+        AssertDirectoriesEqual(firstOutput, secondOutput);
+
+        var releaseJson = await File.ReadAllTextAsync(
+            Path.Combine(firstOutput, "release-review", "release-review.json"));
+        using var release = JsonDocument.Parse(releaseJson);
+        Assert.Equal(2, release.RootElement.GetProperty("query").GetProperty("maxFindings").GetInt32());
+        Assert.True(release.RootElement.GetProperty("summary").GetProperty("truncated").GetBoolean());
+        Assert.Contains(
+            release.RootElement.GetProperty("gaps").EnumerateArray(),
+            gap => gap.GetProperty("classification").GetString() == "TruncatedByLimit");
+
+        var invalid = await Assert.ThrowsAsync<AccessLocalReviewException>(
+            () => AccessLocalReviewBundle.CreateAsync(
+                new(scanOutput, Path.Combine(temp.Path, "invalid"), MaxFindings: 10_001)));
+        Assert.Equal("AccessReviewFindingLimitInvalid", invalid.Code);
     }
 
     [Fact]

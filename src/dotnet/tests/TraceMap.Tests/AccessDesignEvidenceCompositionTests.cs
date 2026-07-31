@@ -19,6 +19,108 @@ public sealed class AccessDesignEvidenceCompositionTests
     private const string ProtectedModule = "Private_Server_Module_71923";
     private const string ProtectedMacro = "Credential_Rotation_Macro_61922";
     private const string ProtectedField = "Private Field 51729";
+    private const string UnusedProtectedQuery = "Unused_Private_Query_41922";
+    private const string UnusedProtectedTable = "Unused_Private_Table_31922";
+    private const string OrphanProtectedField = "Orphan_Private_Field_21922";
+
+    [Fact]
+    public async Task Hidden_identity_projection_is_explicit_hash_inventoried_and_independently_deletable()
+    {
+        using var temp = new TempDirectory();
+        var baseScan = await WriteBaseScanAsync(temp.Path);
+        var design = WriteDesignBundle(temp.Path, baseScan, includeHiddenIdentityRegressions: true);
+        var output = Path.Combine(temp.Path, "hidden-identities");
+
+        var result = await AccessHiddenIdentityProjection.WriteAsync(baseScan, design, output);
+
+        Assert.True(result.IdentityCount >= 2);
+        var payload = await File.ReadAllTextAsync(Path.Combine(output, "access-identities.json"));
+        var manifestText = await File.ReadAllTextAsync(Path.Combine(output, "access-identity-manifest.json"));
+        Assert.Contains(ProtectedForm, payload, StringComparison.Ordinal);
+        Assert.Contains(ProtectedControl, payload, StringComparison.Ordinal);
+        Assert.DoesNotContain(ProtectedModule, payload, StringComparison.Ordinal);
+        Assert.DoesNotContain(ProtectedMacro, payload, StringComparison.Ordinal);
+        Assert.DoesNotContain("sourceText", payload, StringComparison.Ordinal);
+        Assert.DoesNotContain("designText", payload, StringComparison.Ordinal);
+        Assert.DoesNotContain("SELECT Password FROM Users", payload, StringComparison.OrdinalIgnoreCase);
+        using var payloadDocument = JsonDocument.Parse(payload);
+        var identities = payloadDocument.RootElement.GetProperty("identities").EnumerateArray().ToArray();
+        Assert.DoesNotContain(identities, item =>
+            item.GetProperty("role").GetString() == "saved-query"
+            && item.GetProperty("identity").GetString() == UnusedProtectedQuery);
+        Assert.DoesNotContain(identities, item =>
+            item.GetProperty("role").GetString() == "table"
+            && item.GetProperty("identity").GetString() == UnusedProtectedTable);
+        Assert.DoesNotContain(identities, item =>
+            item.GetProperty("role").GetString() == "table-field"
+            && item.GetProperty("identity").GetString() == OrphanProtectedField);
+        var queryIdentity = identities
+            .Single(item => item.GetProperty("role").GetString() == "saved-query");
+        var baseQuery = File.ReadLines(Path.Combine(baseScan, "facts.ndjson"))
+            .Select(line => JsonSerializer.Deserialize<CodeFact>(
+                line,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!)
+            .Single(fact => fact.FactType == FactTypes.AccessQueryDeclared);
+        Assert.Equal(baseQuery.TargetSymbol, queryIdentity.GetProperty("stableKey").GetString());
+        Assert.Contains("\"claimLevel\": \"hidden\"", manifestText, StringComparison.Ordinal);
+        using var manifest = JsonDocument.Parse(manifestText);
+        var file = Assert.Single(manifest.RootElement.GetProperty("files").EnumerateArray());
+        Assert.Equal("access-identities.json", file.GetProperty("path").GetString());
+        Assert.Equal(
+            Sha256(await File.ReadAllBytesAsync(Path.Combine(output, "access-identities.json"))),
+            file.GetProperty("sha256").GetString());
+        Directory.Delete(output, true);
+        Assert.True(Directory.Exists(baseScan));
+        Assert.True(Directory.Exists(design));
+    }
+
+    [Fact]
+    public async Task Hidden_identity_projection_deduplicates_controls_observed_in_structured_and_text_evidence()
+    {
+        using var temp = new TempDirectory();
+        var baseScan = await WriteBaseScanAsync(temp.Path);
+        var design = WriteDesignBundle(temp.Path, baseScan, includeReviewRegressions: true);
+        var output = Path.Combine(temp.Path, "hidden-identities");
+
+        var result = await AccessHiddenIdentityProjection.WriteAsync(baseScan, design, output);
+
+        using var payload = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(output, "access-identities.json")));
+        var identities = payload.RootElement.GetProperty("identities").EnumerateArray().ToArray();
+        Assert.Contains("BaseTable", payload.RootElement.GetRawText(), StringComparison.Ordinal);
+        Assert.Contains(ProtectedField, payload.RootElement.GetRawText(), StringComparison.Ordinal);
+        var controls = identities.Where(item =>
+            item.GetProperty("role").GetString() == "control"
+            && item.GetProperty("identity").GetString() == ProtectedControl).ToArray();
+        var control = Assert.Single(controls);
+        Assert.Equal("ui-control", control.GetProperty("recordKind").GetString());
+        Assert.Equal(identities.Length, result.IdentityCount);
+    }
+
+    [Fact]
+    public async Task Hidden_identity_projection_rejects_a_base_scan_with_an_inconsistent_database_stable_key()
+    {
+        using var temp = new TempDirectory();
+        var baseScan = await WriteBaseScanAsync(temp.Path);
+        var design = WriteDesignBundle(temp.Path, baseScan);
+        var factsPath = Path.Combine(baseScan, "facts.ndjson");
+        var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var facts = File.ReadLines(factsPath)
+            .Select(line => JsonSerializer.Deserialize<CodeFact>(line, jsonOptions)!)
+            .Select(fact => fact.FactType == FactTypes.LegacyDataMetadataDeclared
+                && fact.RuleId == RuleIds.LegacyAccessDatabaseInventory
+                    ? fact with { TargetSymbol = "access-database-inconsistent" }
+                    : fact)
+            .Select(fact => JsonSerializer.Serialize(fact, jsonOptions));
+        await File.WriteAllTextAsync(factsPath, string.Join('\n', facts) + "\n", new UTF8Encoding(false));
+        var output = Path.Combine(temp.Path, "hidden-identities");
+
+        var error = await Assert.ThrowsAsync<AccessScanException>(() =>
+            AccessHiddenIdentityProjection.WriteAsync(baseScan, design, output));
+
+        Assert.Equal("AccessDesignInputDatabaseUnbound", error.Classification);
+        Assert.False(Directory.Exists(output));
+    }
 
     [Fact]
     public async Task Enrichment_is_deterministic_hash_only_immutable_and_preserved_by_downstream_consumers()
@@ -230,6 +332,21 @@ public sealed class AccessDesignEvidenceCompositionTests
         AssertNoProtectedMaterial(await WriteResultAsync(temp.Path, result));
     }
 
+    [Fact]
+    public async Task Enrichment_marks_a_report_group_only_conflict_as_partial()
+    {
+        using var temp = new TempDirectory();
+        var baseScan = await WriteBaseScanAsync(temp.Path);
+        var design = WriteDesignBundle(temp.Path, baseScan, includeReportGroupConflict: true);
+
+        var result = await AccessDesignEvidenceComposer.ComposeAsync(baseScan, design);
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("classification") == "AccessDesignInputSurfaceConflict");
+        var report = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessReportDeclared);
+        Assert.Equal("partial", report.Properties.GetValueOrDefault("projectorCoverage"));
+    }
+
     private static async Task<string> WriteBaseScanAsync(string root)
     {
         var database = Path.Combine(root, "fixture.accdb");
@@ -289,7 +406,9 @@ public sealed class AccessDesignEvidenceCompositionTests
         string baseScan,
         string? databaseIdentityOverride = null,
         bool includeProjectionIdentityDuplicates = false,
-        bool includeReviewRegressions = false)
+        bool includeReviewRegressions = false,
+        bool includeHiddenIdentityRegressions = false,
+        bool includeReportGroupConflict = false)
     {
         var directory = Path.Combine(root, "protected-design-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -316,7 +435,13 @@ public sealed class AccessDesignEvidenceCompositionTests
                     ("events", Object(("on-load", "[Event Procedure]"))))),
             Record("ui-control", "control", "surface", "form-design-export", "container-only", null, null, null, "complete",
                 Object(("identity", ProtectedControl), ("ordinal", 0), ("controlType", 104),
-                    ("controlSource", includeReviewRegressions ? ProtectedField : null),
+                    ("controlSource", includeReviewRegressions
+                        ? ProtectedField
+                        : includeHiddenIdentityRegressions ? UnusedProtectedQuery : null),
+                    ("rowSource", "SELECT Password FROM Users"),
+                    ("linkMasterFields", includeHiddenIdentityRegressions
+                        ? $"{UnusedProtectedTable}, {OrphanProtectedField}"
+                        : null),
                     ("events", Object(("on-click", "[Event Procedure]"))))),
             Record("vba-module", "module", null, "vba-module-export", "exact-lines", vbaHash, 1, 4, "complete",
                 Object(("moduleRole", "standard"), ("identity", ProtectedModule), ("moduleKind", "standard"),
@@ -327,6 +452,69 @@ public sealed class AccessDesignEvidenceCompositionTests
             Record("source-gap", "gap", null, "producer-gap", "unavailable", null, null, null, "partial",
                 Object(("classification", "source-unavailable"), ("affectedScope", "macro"), ("coverageCategory", "source-unavailable")))
         };
+        if (includeHiddenIdentityRegressions)
+        {
+            records.Add(Record(
+                "catalog-object", "catalog-module", null, "catalog-export", "container-only", null, null, null, "complete",
+                Object(("objectRole", "module"), ("identity", ProtectedModule), ("ordinal", 0))));
+            records.Add(Record(
+                "catalog-object", "catalog-macro", null, "catalog-export", "container-only", null, null, null, "complete",
+                Object(("objectRole", "macro"), ("identity", ProtectedMacro), ("ordinal", 0))));
+            records.Add(Record(
+                "catalog-object", "catalog-unused-query", null, "catalog-export", "container-only", null, null, null, "complete",
+                Object(("objectRole", "saved-query"), ("identity", UnusedProtectedQuery), ("ordinal", 0))));
+            records.Add(Record(
+                "catalog-object", "catalog-unused-table", null, "catalog-export", "container-only", null, null, null, "complete",
+                Object(("objectRole", "table"), ("identity", UnusedProtectedTable), ("ordinal", 0))));
+            records.Add(Record(
+                "catalog-object", "catalog-orphan-field", "catalog-unused-table", "catalog-export", "container-only",
+                null, null, null, "complete",
+                Object(("objectRole", "table-field"), ("identity", OrphanProtectedField), ("ordinal", 0))));
+        }
+        if (includeReportGroupConflict)
+        {
+            const string reportName = "Private_Group_Report_21922";
+            const string reportDesign = """
+                Begin Report
+                    GroupLevel = Begin
+                        0 = Begin
+                            Expression ="TextGroup"
+                            SortOrder =0
+                            GroupOn =0
+                        End
+                    End
+                End
+                """;
+            var reportDesignHash = Sha256(Encoding.UTF8.GetBytes(reportDesign));
+            records.Add(Record(
+                "catalog-object", "catalog-report", null, "catalog-export", "container-only", null, null, null, "complete",
+                Object(("objectRole", "report"), ("identity", reportName), ("ordinal", 0))));
+            records.Add(Record(
+                "ui-design-document", "report-design-document", "catalog-report", "report-design-export", "exact-lines",
+                reportDesignHash, 1, reportDesign.Count(character => character == '\n') + 1, "complete",
+                Object(
+                    ("documentRole", "report"),
+                    ("designText", reportDesign),
+                    ("documentSha256", reportDesignHash),
+                    ("lineCount", reportDesign.Count(character => character == '\n') + 1))));
+            records.Add(Record(
+                "ui-surface", "report-surface", "catalog-report", "report-design-export", "container-only",
+                null, null, null, "complete",
+                Object(
+                    ("surfaceRole", "report"),
+                    ("identity", reportName),
+                    ("ordinal", 0),
+                    ("modulePresence", "absent"),
+                    ("boundState", "unbound"))));
+            records.Add(Record(
+                "report-group", "report-group", "report-surface", "report-design-export", "container-only",
+                null, null, null, "complete",
+                Object(
+                    ("ordinal", 0),
+                    ("expression", "StructuredGroup"),
+                    ("sortOrder", "ascending"),
+                    ("groupOn", "declared"))));
+        }
         if (includeReviewRegressions)
         {
             var eventVba = $"Private Sub {ProtectedControl}_Click()\nEnd Sub";
