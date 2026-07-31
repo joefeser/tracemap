@@ -127,7 +127,7 @@ function Get-AccessApplicationProcess([object]$Application) {
     $processId = [uint32]0
     $windowHandle = [IntPtr][long]$Application.hWndAccessApp
     [void][TraceMapAccessWindowProcess]::GetWindowThreadProcessId($windowHandle, [ref]$processId)
-    if ($processId -eq 0) { return $null }
+    if ($processId -eq 0 -or $processId -gt [uint32]([int]::MaxValue)) { return $null }
     return Get-Process -Id ([int]$processId) -ErrorAction SilentlyContinue
 }
 
@@ -606,10 +606,6 @@ finally {
     [GC]::Collect()
     [GC]::WaitForPendingFinalizers()
     $remainingAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
-    $unattributedAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
-    if ($ownedAccessProcessIdentities.Count -eq 0 -and $unattributedAccess.Count -gt 0) {
-        $cleanupFailure = "AccessMetadataProcessCleanupFailed"
-    }
     if ($remainingAccess.Count -gt 0) {
         $remainingAccess | Wait-Process -Timeout 30 -ErrorAction SilentlyContinue
         $remainingAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
@@ -632,6 +628,10 @@ finally {
         if ($remainingAccess.Count -gt 0) {
             $cleanupFailure = "AccessMetadataProcessCleanupFailed"
         }
+    }
+    $unattributedAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
+    if ($unattributedAccess.Count -gt 0) {
+        $cleanupFailure = "AccessMetadataProcessCleanupFailed"
     }
     try {
         if (Test-Path -LiteralPath $scratch) {
