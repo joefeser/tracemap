@@ -56,7 +56,7 @@ public sealed class AccessFileScanRunner
             var snapshotFileName = $"database{validated.Extension}";
             var snapshotDatabase = Path.Combine(snapshotRepository, snapshotFileName);
             CopyAndVerify(validated.FullPath, snapshotDatabase, validated.Hash);
-            InitializeSnapshotRepository(snapshotRepository, snapshotFileName);
+            InitializeSnapshotRepository(snapshotRepository, snapshotFileName, options.TimeoutSeconds);
 
             ScanResult? result = null;
             ExceptionDispatchInfo? scanFailure = null;
@@ -107,7 +107,12 @@ public sealed class AccessFileScanRunner
         if (options.TimeoutSeconds is < 30 or > 3600)
             throw new AccessScanException("AccessInvalidTimeout");
 
+        if (IsNetworkHostedPath(options.DatabasePath))
+            throw new AccessScanException("AccessNetworkDatabasePathRejected");
+
         var fullPath = Path.GetFullPath(options.DatabasePath);
+        if (IsNetworkHostedPath(fullPath))
+            throw new AccessScanException("AccessNetworkDatabasePathRejected");
         RejectReparsePath(fullPath, "AccessDatabaseReparsePointRejected");
         if (!File.Exists(fullPath) || (File.GetAttributes(fullPath) & FileAttributes.Directory) != 0)
             throw new AccessScanException("AccessDatabaseFileUnavailable");
@@ -170,7 +175,7 @@ public sealed class AccessFileScanRunner
             throw new AccessScanException("AccessFileSnapshotHashMismatch");
     }
 
-    private static void InitializeSnapshotRepository(string repository, string databaseFileName)
+    private static void InitializeSnapshotRepository(string repository, string databaseFileName, int timeoutSeconds)
     {
         var emptyGlobalConfig = Path.Combine(repository, AccessGitIsolation.EmptyGlobalConfigFileName);
         var emptyTemplate = Path.Combine(repository, ".tracemap-empty-git-template");
@@ -181,16 +186,17 @@ public sealed class AccessFileScanRunner
         RunGit(
             repository,
             "AccessFileSnapshotGitInitFailed",
+            timeoutSeconds,
             "init",
             "--quiet",
             "--object-format=sha1",
             "--initial-branch=access-file-snapshot",
             $"--template={emptyTemplate}");
-        RunGit(repository, "AccessFileSnapshotGitInitFailed", "config", "user.name", "TraceMap Local File Snapshot");
-        RunGit(repository, "AccessFileSnapshotGitInitFailed", "config", "user.email", "local-snapshot@tracemap.invalid");
-        RunGit(repository, "AccessFileSnapshotGitInitFailed", "config", "core.autocrlf", "false");
-        RunGit(repository, "AccessFileSnapshotGitInitFailed", "config", "core.hooksPath", disabledHooks);
-        RunGit(repository, "AccessFileSnapshotGitInitFailed", "config", "commit.gpgsign", "false");
+        RunGit(repository, "AccessFileSnapshotGitInitFailed", timeoutSeconds, "config", "user.name", "TraceMap Local File Snapshot");
+        RunGit(repository, "AccessFileSnapshotGitInitFailed", timeoutSeconds, "config", "user.email", "local-snapshot@tracemap.invalid");
+        RunGit(repository, "AccessFileSnapshotGitInitFailed", timeoutSeconds, "config", "core.autocrlf", "false");
+        RunGit(repository, "AccessFileSnapshotGitInitFailed", timeoutSeconds, "config", "core.hooksPath", disabledHooks);
+        RunGit(repository, "AccessFileSnapshotGitInitFailed", timeoutSeconds, "config", "commit.gpgsign", "false");
         File.WriteAllText(
             Path.Combine(repository, ".gitattributes"),
             "/database.accdb -text -filter -diff\n/database.mdb -text -filter -diff\n",
@@ -198,6 +204,7 @@ public sealed class AccessFileScanRunner
         RunGit(
             repository,
             "AccessFileSnapshotGitCommitFailed",
+            timeoutSeconds,
             "add",
             "--",
             AccessGitIsolation.EmptyGlobalConfigFileName,
@@ -206,23 +213,25 @@ public sealed class AccessFileScanRunner
         RunGit(
             repository,
             "AccessFileSnapshotGitCommitFailed",
+            timeoutSeconds,
             ["commit", "--quiet", "--no-verify", "-m", "TraceMap local file snapshot"],
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["GIT_AUTHOR_DATE"] = "2000-01-01T00:00:00Z",
                 ["GIT_COMMITTER_DATE"] = "2000-01-01T00:00:00Z"
             });
-        var remotes = RunGit(repository, "AccessFileSnapshotGitInitFailed", "remote");
+        var remotes = RunGit(repository, "AccessFileSnapshotGitInitFailed", timeoutSeconds, "remote");
         if (!string.IsNullOrWhiteSpace(remotes))
             throw new AccessScanException("AccessFileSnapshotRemoteRejected");
     }
 
-    private static string RunGit(string workingDirectory, string classification, params string[] arguments) =>
-        RunGit(workingDirectory, classification, arguments, null);
+    private static string RunGit(string workingDirectory, string classification, int timeoutSeconds, params string[] arguments) =>
+        RunGit(workingDirectory, classification, timeoutSeconds, arguments, null);
 
     private static string RunGit(
         string workingDirectory,
         string classification,
+        int timeoutSeconds,
         IReadOnlyList<string> arguments,
         IReadOnlyDictionary<string, string>? environment)
     {
@@ -248,7 +257,7 @@ public sealed class AccessFileScanRunner
             using var process = Process.Start(start) ?? throw new AccessScanException(classification);
             var outputTask = process.StandardOutput.ReadToEndAsync();
             var errorTask = process.StandardError.ReadToEndAsync();
-            if (!process.WaitForExit(15_000))
+            if (!process.WaitForExit(GitTimeoutMilliseconds(timeoutSeconds)))
             {
                 try { process.Kill(entireProcessTree: true); } catch { }
                 throw new AccessScanException("AccessFileSnapshotGitTimeout");
@@ -266,6 +275,41 @@ public sealed class AccessFileScanRunner
         catch
         {
             throw new AccessScanException("AccessFileSnapshotGitUnavailable");
+        }
+    }
+
+    internal static int GitTimeoutMilliseconds(int timeoutSeconds) => checked(timeoutSeconds * 1000);
+
+    internal static bool IsNetworkHostedPath(
+        string path,
+        Func<string, DriveType>? driveType = null)
+    {
+        if (path.StartsWith(@"\\", StringComparison.Ordinal)
+            || path.StartsWith("//", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        string? root;
+        try
+        {
+            root = Path.GetPathRoot(Path.GetFullPath(path));
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(root))
+            return false;
+
+        try
+        {
+            return (driveType ?? (value => new DriveInfo(value).DriveType))(root) == DriveType.Network;
+        }
+        catch
+        {
+            return false;
         }
     }
 

@@ -10,13 +10,11 @@ internal static class AccessGitIsolation
     {
         foreach (var key in start.Environment.Keys.ToArray())
         {
-            if (key.Equals("GIT_CONFIG_COUNT", StringComparison.OrdinalIgnoreCase)
-                || key.Equals("GIT_CONFIG_PARAMETERS", StringComparison.OrdinalIgnoreCase)
-                || key.StartsWith("GIT_CONFIG_KEY_", StringComparison.OrdinalIgnoreCase)
-                || key.StartsWith("GIT_CONFIG_VALUE_", StringComparison.OrdinalIgnoreCase))
-            {
+            // Git honors many process-level routing variables before it considers
+            // the working directory. Start from no inherited Git state, then add
+            // only the settings controlled by this snapshot operation.
+            if (key.StartsWith("GIT_", StringComparison.OrdinalIgnoreCase))
                 start.Environment.Remove(key);
-            }
         }
 
         start.Environment["GIT_CONFIG_NOSYSTEM"] = "1";

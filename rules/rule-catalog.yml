@@ -1443,12 +1443,14 @@ rules:
 
   - id: legacy.access.query.v1
     name: Microsoft Access saved-query shape
-    description: Records saved-query kind, parameter metadata, full text hash/length, and bounded local-object dependency candidates without executing or materializing queries.
+    description: Records saved-query kind, parameter metadata, full text hash/length, bounded local-object dependencies, and bounded QueryDef output-field/source candidates without executing or materializing queries.
     evidenceTier: Tier2Structural
     possibleEvidenceTiers: [Tier2Structural, Tier3SyntaxOrTextual, Tier4Unknown]
     emits:
       - AccessQueryDeclared
       - AccessQueryDependencyCandidate
+      - AccessQueryOutputDeclared
+      - AccessQueryOutputSourceCandidate
       - AnalysisGap
     limitations:
       - Query evidence does not prove execution, result shape, parameter values, branch selection, provider behavior, linked-source availability, permissions, runtime reachability, or production use.
@@ -1456,6 +1458,8 @@ rules:
       - Dynamic, malformed, ambiguous, unsupported, action, DDL, union, crosstab, and pass-through shapes remain partial or gaps where dependency projection is not credible.
       - Query-specific gaps retain the owning stable query key and declaration fact only when identity was established before the failure; no owner is invented otherwise.
       - Query result fields and recordsets are never enumerated for pass-through, action, DDL, or unsafe query kinds.
+      - QueryDef output-field metadata is enumerated only for supported select queries; no recordset is opened and pass-through, action, DDL, or unsafe query kinds retain no output-field conclusion.
+      - Blank, calculated, aliased, ambiguous, or unavailable SourceTable/SourceField metadata remains partial and does not prove result values or runtime lineage.
 
   - id: legacy.access.external-link.v1
     name: Microsoft Access external boundary

@@ -219,6 +219,29 @@ The base scan and protected input are immutable inputs. The output must be a
 new, non-overlapping path. Protected source and identities are consumed only
 in-process; the standard output remains hash-only.
 
+Functional form/report metadata changes additionally validate lookup,
+subform/subreport, report group/sort, and query-output-field candidates:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter "FullyQualifiedName~AccessUiProjectionTests|FullyQualifiedName~AccessScreenDataFlowTests|FullyQualifiedName~AccessDesignEvidence"
+```
+
+An owner may explicitly create a separately deletable hidden-local identity
+projection:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Access.Cli -- identity-project \
+  --base-scan <completed-access-scan> \
+  --design-evidence <protected-owner-controlled-directory> \
+  --out <new-hidden-local-directory>
+```
+
+This output is not a standard artifact and is not accepted by combine, vault,
+public-site, or release-publication workflows. It may contain owner-local
+direct identifiers, but never raw design text, inline SQL, VBA, macro bodies,
+credentials, or local paths.
+
 Source-neutral screen-to-data composition is also Mac-only and reads only the
 completed enriched index:
 
@@ -360,7 +383,7 @@ and exactly two enabled host shares: read-only `access_input` and read/write
 pinned Git/.NET launcher hashes, reparse-free required path chains, and an
 offline toolchain/package cache. Guest attestations are not independent host
 proof of an uncompromised Windows runtime or complete SDK tree. The runner
-supports only `doctor`, `build`, and synthetic validation. It does not accept a
+supports `doctor`, `build`, `synthetic`, and metadata-producer validation. It does not accept a
 representative database or change the Access extraction boundary.
 
 For Access design-review composition changes, run the focused Access and

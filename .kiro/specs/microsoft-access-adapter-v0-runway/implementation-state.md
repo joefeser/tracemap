@@ -63,12 +63,27 @@ is intentionally not used for issue #563; the existing Windows COM reader is
 unchanged, and no private database is an allowed fixture.
 
 Exact-head review hardening isolates every local-snapshot Git process from
-system/global/injected configuration, disables prompting and optional locks,
+system/global/injected configuration, including inherited repository-routing
+variables such as `GIT_DIR`, `GIT_WORK_TREE`, and `GIT_INDEX_FILE`; disables prompting and optional locks,
 uses explicit no-filter attributes for the generic database name, and pins
 `git init --object-format=sha1`. A malicious global clean-filter regression
 proves the filter is not invoked and the commit remains a 40-character SHA-1.
 The real query-reader path also proves a bounded parameter-collection failure
 retains the query projection and links its gap to the declaration fact.
+Review follow-up also rejects UNC and mapped-network database inputs before any
+copy is made and applies the caller's bounded scan timeout to snapshot Git
+operations instead of using an unrelated fixed timeout. These behaviors have
+focused regression coverage. The latest `origin/dev` form/report metadata work
+was merged into the branch with both query-owner attribution and query-output
+field evidence preserved.
+
+Review follow-up validation after merging the latest `origin/dev`:
+
+- Access foundation tests: 38/38 passed;
+- full solution build: passed with 0 warnings and 0 errors;
+- full solution tests: 1035/1035 passed;
+- focused changed-file formatting verification: passed;
+- private-path guard and `git diff --check`: passed.
 
 ## Why This Runway Exists
 
