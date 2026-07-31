@@ -192,10 +192,7 @@ if ($Action -eq "build") {
 }
 
 if ($Action -eq "metadata") {
-    $metadataParent = Join-Path $GuestRoot "runs"
-    if (-not (Test-Path -LiteralPath $metadataParent)) {
-        New-Item -ItemType Directory -Path $metadataParent -ErrorAction Stop | Out-Null
-    }
+    $metadataParent = $GuestRoot
     if (-not (Test-TrustedPath $metadataParent $GuestRoot)) {
         Stop-Guest "AccessGuestMetadataOutputBoundaryInvalid"
     }
