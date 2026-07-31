@@ -151,6 +151,9 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("Get-OwnedAccessProcesses", producer, StringComparison.Ordinal);
         Assert.Contains("ConvertTo-AccessProcessIdentities", producer, StringComparison.Ordinal);
         Assert.Contains("Remove-Job -Job $workerJob -Force", producer, StringComparison.Ordinal);
+        Assert.Contains("try { $workerJob.Dispose() } catch { }", producer, StringComparison.Ordinal);
+        Assert.Contains("$workerJob = $null", producer, StringComparison.Ordinal);
+        Assert.Contains("$observedAccess = @(Get-Process -Name \"MSACCESS\"", producer, StringComparison.Ordinal);
         Assert.Contains("$remainingOwnedAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)", producer, StringComparison.Ordinal);
         Assert.Contains("$processCleanupFailed = $remainingOwnedAccess.Count -gt 0 -or $unattributedAccess.Count -gt 0", producer, StringComparison.Ordinal);
         Assert.Contains("GetWindowThreadProcessId", producer, StringComparison.Ordinal);

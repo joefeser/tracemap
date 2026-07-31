@@ -364,10 +364,16 @@ if (-not $InternalWorker) {
         }
     }
     Remove-Job -Job $workerJob -Force -ErrorAction SilentlyContinue
+    try { $workerJob.Dispose() } catch { }
+    $completedJob = $null
+    $workerJob = $null
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
     $remainingOwnedAccess = @()
     for ($attempt = 0; $attempt -lt 120; $attempt++) {
         $remainingOwnedAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
-        if ($remainingOwnedAccess.Count -eq 0) { break }
+        $observedAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
+        if ($observedAccess.Count -eq 0) { break }
         Start-Sleep -Milliseconds 250
     }
     if ($remainingOwnedAccess.Count -gt 0) {
