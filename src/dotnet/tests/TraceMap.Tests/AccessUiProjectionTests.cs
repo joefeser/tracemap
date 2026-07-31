@@ -17,6 +17,50 @@ public sealed class AccessUiProjectionTests
     private const string ProtectedValidation = "[CustomerId] <> \"SecretValidation_92817\"";
 
     [Fact]
+    public void Text_design_parser_projects_each_indexed_report_group()
+    {
+        const string design = """
+            Begin Report
+                RecordSource ="qryParent"
+                GroupLevel = Begin
+                    0 = Begin
+                        ControlSource ="StatusId"
+                        SortOrder =1
+                        GroupOn =0
+                    End
+                    1 = Begin
+                        Expression ="TenantId"
+                        SortOrder =0
+                        GroupOn =1
+                    End
+                End
+            End
+            """;
+
+        var parsed = AccessUiTextParser.Parse(new StringReader(design), "rptParent", "report");
+        var surface = Assert.IsType<AccessRawUiSurface>(parsed.Surface);
+
+        Assert.Equal("complete", surface.Coverage);
+        Assert.Empty(parsed.Gaps);
+        Assert.Collection(
+            surface.ReportGroups!,
+            group =>
+            {
+                Assert.Equal(0, group.Ordinal);
+                Assert.Equal("StatusId", group.Expression);
+                Assert.Equal("1", group.SortOrder);
+                Assert.Equal("0", group.GroupOn);
+            },
+            group =>
+            {
+                Assert.Equal(1, group.Ordinal);
+                Assert.Equal("TenantId", group.Expression);
+                Assert.Equal("0", group.SortOrder);
+                Assert.Equal("1", group.GroupOn);
+            });
+    }
+
+    [Fact]
     public void Functional_metadata_parser_projects_lookup_subform_and_report_group_bindings_without_layout()
     {
         const string formDesign = """

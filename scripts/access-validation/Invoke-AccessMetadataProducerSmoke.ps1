@@ -40,7 +40,8 @@ try {
             -RepositoryIdentityHash $RepositoryHash `
             -CommitSha $Commit `
             -BaseScanManifestSha256 $BaseHash `
-            -DatabaseIdentityHash $DatabaseHash *> $null
+            -DatabaseIdentityHash $DatabaseHash `
+            -TimeoutSeconds 240 *> $null
     } -ArgumentList $Producer, $copy, $original, $bundle, $canary, $zeroHash, $commit, $zeroHash, $zeroHash
     try {
         if ($null -eq (Wait-Job -Job $producerJob -Timeout 300)) {

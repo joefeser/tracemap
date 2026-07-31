@@ -128,8 +128,8 @@ internal static partial class AccessUiProjector
                     controlBindings.OrderBy(item => item.BindingKind, StringComparer.Ordinal).ToArray(),
                     ProjectEvents(rawControl.Events),
                     NormalizeRowSourceType(rawControl.RowSourceType),
-                    NormalizePositive(rawControl.BoundColumn),
-                    NormalizePositive(rawControl.ColumnCount)));
+                    NormalizeNonNegative(rawControl.BoundColumn),
+                    NormalizeNonNegative(rawControl.ColumnCount)));
             }
 
             var surfaceEvents = ProjectEvents(raw.Events);
@@ -443,7 +443,7 @@ internal static partial class AccessUiProjector
         _ => $"access-control-{value}"
     };
 
-    private static int? NormalizePositive(int? value) => value is >= 0 and <= 10_000 ? value : null;
+    private static int? NormalizeNonNegative(int? value) => value is >= 0 and <= 10_000 ? value : null;
 
     private static string? NormalizeSourceObject(string? value)
     {

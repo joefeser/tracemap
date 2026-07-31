@@ -168,6 +168,7 @@ public static class AccessScreenDataFlowReporter
                 var classification = SafeCategory(
                     fact.Properties.GetValueOrDefault("classification"),
                     "AccessAnalysisGap");
+                var supportingFactIds = SupportingGapFactIds(fact, accessFacts);
                 AddGap(gaps, maxGaps, ref truncated, new(
                     Id("gap", classification, fact.FactId),
                     classification,
@@ -181,7 +182,7 @@ public static class AccessScreenDataFlowReporter
                     fact.Evidence.EndLine,
                     SafeToken(fact.Evidence.ExtractorId),
                     SafeToken(fact.Evidence.ExtractorVersion),
-                    [fact.FactId],
+                    supportingFactIds,
                     SafeLimitations(fact.Properties.GetValueOrDefault("limitations"))));
                 continue;
             }
@@ -422,6 +423,39 @@ public static class AccessScreenDataFlowReporter
         SafeToken(fact.Evidence.ExtractorVersion),
         SafeCategory(fact.Properties.GetValueOrDefault("coverageLabel"), "unknown"),
         SafeLimitations(fact.Properties.GetValueOrDefault("limitations")));
+
+    private static IReadOnlyList<string> SupportingGapFactIds(CodeFact gap, IReadOnlyList<CodeFact> facts)
+    {
+        var supporting = new SortedSet<string>(StringComparer.Ordinal) { gap.FactId };
+        if (!SafeStableKey(gap.TargetSymbol))
+            return supporting.ToArray();
+
+        var scope = gap.Properties.GetValueOrDefault("scopeKind");
+        if (scope == "query-output-field")
+        {
+            foreach (var output in facts.Where(candidate =>
+                         candidate.TargetSymbol == gap.TargetSymbol
+                         && candidate.FactType == FactTypes.AccessQueryOutputDeclared))
+            {
+                supporting.Add(output.FactId);
+                foreach (var query in facts.Where(candidate =>
+                             candidate.TargetSymbol == output.SourceSymbol
+                             && candidate.FactType == FactTypes.AccessQueryDeclared))
+                    supporting.Add(query.FactId);
+            }
+        }
+        else if (scope == "query"
+                 && gap.Properties.GetValueOrDefault("classification")?.StartsWith(
+                     "AccessQueryOutput",
+                     StringComparison.Ordinal) == true)
+        {
+            foreach (var query in facts.Where(candidate =>
+                         candidate.TargetSymbol == gap.TargetSymbol
+                         && candidate.FactType == FactTypes.AccessQueryDeclared))
+                supporting.Add(query.FactId);
+        }
+        return supporting.ToArray();
+    }
 
     private static void EnsureReferencedNode(IDictionary<string, MutableNode> nodes, string key, CodeFact fact, bool source)
     {
