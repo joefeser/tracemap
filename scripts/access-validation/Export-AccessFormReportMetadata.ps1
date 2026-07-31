@@ -41,6 +41,19 @@ $MaxTextBytes = 4MB
 $MaxTextLines = 100000
 $Utf8NoBom = [Text.UTF8Encoding]::new($false)
 
+if ($InternalWorker -and -not ("TraceMapAccessWindowProcess" -as [type])) {
+    Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class TraceMapAccessWindowProcess
+{
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr windowHandle, out uint processId);
+}
+"@
+}
+
 function Stop-Export([string]$Classification) {
     throw $Classification
 }
@@ -72,9 +85,29 @@ function New-AccessProcessIdentity([object]$Process) {
     }
 }
 
+function ConvertTo-AccessProcessIdentities([object[]]$Candidates) {
+    $result = [System.Collections.Generic.List[object]]::new()
+    foreach ($candidate in $Candidates) {
+        $processId = 0
+        $startTimeUtcTicks = [long]0
+        if ($null -eq $candidate -or
+            -not [int]::TryParse([string]$candidate.processId, [ref]$processId) -or
+            -not [long]::TryParse([string]$candidate.startTimeUtcTicks, [ref]$startTimeUtcTicks) -or
+            $processId -le 0 -or
+            $startTimeUtcTicks -le 0) {
+            continue
+        }
+        $result.Add([pscustomobject]@{
+            processId = $processId
+            startTimeUtcTicks = $startTimeUtcTicks
+        })
+    }
+    return @($result)
+}
+
 function Get-OwnedAccessProcesses([object[]]$ProcessIdentities) {
     $result = [System.Collections.Generic.List[object]]::new()
-    foreach ($identity in $ProcessIdentities) {
+    foreach ($identity in @(ConvertTo-AccessProcessIdentities $ProcessIdentities)) {
         $process = Get-Process -Id ([int]$identity.processId) -ErrorAction SilentlyContinue
         if ($null -eq $process -or
             -not [string]::Equals($process.ProcessName, "MSACCESS", [StringComparison]::OrdinalIgnoreCase)) {
@@ -88,6 +121,14 @@ function Get-OwnedAccessProcesses([object[]]$ProcessIdentities) {
         catch { }
     }
     return @($result)
+}
+
+function Get-AccessApplicationProcess([object]$Application) {
+    $processId = [uint32]0
+    $windowHandle = [IntPtr][long]$Application.hWndAccessApp
+    [void][TraceMapAccessWindowProcess]::GetWindowThreadProcessId($windowHandle, [ref]$processId)
+    if ($processId -eq 0) { return $null }
+    return Get-Process -Id ([int]$processId) -ErrorAction SilentlyContinue
 }
 
 function Get-LoadedState([object]$Application) {
@@ -231,8 +272,11 @@ if (-not $InternalWorker) {
         $ownedAccessProcessIdentities = @()
         if (Test-Path -LiteralPath $workerProcessMarker) {
             try {
-                $ownedAccessProcessIdentities = @(
+                $parsedIdentities = @(
                     [IO.File]::ReadAllText($workerProcessMarker) | ConvertFrom-Json
+                )
+                $ownedAccessProcessIdentities = @(
+                    ConvertTo-AccessProcessIdentities $parsedIdentities
                 )
             }
             catch {
@@ -256,11 +300,9 @@ if (-not $InternalWorker) {
         if ($remainingOwnedAccess.Count -gt 0) {
             $remainingOwnedAccess | Stop-Process -Force -ErrorAction SilentlyContinue
         }
-        $processCleanupFailed = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities).Count -gt 0
+        $remainingOwnedAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
         $unattributedAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
-        if ($ownedAccessProcessIdentities.Count -eq 0 -and $unattributedAccess.Count -gt 0) {
-            $processCleanupFailed = $true
-        }
+        $processCleanupFailed = $remainingOwnedAccess.Count -gt 0 -or $unattributedAccess.Count -gt 0
         $scratchPattern = ".$([IO.Path]::GetFileName($output)).metadata-*"
         try {
             if (Test-Path -LiteralPath $output) {
@@ -330,13 +372,12 @@ try {
     $workingCopy = Join-Path $scratch "working.accdb"
     Copy-Item -LiteralPath $copy -Destination $workingCopy
     $access = New-Object -ComObject Access.Application
-    $observedAccessProcesses = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
-    if ($observedAccessProcesses.Count -ne 1) {
+    $ownedAccessProcess = Get-AccessApplicationProcess $access
+    if ($null -eq $ownedAccessProcess) {
         Stop-Export "AccessMetadataProcessOwnershipAmbiguous"
     }
     $ownedAccessProcessIdentities = @(
-        $observedAccessProcesses |
-            ForEach-Object { New-AccessProcessIdentity $_ }
+        New-AccessProcessIdentity $ownedAccessProcess
     )
     if (-not [string]::IsNullOrWhiteSpace($WorkerProcessMarkerPath)) {
         [IO.File]::WriteAllText(
@@ -565,6 +606,10 @@ finally {
     [GC]::Collect()
     [GC]::WaitForPendingFinalizers()
     $remainingAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)
+    $unattributedAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
+    if ($ownedAccessProcessIdentities.Count -eq 0 -and $unattributedAccess.Count -gt 0) {
+        $cleanupFailure = "AccessMetadataProcessCleanupFailed"
+    }
     if ($remainingAccess.Count -gt 0) {
         $remainingAccess | Wait-Process -Timeout 30 -ErrorAction SilentlyContinue
         $remainingAccess = @(Get-OwnedAccessProcesses $ownedAccessProcessIdentities)

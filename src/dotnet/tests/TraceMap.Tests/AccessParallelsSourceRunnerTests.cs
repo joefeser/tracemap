@@ -148,6 +148,9 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("$workerHostMarker", producer, StringComparison.Ordinal);
         Assert.Contains("Get-CimInstance -ClassName Win32_Process", producer, StringComparison.Ordinal);
         Assert.Contains("Get-OwnedAccessProcesses", producer, StringComparison.Ordinal);
+        Assert.Contains("ConvertTo-AccessProcessIdentities", producer, StringComparison.Ordinal);
+        Assert.Contains("GetWindowThreadProcessId", producer, StringComparison.Ordinal);
+        Assert.Contains("hWndAccessApp", producer, StringComparison.Ordinal);
         Assert.Contains("startTimeUtcTicks", producer, StringComparison.Ordinal);
         Assert.Contains("ProcessName, \"MSACCESS\"", producer, StringComparison.Ordinal);
         Assert.Contains("AccessMetadataProcessOwnershipAmbiguous", producer, StringComparison.Ordinal);
