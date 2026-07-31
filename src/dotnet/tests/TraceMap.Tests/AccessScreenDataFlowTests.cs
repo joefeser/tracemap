@@ -268,6 +268,8 @@ public sealed class AccessScreenDataFlowTests
         const string missingProcedure = "access-vba-procedure-99999999999999999999999999999999";
         const string query = "access-query-44444444444444444444444444444444";
         const string table = "access-table-55555555555555555555555555555555";
+        const string tableField = "access-field-12121212121212121212121212121212";
+        const string queryOutput = "access-query-field-13131313131313131313131313131313";
         const string report = "access-report-66666666666666666666666666666666";
         return
         [
@@ -281,6 +283,14 @@ public sealed class AccessScreenDataFlowTests
                 ("coverageLabel", "complete"), ("rawSql", "SELECT * FROM Customers")),
             Fact("fact-table", FactTypes.LegacyDataEntityDeclared, RuleIds.LegacyAccessSchema, EvidenceTiers.Tier2Structural, null, table,
                 ("coverageLabel", "complete")),
+            Fact("fact-table-field", FactTypes.LegacyDataColumnDeclared, RuleIds.LegacyAccessSchema, EvidenceTiers.Tier2Structural, table, tableField,
+                ("coverageLabel", "complete")),
+            Fact("fact-query-output", FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, query, queryOutput,
+                ("coverageLabel", "complete")),
+            Fact("fact-query-output-source", FactTypes.AccessQueryOutputSourceCandidate, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier3SyntaxOrTextual, queryOutput, tableField,
+                ("targetKind", "field"), ("coverageLabel", "complete")),
+            Fact("fact-control-output", FactTypes.AccessBindingDeclared, RuleIds.LegacyAccessBinding, EvidenceTiers.Tier2Structural, control, queryOutput,
+                ("targetKind", "field"), ("coverageLabel", "complete")),
             Fact("fact-report", FactTypes.AccessReportDeclared, RuleIds.LegacyAccessUiSurface, EvidenceTiers.Tier2Structural, null, report,
                 ("coverageLabel", "structured-design-observed")),
             Fact("fact-event", FactTypes.AccessEventBindingCandidate, RuleIds.LegacyAccessEventBinding, EvidenceTiers.Tier3SyntaxOrTextual, control, procedure,

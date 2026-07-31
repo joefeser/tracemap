@@ -17,6 +17,110 @@ public sealed class AccessUiProjectionTests
     private const string ProtectedValidation = "[CustomerId] <> \"SecretValidation_92817\"";
 
     [Fact]
+    public void Functional_metadata_parser_projects_lookup_subform_and_report_group_bindings_without_layout()
+    {
+        const string formDesign = """
+            Begin Form
+                RecordSource ="qryParent"
+                Begin Subform
+                    Name ="subDetails"
+                    SourceObject ="Form.frmDetails"
+                    LinkMasterFields ="ParentId, TenantId"
+                    LinkChildFields ="ParentId;TenantId"
+                End
+                Begin ComboBox
+                    Name ="cboStatus"
+                    ControlSource ="StatusId"
+                    RowSourceType ="Table/Query"
+                    RowSource ="qryStatuses"
+                    BoundColumn =0
+                    ColumnCount =3
+                    ConditionalFormat = Begin
+                        Name ="nestedOverwrite"
+                        ControlSource ="NestedSecret"
+                    End
+                End
+            End
+            """;
+        const string reportDesign = """
+            Begin Report
+                RecordSource ="qryParent"
+                GroupLevel = Begin
+                    ControlSource ="StatusId"
+                    SortOrder =1
+                    GroupOn =0
+                End
+            End
+            """;
+        var form = Assert.IsType<AccessRawUiSurface>(
+            AccessUiTextParser.Parse(new StringReader(formDesign), "frmParent", "form").Surface);
+        var report = Assert.IsType<AccessRawUiSurface>(
+            AccessUiTextParser.Parse(new StringReader(reportDesign), "rptParent", "report").Surface);
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('1', 40), "fixture.accdb", "hash");
+        var parentQuery = AccessSafeValues.Identity(seed, "query", "qryParent");
+        var detailQuery = AccessSafeValues.Identity(seed, "query", "qryDetails");
+        var statusQuery = AccessSafeValues.Identity(seed, "query", "qryStatuses");
+        var detailSurface = AccessSafeValues.Identity(seed, "form", "frmDetails");
+        var parentId = AccessSafeValues.Identity(seed, $"query-field-{parentQuery.StableKey}", "ParentId");
+        var tenantId = AccessSafeValues.Identity(seed, $"query-field-{parentQuery.StableKey}", "TenantId");
+        var statusId = AccessSafeValues.Identity(seed, $"query-field-{parentQuery.StableKey}", "StatusId");
+        var childParentId = AccessSafeValues.Identity(seed, $"query-field-{detailQuery.StableKey}", "ParentId");
+        var childTenantId = AccessSafeValues.Identity(seed, $"query-field-{detailQuery.StableKey}", "TenantId");
+        var projected = AccessUiProjector.Project(
+            seed,
+            [
+                form,
+                report,
+                new("frmDetails", "form", false, "qryDetails", [], [])
+            ],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qryParent"] = [(parentQuery.StableKey, "query")],
+                ["qryDetails"] = [(detailQuery.StableKey, "query")],
+                ["qryStatuses"] = [(statusQuery.StableKey, "query")],
+                ["frmDetails"] = [(detailSurface.StableKey, "form")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [parentQuery.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["ParentId"] = [parentId.StableKey],
+                    ["TenantId"] = [tenantId.StableKey],
+                    ["StatusId"] = [statusId.StableKey]
+                },
+                [detailQuery.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["ParentId"] = [childParentId.StableKey],
+                    ["TenantId"] = [childTenantId.StableKey]
+                }
+            });
+
+        var projectedForm = projected.Surfaces.Single(surface => surface.Identity.StableKey
+            == AccessSafeValues.Identity(seed, "form", "frmParent").StableKey);
+        var lookup = projectedForm.Controls.Single(control => control.ControlType == "combo-box");
+        Assert.Equal("table-query", lookup.RowSourceType);
+        Assert.Equal(0, lookup.BoundColumn);
+        Assert.Equal(3, lookup.ColumnCount);
+        Assert.Equal("cboStatus", form.Controls.Single(control => control.ControlType == 111).Name);
+        Assert.Contains(lookup.Bindings, binding => binding.BindingKind == "control-source"
+            && binding.TargetStableKeys.SequenceEqual([statusId.StableKey]));
+        Assert.Contains(lookup.Bindings, binding => binding.BindingKind == "row-source"
+            && binding.TargetStableKeys.SequenceEqual([statusQuery.StableKey]));
+
+        var subform = projectedForm.Controls.Single(control => control.ControlType == "subform-or-subreport");
+        Assert.Contains(subform.Bindings, binding => binding.BindingKind == "source-object"
+            && binding.TargetStableKeys.SequenceEqual([detailSurface.StableKey]));
+        Assert.Equal(2, subform.Bindings.Count(binding => binding.BindingKind.StartsWith("link-master-field-", StringComparison.Ordinal)));
+        Assert.Equal(2, subform.Bindings.Count(binding => binding.BindingKind.StartsWith("link-child-field-", StringComparison.Ordinal)));
+
+        var projectedReport = projected.Surfaces.Single(surface => surface.SurfaceKind == "report");
+        var group = Assert.Single(projectedReport.ReportGroups!);
+        Assert.Equal("descending", group.SortOrder);
+        Assert.Equal(statusId.StableKey, Assert.Single(group.Binding.TargetStableKeys));
+        Assert.DoesNotContain("Caption", JsonSerializer.Serialize(projected), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Text_design_parser_stops_before_code_hashes_protected_design_and_balances_unsupported_property_blocks()
     {
         const string design = """"

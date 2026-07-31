@@ -266,6 +266,8 @@ public static class AccessScreenDataFlowReporter
             FactTypes.AccessNavigationCandidate => "static-vba-call-navigation-candidate",
             FactTypes.AccessBindingDeclared => "declared-data-binding",
             FactTypes.AccessQueryDependencyCandidate => "static-query-dependency-candidate",
+            FactTypes.AccessQueryOutputDeclared => "declared-query-output",
+            FactTypes.AccessQueryOutputSourceCandidate => "static-query-output-source-candidate",
             _ => null
         };
         if (kind is not null)
@@ -451,6 +453,7 @@ public static class AccessScreenDataFlowReporter
         FactTypes.AccessControlDeclared => "control",
         FactTypes.AccessVbaProcedureDeclared => "procedure",
         FactTypes.AccessQueryDeclared => "saved-query",
+        FactTypes.AccessQueryOutputDeclared => "query-output-field",
         FactTypes.LegacyDataEntityDeclared => "table",
         FactTypes.LegacyDataColumnDeclared => "field",
         FactTypes.AccessMacroDeclared => "macro",

@@ -21,6 +21,47 @@ public sealed class AccessDesignEvidenceCompositionTests
     private const string ProtectedField = "Private Field 51729";
 
     [Fact]
+    public async Task Hidden_identity_projection_is_explicit_hash_inventoried_and_independently_deletable()
+    {
+        using var temp = new TempDirectory();
+        var baseScan = await WriteBaseScanAsync(temp.Path);
+        var design = WriteDesignBundle(temp.Path, baseScan);
+        var output = Path.Combine(temp.Path, "hidden-identities");
+
+        var result = await AccessHiddenIdentityProjection.WriteAsync(baseScan, design, output);
+
+        Assert.True(result.IdentityCount >= 2);
+        var payload = await File.ReadAllTextAsync(Path.Combine(output, "access-identities.json"));
+        var manifestText = await File.ReadAllTextAsync(Path.Combine(output, "access-identity-manifest.json"));
+        Assert.Contains(ProtectedForm, payload, StringComparison.Ordinal);
+        Assert.Contains(ProtectedControl, payload, StringComparison.Ordinal);
+        Assert.DoesNotContain(ProtectedModule, payload, StringComparison.Ordinal);
+        Assert.DoesNotContain(ProtectedMacro, payload, StringComparison.Ordinal);
+        Assert.DoesNotContain("sourceText", payload, StringComparison.Ordinal);
+        Assert.DoesNotContain("designText", payload, StringComparison.Ordinal);
+        Assert.DoesNotContain("SELECT Password FROM Users", payload, StringComparison.OrdinalIgnoreCase);
+        using var payloadDocument = JsonDocument.Parse(payload);
+        var queryIdentity = payloadDocument.RootElement.GetProperty("identities").EnumerateArray()
+            .Single(item => item.GetProperty("role").GetString() == "saved-query");
+        var baseQuery = File.ReadLines(Path.Combine(baseScan, "facts.ndjson"))
+            .Select(line => JsonSerializer.Deserialize<CodeFact>(
+                line,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!)
+            .Single(fact => fact.FactType == FactTypes.AccessQueryDeclared);
+        Assert.Equal(baseQuery.TargetSymbol, queryIdentity.GetProperty("stableKey").GetString());
+        Assert.Contains("\"claimLevel\": \"hidden\"", manifestText, StringComparison.Ordinal);
+        using var manifest = JsonDocument.Parse(manifestText);
+        var file = Assert.Single(manifest.RootElement.GetProperty("files").EnumerateArray());
+        Assert.Equal("access-identities.json", file.GetProperty("path").GetString());
+        Assert.Equal(
+            Sha256(await File.ReadAllBytesAsync(Path.Combine(output, "access-identities.json"))),
+            file.GetProperty("sha256").GetString());
+        Directory.Delete(output, true);
+        Assert.True(Directory.Exists(baseScan));
+        Assert.True(Directory.Exists(design));
+    }
+
+    [Fact]
     public async Task Enrichment_is_deterministic_hash_only_immutable_and_preserved_by_downstream_consumers()
     {
         using var temp = new TempDirectory();
@@ -317,6 +358,7 @@ public sealed class AccessDesignEvidenceCompositionTests
             Record("ui-control", "control", "surface", "form-design-export", "container-only", null, null, null, "complete",
                 Object(("identity", ProtectedControl), ("ordinal", 0), ("controlType", 104),
                     ("controlSource", includeReviewRegressions ? ProtectedField : null),
+                    ("rowSource", "SELECT Password FROM Users"),
                     ("events", Object(("on-click", "[Event Procedure]"))))),
             Record("vba-module", "module", null, "vba-module-export", "exact-lines", vbaHash, 1, 4, "complete",
                 Object(("moduleRole", "standard"), ("identity", ProtectedModule), ("moduleKind", "standard"),
