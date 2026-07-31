@@ -125,7 +125,10 @@ function Get-OwnedAccessProcesses([object[]]$ProcessIdentities) {
 
 function Get-AccessApplicationProcess([object]$Application) {
     $processId = [uint32]0
-    $windowHandle = [IntPtr][long]$Application.hWndAccessApp
+    # Access exposes hWndAccessApp as a method. PowerShell 7 returns a PSMethod
+    # object when it is read like a property, which cannot be converted to the
+    # native window handle expected by GetWindowThreadProcessId.
+    $windowHandle = [IntPtr][long]$Application.hWndAccessApp()
     [void][TraceMapAccessWindowProcess]::GetWindowThreadProcessId($windowHandle, [ref]$processId)
     if ($processId -eq 0 -or $processId -gt [uint32]([int]::MaxValue)) { return $null }
     return Get-Process -Id ([int]$processId) -ErrorAction SilentlyContinue
