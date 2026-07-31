@@ -386,7 +386,7 @@ finally {
     [GC]::WaitForPendingFinalizers()
     $remainingAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
     if ($remainingAccess.Count -gt 0) {
-        $remainingAccess | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
+        $remainingAccess | Wait-Process -Timeout 30 -ErrorAction SilentlyContinue
         $remainingAccess = @(Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue)
     }
     if ($remainingAccess.Count -gt 0) {
