@@ -4,6 +4,8 @@ Status: implementation and isolated Windows synthetic validation complete
 
 Issue: #565
 
+Pull request: #566 (ready for review, targeting `dev`)
+
 Branch: `codex/issue-565-access-form-report-metadata`
 
 Base: `origin/dev` at `3552c6deb822d760a090271daa1e548b2bb43091`
