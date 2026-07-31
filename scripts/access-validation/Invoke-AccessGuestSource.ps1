@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("doctor", "build", "synthetic")]
+    [ValidateSet("doctor", "build", "synthetic", "metadata")]
     [string]$Action,
 
     [Parameter(Mandatory = $true)]
@@ -104,12 +104,14 @@ $solution = Join-Path $repository "src\dotnet\TraceMap.sln"
 $tests = Join-Path $repository "src\dotnet\tests\TraceMap.Tests\TraceMap.Tests.csproj"
 $generator = Join-Path $repository "scripts\access-validation\New-SyntheticAccessFixture.ps1"
 $harness = Join-Path $repository "scripts\access-validation\Invoke-AccessSmoke.ps1"
+$metadataProducer = Join-Path $repository "scripts\access-validation\Export-AccessFormReportMetadata.ps1"
+$metadataHarness = Join-Path $repository "scripts\access-validation\Invoke-AccessMetadataProducerSmoke.ps1"
 $packages = Join-Path $GuestRoot "packages"
 
 if (-not (Test-TrustedPath $repository $GuestRoot)) {
     Stop-Guest "AccessGuestSourceInputMissing"
 }
-foreach ($required in @($git, $dotnet, $solution, $tests, $generator, $harness)) {
+foreach ($required in @($git, $dotnet, $solution, $tests, $generator, $harness, $metadataProducer, $metadataHarness)) {
     if (-not (Test-TrustedPath $required $GuestRoot $true)) {
         Stop-Guest "AccessGuestSourceInputMissing"
     }
@@ -186,6 +188,42 @@ if ($Action -eq "build") {
     }
 
     Write-Output "access-parallels-build=completed;head=$head;buildPassed=true;accessTestsPassed=true;sourceClean=true"
+    exit 0
+}
+
+if ($Action -eq "metadata") {
+    $metadataParent = Join-Path $GuestRoot "runs"
+    if (-not (Test-Path -LiteralPath $metadataParent)) {
+        New-Item -ItemType Directory -Path $metadataParent -ErrorAction Stop | Out-Null
+    }
+    if (-not (Test-TrustedPath $metadataParent $GuestRoot)) {
+        Stop-Guest "AccessGuestMetadataOutputBoundaryInvalid"
+    }
+    $metadataRoot = Join-Path $metadataParent "metadata-$([Guid]::NewGuid().ToString('N'))"
+    $metadataSucceeded = $false
+    try {
+        & $metadataHarness `
+            -Generator $generator `
+            -Producer $metadataProducer `
+            -SmokeRoot $metadataRoot *> $null
+        if (Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue) {
+            Stop-Guest "AccessGuestMetadataProcessCleanupFailed"
+        }
+        $identityAfterMetadata = Get-SourceIdentity $git $repository
+        if (-not (Test-ExpectedIdentity $identityAfterMetadata $ExpectedHead)) {
+            Stop-Guest "AccessGuestSourceChanged"
+        }
+        $metadataSucceeded = $true
+    }
+    finally {
+        if (Test-Path -LiteralPath $metadataRoot) {
+            Remove-Item -LiteralPath $metadataRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+    if (-not $metadataSucceeded -or (Test-Path -LiteralPath $metadataRoot)) {
+        Stop-Guest "AccessGuestMetadataCleanupFailed"
+    }
+    Write-Output "access-parallels-metadata=completed;head=$head;saveAsTextCompleted=true;loadedStateUnchanged=true;canariesClear=true;sourceUnchanged=true;scratchClean=true;processCleanup=true;sourceClean=true"
     exit 0
 }
 

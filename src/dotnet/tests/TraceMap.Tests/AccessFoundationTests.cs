@@ -111,6 +111,26 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Query_output_shape_accepts_only_direct_select_fields()
+    {
+        Assert.True(AccessQueryProjector.IsDirectOutputField(
+            "SELECT Orders.OrderId, [Orders].[Order Status] FROM Orders;",
+            "OrderId"));
+        Assert.True(AccessQueryProjector.IsDirectOutputField(
+            "SELECT Orders.OrderId, [Orders].[Order Status] FROM Orders;",
+            "Order Status"));
+        Assert.False(AccessQueryProjector.IsDirectOutputField(
+            "SELECT Orders.OrderId AS Identifier FROM Orders;",
+            "Identifier"));
+        Assert.False(AccessQueryProjector.IsDirectOutputField(
+            "SELECT Orders.* FROM Orders;",
+            "OrderId"));
+        Assert.False(AccessQueryProjector.IsDirectOutputField(
+            "SELECT Count(Orders.OrderId) AS OrderCount FROM Orders;",
+            "OrderCount"));
+    }
+
+    [Fact]
     public void Input_validator_requires_exact_tracked_head_bytes_preserves_requested_output_and_rejects_destructive_ancestor()
     {
         using var temp = new TempDirectory();

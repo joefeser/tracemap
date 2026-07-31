@@ -71,7 +71,9 @@ $passThrough = $null
 $startupForm = $null
 $customerForm = $null
 $customerFormModule = $null
+$detailForm = $null
 $ordersReport = $null
+$reportGroup = $null
 $fixtureControls = [System.Collections.Generic.List[object]]::new()
 try {
     $access = New-Object -ComObject Access.Application
@@ -179,6 +181,22 @@ End Sub
     # Phase 7 disposable design fixture. Generator-only CreateForm/CreateReport
     # calls are allowed here; the scanner must never open or render these saved
     # surfaces. Protected values make accidental export immediately observable.
+    $detailForm = $access.CreateForm()
+    $detailFormTemporaryName = [string]$detailForm.Name
+    $detailForm.RecordSource = "Orders"
+    $detailForm.HasModule = $false
+    $detailStatus = $access.CreateControl($detailFormTemporaryName, 109, 0, "", "", 200, 200, 1800, 300)
+    $fixtureControls.Add($detailStatus)
+    $detailStatus.Name = "txtDetailStatus"
+    $detailStatus.ControlSource = "OrderStatus"
+    $access.DoCmd.Save(2, $detailFormTemporaryName)
+    $access.DoCmd.Close(2, $detailFormTemporaryName, 1)
+    $access.DoCmd.Rename("frmOrderDetails", 2, $detailFormTemporaryName)
+    Close-ComObject $detailForm
+    $detailForm = $null
+    foreach ($control in $fixtureControls) { Close-ComObject $control }
+    $fixtureControls.Clear()
+
     $customerForm = $access.CreateForm()
     $customerFormTemporaryName = [string]$customerForm.Name
     $customerForm.RecordSource = "Customers"
@@ -196,6 +214,8 @@ End Sub
     $orderSelector.Name = "cboOrderStatus"
     $orderSelector.RowSourceType = "Table/Query"
     $orderSelector.RowSource = "qryOrdersByStatus"
+    $orderSelector.BoundColumn = 2
+    $orderSelector.ColumnCount = 3
     $calculatedControl = $access.CreateControl($customerFormTemporaryName, 109, 0, "", "", 1800, 1400, 2400, 300)
     $fixtureControls.Add($calculatedControl)
     $calculatedControl.Name = "txtCalculatedCustomer"
@@ -220,6 +240,12 @@ End Sub
     $embeddedMacroButton.Name = "cmdEmbeddedMacro"
     $embeddedMacroButton.Caption = "EMBEDDED_MACRO_CAPTION_MARKER_92817"
     $embeddedMacroButton.OnClick = "[Embedded Macro]"
+    $detailSubform = $access.CreateControl($customerFormTemporaryName, 112, 0, "", "", 1800, 3400, 4800, 1200)
+    $fixtureControls.Add($detailSubform)
+    $detailSubform.Name = "subOrders"
+    $detailSubform.SourceObject = "Form.frmOrderDetails"
+    $detailSubform.LinkMasterFields = "CustomerId"
+    $detailSubform.LinkChildFields = "CustomerId"
     $escapedPhase8CanaryPath = $CanaryPath.Replace('"', '""')
     $customerFormModule = $customerForm.Module
     $customerFormModule.InsertLines(1, @"
@@ -282,11 +308,15 @@ End Sub
     $fixtureControls.Add($reportCalculated)
     $reportCalculated.Name = "txtCalculatedOrder"
     $reportCalculated.ControlSource = '=[OrderId] & "REPORT_EXPRESSION_MARKER_92817"'
+    $reportGroup = $access.CreateGroupLevel($ordersReportTemporaryName, "OrderStatus", $true, $false)
+    $reportGroup.SortOrder = $true
     $access.DoCmd.Save(3, $ordersReportTemporaryName)
     $access.DoCmd.Close(3, $ordersReportTemporaryName, 1)
     $access.DoCmd.Rename("rptOrders", 3, $ordersReportTemporaryName)
     Close-ComObject $ordersReport
     $ordersReport = $null
+    Close-ComObject $reportGroup
+    $reportGroup = $null
     foreach ($control in $fixtureControls) { Close-ComObject $control }
     $fixtureControls.Clear()
 
@@ -313,11 +343,11 @@ End Sub
         MdbCreated = $mdbCreated
         RowsInserted = 0
         StartupCanary = "configured"
-        Forms = 2
+        Forms = 3
         Reports = 1
-        Phase7Controls = 8
+        Phase7Controls = 10
         Phase8Controls = 2
-        TotalFormReportControls = 10
+        TotalFormReportControls = 12
         FormReportCoverage = "phase7-design-fixture"
         VbaCoverage = "phase8-form-code-behind-fixture"
         MacroCoverage = "phase9-embedded-event-marker-only;named-data-deferred"
@@ -326,6 +356,8 @@ End Sub
 finally {
     foreach ($control in $fixtureControls) { Close-ComObject $control }
     Close-ComObject $ordersReport
+    Close-ComObject $reportGroup
+    Close-ComObject $detailForm
     Close-ComObject $customerFormModule
     Close-ComObject $customerForm
     Close-ComObject $startupForm

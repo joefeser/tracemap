@@ -22,6 +22,7 @@ public static class AccessDesignEvidenceReader
         "ui-design-document",
         "ui-surface",
         "ui-control",
+        "report-group",
         "vba-module",
         "event-reference",
         "macro-inventory",
@@ -30,8 +31,8 @@ public static class AccessDesignEvidenceReader
     private static readonly HashSet<string> CoordinateStatuses = ["exact-lines", "container-only", "unavailable"];
     private static readonly HashSet<string> CompletenessStatuses = ["complete", "partial", "unavailable"];
     private static readonly HashSet<string> CopyBindings = ["hash-identical", "owner-attested-derived-copy", "unbound"];
-    private static readonly HashSet<string> Mechanisms = ["preexisting-text-export", "synthetic-hand-authored"];
-    private static readonly HashSet<string> ProducerIds = ["owner-controlled-export", "tracemap-synthetic-fixture"];
+    private static readonly HashSet<string> Mechanisms = ["preexisting-text-export", "synthetic-hand-authored", "access-save-as-text-metadata"];
+    private static readonly HashSet<string> ProducerIds = ["owner-controlled-export", "tracemap-synthetic-fixture", "tracemap-access-windows-export"];
     private static readonly HashSet<string> DocumentRoles =
     [
         "catalog-export",
@@ -69,9 +70,15 @@ public static class AccessDesignEvidenceReader
                 ["surfaceRole", "identity"],
                 ["surfaceRole", "identity", "ordinal"]),
             ["ui-control"] = new(
-                ["identity", "ordinal", "controlType", "controlSource", "rowSource", "validationRule", "events"],
+                ["identity", "ordinal", "controlType", "controlSource", "rowSource", "rowSourceType",
+                    "validationRule", "boundColumn", "columnCount", "sourceObject", "linkMasterFields",
+                    "linkChildFields", "events"],
                 ["identity", "ordinal", "controlType"],
                 ["identity", "ordinal", "controlType"]),
+            ["report-group"] = new(
+                ["ordinal", "expression", "sortOrder", "groupOn"],
+                ["ordinal"],
+                ["ordinal"]),
             ["vba-module"] = new(
                 ["moduleRole", "identity", "moduleKind", "sourceText", "sourceSha256", "lineCount", "coordinateBasis"],
                 ["moduleRole", "identity", "moduleKind", "sourceText", "sourceSha256", "lineCount", "coordinateBasis"],
@@ -502,6 +509,8 @@ public static class AccessDesignEvidenceReader
                 case "ordinal":
                 case "lineCount":
                 case "controlType":
+                case "boundColumn":
+                case "columnCount":
                     if (!property.Value.TryGetInt32(out var number) || number < 0)
                         throw new AccessScanException("AccessDesignInputRecordMalformed");
                     break;
@@ -535,7 +544,7 @@ public static class AccessDesignEvidenceReader
         if (kind == "catalog-object")
         {
             RequireClosedString(payload, "objectRole",
-                ["table", "saved-query", "form", "report", "module", "macro", "table-field"],
+                ["table", "saved-query", "form", "report", "module", "macro", "table-field", "query-field"],
                 "AccessDesignInputRecordMalformed");
             var hasIdentity = payload.TryGetProperty("identity", out var identity)
                 && identity.ValueKind == JsonValueKind.String
@@ -563,6 +572,20 @@ public static class AccessDesignEvidenceReader
                 || !controlType.TryGetInt32(out var controlTypeValue)
                 || !AccessUiTextParser.IsSupportedControlType(controlTypeValue))
                 throw new AccessScanException("AccessDesignInputRecordMalformed");
+            OptionalClosedString(payload, "rowSourceType",
+                ["table-query", "value-list", "field-list", "unspecified", "other"],
+                "AccessDesignInputRecordMalformed");
+            OptionalBoundedInt(payload, "boundColumn", 0, 10_000, "AccessDesignInputRecordMalformed");
+            OptionalBoundedInt(payload, "columnCount", 0, 10_000, "AccessDesignInputRecordMalformed");
+        }
+        if (kind == "report-group")
+        {
+            OptionalClosedString(payload, "sortOrder",
+                ["ascending", "descending", "unspecified"],
+                "AccessDesignInputRecordMalformed");
+            OptionalClosedString(payload, "groupOn",
+                ["declared", "unspecified"],
+                "AccessDesignInputRecordMalformed");
         }
         if (kind == "event-reference")
             RequireClosedString(payload, "eventRole", EventRoles, "AccessDesignInputRecordMalformed");
@@ -594,7 +617,7 @@ public static class AccessDesignEvidenceReader
         var allowed = kind switch
         {
             "catalog-object" => new[] { "catalog-export" },
-            "ui-design-document" or "ui-surface" or "ui-control" => new[] { "form-design-export", "report-design-export" },
+            "ui-design-document" or "ui-surface" or "ui-control" or "report-group" => new[] { "form-design-export", "report-design-export" },
             "vba-module" => new[] { "vba-module-export" },
             "event-reference" => new[] { "form-design-export", "report-design-export", "vba-module-export" },
             "macro-inventory" => new[] { "macro-inventory-export" },
@@ -666,6 +689,28 @@ public static class AccessDesignEvidenceReader
             if (control.ParentRecordId is null
                 || !byProducerId.TryGetValue(control.ParentRecordId, out var parent)
                 || parent.Kind != "ui-surface")
+                throw new AccessScanException("AccessDesignInputParentUnavailable");
+        }
+        foreach (var group in records.Where(record => record.Kind == "report-group"))
+        {
+            if (group.ParentRecordId is null
+                || !byProducerId.TryGetValue(group.ParentRecordId, out var parent)
+                || parent.Kind != "ui-surface"
+                || parent.Payload.GetProperty("surfaceRole").GetString() != "report")
+                throw new AccessScanException("AccessDesignInputParentUnavailable");
+        }
+        foreach (var field in records.Where(record =>
+                     record.Kind == "catalog-object"
+                     && record.Payload.GetProperty("objectRole").GetString() is "table-field" or "query-field"))
+        {
+            if (field.ParentRecordId is null
+                || !byProducerId.TryGetValue(field.ParentRecordId, out var parent)
+                || parent.Kind != "catalog-object")
+                throw new AccessScanException("AccessDesignInputParentUnavailable");
+            var role = field.Payload.GetProperty("objectRole").GetString();
+            var parentRole = parent.Payload.GetProperty("objectRole").GetString();
+            if ((role == "table-field" && parentRole != "table")
+                || (role == "query-field" && parentRole != "saved-query"))
                 throw new AccessScanException("AccessDesignInputParentUnavailable");
         }
         foreach (var eventReference in records.Where(record => record.Kind == "event-reference"))
@@ -1080,6 +1125,20 @@ public static class AccessDesignEvidenceReader
         if (!parent.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null)
             return null;
         if (!value.TryGetInt32(out var number) || number <= 0)
+            throw new AccessScanException(classification);
+        return number;
+    }
+
+    private static int? OptionalBoundedInt(
+        JsonElement parent,
+        string name,
+        int minimum,
+        int maximum,
+        string classification)
+    {
+        if (!parent.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null)
+            return null;
+        if (!value.TryGetInt32(out var number) || number < minimum || number > maximum)
             throw new AccessScanException(classification);
         return number;
     }
