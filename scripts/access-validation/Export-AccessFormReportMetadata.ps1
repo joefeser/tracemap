@@ -451,9 +451,11 @@ if (-not $InternalWorker) {
         Stop-Export "AccessMetadataSourceChanged"
     }
     if (-not [string]::IsNullOrWhiteSpace($workerFailure)) {
+        Remove-PathChecked $output $true "AccessMetadataOutputCleanupFailed"
         Stop-Export $workerFailure
     }
     if ($workerErrors.Count -gt 0) {
+        Remove-PathChecked $output $true "AccessMetadataOutputCleanupFailed"
         Stop-Export ([string]$workerErrors[0].Exception.Message)
     }
     $workerOutput | Write-Output

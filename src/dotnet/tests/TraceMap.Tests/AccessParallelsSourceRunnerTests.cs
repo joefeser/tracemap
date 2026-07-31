@@ -178,6 +178,8 @@ public sealed class AccessParallelsSourceRunnerTests
         Assert.Contains("AccessMetadataProcessCleanupFailed", producer, StringComparison.Ordinal);
         Assert.Contains("AccessMetadataOutputCleanupFailed", producer, StringComparison.Ordinal);
         Assert.Contains("Test-SourceHashesUnchanged", producer, StringComparison.Ordinal);
+        Assert.Contains("if (-not [string]::IsNullOrWhiteSpace($workerFailure)) {\n        Remove-PathChecked $output", producer, StringComparison.Ordinal);
+        Assert.Contains("if ($workerErrors.Count -gt 0) {\n        Remove-PathChecked $output", producer, StringComparison.Ordinal);
         Assert.Contains("$scratchCleanupFailed = $true", producer, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenForm", producer, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("OpenReport", producer, StringComparison.OrdinalIgnoreCase);
