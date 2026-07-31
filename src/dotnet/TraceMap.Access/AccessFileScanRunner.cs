@@ -13,6 +13,8 @@ public sealed record AccessFileScanOptions(
 public sealed class AccessFileScanRunner
 {
     private const string SnapshotRepositoryName = "localfilesnapshot";
+    private const int CleanupAttemptCount = 30;
+    private const int CleanupRetryDelayMilliseconds = 200;
     private readonly AccessLimits _limits;
 
     public AccessFileScanRunner(AccessLimits? limits = null)
@@ -40,7 +42,8 @@ public sealed class AccessFileScanRunner
         Func<AccessScanOptions, CancellationToken, Task<ScanResult>> scan,
         Func<string> createScratchDirectory,
         Action<string> deleteScratchDirectory,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action? cleanupRetryDelay = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var validated = Validate(options, _limits);
@@ -87,9 +90,10 @@ public sealed class AccessFileScanRunner
             {
                 try
                 {
-                    deleteScratchDirectory(scratchDirectory);
-                    if (Directory.Exists(scratchDirectory))
-                        throw new AccessScanException("AccessFileSnapshotCleanupFailed");
+                    DeleteScratchDirectoryWithRetry(
+                        scratchDirectory,
+                        deleteScratchDirectory,
+                        cleanupRetryDelay ?? (() => Thread.Sleep(CleanupRetryDelayMilliseconds)));
                 }
                 catch
                 {
@@ -97,6 +101,30 @@ public sealed class AccessFileScanRunner
                 }
             }
         }
+    }
+
+    internal static void DeleteScratchDirectoryWithRetry(
+        string scratchDirectory,
+        Action<string> deleteScratchDirectory,
+        Action retryDelay)
+    {
+        for (var attempt = 1; attempt <= CleanupAttemptCount; attempt++)
+        {
+            try
+            {
+                deleteScratchDirectory(scratchDirectory);
+                if (!Directory.Exists(scratchDirectory)) return;
+            }
+            catch when (attempt < CleanupAttemptCount)
+            {
+                // Windows can retain a short-lived handle after Git or Access exits.
+                // Retry only this known disposable directory and verify removal below.
+            }
+
+            if (attempt < CleanupAttemptCount) retryDelay();
+        }
+
+        throw new AccessScanException("AccessFileSnapshotCleanupFailed");
     }
 
     private static AccessFileValidatedInput Validate(AccessFileScanOptions options, AccessLimits limits)
