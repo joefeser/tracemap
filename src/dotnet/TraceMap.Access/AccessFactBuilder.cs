@@ -163,6 +163,33 @@ public static class AccessFactBuilder
                     properties: Props(("sourceQueryStableKey", query.Identity.StableKey), ("targetStableKey", dependency.TargetStableKey),
                         ("targetKind", dependency.TargetKind), ("coverageLabel", dependency.Coverage), ("limitations", "static-access-sql-shape-only;no-execution"))));
             }
+            foreach (var output in query.OutputFields ?? [])
+            {
+                facts.Add(Create(manifest, FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, span,
+                    sourceSymbol: query.Identity.StableKey,
+                    targetSymbol: output.Identity.StableKey,
+                    properties: IdentityProps(output.Identity,
+                        ("queryStableKey", query.Identity.StableKey),
+                        ("queryOutputStableKey", output.Identity.StableKey),
+                        ("ordinal", output.Ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                        ("typeFamily", output.TypeFamily),
+                        ("coverageLabel", output.Coverage),
+                        ("limitations", "querydef-field-metadata-only;no-query-execution;no-row-read"))));
+                foreach (var sourceField in output.SourceFieldStableKeys)
+                {
+                    facts.Add(Create(manifest, FactTypes.AccessQueryOutputSourceCandidate, RuleIds.LegacyAccessQuery,
+                        EvidenceTiers.Tier3SyntaxOrTextual, span,
+                        sourceSymbol: output.Identity.StableKey,
+                        targetSymbol: sourceField,
+                        properties: Props(
+                            ("queryStableKey", query.Identity.StableKey),
+                            ("queryOutputStableKey", output.Identity.StableKey),
+                            ("sourceFieldStableKey", sourceField),
+                            ("targetKind", "field"),
+                            ("coverageLabel", output.Coverage),
+                            ("limitations", "static-query-output-source-candidate;no-query-execution;no-row-read"))));
+                }
+            }
         }
 
         foreach (var boundary in projection.ExternalLinks)
@@ -183,6 +210,7 @@ public static class AccessFactBuilder
                     ("surfaceKind", surface.SurfaceKind), ("stableSurfaceKey", surface.Identity.StableKey),
                     ("modulePresence", surface.ModulePresence), ("boundState", surface.BoundState),
                     ("designHash", surface.DesignHash), ("controlCount", surface.Controls.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    ("reportGroupCount", (surface.ReportGroups?.Count ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture)),
                     ("controlTypeCounts", ControlTypeCounts(surface.Controls)), ("eventDescriptors", EventDescriptors(surface.Events)),
                     ("coverageLabel", surface.Coverage),
                     ("limitations", "no-render;no-invocation;no-runtime-reachability;binary-container-span"))));
@@ -196,6 +224,9 @@ public static class AccessFactBuilder
                     properties: IdentityProps(control.Identity,
                         ("surfaceStableKey", control.SurfaceStableKey), ("stableControlKey", control.Identity.StableKey),
                         ("controlType", control.ControlType), ("ordinal", control.Ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                        ("rowSourceType", control.RowSourceType),
+                        ("boundColumn", control.BoundColumn?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                        ("columnCount", control.ColumnCount?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                         ("eventDescriptors", EventDescriptors(control.Events)), ("coverageLabel", "static-design-metadata"),
                         ("limitations", "no-render;no-value-read;no-event-execution"))));
                 AddBindingFacts(facts, manifest, span, control.Bindings);

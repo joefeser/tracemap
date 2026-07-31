@@ -111,6 +111,126 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Query_output_shape_accepts_only_direct_select_fields()
+    {
+        Assert.True(AccessQueryProjector.IsDirectOutputField(
+            "SELECT Orders.OrderId, [Orders].[Order Status] FROM Orders;",
+            "OrderId"));
+        Assert.True(AccessQueryProjector.IsDirectOutputField(
+            "SELECT Orders.OrderId, [Orders].[Order Status] FROM Orders;",
+            "Order Status"));
+        Assert.False(AccessQueryProjector.IsDirectOutputField(
+            "SELECT Orders.OrderId AS Identifier FROM Orders;",
+            "Identifier"));
+        Assert.False(AccessQueryProjector.IsDirectOutputField(
+            "SELECT Orders.* FROM Orders;",
+            "OrderId"));
+        Assert.False(AccessQueryProjector.IsDirectOutputField(
+            "SELECT Count(Orders.OrderId) AS OrderCount FROM Orders;",
+            "OrderCount"));
+    }
+
+    [Fact]
+    public void Com_reader_keeps_query_outputs_when_dependency_coverage_is_partial()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "PartialQuery");
+        var tableIdentity = AccessSafeValues.Identity(seed, "table", "Orders");
+        var field = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{tableIdentity.StableKey}", "Id"),
+            0,
+            "long",
+            4,
+            true);
+        var table = new AccessTableProjection(tableIdentity, [field], []);
+        var database = new FakeDaoDatabase(
+            new FakeDaoQuery(
+                "PartialQuery",
+                "SELECT [Id] FROM [Orders], [MissingSource]",
+                new FakeDaoField("Id", "Orders", "Id")));
+        var gaps = new List<AccessGapProjection>();
+
+        var queries = new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["PartialQuery"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Orders"] = [(tableIdentity.StableKey, "table")]
+            },
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Orders"] = [table]
+            },
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+            {
+                [tableIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Id"] = [field]
+                }
+            },
+            gaps,
+            []);
+
+        var output = Assert.Single(Assert.Single(queries).OutputFields!);
+        Assert.Equal("partial", output.Coverage);
+        Assert.Equal([field.Identity.StableKey], output.SourceFieldStableKeys);
+        Assert.Contains(gaps, gap =>
+            gap.Classification == "AccessQueryOutputDependencyPartial"
+            && gap.ScopeKind == "query-output-field"
+            && gap.StableScopeKey == output.Identity.StableKey);
+        Assert.DoesNotContain(gaps, gap => gap.Classification == "AccessQueryOutputMetadataUnavailable");
+    }
+
+    [Fact]
+    public void Com_reader_scopes_output_failures_to_the_most_specific_constructed_identity()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var sourceFailureIdentity = AccessSafeValues.Identity(seed, "query", "SourceFailure");
+        var nameFailureIdentity = AccessSafeValues.Identity(seed, "query", "NameFailure");
+        var database = new FakeDaoDatabase(
+            new FakeDaoQuery(
+                "SourceFailure",
+                "SELECT [Id] FROM [Orders]",
+                new FakeDaoField("Id", throwOnSource: true)),
+            new FakeDaoQuery(
+                "NameFailure",
+                "SELECT [Id] FROM [Orders]",
+                new FakeDaoField(throwOnName: true)));
+        var gaps = new List<AccessGapProjection>();
+
+        var queries = new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SourceFailure"] = sourceFailureIdentity,
+                ["NameFailure"] = nameFailureIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Orders"] = [("access-table-11111111111111111111111111111111", "table")]
+            },
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal),
+            gaps,
+            []);
+
+        var sourceOutput = Assert.Single(queries.Single(query => query.Identity == sourceFailureIdentity).OutputFields!);
+        Assert.Contains(gaps, gap =>
+            gap.Classification == "AccessQueryOutputSourceUnavailable"
+            && gap.ScopeKind == "query-output-field"
+            && gap.StableScopeKey == sourceOutput.Identity.StableKey);
+        Assert.Contains(gaps, gap =>
+            gap.Classification == "AccessQueryOutputFieldNameUnavailable"
+            && gap.ScopeKind == "query"
+            && gap.StableScopeKey == nameFailureIdentity.StableKey);
+    }
+
+    [Fact]
     public void Input_validator_requires_exact_tracked_head_bytes_preserves_requested_output_and_rejects_destructive_ancestor()
     {
         using var temp = new TempDirectory();
@@ -568,6 +688,41 @@ public sealed class AccessFoundationTests
             directory = directory.Parent;
         }
         throw new DirectoryNotFoundException("Could not locate repository root.");
+    }
+
+    public sealed class FakeDaoDatabase(params FakeDaoQuery[] queries)
+    {
+        public FakeDaoCollection<FakeDaoQuery> QueryDefs { get; } = new(queries);
+    }
+
+    public sealed class FakeDaoQuery(string name, string sql, params FakeDaoField[] fields)
+    {
+        public string Name { get; } = name;
+        public int Type => 0;
+        public string SQL { get; } = sql;
+        public FakeDaoCollection<FakeDaoParameter> Parameters { get; } = new([]);
+        public FakeDaoCollection<FakeDaoField> Fields { get; } = new(fields);
+    }
+
+    public sealed class FakeDaoField(
+        string name = "Id",
+        string sourceTable = "",
+        string sourceField = "",
+        bool throwOnName = false,
+        bool throwOnSource = false)
+    {
+        public string Name => throwOnName ? throw new InvalidOperationException() : name;
+        public string SourceTable => throwOnSource ? throw new InvalidOperationException() : sourceTable;
+        public string SourceField => throwOnSource ? throw new InvalidOperationException() : sourceField;
+        public int Type => 4;
+    }
+
+    public sealed class FakeDaoParameter;
+
+    public sealed class FakeDaoCollection<T>(params T[] values)
+    {
+        public int Count => values.Length;
+        public T this[int index] => values[index];
     }
 
     private sealed class BlockingTextReader : TextReader
