@@ -259,6 +259,8 @@ public static class FactTypes
     public const string LegacyDataGeneratedCodeLinked = nameof(LegacyDataGeneratedCodeLinked);
     public const string AccessQueryDeclared = nameof(AccessQueryDeclared);
     public const string AccessQueryDependencyCandidate = nameof(AccessQueryDependencyCandidate);
+    public const string AccessQueryOutputDeclared = nameof(AccessQueryOutputDeclared);
+    public const string AccessQueryOutputSourceCandidate = nameof(AccessQueryOutputSourceCandidate);
     public const string AccessExternalLinkDeclared = nameof(AccessExternalLinkDeclared);
     public const string AccessFormDeclared = nameof(AccessFormDeclared);
     public const string AccessReportDeclared = nameof(AccessReportDeclared);
@@ -476,7 +478,7 @@ public static class ScannerVersions
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.1.0";
     public const string LegacyDataExtractor = "legacy-data/0.1.0";
-    public const string AccessExtractor = "legacy-access/0.1.0";
+    public const string AccessExtractor = "legacy-access/0.2.0";
     public const string EndpointAlignment = "endpoint-alignment/0.1.0";
     public const string RazorBindingExtractor = "csharp-razor-binding/0.1.0";
 }

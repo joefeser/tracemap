@@ -7,6 +7,48 @@ namespace TraceMap.Tests;
 
 public sealed class AccessDesignEvidenceReaderTests
 {
+    [Fact]
+    public void Reader_accepts_bounded_functional_control_and_report_group_metadata()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "functional-metadata");
+        var records = new[]
+        {
+            Record(
+                "ui-surface", "report", null, "report-design-export", "container-only", null, null, null,
+                "complete",
+                Ordered(("surfaceRole", "report"), ("identity", "rptSchedule"), ("recordSource", "qrySchedule"))),
+            Record(
+                "ui-control", "lookup", "report", "report-design-export", "container-only", null, null, null,
+                "complete",
+                Ordered(
+                    ("identity", "cboStatus"),
+                    ("ordinal", 0),
+                    ("controlType", 111),
+                    ("controlSource", "StatusId"),
+                    ("rowSource", "qryStatuses"),
+                    ("rowSourceType", "table-query"),
+                    ("boundColumn", 0),
+                    ("columnCount", 3),
+                    ("sourceObject", "Form.frmScheduleDetail"),
+                    ("linkMasterFields", "ScheduleId"),
+                    ("linkChildFields", "ScheduleId"))),
+            Record(
+                "report-group", "group", "report", "report-design-export", "container-only", null, null, null,
+                "complete",
+                Ordered(("ordinal", 0), ("expression", "StatusId"), ("sortOrder", "descending"), ("groupOn", "declared")))
+        };
+        WriteBundle(path, records);
+
+        using var result = AccessDesignEvidenceReader.Read(path, Binding());
+
+        Assert.True(result.AcceptedForProjection);
+        Assert.Contains(result.Records, record => record.Kind == "ui-control"
+            && record.Payload.GetProperty("boundColumn").GetInt32() == 0);
+        Assert.Contains(result.Records, record => record.Kind == "report-group"
+            && record.ParentCanonicalRecordId is not null);
+    }
+
     private const string RepositoryHash = "1111111111111111111111111111111111111111111111111111111111111111";
     private const string CommitSha = "2222222222222222222222222222222222222222";
     private const string BaseManifestHash = "3333333333333333333333333333333333333333333333333333333333333333";

@@ -276,12 +276,28 @@ dotnet run --project src/dotnet/TraceMap.Cli -- release-review \
 
 The release review command writes `release-review.md` and `release-review.json` when `--out` is a directory. It composes available TraceMap evidence from source coverage, combined change impact, contract delta impact, SQL runway evidence, Microsoft Access design evidence, optional path/reverse context, section gaps, and a deterministic reviewer checklist. Access composition is after-snapshot static context over allowlisted inventory, schema, relationship, query-shape, external-boundary, count-only metadata, and structured gaps; it does not reopen Access COM extraction or infer UI/VBA/macro identities. The packet is not release approval, CI policy, runtime risk prediction, deployment verification, or production usage proof. API/DTO, SQL/schema, and package-upgrade sections are rendered from available deterministic workflows or as explicit unavailable/deferred sections when compatible inputs are not supplied.
 
+On Windows with Microsoft Access installed, scan one explicitly authorized
+local database without preparing a Git repository:
+
+```powershell
+dotnet run --project src/dotnet/TraceMap.Access.Cli -- scan-file `
+  --database C:\private\authorized.accdb `
+  --out C:\private\tracemap-access
+```
+
+TraceMap creates a deterministic no-remote local snapshot commit internally,
+opens only a verified private copy, labels the provenance as
+`local-file-snapshot`, verifies the original again after scanning, and removes
+the disposable repository. See
+[the Microsoft Access file-first workflow](docs/ACCESS_FILE_FIRST_SCAN.md).
+
 Compose an existing Microsoft Access scan into a private local design-review bundle:
 
 ```bash
 dotnet run --project src/dotnet/TraceMap.Cli -- access-review create \
   --scan-output .tracemap-access \
-  --out .tracemap-access-review
+  --out .tracemap-access-review \
+  --max-findings 1000
 ```
 
 The bundle contains an Access-only release-review packet, a hidden-local static

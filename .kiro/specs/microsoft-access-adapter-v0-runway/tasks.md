@@ -207,6 +207,23 @@ remain covered for any separately reviewed future source.
 - [x] 9.5 Add a local-only representative customer/sample validation workflow
       using labels, counts, hashes, and gaps only.
 
+## Phase 10: File-First and Dogfood Evidence Hardening
+
+- [x] 10.1 Add `scan-file` over a restricted verified disposable no-remote
+      snapshot repository while preserving commit provenance.
+- [x] 10.2 Re-hash the original after scanning and clean snapshot state on
+      success, failure, cancellation, and fail-closed cleanup errors.
+- [x] 10.3 Label local snapshot provenance without persisting original local
+      paths, filenames, usernames, command text, or scratch identities.
+- [x] 10.4 Decode supported DAO relationship attributes deterministically while
+      retaining the raw mask and explicit unknown bits.
+- [x] 10.5 Preserve query owner stable keys and supporting declaration fact IDs
+      on query-specific gaps where available.
+- [x] 10.6 Make the hidden local Access review finding cap configurable and
+      explicitly truncated when reached.
+- [x] 10.7 Add synthetic platform-neutral regression coverage and update the
+      Access workflow documentation without widening COM reads.
+
 ## Deferred Beyond V0
 
 - Password-protected/encrypted database secret channels.

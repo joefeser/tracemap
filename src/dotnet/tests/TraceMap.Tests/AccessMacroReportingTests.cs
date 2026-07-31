@@ -273,6 +273,9 @@ public sealed class AccessMacroReportingTests
             && item.Metadata.Any(pair => pair.Key == "targetDesignKey"));
         Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "mapping")
             && item.Metadata.Any(pair => pair.Key == "mappingKind" && pair.Value == "declared-relationship")
+            && item.Metadata.Any(pair => pair.Key == "relationshipAttributes" && pair.Value == "4352")
+            && item.Metadata.Any(pair => pair.Key == "relationshipAttributeFlags" && pair.Value == "update-cascade;delete-cascade")
+            && item.Metadata.Any(pair => pair.Key == "relationshipUnknownAttributeBits" && pair.Value == "0")
             && item.Metadata.Any(pair => pair.Key == "mappingDesignKey" && pair.Value.StartsWith("access-", StringComparison.Ordinal)));
         Assert.Contains(review.AccessEvidence.Findings, item => item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "external-boundary")
             && item.Metadata.Any(pair => pair.Key == "designKey" && pair.Value.StartsWith("access-", StringComparison.Ordinal))
@@ -285,6 +288,10 @@ public sealed class AccessMacroReportingTests
                 item.Metadata.Any(pair => pair.Key == "capability" && pair.Value is "rowDataRead" or "executionPerformed" or "startupSuppression")),
             item => Assert.Equal(ReleaseReviewClassifications.NoActionableEvidence, item.Classification));
         Assert.Contains(review.AccessEvidence.Gaps, item => item.GapKind == "AccessMacroIdentityUnavailable");
+        var queryGap = Assert.Single(review.AccessEvidence.Gaps, item => item.GapKind == "AccessQueryDependencyPartial");
+        var queryFinding = Assert.Single(review.AccessEvidence.Findings, item =>
+            item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "saved-query"));
+        Assert.Contains(queryFinding.SupportingFactIds[0], queryGap.SupportingFactIds);
         Assert.DoesNotContain(review.Gaps, item => item.GapKind == "AccessEvidenceConsumerUnsupported");
         Assert.All(review.AccessEvidence.Findings, finding =>
         {
@@ -642,14 +649,15 @@ public sealed class AccessMacroReportingTests
             false,
             0,
             [new(table, [new(field, 0, "long", 4, true)], [new(indexIdentity, true, true, [field.StableKey])])],
-            [new(relationshipIdentity, table.StableKey, table.StableKey, 0, [new(field.StableKey, field.StableKey, 0)])],
+            [new(relationshipIdentity, table.StableKey, table.StableKey, 4352, [new(field.StableKey, field.StableKey, 0)])],
             [new(queryIdentity, "select", AccessSafeValues.RoleHash("access-query-sql", "SELECT * FROM OrdersPrivate"), 27, "complete", [], [new(table.StableKey, "table", "direct-static-reference")], false, null, null)],
             [new(externalIdentity, "odbc", AccessSafeValues.RoleHash("access-linked-source", "PrivateServer"), "linked-table")],
             [
                 .. macro.Gaps,
                 .. productMacroGaps,
                 new("AccessUiSurfaceUnavailable", "ui-surface", null, RuleIds.LegacyAccessUiSurface),
-                new("AccessVbaProjectUnavailable", "vba-project", null, RuleIds.LegacyAccessVba)
+                new("AccessVbaProjectUnavailable", "vba-project", null, RuleIds.LegacyAccessVba),
+                new("AccessQueryDependencyPartial", "query", queryIdentity.StableKey)
             ],
             [
                 new("macros", macroCoverage),

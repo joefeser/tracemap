@@ -13,7 +13,19 @@ internal sealed record AccessRawControl(
     string? ControlSource,
     string? RowSource,
     IReadOnlyList<AccessRawUiEvent> Events,
-    string? ValidationRule = null);
+    string? ValidationRule = null,
+    string? RowSourceType = null,
+    int? BoundColumn = null,
+    int? ColumnCount = null,
+    string? SourceObject = null,
+    string? LinkMasterFields = null,
+    string? LinkChildFields = null);
+
+internal sealed record AccessRawReportGroup(
+    int Ordinal,
+    string? Expression,
+    string? SortOrder,
+    string? GroupOn);
 
 internal sealed record AccessRawUiSurface(
     string Name,
@@ -25,7 +37,8 @@ internal sealed record AccessRawUiSurface(
     string Coverage = "complete",
     string? Filter = null,
     string? OrderBy = null,
-    string? DeclaredBoundState = null);
+    string? DeclaredBoundState = null,
+    IReadOnlyList<AccessRawReportGroup>? ReportGroups = null);
 
 internal sealed record AccessUiProjectionResult(
     IReadOnlyList<AccessUiSurfaceProjection> Surfaces,
@@ -75,17 +88,81 @@ internal static partial class AccessUiProjector
                 var validation = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "validation-rule", rawControl.ValidationRule,
                     rawControl.Ordinal, null, scopedFields, gaps, disclosurePolicy);
                 if (validation is not null) controlBindings.Add(validation);
+                var sourceObject = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "source-object", NormalizeSourceObject(rawControl.SourceObject),
+                    rawControl.Ordinal, knownObjects, null, gaps, disclosurePolicy);
+                if (sourceObject is not null) controlBindings.Add(sourceObject);
+                var masterCount = CountLinkFields(rawControl.LinkMasterFields);
+                var childCount = CountLinkFields(rawControl.LinkChildFields);
+                if (masterCount != childCount && (masterCount > 0 || childCount > 0))
+                    gaps.Add(new(
+                        "AccessSubsurfaceLinkFieldCountMismatch",
+                        "binding",
+                        controlIdentity.StableKey,
+                        RuleIds.LegacyAccessBinding));
+                controlBindings.AddRange(ProjectFieldListBindings(
+                    databaseIdentitySeed, controlIdentity.StableKey, "link-master-field",
+                    rawControl.LinkMasterFields, rawControl.Ordinal, scopedFields, gaps, disclosurePolicy));
+                IReadOnlyDictionary<string, IReadOnlyList<string>>? childFields = null;
+                if (sourceObject is { SourceKind: "direct-object", TargetStableKeys.Count: 1 }
+                    && rawSurfaces.FirstOrDefault(candidate =>
+                        AccessSafeValues.Identity(
+                            databaseIdentitySeed,
+                            candidate.SurfaceKind,
+                            candidate.Name,
+                            disclosurePolicy: disclosurePolicy).StableKey == sourceObject.TargetStableKeys[0]) is { } childSurface)
+                {
+                    var childRecord = ProjectBinding(databaseIdentitySeed, sourceObject.TargetStableKeys[0], "record-source",
+                        childSurface.RecordSource, 0, knownObjects, null, [], disclosurePolicy);
+                    if (childRecord is { SourceKind: "direct-object", TargetStableKeys.Count: 1 }
+                        && fieldsByTable.TryGetValue(childRecord.TargetStableKeys[0], out var resolvedChildFields))
+                        childFields = resolvedChildFields;
+                }
+                controlBindings.AddRange(ProjectFieldListBindings(
+                    databaseIdentitySeed, controlIdentity.StableKey, "link-child-field",
+                    rawControl.LinkChildFields, rawControl.Ordinal, childFields, gaps, disclosurePolicy));
                 controls.Add(new(
                     controlIdentity,
                     identity.StableKey,
                     rawControl.Ordinal,
                     ControlType(rawControl.ControlType),
                     controlBindings.OrderBy(item => item.BindingKind, StringComparer.Ordinal).ToArray(),
-                    ProjectEvents(rawControl.Events)));
+                    ProjectEvents(rawControl.Events),
+                    NormalizeRowSourceType(rawControl.RowSourceType),
+                    NormalizeNonNegative(rawControl.BoundColumn),
+                    NormalizeNonNegative(rawControl.ColumnCount)));
             }
 
             var surfaceEvents = ProjectEvents(raw.Events);
-            var designHash = DesignHash(identity, kind, raw.HasModule, raw.RecordSource, raw.Filter, raw.OrderBy, raw.Controls, raw.Events);
+            var groupBindings = (raw.ReportGroups ?? [])
+                .OrderBy(group => group.Ordinal)
+                .Select(group =>
+                {
+                    var binding = string.IsNullOrWhiteSpace(group.Expression)
+                        ? MissingReportGroupBinding(
+                            databaseIdentitySeed,
+                            identity.StableKey,
+                            group.Ordinal,
+                            gaps,
+                            disclosurePolicy)
+                        : ProjectBinding(
+                            databaseIdentitySeed,
+                            identity.StableKey,
+                            "report-group-sort",
+                            group.Expression,
+                            group.Ordinal,
+                            null,
+                            scopedFields,
+                            gaps,
+                            disclosurePolicy)!;
+                    return new AccessReportGroupProjection(
+                        group.Ordinal,
+                        binding,
+                        NormalizeSortOrder(group.SortOrder),
+                        NormalizeGroupOn(group.GroupOn));
+                })
+                .ToArray();
+            bindings.AddRange(groupBindings.Select(group => group.Binding));
+            var designHash = DesignHash(identity, kind, raw.HasModule, raw.RecordSource, raw.Filter, raw.OrderBy, raw.Controls, raw.Events, raw.ReportGroups ?? []);
             surfaces.Add(new(
                 identity,
                 kind,
@@ -103,7 +180,8 @@ internal static partial class AccessUiProjector
                 bindings,
                 controls,
                 surfaceEvents,
-                raw.Coverage));
+                raw.Coverage,
+                groupBindings));
         }
 
         return new(
@@ -180,6 +258,37 @@ internal static partial class AccessUiProjector
             candidates, fields is not null ? "field" : "object", "partial");
     }
 
+    private static AccessBindingProjection MissingReportGroupBinding(
+        string databaseIdentitySeed,
+        string ownerStableKey,
+        int ordinal,
+        List<AccessGapProjection> gaps,
+        AccessIdentityDisclosurePolicy disclosurePolicy)
+    {
+        const string bindingKind = "report-group-sort";
+        var identity = AccessSafeValues.Identity(
+            databaseIdentitySeed,
+            $"binding-{ownerStableKey}-{bindingKind}",
+            bindingKind,
+            ordinal,
+            disclosurePolicy);
+        gaps.Add(new(
+            "AccessReportGroupExpressionUnavailable",
+            "binding",
+            identity.StableKey,
+            RuleIds.LegacyAccessBinding));
+        return new(
+            identity,
+            ownerStableKey,
+            bindingKind,
+            "unresolved",
+            null,
+            0,
+            [],
+            "field",
+            "partial");
+    }
+
     private static AccessBindingProjection Ambiguous(
         AccessSafeIdentity identity,
         string ownerStableKey,
@@ -192,6 +301,38 @@ internal static partial class AccessUiProjector
         return new(identity, ownerStableKey, bindingKind, "ambiguous-identifier",
             AccessSafeValues.RoleHash($"access-{bindingKind}-expression", value), value.Length,
             [], targetKind, "partial");
+    }
+
+    private static IReadOnlyList<AccessBindingProjection> ProjectFieldListBindings(
+        string databaseIdentitySeed,
+        string ownerStableKey,
+        string bindingKind,
+        string? value,
+        int controlOrdinal,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? fields,
+        List<AccessGapProjection> gaps,
+        AccessIdentityDisclosurePolicy disclosurePolicy)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return [];
+        var items = value.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (items.Length == 0 || items.Length > 64)
+        {
+            gaps.Add(new("AccessSubsurfaceLinkShapeUnsupported", "binding", ownerStableKey, RuleIds.LegacyAccessBinding));
+            return [];
+        }
+        return items.Select((item, index) => ProjectBinding(
+                databaseIdentitySeed,
+                ownerStableKey,
+                $"{bindingKind}-{index}",
+                item,
+                checked(controlOrdinal * 64 + index),
+                null,
+                fields,
+                gaps,
+                disclosurePolicy))
+            .Where(binding => binding is not null)
+            .Cast<AccessBindingProjection>()
+            .ToArray();
     }
 
     private static IReadOnlyList<string> ResolveExpressionCandidates(
@@ -236,7 +377,8 @@ internal static partial class AccessUiProjector
         string? filter,
         string? orderBy,
         IReadOnlyList<AccessRawControl> controls,
-        IReadOnlyList<AccessRawUiEvent> events)
+        IReadOnlyList<AccessRawUiEvent> events,
+        IReadOnlyList<AccessRawReportGroup> reportGroups)
     {
         var builder = new StringBuilder();
         builder.Append("access-ui-design/v1|").Append(identity.StableKey).Append('|').Append(kind).Append('|').Append(hasModule?.ToString() ?? "unknown");
@@ -250,7 +392,20 @@ internal static partial class AccessUiProjector
             AppendProtected(builder, "control-source", control.ControlSource);
             AppendProtected(builder, "row-source", control.RowSource);
             AppendProtected(builder, "validation-rule", control.ValidationRule);
+            AppendProtected(builder, "row-source-type", control.RowSourceType);
+            AppendProtected(builder, "source-object", control.SourceObject);
+            AppendProtected(builder, "link-master-fields", control.LinkMasterFields);
+            AppendProtected(builder, "link-child-fields", control.LinkChildFields);
+            builder.Append(':').Append(control.BoundColumn?.ToString() ?? "unknown")
+                .Append(':').Append(control.ColumnCount?.ToString() ?? "unknown");
             AppendEvents(builder, control.Events);
+        }
+        foreach (var group in reportGroups.OrderBy(item => item.Ordinal))
+        {
+            builder.Append("|group:").Append(group.Ordinal);
+            AppendProtected(builder, "group-expression", group.Expression);
+            AppendProtected(builder, "group-sort-order", group.SortOrder);
+            AppendProtected(builder, "group-on", group.GroupOn);
         }
         AppendEvents(builder, events);
         return AccessSafeValues.RoleHash("access-ui-design", builder.ToString());
@@ -321,6 +476,46 @@ internal static partial class AccessUiProjector
         130 => "navigation-button",
         _ => $"access-control-{value}"
     };
+
+    private static int? NormalizeNonNegative(int? value) => value is >= 0 and <= 10_000 ? value : null;
+
+    private static string? NormalizeSourceObject(string? value)
+    {
+        var normalized = value?.Trim();
+        if (normalized is null) return null;
+        foreach (var prefix in new[] { "Form.", "Report." })
+            if (normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return normalized[prefix.Length..];
+        return normalized;
+    }
+
+    private static int CountLinkFields(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? 0
+            : value.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Length;
+
+    private static string NormalizeRowSourceType(string? value)
+    {
+        var normalized = value?.Trim();
+        return normalized switch
+        {
+            "Table/Query" => "table-query",
+            "Value List" => "value-list",
+            "Field List" => "field-list",
+            null or "" => "unspecified",
+            _ => "other"
+        };
+    }
+
+    private static string NormalizeSortOrder(string? value) => value?.Trim() switch
+    {
+        "1" or "Descending" or "descending" => "descending",
+        "0" or "Ascending" or "ascending" => "ascending",
+        _ => "unspecified"
+    };
+
+    private static string NormalizeGroupOn(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "unspecified" : "declared";
 
     private static readonly HashSet<string> AllowedEventRoles = new(StringComparer.Ordinal)
     {
