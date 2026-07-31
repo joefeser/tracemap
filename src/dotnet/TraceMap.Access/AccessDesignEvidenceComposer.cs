@@ -895,33 +895,40 @@ public static class AccessDesignEvidenceComposer
             if (values.Length > 1) conflict = true;
             return values.Length == 1 ? values[0] : null;
         }
-        var controls = ordered.SelectMany(item => item.Raw.Controls)
-            .GroupBy(item => (item.Ordinal, NameHash: AccessSafeValues.RoleHash("access-control-merge-name", item.Name)))
+        T[] MergeGrouped<T, TKey>(
+            IEnumerable<T> values,
+            Func<T, TKey> keySelector,
+            Func<T, T, bool> equivalent,
+            Func<IEnumerable<T>, IOrderedEnumerable<T>> order)
+            where TKey : notnull
+        {
+            var selected = values.GroupBy(keySelector)
             .Select(group =>
             {
                 var observations = group.ToArray();
-                if (observations.Skip(1).Any(item => !EquivalentControl(observations[0], item)))
+                if (observations.Skip(1).Any(item => !equivalent(observations[0], item)))
                     conflict = true;
                 return observations[0];
             })
-            .OrderBy(item => item.Ordinal)
-            .ThenBy(item => AccessSafeValues.RoleHash("access-control-sort-name", item.Name), StringComparer.Ordinal)
             .ToArray();
+            return order(selected).ToArray();
+        }
+        var controls = MergeGrouped(
+            ordered.SelectMany(item => item.Raw.Controls),
+            item => (item.Ordinal, NameHash: AccessSafeValues.RoleHash("access-control-merge-name", item.Name)),
+            EquivalentControl,
+            values => values
+                .OrderBy(item => item.Ordinal)
+                .ThenBy(item => AccessSafeValues.RoleHash("access-control-sort-name", item.Name), StringComparer.Ordinal));
         var events = ordered.SelectMany(item => item.Raw.Events).Distinct()
             .OrderBy(item => item.Role, StringComparer.Ordinal)
             .ThenBy(item => item.Value, StringComparer.Ordinal)
             .ToArray();
-        var reportGroups = ordered.SelectMany(item => item.Raw.ReportGroups ?? [])
-            .GroupBy(item => item.Ordinal)
-            .Select(group =>
-            {
-                var observations = group.ToArray();
-                if (observations.Skip(1).Any(item => item != observations[0]))
-                    conflict = true;
-                return observations[0];
-            })
-            .OrderBy(item => item.Ordinal)
-            .ToArray();
+        var reportGroups = MergeGrouped(
+            ordered.SelectMany(item => item.Raw.ReportGroups ?? []),
+            item => item.Ordinal,
+            (left, right) => left == right,
+            values => values.OrderBy(item => item.Ordinal));
         var merged = preferred with
         {
             HasModule = MergeValue(surface => surface.HasModule),

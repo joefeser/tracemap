@@ -21,6 +21,7 @@ public sealed class AccessDesignEvidenceCompositionTests
     private const string ProtectedField = "Private Field 51729";
     private const string UnusedProtectedQuery = "Unused_Private_Query_41922";
     private const string UnusedProtectedTable = "Unused_Private_Table_31922";
+    private const string OrphanProtectedField = "Orphan_Private_Field_21922";
 
     [Fact]
     public async Task Hidden_identity_projection_is_explicit_hash_inventoried_and_independently_deletable()
@@ -39,13 +40,21 @@ public sealed class AccessDesignEvidenceCompositionTests
         Assert.Contains(ProtectedControl, payload, StringComparison.Ordinal);
         Assert.DoesNotContain(ProtectedModule, payload, StringComparison.Ordinal);
         Assert.DoesNotContain(ProtectedMacro, payload, StringComparison.Ordinal);
-        Assert.DoesNotContain(UnusedProtectedQuery, payload, StringComparison.Ordinal);
-        Assert.DoesNotContain(UnusedProtectedTable, payload, StringComparison.Ordinal);
         Assert.DoesNotContain("sourceText", payload, StringComparison.Ordinal);
         Assert.DoesNotContain("designText", payload, StringComparison.Ordinal);
         Assert.DoesNotContain("SELECT Password FROM Users", payload, StringComparison.OrdinalIgnoreCase);
         using var payloadDocument = JsonDocument.Parse(payload);
-        var queryIdentity = payloadDocument.RootElement.GetProperty("identities").EnumerateArray()
+        var identities = payloadDocument.RootElement.GetProperty("identities").EnumerateArray().ToArray();
+        Assert.DoesNotContain(identities, item =>
+            item.GetProperty("role").GetString() == "saved-query"
+            && item.GetProperty("identity").GetString() == UnusedProtectedQuery);
+        Assert.DoesNotContain(identities, item =>
+            item.GetProperty("role").GetString() == "table"
+            && item.GetProperty("identity").GetString() == UnusedProtectedTable);
+        Assert.DoesNotContain(identities, item =>
+            item.GetProperty("role").GetString() == "table-field"
+            && item.GetProperty("identity").GetString() == OrphanProtectedField);
+        var queryIdentity = identities
             .Single(item => item.GetProperty("role").GetString() == "saved-query");
         var baseQuery = File.ReadLines(Path.Combine(baseScan, "facts.ndjson"))
             .Select(line => JsonSerializer.Deserialize<CodeFact>(
@@ -426,8 +435,13 @@ public sealed class AccessDesignEvidenceCompositionTests
                     ("events", Object(("on-load", "[Event Procedure]"))))),
             Record("ui-control", "control", "surface", "form-design-export", "container-only", null, null, null, "complete",
                 Object(("identity", ProtectedControl), ("ordinal", 0), ("controlType", 104),
-                    ("controlSource", includeReviewRegressions ? ProtectedField : null),
+                    ("controlSource", includeReviewRegressions
+                        ? ProtectedField
+                        : includeHiddenIdentityRegressions ? UnusedProtectedQuery : null),
                     ("rowSource", "SELECT Password FROM Users"),
+                    ("linkMasterFields", includeHiddenIdentityRegressions
+                        ? $"{UnusedProtectedTable}, {OrphanProtectedField}"
+                        : null),
                     ("events", Object(("on-click", "[Event Procedure]"))))),
             Record("vba-module", "module", null, "vba-module-export", "exact-lines", vbaHash, 1, 4, "complete",
                 Object(("moduleRole", "standard"), ("identity", ProtectedModule), ("moduleKind", "standard"),
@@ -452,6 +466,10 @@ public sealed class AccessDesignEvidenceCompositionTests
             records.Add(Record(
                 "catalog-object", "catalog-unused-table", null, "catalog-export", "container-only", null, null, null, "complete",
                 Object(("objectRole", "table"), ("identity", UnusedProtectedTable), ("ordinal", 0))));
+            records.Add(Record(
+                "catalog-object", "catalog-orphan-field", "catalog-unused-table", "catalog-export", "container-only",
+                null, null, null, "complete",
+                Object(("objectRole", "table-field"), ("identity", OrphanProtectedField), ("ordinal", 0))));
         }
         if (includeReportGroupConflict)
         {

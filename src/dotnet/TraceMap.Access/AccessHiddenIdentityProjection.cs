@@ -120,7 +120,7 @@ public static class AccessHiddenIdentityProjection
         var emittedCatalogRecords = new HashSet<string>(StringComparer.Ordinal);
         var emittedUiStableKeys = new HashSet<string>(StringComparer.Ordinal);
         var catalogRecords = bundle.Records.Where(record => record.Kind == "catalog-object").ToArray();
-        var directBindingIdentifiers = CollectDirectBindingIdentifiers(bundle, catalogRecords);
+        var directBindingReferences = CollectDirectBindingReferences(bundle, catalogRecords);
         foreach (var record in catalogRecords.Where(record =>
                      String(record, "objectRole") is "form" or "report" or "table" or "saved-query"))
         {
@@ -136,7 +136,7 @@ public static class AccessHiddenIdentityProjection
                 ?? calculated;
             stableByRecord[record.CanonicalRecordId] = stable;
             if (role is not ("form" or "report")
-                && !directBindingIdentifiers.Contains(identity))
+                && !directBindingReferences.Sources.Contains(identity))
                 continue;
             emittedCatalogRecords.Add(record.CanonicalRecordId);
             rows.Add(new
@@ -156,8 +156,9 @@ public static class AccessHiddenIdentityProjection
             var role = String(record, "objectRole");
             var identity = Optional(record, "identity");
             if (identity is null
-                || !directBindingIdentifiers.Contains(identity)
+                || !directBindingReferences.Fields.Contains(identity)
                 || record.ParentCanonicalRecordId is null
+                || !emittedCatalogRecords.Contains(record.ParentCanonicalRecordId)
                 || !stableByRecord.TryGetValue(record.ParentCanonicalRecordId, out var parentStable))
                 continue;
             var calculated = AccessSafeValues.Identity(
@@ -174,9 +175,7 @@ public static class AccessHiddenIdentityProjection
                 recordKind = record.Kind,
                 role,
                 stableKey = stable,
-                parentStableKey = emittedCatalogRecords.Contains(record.ParentCanonicalRecordId)
-                    ? parentStable
-                    : null,
+                parentStableKey = parentStable,
                 identity
             });
         }
@@ -317,16 +316,17 @@ public static class AccessHiddenIdentityProjection
         return values;
     }
 
-    private static HashSet<string> CollectDirectBindingIdentifiers(
+    private static DirectBindingReferences CollectDirectBindingReferences(
         AccessDesignEvidenceBundle bundle,
         IReadOnlyList<AccessDesignEvidenceRecord> catalogRecords)
     {
-        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var sources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var fields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         void Add(IReadOnlyDictionary<string, object> bindings)
         {
-            foreach (var value in bindings.Values.OfType<string>())
+            foreach (var binding in bindings.Where(item => item.Value is string))
             {
-                foreach (var part in value.Split(
+                foreach (var part in ((string)binding.Value).Split(
                              [',', ';'],
                              StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 {
@@ -339,13 +339,23 @@ public static class AccessHiddenIdentityProjection
                     if (candidate.StartsWith('[') && candidate.EndsWith(']'))
                         candidate = candidate[1..^1];
                     if (candidate.Length == 0) continue;
-                    result.Add(candidate);
+                    if (binding.Key is "recordSource" or "rowSource")
+                    {
+                        sources.Add(candidate);
+                        continue;
+                    }
+                    if (binding.Key is not ("controlSource" or "linkMasterFields" or "linkChildFields"))
+                        continue;
                     var separator = candidate.LastIndexOf('.');
                     if (separator >= 0 && separator + 1 < candidate.Length)
                     {
+                        var source = candidate[..separator].Trim('[', ']');
                         var terminal = candidate[(separator + 1)..].Trim('[', ']');
-                        if (terminal.Length > 0) result.Add(terminal);
+                        if (source.Length > 0) sources.Add(source);
+                        if (terminal.Length > 0) fields.Add(terminal);
                     }
+                    else
+                        fields.Add(candidate);
                 }
             }
         }
@@ -389,8 +399,12 @@ public static class AccessHiddenIdentityProjection
                 }));
             }
         }
-        return result;
+        return new(sources, fields);
     }
+
+    private sealed record DirectBindingReferences(
+        HashSet<string> Sources,
+        HashSet<string> Fields);
 
     private static bool IsDirectBinding(string property, string value)
     {
