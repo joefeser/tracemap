@@ -9,4 +9,4 @@
 - [x] Validate pure paths on macOS with synthetic fixtures.
 - [x] Validate the producer with the isolated Parallels synthetic workflow.
 - [x] Update documentation and implementation state.
-- [ ] Commit, push, and open a ready PR to `dev` linked to #565.
+- [x] Commit, push, and open a ready PR to `dev` linked to #565.
