@@ -189,7 +189,7 @@ try {
     }
     $access.OpenCurrentDatabase($workingCopy, $true)
     if ([bool]$access.Visible -or (Test-Path -LiteralPath $canary)) {
-        Stop-Export "AccessMetadataCanaryFired"
+        Stop-Export "AccessMetadataStartupCanaryFired"
     }
     $loadedBaseline = Get-LoadedState $access
     if ($loadedBaseline -ne "0:0") {
@@ -309,7 +309,7 @@ try {
                     $textPath = Join-Path $scratch "$surfaceId.txt"
                     $access.SaveAsText($surfaceSpec.ObjectType, $name, $textPath)
                     if ([bool]$access.Visible -or (Test-Path -LiteralPath $canary)) {
-                        Stop-Export "AccessMetadataCanaryFired"
+                        Stop-Export "AccessMetadataDesignExportCanaryFired"
                     }
                     if ((Get-LoadedState $access) -ne $loadedBaseline) {
                         Stop-Export "AccessMetadataLoadedStateChanged"
@@ -335,7 +335,7 @@ try {
     }
 
     $access.CloseCurrentDatabase()
-    if (Test-Path -LiteralPath $canary) { Stop-Export "AccessMetadataCanaryFired" }
+    if (Test-Path -LiteralPath $canary) { Stop-Export "AccessMetadataCloseCanaryFired" }
     if ((Get-Sha256 $original) -ne $originalBefore -or (Get-Sha256 $copy) -ne $copyBefore) {
         Stop-Export "AccessMetadataSourceChanged"
     }
