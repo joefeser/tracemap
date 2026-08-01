@@ -25,6 +25,14 @@ the same non-invoking export mechanism for form/report metadata. Module catalog
 identity reads remain a new guarded capability, validated by count canaries,
 invisibility, source hashes, timeout, and process cleanup.
 
+The original file is the only source-integrity gate: its hash must remain
+unchanged or the exporter removes output and returns
+`AccessVbaOriginalSourceChanged`. Access bookkeeping can change an opened
+disposable copy. The bundle records initial and final copy hashes and a typed
+working-copy outcome instead of conflating that observation with an original
+mutation. Filesystem read-only mode is not enabled without a separately
+validated Access compatibility decision.
+
 The composer maps only `[Event Procedure]` or exact `=Identifier()` to a
 candidate procedure in `Form_<surface>` or `Report_<surface>`. Arguments,
 qualifiers, expression composition, or unresolved targets remain gaps.

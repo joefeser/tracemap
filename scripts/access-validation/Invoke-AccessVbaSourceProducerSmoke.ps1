@@ -59,8 +59,9 @@ try {
         -DatabaseIdentityHash $zeroHash `
         -TimeoutSeconds 240 *> $null
     if (Test-Path -LiteralPath $generationCanary -or Test-Path -LiteralPath $vbaCanary) { throw "AccessVbaCanaryFired" }
-    if ((Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash -ne $originalHash -or
-        (Get-FileHash -LiteralPath $vbaCopy -Algorithm SHA256).Hash -ne $vbaCopyHash) { throw "AccessVbaSourceChanged" }
+    if ((Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash -ne $originalHash) {
+        throw "AccessVbaOriginalSourceChanged"
+    }
     $normalized = Join-Path $output "normalized-design-evidence"
     $raw = Join-Path $output "private-access-source"
     $manifestPath = Join-Path $normalized "access-design-manifest.json"
@@ -72,7 +73,21 @@ try {
     if ($manifest.producer.mechanism -ne "access-save-as-text-vba" -or
         @($records | Where-Object kind -eq "vba-module").Count -le 0 -or
         (Get-Content -LiteralPath (Join-Path $raw "source-manifest.json") -Raw | ConvertFrom-Json).formReportDesignFileCount -le 0) { throw "AccessVbaOutputInvalid" }
+    $copyAfter = (Get-FileHash -LiteralPath $vbaCopy -Algorithm SHA256).Hash
+    $expectedWorkingCopyOutcome = if ($copyAfter -eq $vbaCopyHash) {
+        "AccessVbaWorkingCopyUnchanged"
+    }
+    else {
+        "AccessVbaWorkingCopyChanged"
+    }
+    if ($manifest.sourceCopy.sha256 -ne $vbaCopyHash -or
+        $manifest.workingCopy.preExportSha256 -ne $vbaCopyHash -or
+        $manifest.workingCopy.postExportSha256 -ne $copyAfter -or
+        $manifest.workingCopy.mutationOutcome -ne $expectedWorkingCopyOutcome) {
+        throw "AccessVbaWorkingCopyOutcomeInvalid"
+    }
     if (Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue) { throw "AccessVbaProcessCleanupFailed" }
+    Write-Output "access-vba-source-smoke=completed;originalSourceUnchanged=true;workingCopyOutcome=$expectedWorkingCopyOutcome;canariesClear=true;processCleanup=true"
 }
 finally {
     if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }

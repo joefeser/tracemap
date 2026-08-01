@@ -104,9 +104,9 @@ function Remove-DirectoryWithRetry([string]$Path) {
     return $false
 }
 
-function Test-HashesUnchanged([string]$OriginalPath, [string]$OriginalHash, [string]$CopyPath, [string]$CopyHash) {
+function Test-OriginalHashUnchanged([string]$OriginalPath, [string]$OriginalHash) {
     try {
-        return (Get-Sha256 $OriginalPath) -eq $OriginalHash -and (Get-Sha256 $CopyPath) -eq $CopyHash
+        return (Get-Sha256 $OriginalPath) -eq $OriginalHash
     }
     catch { return $false }
 }
@@ -215,7 +215,7 @@ if (-not $InternalWorker) {
         Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
         if (Test-Path -LiteralPath $output) { Remove-DirectoryWithRetry $output | Out-Null }
         Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
-        if (-not (Test-HashesUnchanged $original $originalBefore $copy $copyBefore)) { Stop-Export "AccessVbaSourceChanged" }
+        if (-not (Test-OriginalHashUnchanged $original $originalBefore)) { Stop-Export "AccessVbaOriginalSourceChanged" }
         Stop-Export "AccessVbaTimeout"
     }
     $errors = @()
@@ -234,9 +234,9 @@ if (-not $InternalWorker) {
         Stop-Export "AccessVbaProcessCleanupFailed"
     }
     Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
-    if (-not (Test-HashesUnchanged $original $originalBefore $copy $copyBefore)) {
+    if (-not (Test-OriginalHashUnchanged $original $originalBefore)) {
         if (Test-Path -LiteralPath $output) { Remove-DirectoryWithRetry $output | Out-Null }
-        Stop-Export "AccessVbaSourceChanged"
+        Stop-Export "AccessVbaOriginalSourceChanged"
     }
     if ((Test-Path -LiteralPath $generationCanary) -or (Test-Path -LiteralPath $extractionCanary)) {
         if (Test-Path -LiteralPath $output) { Remove-DirectoryWithRetry $output | Out-Null }
@@ -346,7 +346,14 @@ try {
     Close-ComObject $modules; $modules = $null
     Close-ComObject $project; $project = $null
     $access.CloseCurrentDatabase()
-    if (-not (Test-HashesUnchanged $original $originalBeforeWorker $copy $copyBeforeWorker)) { Stop-Export "AccessVbaSourceChanged" }
+    if (-not (Test-OriginalHashUnchanged $original $originalBeforeWorker)) { Stop-Export "AccessVbaOriginalSourceChanged" }
+    $copyAfterWorker = Get-Sha256 $copy
+    $copyMutationOutcome = if ($copyAfterWorker -eq $copyBeforeWorker) {
+        "AccessVbaWorkingCopyUnchanged"
+    }
+    else {
+        "AccessVbaWorkingCopyChanged"
+    }
 
     $ordered = @($records | Sort-Object { $_["kind"] }, { $_["recordId"] })
     $lines = @($ordered | ForEach-Object { $_ | ConvertTo-Json -Compress -Depth 20 })
@@ -358,18 +365,26 @@ try {
     [IO.File]::WriteAllBytes((Join-Path $normalizedRoot "access-design-records.ndjson"), $recordBytes)
     $manifest = [ordered]@{
         schema = "tracemap.access-design-evidence.v1"
-        producer = [ordered]@{ id = "tracemap-access-windows-export"; version = "1.0.0"; mechanism = "access-save-as-text-vba" }
+        producer = [ordered]@{ id = "tracemap-access-windows-export"; version = "1.1.0"; mechanism = "access-save-as-text-vba" }
         repository = [ordered]@{ identityHash = $RepositoryIdentityHash; commitSha = $CommitSha }
         baseScan = [ordered]@{ manifestSha256 = $BaseScanManifestSha256; databaseIdentityHash = $DatabaseIdentityHash }
         sourceCopy = [ordered]@{ sha256 = $copyBeforeWorker; binding = "hash-identical" }
+        workingCopy = [ordered]@{
+            preExportSha256 = $copyBeforeWorker
+            postExportSha256 = $copyAfterWorker
+            mutationOutcome = $copyMutationOutcome
+        }
         records = [ordered]@{ sha256 = (Get-BytesSha256 $recordBytes); count = $ordered.Count; countsByKind = $counts }
         capabilities = [ordered]@{ coordinates = "mixed"; catalogCompleteness = "declared-partial"; identityDisclosure = "hash-only" }
     }
     [IO.File]::WriteAllText((Join-Path $normalizedRoot "access-design-manifest.json"), ($manifest | ConvertTo-Json -Compress -Depth 20), $Utf8NoBom)
     $rawManifest = [ordered]@{
         schema = "tracemap.access-vba-private-source.v1"
-        exporterVersion = "1.0.0"
+        exporterVersion = "1.1.0"
         sourceCopySha256 = $copyBeforeWorker
+        workingCopyPreExportSha256 = $copyBeforeWorker
+        workingCopyPostExportSha256 = $copyAfterWorker
+        workingCopyMutationOutcome = $copyMutationOutcome
         artifactCount = $privateArtifacts.Count
         moduleFileCount = $moduleCount
         formReportDesignFileCount = $designOrdinal

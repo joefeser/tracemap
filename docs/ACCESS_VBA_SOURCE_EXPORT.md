@@ -12,10 +12,20 @@ metadata bundle and creates:
 ```
 
 The exporter sets force-disabled automation and invisibility, verifies separate
-canaries and original/copy hashes, uses a count-only loaded-module canary, and
-fails closed on timeout, visible UI, fired canary, source mutation, or cleanup
-failure. It never accesses VBE, recordsets, forms/reports, queries, macros, or
-procedures.
+canaries and the original hash, and uses a count-only loaded-module canary. It
+fails closed on timeout, visible UI, fired canary, original-source mutation, or
+cleanup failure. It never accesses VBE, recordsets, forms/reports, queries,
+macros, or procedures.
+
+Access may write internal bookkeeping to the disposable copy while opening it
+for this export. The exporter therefore records only sanitized pre/post copy
+hashes and either `AccessVbaWorkingCopyUnchanged` or
+`AccessVbaWorkingCopyChanged` in both manifests, while preserving the strict
+`AccessVbaOriginalSourceChanged` failure gate. It does not make the disposable
+copy filesystem read-only: that would be an unvalidated change to the Access
+open/export contract and may prevent the bounded export itself. A working-copy
+change is not evidence of source mutation, nor proof that the copy's logical
+contents are unchanged.
 
 The normalized directory is protected local input. `enrich-design` processes
 source only in memory; normal facts, indexes, reports, and logs omit raw source

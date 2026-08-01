@@ -22,7 +22,11 @@ public sealed class AccessVbaSourceExportTests
         Assert.Contains("formReportDesignFileCount", script, StringComparison.Ordinal);
         Assert.Contains("Get-LoadedModuleCount", script, StringComparison.Ordinal);
         Assert.Contains("AccessVbaLoadedStateChanged", script, StringComparison.Ordinal);
-        Assert.Contains("AccessVbaSourceChanged", script, StringComparison.Ordinal);
+        Assert.Contains("AccessVbaOriginalSourceChanged", script, StringComparison.Ordinal);
+        Assert.Contains("AccessVbaWorkingCopyChanged", script, StringComparison.Ordinal);
+        Assert.Contains("workingCopyPreExportSha256", script, StringComparison.Ordinal);
+        Assert.Contains("workingCopyPostExportSha256", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("AccessVbaSourceChanged", script, StringComparison.Ordinal);
         Assert.Contains("AccessVbaCanaryFired", script, StringComparison.Ordinal);
         Assert.Contains("Wait-Job -Job $job -Timeout $TimeoutSeconds", script, StringComparison.Ordinal);
         Assert.Contains("AccessVbaProcessCleanupFailed", script, StringComparison.Ordinal);
@@ -65,6 +69,9 @@ public sealed class AccessVbaSourceExportTests
         Assert.Contains("ExtractionCanaryPath", smoke, StringComparison.Ordinal);
         Assert.Contains("normalized-design-evidence", smoke, StringComparison.Ordinal);
         Assert.Contains("private-access-source", smoke, StringComparison.Ordinal);
+        Assert.Contains("AccessVbaOriginalSourceChanged", smoke, StringComparison.Ordinal);
+        Assert.Contains("AccessVbaWorkingCopyOutcomeInvalid", smoke, StringComparison.Ordinal);
+        Assert.Contains("workingCopyOutcome=$expectedWorkingCopyOutcome", smoke, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenForm", smoke, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("OpenRecordset", smoke, StringComparison.OrdinalIgnoreCase);
     }
