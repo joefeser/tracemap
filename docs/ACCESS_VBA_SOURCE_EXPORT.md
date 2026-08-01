@@ -2,6 +2,8 @@
 
 `Export-AccessVbaSource.ps1` is a separate Windows-only source-export boundary.
 It is not used by `tracemap-access scan` or `tracemap-access scan-file`.
+It supports the built-in Windows PowerShell 5.1 runtime; no PowerShell 7
+installation is required for the synthetic validation.
 
 It accepts a disposable Access copy plus a compatible protected form/report
 metadata bundle and creates:

@@ -38,6 +38,8 @@ public sealed class AccessVbaSourceExportTests
         Assert.Contains("AccessVbaProcessCleanupFailed", script, StringComparison.Ordinal);
         Assert.Contains("FormReportMetadataDirectory", script, StringComparison.Ordinal);
         Assert.Contains("AccessVbaMetadataBundleBindingMismatch", script, StringComparison.Ordinal);
+        Assert.Contains("Windows PowerShell 5.1 lacks the hashtable conversion switch", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("-AsHashtable", script, StringComparison.Ordinal);
 
         foreach (var forbidden in new[]
         {
@@ -81,6 +83,19 @@ public sealed class AccessVbaSourceExportTests
         Assert.Contains("workingCopyOutcome=$expectedWorkingCopyOutcome", smoke, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenForm", smoke, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("OpenRecordset", smoke, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Windows_validation_scripts_avoid_PowerShell_7_only_hashtable_deserialization()
+    {
+        var root = FindRepoRoot();
+        var scripts = Directory.GetFiles(Path.Combine(root, "scripts", "access-validation"), "*.ps1");
+
+        foreach (var path in scripts)
+        {
+            var script = await File.ReadAllTextAsync(path);
+            Assert.DoesNotContain("-AsHashtable", script, StringComparison.Ordinal);
+        }
     }
 
     private static string FindRepoRoot()
