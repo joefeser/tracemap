@@ -191,6 +191,9 @@ End Sub
     $customerFormTemporaryName = [string]$customerForm.Name
     $customerForm.RecordSource = "Customers"
     $customerForm.HasModule = $true
+    $customerForm.OnOpen = "[Event Procedure]"
+    $customerForm.OnLoad = "[Event Procedure]"
+    $customerForm.OnCurrent = "[Event Procedure]"
     $customerName = $access.CreateControl($customerFormTemporaryName, 109, 0, "", "", 1800, 400, 2400, 300)
     $fixtureControls.Add($customerName)
     $customerName.Name = "txtCustomerName"
@@ -230,6 +233,10 @@ End Sub
     $vbaExpressionButton.Name = "cmdVbaExpression"
     $vbaExpressionButton.Caption = "VBA_EXPRESSION_BUTTON_MARKER_92817"
     $vbaExpressionButton.OnClick = "=RunSyntheticScenario()"
+    $lifecycleList = $access.CreateControl($customerFormTemporaryName, 110, 0, "", "", 4400, 2900, 2400, 400)
+    $fixtureControls.Add($lifecycleList)
+    $lifecycleList.Name = "lstLifecycle"
+    $lifecycleList.OnAfterUpdate = "[Event Procedure]"
     $embeddedMacroButton = $access.CreateControl($customerFormTemporaryName, 104, 0, "", "", 1800, 2900, 2400, 400)
     $fixtureControls.Add($embeddedMacroButton)
     $embeddedMacroButton.Name = "cmdEmbeddedMacro"
@@ -272,6 +279,26 @@ Private Sub cmdVbaFlow_Click()
     Eval ("VBA_EVAL_MARKER_92817")
     Application.Run "VBA_RUN_MARKER_92817"
     CreateObject("WScript.Shell").Run "VBA_COMMAND_MARKER_92817"
+End Sub
+
+Private Sub Form_Open(Cancel As Integer)
+    DoCmd.OpenForm "frmCustomers"
+End Sub
+
+Private Sub Form_Load()
+    Call HelperStatic
+End Sub
+
+Private Sub Form_Current()
+    If Me.IsDirty Then
+        Me.txtCustomerName.Visible = False
+        Me.txtCustomerName.Enabled = True
+    End If
+    Me.Requery
+End Sub
+
+Private Sub lstLifecycle_AfterUpdate()
+    Me.txtCustomerName.Locked = True
 End Sub
 
 Private Sub HelperStatic()
@@ -347,8 +374,8 @@ End Function
         Forms = 2
         Reports = 1
         Phase7Controls = 10
-        Phase8Controls = 3
-        TotalFormReportControls = 13
+        Phase8Controls = 4
+        TotalFormReportControls = 14
         FormReportCoverage = "phase7-design-fixture"
         VbaCoverage = "phase8-form-code-behind-fixture"
         MacroCoverage = "phase9-embedded-event-marker-only;named-data-deferred"

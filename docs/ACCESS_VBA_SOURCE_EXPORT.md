@@ -23,6 +23,14 @@ and event-expression text. Static same-module candidates do not prove runtime
 behavior. Run the synthetic fixture first; a representative input needs a
 separate owner authorization.
 
+The pure projector also records bounded lifecycle linkage for populated
+form/report/control event properties. It supports conventional event procedure
+names and exact zero-argument expression functions, and may describe textual
+`Me` state assignments, `Me.Requery`, and literal `Forms(...)` references with
+module-relative spans and hash-only condition context. Embedded macros and
+dynamic handlers are gaps. This does not establish event firing, lifecycle
+ordering, runtime state, or a user workflow.
+
 On the isolated Windows VM, validate only the synthetic fixture before any
 owner-authorized representative discussion:
 

@@ -51,13 +51,20 @@ public static class AccessDesignEvidenceReader
     private static readonly HashSet<string> EventRoles =
     [
         "after-update",
+        "on-activate",
         "before-update",
         "on-click",
+        "on-close",
         "on-current",
+        "on-deactivate",
         "on-dbl-click",
+        "on-error",
         "on-load",
         "on-no-data",
-        "on-open"
+        "on-open",
+        "on-resize",
+        "on-timer",
+        "on-unload"
     ];
 
     private static readonly IReadOnlyDictionary<string, PayloadShape> PayloadShapes =

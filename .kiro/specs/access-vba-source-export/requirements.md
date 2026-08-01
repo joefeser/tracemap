@@ -26,9 +26,15 @@ copy so the existing deterministic VBA projector can emit bounded static facts.
 6. The normalized input reuses `vba-module` and `AccessVbaProjector`. Exact
    zero-argument event expressions and conventional event procedures may map
    only to same-module procedure candidates.
+7. Form/report/control lifecycle properties preserve owner kind, event role,
+   binding kind, procedure candidate, source span, and hash-only event
+   expression where applicable. Embedded macros and dynamic handlers are gaps.
+8. Bounded active handler effects may record `Me` state assignments,
+   `Me.Requery`, literal `Forms(...)` references, and already supported open
+   calls. Conditions are hash-only syntax context; comments are inactive.
 
 ## Non-claims
 
 This lane does not prove a form loaded, an event fired, a procedure executed,
-a query ran, records changed, navigation, business intent, correctness,
+a query ran, records changed, navigation, lifecycle order, business intent, correctness,
 completeness, production use, or release approval.

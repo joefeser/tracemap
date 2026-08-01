@@ -346,15 +346,25 @@ public sealed class AccessDesignEvidenceCompositionTests
             && fact.Properties.GetValueOrDefault("projectorCoverage") == "complete");
         Assert.NotNull(binding.SourceSymbol);
         Assert.NotNull(binding.TargetSymbol);
+        Assert.Equal("control", binding.Properties.GetValueOrDefault("ownerKind"));
+        Assert.Equal("expression-function", binding.Properties.GetValueOrDefault("bindingKind"));
+        Assert.NotNull(binding.Properties.GetValueOrDefault("eventExpressionHash"));
+        Assert.Equal(1, binding.Evidence.StartLine);
+        Assert.Equal(7, binding.Evidence.EndLine);
         var control = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessControlDeclared
             && fact.Properties.GetValueOrDefault("eventDescriptors")?.Contains("on-click:expression:", StringComparison.Ordinal) == true);
         Assert.Equal(control.TargetSymbol, binding.SourceSymbol);
+        var effect = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessUiStateEffectCandidate);
+        Assert.Equal(binding.TargetSymbol, effect.SourceSymbol);
+        Assert.Equal("control-state-assignment", effect.Properties.GetValueOrDefault("effectKind"));
+        Assert.NotNull(effect.Properties.GetValueOrDefault("conditionHash"));
 
         var output = await WriteResultAsync(temp.Path, result);
         var text = await File.ReadAllTextAsync(Path.Combine(output, "facts.ndjson"));
         Assert.DoesNotContain("RunSelectedScenario", text, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenArgsMarker", text, StringComparison.Ordinal);
         Assert.DoesNotContain("StatusFilterMarker", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("txtChoice", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -569,12 +579,12 @@ public sealed class AccessDesignEvidenceCompositionTests
         }
         if (includeExpressionEvent)
         {
-            const string expressionSource = "Private Function RunSelectedScenario() As Boolean\nDoCmd.OpenForm \"TargetForm\", , , \"StatusFilterMarker\", , \"OpenArgsMarker\"\nRunSelectedScenario = True\nEnd Function";
+            const string expressionSource = "Private Function RunSelectedScenario() As Boolean\nIf Me.IsDirty Then\nMe.txtChoice.Visible = False\nEnd If\nDoCmd.OpenForm \"TargetForm\", , , \"StatusFilterMarker\", , \"OpenArgsMarker\"\nRunSelectedScenario = True\nEnd Function";
             var expressionHash = Sha256(Encoding.UTF8.GetBytes(expressionSource));
             records.Add(Record(
-                "vba-module", "expression-form-module", null, "vba-module-export", "exact-lines", expressionHash, 1, 4, "complete",
+                "vba-module", "expression-form-module", null, "vba-module-export", "exact-lines", expressionHash, 1, 7, "complete",
                 Object(("moduleRole", "form"), ("identity", $"Form_{ProtectedForm}"), ("moduleKind", "form"),
-                    ("sourceText", expressionSource), ("sourceSha256", expressionHash), ("lineCount", 4), ("coordinateBasis", "module-relative"))));
+                    ("sourceText", expressionSource), ("sourceSha256", expressionHash), ("lineCount", 7), ("coordinateBasis", "module-relative"))));
         }
         if (includeProjectionIdentityDuplicates)
         {

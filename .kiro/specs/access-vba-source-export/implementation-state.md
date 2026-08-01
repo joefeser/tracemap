@@ -30,6 +30,18 @@ Local validation:
 - full solution build: passed with 0 warnings and 0 errors;
 - private-path guard and `git diff --check`: passed.
 
+Lifecycle follow-up validation:
+
+- focused lifecycle/projector/composition tests passed;
+- all Access-named tests: 173/173 passed;
+- full solution build: passed with 0 warnings and 0 errors;
+- private-path guard and `git diff --check`: passed.
+- `dotnet format --verify-no-changes` was attempted but currently reports
+  pre-existing formatting drift across unrelated projects on the fresh base;
+  this lane does not modify those files.
+
 Deferred: standard/class classification beyond form/report naming, dynamic
-expressions, nonzero argument functions, callbacks, macro code, runtime
-behavior, and representative validation.
+expressions, nonzero argument functions, callbacks, macro code, section-level
+metadata, runtime behavior/order, and representative validation. Event bindings
+resolve to procedure line spans only when the static same-module resolution is
+unique; the source line for a design-property declaration remains unavailable.
