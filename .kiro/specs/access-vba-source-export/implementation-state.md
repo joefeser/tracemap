@@ -47,6 +47,17 @@ test asserts that exact contract while rejecting `OnAfterUpdate`. PowerShell
 syntax parsing and the relevant source-export/projector tests pass locally;
 the corrected head still requires a fresh Windows synthetic smoke run.
 
+The corrected smoke reached the exporter and reported the old combined
+`AccessVbaSourceChanged` classification. Original and disposable-copy hashes
+were previously treated as one gate, so that result does not establish an
+original mutation. The exporter now fails closed only for
+`AccessVbaOriginalSourceChanged`; it records pre/post disposable-copy hashes
+and either `AccessVbaWorkingCopyUnchanged` or `AccessVbaWorkingCopyChanged` in
+the private and normalized manifests. Filesystem read-only mode was not added:
+the observed Access bookkeeping occurs on the disposable copy, and read-only
+opening has not been validated for this export mechanism. A new isolated
+Windows synthetic smoke run is required to verify the explicit outcome.
+
 Deferred: standard/class classification beyond form/report naming, dynamic
 expressions, nonzero argument functions, callbacks, macro code, section-level
 metadata, runtime behavior/order, and representative validation. Event bindings
