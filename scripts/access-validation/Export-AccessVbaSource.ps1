@@ -38,6 +38,8 @@ param(
 
     [switch]$InternalWorker,
 
+    [switch]$IncludeRawSource,
+
     [string]$WorkerProcessMarkerPath = ""
 )
 
@@ -109,6 +111,17 @@ function Test-HashUnchanged([string]$Path, [string]$ExpectedHash) {
         return (Get-Sha256 $Path) -eq $ExpectedHash
     }
     catch { return $false }
+}
+
+function Stop-OwnedAccessProcess([string]$MarkerPath) {
+    if (-not (Test-Path -LiteralPath $MarkerPath)) { return }
+    try {
+        $marker = Get-Content -LiteralPath $MarkerPath -Raw | ConvertFrom-Json
+        $process = Get-Process -Id ([int]$marker.processId) -ErrorAction SilentlyContinue
+        if ($null -ne $process -and $process.StartTime.ToUniversalTime().Ticks -eq [long]$marker.startTimeUtcTicks) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        }
+    } catch { }
 }
 
 function Get-AccessProcess([object]$Application) {
@@ -242,7 +255,7 @@ if (-not $InternalWorker) {
     $completed = Wait-Job -Job $job -Timeout $TimeoutSeconds
     if ($null -eq $completed) {
         Stop-Job -Job $job -ErrorAction SilentlyContinue
-        Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        Stop-OwnedAccessProcess $marker
         Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
         if (Test-Path -LiteralPath $output) { Remove-DirectoryWithRetry $output | Out-Null }
         Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
@@ -260,7 +273,7 @@ if (-not $InternalWorker) {
         Start-Sleep -Milliseconds 250
     }
     if (Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue) {
-        Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        Stop-OwnedAccessProcess $marker
         if (Test-Path -LiteralPath $output) { Remove-DirectoryWithRetry $output | Out-Null }
         Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
         Stop-Export "AccessVbaProcessCleanupFailed"
@@ -422,7 +435,6 @@ try {
             moduleRole = $surfaceKind
             identity = $moduleName
             moduleKind = $surfaceKind
-            sourceText = [string]$codeBehind.Source
             sourceSha256 = $sourceHash
             lineCount = $lineCount
             coordinateBasis = "module-relative"
@@ -430,6 +442,7 @@ try {
             sourceDocumentStartLine = [int]$codeBehind.StartLine
             extractionMechanism = "save-as-text-code-behind"
         })
+        if ($IncludeRawSource) { $records[-1].payload.sourceText = [string]$codeBehind.Source }
         $codeBehindOrdinal++
         $vbaModuleCount++
     }
@@ -467,11 +480,11 @@ try {
                 moduleRole = $moduleKind
                 identity = $name
                 moduleKind = $moduleKind
-                sourceText = $source
                 sourceSha256 = $hash
                 lineCount = $lineCount
                 coordinateBasis = "module-relative"
             })
+            if ($IncludeRawSource) { $records[-1].payload.sourceText = $source }
             $vbaModuleCount++
         }
         finally { Close-ComObject $module }

@@ -276,6 +276,7 @@ public static class AccessCopyCloneCandidateReporter
                     .Distinct(StringComparer.Ordinal)
                     .Where(safeFactsById.ContainsKey)
                     .Select(factId => safeFactsById[factId]))
+                .Concat(actionFacts)
                 .Append(fact)
                 .GroupBy(item => item.FactId, StringComparer.Ordinal)
                 .Select(group => Evidence(group.First()))

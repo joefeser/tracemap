@@ -737,7 +737,7 @@ public sealed class AccessComReader
                             kind,
                             known,
                             fieldLookups,
-                            parameterRows.ToDictionary(parameter => parameter.Identity.StableKey, parameter => parameter.Identity));
+                            parameterRows.Select(parameter => parameter.Ordinal).ToArray());
                         if (actionLineage.Coverage == "partial")
                             gaps.Add(new("AccessQueryActionLineagePartial", "query", identity.StableKey, RuleIds.LegacyAccessQuery));
                     }
