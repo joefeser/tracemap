@@ -514,16 +514,6 @@ try {
         repository = [ordered]@{ identityHash = $RepositoryIdentityHash; commitSha = $CommitSha }
         baseScan = [ordered]@{ manifestSha256 = $BaseScanManifestSha256; databaseIdentityHash = $DatabaseIdentityHash }
         sourceCopy = [ordered]@{ sha256 = $copyBeforeWorker; binding = "hash-identical" }
-        suppliedCopy = [ordered]@{
-            preExportSha256 = $copyBeforeWorker
-            postExportSha256 = $copyAfterWorker
-            mutationOutcome = $suppliedCopyMutationOutcome
-        }
-        workingCopy = [ordered]@{
-            preExportSha256 = $workingCopyBeforeWorker
-            postExportSha256 = $workingCopyAfterWorker
-            mutationOutcome = $workingCopyMutationOutcome
-        }
         records = [ordered]@{ sha256 = (Get-BytesSha256 $recordBytes); count = $ordered.Count; countsByKind = $counts }
         capabilities = [ordered]@{ coordinates = "mixed"; catalogCompleteness = "declared-partial"; identityDisclosure = "hash-only" }
     }

@@ -37,6 +37,12 @@ public sealed class AccessVbaSourceExportTests
         Assert.Contains("AccessVbaExtractionCanaryFired", script, StringComparison.Ordinal);
         Assert.Contains("workingCopyPreExportSha256", script, StringComparison.Ordinal);
         Assert.Contains("workingCopyPostExportSha256", script, StringComparison.Ordinal);
+        var normalizedManifestStart = script.IndexOf("$manifest = [ordered]@{", StringComparison.Ordinal);
+        var privateManifestStart = script.IndexOf("$rawManifest = [ordered]@{", StringComparison.Ordinal);
+        Assert.True(normalizedManifestStart >= 0 && privateManifestStart > normalizedManifestStart);
+        var normalizedManifest = script[normalizedManifestStart..privateManifestStart];
+        Assert.DoesNotContain("suppliedCopy =", normalizedManifest, StringComparison.Ordinal);
+        Assert.DoesNotContain("workingCopy =", normalizedManifest, StringComparison.Ordinal);
         Assert.DoesNotContain("AccessVbaSourceChanged", script, StringComparison.Ordinal);
         Assert.Contains("AccessVbaCanaryFired", script, StringComparison.Ordinal);
         Assert.Contains("Wait-Job -Job $job -Timeout $TimeoutSeconds", script, StringComparison.Ordinal);
