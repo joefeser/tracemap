@@ -95,7 +95,7 @@ public static class AccessDesignEvidenceReader
             ["vba-module"] = new(
                 ["moduleRole", "identity", "moduleKind", "sourceText", "sourceSha256", "lineCount", "coordinateBasis",
                     "sourceDocumentSha256", "sourceDocumentStartLine", "extractionMechanism"],
-                ["moduleRole", "identity", "moduleKind", "sourceText", "sourceSha256", "lineCount", "coordinateBasis"],
+                ["moduleRole", "identity", "moduleKind", "sourceSha256", "lineCount", "coordinateBasis"],
                 ["moduleRole", "identity", "moduleKind"]),
             ["event-reference"] = new(
                 ["eventRole", "value", "ordinal"],
@@ -551,8 +551,14 @@ public static class AccessDesignEvidenceReader
         }
         if (kind == "vba-module")
         {
-            ValidateProtectedText(payload, "sourceText", "sourceSha256", "lineCount",
-                limits.MaxVbaModuleTextLength, limits.MaxVbaModuleLines);
+            if (payload.TryGetProperty("sourceText", out _))
+                ValidateProtectedText(payload, "sourceText", "sourceSha256", "lineCount",
+                    limits.MaxVbaModuleTextLength, limits.MaxVbaModuleLines);
+            else
+            {
+                RequireSha256(payload, "sourceSha256", "AccessDesignInputFieldRejected");
+                RequireNonNegativeInt(payload, "lineCount", "AccessDesignInputRecordMalformed");
+            }
             RequireClosedString(payload, "moduleKind", ["standard", "class", "form", "report"], "AccessDesignInputRecordMalformed");
             RequireClosedString(payload, "coordinateBasis", ["module-relative"], "AccessDesignInputRecordMalformed");
             if (payload.TryGetProperty("sourceDocumentSha256", out var sourceDocumentHash)
@@ -629,7 +635,7 @@ public static class AccessDesignEvidenceReader
                     "AccessVbaCodeBehindProcedureUnavailable"],
                 "AccessDesignInputRecordMalformed");
             RequireClosedString(payload, "affectedScope",
-                ["database", "catalog", "ui", "vba", "macro", "form", "report"],
+                ["database", "catalog", "ui", "ui-surface", "vba", "macro", "form", "report"],
                 "AccessDesignInputRecordMalformed");
             RequireClosedString(payload, "coverageCategory",
                 ["source-declared-partial", "source-unavailable", "unsupported", "limit-reached"],

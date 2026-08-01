@@ -730,7 +730,7 @@ public sealed class AccessComReader
 
                     AccessQueryActionProjection? actionLineage = null;
                     AccessQueryCrosstabProjection? crosstabLineage = null;
-                    if (kind is "append" or "update" or "delete")
+                    if (kind is "append" or "make-table" or "update" or "delete")
                     {
                         actionLineage = AccessQueryProjector.ProjectActionLineage(
                             sql,

@@ -168,6 +168,37 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Query_projector_preserves_unresolved_append_target_ordinals()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SourceTable"] = [("table-source", "table")],
+            ["TargetTable"] = [("table-target", "table")]
+        };
+        var fields = new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+        {
+            ["table-source"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SourceA"] = [new(new(null, "source-a", "field-source-a"), 0, "long", 4, false)],
+                ["SourceB"] = [new(new(null, "source-b", "field-source-b"), 1, "long", 4, false)]
+            },
+            ["table-target"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["KnownField"] = [new(new(null, "known", "field-known"), 0, "long", 4, false)]
+            }
+        };
+
+        var projected = AccessQueryProjector.ProjectActionLineage(
+            "INSERT INTO TargetTable (UnknownField, KnownField) SELECT SourceA, SourceB FROM SourceTable;",
+            "append", known, fields);
+
+        Assert.Equal(["", "field-known"], projected.TargetFieldStableKeys);
+        Assert.Equal("partial", projected.FieldMappings[0].Coverage);
+        Assert.Equal("field-known", projected.FieldMappings[1].TargetFieldStableKey);
+        Assert.Equal(["field-source-b"], projected.FieldMappings[1].SourceFieldStableKeys);
+    }
+
+    [Fact]
     public void Query_projector_projects_bounded_crosstab_shape_and_keeps_dynamic_pivots_partial()
     {
         var field = new AccessSafeIdentity(null, "row-name", "field-row");
@@ -192,6 +223,7 @@ public sealed class AccessFoundationTests
 
         Assert.Equal(["field-row"], staticShape.RowHeadingFieldStableKeys);
         Assert.Equal(2, staticShape.StaticColumnHashes.Count);
+        Assert.NotEqual(staticShape.AggregateExpressionHash, staticShape.ValueExpressionHash);
         Assert.Equal("complete", staticShape.Coverage);
         Assert.Empty(dynamicShape.StaticColumnHashes);
         Assert.Equal("partial", dynamicShape.Coverage);
