@@ -210,6 +210,55 @@ public sealed class AccessVbaProjectionTests
     }
 
     [Fact]
+    public void Projector_collects_active_lifecycle_state_effects_and_ignores_commented_out_statements()
+    {
+        const string source = """
+            Private Sub Form_Open(Cancel As Integer)
+                DoCmd.OpenForm "frmTarget"
+            End Sub
+
+            Private Sub Form_Current()
+                If Me.IsArchived Then
+                    Me.txtStatus.Visible = False
+                    Me.txtStatus.Enabled = False
+                    Forms("frmTarget").Visible = True
+                End If
+                Me.Requery
+                ' Me.txtCommented.Locked = True
+            End Sub
+
+            Private Sub lstSelection_AfterUpdate()
+                Me.txtStatus.Caption = "Changed"
+                Call Helper
+            End Sub
+
+            Private Sub Helper()
+            End Sub
+            """;
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('c', 40), "fixture.accdb", "hash");
+        var result = AccessVbaProjector.Project(seed,
+            [new("Form_frmHost", "form", source)],
+            [
+                new("form-owner", "on-open", "Form_frmHost", "Form_Open"),
+                new("form-owner", "on-current", "Form_frmHost", "Form_Current"),
+                new("control-owner", "after-update", "Form_frmHost", "lstSelection_AfterUpdate")
+            ]);
+
+        var procedures = result.Modules.Single().Procedures;
+        Assert.Equal(3, result.EventBindings.Count);
+        Assert.All(result.EventBindings, binding => Assert.Equal("complete", binding.Coverage));
+        var current = procedures.Single(procedure => procedure.Identity.DisplayName == "Form_Current");
+        var effects = current.Effects!;
+        Assert.Equal(2, effects.Count(effect => effect.EffectKind == "control-state-assignment"));
+        Assert.Contains(effects, effect => effect.EffectKind == "forms-reference" && effect.TargetIdentity is not null);
+        Assert.Contains(effects, effect => effect.EffectKind == "surface-requery");
+        Assert.All(effects.Where(effect => effect.EffectKind != "surface-requery"), effect => Assert.NotNull(effect.ConditionHash));
+        Assert.DoesNotContain(effects, effect => effect.TargetIdentity?.DisplayName == "txtCommented");
+        Assert.Contains(procedures.Single(procedure => procedure.Identity.DisplayName == "lstSelection_AfterUpdate").Calls,
+            call => call.CallKind == "local-procedure-call");
+    }
+
+    [Fact]
     public void Projector_scopes_missing_procedure_terminator_gaps_to_distinct_procedures()
     {
         const string source = """

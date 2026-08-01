@@ -269,13 +269,20 @@ internal static partial class AccessUiTextParser
     private static readonly Dictionary<string, string> EventRoles = new(StringComparer.Ordinal)
     {
         ["AfterUpdate"] = "after-update",
+        ["OnActivate"] = "on-activate",
         ["BeforeUpdate"] = "before-update",
         ["OnClick"] = "on-click",
+        ["OnClose"] = "on-close",
         ["OnCurrent"] = "on-current",
+        ["OnDeactivate"] = "on-deactivate",
         ["OnDblClick"] = "on-dbl-click",
+        ["OnError"] = "on-error",
         ["OnLoad"] = "on-load",
         ["OnNoData"] = "on-no-data",
-        ["OnOpen"] = "on-open"
+        ["OnOpen"] = "on-open",
+        ["OnResize"] = "on-resize",
+        ["OnTimer"] = "on-timer",
+        ["OnUnload"] = "on-unload"
     };
 
     private static readonly IReadOnlyDictionary<string, int> ControlTypes =

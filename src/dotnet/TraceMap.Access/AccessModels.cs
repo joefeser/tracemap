@@ -187,7 +187,21 @@ public sealed record AccessVbaProcedureProjection(
     string ProcedureKind,
     int StartLine,
     int EndLine,
-    IReadOnlyList<AccessVbaCallProjection> Calls);
+    IReadOnlyList<AccessVbaCallProjection> Calls,
+    IReadOnlyList<AccessVbaEffectProjection>? Effects = null);
+
+public sealed record AccessVbaEffectProjection(
+    AccessSafeIdentity Identity,
+    string ProcedureStableKey,
+    string EffectKind,
+    int StartLine,
+    int EndLine,
+    AccessSafeIdentity? TargetIdentity,
+    string? ExpressionHash,
+    int ExpressionLength,
+    string? ConditionHash,
+    int ConditionLength,
+    string Coverage);
 
 public sealed record AccessVbaModuleProjection(
     AccessSafeIdentity Identity,
@@ -202,7 +216,13 @@ public sealed record AccessEventBindingProjection(
     string EventRole,
     string ModuleStableKey,
     string? ProcedureStableKey,
-    string Coverage);
+    string Coverage,
+    string OwnerKind = "unknown",
+    string BindingKind = "event-procedure",
+    string? EventExpressionHash = null,
+    int EventExpressionLength = 0,
+    int ProcedureStartLine = 0,
+    int ProcedureEndLine = 0);
 
 public sealed record AccessMacroProjection(
     AccessSafeIdentity Identity,

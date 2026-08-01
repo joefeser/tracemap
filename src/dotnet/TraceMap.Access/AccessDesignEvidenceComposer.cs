@@ -148,6 +148,7 @@ public static class AccessDesignEvidenceComposer
             FactTypes.AccessVbaProcedureDeclared,
             FactTypes.AccessEventBindingCandidate,
             FactTypes.AccessNavigationCandidate,
+            FactTypes.AccessUiStateEffectCandidate,
             FactTypes.AccessMacroDeclared,
             FactTypes.AnalysisGap
         };
@@ -480,48 +481,25 @@ public static class AccessDesignEvidenceComposer
                 raw.Events,
                 identity.StableKey,
                 raw.SurfaceKind,
+                raw.SurfaceKind,
                 raw.Name,
                 raw.SurfaceKind == "report" ? "Report" : "Form",
-                eventProcedureReferences);
+                eventProcedureReferences,
+                normalizationGaps);
             foreach (var rawControl in raw.Controls)
             {
                 var control = projectedSurface.Controls.Single(item => item.Ordinal == rawControl.Ordinal);
                 AddStaticEventReferences(
                     rawControl.Events,
                     control.Identity.StableKey,
+                    "control",
                     raw.SurfaceKind,
                     raw.Name,
                     rawControl.Name,
-                    eventProcedureReferences);
+                    eventProcedureReferences,
+                    normalizationGaps);
             }
             AddUiChildSupport(projectedSurface, support, sources);
-        }
-
-        foreach (var eventRecord in bundle.Records.Where(record =>
-                     record.Kind == "event-reference"
-                     && string.Equals(String(record.Payload, "value").Trim(), "[Event Procedure]", StringComparison.OrdinalIgnoreCase)))
-        {
-            if (eventRecord.ParentCanonicalRecordId is null
-                || !stableKeyByCanonicalRecordId.TryGetValue(eventRecord.ParentCanonicalRecordId, out var ownerStableKey))
-                continue;
-            var parent = bundle.Records.Single(record =>
-                record.CanonicalRecordId == eventRecord.ParentCanonicalRecordId);
-            var surface = parent.Kind == "ui-surface"
-                ? parent
-                : bundle.Records.Single(record =>
-                    record.CanonicalRecordId == parent.ParentCanonicalRecordId);
-            var surfaceKind = String(surface.Payload, "surfaceRole");
-            var surfaceName = String(surface.Payload, "identity");
-            var eventSuffix = EventProcedureSuffix(String(eventRecord.Payload, "eventRole"));
-            var procedureOwner = parent.Kind == "ui-control"
-                ? String(parent.Payload, "identity")
-                : surfaceKind == "report" ? "Report" : "Form";
-            eventProcedureReferences.Add(new(
-                ownerStableKey,
-                String(eventRecord.Payload, "eventRole"),
-                $"{(surfaceKind == "report" ? "Report" : "Form")}_{surfaceName}",
-                $"{procedureOwner}_{eventSuffix}"));
-            SetSupport(support, ownerStableKey, [eventRecord]);
         }
 
         var rawModules = bundle.Records.Where(record => record.Kind == "vba-module")
@@ -707,7 +685,10 @@ public static class AccessDesignEvidenceComposer
         var start = record.Source.StartLine!.Value;
         var end = record.Source.EndLine!.Value;
         if (record.Kind == "vba-module"
-            && fact.FactType is FactTypes.AccessVbaProcedureDeclared or FactTypes.AccessNavigationCandidate)
+            && fact.FactType is FactTypes.AccessVbaProcedureDeclared
+                or FactTypes.AccessEventBindingCandidate
+                or FactTypes.AccessNavigationCandidate
+                or FactTypes.AccessUiStateEffectCandidate)
         {
             start += Math.Max(0, fact.Evidence.StartLine - 1);
             end = start + Math.Max(0, fact.Evidence.EndLine - fact.Evidence.StartLine);
@@ -998,21 +979,38 @@ public static class AccessDesignEvidenceComposer
     private static void AddStaticEventReferences(
         IEnumerable<AccessRawUiEvent> events,
         string ownerStableKey,
+        string ownerKind,
         string surfaceKind,
         string surfaceName,
         string procedureOwner,
-        List<AccessRawEventProcedureReference> references)
+        List<AccessRawEventProcedureReference> references,
+        List<AccessGapProjection> gaps)
     {
         var moduleName = $"{(surfaceKind == "report" ? "Report" : "Form")}_{surfaceName}";
         foreach (var entry in events)
         {
             var value = entry.Value?.Trim() ?? string.Empty;
-            var procedureName = value.Equals("[Event Procedure]", StringComparison.OrdinalIgnoreCase)
+            var bindingKind = value.Equals("[Event Procedure]", StringComparison.OrdinalIgnoreCase)
+                ? "event-procedure"
+                : "expression-function";
+            var procedureName = bindingKind == "event-procedure"
                 ? $"{procedureOwner}_{EventProcedureSuffix(entry.Role)}"
                 : StaticEventExpressionProcedure(value);
             if (procedureName is null)
+            {
+                if (value.Equals("[Embedded Macro]", StringComparison.OrdinalIgnoreCase))
+                    gaps.Add(new("AccessEventEmbeddedMacroUnsupported", "event-binding", ownerStableKey, RuleIds.LegacyAccessEventBinding));
+                else if (value.StartsWith("=", StringComparison.Ordinal))
+                    gaps.Add(new("AccessEventExpressionDynamic", "event-binding", ownerStableKey, RuleIds.LegacyAccessEventBinding));
+                else if (value.Length > 0)
+                    gaps.Add(new("AccessEventHandlerUnsupported", "event-binding", ownerStableKey, RuleIds.LegacyAccessEventBinding));
                 continue;
-            references.Add(new(ownerStableKey, entry.Role, moduleName, procedureName));
+            }
+            var expressionHash = bindingKind == "expression-function"
+                ? AccessSafeValues.RoleHash($"access-event-{entry.Role}", value)
+                : null;
+            references.Add(new(ownerStableKey, entry.Role, moduleName, procedureName,
+                ownerKind, bindingKind, expressionHash, expressionHash is null ? 0 : value.Length));
         }
     }
 
@@ -1026,13 +1024,20 @@ public static class AccessDesignEvidenceComposer
     private static string EventProcedureSuffix(string eventRole) => eventRole switch
     {
         "after-update" => "AfterUpdate",
+        "on-activate" => "Activate",
         "before-update" => "BeforeUpdate",
         "on-click" => "Click",
+        "on-close" => "Close",
         "on-current" => "Current",
+        "on-deactivate" => "Deactivate",
         "on-dbl-click" => "DblClick",
+        "on-error" => "Error",
         "on-load" => "Load",
         "on-no-data" => "NoData",
         "on-open" => "Open",
+        "on-resize" => "Resize",
+        "on-timer" => "Timer",
+        "on-unload" => "Unload",
         _ => throw new AccessScanException("AccessDesignInputRecordMalformed")
     };
 
