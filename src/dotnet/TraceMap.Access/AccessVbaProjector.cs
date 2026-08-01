@@ -741,7 +741,7 @@ internal static partial class AccessVbaProjector
     [GeneratedRegex(@"\bMe\s*\.\s*Requery\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex MeRequeryPattern();
 
-    [GeneratedRegex(@"\bDoCmd\s*\.\s*RunCommand\s*(?:\(\s*)?\(?\s*acCmdSaveRecord\s*\)?\s*\)?", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\bDoCmd\s*\.\s*RunCommand\s*(?:\(\s*)?\bacCmdSaveRecord\b\s*\)?\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SaveCurrentRecordPattern();
 
     [GeneratedRegex(@"\bDoCmd\s*\.\s*RunCommand\b(?:\s*\(|\s+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
