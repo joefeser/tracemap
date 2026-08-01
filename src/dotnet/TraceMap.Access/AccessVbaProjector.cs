@@ -328,7 +328,7 @@ internal static partial class AccessVbaProjector
                     if (coverage != "complete")
                         gaps.Add(new("AccessVbaRowSourceProjectionPartial", "vba-effect", target.StableKey, RuleIds.LegacyAccessVba));
                     if (rowSourceContexts is not null
-                        && rowSourceContexts.TryGetValue(moduleName + "|" + AccessSafeValues.RoleHash("access-control-name", targetName), out var context))
+                        && TryGetRowSourceContext(rowSourceContexts, moduleName, targetName, out var context))
                     {
                         var selected = context.BoundColumn is > 0 && context.BoundColumn.Value <= projection.Outputs.Count
                             ? projection.Outputs[context.BoundColumn.Value - 1].SourceFieldStableKeys
@@ -377,6 +377,22 @@ internal static partial class AccessVbaProjector
             }
         }
         return effects.OrderBy(item => item.StartLine).ThenBy(item => item.EffectKind, StringComparer.Ordinal).ToArray();
+    }
+
+    private static bool TryGetRowSourceContext(
+        IReadOnlyDictionary<string, AccessRowSourceBindingProjection> contexts,
+        string moduleName,
+        string controlName,
+        out AccessRowSourceBindingProjection context)
+    {
+        var controlHash = AccessSafeValues.RoleHash("access-control-name", controlName);
+        var names = new[] { moduleName,
+            moduleName.StartsWith("Form_", StringComparison.OrdinalIgnoreCase) || moduleName.StartsWith("Report_", StringComparison.OrdinalIgnoreCase)
+                ? moduleName[5..] : moduleName };
+        foreach (var name in names)
+            if (contexts.TryGetValue(name + "|" + controlHash, out context!)) return true;
+        context = null!;
+        return false;
     }
 
     private static AccessVbaEffectProjection NewEffect(
