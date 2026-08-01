@@ -66,6 +66,13 @@ pre/post hashes and outcome are recorded, and the inner scratch is removed.
 Visible UI, generation canary, and extraction canary now have distinct typed
 classifications. A fresh synthetic Windows smoke run is required at this head.
 
+That fresh smoke reached metadata-record handling and stopped before source
+projection because the isolated VM has Windows PowerShell 5.1, which lacks the
+hashtable conversion switch used by the exporter. The exporter now uses ordered
+`PSCustomObject` property access and property-based sorting/grouping instead.
+This preserves record order and schema while requiring no additional runtime.
+A fresh synthetic Windows smoke run is required at the corrected head.
+
 Deferred: standard/class classification beyond form/report naming, dynamic
 expressions, nonzero argument functions, callbacks, macro code, section-level
 metadata, runtime behavior/order, and representative validation. Event bindings

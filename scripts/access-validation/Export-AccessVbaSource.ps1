@@ -314,20 +314,22 @@ try {
     $designOrdinal = 0
     foreach ($line in @(Get-Content -LiteralPath $metadataBundle.RecordsPath)) {
         if ([string]::IsNullOrWhiteSpace($line)) { Stop-Export "AccessVbaMetadataBundleInvalid" }
-        $record = $line | ConvertFrom-Json -AsHashtable
+        # Windows PowerShell 5.1 lacks the hashtable conversion switch.
+        # PSCustomObject preserves property access and input property order here.
+        $record = $line | ConvertFrom-Json
         $records.Add($record)
-        if ($record["kind"] -eq "ui-design-document") {
-            $designText = [string]$record["payload"]["designText"]
-            $designHash = [string]$record["payload"]["documentSha256"]
+        if ($record.kind -eq "ui-design-document") {
+            $designText = [string]$record.payload.designText
+            $designHash = [string]$record.payload.documentSha256
             $designBytes = $Utf8NoBom.GetBytes($designText)
             if ((Get-BytesSha256 $designBytes) -ne $designHash) { Stop-Export "AccessVbaMetadataBundleHashMismatch" }
             $artifactName = "design-$($designOrdinal.ToString('D6')).txt"
             [IO.File]::WriteAllBytes((Join-Path $privateRoot $artifactName), $designBytes)
             $privateArtifacts.Add([ordered]@{
                 artifact = $artifactName
-                documentRole = [string]$record["payload"]["documentRole"]
+                documentRole = [string]$record.payload.documentRole
                 sha256 = $designHash
-                lineCount = [int]$record["payload"]["lineCount"]
+                lineCount = [int]$record.payload.lineCount
             })
             $designOrdinal++
         }
@@ -396,12 +398,12 @@ try {
     }
     if (-not (Remove-DirectoryWithRetry $innerScratch)) { Stop-Export "AccessVbaInnerScratchCleanupFailed" }
 
-    $ordered = @($records | Sort-Object { $_["kind"] }, { $_["recordId"] })
+    $ordered = @($records | Sort-Object { $_.kind }, { $_.recordId })
     $lines = @($ordered | ForEach-Object { $_ | ConvertTo-Json -Compress -Depth 20 })
     $text = if ($lines.Count -eq 0) { "" } else { ($lines -join "`n") + "`n" }
     $recordBytes = $Utf8NoBom.GetBytes($text)
     $counts = [ordered]@{}
-    foreach ($group in $ordered | Group-Object { $_["kind"] } | Sort-Object Name) { $counts[$group.Name] = $group.Count }
+    foreach ($group in $ordered | Group-Object { $_.kind } | Sort-Object Name) { $counts[$group.Name] = $group.Count }
     New-Item -ItemType Directory -Path $normalizedRoot -Force | Out-Null
     [IO.File]::WriteAllBytes((Join-Path $normalizedRoot "access-design-records.ndjson"), $recordBytes)
     $manifest = [ordered]@{
