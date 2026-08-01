@@ -93,6 +93,14 @@ assertions are now typed by mechanism, module, design document, code-behind,
 form-code-behind, and lifecycle-procedure failures. A fresh synthetic Windows
 smoke run is required at the corrected head.
 
+The first code-behind smoke run found multiple synthetic form modules: the
+startup-canary form appears before the representative lifecycle form. The smoke
+now selects exactly one representative form by its synthetic-only
+`cmdVbaFlow_Click` declaration, returning typed missing/ambiguous failures
+instead of selecting the first form. All lifecycle procedure assertions remain
+on that selected module. A fresh synthetic Windows smoke run is required at the
+corrected head.
+
 Deferred: standard/class classification beyond form/report naming, dynamic
 expressions, nonzero argument functions, callbacks, macro code, section-level
 metadata, runtime behavior/order, and representative validation. Event bindings

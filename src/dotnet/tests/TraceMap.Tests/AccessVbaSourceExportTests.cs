@@ -88,6 +88,9 @@ public sealed class AccessVbaSourceExportTests
         Assert.Contains("AccessVbaOutputVbaModuleMissing", smoke, StringComparison.Ordinal);
         Assert.Contains("AccessVbaOutputDesignDocumentMissing", smoke, StringComparison.Ordinal);
         Assert.Contains("AccessVbaOutputCodeBehindModuleMissing", smoke, StringComparison.Ordinal);
+        Assert.Contains("AccessVbaOutputRepresentativeCodeBehindMissing", smoke, StringComparison.Ordinal);
+        Assert.Contains("AccessVbaOutputRepresentativeCodeBehindAmbiguous", smoke, StringComparison.Ordinal);
+        Assert.Contains("cmdVbaFlow_Click", smoke, StringComparison.Ordinal);
         Assert.Contains("AccessVbaOutputLifecycleProcedureMissing", smoke, StringComparison.Ordinal);
         Assert.Contains("RunSyntheticScenario", smoke, StringComparison.Ordinal);
         Assert.Contains("suppliedCopyOutcome=$expectedSuppliedCopyOutcome", smoke, StringComparison.Ordinal);

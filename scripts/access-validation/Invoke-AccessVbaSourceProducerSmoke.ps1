@@ -77,8 +77,13 @@ try {
     if ($rawManifest.formReportDesignFileCount -le 0) { throw "AccessVbaOutputDesignDocumentMissing" }
     $codeBehindModules = @($vbaModules | Where-Object { $_.payload.extractionMechanism -eq "save-as-text-code-behind" })
     if ($codeBehindModules.Count -le 0) { throw "AccessVbaOutputCodeBehindModuleMissing" }
-    $formCodeBehind = @($codeBehindModules | Where-Object { $_.payload.moduleKind -eq "form" }) | Select-Object -First 1
-    if ($null -eq $formCodeBehind) { throw "AccessVbaOutputFormCodeBehindMissing" }
+    $representativeFormCodeBehind = @($codeBehindModules | Where-Object {
+        $_.payload.moduleKind -eq "form" -and
+        [string]$_.payload.sourceText -match "(?im)^\s*Private\s+Sub\s+cmdVbaFlow_Click\b"
+    })
+    if ($representativeFormCodeBehind.Count -eq 0) { throw "AccessVbaOutputRepresentativeCodeBehindMissing" }
+    if ($representativeFormCodeBehind.Count -ne 1) { throw "AccessVbaOutputRepresentativeCodeBehindAmbiguous" }
+    $formCodeBehind = $representativeFormCodeBehind[0]
     foreach ($procedureName in @("cmdVbaFlow_Click", "Form_Open", "Form_Load", "Form_Current", "lstLifecycle_AfterUpdate", "RunSyntheticScenario")) {
         if ([string]$formCodeBehind.payload.sourceText -notmatch ("(?im)^\s*(?:Public|Private)\s+(?:Sub|Function)\s+" + [regex]::Escape($procedureName) + "\b")) {
             throw "AccessVbaOutputLifecycleProcedureMissing"
