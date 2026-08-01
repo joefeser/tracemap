@@ -220,11 +220,15 @@ public sealed class AccessFoundationTests
         var dynamicShape = AccessQueryProjector.ProjectCrosstabLineage(
             "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month;",
             known, fields);
+        var alternateStaticShape = AccessQueryProjector.ProjectCrosstabLineage(
+            "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN (\"Q1\",2025);",
+            known, fields);
 
         Assert.Equal(["field-row"], staticShape.RowHeadingFieldStableKeys);
         Assert.Equal(2, staticShape.StaticColumnHashes.Count);
         Assert.NotEqual(staticShape.AggregateExpressionHash, staticShape.ValueExpressionHash);
         Assert.Equal("complete", staticShape.Coverage);
+        Assert.Equal(2, alternateStaticShape.StaticColumnHashes.Count);
         Assert.Empty(dynamicShape.StaticColumnHashes);
         Assert.Equal("partial", dynamicShape.Coverage);
     }
@@ -247,12 +251,16 @@ public sealed class AccessFoundationTests
 
         var update = AccessQueryProjector.ProjectActionLineage(
             "UPDATE TargetTable SET Status = 'Ready' WHERE Id = [pId];", "update", known, fields);
+        var unresolvedUpdate = AccessQueryProjector.ProjectActionLineage(
+            "UPDATE TargetTable SET Status = MissingField WHERE Id = [pId];", "update", known, fields);
         var delete = AccessQueryProjector.ProjectActionLineage(
             "DELETE FROM TargetTable WHERE Id = [pId];", "delete", known, fields);
 
         Assert.Equal("table-target", update.TargetStableKey);
         Assert.Equal("field-status", Assert.Single(update.FieldMappings).TargetFieldStableKey);
         Assert.NotNull(update.PredicateExpressionHash);
+        Assert.Equal("partial", unresolvedUpdate.Coverage);
+        Assert.Equal("partial", Assert.Single(unresolvedUpdate.FieldMappings).Coverage);
         Assert.Equal("table-target", delete.TargetStableKey);
         Assert.NotNull(delete.PredicateExpressionHash);
     }

@@ -4,7 +4,7 @@ using TraceMap.Core;
 
 namespace TraceMap.Access;
 
-internal sealed record AccessRawVbaModule(string Name, string ModuleKind, string Source);
+internal sealed record AccessRawVbaModule(string Name, string ModuleKind, string? Source, string? SourceHash = null, int? DeclaredLineCount = null);
 
 internal sealed record AccessRawEventProcedureReference(
     string OwnerStableKey,
@@ -50,6 +50,19 @@ internal static partial class AccessVbaProjector
                      .ThenBy(item => AccessSafeValues.RoleHash("access-vba-module-sort", item.Name), StringComparer.Ordinal)
                      .Take(limits.MaxObjectsPerCollection))
         {
+            if (raw.Source is null)
+            {
+                var unavailableIdentity = AccessSafeValues.Identity(databaseIdentitySeed, "vba-module", raw.Name, disclosurePolicy: disclosurePolicy);
+                gaps.Add(new("AccessVbaModuleSourceUnavailable", "vba-module", unavailableIdentity.StableKey, RuleIds.LegacyAccessVba));
+                modules.Add(new(raw.Name, new(
+                    unavailableIdentity,
+                    NormalizeModuleKind(raw.ModuleKind),
+                    raw.SourceHash ?? AccessSafeValues.RoleHash("access-vba-module-source", string.Empty),
+                    raw.DeclaredLineCount ?? 0,
+                    [],
+                    "partial"), []));
+                continue;
+            }
             if (raw.Source.Length > limits.MaxVbaModuleTextLength)
             {
                 gaps.Add(new("AccessVbaModuleTextLimitReached", "vba-module", null, RuleIds.LegacyAccessVba));
@@ -79,7 +92,7 @@ internal static partial class AccessVbaProjector
                 new(
                     moduleIdentity,
                     NormalizeModuleKind(raw.ModuleKind),
-                    AccessSafeValues.RoleHash("access-vba-module-source", raw.Source),
+                    raw.SourceHash ?? AccessSafeValues.RoleHash("access-vba-module-source", raw.Source),
                     lines.Length,
                     procedures,
                     procedures.Any(procedure => procedure.Calls.Any(call => call.Coverage != "complete"))

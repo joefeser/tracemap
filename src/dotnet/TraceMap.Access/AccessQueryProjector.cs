@@ -58,7 +58,7 @@ public static partial class AccessQueryProjector
                 if (targetField is { Length: 0 }) targetField = null;
                 var expression = equals < 0 ? null : assignment[(equals + 1)..].Trim();
                 var sources = expression is null ? [] : ResolveExpressionFields(expression, knownObjects, fieldLookups);
-                var mapped = targetField is not null && expression is not null ? "complete" : "partial";
+                var mapped = targetField is not null && expression is not null && sources.Count > 0 ? "complete" : "partial";
                 if (mapped == "partial") coverage = "partial";
                 mappings.Add(new(index, expression is null ? null : AccessSafeValues.RoleHash("access-query-expression", expression), sources, targetField, mapped));
             }
@@ -255,9 +255,23 @@ public static partial class AccessQueryProjector
         var original = sql[(match.Index + inMatch.Index)..];
         var originalValues = Regex.Match(original, @"(?is)\bin\s*\((?<values>[^)]*)\)");
         if (!originalValues.Success) return [];
-        return Regex.Matches(originalValues.Groups["values"].Value, @"'((?:''|[^'])*)'")
-            .Select(item => AccessSafeValues.RoleHash("access-query-pivot-column", item.Groups[1].Value.Replace("''", "'")))
-            .OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        var values = SplitSelectItems(originalValues.Groups["values"].Value)
+            .Select(value => UnquotePivotLiteral(value.Trim()))
+            .Where(value => value is not null)
+            .Select(value => AccessSafeValues.RoleHash("access-query-pivot-column", value!))
+            .ToArray();
+        return values.Length == 0 ? [] : values.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+    }
+
+    private static string? UnquotePivotLiteral(string value)
+    {
+        if (value.Length >= 2 && value[0] == '\'' && value[^1] == '\'')
+            return value[1..^1].Replace("''", "'", StringComparison.Ordinal);
+        if (value.Length >= 2 && value[0] == '"' && value[^1] == '"')
+            return value[1..^1].Replace("\"\"", "\"", StringComparison.Ordinal);
+        return Regex.IsMatch(value, @"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$", RegexOptions.CultureInvariant)
+            ? value
+            : null;
     }
 
     public static (IReadOnlyList<AccessQueryDependencyProjection> Dependencies, string Coverage, bool UnsupportedShape) ProjectDependencies(

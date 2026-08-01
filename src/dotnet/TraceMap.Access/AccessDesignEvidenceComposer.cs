@@ -508,7 +508,11 @@ public static class AccessDesignEvidenceComposer
             .Select(record => new AccessRawVbaModule(
                 String(record.Payload, "identity"),
                 String(record.Payload, "moduleKind"),
-                OptionalString(record.Payload, "sourceText") ?? string.Empty))
+                OptionalString(record.Payload, "sourceText"),
+                OptionalString(record.Payload, "sourceSha256"),
+                record.Payload.TryGetProperty("lineCount", out var lineCount) && lineCount.ValueKind == JsonValueKind.Number
+                    ? lineCount.GetInt32()
+                    : null))
             .ToArray();
         var vba = AccessVbaProjector.Project(
             databaseSeed,

@@ -66,6 +66,20 @@ public sealed class AccessVbaProjectionTests
     }
 
     [Fact]
+    public void Projector_marks_hash_only_vba_modules_partial_without_source_facts()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var result = AccessVbaProjector.Project(seed,
+            [new AccessRawVbaModule("ModuleA", "standard", null, new string('b', 64), 12)]);
+
+        var module = Assert.Single(result.Modules);
+        Assert.Equal("partial", module.Coverage);
+        Assert.Equal(12, module.LineCount);
+        Assert.Empty(module.Procedures);
+        Assert.Contains(result.Gaps, gap => gap.Classification == "AccessVbaModuleSourceUnavailable");
+    }
+
+    [Fact]
     public async Task Count_only_vba_inventory_emits_metadata_and_gap_without_identity_or_flow_facts()
     {
         using var temp = new TempDirectory();

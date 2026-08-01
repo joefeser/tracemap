@@ -183,7 +183,7 @@ function Add-Record(
             startLine = if ($Kind -eq "vba-module") { 1 } else { $null }
             endLine = if ($Kind -eq "vba-module") { $LineCount } else { $null }
         }
-        completeness = if ($Kind -eq "vba-module") { "complete" } else { "partial" }
+        completeness = if ($Kind -eq "vba-module" -and $IncludeRawSource) { "complete" } else { "partial" }
         payload = $Payload
     })
 }
