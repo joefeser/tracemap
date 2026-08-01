@@ -576,7 +576,9 @@ public static class AccessDesignEvidenceComposer
                 gap.Classification, gap.ScopeKind, gap.CanonicalRecordId, RuleIds.LegacyAccessDesignInput))
             .Concat(bundle.Records.Where(record => record.Kind == "source-gap").Select(record =>
                 new AccessGapProjection(
-                    "AccessDesignInputSourceDeclaredPartial",
+                    String(record.Payload, "classification").StartsWith("AccessVbaCodeBehind", StringComparison.Ordinal)
+                        ? String(record.Payload, "classification")
+                        : "AccessDesignInputSourceDeclaredPartial",
                     String(record.Payload, "affectedScope"),
                     record.CanonicalRecordId,
                     RuleIds.LegacyAccessDesignInput)))
@@ -648,6 +650,15 @@ public static class AccessDesignEvidenceComposer
         };
         if (properties.TryGetValue("coverageLabel", out var projectorCoverage))
             properties["projectorCoverage"] = projectorCoverage;
+        if (record?.Kind == "vba-module"
+            && record.Payload.TryGetProperty("sourceDocumentSha256", out var sourceDocumentHash))
+            properties["sourceDocumentSha256"] = sourceDocumentHash.GetString()!;
+        if (record?.Kind == "vba-module"
+            && record.Payload.TryGetProperty("sourceDocumentStartLine", out var sourceDocumentStartLine))
+            properties["sourceDocumentStartLine"] = sourceDocumentStartLine.GetInt32().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (record?.Kind == "vba-module"
+            && record.Payload.TryGetProperty("extractionMechanism", out var extractionMechanism))
+            properties["sourceExtractionMechanism"] = extractionMechanism.GetString()!;
         properties["coverageLabel"] = manifest.CopyBinding == "owner-attested-derived-copy"
             ? "copy-lineage-owner-attested"
             : record?.Completeness is "partial" or "unavailable"

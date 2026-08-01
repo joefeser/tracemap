@@ -38,6 +38,12 @@ copy so the existing deterministic VBA projector can emit bounded static facts.
 8. Bounded active handler effects may record `Me` state assignments,
    `Me.Requery`, literal `Forms(...)` references, and already supported open
    calls. Conditions are hash-only syntax context; comments are inactive.
+9. Compatible retained form/report definitions may provide class-module source
+   only after an exact `CodeBehindForm` or `CodeBehindReport` marker. The
+   protected module record carries source hash, module-relative lines,
+   originating definition hash/start line, and extraction mechanism. Missing or
+   procedure-unparseable code-behind declarations are gaps; standard modules
+   must not be synthesized to fill coverage.
 
 ## Non-claims
 

@@ -26,6 +26,11 @@ public sealed class AccessVbaSourceExportTests
         Assert.Contains("AccessVbaSuppliedCopyChanged", script, StringComparison.Ordinal);
         Assert.Contains("AccessVbaWorkingCopyChanged", script, StringComparison.Ordinal);
         Assert.Contains("Properties.Delete(\"StartupForm\")", script, StringComparison.Ordinal);
+        Assert.Contains("Get-CodeBehindModule", script, StringComparison.Ordinal);
+        Assert.Contains("CodeBehindForm", script, StringComparison.Ordinal);
+        Assert.Contains("save-as-text-code-behind", script, StringComparison.Ordinal);
+        Assert.Contains("AccessVbaCodeBehindSourceUnavailable", script, StringComparison.Ordinal);
+        Assert.Contains("AccessVbaCodeBehindProcedureUnavailable", script, StringComparison.Ordinal);
         Assert.Contains("OpenCurrentDatabase($workingCopy, $true)", script, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenCurrentDatabase($copy, $true)", script, StringComparison.Ordinal);
         Assert.Contains("AccessVbaGenerationCanaryFired", script, StringComparison.Ordinal);
@@ -79,6 +84,12 @@ public sealed class AccessVbaSourceExportTests
         Assert.Contains("private-access-source", smoke, StringComparison.Ordinal);
         Assert.Contains("AccessVbaOriginalSourceChanged", smoke, StringComparison.Ordinal);
         Assert.Contains("AccessVbaWorkingCopyOutcomeInvalid", smoke, StringComparison.Ordinal);
+        Assert.Contains("AccessVbaOutputMechanismInvalid", smoke, StringComparison.Ordinal);
+        Assert.Contains("AccessVbaOutputVbaModuleMissing", smoke, StringComparison.Ordinal);
+        Assert.Contains("AccessVbaOutputDesignDocumentMissing", smoke, StringComparison.Ordinal);
+        Assert.Contains("AccessVbaOutputCodeBehindModuleMissing", smoke, StringComparison.Ordinal);
+        Assert.Contains("AccessVbaOutputLifecycleProcedureMissing", smoke, StringComparison.Ordinal);
+        Assert.Contains("RunSyntheticScenario", smoke, StringComparison.Ordinal);
         Assert.Contains("suppliedCopyOutcome=$expectedSuppliedCopyOutcome", smoke, StringComparison.Ordinal);
         Assert.Contains("workingCopyOutcome=$expectedWorkingCopyOutcome", smoke, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenForm", smoke, StringComparison.OrdinalIgnoreCase);

@@ -70,9 +70,20 @@ try {
         -not (Test-Path -LiteralPath (Join-Path $raw "source-manifest.json"))) { throw "AccessVbaOutputMissing" }
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
     $records = @(Get-Content -LiteralPath $recordsPath | ForEach-Object { $_ | ConvertFrom-Json })
-    if ($manifest.producer.mechanism -ne "access-save-as-text-vba" -or
-        @($records | Where-Object kind -eq "vba-module").Count -le 0 -or
-        (Get-Content -LiteralPath (Join-Path $raw "source-manifest.json") -Raw | ConvertFrom-Json).formReportDesignFileCount -le 0) { throw "AccessVbaOutputInvalid" }
+    if ($manifest.producer.mechanism -ne "access-save-as-text-vba") { throw "AccessVbaOutputMechanismInvalid" }
+    $vbaModules = @($records | Where-Object kind -eq "vba-module")
+    if ($vbaModules.Count -le 0) { throw "AccessVbaOutputVbaModuleMissing" }
+    $rawManifest = Get-Content -LiteralPath (Join-Path $raw "source-manifest.json") -Raw | ConvertFrom-Json
+    if ($rawManifest.formReportDesignFileCount -le 0) { throw "AccessVbaOutputDesignDocumentMissing" }
+    $codeBehindModules = @($vbaModules | Where-Object { $_.payload.extractionMechanism -eq "save-as-text-code-behind" })
+    if ($codeBehindModules.Count -le 0) { throw "AccessVbaOutputCodeBehindModuleMissing" }
+    $formCodeBehind = @($codeBehindModules | Where-Object { $_.payload.moduleKind -eq "form" }) | Select-Object -First 1
+    if ($null -eq $formCodeBehind) { throw "AccessVbaOutputFormCodeBehindMissing" }
+    foreach ($procedureName in @("cmdVbaFlow_Click", "Form_Open", "Form_Load", "Form_Current", "lstLifecycle_AfterUpdate", "RunSyntheticScenario")) {
+        if ([string]$formCodeBehind.payload.sourceText -notmatch ("(?im)^\s*(?:Public|Private)\s+(?:Sub|Function)\s+" + [regex]::Escape($procedureName) + "\b")) {
+            throw "AccessVbaOutputLifecycleProcedureMissing"
+        }
+    }
     $copyAfter = (Get-FileHash -LiteralPath $vbaCopy -Algorithm SHA256).Hash
     $expectedSuppliedCopyOutcome = if ($copyAfter -eq $vbaCopyHash) {
         "AccessVbaWorkingCopyUnchanged"

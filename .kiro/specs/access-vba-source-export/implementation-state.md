@@ -80,6 +80,19 @@ parenthesized. A regression scans every Access validation script for this
 unparenthesized `Test-Path` boolean form. Cleanup completed, and a fresh
 synthetic Windows smoke run is required at the corrected head.
 
+The next smoke completed exporter output creation but found no `vba-module`
+records. That exposed a material source gap: `CurrentProject.AllModules` does
+not provide the form/report class-module code needed for lifecycle evidence,
+while the compatible retained design documents do contain `CodeBehindForm`
+sections. The exporter now derives protected form/report module records from
+only those code-behind suffixes, recording code and originating-document hashes
+plus line mapping. It does not synthesize a standard module. Missing or
+procedure-unparseable code-behind text is an explicit source gap; a module
+already derived this way wins over a matching AllModules export. Smoke output
+assertions are now typed by mechanism, module, design document, code-behind,
+form-code-behind, and lifecycle-procedure failures. A fresh synthetic Windows
+smoke run is required at the corrected head.
+
 Deferred: standard/class classification beyond form/report naming, dynamic
 expressions, nonzero argument functions, callbacks, macro code, section-level
 metadata, runtime behavior/order, and representative validation. Event bindings
