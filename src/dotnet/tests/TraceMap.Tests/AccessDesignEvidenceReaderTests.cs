@@ -168,6 +168,30 @@ public sealed class AccessDesignEvidenceReaderTests
     }
 
     [Theory]
+    [InlineData("AccessVbaCodeBehindOwnerUnavailable", "form")]
+    [InlineData("AccessVbaCodeBehindSourceUnavailable", "report")]
+    [InlineData("AccessVbaCodeBehindProcedureUnavailable", "form")]
+    public void Reader_accepts_bounded_code_behind_source_gaps(string classification, string affectedScope)
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "code-behind-gap");
+        WriteBundle(path,
+        [
+            Record("source-gap", "gap-one", null, "producer-gap", "unavailable", null, null, null, "partial",
+                Ordered(("classification", classification), ("affectedScope", affectedScope),
+                    ("coverageCategory", "source-unavailable")))
+        ]);
+
+        using var result = AccessDesignEvidenceReader.Read(path, Binding());
+
+        Assert.True(result.AcceptedForProjection);
+        var gap = Assert.Single(result.Records);
+        Assert.Equal("source-gap", gap.Kind);
+        Assert.Equal(classification, gap.Payload.GetProperty("classification").GetString());
+        Assert.Equal(affectedScope, gap.Payload.GetProperty("affectedScope").GetString());
+    }
+
+    [Theory]
     [InlineData("missing")]
     [InlineData("catalog")]
     public void Ui_controls_require_a_ui_surface_parent(string parentShape)

@@ -624,10 +624,12 @@ public static class AccessDesignEvidenceReader
         if (kind == "source-gap")
         {
             RequireClosedString(payload, "classification",
-                ["catalog-partial", "coordinates-unavailable", "source-unavailable", "unsupported-object", "producer-limit-reached"],
+                ["catalog-partial", "coordinates-unavailable", "source-unavailable", "unsupported-object", "producer-limit-reached",
+                    "AccessVbaCodeBehindOwnerUnavailable", "AccessVbaCodeBehindSourceUnavailable",
+                    "AccessVbaCodeBehindProcedureUnavailable"],
                 "AccessDesignInputRecordMalformed");
             RequireClosedString(payload, "affectedScope",
-                ["database", "catalog", "ui", "vba", "macro"],
+                ["database", "catalog", "ui", "vba", "macro", "form", "report"],
                 "AccessDesignInputRecordMalformed");
             RequireClosedString(payload, "coverageCategory",
                 ["source-declared-partial", "source-unavailable", "unsupported", "limit-reached"],
