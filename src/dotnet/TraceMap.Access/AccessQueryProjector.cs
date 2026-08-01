@@ -5,6 +5,9 @@ namespace TraceMap.Access;
 
 public static partial class AccessQueryProjector
 {
+    private static readonly string[] SqlFunctionNames = [
+        "abs", "avg", "count", "date", "dateadd", "datediff", "dlookup", "dsum", "first", "format",
+        "iif", "instr", "isnull", "len", "max", "min", "nz", "sum", "val"];
     public static AccessQueryActionProjection ProjectActionLineage(
         string sql,
         string operationKind,
@@ -96,6 +99,57 @@ public static partial class AccessQueryProjector
             value is null ? null : AccessSafeValues.RoleHash("access-query-value", value),
             pivot is null ? null : AccessSafeValues.RoleHash("access-query-pivot", pivot),
             staticColumns, coverage);
+    }
+
+    public static AccessQueryStaticProjection ProjectStaticSelect(
+        string sql,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> knownObjects,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fieldsByTable)
+    {
+        var masked = MaskLiteralsAndComments(sql);
+        var dependencyProjection = ProjectDependencies(sql, knownObjects);
+        var select = SelectListAfterKeyword(masked, "select");
+        var expressions = select is null ? [] : SplitSelectItems(select);
+        var outputs = expressions.Select((expression, ordinal) =>
+        {
+            var trimmed = expression.Trim();
+            var sourceFields = ResolveExpressionFieldKeys(trimmed, knownObjects, fieldsByTable);
+            var nameHash = AccessSafeValues.RoleHash("access-query-output-name", trimmed);
+            return new AccessQueryStaticOutputProjection(
+                ordinal,
+                nameHash,
+                sourceFields,
+                sourceFields.Count > 0 && IsStaticDirectProjection(trimmed) ? "complete" : "partial");
+        }).ToArray();
+        var predicate = Clause(masked, "where", ["group", "order", ";", "$"]);
+        var order = Clause(masked, "order", [";", "$"]);
+        var functions = predicate is null
+            ? []
+            : NamedFunctionPattern().Matches(predicate)
+                .Select(match => match.Groups["name"].Value)
+                .Where(name => !SqlFunctionNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+                .Select(name => AccessSafeValues.RoleHash("access-query-function-name", name))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+        var predicateComplete = predicate is null || ResolvesExpressionFieldKeys(predicate, knownObjects, fieldsByTable);
+        var orderComplete = order is null || ResolvesExpressionFieldKeys(order, knownObjects, fieldsByTable);
+        var coverage = expressions.Count > 0
+            && outputs.All(output => output.Coverage == "complete")
+            && dependencyProjection.Coverage == "complete"
+            && predicateComplete
+            && orderComplete
+            ? "complete"
+            : "partial";
+        return new(
+            AccessSafeValues.RoleHash("access-query-sql", sql),
+            sql.Length,
+            dependencyProjection.Dependencies,
+            predicate is null ? null : AccessSafeValues.RoleHash("access-query-predicate", predicate),
+            order is null ? null : AccessSafeValues.RoleHash("access-query-order-by", order),
+            functions,
+            outputs,
+            coverage);
     }
 
     public static bool IsDirectOutputField(string sql, string outputName)
@@ -225,6 +279,9 @@ public static partial class AccessQueryProjector
         var result = new List<string>();
         foreach (Match match in FieldReferencePattern().Matches(expression))
         {
+            var next = match.Index + match.Length;
+            while (next < expression.Length && char.IsWhiteSpace(expression[next])) next++;
+            if (next < expression.Length && expression[next] == '(') continue;
             var tableName = match.Groups["table"].Success ? match.Groups["table"].Value : null;
             var fieldName = match.Groups["field"].Value;
             var tables = tableName is null ? known.Values.SelectMany(value => value).Where(value => value.Kind == "table") : (known.TryGetValue(tableName, out var found) ? found : []);
@@ -240,6 +297,48 @@ public static partial class AccessQueryProjector
         }
         return result.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
     }
+
+    private static IReadOnlyList<string> ResolveExpressionFieldKeys(
+        string expression,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> known,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fields)
+    {
+        var result = new List<string>();
+        foreach (Match match in FieldReferencePattern().Matches(expression))
+        {
+            var next = match.Index + match.Length;
+            while (next < expression.Length && char.IsWhiteSpace(expression[next])) next++;
+            if (next < expression.Length && expression[next] == '(') continue;
+            var tableName = match.Groups["table"].Success ? match.Groups["table"].Value : null;
+            var fieldName = match.Groups["field"].Value;
+            var tables = tableName is null
+                ? known.Values.SelectMany(value => value).Where(value => value.Kind == "table")
+                : known.TryGetValue(tableName, out var found) ? found : [];
+            var matches = tables.Where(table => fields.TryGetValue(table.StableKey, out var lookup)
+                    && lookup.TryGetValue(fieldName, out var candidates)
+                    && candidates.Count == 1)
+                .SelectMany(table => fields[table.StableKey][fieldName])
+                .ToArray();
+            if (tableName is null && matches.Length != 1) continue;
+            result.AddRange(matches);
+        }
+        return result.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+    }
+
+    private static bool ResolvesExpressionFieldKeys(
+        string expression,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> known,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fields) =>
+        FieldReferencePattern().Matches(expression).Cast<Match>().Where(match =>
+        {
+            var next = match.Index + match.Length;
+            while (next < expression.Length && char.IsWhiteSpace(expression[next])) next++;
+            return next >= expression.Length || expression[next] != '(';
+        }).ToArray() is { Length: > 0 } matches
+        && matches.All(match => ResolveExpressionFieldKeys(match.Value, known, fields).Count == 1);
+
+    private static bool IsStaticDirectProjection(string expression) =>
+        DirectSelectFieldPattern().IsMatch(expression.Trim());
 
     private static bool ResolvesExpressionCompletely(
         string expression,
@@ -441,4 +540,7 @@ public static partial class AccessQueryProjector
 
     [GeneratedRegex(@"(?ix)(?:(?:\[(?<table>[^\]]+)\]|(?<table>[A-Za-z_][A-Za-z0-9_]*))\s*\.\s*)?(?:\[(?<field>[^\]]+)\]|(?<field>[A-Za-z_][A-Za-z0-9_]*))", RegexOptions.CultureInvariant)]
     private static partial Regex FieldReferencePattern();
+
+    [GeneratedRegex(@"(?ix)\b(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.CultureInvariant)]
+    private static partial Regex NamedFunctionPattern();
 }
