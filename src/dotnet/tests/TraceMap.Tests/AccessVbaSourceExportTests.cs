@@ -57,6 +57,8 @@ public sealed class AccessVbaSourceExportTests
 
         Assert.Contains("=RunSyntheticScenario()", generator, StringComparison.Ordinal);
         Assert.Contains("Public Function RunSyntheticScenario()", generator, StringComparison.Ordinal);
+        Assert.Contains("$lifecycleList.AfterUpdate = \"[Event Procedure]\"", generator, StringComparison.Ordinal);
+        Assert.DoesNotContain("$lifecycleList.OnAfterUpdate", generator, StringComparison.Ordinal);
         Assert.Contains("SyntheticOpenArgsMarker_92817", generator, StringComparison.Ordinal);
         Assert.Contains("VbaProducer", smoke, StringComparison.Ordinal);
         Assert.Contains("GenerationCanaryPath", smoke, StringComparison.Ordinal);
