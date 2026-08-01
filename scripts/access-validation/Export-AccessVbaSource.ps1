@@ -465,7 +465,9 @@ try {
             $source = [IO.File]::ReadAllText($rawPath)
             $lineCount = if ($source.Length -eq 0) { 0 } else { [regex]::Matches($source, "`n").Count + 1 }
             if ($lineCount -gt $MaxSourceLines) { Stop-Export "AccessVbaSourceLimitReached" }
-            $hash = Get-BytesSha256 ($Utf8NoBom.GetBytes($source))
+            $normalizedBytes = $Utf8NoBom.GetBytes($source)
+            [IO.File]::WriteAllBytes($rawPath, $normalizedBytes)
+            $hash = Get-BytesSha256 $normalizedBytes
             $privateArtifacts.Add([ordered]@{
                 artifact = "$recordId.txt"
                 documentRole = "vba-module"

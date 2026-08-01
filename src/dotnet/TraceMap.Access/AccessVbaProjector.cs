@@ -251,7 +251,7 @@ internal static partial class AccessVbaProjector
         AccessIdentityDisclosurePolicy disclosurePolicy)
     {
         var effects = new List<AccessVbaEffectProjection>();
-        var conditions = new Stack<(string Hash, int Length)>();
+        var conditions = new Stack<(string Hash, int Length, string Text)>();
         for (var index = procedure.BodyStartIndex; index <= procedure.BodyEndIndex && index < lines.Length; index++)
         {
             var source = CodeWithoutComment(lines[index]);
@@ -263,26 +263,45 @@ internal static partial class AccessVbaProjector
                 if (conditions.Count > 0) conditions.Pop();
                 continue;
             }
+            if (ElsePattern().IsMatch(trimmed))
+            {
+                if (conditions.Count > 0)
+                {
+                    var prior = conditions.Pop();
+                    var alternateText = $"Else({prior.Text})";
+                    conditions.Push((AccessSafeValues.RoleHash("access-vba-condition", alternateText), alternateText.Length, alternateText));
+                }
+                continue;
+            }
+            var elseIf = ElseIfPattern().Match(trimmed);
+            if (elseIf.Success)
+            {
+                if (conditions.Count > 0) conditions.Pop();
+                var alternateText = source.Trim();
+                conditions.Push((AccessSafeValues.RoleHash("access-vba-condition", alternateText), alternateText.Length, alternateText));
+                continue;
+            }
             var condition = IfConditionPattern().Match(trimmed);
             if (condition.Success)
             {
                 var conditionText = source.Trim();
                 if (trimmed.EndsWith("Then", StringComparison.OrdinalIgnoreCase))
-                    conditions.Push((AccessSafeValues.RoleHash("access-vba-condition", conditionText), conditionText.Length));
+                    conditions.Push((AccessSafeValues.RoleHash("access-vba-condition", conditionText), conditionText.Length, conditionText));
                 continue;
             }
 
             var line = index + 1;
-            var activeCondition = conditions.Count > 0 ? conditions.Peek() : ((string Hash, int Length)?)null;
+            var activeCondition = conditions.Count > 0 ? conditions.Peek() : ((string Hash, int Length, string Text)?)null;
             foreach (Match match in MeStateAssignmentPattern().Matches(masked))
             {
                 var target = AccessSafeValues.Identity(databaseIdentitySeed, "vba-control-state-target", match.Groups["name"].Value, disclosurePolicy: disclosurePolicy);
                 var expression = source[(source.IndexOf('=') + 1)..].Trim();
                 effects.Add(NewEffect(databaseIdentitySeed, procedure, effects.Count, "control-state-assignment", line, target,
-                    expression, activeCondition, disclosurePolicy));
+                    expression, activeCondition is null ? null : (activeCondition.Value.Hash, activeCondition.Value.Length), disclosurePolicy));
             }
             if (MeRequeryPattern().IsMatch(masked))
-                effects.Add(NewEffect(databaseIdentitySeed, procedure, effects.Count, "surface-requery", line, null, string.Empty, activeCondition, disclosurePolicy));
+                effects.Add(NewEffect(databaseIdentitySeed, procedure, effects.Count, "surface-requery", line, null, string.Empty,
+                    activeCondition is null ? null : (activeCondition.Value.Hash, activeCondition.Value.Length), disclosurePolicy));
             foreach (Match match in FormsReferencePattern().Matches(masked))
             {
                 var argument = ArgumentAt(source, match.Index + match.Length, 0);
@@ -290,7 +309,9 @@ internal static partial class AccessVbaProjector
                     ? AccessSafeValues.Identity(databaseIdentitySeed, "vba-form-reference-target", literal, disclosurePolicy: disclosurePolicy)
                     : null;
                 effects.Add(NewEffect(databaseIdentitySeed, procedure, effects.Count, "forms-reference", line, target,
-                    argument ?? string.Empty, activeCondition, disclosurePolicy, target is null ? "partial" : "complete"));
+                    argument ?? string.Empty,
+                    activeCondition is null ? null : (activeCondition.Value.Hash, activeCondition.Value.Length),
+                    disclosurePolicy, target is null ? "partial" : "complete"));
             }
         }
         return effects.OrderBy(item => item.StartLine).ThenBy(item => item.EffectKind, StringComparer.Ordinal).ToArray();
@@ -587,6 +608,12 @@ internal static partial class AccessVbaProjector
 
     [GeneratedRegex(@"^\s*End\s+If\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex EndIfPattern();
+
+    [GeneratedRegex(@"^\s*Else\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ElsePattern();
+
+    [GeneratedRegex(@"^\s*ElseIf\s+.+?\s+Then\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ElseIfPattern();
 
     [GeneratedRegex(@"\bMe\s*\.\s*(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*(?:Visible|Enabled|Locked|Caption)\s*=", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex MeStateAssignmentPattern();

@@ -508,7 +508,7 @@ public static class AccessDesignEvidenceComposer
             .Select(record => new AccessRawVbaModule(
                 String(record.Payload, "identity"),
                 String(record.Payload, "moduleKind"),
-                String(record.Payload, "sourceText")))
+                OptionalString(record.Payload, "sourceText") ?? string.Empty))
             .ToArray();
         var vba = AccessVbaProjector.Project(
             databaseSeed,

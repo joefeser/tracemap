@@ -27,7 +27,7 @@ public static partial class AccessQueryProjector
             "update" => ParseUpdateTargets(masked),
             _ => []
         };
-        var targetFieldKeys = ResolveFields(target?.StableKey, targetFields, fieldLookups);
+        var targetFieldKeys = ResolveFieldsAligned(target?.StableKey, targetFields, fieldLookups);
         var mappings = new List<AccessQueryFieldMappingProjection>();
         var coverage = targetName is null ? "partial" : target is null ? "partial" : "complete";
         if (operationKind is "append" or "make-table")
@@ -38,7 +38,7 @@ public static partial class AccessQueryProjector
             for (var index = 0; index < Math.Max(items.Count, targetFields.Count); index++)
             {
                 var expression = index < items.Count ? items[index].Trim() : null;
-                var targetField = index < targetFieldKeys.Count ? targetFieldKeys[index] : null;
+                var targetField = index < targetFieldKeys.Count && targetFieldKeys[index].Length > 0 ? targetFieldKeys[index] : null;
                 var sources = expression is null ? [] : ResolveExpressionFields(expression, knownObjects, fieldLookups);
                 var mapped = expression is not null && targetField is not null && sources.Count > 0 ? "complete" : "partial";
                 if (mapped == "partial") coverage = "partial";
@@ -54,7 +54,8 @@ public static partial class AccessQueryProjector
             {
                 var assignment = assignments[index];
                 var equals = assignment.IndexOf('=');
-                var targetField = equals < 0 ? null : ResolveFields(target?.StableKey, [assignment[..equals].Trim()], fieldLookups).FirstOrDefault();
+                var targetField = equals < 0 ? null : ResolveFieldsAligned(target?.StableKey, [assignment[..equals].Trim()], fieldLookups).FirstOrDefault();
+                if (targetField is { Length: 0 }) targetField = null;
                 var expression = equals < 0 ? null : assignment[(equals + 1)..].Trim();
                 var sources = expression is null ? [] : ResolveExpressionFields(expression, knownObjects, fieldLookups);
                 var mapped = targetField is not null && expression is not null ? "complete" : "partial";
@@ -79,9 +80,9 @@ public static partial class AccessQueryProjector
         var row = rowExpressions.SelectMany(item => ResolveExpressionFields(item, knownObjects, fieldLookups)).Distinct(StringComparer.Ordinal).ToArray();
         var aggregate = MatchValue(masked, TransformPattern());
         var pivot = MatchValue(masked, PivotPattern());
-        var value = aggregate is null ? null : aggregate[(aggregate.IndexOf(' ', StringComparison.Ordinal) + 1)..].Trim();
+        var value = aggregate is null ? null : ExtractAggregateValue(aggregate);
         var staticColumns = ParsePivotColumns(sql);
-        var coverage = row.Length > 0 && aggregate is not null && pivot is not null ? "complete" : "partial";
+        var coverage = row.Length > 0 && aggregate is not null && value is not null && pivot is not null ? "complete" : "partial";
         if (pivot is not null && staticColumns.Count == 0) coverage = "partial";
         return new(row,
             aggregate is null ? null : AccessSafeValues.RoleHash("access-query-aggregate", aggregate),
@@ -189,11 +190,27 @@ public static partial class AccessQueryProjector
 
     private static string UnquoteIdentifier(string value) => value.Trim().Trim('[', ']').Split('.').Last().Trim('[', ']');
 
-    private static IReadOnlyList<string> ResolveFields(string? tableKey, IReadOnlyList<string> names, IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fields)
+    private static IReadOnlyList<string> ResolveFieldsAligned(string? tableKey, IReadOnlyList<string> names, IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fields)
     {
-        if (tableKey is null || !fields.TryGetValue(tableKey, out var lookup)) return [];
-        return names.SelectMany(name => lookup.TryGetValue(UnquoteIdentifier(name), out var candidates) && candidates.Count == 1
-            ? candidates.Select(candidate => candidate.Identity.StableKey) : []).ToArray();
+        if (tableKey is null || !fields.TryGetValue(tableKey, out var lookup)) return names.Select(_ => string.Empty).ToArray();
+        return names.Select(name => lookup.TryGetValue(UnquoteIdentifier(name), out var candidates) && candidates.Count == 1
+            ? candidates[0].Identity.StableKey : string.Empty).ToArray();
+    }
+
+    private static string? ExtractAggregateValue(string aggregate)
+    {
+        var open = aggregate.IndexOf('(');
+        if (open < 0 || !aggregate.EndsWith(')')) return null;
+        var depth = 0;
+        for (var index = open; index < aggregate.Length; index++)
+        {
+            if (aggregate[index] == '(') depth++;
+            else if (aggregate[index] == ')' && --depth == 0)
+                return index == aggregate.Length - 1 && index > open + 1
+                    ? aggregate[(open + 1)..index].Trim()
+                    : null;
+        }
+        return null;
     }
 
     private static IReadOnlyList<string> ResolveExpressionFields(string expression, IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> known, IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fields)
