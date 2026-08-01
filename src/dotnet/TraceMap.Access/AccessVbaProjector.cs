@@ -541,7 +541,10 @@ internal static partial class AccessVbaProjector
                 : AccessSafeValues.Identity(databaseIdentitySeed, "vba-event-module-target", reference.ModuleName, disclosurePolicy: disclosurePolicy).StableKey;
             var procedure = procedureCandidates.Length == 1 ? procedureCandidates[0].Procedure.Projection : null;
             var procedureStableKey = procedure?.Identity.StableKey;
-            var classification = procedureCandidates.Length switch
+            var moduleResolved = moduleCandidates.Length == 1;
+            var classification = !moduleResolved
+                ? "ambiguous"
+                : procedureCandidates.Length switch
             {
                 1 when reference.BindingKind == "event-procedure" => "resolved",
                 1 when reference.BindingKind == "expression-function" => "expression-handler",
@@ -552,15 +555,15 @@ internal static partial class AccessVbaProjector
             };
             var command = procedure?.Effects?.FirstOrDefault(effect => effect.EffectKind == "save-current-record-command");
             result.Add(new(reference.OwnerStableKey, reference.EventRole, moduleStableKey, procedureStableKey,
-                procedureCandidates.Length == 1 ? "complete" : "partial",
+                moduleResolved && procedureCandidates.Length == 1 ? "complete" : "partial",
                 reference.OwnerKind, reference.BindingKind, reference.EventExpressionHash, reference.EventExpressionLength,
                 procedure?.StartLine ?? 0, procedure?.EndLine ?? 0, classification,
                 command is null ? null : "save-current-record",
                 command?.Coverage,
                 command?.ExpressionHash,
                 command?.ExpressionLength ?? 0));
-            if (procedureCandidates.Length != 1)
-                gaps.Add(new(procedureCandidates.Length == 0 ? "AccessEventProcedureUnresolved" : "AccessEventProcedureAmbiguous",
+            if (!moduleResolved || procedureCandidates.Length != 1)
+                gaps.Add(new(!moduleResolved || procedureCandidates.Length > 1 ? "AccessEventProcedureAmbiguous" : "AccessEventProcedureUnresolved",
                     "event-binding", reference.OwnerStableKey, RuleIds.LegacyAccessEventBinding));
         }
         return result.OrderBy(item => item.OwnerStableKey, StringComparer.Ordinal).ThenBy(item => item.EventRole, StringComparer.Ordinal).ToArray();
@@ -738,10 +741,10 @@ internal static partial class AccessVbaProjector
     [GeneratedRegex(@"\bMe\s*\.\s*Requery\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex MeRequeryPattern();
 
-    [GeneratedRegex(@"\bDoCmd\s*\.\s*RunCommand\s*\(\s*\(?\s*acCmdSaveRecord\s*\)?\s*\)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\bDoCmd\s*\.\s*RunCommand\s*(?:\(\s*)?\(?\s*acCmdSaveRecord\s*\)?\s*\)?", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SaveCurrentRecordPattern();
 
-    [GeneratedRegex(@"\bDoCmd\s*\.\s*RunCommand\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\bDoCmd\s*\.\s*RunCommand\b(?:\s*\(|\s+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex RunCommandPattern();
 
     [GeneratedRegex(@"\bForms\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

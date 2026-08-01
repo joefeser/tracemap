@@ -69,7 +69,7 @@ public sealed class AccessUiProjectionTests
                 Filter ="[Status] = \"Open\"
             and [Kind] = \"Weekly\""
                 UnknownProperty ={opaque} Begin
-                    Nested ="ignored"
+                    Filter ="nested-filter-must-not-overwrite"
                 End
                 Begin TextBox
                     Name ="txtStatus"
