@@ -193,6 +193,7 @@ public static class AccessScreenDataFlowReporter
 
         if (!accessFacts.Any(fact => fact.FactType is FactTypes.AccessFormDeclared
                 or FactTypes.AccessEventBindingCandidate
+                or FactTypes.AccessCommandCandidate
                 or FactTypes.AccessVbaProcedureDeclared
                 or FactTypes.AccessNavigationCandidate
                 or FactTypes.AccessBindingDeclared))
@@ -264,6 +265,7 @@ public static class AccessScreenDataFlowReporter
         {
             FactTypes.AccessControlDeclared => "surface-control-ownership",
             FactTypes.AccessEventBindingCandidate => "static-event-binding-candidate",
+            FactTypes.AccessCommandCandidate => "static-command-candidate",
             FactTypes.AccessNavigationCandidate => "static-vba-call-navigation-candidate",
             FactTypes.AccessBindingDeclared => "declared-data-binding",
             FactTypes.AccessQueryDependencyCandidate => "static-query-dependency-candidate",

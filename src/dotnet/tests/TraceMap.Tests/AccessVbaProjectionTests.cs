@@ -364,6 +364,25 @@ public sealed class AccessVbaProjectionTests
     }
 
     [Fact]
+    public void Projector_recognizes_statement_form_run_command_and_keeps_other_commands_dynamic()
+    {
+        const string source = """
+            Private Sub Form_Current()
+                DoCmd.RunCommand acCmdSaveRecord
+                DoCmd.RunCommand acCmdSomethingElse
+            End Sub
+            """;
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('6', 40), "fixture.accdb", "hash");
+        var result = AccessVbaProjector.Project(seed,
+            [new("Form_frmHost", "form", source)],
+            [new("form-owner", "on-current", "Form_frmHost", "Form_Current")]);
+
+        var effects = result.Modules.Single().Procedures.Single().Effects!;
+        Assert.Contains(effects, effect => effect.EffectKind == "save-current-record-command");
+        Assert.Contains(result.Gaps, gap => gap.Classification == "AccessVbaCommandDynamic");
+    }
+
+    [Fact]
     public void Projector_keeps_dynamic_event_expression_as_explicit_gap()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('5', 40), "fixture.accdb", "hash");

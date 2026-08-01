@@ -1528,10 +1528,12 @@ rules:
     evidenceTier: Tier3SyntaxOrTextual
     emits:
       - AccessEventBindingCandidate
+      - AccessCommandCandidate
       - AnalysisGap
     limitations:
       - Event binding candidates prove only an exact static naming match in the owning module; they do not prove event firing, runtime dispatch, user interaction, branch feasibility, rendering, navigation, deployment, or production use.
       - Missing, ambiguous, dynamic, expression, and embedded-macro handlers remain gaps or separately classified surface evidence; the extractor never invokes an event or persists an event expression or macro body.
+      - Literal save-current-record command candidates are static syntax evidence only; they do not prove a save occurred, a record was available, or that the event fired.
       - Procedure and owner identities follow safe/hash policy, and VBA source never crosses worker IPC or enters artifacts.
 
   - id: legacy.access.macro-gap.v1

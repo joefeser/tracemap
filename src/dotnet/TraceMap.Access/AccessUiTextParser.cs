@@ -63,6 +63,8 @@ internal static partial class AccessUiTextParser
             {
                 var block = begin.Groups["block"].Success ? begin.Groups["block"].Value : "anonymous";
                 blocks.Push(block);
+                if (blocks.Skip(1).Any(item => item == "property-opaque"))
+                    continue;
                 if (block.Equals(surfaceKind, StringComparison.OrdinalIgnoreCase)) sawSurfaceBlock = true;
                 if (control is null && TryControlType(block, out var controlType))
                 {
@@ -118,6 +120,7 @@ internal static partial class AccessUiTextParser
 
             var property = PropertyPattern().Match(line);
             if (!property.Success) continue;
+            if (blocks.Contains("property-opaque")) continue;
             var name = property.Groups["name"].Value;
             var sourceValue = property.Groups["value"].Value;
             if (sourceValue.TrimStart().StartsWith('"') && !IsQuotedScalarComplete(sourceValue))
