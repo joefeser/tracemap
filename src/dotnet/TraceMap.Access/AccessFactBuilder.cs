@@ -280,6 +280,14 @@ public static class AccessFactBuilder
                         ("rowSourceType", control.RowSourceType),
                         ("boundColumn", control.BoundColumn?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                         ("columnCount", control.ColumnCount?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                        ("valueBindingClassification", control.ValueBindingClassification),
+                        ("populationSourceType", control.PopulationSourceType),
+                        ("populationTargetStableKeys", control.PopulationTargetStableKeys is null ? null : string.Join(';', control.PopulationTargetStableKeys)),
+                        ("populationCoverage", control.PopulationCoverage),
+                        ("selectedProjectionOrdinals", control.SelectedProjectionOrdinals is null ? null : string.Join(';', control.SelectedProjectionOrdinals)),
+                        ("selectedValueStableKeys", control.SelectedValueStableKeys is null ? null : string.Join(';', control.SelectedValueStableKeys)),
+                        ("persistenceTargetStableKeys", control.PersistenceTargetStableKeys is null ? null : string.Join(';', control.PersistenceTargetStableKeys)),
+                        ("functionalRole", control.FunctionalRole),
                         ("eventDescriptors", EventDescriptors(control.Events)), ("coverageLabel", "static-design-metadata"),
                         ("limitations", "no-render;no-value-read;no-event-execution"))));
                 AddBindingFacts(facts, manifest, span, control.Bindings);
@@ -508,6 +516,18 @@ public static class AccessFactBuilder
                         ("expressionHash", binding.ExpressionHash),
                         ("expressionLength", binding.ExpressionLength > 0 ? binding.ExpressionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
                         ("targetStableKey", target), ("targetKind", binding.TargetKind), ("coverageLabel", binding.Coverage),
+                        ("expressionClassification", binding.Expression?.Classification),
+                        ("expressionStructureHash", binding.Expression?.StructureHash),
+                        ("expressionFunctionNameHashes", binding.Expression is null ? null : string.Join(';', binding.Expression.FunctionNameHashes)),
+                        ("expressionOperatorNameHashes", binding.Expression is null ? null : string.Join(';', binding.Expression.OperatorNameHashes)),
+                        ("expressionFieldStableKeys", binding.Expression is null ? null : string.Join(';', binding.Expression.FieldStableKeys)),
+                        ("expressionControlReferenceHashes", binding.Expression is null ? null : string.Join(';', binding.Expression.ControlReferenceHashes)),
+                        ("expressionQueryStableKeys", binding.Expression is null ? null : string.Join(';', binding.Expression.QueryStableKeys)),
+                        ("expressionSelectedFieldStableKeys", binding.Expression is null ? null : string.Join(';', binding.Expression.SelectedFieldStableKeys)),
+                        ("expressionCriteriaFieldStableKeys", binding.Expression is null ? null : string.Join(';', binding.Expression.CriteriaFieldStableKeys)),
+                        ("expressionLiteralKinds", binding.Expression is null ? null : string.Join(';', binding.Expression.LiteralKinds)),
+                        ("expressionCoverage", binding.Expression?.Coverage),
+                        ("expressionGapClassification", binding.Expression?.GapClassification),
                         ("limitations", "declared-static-binding-only;no-evaluation;no-runtime-target-proof"))));
             }
         }

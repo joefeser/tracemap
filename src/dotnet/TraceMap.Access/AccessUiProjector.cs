@@ -51,7 +51,8 @@ internal static partial class AccessUiProjector
         IReadOnlyList<AccessRawUiSurface> rawSurfaces,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> knownObjects,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fieldsByTable,
-        AccessIdentityDisclosurePolicy disclosurePolicy = AccessIdentityDisclosurePolicy.SafeIdentifier)
+        AccessIdentityDisclosurePolicy disclosurePolicy = AccessIdentityDisclosurePolicy.SafeIdentifier,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? queryOutputStableKeys = null)
     {
         var surfaces = new List<AccessUiSurfaceProjection>();
         var gaps = new List<AccessGapProjection>();
@@ -60,17 +61,18 @@ internal static partial class AccessUiProjector
         {
             var kind = raw.SurfaceKind is "form" or "report" ? raw.SurfaceKind : "unknown";
             var identity = AccessSafeValues.Identity(databaseIdentitySeed, kind, raw.Name, disclosurePolicy: disclosurePolicy);
+            var controlNames = raw.Controls.Select(control => control.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var bindings = new List<AccessBindingProjection>();
-            var recordBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "record-source", raw.RecordSource, 0, knownObjects, null, gaps, disclosurePolicy);
+            var recordBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "record-source", raw.RecordSource, 0, knownObjects, null, gaps, disclosurePolicy, controlNames, fieldsByTable);
             if (recordBinding is not null) bindings.Add(recordBinding);
 
             IReadOnlyDictionary<string, IReadOnlyList<string>>? scopedFields = null;
             if (recordBinding is { SourceKind: "direct-object", TargetStableKeys.Count: 1 }
                 && fieldsByTable.TryGetValue(recordBinding.TargetStableKeys[0], out var fieldLookup))
                 scopedFields = fieldLookup;
-            var filterBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "filter", raw.Filter, 0, null, scopedFields, gaps, disclosurePolicy);
+            var filterBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "filter", raw.Filter, 0, null, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable);
             if (filterBinding is not null) bindings.Add(filterBinding);
-            var orderByBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "order-by", raw.OrderBy, 0, null, scopedFields, gaps, disclosurePolicy);
+            var orderByBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "order-by", raw.OrderBy, 0, null, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable);
             if (orderByBinding is not null) bindings.Add(orderByBinding);
 
             var controls = new List<AccessControlProjection>();
@@ -80,16 +82,16 @@ internal static partial class AccessUiProjector
                 var controlIdentity = AccessSafeValues.Identity(databaseIdentitySeed, $"control-{identity.StableKey}", rawControl.Name, rawControl.Ordinal, disclosurePolicy);
                 var controlBindings = new List<AccessBindingProjection>();
                 var controlSource = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "control-source", rawControl.ControlSource,
-                    rawControl.Ordinal, null, scopedFields, gaps, disclosurePolicy);
+                    rawControl.Ordinal, null, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable);
                 if (controlSource is not null) controlBindings.Add(controlSource);
                 var rowSource = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "row-source", rawControl.RowSource,
-                    rawControl.Ordinal, knownObjects, null, gaps, disclosurePolicy);
+                    rawControl.Ordinal, knownObjects, null, gaps, disclosurePolicy, controlNames, fieldsByTable);
                 if (rowSource is not null) controlBindings.Add(rowSource);
                 var validation = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "validation-rule", rawControl.ValidationRule,
-                    rawControl.Ordinal, null, scopedFields, gaps, disclosurePolicy);
+                    rawControl.Ordinal, null, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable);
                 if (validation is not null) controlBindings.Add(validation);
                 var sourceObject = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "source-object", NormalizeSourceObject(rawControl.SourceObject),
-                    rawControl.Ordinal, knownObjects, null, gaps, disclosurePolicy);
+                    rawControl.Ordinal, knownObjects, null, gaps, disclosurePolicy, controlNames, fieldsByTable);
                 if (sourceObject is not null) controlBindings.Add(sourceObject);
                 var masterCount = CountLinkFields(rawControl.LinkMasterFields);
                 var childCount = CountLinkFields(rawControl.LinkChildFields);
@@ -112,7 +114,7 @@ internal static partial class AccessUiProjector
                             disclosurePolicy: disclosurePolicy).StableKey == sourceObject.TargetStableKeys[0]) is { } childSurface)
                 {
                     var childRecord = ProjectBinding(databaseIdentitySeed, sourceObject.TargetStableKeys[0], "record-source",
-                        childSurface.RecordSource, 0, knownObjects, null, [], disclosurePolicy);
+                        childSurface.RecordSource, 0, knownObjects, null, [], disclosurePolicy, controlNames, fieldsByTable);
                     if (childRecord is { SourceKind: "direct-object", TargetStableKeys.Count: 1 }
                         && fieldsByTable.TryGetValue(childRecord.TargetStableKeys[0], out var resolvedChildFields))
                         childFields = resolvedChildFields;
@@ -120,6 +122,27 @@ internal static partial class AccessUiProjector
                 controlBindings.AddRange(ProjectFieldListBindings(
                     databaseIdentitySeed, controlIdentity.StableKey, "link-child-field",
                     rawControl.LinkChildFields, rawControl.Ordinal, childFields, gaps, disclosurePolicy));
+                var controlSourceBinding = controlBindings.FirstOrDefault(binding => binding.BindingKind == "control-source");
+                var rowSourceBinding = controlBindings.FirstOrDefault(binding => binding.BindingKind == "row-source");
+                var valueClassification = controlSourceBinding is null
+                    ? "unbound"
+                    : controlSourceBinding.SourceKind == "direct-field" ? "bound-field"
+                    : controlSourceBinding.Expression?.Classification == "calculated-expression" ? "calculated-expression"
+                    : "unresolved-or-dynamic";
+                var populationType = rowSourceBinding is null
+                    ? "none"
+                    : NormalizeRowSourceType(rawControl.RowSourceType) == "value-list" ? "value-list"
+                    : rowSourceBinding.SourceKind == "direct-object"
+                        ? (rowSourceBinding.TargetKind == "query" ? "saved-query" : "table")
+                    : rawControl.RowSource?.TrimStart().StartsWith("select", StringComparison.OrdinalIgnoreCase) == true ? "inline-sql"
+                    : "dynamic";
+                IReadOnlyList<int> selectedOrdinals = rawControl.BoundColumn is > 0 ? [rawControl.BoundColumn.Value - 1] : Array.Empty<int>();
+                IReadOnlyList<string> selectedValues = rowSourceBinding?.TargetStableKeys.Count == 1
+                    && queryOutputStableKeys?.TryGetValue(rowSourceBinding.TargetStableKeys[0], out var outputs) == true
+                    && rawControl.BoundColumn is > 0
+                    && rawControl.BoundColumn.Value <= outputs.Count
+                    ? new[] { outputs[rawControl.BoundColumn.Value - 1] }
+                    : Array.Empty<string>();
                 controls.Add(new(
                     controlIdentity,
                     identity.StableKey,
@@ -129,7 +152,15 @@ internal static partial class AccessUiProjector
                     ProjectEvents(rawControl.Events),
                     NormalizeRowSourceType(rawControl.RowSourceType),
                     NormalizeNonNegative(rawControl.BoundColumn),
-                    NormalizeNonNegative(rawControl.ColumnCount)));
+                    NormalizeNonNegative(rawControl.ColumnCount),
+                    valueClassification,
+                    populationType,
+                    rowSourceBinding?.TargetStableKeys ?? [],
+                    rowSourceBinding?.Coverage ?? "none",
+                    selectedOrdinals,
+                    selectedValues,
+                    controlSourceBinding?.TargetStableKeys ?? [],
+                    valueClassification == "unbound" && populationType is "saved-query" or "table" ? "query-backed-selector" : "none"));
             }
 
             var surfaceEvents = ProjectEvents(raw.Events);
@@ -153,7 +184,9 @@ internal static partial class AccessUiProjector
                             null,
                             scopedFields,
                             gaps,
-                            disclosurePolicy)!;
+                            disclosurePolicy,
+                            controlNames,
+                            fieldsByTable)!;
                     return new AccessReportGroupProjection(
                         group.Ordinal,
                         binding,
@@ -223,7 +256,9 @@ internal static partial class AccessUiProjector
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? objects,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? fields,
         List<AccessGapProjection> gaps,
-        AccessIdentityDisclosurePolicy disclosurePolicy)
+        AccessIdentityDisclosurePolicy disclosurePolicy,
+        IReadOnlySet<string>? controlNames = null,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? fieldSetsByObject = null)
     {
         var trimmed = value?.Trim() ?? string.Empty;
         if (trimmed.Length == 0) return null;
@@ -252,10 +287,14 @@ internal static partial class AccessUiProjector
         }
 
         var candidates = ResolveExpressionCandidates(trimmed, objects, fields, out var ambiguous);
-        gaps.Add(new(ambiguous ? "AccessBindingTargetAmbiguous" : "AccessBindingExpressionPartial", "binding", identity.StableKey, RuleIds.LegacyAccessBinding));
+        var expression = AccessExpressionProjector.Project(trimmed, objects, fields, controlNames, fieldSetsByObject);
+        if (expression.GapClassification is not null)
+            gaps.Add(new(expression.GapClassification, "binding", identity.StableKey, RuleIds.LegacyAccessBinding));
+        else if (ambiguous)
+            gaps.Add(new("AccessBindingTargetAmbiguous", "binding", identity.StableKey, RuleIds.LegacyAccessBinding));
         return new(identity, ownerStableKey, bindingKind, "expression",
             AccessSafeValues.RoleHash($"access-{bindingKind}-expression", trimmed), trimmed.Length,
-            candidates, fields is not null ? "field" : "object", "partial");
+            candidates, fields is not null ? "field" : "object", expression.Coverage, expression);
     }
 
     private static AccessBindingProjection MissingReportGroupBinding(
