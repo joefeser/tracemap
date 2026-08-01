@@ -343,6 +343,41 @@ public sealed class AccessVbaProjectionTests
     }
 
     [Fact]
+    public void Projector_reconciles_event_handler_with_static_save_current_record_command()
+    {
+        const string source = """
+            Private Sub Form_Current()
+                DoCmd.RunCommand(acCmdSaveRecord)
+            End Sub
+            """;
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('4', 40), "fixture.accdb", "hash");
+        var result = AccessVbaProjector.Project(seed,
+            [new("Form_frmHost", "form", source)],
+            [new("form-owner", "on-current", "Form_frmHost", "Form_Current")]);
+
+        var binding = Assert.Single(result.EventBindings);
+        Assert.Equal("resolved", binding.Classification);
+        Assert.Equal("save-current-record", binding.CommandKind);
+        Assert.Equal("complete", binding.CommandCoverage);
+        Assert.Contains(result.Modules.Single().Procedures.Single().Effects!,
+            effect => effect.EffectKind == "save-current-record-command");
+    }
+
+    [Fact]
+    public void Projector_keeps_dynamic_event_expression_as_explicit_gap()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('5', 40), "fixture.accdb", "hash");
+        var result = AccessVbaProjector.Project(seed,
+            [new("Form_frmHost", "form", "Private Sub Form_Load()\nEnd Sub")],
+            [new("form-owner", "on-load", "Form_frmHost", "", "form", "dynamic-event-expression", "hash", 12)]);
+
+        var binding = Assert.Single(result.EventBindings);
+        Assert.Equal("unsupported-dynamic-target", binding.Classification);
+        Assert.Equal("partial", binding.Coverage);
+        Assert.Contains(result.Gaps, gap => gap.Classification == "AccessEventProcedureUnresolved");
+    }
+
+    [Fact]
     public void Projector_scopes_missing_procedure_terminator_gaps_to_distinct_procedures()
     {
         const string source = """

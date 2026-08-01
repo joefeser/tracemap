@@ -385,8 +385,27 @@ public static class AccessFactBuilder
                     ("eventExpressionLength", binding.EventExpressionLength > 0 ? binding.EventExpressionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
                     ("procedureStartLine", binding.ProcedureStartLine > 0 ? binding.ProcedureStartLine.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
                     ("procedureEndLine", binding.ProcedureEndLine > 0 ? binding.ProcedureEndLine.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                    ("classification", binding.Classification),
+                    ("commandKind", binding.CommandKind),
+                    ("commandCoverage", binding.CommandCoverage),
+                    ("commandExpressionHash", binding.CommandExpressionHash),
+                    ("commandExpressionLength", binding.CommandExpressionLength > 0 ? binding.CommandExpressionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
                     ("coverageLabel", binding.Coverage),
-                    ("limitations", "exact-same-module-static-candidate;no-event-execution-or-runtime-dispatch-proof"))));
+                    ("limitations", "exact-same-module-static-candidate;save-command-is-static-candidate-only;no-event-execution-or-runtime-dispatch-proof"))));
+            if (binding.CommandKind is not null)
+                facts.Add(Create(manifest, FactTypes.AccessCommandCandidate, RuleIds.LegacyAccessEventBinding,
+                    EvidenceTiers.Tier3SyntaxOrTextual, bindingSpan,
+                    sourceSymbol: binding.ProcedureStableKey ?? binding.OwnerStableKey,
+                    targetSymbol: binding.OwnerStableKey,
+                    properties: Props(
+                        ("ownerStableKey", binding.OwnerStableKey),
+                        ("eventRole", binding.EventRole),
+                        ("commandKind", binding.CommandKind),
+                        ("commandCoverage", binding.CommandCoverage),
+                        ("commandExpressionHash", binding.CommandExpressionHash),
+                        ("commandExpressionLength", binding.CommandExpressionLength > 0 ? binding.CommandExpressionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                        ("coverageLabel", binding.CommandCoverage ?? "partial"),
+                        ("limitations", "static-command-candidate;no-command-execution;no-persistence-proof"))));
         }
 
         foreach (var macro in projection.Macros ?? [])
