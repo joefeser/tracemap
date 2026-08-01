@@ -127,6 +127,29 @@ public sealed record AccessQueryCrosstabProjection(
     IReadOnlyList<string> StaticColumnHashes,
     string Coverage);
 
+public sealed record AccessQueryStaticOutputProjection(
+    int Ordinal,
+    string NameHash,
+    IReadOnlyList<string> SourceFieldStableKeys,
+    string Coverage);
+
+public sealed record AccessQueryStaticProjection(
+    string SqlHash,
+    int SqlLength,
+    IReadOnlyList<AccessQueryDependencyProjection> Dependencies,
+    string? PredicateHash,
+    string? OrderByHash,
+    IReadOnlyList<string> FunctionNameHashes,
+    IReadOnlyList<AccessQueryStaticOutputProjection> Outputs,
+    string Coverage);
+
+public sealed record AccessRowSourceBindingProjection(
+    int? BoundColumn,
+    IReadOnlyList<string> SelectedValueFieldStableKeys,
+    IReadOnlyList<string> ControlSourceFieldStableKeys,
+    IReadOnlyList<string> SurfaceRecordSourceStableKeys,
+    string Coverage);
+
 public sealed record AccessQueryProjection(
     AccessSafeIdentity Identity,
     string QueryKind,
@@ -227,7 +250,10 @@ public sealed record AccessVbaEffectProjection(
     int ExpressionLength,
     string? ConditionHash,
     int ConditionLength,
-    string Coverage);
+    string Coverage,
+    AccessQueryStaticProjection? RowSourceProjection = null,
+    int BranchOrder = 0,
+    AccessRowSourceBindingProjection? RowSourceBinding = null);
 
 public sealed record AccessVbaModuleProjection(
     AccessSafeIdentity Identity,
