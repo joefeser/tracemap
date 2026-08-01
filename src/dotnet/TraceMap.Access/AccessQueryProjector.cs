@@ -10,7 +10,7 @@ public static partial class AccessQueryProjector
         string operationKind,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> knownObjects,
         IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fieldLookups,
-        IReadOnlyDictionary<string, AccessSafeIdentity>? parameterIdentities = null)
+        IReadOnlyList<int>? parameterOrdinals = null)
     {
         var masked = MaskLiteralsAndComments(sql);
         var targetName = operationKind switch
@@ -29,7 +29,7 @@ public static partial class AccessQueryProjector
         };
         var targetFieldKeys = ResolveFields(target?.StableKey, targetFields, fieldLookups);
         var mappings = new List<AccessQueryFieldMappingProjection>();
-        var coverage = target is null && targetName is not null ? "partial" : "complete";
+        var coverage = targetName is null ? "partial" : target is null ? "partial" : "complete";
         if (operationKind is "append" or "make-table")
         {
             var select = SelectList(masked);
@@ -49,6 +49,7 @@ public static partial class AccessQueryProjector
         {
             var set = SetClause(masked);
             var assignments = set is null ? [] : SplitSelectItems(set);
+            if (assignments.Count == 0) coverage = "partial";
             for (var index = 0; index < assignments.Count; index++)
             {
                 var assignment = assignments[index];
@@ -62,7 +63,7 @@ public static partial class AccessQueryProjector
             }
         }
         var predicate = PredicateClause(masked);
-        var parameters = parameterIdentities?.Values.Select((_, i) => i).ToArray() ?? [];
+        var parameters = parameterOrdinals?.Distinct().OrderBy(value => value).ToArray() ?? [];
         return new(operationKind, target?.StableKey, targetFieldKeys, mappings,
             predicate is null ? null : AccessSafeValues.RoleHash("access-query-predicate", predicate), parameters, coverage);
     }
@@ -138,10 +139,27 @@ public static partial class AccessQueryProjector
     {
         var prefix = Regex.Match(masked, $@"(?is)\b{keyword}\b\s+(?:(?:distinct|distinctrow|top\s+\d+(?:\s+percent)?)\s+)*");
         if (!prefix.Success) return null;
-        var tail = masked[(prefix.Index + prefix.Length)..];
-        var match = Regex.Match(tail, @"\s+\bfrom\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        return match.Success ? tail[..match.Index].Trim() : null;
+        var start = prefix.Index + prefix.Length;
+        var depth = 0;
+        var bracket = false;
+        for (var index = start; index < masked.Length; index++)
+        {
+            var current = masked[index];
+            if (current == '[') bracket = true;
+            else if (current == ']') bracket = false;
+            else if (!bracket && current == '(') depth++;
+            else if (!bracket && current == ')' && depth > 0) depth--;
+            else if (!bracket && depth == 0 && IsKeywordAt(masked, index, "from"))
+                return masked[start..index].Trim();
+        }
+        return null;
     }
+
+    private static bool IsKeywordAt(string value, int index, string keyword) =>
+        index + keyword.Length <= value.Length
+        && string.Equals(value.Substring(index, keyword.Length), keyword, StringComparison.OrdinalIgnoreCase)
+        && (index == 0 || !char.IsLetterOrDigit(value[index - 1]) && value[index - 1] != '_')
+        && (index + keyword.Length == value.Length || !char.IsLetterOrDigit(value[index + keyword.Length]) && value[index + keyword.Length] != '_');
 
     private static string? MatchValue(string masked, Regex regex)
     {
@@ -186,9 +204,15 @@ public static partial class AccessQueryProjector
             var tableName = match.Groups["table"].Success ? match.Groups["table"].Value : null;
             var fieldName = match.Groups["field"].Value;
             var tables = tableName is null ? known.Values.SelectMany(value => value).Where(value => value.Kind == "table") : (known.TryGetValue(tableName, out var found) ? found : []);
-            foreach (var table in tables.Where(value => value.Kind == "table"))
-                if (fields.TryGetValue(table.StableKey, out var lookup) && lookup.TryGetValue(fieldName, out var candidates) && candidates.Count == 1)
-                    result.Add(candidates[0].Identity.StableKey);
+            var matches = tables.Where(value => value.Kind == "table")
+                .Where(table => fields.TryGetValue(table.StableKey, out var lookup)
+                    && lookup.TryGetValue(fieldName, out var candidates)
+                    && candidates.Count == 1)
+                .SelectMany(table => fields[table.StableKey][fieldName].Select(field => (table.StableKey, Field: field.Identity.StableKey)))
+                .ToArray();
+            if (tableName is null && matches.Select(value => value.StableKey).Distinct(StringComparer.Ordinal).Count() != 1)
+                continue;
+            result.AddRange(matches.Select(value => value.Field));
         }
         return result.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
     }
@@ -208,9 +232,15 @@ public static partial class AccessQueryProjector
     {
         var match = PivotPattern().Match(MaskLiteralsAndComments(sql));
         if (!match.Success) return [];
-        var inMatch = Regex.Match(sql[match.Index..], @"(?is)\bin\s*\((?<values>[^)]*)\)");
+        var masked = MaskLiteralsAndComments(sql);
+        var inMatch = Regex.Match(masked[match.Index..], @"(?is)\bin\s*\((?<values>[^)]*)\)");
         if (!inMatch.Success) return [];
-        return Regex.Matches(inMatch.Groups["values"].Value, @"'((?:''|[^'])*)'").Select(item => AccessSafeValues.RoleHash("access-query-pivot-column", item.Groups[1].Value.Replace("''", "'"))).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        var original = sql[(match.Index + inMatch.Index)..];
+        var originalValues = Regex.Match(original, @"(?is)\bin\s*\((?<values>[^)]*)\)");
+        if (!originalValues.Success) return [];
+        return Regex.Matches(originalValues.Groups["values"].Value, @"'((?:''|[^'])*)'")
+            .Select(item => AccessSafeValues.RoleHash("access-query-pivot-column", item.Groups[1].Value.Replace("''", "'")))
+            .OrderBy(value => value, StringComparer.Ordinal).ToArray();
     }
 
     public static (IReadOnlyList<AccessQueryDependencyProjection> Dependencies, string Coverage, bool UnsupportedShape) ProjectDependencies(

@@ -150,6 +150,8 @@ public static class AccessDesignEvidenceComposer
             FactTypes.AccessNavigationCandidate,
             FactTypes.AccessUiStateEffectCandidate,
             FactTypes.AccessMacroDeclared,
+            FactTypes.AccessQueryActionLineageCandidate,
+            FactTypes.AccessQueryCrosstabLineageCandidate,
             FactTypes.AnalysisGap
         };
         var designFacts = generated.Facts

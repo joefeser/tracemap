@@ -15,6 +15,16 @@ param(
 # Windows-only synthetic validation for the separately reviewed VBA exporter.
 # It never accepts a representative database and deletes all protected output.
 $ErrorActionPreference = "Stop"
+$scriptRoot = [IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $PSCommandPath) "."))
+function Resolve-OwnedProducer([string]$Path) {
+    $resolved = [IO.Path]::GetFullPath($Path)
+    if ([IO.Path]::GetDirectoryName($resolved) -ne $scriptRoot -or
+        [IO.Path]::GetFileName($resolved) -notin @("Invoke-AccessFixtureGenerator.ps1", "Export-AccessFormReportMetadata.ps1", "Export-AccessVbaSource.ps1")) { throw "AccessVbaProducerPathUnsafe" }
+    return $resolved
+}
+$Generator = Resolve-OwnedProducer $Generator
+$MetadataProducer = Resolve-OwnedProducer $MetadataProducer
+$VbaProducer = Resolve-OwnedProducer $VbaProducer
 $root = [IO.Path]::GetFullPath($SmokeRoot)
 $original = Join-Path $root "fixture.accdb"
 $metadataCopy = Join-Path $root "metadata-copy.accdb"
@@ -57,7 +67,7 @@ try {
         -CommitSha $commit `
         -BaseScanManifestSha256 $zeroHash `
         -DatabaseIdentityHash $zeroHash `
-        -TimeoutSeconds 240 *> $null
+        -TimeoutSeconds 240 -IncludeRawSource *> $null
     if ((Test-Path -LiteralPath $generationCanary) -or (Test-Path -LiteralPath $vbaCanary)) { throw "AccessVbaCanaryFired" }
     if ((Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash -ne $originalHash) {
         throw "AccessVbaOriginalSourceChanged"
@@ -96,19 +106,19 @@ try {
     else {
         "AccessVbaWorkingCopyChanged"
     }
-    $expectedWorkingCopyOutcome = if ($manifest.workingCopy.postExportSha256 -eq $manifest.workingCopy.preExportSha256) {
+    $expectedWorkingCopyOutcome = if ($rawManifest.workingCopyPostExportSha256 -eq $rawManifest.workingCopyPreExportSha256) {
         "AccessVbaWorkingCopyUnchanged"
     }
     else {
         "AccessVbaWorkingCopyChanged"
     }
     if ($manifest.sourceCopy.sha256 -ne $vbaCopyHash -or
-        $manifest.suppliedCopy.preExportSha256 -ne $vbaCopyHash -or
-        $manifest.suppliedCopy.postExportSha256 -ne $copyAfter -or
-        $manifest.suppliedCopy.mutationOutcome -ne $expectedSuppliedCopyOutcome -or
-        $manifest.workingCopy.preExportSha256 -ne $vbaCopyHash -or
-        [string]::IsNullOrWhiteSpace($manifest.workingCopy.postExportSha256) -or
-        $manifest.workingCopy.mutationOutcome -ne $expectedWorkingCopyOutcome) {
+        $rawManifest.suppliedCopyPreExportSha256 -ne $vbaCopyHash -or
+        $rawManifest.suppliedCopyPostExportSha256 -ne $copyAfter -or
+        $rawManifest.suppliedCopyMutationOutcome -ne $expectedSuppliedCopyOutcome -or
+        $rawManifest.workingCopyPreExportSha256 -ne $vbaCopyHash -or
+        [string]::IsNullOrWhiteSpace($rawManifest.workingCopyPostExportSha256) -or
+        $rawManifest.workingCopyMutationOutcome -ne $expectedWorkingCopyOutcome) {
         throw "AccessVbaWorkingCopyOutcomeInvalid"
     }
     if (Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue) { throw "AccessVbaProcessCleanupFailed" }
