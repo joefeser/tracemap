@@ -19,7 +19,8 @@ copy so the existing deterministic VBA projector can emit bounded static facts.
 4. Module count before/after extraction is a canary. A changed count, visible
    Access, fired canary, source mutation, timeout, or cleanup failure fails
    closed and removes partial output.
-5. Raw module files live separately from normalized protected evidence input.
+5. Raw module files and full form/report definitions live separately from
+   normalized protected evidence input. Layout parsing is deferred.
    Standard artifacts contain only hashes, safe identities, spans, rule IDs,
    provenance, coverage, gaps, and limitations—not raw source or expressions.
 6. The normalized input reuses `vba-module` and `AccessVbaProjector`. Exact

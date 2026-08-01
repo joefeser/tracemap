@@ -62,7 +62,7 @@ try {
     if ((Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash -ne $originalHash -or
         (Get-FileHash -LiteralPath $vbaCopy -Algorithm SHA256).Hash -ne $vbaCopyHash) { throw "AccessVbaSourceChanged" }
     $normalized = Join-Path $output "normalized-design-evidence"
-    $raw = Join-Path $output "private-vba-source"
+    $raw = Join-Path $output "private-access-source"
     $manifestPath = Join-Path $normalized "access-design-manifest.json"
     $recordsPath = Join-Path $normalized "access-design-records.ndjson"
     if (-not (Test-Path -LiteralPath $manifestPath) -or -not (Test-Path -LiteralPath $recordsPath) -or
@@ -70,7 +70,8 @@ try {
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
     $records = @(Get-Content -LiteralPath $recordsPath | ForEach-Object { $_ | ConvertFrom-Json })
     if ($manifest.producer.mechanism -ne "access-save-as-text-vba" -or
-        @($records | Where-Object kind -eq "vba-module").Count -le 0) { throw "AccessVbaOutputInvalid" }
+        @($records | Where-Object kind -eq "vba-module").Count -le 0 -or
+        (Get-Content -LiteralPath (Join-Path $raw "source-manifest.json") -Raw | ConvertFrom-Json).formReportDesignFileCount -le 0) { throw "AccessVbaOutputInvalid" }
     if (Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue) { throw "AccessVbaProcessCleanupFailed" }
 }
 finally {
