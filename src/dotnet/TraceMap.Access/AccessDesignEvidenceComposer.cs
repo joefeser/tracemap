@@ -708,11 +708,18 @@ public static class AccessDesignEvidenceComposer
         CodeFact fact,
         IReadOnlyDictionary<string, IReadOnlyList<AccessDesignEvidenceRecord>> support)
     {
-        foreach (var key in new[] { fact.TargetSymbol, fact.SourceSymbol,
+        var keys = fact.FactType == FactTypes.AccessCommandCandidate
+            ? new[] { fact.SourceSymbol, fact.TargetSymbol,
+                     fact.Properties.GetValueOrDefault("procedureStableKey"),
+                     fact.Properties.GetValueOrDefault("moduleStableKey"),
+                     fact.Properties.GetValueOrDefault("ownerStableKey"),
+                     fact.Properties.GetValueOrDefault("scopeStableKey") }
+            : new[] { fact.TargetSymbol, fact.SourceSymbol,
                      fact.Properties.GetValueOrDefault("scopeStableKey"),
                      fact.Properties.GetValueOrDefault("ownerStableKey"),
                      fact.Properties.GetValueOrDefault("moduleStableKey"),
-                     fact.Properties.GetValueOrDefault("procedureStableKey") })
+                     fact.Properties.GetValueOrDefault("procedureStableKey") };
+        foreach (var key in keys)
             if (key is not null && support.TryGetValue(key, out var record))
                 return record;
         return [];
@@ -728,7 +735,8 @@ public static class AccessDesignEvidenceComposer
             && fact.FactType is FactTypes.AccessVbaProcedureDeclared
                 or FactTypes.AccessEventBindingCandidate
                 or FactTypes.AccessNavigationCandidate
-                or FactTypes.AccessUiStateEffectCandidate)
+                or FactTypes.AccessUiStateEffectCandidate
+                or FactTypes.AccessCommandCandidate)
         {
             start += Math.Max(0, fact.Evidence.StartLine - 1);
             end = start + Math.Max(0, fact.Evidence.EndLine - fact.Evidence.StartLine);

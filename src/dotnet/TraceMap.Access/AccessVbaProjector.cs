@@ -542,16 +542,20 @@ internal static partial class AccessVbaProjector
             var procedure = procedureCandidates.Length == 1 ? procedureCandidates[0].Procedure.Projection : null;
             var procedureStableKey = procedure?.Identity.StableKey;
             var moduleResolved = moduleCandidates.Length == 1;
-            var classification = !moduleResolved
-                ? "ambiguous"
-                : procedureCandidates.Length switch
+            var classification = moduleCandidates.Length switch
             {
-                1 when reference.BindingKind == "event-procedure" => "resolved",
-                1 when reference.BindingKind == "expression-function" => "expression-handler",
-                1 => "resolved",
+                0 when reference.BindingKind == "dynamic-event-expression" => "unsupported-dynamic-target",
+                0 => "declared-handler-missing",
                 > 1 => "ambiguous",
-                _ when reference.BindingKind == "dynamic-event-expression" => "unsupported-dynamic-target",
-                _ => "declared-handler-missing"
+                _ => procedureCandidates.Length switch
+                {
+                    1 when reference.BindingKind == "event-procedure" => "resolved",
+                    1 when reference.BindingKind == "expression-function" => "expression-handler",
+                    1 => "resolved",
+                    > 1 => "ambiguous",
+                    _ when reference.BindingKind == "dynamic-event-expression" => "unsupported-dynamic-target",
+                    _ => "declared-handler-missing"
+                }
             };
             var command = procedure?.Effects?.FirstOrDefault(effect => effect.EffectKind == "save-current-record-command");
             result.Add(new(reference.OwnerStableKey, reference.EventRole, moduleStableKey, procedureStableKey,
@@ -561,9 +565,13 @@ internal static partial class AccessVbaProjector
                 command is null ? null : "save-current-record",
                 command?.Coverage,
                 command?.ExpressionHash,
-                command?.ExpressionLength ?? 0));
-            if (!moduleResolved || procedureCandidates.Length != 1)
-                gaps.Add(new(!moduleResolved || procedureCandidates.Length > 1 ? "AccessEventProcedureAmbiguous" : "AccessEventProcedureUnresolved",
+                command?.ExpressionLength ?? 0,
+                command?.StartLine ?? 0,
+                command?.EndLine ?? 0));
+            if (moduleCandidates.Length != 1 || procedureCandidates.Length != 1)
+                gaps.Add(new(moduleCandidates.Length == 0 || procedureCandidates.Length == 0
+                        ? "AccessEventProcedureUnresolved"
+                        : "AccessEventProcedureAmbiguous",
                     "event-binding", reference.OwnerStableKey, RuleIds.LegacyAccessEventBinding));
         }
         return result.OrderBy(item => item.OwnerStableKey, StringComparer.Ordinal).ThenBy(item => item.EventRole, StringComparer.Ordinal).ToArray();

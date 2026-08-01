@@ -279,7 +279,9 @@ public sealed record AccessEventBindingProjection(
     string? CommandKind = null,
     string? CommandCoverage = null,
     string? CommandExpressionHash = null,
-    int CommandExpressionLength = 0);
+    int CommandExpressionLength = 0,
+    int CommandStartLine = 0,
+    int CommandEndLine = 0);
 
 public sealed record AccessMacroProjection(
     AccessSafeIdentity Identity,
