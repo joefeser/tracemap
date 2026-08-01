@@ -147,6 +147,7 @@ public static class AccessDesignEvidenceComposer
             FactTypes.AccessVbaModuleDeclared,
             FactTypes.AccessVbaProcedureDeclared,
             FactTypes.AccessEventBindingCandidate,
+            FactTypes.AccessCommandCandidate,
             FactTypes.AccessNavigationCandidate,
             FactTypes.AccessUiStateEffectCandidate,
             FactTypes.AccessMacroDeclared,
@@ -1043,6 +1044,12 @@ public static class AccessDesignEvidenceComposer
                     gaps.Add(new("AccessEventExpressionDynamic", "event-binding", ownerStableKey, RuleIds.LegacyAccessEventBinding));
                 else if (value.Length > 0)
                     gaps.Add(new("AccessEventHandlerUnsupported", "event-binding", ownerStableKey, RuleIds.LegacyAccessEventBinding));
+                if (value.StartsWith("=", StringComparison.Ordinal))
+                {
+                    var dynamicExpressionHash = AccessSafeValues.RoleHash($"access-event-{entry.Role}", value);
+                    references.Add(new(ownerStableKey, entry.Role, moduleName, string.Empty,
+                        ownerKind, "dynamic-event-expression", dynamicExpressionHash, value.Length));
+                }
                 continue;
             }
             var expressionHash = bindingKind == "expression-function"

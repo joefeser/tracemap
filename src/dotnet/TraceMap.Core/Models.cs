@@ -273,6 +273,7 @@ public static class FactTypes
     public const string AccessEventBindingCandidate = nameof(AccessEventBindingCandidate);
     public const string AccessNavigationCandidate = nameof(AccessNavigationCandidate);
     public const string AccessUiStateEffectCandidate = nameof(AccessUiStateEffectCandidate);
+    public const string AccessCommandCandidate = nameof(AccessCommandCandidate);
     public const string AccessMacroDeclared = nameof(AccessMacroDeclared);
     public const string UiTemplateBinding = nameof(UiTemplateBinding);
     public const string UiFormControlBinding = nameof(UiFormControlBinding);

@@ -274,7 +274,12 @@ public sealed record AccessEventBindingProjection(
     string? EventExpressionHash = null,
     int EventExpressionLength = 0,
     int ProcedureStartLine = 0,
-    int ProcedureEndLine = 0);
+    int ProcedureEndLine = 0,
+    string Classification = "resolved",
+    string? CommandKind = null,
+    string? CommandCoverage = null,
+    string? CommandExpressionHash = null,
+    int CommandExpressionLength = 0);
 
 public sealed record AccessMacroProjection(
     AccessSafeIdentity Identity,
