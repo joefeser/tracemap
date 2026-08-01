@@ -210,6 +210,39 @@ public static class AccessFactBuilder
                             ("limitations", "static-query-output-source-candidate;no-query-execution;no-row-read"))));
                 }
             }
+
+            if (query.ActionLineage is { } action)
+            {
+                facts.Add(Create(manifest, FactTypes.AccessQueryActionLineageCandidate, RuleIds.LegacyAccessQuery,
+                    EvidenceTiers.Tier3SyntaxOrTextual, span, sourceSymbol: query.Identity.StableKey,
+                    targetSymbol: action.TargetStableKey,
+                    properties: Props(
+                        ("queryStableKey", query.Identity.StableKey),
+                        ("operationKind", action.OperationKind),
+                        ("targetStableKey", action.TargetStableKey ?? ""),
+                        ("targetFieldStableKeys", string.Join(';', action.TargetFieldStableKeys)),
+                        ("fieldMappings", string.Join(';', action.FieldMappings.Select(mapping =>
+                            $"{mapping.Ordinal}:{mapping.TargetFieldStableKey ?? ""}:{string.Join(',', mapping.SourceFieldStableKeys)}:{mapping.SourceExpressionHash ?? ""}:{mapping.Coverage}"))),
+                        ("predicateExpressionHash", action.PredicateExpressionHash ?? ""),
+                        ("parameterOrdinals", string.Join(';', action.ParameterOrdinals)),
+                        ("coverageLabel", action.Coverage),
+                        ("limitations", "static-sql-shape-only;no-query-execution;no-row-read;dynamic-targets-remain-gaps"))));
+            }
+
+            if (query.CrosstabLineage is { } crosstab)
+            {
+                facts.Add(Create(manifest, FactTypes.AccessQueryCrosstabLineageCandidate, RuleIds.LegacyAccessQuery,
+                    EvidenceTiers.Tier3SyntaxOrTextual, span, sourceSymbol: query.Identity.StableKey,
+                    properties: Props(
+                        ("queryStableKey", query.Identity.StableKey),
+                        ("rowHeadingFieldStableKeys", string.Join(';', crosstab.RowHeadingFieldStableKeys)),
+                        ("aggregateExpressionHash", crosstab.AggregateExpressionHash ?? ""),
+                        ("valueExpressionHash", crosstab.ValueExpressionHash ?? ""),
+                        ("pivotExpressionHash", crosstab.PivotExpressionHash ?? ""),
+                        ("staticColumnHashes", string.Join(';', crosstab.StaticColumnHashes)),
+                        ("coverageLabel", crosstab.Coverage),
+                        ("limitations", "static-crosstab-shape-only;no-row-read;dynamic-pivot-values-remain-gaps"))));
+            }
         }
 
         foreach (var boundary in projection.ExternalLinks)

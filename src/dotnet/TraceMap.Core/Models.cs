@@ -261,6 +261,8 @@ public static class FactTypes
     public const string AccessQueryDependencyCandidate = nameof(AccessQueryDependencyCandidate);
     public const string AccessQueryOutputDeclared = nameof(AccessQueryOutputDeclared);
     public const string AccessQueryOutputSourceCandidate = nameof(AccessQueryOutputSourceCandidate);
+    public const string AccessQueryActionLineageCandidate = nameof(AccessQueryActionLineageCandidate);
+    public const string AccessQueryCrosstabLineageCandidate = nameof(AccessQueryCrosstabLineageCandidate);
     public const string AccessExternalLinkDeclared = nameof(AccessExternalLinkDeclared);
     public const string AccessFormDeclared = nameof(AccessFormDeclared);
     public const string AccessReportDeclared = nameof(AccessReportDeclared);

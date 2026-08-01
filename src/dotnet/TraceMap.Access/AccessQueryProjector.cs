@@ -5,6 +5,90 @@ namespace TraceMap.Access;
 
 public static partial class AccessQueryProjector
 {
+    public static AccessQueryActionProjection ProjectActionLineage(
+        string sql,
+        string operationKind,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> knownObjects,
+        IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fieldLookups,
+        IReadOnlyDictionary<string, AccessSafeIdentity>? parameterIdentities = null)
+    {
+        var masked = MaskLiteralsAndComments(sql);
+        var targetName = operationKind switch
+        {
+            "append" or "make-table" => MatchValue(masked, AppendTargetPattern()),
+            "update" => MatchValue(masked, UpdateTargetPattern()),
+            "delete" => MatchValue(masked, DeleteTargetPattern()),
+            _ => null
+        };
+        var target = ResolveUnique(targetName, knownObjects);
+        var targetFields = operationKind switch
+        {
+            "append" or "make-table" => ParseParenthesizedNames(masked, AppendTargetFieldsPattern().Match(masked)),
+            "update" => ParseUpdateTargets(masked),
+            _ => []
+        };
+        var targetFieldKeys = ResolveFields(target?.StableKey, targetFields, fieldLookups);
+        var mappings = new List<AccessQueryFieldMappingProjection>();
+        var coverage = target is null && targetName is not null ? "partial" : "complete";
+        if (operationKind is "append" or "make-table")
+        {
+            var select = SelectList(masked);
+            var items = select is null ? [] : SplitSelectItems(select);
+            if (items.Count == 0) coverage = "partial";
+            for (var index = 0; index < Math.Max(items.Count, targetFields.Count); index++)
+            {
+                var expression = index < items.Count ? items[index].Trim() : null;
+                var targetField = index < targetFieldKeys.Count ? targetFieldKeys[index] : null;
+                var sources = expression is null ? [] : ResolveExpressionFields(expression, knownObjects, fieldLookups);
+                var mapped = expression is not null && targetField is not null && sources.Count > 0 ? "complete" : "partial";
+                if (mapped == "partial") coverage = "partial";
+                mappings.Add(new(index, expression is null ? null : AccessSafeValues.RoleHash("access-query-expression", expression), sources, targetField, mapped));
+            }
+        }
+        else if (operationKind == "update")
+        {
+            var set = SetClause(masked);
+            var assignments = set is null ? [] : SplitSelectItems(set);
+            for (var index = 0; index < assignments.Count; index++)
+            {
+                var assignment = assignments[index];
+                var equals = assignment.IndexOf('=');
+                var targetField = equals < 0 ? null : ResolveFields(target?.StableKey, [assignment[..equals].Trim()], fieldLookups).FirstOrDefault();
+                var expression = equals < 0 ? null : assignment[(equals + 1)..].Trim();
+                var sources = expression is null ? [] : ResolveExpressionFields(expression, knownObjects, fieldLookups);
+                var mapped = targetField is not null && expression is not null ? "complete" : "partial";
+                if (mapped == "partial") coverage = "partial";
+                mappings.Add(new(index, expression is null ? null : AccessSafeValues.RoleHash("access-query-expression", expression), sources, targetField, mapped));
+            }
+        }
+        var predicate = PredicateClause(masked);
+        var parameters = parameterIdentities?.Values.Select((_, i) => i).ToArray() ?? [];
+        return new(operationKind, target?.StableKey, targetFieldKeys, mappings,
+            predicate is null ? null : AccessSafeValues.RoleHash("access-query-predicate", predicate), parameters, coverage);
+    }
+
+    public static AccessQueryCrosstabProjection ProjectCrosstabLineage(
+        string sql,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> knownObjects,
+        IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fieldLookups)
+    {
+        var masked = MaskLiteralsAndComments(sql);
+        var select = SelectListAfterKeyword(masked, "select");
+        var rowExpressions = select is null ? [] : SplitSelectItems(select);
+        var row = rowExpressions.SelectMany(item => ResolveExpressionFields(item, knownObjects, fieldLookups)).Distinct(StringComparer.Ordinal).ToArray();
+        var aggregate = MatchValue(masked, TransformPattern());
+        var pivot = MatchValue(masked, PivotPattern());
+        var value = aggregate is null ? null : aggregate[(aggregate.IndexOf(' ', StringComparison.Ordinal) + 1)..].Trim();
+        var staticColumns = ParsePivotColumns(sql);
+        var coverage = row.Length > 0 && aggregate is not null && pivot is not null ? "complete" : "partial";
+        if (pivot is not null && staticColumns.Count == 0) coverage = "partial";
+        return new(row,
+            aggregate is null ? null : AccessSafeValues.RoleHash("access-query-aggregate", aggregate),
+            value is null ? null : AccessSafeValues.RoleHash("access-query-value", value),
+            pivot is null ? null : AccessSafeValues.RoleHash("access-query-pivot", pivot),
+            staticColumns, coverage);
+    }
+
     public static bool IsDirectOutputField(string sql, string outputName)
     {
         if (string.IsNullOrWhiteSpace(sql) || string.IsNullOrWhiteSpace(outputName))
@@ -46,6 +130,87 @@ public static partial class AccessQueryProjector
         }
         result.Add(value[start..]);
         return result;
+    }
+
+    private static string? SelectList(string masked) => SelectListAfterKeyword(masked, "select");
+
+    private static string? SelectListAfterKeyword(string masked, string keyword)
+    {
+        var prefix = Regex.Match(masked, $@"(?is)\b{keyword}\b\s+(?:(?:distinct|distinctrow|top\s+\d+(?:\s+percent)?)\s+)*");
+        if (!prefix.Success) return null;
+        var tail = masked[(prefix.Index + prefix.Length)..];
+        var match = Regex.Match(tail, @"\s+\bfrom\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return match.Success ? tail[..match.Index].Trim() : null;
+    }
+
+    private static string? MatchValue(string masked, Regex regex)
+    {
+        var match = regex.Match(masked);
+        return match.Success ? match.Groups["value"].Value.Trim() : null;
+    }
+
+    private static AccessSafeIdentity? ResolveUnique(string? name, IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> known)
+    {
+        if (string.IsNullOrWhiteSpace(name) || !known.TryGetValue(name, out var candidates) || candidates.Count != 1) return null;
+        var candidate = candidates[0];
+        return new(null, AccessSafeValues.RoleHash("access-resolved-name", name), candidate.StableKey);
+    }
+
+    private static IReadOnlyList<string> ParseParenthesizedNames(string masked, Match match)
+    {
+        if (!match.Success || !match.Groups["fields"].Success) return [];
+        return match.Groups["fields"].Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(UnquoteIdentifier).ToArray();
+    }
+
+    private static IReadOnlyList<string> ParseUpdateTargets(string masked)
+    {
+        var set = SetClause(masked);
+        return set is null ? [] : SplitSelectItems(set).Select(item => item[..Math.Max(0, item.IndexOf('='))].Trim()).Where(value => value.Length > 0).Select(UnquoteIdentifier).ToArray();
+    }
+
+    private static string UnquoteIdentifier(string value) => value.Trim().Trim('[', ']').Split('.').Last().Trim('[', ']');
+
+    private static IReadOnlyList<string> ResolveFields(string? tableKey, IReadOnlyList<string> names, IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fields)
+    {
+        if (tableKey is null || !fields.TryGetValue(tableKey, out var lookup)) return [];
+        return names.SelectMany(name => lookup.TryGetValue(UnquoteIdentifier(name), out var candidates) && candidates.Count == 1
+            ? candidates.Select(candidate => candidate.Identity.StableKey) : []).ToArray();
+    }
+
+    private static IReadOnlyList<string> ResolveExpressionFields(string expression, IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> known, IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fields)
+    {
+        var result = new List<string>();
+        foreach (Match match in FieldReferencePattern().Matches(expression))
+        {
+            var tableName = match.Groups["table"].Success ? match.Groups["table"].Value : null;
+            var fieldName = match.Groups["field"].Value;
+            var tables = tableName is null ? known.Values.SelectMany(value => value).Where(value => value.Kind == "table") : (known.TryGetValue(tableName, out var found) ? found : []);
+            foreach (var table in tables.Where(value => value.Kind == "table"))
+                if (fields.TryGetValue(table.StableKey, out var lookup) && lookup.TryGetValue(fieldName, out var candidates) && candidates.Count == 1)
+                    result.Add(candidates[0].Identity.StableKey);
+        }
+        return result.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+    }
+
+    private static string? SetClause(string masked) => Clause(masked, "set", ["where", "order", ";", "$"]);
+    private static string? PredicateClause(string masked) => Clause(masked, "where", ["group", "order", ";", "$"]);
+    private static string? Clause(string masked, string keyword, string[] boundaries)
+    {
+        var start = Regex.Match(masked, $@"(?is)\b{keyword}\b");
+        if (!start.Success) return null;
+        var tail = masked[(start.Index + start.Length)..];
+        var end = Regex.Match(tail, $@"(?is)\s+(?:{string.Join('|', boundaries.Where(x => x != "$"))})\b|;").Index;
+        return tail[..(end == 0 ? tail.Length : end)].Trim();
+    }
+
+    private static IReadOnlyList<string> ParsePivotColumns(string sql)
+    {
+        var match = PivotPattern().Match(MaskLiteralsAndComments(sql));
+        if (!match.Success) return [];
+        var inMatch = Regex.Match(sql[match.Index..], @"(?is)\bin\s*\((?<values>[^)]*)\)");
+        if (!inMatch.Success) return [];
+        return Regex.Matches(inMatch.Groups["values"].Value, @"'((?:''|[^'])*)'").Select(item => AccessSafeValues.RoleHash("access-query-pivot-column", item.Groups[1].Value.Replace("''", "'"))).OrderBy(value => value, StringComparer.Ordinal).ToArray();
     }
 
     public static (IReadOnlyList<AccessQueryDependencyProjection> Dependencies, string Coverage, bool UnsupportedShape) ProjectDependencies(
@@ -170,4 +335,25 @@ public static partial class AccessQueryProjector
 
     [GeneratedRegex(@"^(?:(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_.$]*)\s*\.\s*)?(?:\[(?<bracketed>[^\]]+)\]|(?<plain>[A-Za-z_][A-Za-z0-9_ ]*))$", RegexOptions.CultureInvariant)]
     private static partial Regex DirectSelectFieldPattern();
+
+    [GeneratedRegex(@"(?ix)\binto\s+(?:\[(?<value>[^\]]+)\]|(?<value>[A-Za-z_][A-Za-z0-9_.$]*))", RegexOptions.CultureInvariant)]
+    private static partial Regex AppendTargetPattern();
+
+    [GeneratedRegex(@"(?ix)\binto\s+(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_.$]*)\s*\((?<fields>[^)]*)\)", RegexOptions.CultureInvariant)]
+    private static partial Regex AppendTargetFieldsPattern();
+
+    [GeneratedRegex(@"(?ix)\bupdate\s+(?:\[(?<value>[^\]]+)\]|(?<value>[A-Za-z_][A-Za-z0-9_.$]*))", RegexOptions.CultureInvariant)]
+    private static partial Regex UpdateTargetPattern();
+
+    [GeneratedRegex(@"(?ix)\bdelete\s+from\s+(?:\[(?<value>[^\]]+)\]|(?<value>[A-Za-z_][A-Za-z0-9_.$]*))", RegexOptions.CultureInvariant)]
+    private static partial Regex DeleteTargetPattern();
+
+    [GeneratedRegex(@"(?is)\btransform\b(?<value>.*?)\bselect\b", RegexOptions.CultureInvariant)]
+    private static partial Regex TransformPattern();
+
+    [GeneratedRegex(@"(?is)\bpivot\b(?<value>.*?)(?:\bin\b|;|$)", RegexOptions.CultureInvariant)]
+    private static partial Regex PivotPattern();
+
+    [GeneratedRegex(@"(?ix)(?:(?:\[(?<table>[^\]]+)\]|(?<table>[A-Za-z_][A-Za-z0-9_]*))\s*\.\s*)?(?:\[(?<field>[^\]]+)\]|(?<field>[A-Za-z_][A-Za-z0-9_]*))", RegexOptions.CultureInvariant)]
+    private static partial Regex FieldReferencePattern();
 }
