@@ -210,7 +210,9 @@ public sealed class AccessFoundationTests
         {
             ["table-events"] = new(StringComparer.OrdinalIgnoreCase)
             {
-                ["Category"] = [new(field, 0, "text", 64, false)]
+                ["Category"] = [new(field, 0, "text", 64, false)],
+                ["Amount"] = [new(new(null, "amount", "field-amount"), 1, "decimal", 16, false)],
+                ["Month"] = [new(new(null, "month", "field-month"), 2, "text", 16, false)]
             }
         };
 
@@ -223,12 +225,16 @@ public sealed class AccessFoundationTests
         var alternateStaticShape = AccessQueryProjector.ProjectCrosstabLineage(
             "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN (\"Q1\",2025);",
             known, fields);
+        var partiallyResolvedRows = AccessQueryProjector.ProjectCrosstabLineage(
+            "TRANSFORM Sum(Events.Amount) SELECT Events.Category, MissingCategory FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
+            known, fields);
 
         Assert.Equal(["field-row"], staticShape.RowHeadingFieldStableKeys);
         Assert.Equal(2, staticShape.StaticColumnHashes.Count);
         Assert.NotEqual(staticShape.AggregateExpressionHash, staticShape.ValueExpressionHash);
         Assert.Equal("complete", staticShape.Coverage);
         Assert.Equal(2, alternateStaticShape.StaticColumnHashes.Count);
+        Assert.Equal("partial", partiallyResolvedRows.Coverage);
         Assert.Empty(dynamicShape.StaticColumnHashes);
         Assert.Equal("partial", dynamicShape.Coverage);
     }
