@@ -50,13 +50,21 @@ the corrected head still requires a fresh Windows synthetic smoke run.
 The corrected smoke reached the exporter and reported the old combined
 `AccessVbaSourceChanged` classification. Original and disposable-copy hashes
 were previously treated as one gate, so that result does not establish an
-original mutation. The exporter now fails closed only for
-`AccessVbaOriginalSourceChanged`; it records pre/post disposable-copy hashes
-and either `AccessVbaWorkingCopyUnchanged` or `AccessVbaWorkingCopyChanged` in
-the private and normalized manifests. Filesystem read-only mode was not added:
-the observed Access bookkeeping occurs on the disposable copy, and read-only
-opening has not been validated for this export mechanism. A new isolated
-Windows synthetic smoke run is required to verify the explicit outcome.
+original mutation. The exporter now gives original and supplied copies distinct
+strict classifications and records pre/post inner-working-copy hashes and a
+typed outcome. Filesystem read-only mode was not added because it is unvalidated
+for the Access open/export mechanism.
+
+The next synthetic smoke reached `OpenCurrentDatabase` and stopped at the
+generation sentinel. The fixture has an intentional `StartupForm` whose
+`Form_Open` writes that sentinel, while the exporter opened the supplied copy
+directly. The exporter now follows the reviewed metadata exporter pattern: it
+creates a bounded inner scratch copy, clears only `StartupForm` with DAO,
+closes DAO, then opens the inner copy with disabled automation and invisible
+UI. Original and supplied-copy hashes remain integrity gates; inner-copy
+pre/post hashes and outcome are recorded, and the inner scratch is removed.
+Visible UI, generation canary, and extraction canary now have distinct typed
+classifications. A fresh synthetic Windows smoke run is required at this head.
 
 Deferred: standard/class classification beyond form/report naming, dynamic
 expressions, nonzero argument functions, callbacks, macro code, section-level

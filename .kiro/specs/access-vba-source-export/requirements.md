@@ -13,7 +13,7 @@ copy so the existing deterministic VBA projector can emit bounded static facts.
 2. It requires a hash-identical disposable copy before export, an unchanged
    original, compatible protected form/report metadata bundle, provenance
    hashes, and separate generation/extraction canaries. The output records
-   pre/post disposable-copy hashes and a typed working-copy outcome.
+   pre/post supplied-copy and inner-working-copy hashes with typed outcomes.
 3. Before opening the copy it forces automation security and invisibility. It
    never opens/renders a form/report, executes a query/macro/VBA procedure,
    inspects rows, or invokes an event.
@@ -22,6 +22,9 @@ copy so the existing deterministic VBA projector can emit bounded static facts.
    fails closed and removes partial output. A disposable-copy mutation is
    explicitly recorded as `AccessVbaWorkingCopyChanged`; it is never presented
    as original-source mutation or evidence that source content was unchanged.
+   The supplied copy remains an integrity gate; only the per-run inner scratch
+   copy may receive Access bookkeeping after its StartupForm property is
+   removed through DAO.
 5. Raw module files and full form/report definitions live separately from
    normalized protected evidence input. Layout parsing is deferred.
    Standard artifacts contain only hashes, safe identities, spans, rule IDs,

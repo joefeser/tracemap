@@ -25,13 +25,15 @@ the same non-invoking export mechanism for form/report metadata. Module catalog
 identity reads remain a new guarded capability, validated by count canaries,
 invisibility, source hashes, timeout, and process cleanup.
 
-The original file is the only source-integrity gate: its hash must remain
-unchanged or the exporter removes output and returns
-`AccessVbaOriginalSourceChanged`. Access bookkeeping can change an opened
-disposable copy. The bundle records initial and final copy hashes and a typed
-working-copy outcome instead of conflating that observation with an original
-mutation. Filesystem read-only mode is not enabled without a separately
-validated Access compatibility decision.
+The original and supplied disposable file are integrity gates: either changing
+causes output removal and a typed source/copy failure. Before Access opens a
+database, the exporter creates an inner scratch copy, removes only `StartupForm`
+through DAO, and opens that inner copy. This prevents the startup sentinel from
+being invoked without opening or rendering a surface. The bundle records the
+initial/final hashes and typed outcome for both supplied and inner copies;
+only the inner copy is expected to receive Access bookkeeping and it is removed
+before output succeeds. Filesystem read-only mode is not enabled without a
+separately validated Access compatibility decision.
 
 The composer maps only `[Event Procedure]` or exact `=Identifier()` to a
 candidate procedure in `Form_<surface>` or `Report_<surface>`. Arguments,

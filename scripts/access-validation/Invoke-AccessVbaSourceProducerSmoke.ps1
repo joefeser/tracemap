@@ -74,20 +74,29 @@ try {
         @($records | Where-Object kind -eq "vba-module").Count -le 0 -or
         (Get-Content -LiteralPath (Join-Path $raw "source-manifest.json") -Raw | ConvertFrom-Json).formReportDesignFileCount -le 0) { throw "AccessVbaOutputInvalid" }
     $copyAfter = (Get-FileHash -LiteralPath $vbaCopy -Algorithm SHA256).Hash
-    $expectedWorkingCopyOutcome = if ($copyAfter -eq $vbaCopyHash) {
+    $expectedSuppliedCopyOutcome = if ($copyAfter -eq $vbaCopyHash) {
+        "AccessVbaWorkingCopyUnchanged"
+    }
+    else {
+        "AccessVbaWorkingCopyChanged"
+    }
+    $expectedWorkingCopyOutcome = if ($manifest.workingCopy.postExportSha256 -eq $manifest.workingCopy.preExportSha256) {
         "AccessVbaWorkingCopyUnchanged"
     }
     else {
         "AccessVbaWorkingCopyChanged"
     }
     if ($manifest.sourceCopy.sha256 -ne $vbaCopyHash -or
+        $manifest.suppliedCopy.preExportSha256 -ne $vbaCopyHash -or
+        $manifest.suppliedCopy.postExportSha256 -ne $copyAfter -or
+        $manifest.suppliedCopy.mutationOutcome -ne $expectedSuppliedCopyOutcome -or
         $manifest.workingCopy.preExportSha256 -ne $vbaCopyHash -or
-        $manifest.workingCopy.postExportSha256 -ne $copyAfter -or
+        [string]::IsNullOrWhiteSpace($manifest.workingCopy.postExportSha256) -or
         $manifest.workingCopy.mutationOutcome -ne $expectedWorkingCopyOutcome) {
         throw "AccessVbaWorkingCopyOutcomeInvalid"
     }
     if (Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue) { throw "AccessVbaProcessCleanupFailed" }
-    Write-Output "access-vba-source-smoke=completed;originalSourceUnchanged=true;workingCopyOutcome=$expectedWorkingCopyOutcome;canariesClear=true;processCleanup=true"
+    Write-Output "access-vba-source-smoke=completed;originalSourceUnchanged=true;suppliedCopyOutcome=$expectedSuppliedCopyOutcome;workingCopyOutcome=$expectedWorkingCopyOutcome;canariesClear=true;processCleanup=true"
 }
 finally {
     if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }

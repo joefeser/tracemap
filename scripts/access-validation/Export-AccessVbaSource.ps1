@@ -104,9 +104,9 @@ function Remove-DirectoryWithRetry([string]$Path) {
     return $false
 }
 
-function Test-OriginalHashUnchanged([string]$OriginalPath, [string]$OriginalHash) {
+function Test-HashUnchanged([string]$Path, [string]$ExpectedHash) {
     try {
-        return (Get-Sha256 $OriginalPath) -eq $OriginalHash
+        return (Get-Sha256 $Path) -eq $ExpectedHash
     }
     catch { return $false }
 }
@@ -215,7 +215,8 @@ if (-not $InternalWorker) {
         Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
         if (Test-Path -LiteralPath $output) { Remove-DirectoryWithRetry $output | Out-Null }
         Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
-        if (-not (Test-OriginalHashUnchanged $original $originalBefore)) { Stop-Export "AccessVbaOriginalSourceChanged" }
+        if (-not (Test-HashUnchanged $original $originalBefore)) { Stop-Export "AccessVbaOriginalSourceChanged" }
+        if (-not (Test-HashUnchanged $copy $copyBefore)) { Stop-Export "AccessVbaSuppliedCopyChanged" }
         Stop-Export "AccessVbaTimeout"
     }
     $errors = @()
@@ -234,9 +235,13 @@ if (-not $InternalWorker) {
         Stop-Export "AccessVbaProcessCleanupFailed"
     }
     Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
-    if (-not (Test-OriginalHashUnchanged $original $originalBefore)) {
+    if (-not (Test-HashUnchanged $original $originalBefore)) {
         if (Test-Path -LiteralPath $output) { Remove-DirectoryWithRetry $output | Out-Null }
         Stop-Export "AccessVbaOriginalSourceChanged"
+    }
+    if (-not (Test-HashUnchanged $copy $copyBefore)) {
+        if (Test-Path -LiteralPath $output) { Remove-DirectoryWithRetry $output | Out-Null }
+        Stop-Export "AccessVbaSuppliedCopyChanged"
     }
     if ((Test-Path -LiteralPath $generationCanary) -or (Test-Path -LiteralPath $extractionCanary)) {
         if (Test-Path -LiteralPath $output) { Remove-DirectoryWithRetry $output | Out-Null }
@@ -251,11 +256,21 @@ if (-not $InternalWorker) {
 $originalBeforeWorker = Get-Sha256 $original
 $copyBeforeWorker = Get-Sha256 $copy
 $metadataBundle = Test-DesignBundle $metadata
+$outputParent = Split-Path -Parent $output
+$innerScratch = Join-Path $outputParent ".access-vba-inner-$([Guid]::NewGuid().ToString('N'))"
+$workingCopy = Join-Path $innerScratch "working.accdb"
 $access = $null
 $modules = $null
+$project = $null
+$dbEngine = $null
+$guardDatabase = $null
 $createdOutput = $false
 $succeeded = $false
 try {
+    if (Test-Path -LiteralPath $innerScratch) { Stop-Export "AccessVbaInnerScratchExists" }
+    New-Item -ItemType Directory -Path $innerScratch -ErrorAction Stop | Out-Null
+    Copy-Item -LiteralPath $copy -Destination $workingCopy -ErrorAction Stop
+    $workingCopyBeforeWorker = Get-Sha256 $workingCopy
     $access = New-Object -ComObject Access.Application
     $access.AutomationSecurity = 3
     $access.Visible = $false
@@ -267,10 +282,24 @@ try {
             startTimeUtcTicks = [long]$process.StartTime.ToUniversalTime().Ticks
         } | ConvertTo-Json -Compress), $Utf8NoBom)
     }
-    $access.OpenCurrentDatabase($copy, $true)
-    if ([bool]$access.Visible -or (Test-Path -LiteralPath $generationCanary) -or (Test-Path -LiteralPath $extractionCanary)) {
-        Stop-Export "AccessVbaOpenCanaryFired"
+    try {
+        # StartupForm is removed only from the bounded inner scratch copy before
+        # OpenCurrentDatabase. DAO does not open or render that surface.
+        $dbEngine = $access.DBEngine
+        $guardDatabase = $dbEngine.OpenDatabase($workingCopy)
+        try { $guardDatabase.Properties.Delete("StartupForm") } catch { }
+        $guardDatabase.Close()
     }
+    finally {
+        Close-ComObject $guardDatabase; $guardDatabase = $null
+        Close-ComObject $dbEngine; $dbEngine = $null
+    }
+    $access.OpenCurrentDatabase($workingCopy, $true)
+    if ([bool]$access.Visible) { Stop-Export "AccessVbaVisibleUiDetected" }
+    if (Test-Path -LiteralPath $generationCanary) { Stop-Export "AccessVbaGenerationCanaryFired" }
+    if (Test-Path -LiteralPath $extractionCanary) { Stop-Export "AccessVbaExtractionCanaryFired" }
+    if (-not (Test-HashUnchanged $original $originalBeforeWorker)) { Stop-Export "AccessVbaOriginalSourceChanged" }
+    if (-not (Test-HashUnchanged $copy $copyBeforeWorker)) { Stop-Export "AccessVbaSuppliedCopyChanged" }
     $loadedBaseline = Get-LoadedModuleCount $access
     $project = $access.CurrentProject
     $modules = $project.AllModules
@@ -312,9 +341,9 @@ try {
             $recordId = "vba-module-$($index.ToString('D6'))"
             $rawPath = Join-Path $privateRoot "$recordId.txt"
             $access.SaveAsText($AcModule, $name, $rawPath)
-            if ([bool]$access.Visible -or (Test-Path -LiteralPath $generationCanary) -or (Test-Path -LiteralPath $extractionCanary)) {
-                Stop-Export "AccessVbaExportCanaryFired"
-            }
+            if ([bool]$access.Visible) { Stop-Export "AccessVbaVisibleUiDetected" }
+            if (Test-Path -LiteralPath $generationCanary) { Stop-Export "AccessVbaGenerationCanaryFired" }
+            if (Test-Path -LiteralPath $extractionCanary) { Stop-Export "AccessVbaExtractionCanaryFired" }
             if ((Get-LoadedModuleCount $access) -ne $loadedBaseline) { Stop-Export "AccessVbaLoadedStateChanged" }
             $bytes = [IO.File]::ReadAllBytes($rawPath)
             if ($bytes.LongLength -gt $MaxSourceBytes) { Stop-Export "AccessVbaSourceLimitReached" }
@@ -346,14 +375,26 @@ try {
     Close-ComObject $modules; $modules = $null
     Close-ComObject $project; $project = $null
     $access.CloseCurrentDatabase()
-    if (-not (Test-OriginalHashUnchanged $original $originalBeforeWorker)) { Stop-Export "AccessVbaOriginalSourceChanged" }
+    $access.Quit(2)
+    Close-ComObject $access; $access = $null
+    [GC]::Collect(); [GC]::WaitForPendingFinalizers()
+    if (-not (Test-HashUnchanged $original $originalBeforeWorker)) { Stop-Export "AccessVbaOriginalSourceChanged" }
+    if (-not (Test-HashUnchanged $copy $copyBeforeWorker)) { Stop-Export "AccessVbaSuppliedCopyChanged" }
     $copyAfterWorker = Get-Sha256 $copy
-    $copyMutationOutcome = if ($copyAfterWorker -eq $copyBeforeWorker) {
+    $suppliedCopyMutationOutcome = if ($copyAfterWorker -eq $copyBeforeWorker) {
         "AccessVbaWorkingCopyUnchanged"
     }
     else {
         "AccessVbaWorkingCopyChanged"
     }
+    $workingCopyAfterWorker = Get-Sha256 $workingCopy
+    $workingCopyMutationOutcome = if ($workingCopyAfterWorker -eq $workingCopyBeforeWorker) {
+        "AccessVbaWorkingCopyUnchanged"
+    }
+    else {
+        "AccessVbaWorkingCopyChanged"
+    }
+    if (-not (Remove-DirectoryWithRetry $innerScratch)) { Stop-Export "AccessVbaInnerScratchCleanupFailed" }
 
     $ordered = @($records | Sort-Object { $_["kind"] }, { $_["recordId"] })
     $lines = @($ordered | ForEach-Object { $_ | ConvertTo-Json -Compress -Depth 20 })
@@ -365,14 +406,19 @@ try {
     [IO.File]::WriteAllBytes((Join-Path $normalizedRoot "access-design-records.ndjson"), $recordBytes)
     $manifest = [ordered]@{
         schema = "tracemap.access-design-evidence.v1"
-        producer = [ordered]@{ id = "tracemap-access-windows-export"; version = "1.1.0"; mechanism = "access-save-as-text-vba" }
+        producer = [ordered]@{ id = "tracemap-access-windows-export"; version = "1.2.0"; mechanism = "access-save-as-text-vba" }
         repository = [ordered]@{ identityHash = $RepositoryIdentityHash; commitSha = $CommitSha }
         baseScan = [ordered]@{ manifestSha256 = $BaseScanManifestSha256; databaseIdentityHash = $DatabaseIdentityHash }
         sourceCopy = [ordered]@{ sha256 = $copyBeforeWorker; binding = "hash-identical" }
-        workingCopy = [ordered]@{
+        suppliedCopy = [ordered]@{
             preExportSha256 = $copyBeforeWorker
             postExportSha256 = $copyAfterWorker
-            mutationOutcome = $copyMutationOutcome
+            mutationOutcome = $suppliedCopyMutationOutcome
+        }
+        workingCopy = [ordered]@{
+            preExportSha256 = $workingCopyBeforeWorker
+            postExportSha256 = $workingCopyAfterWorker
+            mutationOutcome = $workingCopyMutationOutcome
         }
         records = [ordered]@{ sha256 = (Get-BytesSha256 $recordBytes); count = $ordered.Count; countsByKind = $counts }
         capabilities = [ordered]@{ coordinates = "mixed"; catalogCompleteness = "declared-partial"; identityDisclosure = "hash-only" }
@@ -380,11 +426,14 @@ try {
     [IO.File]::WriteAllText((Join-Path $normalizedRoot "access-design-manifest.json"), ($manifest | ConvertTo-Json -Compress -Depth 20), $Utf8NoBom)
     $rawManifest = [ordered]@{
         schema = "tracemap.access-vba-private-source.v1"
-        exporterVersion = "1.1.0"
+        exporterVersion = "1.2.0"
         sourceCopySha256 = $copyBeforeWorker
-        workingCopyPreExportSha256 = $copyBeforeWorker
-        workingCopyPostExportSha256 = $copyAfterWorker
-        workingCopyMutationOutcome = $copyMutationOutcome
+        suppliedCopyPreExportSha256 = $copyBeforeWorker
+        suppliedCopyPostExportSha256 = $copyAfterWorker
+        suppliedCopyMutationOutcome = $suppliedCopyMutationOutcome
+        workingCopyPreExportSha256 = $workingCopyBeforeWorker
+        workingCopyPostExportSha256 = $workingCopyAfterWorker
+        workingCopyMutationOutcome = $workingCopyMutationOutcome
         artifactCount = $privateArtifacts.Count
         moduleFileCount = $moduleCount
         formReportDesignFileCount = $designOrdinal
@@ -398,11 +447,15 @@ try {
 }
 finally {
     Close-ComObject $modules
+    Close-ComObject $project
+    Close-ComObject $guardDatabase
+    Close-ComObject $dbEngine
     if ($null -ne $access) {
         try { $access.CloseCurrentDatabase() } catch { }
         try { $access.Quit(2) } catch { }
     }
     Close-ComObject $access
     [GC]::Collect(); [GC]::WaitForPendingFinalizers()
+    if (Test-Path -LiteralPath $innerScratch) { Remove-DirectoryWithRetry $innerScratch | Out-Null }
     if (-not $succeeded -and (Test-Path -LiteralPath $output)) { Remove-DirectoryWithRetry $output | Out-Null }
 }
