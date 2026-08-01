@@ -31,7 +31,13 @@ public static class AccessDesignEvidenceReader
     private static readonly HashSet<string> CoordinateStatuses = ["exact-lines", "container-only", "unavailable"];
     private static readonly HashSet<string> CompletenessStatuses = ["complete", "partial", "unavailable"];
     private static readonly HashSet<string> CopyBindings = ["hash-identical", "owner-attested-derived-copy", "unbound"];
-    private static readonly HashSet<string> Mechanisms = ["preexisting-text-export", "synthetic-hand-authored", "access-save-as-text-metadata"];
+    private static readonly HashSet<string> Mechanisms =
+    [
+        "preexisting-text-export",
+        "synthetic-hand-authored",
+        "access-save-as-text-metadata",
+        "access-save-as-text-vba"
+    ];
     private static readonly HashSet<string> ProducerIds = ["owner-controlled-export", "tracemap-synthetic-fixture", "tracemap-access-windows-export"];
     private static readonly HashSet<string> DocumentRoles =
     [

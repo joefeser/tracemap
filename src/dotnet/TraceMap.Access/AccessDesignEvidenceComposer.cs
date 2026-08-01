@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using TraceMap.Core;
 
 namespace TraceMap.Access;
@@ -474,6 +475,25 @@ public static class AccessDesignEvidenceComposer
                     stableKeyByCanonicalRecordId[controlRecord.CanonicalRecordId] = control.Identity.StableKey;
                 SetSupport(support, control.Identity.StableKey, controlRecords.DefaultIfEmpty(source));
             }
+
+            AddStaticEventReferences(
+                raw.Events,
+                identity.StableKey,
+                raw.SurfaceKind,
+                raw.Name,
+                raw.SurfaceKind == "report" ? "Report" : "Form",
+                eventProcedureReferences);
+            foreach (var rawControl in raw.Controls)
+            {
+                var control = projectedSurface.Controls.Single(item => item.Ordinal == rawControl.Ordinal);
+                AddStaticEventReferences(
+                    rawControl.Events,
+                    control.Identity.StableKey,
+                    raw.SurfaceKind,
+                    raw.Name,
+                    rawControl.Name,
+                    eventProcedureReferences);
+            }
             AddUiChildSupport(projectedSurface, support, sources);
         }
 
@@ -513,7 +533,12 @@ public static class AccessDesignEvidenceComposer
         var vba = AccessVbaProjector.Project(
             databaseSeed,
             rawModules,
-            eventReferences: eventProcedureReferences,
+            eventReferences: eventProcedureReferences
+                .Distinct()
+                .OrderBy(item => item.OwnerStableKey, StringComparer.Ordinal)
+                .ThenBy(item => item.EventRole, StringComparer.Ordinal)
+                .ThenBy(item => item.ProcedureName, StringComparer.Ordinal)
+                .ToArray(),
             knownObjects: known,
             limits: limits,
             disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly);
@@ -969,6 +994,34 @@ public static class AccessDesignEvidenceComposer
             .SequenceEqual(right.Events
                 .OrderBy(item => item.Role, StringComparer.Ordinal)
                 .ThenBy(item => item.Value, StringComparer.Ordinal));
+
+    private static void AddStaticEventReferences(
+        IEnumerable<AccessRawUiEvent> events,
+        string ownerStableKey,
+        string surfaceKind,
+        string surfaceName,
+        string procedureOwner,
+        List<AccessRawEventProcedureReference> references)
+    {
+        var moduleName = $"{(surfaceKind == "report" ? "Report" : "Form")}_{surfaceName}";
+        foreach (var entry in events)
+        {
+            var value = entry.Value?.Trim() ?? string.Empty;
+            var procedureName = value.Equals("[Event Procedure]", StringComparison.OrdinalIgnoreCase)
+                ? $"{procedureOwner}_{EventProcedureSuffix(entry.Role)}"
+                : StaticEventExpressionProcedure(value);
+            if (procedureName is null)
+                continue;
+            references.Add(new(ownerStableKey, entry.Role, moduleName, procedureName));
+        }
+    }
+
+    private static string? StaticEventExpressionProcedure(string value)
+    {
+        var match = Regex.Match(value, @"^=\s*(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s*$",
+            RegexOptions.CultureInvariant);
+        return match.Success ? match.Groups["name"].Value : null;
+    }
 
     private static string EventProcedureSuffix(string eventRole) => eventRole switch
     {
