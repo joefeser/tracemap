@@ -444,8 +444,21 @@ public static class AccessDesignEvidenceComposer
                 field => field.Key,
                 field => (IReadOnlyList<string>)field.Value.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                 StringComparer.OrdinalIgnoreCase),
-            StringComparer.Ordinal);
-        var ui = AccessUiProjector.Project(databaseSeed, rawSurfaces, known, fields, AccessIdentityDisclosurePolicy.HashOnly);
+                StringComparer.Ordinal);
+        var queryOutputs = baseFacts
+            .Where(fact => fact.FactType == FactTypes.AccessQueryOutputDeclared
+                && fact.SourceSymbol is not null
+                && fact.TargetSymbol is not null
+                && int.TryParse(fact.Properties.GetValueOrDefault("ordinal"), out _))
+            .GroupBy(fact => fact.SourceSymbol!, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group
+                    .OrderBy(fact => int.Parse(fact.Properties["ordinal"], System.Globalization.CultureInfo.InvariantCulture))
+                    .Select(fact => fact.TargetSymbol!)
+                    .ToArray(),
+                StringComparer.Ordinal);
+        var ui = AccessUiProjector.Project(databaseSeed, rawSurfaces, known, fields, AccessIdentityDisclosurePolicy.HashOnly, queryOutputs);
         var rowSourceContexts = ui.Surfaces
             .SelectMany(surface => surface.Controls.Select(control =>
             {

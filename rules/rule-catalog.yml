@@ -1503,6 +1503,8 @@ rules:
       - Raw record sources, control sources, row sources, filters, ordering expressions, validation expressions, calculated expressions, SQL, VBA, and macro bodies never persist; complex values retain only role-separated hashes, lengths, safe target keys, and coverage labels.
       - Ambiguous, dynamic, unsupported, or unresolved targets are explicit gaps; the extractor does not choose an arbitrary object or field.
       - Binding extraction never opens a recordset, executes a query, renders a surface, invokes an event, or reads a submitted/control value.
+      - Calculated bindings expose only a bounded function/operator summary, role-separated structure hash, resolved field/query/control candidates, safe literal classes, and coverage; expressions are never evaluated or persisted.
+      - List and combo controls keep value/persistence binding separate from population binding. A query-backed unbound selector has no persistence target unless a ControlSource provides one; BoundColumn is only a static projection-ordinal candidate.
 
   - id: legacy.access.vba.v1
     name: Microsoft Access bounded VBA declaration and call candidate
