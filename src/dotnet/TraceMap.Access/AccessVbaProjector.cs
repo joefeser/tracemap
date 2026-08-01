@@ -277,6 +277,7 @@ internal static partial class AccessVbaProjector
             var source = CodeWithoutComment(lines[index]);
             var masked = MaskCommentsAndStrings(lines[index]);
             var trimmed = masked.Trim();
+            (string Hash, int Length, string Text, int Alternative)? inlineCondition = null;
             if (trimmed.Length == 0) continue;
             if (EndIfPattern().IsMatch(trimmed))
             {
@@ -307,11 +308,20 @@ internal static partial class AccessVbaProjector
                 var conditionText = source.Trim();
                 if (trimmed.EndsWith("Then", StringComparison.OrdinalIgnoreCase))
                     conditions.Push((AccessSafeValues.RoleHash("access-vba-condition", conditionText), conditionText.Length, conditionText, 0));
-                continue;
+                else
+                {
+                    var thenOffset = source.IndexOf("Then", StringComparison.OrdinalIgnoreCase);
+                    var maskedThenOffset = masked.IndexOf("Then", StringComparison.OrdinalIgnoreCase);
+                    if (thenOffset < 0 || maskedThenOffset < 0) continue;
+                    source = source[(thenOffset + 4)..].TrimStart();
+                    masked = masked[(maskedThenOffset + 4)..].TrimStart();
+                    inlineCondition = (AccessSafeValues.RoleHash("access-vba-condition", conditionText), conditionText.Length, conditionText, 0);
+                }
+                if (inlineCondition is null) continue;
             }
 
             var line = index + 1;
-            var activeCondition = conditions.Count > 0 ? conditions.Peek() : ((string Hash, int Length, string Text, int Alternative)?)null;
+            var activeCondition = inlineCondition ?? (conditions.Count > 0 ? conditions.Peek() : ((string Hash, int Length, string Text, int Alternative)?)null);
             foreach (Match match in RowSourceAssignmentPattern().Matches(masked))
             {
                 var targetName = match.Groups["name"].Value;
@@ -387,8 +397,9 @@ internal static partial class AccessVbaProjector
     {
         var controlHash = AccessSafeValues.RoleHash("access-control-name", controlName);
         var names = new[] { moduleName,
-            moduleName.StartsWith("Form_", StringComparison.OrdinalIgnoreCase) || moduleName.StartsWith("Report_", StringComparison.OrdinalIgnoreCase)
-                ? moduleName[5..] : moduleName };
+                moduleName.StartsWith("Form_", StringComparison.OrdinalIgnoreCase) ? moduleName[5..]
+                : moduleName.StartsWith("Report_", StringComparison.OrdinalIgnoreCase) ? moduleName[7..]
+                : moduleName };
         foreach (var name in names)
             if (contexts.TryGetValue(name + "|" + controlHash, out context!)) return true;
         context = null!;
