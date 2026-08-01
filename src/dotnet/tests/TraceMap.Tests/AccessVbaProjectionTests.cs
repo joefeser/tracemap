@@ -273,6 +273,76 @@ public sealed class AccessVbaProjectionTests
     }
 
     [Fact]
+    public void Projector_composes_conditional_literal_rowsources_with_static_projection_and_event_evidence()
+    {
+        const string source = """
+            Private Sub cboMode_AfterUpdate()
+                If Me.cboMode = "general" Then
+                    Me.cboItem.RowSource = "SELECT GeneralId, Label FROM GeneralLookup WHERE OwnerId = glngCurrentUser();"
+                Else
+                    Me.cboItem.RowSource = "SELECT PersonalId, Label FROM PersonalLookup;"
+                End If
+            End Sub
+            """;
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('2', 40), "fixture.accdb", "hash");
+        var general = AccessSafeValues.Identity(seed, "table", "GeneralLookup");
+        var personal = AccessSafeValues.Identity(seed, "table", "PersonalLookup");
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["GeneralLookup"] = [(general.StableKey, "table")],
+            ["PersonalLookup"] = [(personal.StableKey, "table")]
+        };
+        var fields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            [general.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["GeneralId"] = [AccessSafeValues.RoleHash("field", "general-id")],
+                ["Label"] = [AccessSafeValues.RoleHash("field", "general-label")],
+                ["OwnerId"] = [AccessSafeValues.RoleHash("field", "general-owner")]
+            },
+            [personal.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["PersonalId"] = [AccessSafeValues.RoleHash("field", "personal-id")],
+                ["Label"] = [AccessSafeValues.RoleHash("field", "personal-label")]
+            }
+        };
+
+        var result = AccessVbaProjector.Project(seed,
+            [new("Form_frmHost", "form", source)],
+            [new("form-owner", "after-update", "Form_frmHost", "cboMode_AfterUpdate")],
+            knownObjects: known,
+            fieldsByTable: fields);
+
+        var procedure = Assert.Single(result.Modules.Single().Procedures);
+        var effects = procedure.Effects!.Where(effect => effect.EffectKind == "row-source-assignment").ToArray();
+        Assert.Equal(2, effects.Length);
+        Assert.All(effects, effect => Assert.NotNull(effect.ConditionHash));
+        Assert.All(effects, effect => Assert.NotNull(effect.RowSourceProjection));
+        Assert.All(effects, effect => Assert.Equal(new[] { 0, 1 }, effect.RowSourceProjection!.Outputs.Select(output => output.Ordinal)));
+        Assert.Contains(effects, effect => effect.RowSourceProjection!.Dependencies.Any(item => item.TargetStableKey == general.StableKey)
+            && effect.RowSourceProjection.FunctionNameHashes.Count == 1);
+        Assert.Contains(effects, effect => effect.RowSourceProjection!.Dependencies.Any(item => item.TargetStableKey == personal.StableKey));
+        Assert.Contains(result.EventBindings, binding => binding.ProcedureStableKey == procedure.Identity.StableKey
+            && binding.Coverage == "complete");
+    }
+
+    [Fact]
+    public void Projector_preserves_dynamic_rowsource_as_gap_and_partial_effect()
+    {
+        const string source = """
+            Private Sub Form_Load()
+                Me.cboItem.RowSource = "SELECT " & Me.txtField & " FROM Lookup"
+            End Sub
+            """;
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('3', 40), "fixture.accdb", "hash");
+        var result = AccessVbaProjector.Project(seed, [new("Form_frmHost", "form", source)]);
+        var effect = Assert.Single(result.Modules.Single().Procedures.Single().Effects!);
+        Assert.Equal("row-source-assignment", effect.EffectKind);
+        Assert.Equal("partial", effect.Coverage);
+        Assert.Contains(result.Gaps, gap => gap.Classification == "AccessVbaRowSourceDynamic");
+    }
+
+    [Fact]
     public void Projector_scopes_missing_procedure_terminator_gaps_to_distinct_procedures()
     {
         const string source = """

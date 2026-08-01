@@ -445,6 +445,26 @@ public static class AccessDesignEvidenceComposer
                 StringComparer.OrdinalIgnoreCase),
             StringComparer.Ordinal);
         var ui = AccessUiProjector.Project(databaseSeed, rawSurfaces, known, fields, AccessIdentityDisclosurePolicy.HashOnly);
+        var rowSourceContexts = ui.Surfaces
+            .SelectMany(surface => surface.Controls.Select(control =>
+            {
+                var rawSurface = rawSurfaces.FirstOrDefault(raw => SurfaceStableKey(databaseSeed, raw) == surface.Identity.StableKey);
+                var rawControl = rawSurface?.Controls.FirstOrDefault(item => item.Ordinal == control.Ordinal);
+                var controlSource = control.Bindings.FirstOrDefault(binding => binding.BindingKind == "control-source");
+                var recordSource = surface.Bindings.FirstOrDefault(binding => binding.BindingKind == "record-source");
+                return new KeyValuePair<string, AccessRowSourceBindingProjection>(
+                    (rawSurface?.Name ?? surface.Identity.NameHash) + "|" + AccessSafeValues.RoleHash("access-control-name", rawControl?.Name ?? control.Identity.NameHash),
+                    new(
+                        control.BoundColumn,
+                        [],
+                        controlSource?.TargetStableKeys ?? [],
+                        recordSource?.TargetStableKeys ?? [],
+                        controlSource?.Coverage == "complete" && recordSource?.Coverage == "complete" ? "complete" : "partial"));
+            }))
+            .GroupBy(item => item.Key, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key,
+                group => group.Count() == 1 ? group.Single().Value : group.First().Value with { Coverage = "partial" },
+                StringComparer.Ordinal);
         var eventProcedureReferences = new List<AccessRawEventProcedureReference>();
         foreach (var input in mergedSurfaceInputs)
         {
@@ -524,6 +544,8 @@ public static class AccessDesignEvidenceComposer
                 .ThenBy(item => item.ProcedureName, StringComparer.Ordinal)
                 .ToArray(),
             knownObjects: known,
+            fieldsByTable: fields,
+            rowSourceContexts: rowSourceContexts,
             limits: limits,
             disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly);
         foreach (var module in vba.Modules)

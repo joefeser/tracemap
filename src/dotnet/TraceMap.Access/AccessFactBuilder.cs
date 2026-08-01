@@ -348,8 +348,23 @@ public static class AccessFactBuilder
                             ("expressionLength", effect.ExpressionLength > 0 ? effect.ExpressionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
                             ("conditionHash", effect.ConditionHash),
                             ("conditionLength", effect.ConditionLength > 0 ? effect.ConditionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                            ("branchOrder", effect.BranchOrder?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                            ("rowSourceCoverage", effect.RowSourceProjection?.Coverage),
+                            ("rowSourceSqlHash", effect.RowSourceProjection?.SqlHash),
+                            ("rowSourceSqlLength", effect.RowSourceProjection is not null ? effect.RowSourceProjection.SqlLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                            ("rowSourceDependencyStableKeys", effect.RowSourceProjection is null ? null : string.Join(';', effect.RowSourceProjection.Dependencies.Select(item => item.TargetStableKey))),
+                            ("rowSourceOutputOrdinals", effect.RowSourceProjection is null ? null : string.Join(';', effect.RowSourceProjection.Outputs.Select(item => item.Ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)))),
+                            ("rowSourceOutputCoverage", effect.RowSourceProjection is null ? null : string.Join(';', effect.RowSourceProjection.Outputs.Select(item => item.Coverage))),
+                            ("rowSourcePredicateHash", effect.RowSourceProjection?.PredicateHash),
+                            ("rowSourceOrderByHash", effect.RowSourceProjection?.OrderByHash),
+                            ("rowSourceFunctionNameHashes", effect.RowSourceProjection is null ? null : string.Join(';', effect.RowSourceProjection.FunctionNameHashes)),
+                            ("rowSourceBoundColumn", effect.RowSourceBinding?.BoundColumn?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                            ("rowSourceSelectedValueFieldStableKeys", effect.RowSourceBinding is null ? null : string.Join(';', effect.RowSourceBinding.SelectedValueFieldStableKeys)),
+                            ("rowSourceControlSourceFieldStableKeys", effect.RowSourceBinding is null ? null : string.Join(';', effect.RowSourceBinding.ControlSourceFieldStableKeys)),
+                            ("rowSourceSurfaceRecordSourceStableKeys", effect.RowSourceBinding is null ? null : string.Join(';', effect.RowSourceBinding.SurfaceRecordSourceStableKeys)),
+                            ("rowSourceBindingCoverage", effect.RowSourceBinding?.Coverage),
                             ("coverageLabel", effect.Coverage),
-                            ("limitations", "bounded-static-effect-candidate;no-event-execution;no-runtime-state-or-order-proof"))));
+                            ("limitations", "bounded-static-effect-candidate;literal-row-source-only;no-event-execution;no-runtime-state-or-order-proof"))));
                 }
             }
         }
