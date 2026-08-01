@@ -82,8 +82,15 @@ public static partial class AccessQueryProjector
         var pivot = MatchValue(masked, PivotPattern());
         var value = aggregate is null ? null : ExtractAggregateValue(aggregate);
         var staticColumns = ParsePivotColumns(sql);
-        var coverage = row.Length > 0 && aggregate is not null && value is not null && pivot is not null ? "complete" : "partial";
-        if (pivot is not null && staticColumns.Count == 0) coverage = "partial";
+        var rowsResolve = rowExpressions.Count > 0
+            && rowExpressions.All(expression => ResolvesExpressionCompletely(expression, knownObjects, fieldLookups));
+        var valueResolves = value is not null
+            && ResolvesExpressionCompletely(value, knownObjects, fieldLookups);
+        var pivotResolves = pivot is not null
+            && ResolvesExpressionCompletely(pivot, knownObjects, fieldLookups);
+        var coverage = rowsResolve && valueResolves && pivotResolves && staticColumns.Count > 0
+            ? "complete"
+            : "partial";
         return new(row,
             aggregate is null ? null : AccessSafeValues.RoleHash("access-query-aggregate", aggregate),
             value is null ? null : AccessSafeValues.RoleHash("access-query-value", value),
@@ -232,6 +239,23 @@ public static partial class AccessQueryProjector
             result.AddRange(matches.Select(value => value.Field));
         }
         return result.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+    }
+
+    private static bool ResolvesExpressionCompletely(
+        string expression,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> known,
+        IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fields)
+    {
+        var references = FieldReferencePattern().Matches(expression)
+            .Where(match =>
+            {
+                var end = match.Index + match.Length;
+                while (end < expression.Length && char.IsWhiteSpace(expression[end])) end++;
+                return end >= expression.Length || expression[end] != '(';
+            })
+            .ToArray();
+        return references.Length > 0
+            && references.All(reference => ResolveExpressionFields(reference.Value, known, fields).Count == 1);
     }
 
     private static string? SetClause(string masked) => Clause(masked, "set", ["where", "order", ";", "$"]);
