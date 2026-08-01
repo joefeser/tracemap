@@ -1512,12 +1512,14 @@ rules:
       - AccessVbaModuleDeclared
       - AccessVbaProcedureDeclared
       - AccessNavigationCandidate
+      - AccessUiStateEffectCandidate
       - AnalysisGap
     limitations:
       - The Access v0 product reader does not acquire VBA source and therefore emits no module, procedure, call, navigation, or event-binding facts from a database scan; it records only bounded module-count metadata plus AccessVbaProjectUnavailable. Richer evidence requires a separately security-reviewed source mechanism.
       - VBA evidence is bounded textual evidence and does not prove runtime dispatch, branch feasibility, error-handler outcome, query execution, record access, navigation, COM resolution, external process execution, deployment, or production use.
       - Raw source, declaration text, comments, string literals, SQL, connection values, command bodies, and local paths never persist; modules and dynamic expressions retain only role-separated hashes, lengths, counts, safe identities, and real module line coordinates.
       - Ordinary call matching excludes comments and string contents. Literal targets are considered only for allowlisted Access/DAO call shapes and are emitted through the role-specific safe identifier policy or as hashes.
+      - State-effect candidates cover only visibly textual `Me` property assignments, `Me.Requery`, and literal `Forms(...)` references. Condition text remains hash-only syntax context; no condition is interpreted as business intent or a runtime branch result.
       - Variables, concatenation, Eval, Run, callbacks, reflection-like dispatch, external libraries, conditional targets, malformed modules, and limit hits are explicit gaps rather than inferred targets.
 
   - id: legacy.access.event-binding.v1

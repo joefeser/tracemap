@@ -103,6 +103,30 @@ public sealed record AccessQueryOutputFieldProjection(
     IReadOnlyList<string> SourceFieldStableKeys,
     string Coverage);
 
+public sealed record AccessQueryFieldMappingProjection(
+    int Ordinal,
+    string? SourceExpressionHash,
+    IReadOnlyList<string> SourceFieldStableKeys,
+    string? TargetFieldStableKey,
+    string Coverage);
+
+public sealed record AccessQueryActionProjection(
+    string OperationKind,
+    string? TargetStableKey,
+    IReadOnlyList<string> TargetFieldStableKeys,
+    IReadOnlyList<AccessQueryFieldMappingProjection> FieldMappings,
+    string? PredicateExpressionHash,
+    IReadOnlyList<int> ParameterOrdinals,
+    string Coverage);
+
+public sealed record AccessQueryCrosstabProjection(
+    IReadOnlyList<string> RowHeadingFieldStableKeys,
+    string? AggregateExpressionHash,
+    string? ValueExpressionHash,
+    string? PivotExpressionHash,
+    IReadOnlyList<string> StaticColumnHashes,
+    string Coverage);
+
 public sealed record AccessQueryProjection(
     AccessSafeIdentity Identity,
     string QueryKind,
@@ -114,7 +138,9 @@ public sealed record AccessQueryProjection(
     bool IsPassThrough,
     string? ConnectionHash,
     string? ProviderFamily,
-    IReadOnlyList<AccessQueryOutputFieldProjection>? OutputFields = null);
+    IReadOnlyList<AccessQueryOutputFieldProjection>? OutputFields = null,
+    AccessQueryActionProjection? ActionLineage = null,
+    AccessQueryCrosstabProjection? CrosstabLineage = null);
 
 public sealed record AccessExternalLinkProjection(
     AccessSafeIdentity Identity,
@@ -187,7 +213,21 @@ public sealed record AccessVbaProcedureProjection(
     string ProcedureKind,
     int StartLine,
     int EndLine,
-    IReadOnlyList<AccessVbaCallProjection> Calls);
+    IReadOnlyList<AccessVbaCallProjection> Calls,
+    IReadOnlyList<AccessVbaEffectProjection>? Effects = null);
+
+public sealed record AccessVbaEffectProjection(
+    AccessSafeIdentity Identity,
+    string ProcedureStableKey,
+    string EffectKind,
+    int StartLine,
+    int EndLine,
+    AccessSafeIdentity? TargetIdentity,
+    string? ExpressionHash,
+    int ExpressionLength,
+    string? ConditionHash,
+    int ConditionLength,
+    string Coverage);
 
 public sealed record AccessVbaModuleProjection(
     AccessSafeIdentity Identity,
@@ -202,7 +242,13 @@ public sealed record AccessEventBindingProjection(
     string EventRole,
     string ModuleStableKey,
     string? ProcedureStableKey,
-    string Coverage);
+    string Coverage,
+    string OwnerKind = "unknown",
+    string BindingKind = "event-procedure",
+    string? EventExpressionHash = null,
+    int EventExpressionLength = 0,
+    int ProcedureStartLine = 0,
+    int ProcedureEndLine = 0);
 
 public sealed record AccessMacroProjection(
     AccessSafeIdentity Identity,

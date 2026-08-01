@@ -269,6 +269,7 @@ public static class AccessScreenDataFlowReporter
             FactTypes.AccessQueryDependencyCandidate => "static-query-dependency-candidate",
             FactTypes.AccessQueryOutputDeclared => "declared-query-output",
             FactTypes.AccessQueryOutputSourceCandidate => "static-query-output-source-candidate",
+            FactTypes.AccessQueryActionLineageCandidate => "static-action-query-lineage",
             _ => null
         };
         if (kind is not null)

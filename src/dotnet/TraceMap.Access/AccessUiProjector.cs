@@ -519,7 +519,7 @@ internal static partial class AccessUiProjector
 
     private static readonly HashSet<string> AllowedEventRoles = new(StringComparer.Ordinal)
     {
-        "after-update", "before-update", "on-click", "on-current", "on-dbl-click", "on-load", "on-no-data", "on-open"
+        "after-update", "on-activate", "before-update", "on-click", "on-close", "on-current", "on-deactivate", "on-dbl-click", "on-error", "on-load", "on-no-data", "on-open", "on-resize", "on-timer", "on-unload"
     };
 
     [GeneratedRegex(@"^(?:\[(?<bracketed>[^\]]+)\]|(?<plain>[A-Za-z_][A-Za-z0-9_ -]*))$", RegexOptions.CultureInvariant)]

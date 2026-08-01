@@ -210,6 +210,39 @@ public static class AccessFactBuilder
                             ("limitations", "static-query-output-source-candidate;no-query-execution;no-row-read"))));
                 }
             }
+
+            if (query.ActionLineage is { } action)
+            {
+                facts.Add(Create(manifest, FactTypes.AccessQueryActionLineageCandidate, RuleIds.LegacyAccessQuery,
+                    EvidenceTiers.Tier3SyntaxOrTextual, span, sourceSymbol: query.Identity.StableKey,
+                    targetSymbol: action.TargetStableKey,
+                    properties: Props(
+                        ("queryStableKey", query.Identity.StableKey),
+                        ("operationKind", action.OperationKind),
+                        ("targetStableKey", action.TargetStableKey ?? ""),
+                        ("targetFieldStableKeys", string.Join(';', action.TargetFieldStableKeys)),
+                        ("fieldMappings", string.Join(';', action.FieldMappings.Select(mapping =>
+                            $"{mapping.Ordinal}:{mapping.TargetFieldStableKey ?? ""}:{string.Join(',', mapping.SourceFieldStableKeys)}:{mapping.SourceExpressionHash ?? ""}:{mapping.Coverage}"))),
+                        ("predicateExpressionHash", action.PredicateExpressionHash ?? ""),
+                        ("parameterOrdinals", string.Join(';', action.ParameterOrdinals)),
+                        ("coverageLabel", action.Coverage),
+                        ("limitations", "static-sql-shape-only;no-query-execution;no-row-read;dynamic-targets-remain-gaps"))));
+            }
+
+            if (query.CrosstabLineage is { } crosstab)
+            {
+                facts.Add(Create(manifest, FactTypes.AccessQueryCrosstabLineageCandidate, RuleIds.LegacyAccessQuery,
+                    EvidenceTiers.Tier3SyntaxOrTextual, span, sourceSymbol: query.Identity.StableKey,
+                    properties: Props(
+                        ("queryStableKey", query.Identity.StableKey),
+                        ("rowHeadingFieldStableKeys", string.Join(';', crosstab.RowHeadingFieldStableKeys)),
+                        ("aggregateExpressionHash", crosstab.AggregateExpressionHash ?? ""),
+                        ("valueExpressionHash", crosstab.ValueExpressionHash ?? ""),
+                        ("pivotExpressionHash", crosstab.PivotExpressionHash ?? ""),
+                        ("staticColumnHashes", string.Join(';', crosstab.StaticColumnHashes)),
+                        ("coverageLabel", crosstab.Coverage),
+                        ("limitations", "static-crosstab-shape-only;no-row-read;dynamic-pivot-values-remain-gaps"))));
+            }
         }
 
         foreach (var boundary in projection.ExternalLinks)
@@ -298,17 +331,45 @@ public static class AccessFactBuilder
                         targetSymbol: call.TargetStableKey,
                         properties: properties));
                 }
+
+                foreach (var effect in procedure.Effects ?? [])
+                {
+                    facts.Add(Create(manifest, FactTypes.AccessUiStateEffectCandidate, RuleIds.LegacyAccessVba,
+                        EvidenceTiers.Tier3SyntaxOrTextual,
+                        VbaSpan(input.DatabaseRelativePath, effect.StartLine, effect.EndLine),
+                        sourceSymbol: effect.ProcedureStableKey,
+                        targetSymbol: effect.TargetIdentity?.StableKey,
+                        properties: IdentityProps(effect.Identity,
+                            ("procedureStableKey", effect.ProcedureStableKey),
+                            ("stableEffectKey", effect.Identity.StableKey),
+                            ("effectKind", effect.EffectKind),
+                            ("targetNameHash", effect.TargetIdentity?.NameHash),
+                            ("expressionHash", effect.ExpressionHash),
+                            ("expressionLength", effect.ExpressionLength > 0 ? effect.ExpressionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                            ("conditionHash", effect.ConditionHash),
+                            ("conditionLength", effect.ConditionLength > 0 ? effect.ConditionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                            ("coverageLabel", effect.Coverage),
+                            ("limitations", "bounded-static-effect-candidate;no-event-execution;no-runtime-state-or-order-proof"))));
+                }
             }
         }
 
         foreach (var binding in projection.EventBindings ?? [])
         {
-            facts.Add(Create(manifest, FactTypes.AccessEventBindingCandidate, RuleIds.LegacyAccessEventBinding, EvidenceTiers.Tier3SyntaxOrTextual, span,
+            var bindingSpan = binding.ProcedureStartLine > 0
+                ? VbaSpan(input.DatabaseRelativePath, binding.ProcedureStartLine, binding.ProcedureEndLine)
+                : span;
+            facts.Add(Create(manifest, FactTypes.AccessEventBindingCandidate, RuleIds.LegacyAccessEventBinding, EvidenceTiers.Tier3SyntaxOrTextual, bindingSpan,
                 sourceSymbol: binding.OwnerStableKey,
                 targetSymbol: binding.ProcedureStableKey,
                 properties: Props(
                     ("ownerStableKey", binding.OwnerStableKey), ("eventRole", binding.EventRole),
+                    ("ownerKind", binding.OwnerKind), ("bindingKind", binding.BindingKind),
                     ("moduleStableKey", binding.ModuleStableKey), ("procedureStableKey", binding.ProcedureStableKey),
+                    ("eventExpressionHash", binding.EventExpressionHash),
+                    ("eventExpressionLength", binding.EventExpressionLength > 0 ? binding.EventExpressionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                    ("procedureStartLine", binding.ProcedureStartLine > 0 ? binding.ProcedureStartLine.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                    ("procedureEndLine", binding.ProcedureEndLine > 0 ? binding.ProcedureEndLine.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
                     ("coverageLabel", binding.Coverage),
                     ("limitations", "exact-same-module-static-candidate;no-event-execution-or-runtime-dispatch-proof"))));
         }
