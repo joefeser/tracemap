@@ -15,9 +15,11 @@ public sealed class AccessVbaSourceExportTests
         Assert.Contains("$access.AutomationSecurity = 3", script, StringComparison.Ordinal);
         Assert.Contains("$access.Visible = $false", script, StringComparison.Ordinal);
         Assert.Contains("$access.SaveAsText($AcModule, $name, $rawPath)", script, StringComparison.Ordinal);
-        Assert.Contains("private-vba-source", script, StringComparison.Ordinal);
+        Assert.Contains("private-access-source", script, StringComparison.Ordinal);
         Assert.Contains("normalized-design-evidence", script, StringComparison.Ordinal);
         Assert.Contains("sourceText = $source", script, StringComparison.Ordinal);
+        Assert.Contains("ui-design-document", script, StringComparison.Ordinal);
+        Assert.Contains("formReportDesignFileCount", script, StringComparison.Ordinal);
         Assert.Contains("Get-LoadedModuleCount", script, StringComparison.Ordinal);
         Assert.Contains("AccessVbaLoadedStateChanged", script, StringComparison.Ordinal);
         Assert.Contains("AccessVbaSourceChanged", script, StringComparison.Ordinal);
@@ -60,7 +62,7 @@ public sealed class AccessVbaSourceExportTests
         Assert.Contains("GenerationCanaryPath", smoke, StringComparison.Ordinal);
         Assert.Contains("ExtractionCanaryPath", smoke, StringComparison.Ordinal);
         Assert.Contains("normalized-design-evidence", smoke, StringComparison.Ordinal);
-        Assert.Contains("private-vba-source", smoke, StringComparison.Ordinal);
+        Assert.Contains("private-access-source", smoke, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenForm", smoke, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("OpenRecordset", smoke, StringComparison.OrdinalIgnoreCase);
     }

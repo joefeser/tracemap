@@ -7,7 +7,7 @@ It accepts a disposable Access copy plus a compatible protected form/report
 metadata bundle and creates:
 
 ```text
-<output>/private-vba-source/              # owner-controlled raw source
+<output>/private-access-source/            # raw VBA plus form/report definitions
 <output>/normalized-design-evidence/      # pass this directory to enrich-design
 ```
 

@@ -13,7 +13,10 @@ immutable original + hash-identical disposable copy
 The exporter is separate from `AccessComReader` and `scan-file`. It consumes a
 compatible form/report metadata bundle, preserving its event properties and
 adding VBA modules from the same base-scan identity. Its output has sibling
-`private-vba-source/` and `normalized-design-evidence/` directories. Only the
+`private-access-source/` and `normalized-design-evidence/` directories. The
+private directory retains generic-name raw module files and the already exported
+full form/report definition text, with hashes and roles but no object names in
+its manifest. Only the
 latter is accepted by `enrich-design`; the strict reader input rule prevents
 raw files from entering normal input.
 
@@ -25,3 +28,5 @@ invisibility, source hashes, timeout, and process cleanup.
 The composer maps only `[Event Procedure]` or exact `=Identifier()` to a
 candidate procedure in `Form_<surface>` or `Report_<surface>`. Arguments,
 qualifiers, expression composition, or unresolved targets remain gaps.
+Layout parsing remains explicitly deferred: retained definitions make a future
+private parser possible without reopening the database.

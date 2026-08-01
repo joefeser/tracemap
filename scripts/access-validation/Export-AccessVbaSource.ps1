@@ -277,13 +277,31 @@ try {
     if ([int]$modules.Count -gt $MaxModules) { Stop-Export "AccessVbaModuleLimitReached" }
     $moduleCount = [int]$modules.Count
 
-    $privateRoot = Join-Path $output "private-vba-source"
+    $privateRoot = Join-Path $output "private-access-source"
     $normalizedRoot = Join-Path $output "normalized-design-evidence"
     New-Item -ItemType Directory -Path $privateRoot -Force | Out-Null
     $records = [System.Collections.Generic.List[object]]::new()
+    $privateArtifacts = [System.Collections.Generic.List[object]]::new()
+    $designOrdinal = 0
     foreach ($line in @(Get-Content -LiteralPath $metadataBundle.RecordsPath)) {
         if ([string]::IsNullOrWhiteSpace($line)) { Stop-Export "AccessVbaMetadataBundleInvalid" }
-        $records.Add(($line | ConvertFrom-Json -AsHashtable))
+        $record = $line | ConvertFrom-Json -AsHashtable
+        $records.Add($record)
+        if ($record["kind"] -eq "ui-design-document") {
+            $designText = [string]$record["payload"]["designText"]
+            $designHash = [string]$record["payload"]["documentSha256"]
+            $designBytes = $Utf8NoBom.GetBytes($designText)
+            if ((Get-BytesSha256 $designBytes) -ne $designHash) { Stop-Export "AccessVbaMetadataBundleHashMismatch" }
+            $artifactName = "design-$($designOrdinal.ToString('D6')).txt"
+            [IO.File]::WriteAllBytes((Join-Path $privateRoot $artifactName), $designBytes)
+            $privateArtifacts.Add([ordered]@{
+                artifact = $artifactName
+                documentRole = [string]$record["payload"]["documentRole"]
+                sha256 = $designHash
+                lineCount = [int]$record["payload"]["lineCount"]
+            })
+            $designOrdinal++
+        }
     }
     for ($index = 0; $index -lt $moduleCount; $index++) {
         $module = $null
@@ -304,6 +322,12 @@ try {
             $lineCount = if ($source.Length -eq 0) { 0 } else { [regex]::Matches($source, "`n").Count + 1 }
             if ($lineCount -gt $MaxSourceLines) { Stop-Export "AccessVbaSourceLimitReached" }
             $hash = Get-BytesSha256 ($Utf8NoBom.GetBytes($source))
+            $privateArtifacts.Add([ordered]@{
+                artifact = "$recordId.txt"
+                documentRole = "vba-module"
+                sha256 = $hash
+                lineCount = $lineCount
+            })
             $moduleKind = if ($name.StartsWith("Form_", [StringComparison]::OrdinalIgnoreCase)) { "form" }
                 elseif ($name.StartsWith("Report_", [StringComparison]::OrdinalIgnoreCase)) { "report" }
                 else { "standard" }
@@ -346,7 +370,10 @@ try {
         schema = "tracemap.access-vba-private-source.v1"
         exporterVersion = "1.0.0"
         sourceCopySha256 = $copyBeforeWorker
+        artifactCount = $privateArtifacts.Count
         moduleFileCount = $moduleCount
+        formReportDesignFileCount = $designOrdinal
+        artifacts = @($privateArtifacts | Sort-Object artifact)
         sourceArtifactOnly = $true
         limitations = @("private-source", "not-a-standard-tracemap-artifact", "no-runtime-claim")
     }

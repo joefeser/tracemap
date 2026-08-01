@@ -16,6 +16,11 @@ Scope: synthetic fixtures, exporter, protected-bundle contract, and pure
 composition only. No Autonomy database, isolated VM, real source bundle,
 production COM reader, or public artifact has been touched.
 
+The private source bundle retains complete form/report definitions already
+produced by the metadata exporter, with generic artifact names, roles, hashes,
+and line counts. It does not parse or project layout today; that retention
+avoids reopening the database for a future private layout phase.
+
 Local validation:
 
 - PowerShell syntax parsing passed for the exporter, synthetic fixture, and
