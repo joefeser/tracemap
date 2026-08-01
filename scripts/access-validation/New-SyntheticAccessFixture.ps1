@@ -236,7 +236,9 @@ End Sub
     $lifecycleList = $access.CreateControl($customerFormTemporaryName, 110, 0, "", "", 4400, 2900, 2400, 400)
     $fixtureControls.Add($lifecycleList)
     $lifecycleList.Name = "lstLifecycle"
-    $lifecycleList.OnAfterUpdate = "[Event Procedure]"
+    # The Access ListBox COM surface exposes the event property as AfterUpdate.
+    # "OnAfterUpdate" is the design-text property label, not a writable COM member.
+    $lifecycleList.AfterUpdate = "[Event Procedure]"
     $embeddedMacroButton = $access.CreateControl($customerFormTemporaryName, 104, 0, "", "", 1800, 2900, 2400, 400)
     $fixtureControls.Add($embeddedMacroButton)
     $embeddedMacroButton.Name = "cmdEmbeddedMacro"

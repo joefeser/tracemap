@@ -40,6 +40,13 @@ Lifecycle follow-up validation:
   pre-existing formatting drift across unrelated projects on the fresh base;
   this lane does not modify those files.
 
+Windows synthetic smoke follow-up: fixture generation initially stopped before
+private data use because `OnAfterUpdate` is a design-text label, not the
+ListBox COM property. The fixture now assigns `AfterUpdate` and the repository
+test asserts that exact contract while rejecting `OnAfterUpdate`. PowerShell
+syntax parsing and the relevant source-export/projector tests pass locally;
+the corrected head still requires a fresh Windows synthetic smoke run.
+
 Deferred: standard/class classification beyond form/report naming, dynamic
 expressions, nonzero argument functions, callbacks, macro code, section-level
 metadata, runtime behavior/order, and representative validation. Event bindings
