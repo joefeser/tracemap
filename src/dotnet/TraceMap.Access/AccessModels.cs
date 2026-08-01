@@ -103,6 +103,30 @@ public sealed record AccessQueryOutputFieldProjection(
     IReadOnlyList<string> SourceFieldStableKeys,
     string Coverage);
 
+public sealed record AccessQueryFieldMappingProjection(
+    int Ordinal,
+    string? SourceExpressionHash,
+    IReadOnlyList<string> SourceFieldStableKeys,
+    string? TargetFieldStableKey,
+    string Coverage);
+
+public sealed record AccessQueryActionProjection(
+    string OperationKind,
+    string? TargetStableKey,
+    IReadOnlyList<string> TargetFieldStableKeys,
+    IReadOnlyList<AccessQueryFieldMappingProjection> FieldMappings,
+    string? PredicateExpressionHash,
+    IReadOnlyList<int> ParameterOrdinals,
+    string Coverage);
+
+public sealed record AccessQueryCrosstabProjection(
+    IReadOnlyList<string> RowHeadingFieldStableKeys,
+    string? AggregateExpressionHash,
+    string? ValueExpressionHash,
+    string? PivotExpressionHash,
+    IReadOnlyList<string> StaticColumnHashes,
+    string Coverage);
+
 public sealed record AccessQueryProjection(
     AccessSafeIdentity Identity,
     string QueryKind,
@@ -114,7 +138,9 @@ public sealed record AccessQueryProjection(
     bool IsPassThrough,
     string? ConnectionHash,
     string? ProviderFamily,
-    IReadOnlyList<AccessQueryOutputFieldProjection>? OutputFields = null);
+    IReadOnlyList<AccessQueryOutputFieldProjection>? OutputFields = null,
+    AccessQueryActionProjection? ActionLineage = null,
+    AccessQueryCrosstabProjection? CrosstabLineage = null);
 
 public sealed record AccessExternalLinkProjection(
     AccessSafeIdentity Identity,
