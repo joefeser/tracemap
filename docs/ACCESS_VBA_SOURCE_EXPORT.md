@@ -17,15 +17,18 @@ fails closed on timeout, visible UI, fired canary, original-source mutation, or
 cleanup failure. It never accesses VBE, recordsets, forms/reports, queries,
 macros, or procedures.
 
-Access may write internal bookkeeping to the disposable copy while opening it
-for this export. The exporter therefore records only sanitized pre/post copy
-hashes and either `AccessVbaWorkingCopyUnchanged` or
-`AccessVbaWorkingCopyChanged` in both manifests, while preserving the strict
-`AccessVbaOriginalSourceChanged` failure gate. It does not make the disposable
-copy filesystem read-only: that would be an unvalidated change to the Access
-open/export contract and may prevent the bounded export itself. A working-copy
-change is not evidence of source mutation, nor proof that the copy's logical
-contents are unchanged.
+Before opening Access, the exporter makes a new bounded inner scratch copy of
+the hash-identical supplied copy. It removes only the `StartupForm` database
+property from that inner copy with DAO, following the established metadata
+exporter pattern, so the synthetic startup sentinel cannot execute. The
+original and supplied-copy hashes remain strict integrity gates. Access may
+write internal bookkeeping to the inner copy while opening it; the manifests
+record sanitized pre/post hashes and either `AccessVbaWorkingCopyUnchanged` or
+`AccessVbaWorkingCopyChanged` before that inner copy is removed. This does not
+make the supplied copy filesystem read-only: that would be an unvalidated
+change to the Access open/export contract and may prevent the bounded export.
+A working-copy change is not evidence of original-source mutation, nor proof
+that the copy's logical contents are unchanged.
 
 The normalized directory is protected local input. `enrich-design` processes
 source only in memory; normal facts, indexes, reports, and logs omit raw source
