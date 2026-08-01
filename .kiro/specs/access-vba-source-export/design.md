@@ -40,3 +40,11 @@ candidate procedure in `Form_<surface>` or `Report_<surface>`. Arguments,
 qualifiers, expression composition, or unresolved targets remain gaps.
 Layout parsing remains explicitly deferred: retained definitions make a future
 private parser possible without reopening the database.
+
+For lifecycle analysis, the same retained definition is parsed only at the
+`CodeBehindForm`/`CodeBehindReport` boundary. Its suffix becomes a protected
+form/report `vba-module` with exact code hash and module-relative lines; the
+record carries originating definition hash and first code line. A matching
+AllModules export is ignored when this class-module record exists, preventing
+duplicate procedures. Missing, blank, or procedure-unparseable code-behind
+sections remain explicit gaps.

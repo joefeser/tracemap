@@ -150,11 +150,14 @@ public sealed class AccessDesignEvidenceReaderTests
         var path = Path.Combine(temp.Path, "vba-save-as-text");
         const string source = "Private Sub HandleClick()\nEnd Sub";
         var sourceHash = Sha256(source);
+        var documentHash = Sha256("Begin Form\nCodeBehindForm\n" + source);
         WriteBundle(path,
         [
             Record("vba-module", "module", null, "vba-module-export", "exact-lines", sourceHash, 1, 2, "complete",
                 Ordered(("moduleRole", "form"), ("identity", "Form_PrivateForm"), ("moduleKind", "form"),
-                    ("sourceText", source), ("sourceSha256", sourceHash), ("lineCount", 2), ("coordinateBasis", "module-relative")))
+                    ("sourceText", source), ("sourceSha256", sourceHash), ("lineCount", 2), ("coordinateBasis", "module-relative"),
+                    ("sourceDocumentSha256", documentHash), ("sourceDocumentStartLine", 3),
+                    ("extractionMechanism", "save-as-text-code-behind")))
         ], mechanism: "access-save-as-text-vba");
 
         using var result = AccessDesignEvidenceReader.Read(path, Binding());

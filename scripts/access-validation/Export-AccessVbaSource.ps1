@@ -175,6 +175,37 @@ function Add-Record(
     })
 }
 
+function Get-CodeBehindModule([string]$DesignText, [string]$SurfaceKind) {
+    $marker = if ($SurfaceKind -eq "form") { "CodeBehindForm" } else { "CodeBehindReport" }
+    $lines = [regex]::Split($DesignText, "`r`n|`n|`r")
+    $markerIndex = -1
+    for ($index = 0; $index -lt $lines.Length; $index++) {
+        if ($lines[$index].Trim() -eq $marker) {
+            $markerIndex = $index
+            break
+        }
+    }
+    if ($markerIndex -lt 0) {
+        return [pscustomobject]@{ Declared = $false; Source = ""; StartLine = 0; HasProcedure = $false }
+    }
+    $sourceLines = if ($markerIndex + 1 -lt $lines.Length) {
+        @($lines[($markerIndex + 1)..($lines.Length - 1)])
+    }
+    else {
+        @()
+    }
+    $source = [string]::Join("`n", $sourceLines)
+    $hasProcedure = [regex]::IsMatch(
+        $source,
+        "(?im)^\s*(?:(?:Public|Private|Friend|Static)\s+)?(?:Sub|Function|Property\s+(?:Get|Let|Set))\s+[A-Za-z_][A-Za-z0-9_]*")
+    return [pscustomobject]@{
+        Declared = $true
+        Source = $source
+        StartLine = $markerIndex + 2
+        HasProcedure = $hasProcedure
+    }
+}
+
 $copy = [IO.Path]::GetFullPath($DatabaseCopyPath)
 $original = [IO.Path]::GetFullPath($OriginalDatabasePath)
 $metadata = [IO.Path]::GetFullPath($FormReportMetadataDirectory)
@@ -311,13 +342,27 @@ try {
     New-Item -ItemType Directory -Path $privateRoot -Force | Out-Null
     $records = [System.Collections.Generic.List[object]]::new()
     $privateArtifacts = [System.Collections.Generic.List[object]]::new()
+    $metadataRecords = [System.Collections.Generic.List[object]]::new()
+    $surfaceByRecordId = @{}
+    $moduleNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $vbaModuleCount = 0
+    $standaloneModuleFileCount = 0
+    $codeBehindOrdinal = 0
+    $sourceGapOrdinal = 0
     $designOrdinal = 0
     foreach ($line in @(Get-Content -LiteralPath $metadataBundle.RecordsPath)) {
         if ([string]::IsNullOrWhiteSpace($line)) { Stop-Export "AccessVbaMetadataBundleInvalid" }
         # Windows PowerShell 5.1 lacks the hashtable conversion switch.
         # PSCustomObject preserves property access and input property order here.
         $record = $line | ConvertFrom-Json
+        $metadataRecords.Add($record)
         $records.Add($record)
+        if ($record.kind -eq "catalog-object" -and $record.payload.objectRole -in @("form", "report")) {
+            $surfaceByRecordId[[string]$record.recordId] = [pscustomobject]@{
+                Name = [string]$record.payload.identity
+                Kind = [string]$record.payload.objectRole
+            }
+        }
         if ($record.kind -eq "ui-design-document") {
             $designText = [string]$record.payload.designText
             $designHash = [string]$record.payload.documentSha256
@@ -334,12 +379,67 @@ try {
             $designOrdinal++
         }
     }
+
+    foreach ($record in @($metadataRecords | Where-Object kind -eq "ui-design-document" | Sort-Object recordId)) {
+        $surface = $surfaceByRecordId[[string]$record.parentRecordId]
+        $surfaceKind = [string]$record.payload.documentRole
+        if ($null -eq $surface -or $surface.Kind -ne $surfaceKind) {
+            Add-Record $records "source-gap" "gap-code-behind-owner-$($sourceGapOrdinal.ToString('D6'))" "" 0 ([ordered]@{
+                classification = "AccessVbaCodeBehindOwnerUnavailable"
+                affectedScope = "ui-surface"
+                coverageCategory = "source-unavailable"
+            })
+            $sourceGapOrdinal++
+            continue
+        }
+        $codeBehind = Get-CodeBehindModule ([string]$record.payload.designText) $surfaceKind
+        if (-not $codeBehind.Declared) { continue }
+        $moduleName = if ($surfaceKind -eq "form") { "Form_$($surface.Name)" } else { "Report_$($surface.Name)" }
+        if ([string]::IsNullOrWhiteSpace($codeBehind.Source)) {
+            Add-Record $records "source-gap" "gap-code-behind-source-$($sourceGapOrdinal.ToString('D6'))" "" 0 ([ordered]@{
+                classification = "AccessVbaCodeBehindSourceUnavailable"
+                affectedScope = $surfaceKind
+                coverageCategory = "source-unavailable"
+            })
+            $sourceGapOrdinal++
+            continue
+        }
+        if (-not $codeBehind.HasProcedure) {
+            Add-Record $records "source-gap" "gap-code-behind-procedure-$($sourceGapOrdinal.ToString('D6'))" "" 0 ([ordered]@{
+                classification = "AccessVbaCodeBehindProcedureUnavailable"
+                affectedScope = $surfaceKind
+                coverageCategory = "source-unavailable"
+            })
+            $sourceGapOrdinal++
+        }
+        if (-not $moduleNames.Add($moduleName)) { continue }
+        $sourceBytes = $Utf8NoBom.GetBytes([string]$codeBehind.Source)
+        if ($sourceBytes.LongLength -gt $MaxSourceBytes) { Stop-Export "AccessVbaSourceLimitReached" }
+        $lineCount = if ($codeBehind.Source.Length -eq 0) { 0 } else { [regex]::Matches($codeBehind.Source, "`n").Count + 1 }
+        if ($lineCount -gt $MaxSourceLines) { Stop-Export "AccessVbaSourceLimitReached" }
+        $sourceHash = Get-BytesSha256 $sourceBytes
+        Add-Record $records "vba-module" "vba-code-behind-$($codeBehindOrdinal.ToString('D6'))" $sourceHash $lineCount ([ordered]@{
+            moduleRole = $surfaceKind
+            identity = $moduleName
+            moduleKind = $surfaceKind
+            sourceText = [string]$codeBehind.Source
+            sourceSha256 = $sourceHash
+            lineCount = $lineCount
+            coordinateBasis = "module-relative"
+            sourceDocumentSha256 = [string]$record.payload.documentSha256
+            sourceDocumentStartLine = [int]$codeBehind.StartLine
+            extractionMechanism = "save-as-text-code-behind"
+        })
+        $codeBehindOrdinal++
+        $vbaModuleCount++
+    }
     for ($index = 0; $index -lt $moduleCount; $index++) {
         $module = $null
         try {
             $module = $modules.Item($index)
             $name = [string]$module.Name
             if ([string]::IsNullOrWhiteSpace($name)) { Stop-Export "AccessVbaModuleIdentityUnavailable" }
+            if (-not $moduleNames.Add($name)) { continue }
             $recordId = "vba-module-$($index.ToString('D6'))"
             $rawPath = Join-Path $privateRoot "$recordId.txt"
             $access.SaveAsText($AcModule, $name, $rawPath)
@@ -359,6 +459,7 @@ try {
                 sha256 = $hash
                 lineCount = $lineCount
             })
+            $standaloneModuleFileCount++
             $moduleKind = if ($name.StartsWith("Form_", [StringComparison]::OrdinalIgnoreCase)) { "form" }
                 elseif ($name.StartsWith("Report_", [StringComparison]::OrdinalIgnoreCase)) { "report" }
                 else { "standard" }
@@ -371,6 +472,7 @@ try {
                 lineCount = $lineCount
                 coordinateBasis = "module-relative"
             })
+            $vbaModuleCount++
         }
         finally { Close-ComObject $module }
     }
@@ -437,7 +539,10 @@ try {
         workingCopyPostExportSha256 = $workingCopyAfterWorker
         workingCopyMutationOutcome = $workingCopyMutationOutcome
         artifactCount = $privateArtifacts.Count
-        moduleFileCount = $moduleCount
+        moduleFileCount = $standaloneModuleFileCount
+        vbaModuleRecordCount = $vbaModuleCount
+        standaloneModuleFileCount = $standaloneModuleFileCount
+        codeBehindModuleCount = $codeBehindOrdinal
         formReportDesignFileCount = $designOrdinal
         artifacts = @($privateArtifacts | Sort-Object artifact)
         sourceArtifactOnly = $true

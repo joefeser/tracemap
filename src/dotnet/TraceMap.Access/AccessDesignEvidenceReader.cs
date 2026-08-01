@@ -93,7 +93,8 @@ public static class AccessDesignEvidenceReader
                 ["ordinal"],
                 ["ordinal"]),
             ["vba-module"] = new(
-                ["moduleRole", "identity", "moduleKind", "sourceText", "sourceSha256", "lineCount", "coordinateBasis"],
+                ["moduleRole", "identity", "moduleKind", "sourceText", "sourceSha256", "lineCount", "coordinateBasis",
+                    "sourceDocumentSha256", "sourceDocumentStartLine", "extractionMechanism"],
                 ["moduleRole", "identity", "moduleKind", "sourceText", "sourceSha256", "lineCount", "coordinateBasis"],
                 ["moduleRole", "identity", "moduleKind"]),
             ["event-reference"] = new(
@@ -524,6 +525,7 @@ public static class AccessDesignEvidenceReader
                 case "controlType":
                 case "boundColumn":
                 case "columnCount":
+                case "sourceDocumentStartLine":
                     if (!property.Value.TryGetInt32(out var number) || number < 0)
                         throw new AccessScanException("AccessDesignInputRecordMalformed");
                     break;
@@ -553,6 +555,17 @@ public static class AccessDesignEvidenceReader
                 limits.MaxVbaModuleTextLength, limits.MaxVbaModuleLines);
             RequireClosedString(payload, "moduleKind", ["standard", "class", "form", "report"], "AccessDesignInputRecordMalformed");
             RequireClosedString(payload, "coordinateBasis", ["module-relative"], "AccessDesignInputRecordMalformed");
+            if (payload.TryGetProperty("sourceDocumentSha256", out var sourceDocumentHash)
+                && (sourceDocumentHash.ValueKind != JsonValueKind.String
+                    || !IsHex(sourceDocumentHash.GetString(), 64)))
+                throw new AccessScanException("AccessDesignInputRecordMalformed");
+            if (payload.TryGetProperty("sourceDocumentStartLine", out var sourceDocumentStartLine)
+                && (!sourceDocumentStartLine.TryGetInt32(out var startLine) || startLine < 1))
+                throw new AccessScanException("AccessDesignInputRecordMalformed");
+            if (payload.TryGetProperty("extractionMechanism", out var extractionMechanism)
+                && (extractionMechanism.ValueKind != JsonValueKind.String
+                    || !string.Equals(extractionMechanism.GetString(), "save-as-text-code-behind", StringComparison.Ordinal)))
+                throw new AccessScanException("AccessDesignInputRecordMalformed");
         }
         if (kind == "catalog-object")
         {

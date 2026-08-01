@@ -349,6 +349,9 @@ public sealed class AccessDesignEvidenceCompositionTests
         Assert.Equal("control", binding.Properties.GetValueOrDefault("ownerKind"));
         Assert.Equal("expression-function", binding.Properties.GetValueOrDefault("bindingKind"));
         Assert.NotNull(binding.Properties.GetValueOrDefault("eventExpressionHash"));
+        Assert.Equal("save-as-text-code-behind", binding.Properties.GetValueOrDefault("sourceExtractionMechanism"));
+        Assert.NotNull(binding.Properties.GetValueOrDefault("sourceDocumentSha256"));
+        Assert.Equal("4", binding.Properties.GetValueOrDefault("sourceDocumentStartLine"));
         Assert.Equal(1, binding.Evidence.StartLine);
         Assert.Equal(7, binding.Evidence.EndLine);
         var control = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessControlDeclared
@@ -584,7 +587,9 @@ public sealed class AccessDesignEvidenceCompositionTests
             records.Add(Record(
                 "vba-module", "expression-form-module", null, "vba-module-export", "exact-lines", expressionHash, 1, 7, "complete",
                 Object(("moduleRole", "form"), ("identity", $"Form_{ProtectedForm}"), ("moduleKind", "form"),
-                    ("sourceText", expressionSource), ("sourceSha256", expressionHash), ("lineCount", 7), ("coordinateBasis", "module-relative"))));
+                    ("sourceText", expressionSource), ("sourceSha256", expressionHash), ("lineCount", 7), ("coordinateBasis", "module-relative"),
+                    ("sourceDocumentSha256", designTextHash), ("sourceDocumentStartLine", 4),
+                    ("extractionMechanism", "save-as-text-code-behind"))));
         }
         if (includeProjectionIdentityDuplicates)
         {

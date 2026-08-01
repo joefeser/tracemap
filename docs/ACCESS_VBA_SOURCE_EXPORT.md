@@ -32,6 +32,13 @@ change to the Access open/export contract and may prevent the bounded export.
 A working-copy change is not evidence of original-source mutation, nor proof
 that the copy's logical contents are unchanged.
 
+The compatible form/report definitions also supply class-module source. For an
+exact `CodeBehindForm` or `CodeBehindReport` marker, the exporter emits only
+the following code suffix as a protected `vba-module`, with its source hash,
+module-relative lines, originating definition hash, and definition start line.
+The full definition remains private. It does not add a dummy standard module;
+missing or procedure-unparseable code-behind sections become explicit gaps.
+
 The normalized directory is protected local input. `enrich-design` processes
 source only in memory; normal facts, indexes, reports, and logs omit raw source
 and event-expression text. Static same-module candidates do not prove runtime
