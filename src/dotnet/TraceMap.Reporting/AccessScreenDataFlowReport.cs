@@ -193,6 +193,7 @@ public static class AccessScreenDataFlowReporter
 
         if (!accessFacts.Any(fact => fact.FactType is FactTypes.AccessFormDeclared
                 or FactTypes.AccessEventBindingCandidate
+                or FactTypes.AccessCommandCandidate
                 or FactTypes.AccessVbaProcedureDeclared
                 or FactTypes.AccessNavigationCandidate
                 or FactTypes.AccessBindingDeclared))
@@ -264,6 +265,11 @@ public static class AccessScreenDataFlowReporter
         {
             FactTypes.AccessControlDeclared => "surface-control-ownership",
             FactTypes.AccessEventBindingCandidate => "static-event-binding-candidate",
+            // A command is a terminal effect of its procedure, not a traversable
+            // association back to the owning surface. Keeping it out of the
+            // graph prevents a false procedure -> surface -> procedure cycle;
+            // the command fact remains available to composition/reporting.
+            FactTypes.AccessCommandCandidate => null,
             FactTypes.AccessNavigationCandidate => "static-vba-call-navigation-candidate",
             FactTypes.AccessBindingDeclared => "declared-data-binding",
             FactTypes.AccessQueryDependencyCandidate => "static-query-dependency-candidate",

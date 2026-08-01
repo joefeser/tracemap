@@ -37,6 +37,7 @@ internal static partial class AccessUiTextParser
         long lineCount = 0;
         long characterCount = 0;
         var sawSurfaceBlock = false;
+        string? pendingProperty = null;
 
         string? line;
         while ((line = reader.ReadLine()) is not null)
@@ -45,14 +46,25 @@ internal static partial class AccessUiTextParser
             characterCount += line.Length + 1L;
             if (lineCount > limits.MaxUiDesignLines || characterCount > limits.MaxUiDesignTextLength)
                 throw new AccessScanException("AccessUiDesignTextLimitReached");
+            if (pendingProperty is not null)
+            {
+                pendingProperty += "\n" + line;
+                var pendingValue = pendingProperty[(pendingProperty.IndexOf('=') + 1)..];
+                if (!IsQuotedScalarComplete(pendingValue))
+                    continue;
+                line = pendingProperty;
+                pendingProperty = null;
+            }
             var trimmed = line.Trim();
-            if (trimmed is "CodeBehindForm" or "CodeBehindReport") break;
+            if (blocks.Count == 0 && (trimmed is "CodeBehindForm" or "CodeBehindReport")) break;
 
             var begin = BeginPattern().Match(trimmed);
             if (begin.Success)
             {
                 var block = begin.Groups["block"].Success ? begin.Groups["block"].Value : "anonymous";
                 blocks.Push(block);
+                if (blocks.Skip(1).Any(item => item == "property-opaque"))
+                    continue;
                 if (block.Equals(surfaceKind, StringComparison.OrdinalIgnoreCase)) sawSurfaceBlock = true;
                 if (control is null && TryControlType(block, out var controlType))
                 {
@@ -108,8 +120,24 @@ internal static partial class AccessUiTextParser
 
             var property = PropertyPattern().Match(line);
             if (!property.Success) continue;
+            if (blocks.Contains("property-opaque")) continue;
             var name = property.Groups["name"].Value;
             var sourceValue = property.Groups["value"].Value;
+            if (sourceValue.TrimStart().StartsWith('"') && !IsQuotedScalarComplete(sourceValue))
+            {
+                pendingProperty = line;
+                continue;
+            }
+            if (sourceValue.TrimStart().Contains('{')
+                && sourceValue.TrimEnd().EndsWith("Begin", StringComparison.OrdinalIgnoreCase))
+            {
+                blocks.Push("property-opaque");
+                gaps.Add(new(ProtectedPropertyNames.Contains(name)
+                    ? "AccessUiProtectedPropertyShapeUnsupported"
+                    : "AccessUiCompoundPropertyShapeUnsupported",
+                    control is null ? "ui-surface" : "control", null, RuleIds.LegacyAccessUiSurface));
+                continue;
+            }
             if (sourceValue.Trim().Equals("Begin", StringComparison.Ordinal))
             {
                 blocks.Push("property-value");
@@ -190,8 +218,14 @@ internal static partial class AccessUiTextParser
             }
         }
 
+        if (pendingProperty is not null)
+            gaps.Add(new("AccessUiPropertyValueMalformed", control is null ? "ui-surface" : "control", null, RuleIds.LegacyAccessUiSurface));
+
         var malformed = !sawSurfaceBlock || blocks.Count != 0
-            || gaps.Any(item => item.Classification == "AccessUiDesignTextMalformed");
+            || gaps.Any(item => item.Classification is "AccessUiDesignTextMalformed"
+                or "AccessUiProtectedPropertyShapeUnsupported"
+                or "AccessUiCompoundPropertyShapeUnsupported"
+                or "AccessUiPropertyValueMalformed");
         if (!sawSurfaceBlock || blocks.Count != 0)
             gaps.Add(new("AccessUiDesignTextMalformed", "ui-surface", null, RuleIds.LegacyAccessUiSurface));
         return new(
@@ -214,6 +248,12 @@ internal static partial class AccessUiTextParser
         for (var index = 1; index < value.Length; index++)
         {
             var current = value[index];
+            if (current == '\\' && index + 1 < value.Length && value[index + 1] == '"')
+            {
+                builder.Append('"');
+                index++;
+                continue;
+            }
             if (current != '"') { builder.Append(current); continue; }
             if (index + 1 < value.Length && value[index + 1] == '"') { builder.Append('"'); index++; continue; }
             supported = string.IsNullOrWhiteSpace(value[(index + 1)..]);
@@ -221,6 +261,28 @@ internal static partial class AccessUiTextParser
         }
         supported = false;
         return string.Empty;
+    }
+
+    private static bool IsQuotedScalarComplete(string source)
+    {
+        var value = source.Trim();
+        if (!value.StartsWith('"')) return true;
+        for (var index = 1; index < value.Length; index++)
+        {
+            if (value[index] == '\\' && index + 1 < value.Length && value[index + 1] == '"')
+            {
+                index++;
+                continue;
+            }
+            if (value[index] != '"') continue;
+            if (index + 1 < value.Length && value[index + 1] == '"')
+            {
+                index++;
+                continue;
+            }
+            return string.IsNullOrWhiteSpace(value[(index + 1)..]);
+        }
+        return false;
     }
 
     private static bool? ReadBoolean(string value) => value.Trim() switch
@@ -333,6 +395,6 @@ internal static partial class AccessUiTextParser
     [GeneratedRegex(@"^\s*(?<ordinal>[0-9]+)\s*=\s*Begin\s*$", RegexOptions.CultureInvariant)]
     private static partial Regex IndexedGroupPattern();
 
-    [GeneratedRegex(@"^\s*(?<name>[A-Za-z][A-Za-z0-9]*)\s*=\s*(?<value>.*)$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^\s*(?<name>[A-Za-z][A-Za-z0-9]*)\s*=\s*(?<value>.*)$", RegexOptions.CultureInvariant | RegexOptions.Singleline)]
     private static partial Regex PropertyPattern();
 }

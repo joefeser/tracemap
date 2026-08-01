@@ -162,7 +162,8 @@ internal static class AccessDesignReviewComposer
             FactTypes.AccessVbaModuleDeclared => ("vba-module", DesignMetadata(fact.Properties, "moduleKind", "lineCount", "procedureCount", "coverageLabel"), DesignClassification(fact.Properties)),
             FactTypes.AccessVbaProcedureDeclared => ("vba-procedure", DesignMetadata(fact.Properties, "procedureKind", "callCount", "coverageLabel"), ReleaseReviewClassifications.NoActionableEvidence),
             FactTypes.AccessNavigationCandidate => ("navigation-candidate", DesignMetadata(fact.Properties, "callKind", "targetKind", "coverageLabel"), DesignClassification(fact.Properties)),
-            FactTypes.AccessEventBindingCandidate => ("event-binding-candidate", DesignMetadata(fact.Properties, "eventRole", "coverageLabel"), DesignClassification(fact.Properties)),
+            FactTypes.AccessEventBindingCandidate => ("event-binding-candidate", DesignMetadata(fact.Properties, "eventRole", "bindingKind", "classification", "commandKind", "commandCoverage", "coverageLabel"), DesignClassification(fact.Properties)),
+            FactTypes.AccessCommandCandidate => ("command-candidate", DesignMetadata(fact.Properties, "eventRole", "commandKind", "commandCoverage", "commandExpressionLength", "coverageLabel"), DesignClassification(fact.Properties)),
             FactTypes.AccessMacroDeclared => ("macro-inventory", DesignMetadata(fact.Properties, "macroKind", "ordinal", "startupRole", "bodyStatus", "coverageLabel"), DesignClassification(fact.Properties)),
             _ => (null, [], ReleaseReviewClassifications.NoActionableEvidence)
         };
