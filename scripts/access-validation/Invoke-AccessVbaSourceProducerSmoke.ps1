@@ -58,7 +58,7 @@ try {
         -BaseScanManifestSha256 $zeroHash `
         -DatabaseIdentityHash $zeroHash `
         -TimeoutSeconds 240 *> $null
-    if (Test-Path -LiteralPath $generationCanary -or Test-Path -LiteralPath $vbaCanary) { throw "AccessVbaCanaryFired" }
+    if ((Test-Path -LiteralPath $generationCanary) -or (Test-Path -LiteralPath $vbaCanary)) { throw "AccessVbaCanaryFired" }
     if ((Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash -ne $originalHash) {
         throw "AccessVbaOriginalSourceChanged"
     }

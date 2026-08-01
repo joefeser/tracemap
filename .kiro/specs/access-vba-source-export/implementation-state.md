@@ -73,6 +73,13 @@ hashtable conversion switch used by the exporter. The exporter now uses ordered
 This preserves record order and schema while requiring no additional runtime.
 A fresh synthetic Windows smoke run is required at the corrected head.
 
+The next run reached the smoke's final canary assertion and exposed an
+unparenthesized `Test-Path` command joined with `-or`; Windows PowerShell bound
+the second `-LiteralPath` as a duplicate parameter. Each invocation is now
+parenthesized. A regression scans every Access validation script for this
+unparenthesized `Test-Path` boolean form. Cleanup completed, and a fresh
+synthetic Windows smoke run is required at the corrected head.
+
 Deferred: standard/class classification beyond form/report naming, dynamic
 expressions, nonzero argument functions, callbacks, macro code, section-level
 metadata, runtime behavior/order, and representative validation. Event bindings
