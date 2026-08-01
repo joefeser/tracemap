@@ -98,6 +98,22 @@ public sealed class AccessVbaSourceExportTests
         }
     }
 
+    [Fact]
+    public async Task Windows_validation_scripts_parenthesize_commands_used_with_boolean_operators()
+    {
+        var root = FindRepoRoot();
+        var scripts = Directory.GetFiles(Path.Combine(root, "scripts", "access-validation"), "*.ps1");
+        var unparenthesizedTestPath = new System.Text.RegularExpressions.Regex(
+            @"(?m)(?<!\()Test-Path\s+-LiteralPath\s+[^\r\n()]+\s+-(?:or|and)\s+Test-Path\b",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+        foreach (var path in scripts)
+        {
+            var script = await File.ReadAllTextAsync(path);
+            Assert.DoesNotMatch(unparenthesizedTestPath, script);
+        }
+    }
+
     private static string FindRepoRoot()
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);
