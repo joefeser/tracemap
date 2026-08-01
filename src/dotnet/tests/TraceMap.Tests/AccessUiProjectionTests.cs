@@ -61,6 +61,32 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Text_design_parser_preserves_multiline_escaped_property_and_opaque_shape_gap()
+    {
+        const string design = """
+            Begin Form
+                RecordSource ="qryParent"
+                Filter ="[Status] = \"Open\"
+            and [Kind] = \"Weekly\""
+                UnknownProperty ={opaque} Begin
+                    Filter ="nested-filter-must-not-overwrite"
+                End
+                Begin TextBox
+                    Name ="txtStatus"
+                    ControlSource ="Status"
+                End
+            End
+            """;
+
+        var parsed = AccessUiTextParser.Parse(new StringReader(design), "frmParent", "form");
+        var surface = Assert.IsType<AccessRawUiSurface>(parsed.Surface);
+        Assert.Equal("partial", surface.Coverage);
+        Assert.Equal("[Status] = \"Open\"\nand [Kind] = \"Weekly\"", surface.Filter);
+        Assert.Single(surface.Controls);
+        Assert.Contains(parsed.Gaps, gap => gap.Classification == "AccessUiCompoundPropertyShapeUnsupported");
+    }
+
+    [Fact]
     public void Projector_preserves_a_declared_report_group_with_an_unavailable_expression()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed(
