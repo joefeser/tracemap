@@ -225,6 +225,11 @@ End Sub
     $vbaFlowButton.Name = "cmdVbaFlow"
     $vbaFlowButton.Caption = "VBA_BUTTON_MARKER_92817"
     $vbaFlowButton.OnClick = "[Event Procedure]"
+    $vbaExpressionButton = $access.CreateControl($customerFormTemporaryName, 104, 0, "", "", 4400, 2400, 2400, 400)
+    $fixtureControls.Add($vbaExpressionButton)
+    $vbaExpressionButton.Name = "cmdVbaExpression"
+    $vbaExpressionButton.Caption = "VBA_EXPRESSION_BUTTON_MARKER_92817"
+    $vbaExpressionButton.OnClick = "=RunSyntheticScenario()"
     $embeddedMacroButton = $access.CreateControl($customerFormTemporaryName, 104, 0, "", "", 1800, 2900, 2400, 400)
     $fixtureControls.Add($embeddedMacroButton)
     $embeddedMacroButton.Name = "cmdEmbeddedMacro"
@@ -271,6 +276,11 @@ End Sub
 
 Private Sub HelperStatic()
 End Sub
+
+Public Function RunSyntheticScenario() As Boolean
+    DoCmd.OpenForm "frmCustomers", , , "IsActive = True", , "SyntheticOpenArgsMarker_92817"
+    RunSyntheticScenario = True
+End Function
 "@)
     $access.DoCmd.Save(2, $customerFormTemporaryName)
     $access.DoCmd.Close(2, $customerFormTemporaryName, 1)
@@ -337,8 +347,8 @@ End Sub
         Forms = 2
         Reports = 1
         Phase7Controls = 10
-        Phase8Controls = 2
-        TotalFormReportControls = 12
+        Phase8Controls = 3
+        TotalFormReportControls = 13
         FormReportCoverage = "phase7-design-fixture"
         VbaCoverage = "phase8-form-code-behind-fixture"
         MacroCoverage = "phase9-embedded-event-marker-only;named-data-deferred"
