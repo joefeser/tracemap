@@ -8,6 +8,7 @@ public static partial class AccessQueryProjector
     private static readonly string[] SqlFunctionNames = [
         "abs", "avg", "count", "date", "dateadd", "datediff", "dlookup", "dsum", "first", "format",
         "iif", "instr", "isnull", "len", "max", "min", "nz", "sum", "val"];
+    private static readonly string[] SqlKeywordCallNames = ["in", "exists"];
     public static AccessQueryActionProjection ProjectActionLineage(
         string sql,
         string operationKind,
@@ -108,37 +109,44 @@ public static partial class AccessQueryProjector
     {
         var masked = MaskLiteralsAndComments(sql);
         var dependencyProjection = ProjectDependencies(sql, knownObjects);
+        var dependencyKeys = dependencyProjection.Dependencies.Select(item => item.TargetStableKey).ToHashSet(StringComparer.Ordinal);
+        var scopedKnownObjects = knownObjects.ToDictionary(
+            item => item.Key,
+            item => (IReadOnlyList<(string StableKey, string Kind)>)item.Value.Where(candidate => dependencyKeys.Contains(candidate.StableKey)).ToArray(),
+            StringComparer.OrdinalIgnoreCase);
         var select = SelectListAfterKeyword(masked, "select");
         var expressions = select is null ? [] : SplitSelectItems(select);
         var outputs = expressions.Select((expression, ordinal) =>
         {
             var trimmed = expression.Trim();
-            var sourceFields = ResolveExpressionFieldKeys(trimmed, knownObjects, fieldsByTable);
+            var sourceFields = ResolveExpressionFieldKeys(trimmed, scopedKnownObjects, fieldsByTable);
             var nameHash = AccessSafeValues.RoleHash("access-query-output-name", trimmed);
             return new AccessQueryStaticOutputProjection(
                 ordinal,
                 nameHash,
                 sourceFields,
-                sourceFields.Count > 0 && IsStaticDirectProjection(trimmed) ? "complete" : "partial");
+                sourceFields.Count == 1 && IsStaticDirectProjection(trimmed) ? "complete" : "partial");
         }).ToArray();
         var predicate = Clause(masked, "where", ["group", "order", ";", "$"]);
-        var order = Clause(masked, "order", [";", "$"]);
+        var order = Clause(masked, "order\\s+by", [";", "$"]);
         var functions = predicate is null
             ? []
             : NamedFunctionPattern().Matches(predicate)
                 .Select(match => match.Groups["name"].Value)
-                .Where(name => !SqlFunctionNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+                .Where(name => !SqlFunctionNames.Contains(name, StringComparer.OrdinalIgnoreCase)
+                    && !SqlKeywordCallNames.Contains(name, StringComparer.OrdinalIgnoreCase))
                 .Select(name => AccessSafeValues.RoleHash("access-query-function-name", name))
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .ToArray();
-        var predicateComplete = predicate is null || ResolvesExpressionFieldKeys(predicate, knownObjects, fieldsByTable);
-        var orderComplete = order is null || ResolvesExpressionFieldKeys(order, knownObjects, fieldsByTable);
+        var predicateComplete = predicate is null || ResolvesExpressionFieldKeys(predicate, scopedKnownObjects, fieldsByTable);
+        var orderComplete = order is null || ResolvesExpressionFieldKeys(order, scopedKnownObjects, fieldsByTable);
         var coverage = expressions.Count > 0
             && outputs.All(output => output.Coverage == "complete")
             && dependencyProjection.Coverage == "complete"
             && predicateComplete
             && orderComplete
+            && functions.Length == 0
             ? "complete"
             : "partial";
         return new(

@@ -85,7 +85,7 @@ internal static partial class AccessVbaProjector
                 .Select(work => work.Projection with
                 {
                     Calls = ProjectCalls(databaseIdentitySeed, moduleIdentity, work, procedureWork, lines, knownObjects, limits, gaps, disclosurePolicy),
-                    Effects = ProjectEffects(databaseIdentitySeed, work, lines, disclosurePolicy, knownObjects, fieldsByTable, rowSourceContexts, gaps)
+                    Effects = ProjectEffects(databaseIdentitySeed, raw.Name, work, lines, disclosurePolicy, knownObjects, fieldsByTable, rowSourceContexts, gaps)
                 })
                 .ToArray();
             var updatedWork = procedureWork.Zip(procedures, (work, projection) => work with { Projection = projection }).ToArray();
@@ -261,6 +261,7 @@ internal static partial class AccessVbaProjector
 
     private static IReadOnlyList<AccessVbaEffectProjection> ProjectEffects(
         string databaseIdentitySeed,
+        string moduleName,
         ProcedureWork procedure,
         string[] lines,
         AccessIdentityDisclosurePolicy disclosurePolicy,
@@ -270,7 +271,7 @@ internal static partial class AccessVbaProjector
         List<AccessGapProjection> gaps)
     {
         var effects = new List<AccessVbaEffectProjection>();
-        var conditions = new Stack<(string Hash, int Length, string Text)>();
+        var conditions = new Stack<(string Hash, int Length, string Text, int Alternative)>();
         for (var index = procedure.BodyStartIndex; index <= procedure.BodyEndIndex && index < lines.Length; index++)
         {
             var source = CodeWithoutComment(lines[index]);
@@ -288,16 +289,16 @@ internal static partial class AccessVbaProjector
                 {
                     var prior = conditions.Pop();
                     var alternateText = $"Else({prior.Text})";
-                    conditions.Push((AccessSafeValues.RoleHash("access-vba-condition", alternateText), alternateText.Length, alternateText));
+                    conditions.Push((AccessSafeValues.RoleHash("access-vba-condition", alternateText), alternateText.Length, alternateText, prior.Alternative + 1));
                 }
                 continue;
             }
             var elseIf = ElseIfPattern().Match(trimmed);
             if (elseIf.Success)
             {
-                if (conditions.Count > 0) conditions.Pop();
+                var priorAlternative = conditions.Count > 0 ? conditions.Pop().Alternative : -1;
                 var alternateText = source.Trim();
-                conditions.Push((AccessSafeValues.RoleHash("access-vba-condition", alternateText), alternateText.Length, alternateText));
+                conditions.Push((AccessSafeValues.RoleHash("access-vba-condition", alternateText), alternateText.Length, alternateText, priorAlternative + 1));
                 continue;
             }
             var condition = IfConditionPattern().Match(trimmed);
@@ -305,15 +306,16 @@ internal static partial class AccessVbaProjector
             {
                 var conditionText = source.Trim();
                 if (trimmed.EndsWith("Then", StringComparison.OrdinalIgnoreCase))
-                    conditions.Push((AccessSafeValues.RoleHash("access-vba-condition", conditionText), conditionText.Length, conditionText));
+                    conditions.Push((AccessSafeValues.RoleHash("access-vba-condition", conditionText), conditionText.Length, conditionText, 0));
                 continue;
             }
 
             var line = index + 1;
-            var activeCondition = conditions.Count > 0 ? conditions.Peek() : ((string Hash, int Length, string Text)?)null;
+            var activeCondition = conditions.Count > 0 ? conditions.Peek() : ((string Hash, int Length, string Text, int Alternative)?)null;
             foreach (Match match in RowSourceAssignmentPattern().Matches(masked))
             {
-                var target = AccessSafeValues.Identity(databaseIdentitySeed, "vba-control-state-target", match.Groups["name"].Value, disclosurePolicy: disclosurePolicy);
+                var targetName = match.Groups["name"].Value;
+                var target = AccessSafeValues.Identity(databaseIdentitySeed, "vba-control-state-target", targetName, disclosurePolicy: disclosurePolicy);
                 var argument = ArgumentAt(source, match.Index + match.Length, 0);
                 var literal = TryExactStringLiteral(argument, out var sql) ? sql : null;
                 AccessQueryStaticProjection? projection = null;
@@ -326,13 +328,21 @@ internal static partial class AccessVbaProjector
                     if (coverage != "complete")
                         gaps.Add(new("AccessVbaRowSourceProjectionPartial", "vba-effect", target.StableKey, RuleIds.LegacyAccessVba));
                     if (rowSourceContexts is not null
-                        && rowSourceContexts.TryGetValue(AccessSafeValues.RoleHash("access-control-name", match.Groups["name"].Value), out var context))
+                        && rowSourceContexts.TryGetValue(moduleName + "|" + AccessSafeValues.RoleHash("access-control-name", targetName), out var context))
                     {
                         var selected = context.BoundColumn is > 0 && context.BoundColumn.Value <= projection.Outputs.Count
                             ? projection.Outputs[context.BoundColumn.Value - 1].SourceFieldStableKeys
                             : [];
-                        binding = context with { SelectedValueFieldStableKeys = selected };
+                        binding = context with
+                        {
+                            SelectedValueFieldStableKeys = selected,
+                            Coverage = selected.Count > 0 ? context.Coverage : "partial"
+                        };
                     }
+                }
+                else if (literal is not null)
+                {
+                    gaps.Add(new("AccessVbaRowSourceProjectionInputsMissing", "vba-effect", target.StableKey, RuleIds.LegacyAccessVba));
                 }
                 else
                 {
@@ -341,7 +351,8 @@ internal static partial class AccessVbaProjector
                 effects.Add(NewEffect(databaseIdentitySeed, procedure, effects.Count, "row-source-assignment", line, target,
                     argument ?? string.Empty,
                     activeCondition is null ? null : (activeCondition.Value.Hash, activeCondition.Value.Length),
-                    disclosurePolicy, coverage, projection, binding));
+                    disclosurePolicy, coverage, projection, binding,
+                    activeCondition?.Alternative ?? 0));
             }
             foreach (Match match in MeStateAssignmentPattern().Matches(masked))
             {
@@ -380,7 +391,8 @@ internal static partial class AccessVbaProjector
         AccessIdentityDisclosurePolicy disclosurePolicy,
         string coverage = "complete",
         AccessQueryStaticProjection? rowSourceProjection = null,
-        AccessRowSourceBindingProjection? rowSourceBinding = null) =>
+        AccessRowSourceBindingProjection? rowSourceBinding = null,
+        int? branchOrder = null) =>
         new(
             AccessSafeValues.Identity(seed, $"vba-effect-{procedure.Projection.Identity.StableKey}", $"{kind}-{line}", ordinal, disclosurePolicy),
             procedure.Projection.Identity.StableKey,
@@ -394,7 +406,7 @@ internal static partial class AccessVbaProjector
             condition?.Length ?? 0,
             coverage,
             rowSourceProjection,
-            ordinal,
+            branchOrder,
             rowSourceBinding);
 
     private static void AddLiteralTargetCall(
