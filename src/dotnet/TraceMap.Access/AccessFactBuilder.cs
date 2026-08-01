@@ -390,11 +390,16 @@ public static class AccessFactBuilder
                     ("commandCoverage", binding.CommandCoverage),
                     ("commandExpressionHash", binding.CommandExpressionHash),
                     ("commandExpressionLength", binding.CommandExpressionLength > 0 ? binding.CommandExpressionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                    ("commandStartLine", binding.CommandStartLine > 0 ? binding.CommandStartLine.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                    ("commandEndLine", binding.CommandEndLine > 0 ? binding.CommandEndLine.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
                     ("coverageLabel", binding.Coverage),
                     ("limitations", "exact-same-module-static-candidate;save-command-is-static-candidate-only;no-event-execution-or-runtime-dispatch-proof"))));
             if (binding.CommandKind is not null)
                 facts.Add(Create(manifest, FactTypes.AccessCommandCandidate, RuleIds.LegacyAccessEventBinding,
-                    EvidenceTiers.Tier3SyntaxOrTextual, bindingSpan,
+                    EvidenceTiers.Tier3SyntaxOrTextual,
+                    binding.CommandStartLine > 0
+                        ? VbaSpan(input.DatabaseRelativePath, binding.CommandStartLine, binding.CommandEndLine)
+                        : bindingSpan,
                     sourceSymbol: binding.ProcedureStableKey ?? binding.OwnerStableKey,
                     targetSymbol: binding.OwnerStableKey,
                     properties: Props(
@@ -404,6 +409,8 @@ public static class AccessFactBuilder
                         ("commandCoverage", binding.CommandCoverage),
                         ("commandExpressionHash", binding.CommandExpressionHash),
                         ("commandExpressionLength", binding.CommandExpressionLength > 0 ? binding.CommandExpressionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                        ("commandStartLine", binding.CommandStartLine > 0 ? binding.CommandStartLine.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                        ("commandEndLine", binding.CommandEndLine > 0 ? binding.CommandEndLine.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
                         ("coverageLabel", binding.CommandCoverage ?? "partial"),
                         ("limitations", "static-command-candidate;no-command-execution;no-persistence-proof"))));
         }

@@ -416,6 +416,20 @@ public sealed class AccessVbaProjectionTests
     }
 
     [Fact]
+    public void Projector_classifies_missing_event_module_as_unresolved_not_ambiguous()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('8', 40), "fixture.accdb", "hash");
+        var result = AccessVbaProjector.Project(seed,
+            [new("Form_frmHost", "form", "Private Sub Form_Load()\nEnd Sub")],
+            [new("form-owner", "on-load", "MissingModule", "Form_Load")]);
+
+        var binding = Assert.Single(result.EventBindings);
+        Assert.Equal("declared-handler-missing", binding.Classification);
+        Assert.Contains(result.Gaps, gap => gap.Classification == "AccessEventProcedureUnresolved");
+        Assert.DoesNotContain(result.Gaps, gap => gap.Classification == "AccessEventProcedureAmbiguous");
+    }
+
+    [Fact]
     public void Projector_scopes_missing_procedure_terminator_gaps_to_distinct_procedures()
     {
         const string source = """
