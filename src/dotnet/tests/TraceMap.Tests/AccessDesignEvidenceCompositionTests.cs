@@ -333,6 +333,44 @@ public sealed class AccessDesignEvidenceCompositionTests
     }
 
     [Fact]
+    public async Task Enrichment_maps_an_exact_zero_argument_event_expression_to_its_owning_form_module_without_persisting_expression_text()
+    {
+        using var temp = new TempDirectory();
+        var baseScan = await WriteBaseScanAsync(temp.Path);
+        var design = WriteDesignBundle(temp.Path, baseScan, includeExpressionEvent: true);
+
+        var result = await AccessDesignEvidenceComposer.ComposeAsync(baseScan, design);
+
+        var binding = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessEventBindingCandidate
+            && fact.Properties.GetValueOrDefault("eventRole") == "on-click"
+            && fact.Properties.GetValueOrDefault("projectorCoverage") == "complete");
+        Assert.NotNull(binding.SourceSymbol);
+        Assert.NotNull(binding.TargetSymbol);
+        Assert.Equal("control", binding.Properties.GetValueOrDefault("ownerKind"));
+        Assert.Equal("expression-function", binding.Properties.GetValueOrDefault("bindingKind"));
+        Assert.NotNull(binding.Properties.GetValueOrDefault("eventExpressionHash"));
+        Assert.Equal("save-as-text-code-behind", binding.Properties.GetValueOrDefault("sourceExtractionMechanism"));
+        Assert.NotNull(binding.Properties.GetValueOrDefault("sourceDocumentSha256"));
+        Assert.Equal("4", binding.Properties.GetValueOrDefault("sourceDocumentStartLine"));
+        Assert.Equal(1, binding.Evidence.StartLine);
+        Assert.Equal(7, binding.Evidence.EndLine);
+        var control = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessControlDeclared
+            && fact.Properties.GetValueOrDefault("eventDescriptors")?.Contains("on-click:expression:", StringComparison.Ordinal) == true);
+        Assert.Equal(control.TargetSymbol, binding.SourceSymbol);
+        var effect = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessUiStateEffectCandidate);
+        Assert.Equal(binding.TargetSymbol, effect.SourceSymbol);
+        Assert.Equal("control-state-assignment", effect.Properties.GetValueOrDefault("effectKind"));
+        Assert.NotNull(effect.Properties.GetValueOrDefault("conditionHash"));
+
+        var output = await WriteResultAsync(temp.Path, result);
+        var text = await File.ReadAllTextAsync(Path.Combine(output, "facts.ndjson"));
+        Assert.DoesNotContain("RunSelectedScenario", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("OpenArgsMarker", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("StatusFilterMarker", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("txtChoice", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Enrichment_marks_a_report_group_only_conflict_as_partial()
     {
         using var temp = new TempDirectory();
@@ -408,7 +446,8 @@ public sealed class AccessDesignEvidenceCompositionTests
         bool includeProjectionIdentityDuplicates = false,
         bool includeReviewRegressions = false,
         bool includeHiddenIdentityRegressions = false,
-        bool includeReportGroupConflict = false)
+        bool includeReportGroupConflict = false,
+        bool includeExpressionEvent = false)
     {
         var directory = Path.Combine(root, "protected-design-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -442,7 +481,7 @@ public sealed class AccessDesignEvidenceCompositionTests
                     ("linkMasterFields", includeHiddenIdentityRegressions
                         ? $"{UnusedProtectedTable}, {OrphanProtectedField}"
                         : null),
-                    ("events", Object(("on-click", "[Event Procedure]"))))),
+                    ("events", Object(("on-click", includeExpressionEvent ? "=RunSelectedScenario()" : "[Event Procedure]"))))),
             Record("vba-module", "module", null, "vba-module-export", "exact-lines", vbaHash, 1, 4, "complete",
                 Object(("moduleRole", "standard"), ("identity", ProtectedModule), ("moduleKind", "standard"),
                     ("sourceText", vba), ("sourceSha256", vbaHash), ("lineCount", 4), ("coordinateBasis", "module-relative"))),
@@ -540,6 +579,17 @@ public sealed class AccessDesignEvidenceCompositionTests
                 "macro-inventory", "control-macro", "control", "macro-inventory-export", "unavailable", null, null, null, "partial",
                 Object(("macroCategory", "embedded"), ("identity", ProtectedMacro), ("ownerRole", "control"), ("ordinal", 1),
                     ("startupRole", "not-autoexec"), ("bodyStatus", "protected-omitted"))));
+        }
+        if (includeExpressionEvent)
+        {
+            const string expressionSource = "Private Function RunSelectedScenario() As Boolean\nIf Me.IsDirty Then\nMe.txtChoice.Visible = False\nEnd If\nDoCmd.OpenForm \"TargetForm\", , , \"StatusFilterMarker\", , \"OpenArgsMarker\"\nRunSelectedScenario = True\nEnd Function";
+            var expressionHash = Sha256(Encoding.UTF8.GetBytes(expressionSource));
+            records.Add(Record(
+                "vba-module", "expression-form-module", null, "vba-module-export", "exact-lines", expressionHash, 1, 7, "complete",
+                Object(("moduleRole", "form"), ("identity", $"Form_{ProtectedForm}"), ("moduleKind", "form"),
+                    ("sourceText", expressionSource), ("sourceSha256", expressionHash), ("lineCount", 7), ("coordinateBasis", "module-relative"),
+                    ("sourceDocumentSha256", designTextHash), ("sourceDocumentStartLine", 4),
+                    ("extractionMechanism", "save-as-text-code-behind"))));
         }
         if (includeProjectionIdentityDuplicates)
         {

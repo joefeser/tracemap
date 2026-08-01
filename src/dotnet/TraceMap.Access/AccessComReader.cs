@@ -728,8 +728,29 @@ public sealed class AccessComReader
                         }
                     }
 
+                    AccessQueryActionProjection? actionLineage = null;
+                    AccessQueryCrosstabProjection? crosstabLineage = null;
+                    if (kind is "append" or "make-table" or "update" or "delete")
+                    {
+                        actionLineage = AccessQueryProjector.ProjectActionLineage(
+                            sql,
+                            kind,
+                            known,
+                            fieldLookups,
+                            parameterRows.Select(parameter => parameter.Ordinal).ToArray());
+                        if (actionLineage.Coverage == "partial")
+                            gaps.Add(new("AccessQueryActionLineagePartial", "query", identity.StableKey, RuleIds.LegacyAccessQuery));
+                    }
+                    else if (kind == "crosstab")
+                    {
+                        crosstabLineage = AccessQueryProjector.ProjectCrosstabLineage(sql, known, fieldLookups);
+                        if (crosstabLineage.Coverage == "partial")
+                            gaps.Add(new("AccessQueryCrosstabLineagePartial", "query", identity.StableKey, RuleIds.LegacyAccessQuery));
+                    }
+
                     result.Add(new(identity, kind, sqlHash, sql.Length, referenceCoverage, parameterRows,
-                        isPassThrough ? [] : dependencyProjection.Dependencies, isPassThrough, connectHash, provider, outputRows));
+                        isPassThrough ? [] : dependencyProjection.Dependencies, isPassThrough, connectHash, provider, outputRows,
+                        actionLineage, crosstabLineage));
                 }
                 catch (AccessScanException ex) { gaps.Add(new(ex.Classification, "query", identity?.StableKey)); }
                 catch { gaps.Add(new("AccessObjectMetadataUnavailable", "query", identity?.StableKey)); }

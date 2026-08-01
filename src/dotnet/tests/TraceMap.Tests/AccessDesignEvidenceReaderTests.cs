@@ -143,6 +143,54 @@ public sealed class AccessDesignEvidenceReaderTests
         Assert.Empty(result.Gaps);
     }
 
+    [Fact]
+    public void Reader_accepts_the_separately_reviewed_save_as_text_vba_mechanism()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "vba-save-as-text");
+        const string source = "Private Sub HandleClick()\nEnd Sub";
+        var sourceHash = Sha256(source);
+        var documentHash = Sha256("Begin Form\nCodeBehindForm\n" + source);
+        WriteBundle(path,
+        [
+            Record("vba-module", "module", null, "vba-module-export", "exact-lines", sourceHash, 1, 2, "complete",
+                Ordered(("moduleRole", "form"), ("identity", "Form_PrivateForm"), ("moduleKind", "form"),
+                    ("sourceText", source), ("sourceSha256", sourceHash), ("lineCount", 2), ("coordinateBasis", "module-relative"),
+                    ("sourceDocumentSha256", documentHash), ("sourceDocumentStartLine", 3),
+                    ("extractionMechanism", "save-as-text-code-behind")))
+        ], mechanism: "access-save-as-text-vba");
+
+        using var result = AccessDesignEvidenceReader.Read(path, Binding());
+
+        Assert.True(result.AcceptedForProjection);
+        Assert.Equal("access-save-as-text-vba", result.Manifest.Mechanism);
+        Assert.Single(result.Records);
+    }
+
+    [Theory]
+    [InlineData("AccessVbaCodeBehindOwnerUnavailable", "form")]
+    [InlineData("AccessVbaCodeBehindSourceUnavailable", "report")]
+    [InlineData("AccessVbaCodeBehindProcedureUnavailable", "form")]
+    public void Reader_accepts_bounded_code_behind_source_gaps(string classification, string affectedScope)
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "code-behind-gap");
+        WriteBundle(path,
+        [
+            Record("source-gap", "gap-one", null, "producer-gap", "unavailable", null, null, null, "partial",
+                Ordered(("classification", classification), ("affectedScope", affectedScope),
+                    ("coverageCategory", "source-unavailable")))
+        ]);
+
+        using var result = AccessDesignEvidenceReader.Read(path, Binding());
+
+        Assert.True(result.AcceptedForProjection);
+        var gap = Assert.Single(result.Records);
+        Assert.Equal("source-gap", gap.Kind);
+        Assert.Equal(classification, gap.Payload.GetProperty("classification").GetString());
+        Assert.Equal(affectedScope, gap.Payload.GetProperty("affectedScope").GetString());
+    }
+
     [Theory]
     [InlineData("missing")]
     [InlineData("catalog")]
@@ -876,10 +924,11 @@ public sealed class AccessDesignEvidenceReaderTests
         IReadOnlyList<string> records,
         string exportedAtUtc = "2026-07-29T10:00:00Z",
         string copyBinding = "hash-identical",
-        string? sourceCopyHash = null)
+        string? sourceCopyHash = null,
+        string mechanism = "synthetic-hand-authored")
     {
         Directory.CreateDirectory(path);
-        WriteBundleFiles(path, records, exportedAtUtc, copyBinding, sourceCopyHash);
+        WriteBundleFiles(path, records, exportedAtUtc, copyBinding, sourceCopyHash, mechanism);
     }
 
     private static void WriteBundleFiles(
@@ -887,7 +936,8 @@ public sealed class AccessDesignEvidenceReaderTests
         IReadOnlyList<string> records,
         string exportedAtUtc = "2026-07-29T10:00:00Z",
         string copyBinding = "hash-identical",
-        string? sourceCopyHash = null)
+        string? sourceCopyHash = null,
+        string mechanism = "synthetic-hand-authored")
     {
         var recordsBytes = Encoding.UTF8.GetBytes(string.Join('\n', records) + (records.Count == 0 ? string.Empty : "\n"));
         File.WriteAllBytes(Path.Combine(path, AccessDesignEvidenceReader.RecordsFileName), recordsBytes);
@@ -897,7 +947,7 @@ public sealed class AccessDesignEvidenceReaderTests
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
         var manifest = Ordered(
             ("schema", AccessDesignEvidenceReader.ManifestSchema),
-            ("producer", Ordered(("id", "tracemap-synthetic-fixture"), ("version", "1.0.0"), ("mechanism", "synthetic-hand-authored"))),
+            ("producer", Ordered(("id", "tracemap-synthetic-fixture"), ("version", "1.0.0"), ("mechanism", mechanism))),
             ("repository", Ordered(("identityHash", RepositoryHash), ("commitSha", CommitSha))),
             ("baseScan", Ordered(("manifestSha256", BaseManifestHash), ("databaseIdentityHash", DatabaseIdentityHash))),
             ("sourceCopy", Ordered(("sha256", sourceCopyHash ?? DatabaseHash), ("binding", copyBinding))),
