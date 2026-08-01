@@ -453,7 +453,7 @@ public static class AccessDesignEvidenceComposer
                 var controlSource = control.Bindings.FirstOrDefault(binding => binding.BindingKind == "control-source");
                 var recordSource = surface.Bindings.FirstOrDefault(binding => binding.BindingKind == "record-source");
                 return new KeyValuePair<string, AccessRowSourceBindingProjection>(
-                    AccessSafeValues.RoleHash("access-control-name", rawControl?.Name ?? control.Identity.NameHash),
+                    (rawSurface?.Name ?? surface.Identity.NameHash) + "|" + AccessSafeValues.RoleHash("access-control-name", rawControl?.Name ?? control.Identity.NameHash),
                     new(
                         control.BoundColumn,
                         [],

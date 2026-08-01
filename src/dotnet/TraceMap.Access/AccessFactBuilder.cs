@@ -348,7 +348,7 @@ public static class AccessFactBuilder
                             ("expressionLength", effect.ExpressionLength > 0 ? effect.ExpressionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
                             ("conditionHash", effect.ConditionHash),
                             ("conditionLength", effect.ConditionLength > 0 ? effect.ConditionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
-                            ("branchOrder", effect.BranchOrder.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                            ("branchOrder", effect.BranchOrder?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                             ("rowSourceCoverage", effect.RowSourceProjection?.Coverage),
                             ("rowSourceSqlHash", effect.RowSourceProjection?.SqlHash),
                             ("rowSourceSqlLength", effect.RowSourceProjection is not null ? effect.RowSourceProjection.SqlLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),

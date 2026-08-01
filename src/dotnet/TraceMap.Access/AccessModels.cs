@@ -252,7 +252,7 @@ public sealed record AccessVbaEffectProjection(
     int ConditionLength,
     string Coverage,
     AccessQueryStaticProjection? RowSourceProjection = null,
-    int BranchOrder = 0,
+    int? BranchOrder = null,
     AccessRowSourceBindingProjection? RowSourceBinding = null);
 
 public sealed record AccessVbaModuleProjection(

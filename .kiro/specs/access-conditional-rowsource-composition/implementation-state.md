@@ -8,5 +8,7 @@
   support, UI binding context, safe fact properties, synthetic tests
 - Deferred: bulk #571/#572 work, dynamic SQL, runtime branch reachability,
   Access execution, row reads, and layout reconstruction
-- Validation: focused Access VBA tests currently passing; full solution and
-  repository validation are run before PR handoff
+- Validation: focused Access VBA tests 14/14; full solution build 0 warnings,
+  full solution tests 1,059/1,059; private-path guard and `git diff --check`
+  pass. Access COM/private representative smoke was not run in this slice;
+  validation remains synthetic and source-neutral.
