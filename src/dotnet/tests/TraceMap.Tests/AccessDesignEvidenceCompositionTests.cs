@@ -22,6 +22,7 @@ public sealed class AccessDesignEvidenceCompositionTests
     private const string UnusedProtectedQuery = "Unused_Private_Query_41922";
     private const string UnusedProtectedTable = "Unused_Private_Table_31922";
     private const string OrphanProtectedField = "Orphan_Private_Field_21922";
+    private const string ProtectedQueryField = "Private_Query_Field_11922";
 
     [Fact]
     public async Task Hidden_identity_projection_is_explicit_hash_inventoried_and_independently_deletable()
@@ -385,6 +386,29 @@ public sealed class AccessDesignEvidenceCompositionTests
         Assert.Equal("partial", report.Properties.GetValueOrDefault("projectorCoverage"));
     }
 
+    [Fact]
+    public async Task Enrichment_resolves_a_parented_design_catalog_query_field_missing_from_the_base_scan()
+    {
+        using var temp = new TempDirectory();
+        var baseScan = await WriteBaseScanAsync(temp.Path);
+        var design = WriteDesignBundle(temp.Path, baseScan, includeQueryFieldLineage: true);
+
+        var result = await AccessDesignEvidenceComposer.ComposeAsync(baseScan, design);
+
+        var binding = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.AccessBindingDeclared
+            && fact.TargetSymbol?.StartsWith("access-query-field-", StringComparison.Ordinal) == true
+            && fact.Properties.GetValueOrDefault("expressionSelectedFieldStableKeys") is not null);
+        Assert.Equal("complete", binding.Properties.GetValueOrDefault("expressionCoverage"));
+        Assert.NotNull(binding.Properties.GetValueOrDefault("expressionExternalReferenceHashes"));
+        Assert.StartsWith("access-design-record-", binding.Properties.GetValueOrDefault("sourceCanonicalRecordIds"), StringComparison.Ordinal);
+        Assert.Equal("structured-design-observed", binding.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("classification") == "AccessDesignInputCatalogStableKeyUnmatched"
+            && fact.Properties.GetValueOrDefault("scopeKind") == "query-field");
+    }
+
     private static async Task<string> WriteBaseScanAsync(string root)
     {
         var database = Path.Combine(root, "fixture.accdb");
@@ -447,13 +471,16 @@ public sealed class AccessDesignEvidenceCompositionTests
         bool includeReviewRegressions = false,
         bool includeHiddenIdentityRegressions = false,
         bool includeReportGroupConflict = false,
-        bool includeExpressionEvent = false)
+        bool includeExpressionEvent = false,
+        bool includeQueryFieldLineage = false)
     {
         var directory = Path.Combine(root, "protected-design-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         var vba = $"' {ProtectedForm}\nPublic Sub HandleClick()\nDoCmd.OpenForm \"{ProtectedForm}\"\nEnd Sub";
         var vbaHash = Sha256(Encoding.UTF8.GetBytes(vba));
-        var designText = includeReviewRegressions
+        var designText = includeQueryFieldLineage
+            ? $"Begin Form\n    HasModule = -1\n    Begin TextBox\n        Name =\"{ProtectedControl}\"\n        ControlSource =\"=DLookUp(\\\"[{ProtectedQueryField}]\\\",\\\"SharedQuery\\\",\\\"[{ProtectedQueryField}]=[TempVars]![Value]\\\")\"\n    End\nEnd"
+            : includeReviewRegressions
             ? $"Begin Form\n    HasModule = -1\n    Begin TextBox\n        Name =\"{ProtectedControl}\"\n        ControlSource =\"Different Field 51729\"\n    End\nEnd"
             : "Begin Form\n    HasModule = -1\nEnd";
         var designTextHash = Sha256(Encoding.UTF8.GetBytes(designText));
@@ -476,6 +503,8 @@ public sealed class AccessDesignEvidenceCompositionTests
                 Object(("identity", ProtectedControl), ("ordinal", 0), ("controlType", 104),
                     ("controlSource", includeReviewRegressions
                         ? ProtectedField
+                        : includeQueryFieldLineage
+                            ? $"=DLookUp(\"[{ProtectedQueryField}]\",\"SharedQuery\",\"[{ProtectedQueryField}]=[TempVars]![Value]\")"
                         : includeHiddenIdentityRegressions ? UnusedProtectedQuery : null),
                     ("rowSource", "SELECT Password FROM Users"),
                     ("linkMasterFields", includeHiddenIdentityRegressions
@@ -491,6 +520,35 @@ public sealed class AccessDesignEvidenceCompositionTests
             Record("source-gap", "gap", null, "producer-gap", "unavailable", null, null, null, "partial",
                 Object(("classification", "source-unavailable"), ("affectedScope", "macro"), ("coverageCategory", "source-unavailable")))
         };
+        if (includeQueryFieldLineage)
+        {
+            var queryFieldSeed = AccessSafeValues.DatabaseIdentitySeed(
+                RepositoryHash,
+                CommitSha,
+                "fixtures/synthetic.accdb",
+                DatabaseHash);
+            var query = AccessSafeValues.Identity(queryFieldSeed, "query", "SharedQuery");
+            var queryField = AccessSafeValues.Identity(
+                queryFieldSeed,
+                $"query-field-{query.StableKey}",
+                ProtectedQueryField,
+                disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly);
+            records.Add(Record(
+                "catalog-object",
+                "catalog-query-field",
+                "catalog-query",
+                "catalog-export",
+                "container-only",
+                null,
+                null,
+                null,
+                "complete",
+                Object(
+                    ("objectRole", "query-field"),
+                    ("identity", ProtectedQueryField),
+                    ("stableKey", queryField.StableKey),
+                    ("ordinal", 0))));
+        }
         if (includeHiddenIdentityRegressions)
         {
             records.Add(Record(

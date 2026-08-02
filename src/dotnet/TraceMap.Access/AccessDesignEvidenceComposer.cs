@@ -332,7 +332,14 @@ public static class AccessDesignEvidenceComposer
                     && matches.Distinct(StringComparer.Ordinal).ToArray() is { Length: 1 } distinct)
                 {
                     projectedStableKey = distinct[0];
-                    AddField(fieldsByTable, tableStableKey, identity, projectedStableKey);
+                }
+                else if (fieldRole == "query-field")
+                {
+                    projectedStableKey = AccessSafeValues.Identity(
+                        databaseSeed,
+                        $"query-field-{tableStableKey}",
+                        identity,
+                        disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly).StableKey;
                 }
             }
             if (declaredStableKey is not null
@@ -348,10 +355,9 @@ public static class AccessDesignEvidenceComposer
             }
             var stableKey = projectedStableKey ?? declaredStableKey;
             if (stableKey is null
-                || !baseFacts.Any(fact => fact.TargetSymbol == stableKey
-                    && fact.FactType == (fieldRole == "query-field"
-                        ? FactTypes.AccessQueryOutputDeclared
-                        : FactTypes.LegacyDataColumnDeclared)))
+                || fieldRole == "table-field" && !baseFacts.Any(fact =>
+                    fact.TargetSymbol == stableKey
+                    && fact.FactType == FactTypes.LegacyDataColumnDeclared))
             {
                 normalizationGaps.Add(new(
                     "AccessDesignInputCatalogStableKeyUnmatched",
@@ -360,6 +366,8 @@ public static class AccessDesignEvidenceComposer
                     RuleIds.LegacyAccessDesignInput));
                 continue;
             }
+            if (identity is not null && tableStableKey is not null)
+                AddField(fieldsByTable, tableStableKey, identity, stableKey);
             stableKeyByCanonicalRecordId[record.CanonicalRecordId] = stableKey;
             SetSupport(support, stableKey, [record]);
         }

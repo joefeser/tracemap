@@ -307,6 +307,32 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Text_design_parser_reconstructs_adjacent_quoted_property_fragments()
+    {
+        var parsed = AccessUiTextParser.Parse(
+            new StringReader("""
+                Begin Report
+                    Begin
+                        Begin TextBox
+                            Name ="Metric"
+                            ControlSource ="=DLookUp(\"[EngagementPoints] \",\"[qrptMetricsByDay]\",\"[WeeklyPlanID]=[TempVa"
+                                "rs]![TempPlanID] AND [Dow]=1\")"
+                        End
+                    End
+                End
+                """),
+            "rptMetrics",
+            "report");
+
+        var surface = Assert.IsType<AccessRawUiSurface>(parsed.Surface);
+        var control = Assert.Single(surface.Controls);
+        Assert.Equal(
+            "=DLookUp(\"[EngagementPoints] \",\"[qrptMetricsByDay]\",\"[WeeklyPlanID]=[TempVars]![TempPlanID] AND [Dow]=1\")",
+            control.ControlSource);
+        Assert.DoesNotContain(parsed.Gaps, gap => gap.Classification == "AccessUiPropertyValueMalformed");
+    }
+
+    [Fact]
     public void Malformed_design_is_partial_and_does_not_claim_an_unbound_surface()
     {
         var parsed = AccessUiTextParser.Parse(
@@ -368,6 +394,39 @@ public sealed class AccessUiProjectionTests
         Assert.Equal("expression", binding.SourceKind);
         Assert.Contains(projected.Gaps, gap => gap.Classification == "AccessBindingExpressionPartial");
         Assert.DoesNotContain(projected.Gaps, gap => gap.Classification == "AccessBindingTargetUnresolved");
+    }
+
+    [Fact]
+    public void Ui_projector_composes_calculated_control_lineage_with_exact_same_surface_keys()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('c', 40), "fixture.accdb", "hash");
+        var raw = new AccessRawUiSurface(
+            "rptMetrics",
+            "report",
+            false,
+            null,
+            [
+                new("MonActAcntPts", 0, 109, "=1", null, []),
+                new("MonActAchPts", 1, 109, "=2", null, []),
+                new("TotActPtsMon", 2, 109, "=[MonActAcntPts]+[MonActAchPts]", null, [])
+            ],
+            []);
+
+        var result = AccessUiProjector.Project(
+            seed,
+            [raw],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(),
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>());
+
+        var surface = Assert.Single(result.Surfaces);
+        var controls = surface.Controls.ToDictionary(control => control.Ordinal);
+        var aggregate = Assert.Single(controls[2].Bindings);
+        Assert.Equal("complete", aggregate.Coverage);
+        Assert.Equal("control", aggregate.TargetKind);
+        Assert.Equal(
+            new[] { controls[0].Identity.StableKey, controls[1].Identity.StableKey }.OrderBy(value => value, StringComparer.Ordinal),
+            aggregate.Expression!.ControlStableKeys);
+        Assert.DoesNotContain(result.Gaps, gap => gap.StableScopeKey == aggregate.Identity.StableKey);
     }
 
     [Fact]
