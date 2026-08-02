@@ -195,13 +195,55 @@ public sealed record AccessExpressionProjection(
     IReadOnlyList<string> FunctionNameHashes,
     IReadOnlyList<string> OperatorNameHashes,
     IReadOnlyList<string> FieldStableKeys,
+    IReadOnlyList<string> ControlStableKeys,
     IReadOnlyList<string> ControlReferenceHashes,
+    IReadOnlyList<string> ExternalReferenceHashes,
     IReadOnlyList<string> QueryStableKeys,
     IReadOnlyList<string> SelectedFieldStableKeys,
+    IReadOnlyList<string> SelectedFieldReferenceHashes,
     IReadOnlyList<string> CriteriaFieldStableKeys,
+    IReadOnlyList<string> CriteriaFieldReferenceHashes,
     IReadOnlyList<string> LiteralKinds,
     string Coverage,
-    string? GapClassification = null);
+    string? GapClassification = null)
+{
+    // Preserves source and binary construction compatibility for consumers built
+    // against the original public positional record constructor. New projection
+    // code must use the primary constructor so no lineage collections are dropped.
+    [Obsolete("Use the constructor that preserves control, external-context, and unresolved role evidence.")]
+    public AccessExpressionProjection(
+        string classification,
+        string structureHash,
+        IReadOnlyList<string> functionNameHashes,
+        IReadOnlyList<string> operatorNameHashes,
+        IReadOnlyList<string> fieldStableKeys,
+        IReadOnlyList<string> controlReferenceHashes,
+        IReadOnlyList<string> queryStableKeys,
+        IReadOnlyList<string> selectedFieldStableKeys,
+        IReadOnlyList<string> criteriaFieldStableKeys,
+        IReadOnlyList<string> literalKinds,
+        string coverage,
+        string? gapClassification = null)
+        : this(
+            classification,
+            structureHash,
+            functionNameHashes,
+            operatorNameHashes,
+            fieldStableKeys,
+            [],
+            controlReferenceHashes,
+            [],
+            queryStableKeys,
+            selectedFieldStableKeys,
+            [],
+            criteriaFieldStableKeys,
+            [],
+            literalKinds,
+            coverage,
+            gapClassification)
+    {
+    }
+}
 
 public sealed record AccessControlProjection(
     AccessSafeIdentity Identity,

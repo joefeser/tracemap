@@ -298,12 +298,96 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Projector_marks_control_and_scoped_field_expression_lineage_as_mixed()
+    {
+        var parsed = AccessUiTextParser.Parse(
+            new StringReader("Begin Form\nRecordSource =\"Customers\"\nBegin TextBox\nName =\"txtStartDate\"\nControlSource =\"StartDate\"\nEnd\nBegin TextBox\nName =\"txtOffset\"\nControlSource =\"=[txtStartDate]+[Days]\"\nEnd\nEnd\n"),
+            "frmCustomers",
+            "form");
+        var surface = Assert.IsType<AccessRawUiSurface>(parsed.Surface);
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('d', 40), "fixture.accdb", "hash");
+        var table = AccessSafeValues.Identity(seed, "table", "Customers");
+        var startDate = AccessSafeValues.Identity(seed, $"field-{table.StableKey}", "StartDate");
+        var days = AccessSafeValues.Identity(seed, $"field-{table.StableKey}", "Days");
+
+        var projected = AccessUiProjector.Project(
+            seed,
+            [surface],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Customers"] = [(table.StableKey, "table")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [table.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["StartDate"] = [startDate.StableKey],
+                    ["Days"] = [days.StableKey]
+                }
+            });
+
+        var binding = projected.Surfaces.Single().Controls.Single(control => control.Ordinal == 1).Bindings.Single();
+        Assert.Equal("mixed", binding.TargetKind);
+        Assert.Equal("complete", binding.Coverage);
+        Assert.Contains(days.StableKey, binding.Expression!.FieldStableKeys);
+        Assert.Single(binding.Expression.ControlStableKeys);
+    }
+
+    [Fact]
+    public void Unscoped_filter_does_not_resolve_an_identifier_by_object_name_collision()
+    {
+        var parsed = AccessUiTextParser.Parse(
+            new StringReader("Begin Form\nFilter =\"[Active]\"\nEnd\n"),
+            "frmUnbound",
+            "form");
+        var surface = Assert.IsType<AccessRawUiSurface>(parsed.Surface);
+        var projected = AccessUiProjector.Project(
+            AccessSafeValues.DatabaseIdentitySeed("repo", new string('e', 40), "fixture.accdb", "hash"),
+            [surface],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Active"] = [("query-active", "query")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal));
+
+        var binding = Assert.Single(projected.Surfaces.Single().Bindings);
+        Assert.Equal("partial", binding.Coverage);
+        Assert.DoesNotContain("query-active", binding.TargetStableKeys);
+    }
+
+    [Fact]
     public void Text_design_parser_enforces_character_and_line_limits()
     {
         var limits = AccessLimits.Default with { MaxUiDesignTextLength = 20, MaxUiDesignLines = 2 };
         var exception = Assert.Throws<AccessScanException>(() => AccessUiTextParser.Parse(
             new StringReader("Begin Form\nRecordSource =\"Customers\"\nEnd\n"), "frmCustomers", "form", limits));
         Assert.Equal("AccessUiDesignTextLimitReached", exception.Classification);
+    }
+
+    [Fact]
+    public void Text_design_parser_reconstructs_adjacent_quoted_property_fragments()
+    {
+        var parsed = AccessUiTextParser.Parse(
+            new StringReader("""
+                Begin Report
+                    Begin
+                        Begin TextBox
+                            Name ="Metric"
+                            ControlSource ="=DLookUp(\"[EngagementPoints] \",\"[qrptMetricsByDay]\",\"[WeeklyPlanID]=[TempVa"
+                                "rs]![TempPlanID] AND [Dow]=1\")"
+                        End
+                    End
+                End
+                """),
+            "rptMetrics",
+            "report");
+
+        var surface = Assert.IsType<AccessRawUiSurface>(parsed.Surface);
+        var control = Assert.Single(surface.Controls);
+        Assert.Equal(
+            "=DLookUp(\"[EngagementPoints] \",\"[qrptMetricsByDay]\",\"[WeeklyPlanID]=[TempVars]![TempPlanID] AND [Dow]=1\")",
+            control.ControlSource);
+        Assert.DoesNotContain(parsed.Gaps, gap => gap.Classification == "AccessUiPropertyValueMalformed");
     }
 
     [Fact]
@@ -368,6 +452,39 @@ public sealed class AccessUiProjectionTests
         Assert.Equal("expression", binding.SourceKind);
         Assert.Contains(projected.Gaps, gap => gap.Classification == "AccessBindingExpressionPartial");
         Assert.DoesNotContain(projected.Gaps, gap => gap.Classification == "AccessBindingTargetUnresolved");
+    }
+
+    [Fact]
+    public void Ui_projector_composes_calculated_control_lineage_with_exact_same_surface_keys()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('c', 40), "fixture.accdb", "hash");
+        var raw = new AccessRawUiSurface(
+            "rptMetrics",
+            "report",
+            false,
+            null,
+            [
+                new("MonActAcntPts", 0, 109, "=1", null, []),
+                new("MonActAchPts", 1, 109, "=2", null, []),
+                new("TotActPtsMon", 2, 109, "=[MonActAcntPts]+[MonActAchPts]", null, [])
+            ],
+            []);
+
+        var result = AccessUiProjector.Project(
+            seed,
+            [raw],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(),
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>());
+
+        var surface = Assert.Single(result.Surfaces);
+        var controls = surface.Controls.ToDictionary(control => control.Ordinal);
+        var aggregate = Assert.Single(controls[2].Bindings);
+        Assert.Equal("complete", aggregate.Coverage);
+        Assert.Equal("control", aggregate.TargetKind);
+        Assert.Equal(
+            new[] { controls[0].Identity.StableKey, controls[1].Identity.StableKey }.OrderBy(value => value, StringComparer.Ordinal),
+            aggregate.Expression!.ControlStableKeys);
+        Assert.DoesNotContain(result.Gaps, gap => gap.StableScopeKey == aggregate.Identity.StableKey);
     }
 
     [Fact]
