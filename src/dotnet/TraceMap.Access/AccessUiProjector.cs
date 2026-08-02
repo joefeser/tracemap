@@ -141,6 +141,12 @@ internal static partial class AccessUiProjector
                     if (childRecord is { SourceKind: "direct-object", TargetStableKeys.Count: 1 }
                         && fieldsByTable.TryGetValue(childRecord.TargetStableKeys[0], out var resolvedChildFields))
                         childFields = resolvedChildFields;
+                    else if (childRecord is { SourceKind: "inline-sql" })
+                        childFields = BuildInlineFieldScope(
+                            childSurface.RecordSource,
+                            knownObjects,
+                            fieldsByTable,
+                            childRecord.TargetStableKeys);
                 }
                 controlBindings.AddRange(ProjectFieldListBindings(
                     databaseIdentitySeed, controlIdentity.StableKey, "link-child-field",
@@ -319,10 +325,17 @@ internal static partial class AccessUiProjector
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .ToArray();
+            var dependencyKinds = projection.Dependencies.Select(dependency => dependency.TargetKind)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            var dependencyTargetKind = dependencyKinds.Length == 1 ? dependencyKinds[0]
+                : dependencyKinds.Length == 0 ? "unknown"
+                : "mixed";
             if (projection.Coverage != "complete")
                 gaps.Add(new("AccessBindingInlineSqlProjectionPartial", "binding", identity.StableKey, RuleIds.LegacyAccessBinding));
             return new(identity, ownerStableKey, bindingKind, "inline-sql",
-                projection.SqlHash, projection.SqlLength, targets, "query", projection.Coverage);
+                projection.SqlHash, projection.SqlLength, targets, dependencyTargetKind, projection.Coverage);
         }
 
         if (TryDirectName(trimmed, out var directName))
