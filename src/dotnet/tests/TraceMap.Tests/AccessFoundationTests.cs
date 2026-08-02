@@ -385,15 +385,15 @@ public sealed class AccessFoundationTests
             "long",
             4,
             true);
-        var database = new FakeDaoDatabase(
-            new FakeDaoQuery(
+        var appendDefinition = new FakeDaoQuery(
                 "AppendQuery",
                 "INSERT INTO TargetTable (TargetId) SELECT SourceQuery.SourceId FROM SourceQuery;",
-                64),
-            new FakeDaoQuery(
+                64);
+        var sourceDefinition = new FakeDaoQuery(
                 "SourceQuery",
                 "SELECT SourceId FROM SourceTable;",
-                new FakeDaoField("SourceId")));
+                new FakeDaoField("SourceId"));
+        var database = new FakeDaoDatabase(appendDefinition, sourceDefinition);
         var identities = new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
         {
             ["AppendQuery"] = appendQuery,
@@ -433,6 +433,8 @@ public sealed class AccessFoundationTests
         Assert.Equal(
             [AccessSafeValues.Identity(seed, $"query-field-{sourceQuery.StableKey}", "SourceId", 0).StableKey],
             Assert.Single(action.FieldMappings).SourceFieldStableKeys);
+        Assert.Equal(1, sourceDefinition.FieldsReadCount);
+        Assert.Equal(0, appendDefinition.FieldsReadCount);
     }
 
     [Fact]
@@ -1627,6 +1629,8 @@ public sealed class AccessFoundationTests
 
     public sealed class FakeDaoQuery
     {
+        private readonly FakeDaoCollection<FakeDaoField> _fields;
+
         public FakeDaoQuery(string name, string sql, params FakeDaoField[] fields)
             : this(name, sql, 0, fields) { }
 
@@ -1635,14 +1639,22 @@ public sealed class AccessFoundationTests
             Name = name;
             SQL = sql;
             Type = type;
-            Fields = new(fields);
+            _fields = new(fields);
         }
 
         public string Name { get; }
         public int Type { get; }
         public string SQL { get; }
         public FakeDaoCollection<FakeDaoParameter> Parameters { get; } = new([]);
-        public FakeDaoCollection<FakeDaoField> Fields { get; }
+        public int FieldsReadCount { get; private set; }
+        public FakeDaoCollection<FakeDaoField> Fields
+        {
+            get
+            {
+                FieldsReadCount++;
+                return _fields;
+            }
+        }
     }
 
     public sealed class FakeDaoField(

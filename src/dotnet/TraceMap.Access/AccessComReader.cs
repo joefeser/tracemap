@@ -549,12 +549,21 @@ public sealed class AccessComReader
         List<AccessExternalLinkProjection> external)
     {
         var result = new List<AccessQueryProjection>();
+        var queryOutputMetadata = ReadQueryOutputMetadata((object)database, databaseIdentitySeed, identities, gaps);
         var objectFieldLookups = fieldLookups.ToDictionary(
             pair => pair.Key,
             pair => pair.Value,
             StringComparer.Ordinal);
-        foreach (var pair in ReadQueryOutputFieldLookups(database, databaseIdentitySeed, identities))
-            objectFieldLookups[pair.Key] = pair.Value;
+        foreach (var pair in queryOutputMetadata)
+        {
+            var lookup = new Dictionary<string, List<AccessFieldProjection>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var metadata in pair.Value)
+            {
+                if (!lookup.TryGetValue(metadata.Name, out var candidates)) lookup[metadata.Name] = candidates = [];
+                candidates.Add(new(metadata.Identity, metadata.Ordinal, metadata.TypeFamily, 0, false));
+            }
+            objectFieldLookups[pair.Key] = lookup;
+        }
         dynamic? queries = null;
         try
         {
@@ -565,7 +574,6 @@ public sealed class AccessComReader
                 dynamic? query = null;
                 dynamic? parameters = null;
                 AccessSafeIdentity? identity = null;
-                dynamic? outputFields = null;
                 try
                 {
                     query = queries[index];
@@ -618,96 +626,41 @@ public sealed class AccessComReader
 
                     var isPassThrough = type == 112;
                     var outputRows = new List<AccessQueryOutputFieldProjection>();
-                    if (!isPassThrough && type == 0)
+                    if (!isPassThrough && type == 0 && queryOutputMetadata.TryGetValue(identity.StableKey, out var outputMetadata))
                     {
-                        try
+                        foreach (var metadata in outputMetadata)
                         {
-                            outputFields = query.Fields;
-                            var outputCount = BoundedChildCount(outputFields, "AccessQueryOutputFieldCollectionLimit");
-                            for (var ordinal = 0; ordinal < outputCount; ordinal++)
+                            var sources = new List<string>();
+                            if (!string.IsNullOrWhiteSpace(metadata.SourceTable)
+                                && !string.IsNullOrWhiteSpace(metadata.SourceField)
+                                && tableLookup.TryGetValue(metadata.SourceTable, out var tableCandidates))
                             {
-                                dynamic? field = null;
-                                AccessSafeIdentity? outputIdentity = null;
-                                try
+                                foreach (var tableCandidate in tableCandidates)
                                 {
-                                    field = outputFields[ordinal];
-                                    var outputName = BoundedString(() => (string)field.Name, 512, "AccessQueryOutputFieldNameUnavailable");
-                                    outputIdentity = AccessSafeValues.Identity(databaseIdentitySeed, $"query-field-{identity.StableKey}", outputName, ordinal);
-                                    var sources = new List<string>();
-                                    string? sourceTable = null;
-                                    string? sourceField = null;
-                                    try
-                                    {
-                                        sourceTable = BoundedOptionalString(() => (string)field.SourceTable, 512, "AccessQueryOutputSourceUnavailable");
-                                        sourceField = BoundedOptionalString(() => (string)field.SourceField, 512, "AccessQueryOutputSourceUnavailable");
-                                    }
-                                    catch (AccessScanException)
-                                    {
-                                        // Output declaration remains useful even when DAO cannot
-                                        // prove a unique source table/field for an alias or expression.
-                                    }
-                                    if (!string.IsNullOrWhiteSpace(sourceTable)
-                                        && !string.IsNullOrWhiteSpace(sourceField)
-                                        && tableLookup.TryGetValue(sourceTable, out var tableCandidates))
-                                    {
-                                        foreach (var tableCandidate in tableCandidates)
-                                        {
-                                            if (fieldLookups.TryGetValue(tableCandidate.Identity.StableKey, out var fields)
-                                                && fields.TryGetValue(sourceField, out var fieldCandidates))
-                                                sources.AddRange(fieldCandidates.Select(candidate => candidate.Identity.StableKey));
-                                        }
-                                    }
-                                    var distinctSources = sources.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
-                                    var directOutput = AccessQueryProjector.IsDirectOutputField(sql, outputName);
-                                    var isComplete = distinctSources.Length == 1
-                                        && directOutput
-                                        && dependencyProjection.Coverage == "complete";
-                                    var coverage = isComplete ? "complete" : "partial";
-                                    if (coverage == "partial")
-                                        gaps.Add(new(
-                                            distinctSources.Length > 1
-                                                ? "AccessQueryOutputSourceAmbiguous"
-                                                : !directOutput
-                                                    ? "AccessQueryOutputExpressionPartial"
-                                                    : dependencyProjection.Coverage != "complete"
-                                                        ? "AccessQueryOutputDependencyPartial"
-                                                        : "AccessQueryOutputSourceUnavailable",
-                                            "query-output-field",
-                                            outputIdentity.StableKey,
-                                            RuleIds.LegacyAccessQuery));
-                                    outputRows.Add(new(
-                                        outputIdentity,
-                                        ordinal,
-                                        AccessSafeValues.DaoTypeFamily(SafeInt(() => (int)field.Type)),
-                                        distinctSources,
-                                        coverage));
+                                    if (fieldLookups.TryGetValue(tableCandidate.Identity.StableKey, out var fields)
+                                        && fields.TryGetValue(metadata.SourceField, out var fieldCandidates))
+                                        sources.AddRange(fieldCandidates.Select(candidate => candidate.Identity.StableKey));
                                 }
-                                catch (AccessScanException ex)
-                                {
-                                    gaps.Add(new(
-                                        ex.Classification,
-                                        outputIdentity is null ? "query" : "query-output-field",
-                                        outputIdentity?.StableKey ?? identity.StableKey,
-                                        RuleIds.LegacyAccessQuery));
-                                }
-                                catch
-                                {
-                                    gaps.Add(new(
-                                        "AccessQueryOutputMetadataUnavailable",
-                                        outputIdentity is null ? "query" : "query-output-field",
-                                        outputIdentity?.StableKey ?? identity.StableKey,
-                                        RuleIds.LegacyAccessQuery));
-                                }
-                                finally { Release(field); }
                             }
-                        }
-                        catch (AccessScanException ex)
-                        {
-                            gaps.Add(new(ex.Classification, "query", identity.StableKey, RuleIds.LegacyAccessQuery));
-                        }
-                        catch
-                        {
-                            gaps.Add(new("AccessQueryOutputMetadataUnavailable", "query", identity.StableKey, RuleIds.LegacyAccessQuery));
+                            var distinctSources = sources.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+                            var directOutput = AccessQueryProjector.IsDirectOutputField(sql, metadata.Name);
+                            var isComplete = distinctSources.Length == 1
+                                && directOutput
+                                && dependencyProjection.Coverage == "complete";
+                            var coverage = isComplete ? "complete" : "partial";
+                            if (coverage == "partial")
+                                gaps.Add(new(
+                                    distinctSources.Length > 1
+                                        ? "AccessQueryOutputSourceAmbiguous"
+                                        : !directOutput
+                                            ? "AccessQueryOutputExpressionPartial"
+                                            : dependencyProjection.Coverage != "complete"
+                                                ? "AccessQueryOutputDependencyPartial"
+                                                : "AccessQueryOutputSourceUnavailable",
+                                    "query-output-field",
+                                    metadata.Identity.StableKey,
+                                    RuleIds.LegacyAccessQuery));
+                            outputRows.Add(new(metadata.Identity, metadata.Ordinal, metadata.TypeFamily, distinctSources, coverage));
                         }
                     }
                     string? connectHash = null;
@@ -760,7 +713,7 @@ public sealed class AccessComReader
                 }
                 catch (AccessScanException ex) { gaps.Add(new(ex.Classification, "query", identity?.StableKey)); }
                 catch { gaps.Add(new("AccessObjectMetadataUnavailable", "query", identity?.StableKey)); }
-                finally { Release(outputFields); Release(parameters); Release(query); }
+                finally { Release(parameters); Release(query); }
             }
         }
         catch (AccessScanException ex) { gaps.Add(new(ex.Classification, "database-queries", null)); }
@@ -769,12 +722,21 @@ public sealed class AccessComReader
         return result;
     }
 
-    private Dictionary<string, Dictionary<string, List<AccessFieldProjection>>> ReadQueryOutputFieldLookups(
+    private sealed record QueryOutputMetadata(
+        AccessSafeIdentity Identity,
+        int Ordinal,
+        string Name,
+        string TypeFamily,
+        string? SourceTable,
+        string? SourceField);
+
+    private Dictionary<string, IReadOnlyList<QueryOutputMetadata>> ReadQueryOutputMetadata(
         dynamic database,
         string databaseIdentitySeed,
-        IReadOnlyDictionary<string, AccessSafeIdentity> identities)
+        IReadOnlyDictionary<string, AccessSafeIdentity> identities,
+        List<AccessGapProjection> gaps)
     {
-        var result = new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal);
+        var result = new Dictionary<string, IReadOnlyList<QueryOutputMetadata>>(StringComparer.Ordinal);
         dynamic? queries = null;
         try
         {
@@ -792,38 +754,57 @@ public sealed class AccessComReader
                     if (!identities.TryGetValue(name, out var identity)) continue;
                     fields = query.Fields;
                     var fieldCount = BoundedChildCount(fields, "AccessQueryOutputFieldCollectionLimit");
-                    var lookup = new Dictionary<string, List<AccessFieldProjection>>(StringComparer.OrdinalIgnoreCase);
+                    var metadata = new List<QueryOutputMetadata>();
                     for (var ordinal = 0; ordinal < fieldCount; ordinal++)
                     {
                         dynamic? field = null;
+                        AccessSafeIdentity? outputIdentity = null;
                         try
                         {
                             field = fields[ordinal];
                             var fieldName = BoundedString(() => (string)field.Name, 512, "AccessQueryOutputFieldNameUnavailable");
-                            var projection = new AccessFieldProjection(
-                                AccessSafeValues.Identity(databaseIdentitySeed, $"query-field-{identity.StableKey}", fieldName, ordinal),
+                            outputIdentity = AccessSafeValues.Identity(databaseIdentitySeed, $"query-field-{identity.StableKey}", fieldName, ordinal);
+                            string? sourceTable = null;
+                            string? sourceField = null;
+                            try
+                            {
+                                sourceTable = BoundedOptionalString(() => (string)field.SourceTable, 512, "AccessQueryOutputSourceUnavailable");
+                                sourceField = BoundedOptionalString(() => (string)field.SourceField, 512, "AccessQueryOutputSourceUnavailable");
+                            }
+                            catch (AccessScanException)
+                            {
+                                // The declared output remains useful without a unique source.
+                            }
+                            metadata.Add(new(
+                                outputIdentity,
                                 ordinal,
-                                "query-output",
-                                0,
-                                false);
-                            if (!lookup.TryGetValue(fieldName, out var candidates)) lookup[fieldName] = candidates = [];
-                            candidates.Add(projection);
+                                fieldName,
+                                AccessSafeValues.DaoTypeFamily(SafeInt(() => (int)field.Type)),
+                                sourceTable,
+                                sourceField));
+                        }
+                        catch (AccessScanException ex)
+                        {
+                            gaps.Add(new(ex.Classification, outputIdentity is null ? "query" : "query-output-field", outputIdentity?.StableKey ?? identity.StableKey, RuleIds.LegacyAccessQuery));
+                        }
+                        catch
+                        {
+                            gaps.Add(new("AccessQueryOutputMetadataUnavailable", outputIdentity is null ? "query" : "query-output-field", outputIdentity?.StableKey ?? identity.StableKey, RuleIds.LegacyAccessQuery));
                         }
                         finally { Release(field); }
                     }
-                    result[identity.StableKey] = lookup;
+                    result[identity.StableKey] = metadata;
                 }
+                catch (AccessScanException ex) { gaps.Add(new(ex.Classification, "query", null, RuleIds.LegacyAccessQuery)); }
                 catch
                 {
-                    // The normal query read records the bounded output-metadata gap.
+                    gaps.Add(new("AccessQueryOutputMetadataUnavailable", "query", null, RuleIds.LegacyAccessQuery));
                 }
                 finally { Release(fields); Release(query); }
             }
         }
-        catch
-        {
-            // The normal query read records the bounded catalog gap.
-        }
+        catch (AccessScanException ex) { gaps.Add(new(ex.Classification, "database-queries", null, RuleIds.LegacyAccessQuery)); }
+        catch { gaps.Add(new("AccessQueryCatalogUnavailable", "database-queries", null, RuleIds.LegacyAccessQuery)); }
         finally { Release(queries); }
         return result;
     }
