@@ -20,12 +20,12 @@ public static partial class AccessExpressionProjector
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? fieldSetsByObject = null)
     {
         var normalized = expression.Trim();
-        var functions = FunctionPattern().Matches(MaskLiterals(normalized))
+        var functions = FunctionPattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized))
             .Select(match => match.Groups["name"].Value)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(name => AccessSafeValues.RoleHash("access-expression-function", name.ToLowerInvariant()))
             .OrderBy(value => value, StringComparer.Ordinal).ToArray();
-        var operators = OperatorPattern().Matches(MaskLiterals(normalized))
+        var operators = OperatorPattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized))
             .Select(match => match.Value.Any(char.IsLetter)
                 ? match.Value.ToLowerInvariant()
                 : match.Value)
@@ -39,11 +39,11 @@ public static partial class AccessExpressionProjector
         var controlRefs = new SortedSet<string>(StringComparer.Ordinal);
         var literals = new SortedSet<string>(StringComparer.Ordinal);
         var unresolved = false;
-        var domainSyntaxMatches = DomainNamePattern().Matches(MaskLiterals(normalized));
+        var domainSyntaxMatches = DomainNamePattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
         var domainMatches = FindDomainCalls(normalized, domainSyntaxMatches);
         unresolved = domainSyntaxMatches.Count != domainMatches.Count;
 
-        foreach (Match literal in LiteralPattern().Matches(normalized))
+        foreach (Match literal in LiteralPattern().Matches(MaskBracketedIdentifiers(normalized)))
             literals.Add(literal.Groups["kind"].Value.StartsWith('"') ? "string" : "number");
 
         // Domain-call arguments are resolved below against the domain object's
@@ -202,6 +202,38 @@ public static partial class AccessExpressionProjector
             }
         }
         return new string(chars);
+    }
+
+    private static string MaskLiteralsAndBracketedIdentifiers(string value)
+    {
+        var chars = MaskLiterals(value).ToCharArray();
+        MaskBracketedContents(chars);
+        return new string(chars);
+    }
+
+    private static string MaskBracketedIdentifiers(string value)
+    {
+        var chars = value.ToCharArray();
+        MaskBracketedContents(chars);
+        return new string(chars);
+    }
+
+    private static void MaskBracketedContents(char[] chars)
+    {
+        var bracketDepth = 0;
+        for (var index = 0; index < chars.Length; index++)
+        {
+            if (chars[index] == '[')
+            {
+                bracketDepth++;
+                continue;
+            }
+            if (bracketDepth > 0)
+            {
+                if (chars[index] == ']') bracketDepth--;
+                else chars[index] = ' ';
+            }
+        }
     }
 
     private static string MaskDomainCalls(string value, IReadOnlyList<DomainCall> matches)
