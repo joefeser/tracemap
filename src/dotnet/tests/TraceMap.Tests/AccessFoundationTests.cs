@@ -268,6 +268,38 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Query_projector_keeps_action_coverage_partial_when_a_declared_dependency_is_unresolved()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SourceTable"] = [("table-source", "table")],
+            ["TargetTable"] = [("table-target", "table")]
+        };
+        var fields = new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+        {
+            ["table-source"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SourceId"] = [new(new(null, "source", "field-source"), 0, "long", 4, false)]
+            },
+            ["table-target"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["TargetId"] = [new(new(null, "target", "field-target"), 0, "long", 4, false)]
+            }
+        };
+
+        var projected = AccessQueryProjector.ProjectActionLineage(
+            "INSERT INTO TargetTable (TargetId) SELECT SourceTable.SourceId FROM SourceTable LEFT JOIN MissingSource ON SourceTable.SourceId = MissingSource.Id;",
+            "append",
+            known,
+            fields);
+
+        var mapping = Assert.Single(projected.FieldMappings);
+        Assert.Equal("complete", mapping.Coverage);
+        Assert.Equal(["field-source"], mapping.SourceFieldStableKeys);
+        Assert.Equal("partial", projected.Coverage);
+    }
+
+    [Fact]
     public void Query_projector_projects_bounded_crosstab_shape_and_keeps_dynamic_pivots_partial()
     {
         var field = new AccessSafeIdentity(null, "row-name", "field-row");
