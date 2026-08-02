@@ -1509,6 +1509,9 @@ rules:
       - A design-catalog query-field candidate is accepted only beneath a query already matched to the immutable base scan; TraceMap derives its stable key and the candidate does not prove query execution, returned values, or runtime availability.
       - Unresolved domain selected/criteria identifiers retain role-separated hashes only. They are never resolved against the owning surface when the named domain's field catalog is unavailable.
       - List and combo controls keep value/persistence binding separate from population binding. A query-backed unbound selector has no persistence target unless a ControlSource provides one; BoundColumn is only a static projection-ordinal candidate.
+      - A surface-declared crosstab output candidate proves only that a control names an expected output beneath a known crosstab source. It does not prove that row-derived pivot values generated the output or that the query ran.
+      - Inline SQL sources are projected only through a bounded static subset. Dependency-scoped fields and statically named outputs remain candidates; unmatched, computed, wildcard, ambiguous, or dynamic outputs retain precise partial classifications.
+      - A resolved domain object with an incomplete field catalog remains partial even when selected and criteria identifier hashes are available; those hashes are not field identities.
 
   - id: legacy.access.vba.v1
     name: Microsoft Access bounded VBA declaration and call candidate

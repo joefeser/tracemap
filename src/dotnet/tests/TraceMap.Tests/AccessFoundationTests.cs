@@ -129,6 +129,16 @@ public sealed class AccessFoundationTests
         Assert.False(AccessQueryProjector.IsDirectOutputField(
             "SELECT Count(Orders.OrderId) AS OrderCount FROM Orders;",
             "OrderCount"));
+
+        Assert.True(AccessQueryProjector.HasStaticOutputName(
+            "SELECT Orders.OrderId AS Identifier, Total: Sum(Orders.Amount) FROM Orders;",
+            "Identifier"));
+        Assert.True(AccessQueryProjector.HasStaticOutputName(
+            "SELECT Orders.OrderId AS Identifier, Total: Sum(Orders.Amount) FROM Orders;",
+            "Total"));
+        Assert.False(AccessQueryProjector.HasStaticOutputName(
+            "SELECT Orders.OrderId AS Identifier FROM Orders;",
+            "Missing"));
     }
 
     [Fact]

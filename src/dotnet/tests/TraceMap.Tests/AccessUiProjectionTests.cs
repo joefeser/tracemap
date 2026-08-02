@@ -776,6 +776,137 @@ public sealed class AccessUiProjectionTests
         Assert.Empty(control.PersistenceTargetStableKeys!);
     }
 
+    [Fact]
+    public void Crosstab_control_source_is_preserved_as_a_surface_declared_output_candidate()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('d', 40), "fixture.accdb", "hash");
+        var query = AccessSafeValues.Identity(seed, "query", "qryPivot");
+        var raw = new AccessRawUiSurface(
+            "rptPivot",
+            "report",
+            false,
+            "qryPivot",
+            [new("txtGeneratedColumn", 0, 109, "GeneratedColumn", null, [])],
+            []);
+
+        var projected = AccessUiProjector.Project(
+            seed,
+            [raw],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qryPivot"] = [(query.StableKey, "query")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal),
+            queryKindsByStableKey: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [query.StableKey] = "crosstab"
+            });
+
+        var binding = Assert.Single(Assert.Single(Assert.Single(projected.Surfaces).Controls).Bindings);
+        Assert.Equal("surface-declared-crosstab-output-candidate", binding.SourceKind);
+        Assert.Equal("query-output-candidate", binding.TargetKind);
+        Assert.Equal("partial", binding.Coverage);
+        Assert.Single(binding.TargetStableKeys);
+        Assert.Contains(projected.Gaps, gap => gap.Classification == "AccessBindingCrosstabOutputCandidate");
+        Assert.DoesNotContain(projected.Gaps, gap => gap.Classification == "AccessBindingTargetUnresolved");
+    }
+
+    [Fact]
+    public void Inline_record_source_direct_output_is_preserved_as_a_bounded_candidate()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('e', 40), "fixture.accdb", "hash");
+        var table = AccessSafeValues.Identity(seed, "table", "tblOrders");
+        var raw = new AccessRawUiSurface(
+            "frmInline",
+            "form",
+            false,
+            "SELECT [OrderId] FROM [tblOrders]",
+            [new("txtOrderId", 0, 109, "OrderId", null, [])],
+            []);
+
+        var projected = AccessUiProjector.Project(
+            seed,
+            [raw],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["tblOrders"] = [(table.StableKey, "table")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal));
+
+        var binding = Assert.Single(Assert.Single(Assert.Single(projected.Surfaces).Controls).Bindings);
+        Assert.Equal("inline-source-output-candidate", binding.SourceKind);
+        Assert.Equal("query-output-candidate", binding.TargetKind);
+        Assert.Equal("partial", binding.Coverage);
+        Assert.Single(binding.TargetStableKeys);
+        Assert.Contains(projected.Gaps, gap => gap.Classification == "AccessBindingInlineSqlOutputCandidate");
+        Assert.DoesNotContain(projected.Gaps, gap => gap.Classification == "AccessBindingTargetUnresolved");
+    }
+
+    [Fact]
+    public void Inline_record_source_scopes_direct_fields_to_its_static_dependencies()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('f', 40), "fixture.accdb", "hash");
+        var table = AccessSafeValues.Identity(seed, "table", "tblOrders");
+        var field = AccessSafeValues.Identity(seed, $"field-{table.StableKey}", "OrderId");
+        var raw = new AccessRawUiSurface(
+            "frmInline",
+            "form",
+            false,
+            "SELECT * FROM [tblOrders]",
+            [new("txtOrderId", 0, 109, "OrderId", null, [])],
+            []);
+
+        var projected = AccessUiProjector.Project(
+            seed,
+            [raw],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["tblOrders"] = [(table.StableKey, "table")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [table.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["OrderId"] = [field.StableKey]
+                }
+            });
+
+        var binding = Assert.Single(Assert.Single(Assert.Single(projected.Surfaces).Controls).Bindings);
+        Assert.Equal("direct-field", binding.SourceKind);
+        Assert.Equal([field.StableKey], binding.TargetStableKeys);
+        Assert.Equal("complete", binding.Coverage);
+        Assert.DoesNotContain(projected.Gaps, gap => gap.Classification == "AccessBindingTargetUnresolved");
+    }
+
+    [Fact]
+    public void Unmatched_control_sources_preserve_specific_record_source_limitations()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('1', 40), "fixture.accdb", "hash");
+        var query = AccessSafeValues.Identity(seed, "query", "qryKnown");
+        var duplicateTable = AccessSafeValues.Identity(seed, "table", "SharedSource");
+        var duplicateQuery = AccessSafeValues.Identity(seed, "query", "SharedSource");
+        var projected = AccessUiProjector.Project(
+            seed,
+            [
+                new("frmInline", "form", false, "SELECT 1 AS KnownValue FROM [qryKnown]", [new("txtMissing", 0, 109, "MissingValue", null, [])], []),
+                new("frmAmbiguous", "form", false, "SharedSource", [new("txtField", 0, 109, "FieldValue", null, [])], []),
+                new("frmUnbound", "form", false, null, [new("txtField", 0, 109, "FieldValue", null, [])], []),
+                new("frmCatalog", "form", false, "qryKnown", [new("txtField", 0, 109, "FieldValue", null, [])], [])
+            ],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qryKnown"] = [(query.StableKey, "query")],
+                ["SharedSource"] = [(duplicateTable.StableKey, "table"), (duplicateQuery.StableKey, "query")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal));
+
+        Assert.Contains(projected.Gaps, gap => gap.Classification == "AccessBindingInlineSqlOutputUnmatched");
+        Assert.Contains(projected.Gaps, gap => gap.Classification == "AccessBindingRecordSourceAmbiguous");
+        Assert.Contains(projected.Gaps, gap => gap.Classification == "AccessBindingOwningRecordSourceUnavailable");
+        Assert.Contains(projected.Gaps, gap => gap.Classification == "AccessBindingQueryOutputCatalogIncomplete");
+        Assert.DoesNotContain(projected.Gaps, gap => gap.Classification == "AccessBindingTargetUnresolved");
+    }
+
     private static string FindRepoRoot()
     {
         var current = AppContext.BaseDirectory;
