@@ -18,7 +18,8 @@ public static partial class AccessExpressionProjector
         IReadOnlyDictionary<string, IReadOnlyList<string>>? fields,
         IReadOnlySet<string>? controlNames = null,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? fieldSetsByObject = null,
-        IReadOnlyDictionary<string, IReadOnlyList<string>>? controlStableKeys = null)
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? controlStableKeys = null,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? domainObjects = null)
     {
         var normalized = expression.Trim();
         var functionMatches = FunctionPattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
@@ -105,7 +106,7 @@ public static partial class AccessExpressionProjector
             var args = SplitArguments(dlookup.Args);
             if (args.Count >= 2)
             {
-                var queryCandidate = ResolveObject(args[1], objects, queryKeys);
+                var queryCandidate = ResolveObject(args[1], domainObjects ?? objects, queryKeys);
                 var domainFields = queryCandidate is not null && fieldSetsByObject?.TryGetValue(queryCandidate, out var queryFields) == true
                     ? queryFields
                     : null;

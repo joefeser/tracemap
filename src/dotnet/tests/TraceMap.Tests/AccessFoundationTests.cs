@@ -230,6 +230,44 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Query_projector_keeps_partially_resolved_action_expressions_partial_and_source_scoped()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SourceTable"] = [("table-source", "table")],
+            ["UnrelatedTable"] = [("table-unrelated", "table")],
+            ["TargetTable"] = [("table-target", "table")]
+        };
+        var fields = new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+        {
+            ["table-source"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SourceId"] = [new(new(null, "source", "field-source"), 0, "long", 4, false)]
+            },
+            ["table-unrelated"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["MissingId"] = [new(new(null, "unrelated", "field-unrelated"), 0, "long", 4, false)]
+            },
+            ["table-target"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["TargetId"] = [new(new(null, "target", "field-target"), 0, "long", 4, false)]
+            }
+        };
+
+        var projected = AccessQueryProjector.ProjectActionLineage(
+            "INSERT INTO TargetTable (TargetId) SELECT SourceId + MissingId FROM SourceTable;",
+            "append",
+            known,
+            fields);
+
+        var mapping = Assert.Single(projected.FieldMappings);
+        Assert.Equal(["field-source"], mapping.SourceFieldStableKeys);
+        Assert.DoesNotContain("field-unrelated", mapping.SourceFieldStableKeys);
+        Assert.Equal("partial", mapping.Coverage);
+        Assert.Equal("partial", projected.Coverage);
+    }
+
+    [Fact]
     public void Query_projector_projects_bounded_crosstab_shape_and_keeps_dynamic_pivots_partial()
     {
         var field = new AccessSafeIdentity(null, "row-name", "field-row");
@@ -369,6 +407,33 @@ public sealed class AccessFoundationTests
 
         Assert.Equal("complete", constant.Coverage);
         Assert.Equal(AccessSafeValues.RoleHash("access-query-predicate", "1=1"), constant.PredicateHash);
+    }
+
+    [Fact]
+    public void Query_projector_keeps_unsupported_order_by_functions_partial()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SourceTable"] = [("table-source", "table")]
+        };
+        var fields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            ["table-source"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Id"] = ["field-id"]
+            }
+        };
+
+        var projected = AccessQueryProjector.ProjectStaticSelect(
+            "SELECT SourceTable.Id FROM SourceTable ORDER BY CustomSort(SourceTable.Id);",
+            known,
+            fields);
+
+        Assert.Equal("partial", projected.Coverage);
+        Assert.Single(projected.FunctionNameHashes);
+        Assert.Equal(
+            AccessSafeValues.RoleHash("access-query-function-name", "CustomSort"),
+            projected.FunctionNameHashes[0]);
     }
 
     [Fact]

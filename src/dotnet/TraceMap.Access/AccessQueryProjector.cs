@@ -25,6 +25,18 @@ public static partial class AccessQueryProjector
             _ => null
         };
         var target = ResolveUnique(targetName, knownObjects);
+        var dependencyProjection = ProjectDependencies(sql, knownObjects);
+        var sourceKeys = dependencyProjection.Dependencies
+            .Select(item => item.TargetStableKey)
+            .Where(stableKey => operationKind is not ("append" or "make-table")
+                || !string.Equals(stableKey, target?.StableKey, StringComparison.Ordinal))
+            .ToHashSet(StringComparer.Ordinal);
+        var sourceObjects = knownObjects.ToDictionary(
+            item => item.Key,
+            item => (IReadOnlyList<(string StableKey, string Kind)>)item.Value
+                .Where(candidate => sourceKeys.Contains(candidate.StableKey))
+                .ToArray(),
+            StringComparer.OrdinalIgnoreCase);
         var targetFields = operationKind switch
         {
             "append" or "make-table" => ParseParenthesizedNames(masked, AppendTargetFieldsPattern().Match(masked)),
@@ -43,8 +55,14 @@ public static partial class AccessQueryProjector
             {
                 var expression = index < items.Count ? items[index].Trim() : null;
                 var targetField = index < targetFieldKeys.Count && targetFieldKeys[index].Length > 0 ? targetFieldKeys[index] : null;
-                var sources = expression is null ? [] : ResolveExpressionFields(expression, knownObjects, fieldLookups);
-                var mapped = expression is not null && targetField is not null && sources.Count > 0 ? "complete" : "partial";
+                var sources = expression is null ? [] : ResolveExpressionFields(expression, sourceObjects, fieldLookups);
+                var mapped = expression is not null
+                    && targetField is not null
+                    && sources.Count > 0
+                    && ResolvesExpressionCompletely(expression, sourceObjects, fieldLookups)
+                    && !HasUnsupportedNamedFunction(expression)
+                    ? "complete"
+                    : "partial";
                 if (mapped == "partial") coverage = "partial";
                 mappings.Add(new(index, expression is null ? null : AccessSafeValues.RoleHash("access-query-expression", expression), sources, targetField, mapped));
             }
@@ -61,15 +79,21 @@ public static partial class AccessQueryProjector
                 var targetField = equals < 0 ? null : ResolveFieldsAligned(target?.StableKey, [assignment[..equals].Trim()], fieldLookups).FirstOrDefault();
                 if (targetField is { Length: 0 }) targetField = null;
                 var expression = equals < 0 ? null : assignment[(equals + 1)..].Trim();
-                var sources = expression is null ? [] : ResolveExpressionFields(expression, knownObjects, fieldLookups);
-                var mapped = targetField is not null && expression is not null && sources.Count > 0 ? "complete" : "partial";
+                var sources = expression is null ? [] : ResolveExpressionFields(expression, sourceObjects, fieldLookups);
+                var mapped = targetField is not null
+                    && expression is not null
+                    && sources.Count > 0
+                    && ResolvesExpressionCompletely(expression, sourceObjects, fieldLookups)
+                    && !HasUnsupportedNamedFunction(expression)
+                    ? "complete"
+                    : "partial";
                 if (mapped == "partial") coverage = "partial";
                 mappings.Add(new(index, expression is null ? null : AccessSafeValues.RoleHash("access-query-expression", expression), sources, targetField, mapped));
             }
         }
         var predicate = PredicateClause(masked);
         if (predicate is not null
-            && (!ResolvesExpressionCompletely(predicate, knownObjects, fieldLookups)
+            && (!ResolvesExpressionCompletely(predicate, sourceObjects, fieldLookups)
                 || HasUnsupportedNamedFunction(predicate)))
             coverage = "partial";
         var parameters = parameterOrdinals?.Distinct().OrderBy(value => value).ToArray() ?? [];
@@ -140,9 +164,9 @@ public static partial class AccessQueryProjector
         }).ToArray();
         var predicate = Clause(masked, "where", ["group", "order", ";", "$"]);
         var order = Clause(masked, "order\\s+by", [";", "$"]);
-        var functions = predicate is null
-            ? []
-            : NamedFunctionPattern().Matches(predicate)
+        var functions = new[] { predicate, order }
+            .Where(expression => expression is not null)
+            .SelectMany(expression => NamedFunctionPattern().Matches(expression!))
                 .Select(match => match.Groups["name"].Value)
                 .Where(name => !SqlFunctionNames.Contains(name, StringComparer.OrdinalIgnoreCase)
                     && !SqlKeywordCallNames.Contains(name, StringComparer.OrdinalIgnoreCase))
@@ -152,6 +176,7 @@ public static partial class AccessQueryProjector
                 .ToArray();
         var predicateComplete = predicate is null || ResolvesExpressionFieldKeys(predicate, scopedKnownObjects, fieldsByTable);
         var orderComplete = order is null || ResolvesExpressionFieldKeys(order, scopedKnownObjects, fieldsByTable);
+        orderComplete = orderComplete && (order is null || !HasUnsupportedNamedFunction(order));
         var coverage = expressions.Count > 0
             && outputs.All(output => output.Coverage == "complete")
             && dependencyProjection.Coverage == "complete"
