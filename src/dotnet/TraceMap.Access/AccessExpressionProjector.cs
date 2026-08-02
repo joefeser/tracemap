@@ -114,7 +114,7 @@ public static partial class AccessExpressionProjector
                     ? "*"
                     : queryCandidate is not null
                         ? ResolveField(args[0], domainFields, selectedFields)
-                        : ResolveField(args[0], fields, selectedFields);
+                        : null;
                 if (wildcardSelection) literals.Add("wildcard");
                 if (selected is null)
                 {
@@ -131,15 +131,23 @@ public static partial class AccessExpressionProjector
                     {
                         var criteria = queryCandidate is not null
                             ? ResolveField(candidate, domainFields, criteriaFields)
-                            : ResolveField(candidate, fields, criteriaFields);
-                        if (criteria is null && controlStableKeys?.TryGetValue(candidate, out var stableControlCandidates) == true)
+                            : null;
+                        var controlMatched = false;
+                        if (controlStableKeys?.TryGetValue(candidate, out var stableControlCandidates) == true)
                         {
-                            if (stableControlCandidates.Count == 1) controlKeys.Add(stableControlCandidates[0]);
+                            controlMatched = true;
+                            if (stableControlCandidates.Count == 1)
+                                controlKeys.Add(stableControlCandidates[0]);
                             else ambiguous = true;
                         }
-                        else if (criteria is null && controlNames?.Contains(candidate) == true)
+                        else if (controlNames?.Contains(candidate) == true)
+                        {
+                            controlMatched = true;
                             controlRefs.Add(AccessSafeValues.RoleHash("access-expression-control", candidate));
-                        else if (criteria is null)
+                        }
+                        if (criteria is not null && controlMatched)
+                            ambiguous = true;
+                        else if (criteria is null && !controlMatched)
                         {
                             AddIdentifierReferenceHash(candidate, "access-expression-criteria-field", criteriaFieldRefs);
                             unresolved = true;

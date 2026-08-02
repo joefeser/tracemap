@@ -227,6 +227,61 @@ public sealed class AccessExpressionProjectorTests
     }
 
     [Fact]
+    public void Unresolved_domain_preserves_hash_only_field_roles_without_surface_fallback()
+    {
+        var result = AccessExpressionProjector.Project(
+            "=DLookUp([Status], \"MissingQuery\", \"[Status]=[txtStatus]\")",
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Status"] = ["surface-status"]
+            },
+            new HashSet<string>(["txtStatus"], StringComparer.OrdinalIgnoreCase),
+            null,
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["txtStatus"] = ["control-status"]
+            });
+
+        Assert.Equal("partial", result.Coverage);
+        Assert.Empty(result.SelectedFieldStableKeys);
+        Assert.Empty(result.CriteriaFieldStableKeys);
+        Assert.Single(result.SelectedFieldReferenceHashes);
+        Assert.Contains("control-status", result.ControlStableKeys);
+    }
+
+    [Fact]
+    public void Domain_criteria_field_control_collision_is_explicitly_ambiguous()
+    {
+        const string queryKey = "query-status";
+        var result = AccessExpressionProjector.Project(
+            "=DLookUp([Value], \"qStatus\", \"[Status]=1\")",
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qStatus"] = [(queryKey, "query")]
+            },
+            null,
+            new HashSet<string>(["Status"], StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Value"] = ["field-value"],
+                    ["Status"] = ["field-status"]
+                }
+            },
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Status"] = ["control-status"]
+            });
+
+        Assert.Equal("partial", result.Coverage);
+        Assert.Equal("AccessBindingExpressionTargetAmbiguous", result.GapClassification);
+        Assert.Contains("field-status", result.CriteriaFieldStableKeys);
+        Assert.Contains("control-status", result.ControlStableKeys);
+    }
+
+    [Fact]
     public void Projects_multiline_export_style_metrics_domain_lookup()
     {
         const string queryKey = "query-metrics-day";
