@@ -10,6 +10,27 @@ namespace TraceMap.Tests;
 [Collection("AccessGitEnvironment")]
 public sealed class AccessFoundationTests
 {
+    [Fact]
+    public void Conflicting_query_kinds_are_omitted_independently_of_input_order()
+    {
+        var first = AccessDesignEvidenceComposer.BuildConsistentQueryKinds(
+            [("query-a", "select"), ("query-a", "crosstab"), ("query-b", "select")]);
+        var second = AccessDesignEvidenceComposer.BuildConsistentQueryKinds(
+            [("query-b", "select"), ("query-a", "crosstab"), ("query-a", "select")]);
+
+        Assert.Equal(first, second);
+        Assert.False(first.ContainsKey("query-a"));
+        Assert.Equal("select", first["query-b"]);
+    }
+
+    [Fact]
+    public void Wildcard_projection_detection_is_limited_to_projection_items()
+    {
+        Assert.True(AccessQueryProjector.HasWildcardProjection("SELECT * FROM Orders"));
+        Assert.True(AccessQueryProjector.HasWildcardProjection("SELECT Orders.* FROM Orders"));
+        Assert.False(AccessQueryProjector.HasWildcardProjection("SELECT OrderId FROM Orders WHERE Note='*'"));
+    }
+
     private const string SecretMarker = "Password_ProdVault_92817";
     private const string SqlMarker = "SELECT * FROM PayrollSecrets_92817";
     private const string ConnectionMarker = "ODBC;DSN=PrivateLedger_92817;PWD=NeverPersistThis";
@@ -129,6 +150,16 @@ public sealed class AccessFoundationTests
         Assert.False(AccessQueryProjector.IsDirectOutputField(
             "SELECT Count(Orders.OrderId) AS OrderCount FROM Orders;",
             "OrderCount"));
+
+        Assert.True(AccessQueryProjector.HasStaticOutputName(
+            "SELECT Orders.OrderId AS Identifier, Total: Sum(Orders.Amount) FROM Orders;",
+            "Identifier"));
+        Assert.True(AccessQueryProjector.HasStaticOutputName(
+            "SELECT Orders.OrderId AS Identifier, Total: Sum(Orders.Amount) FROM Orders;",
+            "Total"));
+        Assert.False(AccessQueryProjector.HasStaticOutputName(
+            "SELECT Orders.OrderId AS Identifier FROM Orders;",
+            "Missing"));
     }
 
     [Fact]

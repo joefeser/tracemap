@@ -22,9 +22,10 @@ public static partial class AccessExpressionProjector
     {
         var normalized = expression.Trim();
         var functionMatches = FunctionPattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
-        var functions = functionMatches
+        var functionNames = functionMatches
             .Select(match => match.Groups["name"].Value)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var functions = functionNames
             .Select(name => AccessSafeValues.RoleHash("access-expression-function", name.ToLowerInvariant()))
             .OrderBy(value => value, StringComparer.Ordinal).ToArray();
         var operators = OperatorPattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized))
@@ -44,10 +45,10 @@ public static partial class AccessExpressionProjector
         var controlRefs = new SortedSet<string>(StringComparer.Ordinal);
         var externalRefs = new SortedSet<string>(StringComparer.Ordinal);
         var literals = new SortedSet<string>(StringComparer.Ordinal);
-        var unresolved = functionMatches
-            .Select(match => match.Groups["name"].Value)
-            .Any(name => !Functions.Contains(name));
+        var unresolvedFunction = functionNames.Any(name => !Functions.Contains(name));
+        var unresolved = false;
         var ambiguous = false;
+        var domainFieldCatalogIncomplete = false;
         var domainSyntaxMatches = DomainNamePattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
         var domainMatches = FindDomainCalls(normalized, domainSyntaxMatches);
         unresolved |= domainSyntaxMatches.Count != domainMatches.Count;
@@ -65,7 +66,7 @@ public static partial class AccessExpressionProjector
         foreach (Match match in IdentifierPattern().Matches(MaskMatches(nonDomainExpression, generalExternalMatches)))
         {
             var name = NormalizeIdentifier(match.Groups["name"].Value);
-            if (Functions.Contains(name) || IsKeyword(name)) continue;
+            if (IsKeyword(name) || functionNames.Contains(name) || Functions.Contains(name)) continue;
             var resolved = false;
             if (fields is not null && fields.TryGetValue(name, out var candidates))
             {
@@ -108,6 +109,8 @@ public static partial class AccessExpressionProjector
                 var domainFields = queryCandidate is not null && fieldSetsByObject?.TryGetValue(queryCandidate, out var queryFields) == true
                     ? queryFields
                     : null;
+                if (queryCandidate is not null && domainFields is null)
+                    domainFieldCatalogIncomplete = true;
                 var wildcardSelection = dlookup.Name.Equals("DCount", StringComparison.OrdinalIgnoreCase)
                     && NormalizeArgumentIdentifier(args[0]) == "*";
                 var selectedResolution = wildcardSelection
@@ -167,9 +170,11 @@ public static partial class AccessExpressionProjector
         var classification = domainMatches.Count > 0 ? "domain-lookup"
             : functions.Length > 0 || normalized.StartsWith('=') || operators.Length > 0 ? "calculated-expression"
             : "expression";
-        var coverage = dynamic || ambiguous || unresolved ? "partial" : "complete";
+        var coverage = dynamic || ambiguous || unresolved || unresolvedFunction || domainFieldCatalogIncomplete ? "partial" : "complete";
         var gap = dynamic ? "AccessBindingExpressionDynamic"
+            : unresolvedFunction ? "AccessBindingExpressionFunctionUnresolved"
             : ambiguous ? "AccessBindingExpressionTargetAmbiguous"
+            : domainFieldCatalogIncomplete ? "AccessBindingDomainFieldCatalogIncomplete"
             : unresolved ? "AccessBindingExpressionPartial"
             : null;
         return new(

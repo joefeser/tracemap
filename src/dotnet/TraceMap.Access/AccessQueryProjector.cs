@@ -180,6 +180,49 @@ public static partial class AccessQueryProjector
         return fields.Count(field => string.Equals(field, outputName.Trim(), StringComparison.OrdinalIgnoreCase)) == 1;
     }
 
+    public static bool HasStaticOutputName(string sql, string outputName)
+    {
+        if (string.IsNullOrWhiteSpace(sql) || string.IsNullOrWhiteSpace(outputName))
+            return false;
+        var select = SelectListAfterKeyword(MaskLiteralsAndComments(sql), "select");
+        if (select is null) return false;
+        var names = new List<string>();
+        foreach (var item in SplitSelectItems(select))
+        {
+            var trimmed = item.Trim();
+            var alias = OutputAliasPattern().Match(trimmed);
+            if (alias.Success)
+            {
+                names.Add(MatchedOutputName(alias));
+                continue;
+            }
+            var accessAlias = AccessOutputAliasPattern().Match(trimmed);
+            if (accessAlias.Success)
+            {
+                names.Add(MatchedOutputName(accessAlias));
+                continue;
+            }
+            var direct = DirectSelectFieldPattern().Match(trimmed);
+            if (direct.Success)
+                names.Add((direct.Groups["bracketed"].Success ? direct.Groups["bracketed"].Value : direct.Groups["plain"].Value).Trim());
+        }
+        return names.Count(name => string.Equals(name, outputName.Trim(), StringComparison.OrdinalIgnoreCase)) == 1;
+    }
+
+    internal static bool HasWildcardProjection(string sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql)) return false;
+        var select = SelectListAfterKeyword(MaskLiteralsAndComments(sql), "select");
+        return select is not null && SplitSelectItems(select).Any(item =>
+        {
+            var normalized = item.Trim();
+            return normalized == "*" || normalized.EndsWith(".*", StringComparison.Ordinal);
+        });
+    }
+
+    private static string MatchedOutputName(Match match) =>
+        (match.Groups["bracketed"].Success ? match.Groups["bracketed"].Value : match.Groups["plain"].Value).Trim();
+
     private static IReadOnlyList<string> SplitSelectItems(string value)
     {
         var result = new List<string>();
@@ -527,6 +570,12 @@ public static partial class AccessQueryProjector
 
     [GeneratedRegex(@"^(?:(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_.$]*)\s*\.\s*)?(?:\[(?<bracketed>[^\]]+)\]|(?<plain>[A-Za-z_][A-Za-z0-9_ ]*))$", RegexOptions.CultureInvariant)]
     private static partial Regex DirectSelectFieldPattern();
+
+    [GeneratedRegex(@"(?ix)\s+as\s+(?:\[(?<bracketed>[^\]]+)\]|(?<plain>[A-Za-z_][A-Za-z0-9_ ]*))\s*$", RegexOptions.CultureInvariant)]
+    private static partial Regex OutputAliasPattern();
+
+    [GeneratedRegex(@"(?ix)^\s*(?:\[(?<bracketed>[^\]]+)\]|(?<plain>[A-Za-z_][A-Za-z0-9_ ]*))\s*:\s*", RegexOptions.CultureInvariant)]
+    private static partial Regex AccessOutputAliasPattern();
 
     [GeneratedRegex(@"(?ix)\binto\s+(?:\[(?<value>[^\]]+)\]|(?<value>[A-Za-z_][A-Za-z0-9_.$]*))", RegexOptions.CultureInvariant)]
     private static partial Regex AppendTargetPattern();
