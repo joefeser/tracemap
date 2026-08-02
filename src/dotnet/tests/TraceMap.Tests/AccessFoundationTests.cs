@@ -10,6 +10,19 @@ namespace TraceMap.Tests;
 [Collection("AccessGitEnvironment")]
 public sealed class AccessFoundationTests
 {
+    [Fact]
+    public void Conflicting_query_kinds_are_omitted_independently_of_input_order()
+    {
+        var first = AccessDesignEvidenceComposer.BuildConsistentQueryKinds(
+            [("query-a", "select"), ("query-a", "crosstab"), ("query-b", "select")]);
+        var second = AccessDesignEvidenceComposer.BuildConsistentQueryKinds(
+            [("query-b", "select"), ("query-a", "crosstab"), ("query-a", "select")]);
+
+        Assert.Equal(first, second);
+        Assert.False(first.ContainsKey("query-a"));
+        Assert.Equal("select", first["query-b"]);
+    }
+
     private const string SecretMarker = "Password_ProdVault_92817";
     private const string SqlMarker = "SELECT * FROM PayrollSecrets_92817";
     private const string ConnectionMarker = "ODBC;DSN=PrivateLedger_92817;PWD=NeverPersistThis";

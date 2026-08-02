@@ -81,6 +81,10 @@ public sealed class AccessExpressionProjectorTests
         var customFunction = AccessExpressionProjector.Project("=CustomLookup([StartDate])", null, fields);
         Assert.Equal("partial", customFunction.Coverage);
         Assert.Equal("AccessBindingExpressionFunctionUnresolved", customFunction.GapClassification);
+
+        var zeroArgumentFunction = AccessExpressionProjector.Project("=Date", null, null);
+        Assert.Equal("complete", zeroArgumentFunction.Coverage);
+        Assert.Null(zeroArgumentFunction.GapClassification);
     }
 
     [Fact]
