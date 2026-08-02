@@ -275,6 +275,36 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Com_reader_labels_crosstab_lineage_as_not_yet_composed_downstream()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "MonthlyTotals");
+        var database = new FakeDaoDatabase(new FakeDaoQuery(
+            "MonthlyTotals",
+            "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
+            16));
+        var gaps = new List<AccessGapProjection>();
+
+        _ = new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["MonthlyTotals"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal),
+            gaps,
+            []);
+
+        Assert.Contains(gaps, gap =>
+            gap.Classification == "AccessQueryCrosstabDownstreamCompositionUnavailable"
+            && gap.StableScopeKey == queryIdentity.StableKey
+            && gap.RuleId == RuleIds.LegacyAccessQuery);
+    }
+
+    [Fact]
     public void Query_projector_preserves_update_and_delete_targets_with_predicate_hashes()
     {
         var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
