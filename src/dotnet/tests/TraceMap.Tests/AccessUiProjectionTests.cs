@@ -411,6 +411,28 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Unscoped_control_source_does_not_resolve_a_field_identifier_by_object_name_collision()
+    {
+        var parsed = AccessUiTextParser.Parse(
+            new StringReader("Begin Form\nBegin TextBox\nName =\"txtActive\"\nControlSource =\"Active\"\nEnd\nEnd\n"),
+            "frmUnbound",
+            "form");
+        var surface = Assert.IsType<AccessRawUiSurface>(parsed.Surface);
+        var projected = AccessUiProjector.Project(
+            AccessSafeValues.DatabaseIdentitySeed("repo", new string('e', 40), "fixture.accdb", "hash"),
+            [surface],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Active"] = [("query-active", "query")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal));
+
+        var binding = Assert.Single(Assert.Single(projected.Surfaces).Controls.Single().Bindings);
+        Assert.Equal("partial", binding.Coverage);
+        Assert.DoesNotContain("query-active", binding.TargetStableKeys);
+    }
+
+    [Fact]
     public void Text_design_parser_enforces_character_and_line_limits()
     {
         var limits = AccessLimits.Default with { MaxUiDesignTextLength = 20, MaxUiDesignLines = 2 };

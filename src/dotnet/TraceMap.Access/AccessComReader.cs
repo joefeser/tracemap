@@ -693,6 +693,11 @@ public sealed class AccessComReader
                         crosstabLineage = AccessQueryProjector.ProjectCrosstabLineage(sql, known, objectFieldLookups);
                         if (crosstabLineage.Coverage == "partial")
                             gaps.Add(new("AccessQueryCrosstabLineagePartial", "query", identity.StableKey, RuleIds.LegacyAccessQuery));
+                        gaps.Add(new(
+                            "AccessQueryCrosstabDownstreamCompositionUnavailable",
+                            "query",
+                            identity.StableKey,
+                            RuleIds.LegacyAccessQuery));
                     }
 
                     result.Add(new(identity, kind, sqlHash, sql.Length, referenceCoverage, parameterRows,
