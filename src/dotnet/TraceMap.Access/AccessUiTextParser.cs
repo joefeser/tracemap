@@ -260,9 +260,18 @@ internal static partial class AccessUiTextParser
 
     private static string ReadScalar(string source, out bool supported)
     {
+        var parsed = ParseScalar(source);
+        supported = parsed.Supported;
+        return parsed.Value;
+    }
+
+    private static bool IsQuotedScalarComplete(string source) => ParseScalar(source).Complete;
+
+    private static ScalarParseResult ParseScalar(string source)
+    {
         var value = source.Trim();
-        if (value.Length == 0) { supported = true; return string.Empty; }
-        if (value[0] != '"') { supported = true; return value; }
+        if (value.Length == 0) return new(string.Empty, true, true);
+        if (value[0] != '"') return new(value, true, true);
         var builder = new StringBuilder(value.Length);
         var index = 1;
         while (index < value.Length)
@@ -283,40 +292,14 @@ internal static partial class AccessUiTextParser
             }
             index++;
             while (index < value.Length && char.IsWhiteSpace(value[index])) index++;
-            if (index == value.Length) { supported = true; return builder.ToString(); }
-            if (value[index] != '"') { supported = false; return string.Empty; }
+            if (index == value.Length) return new(builder.ToString(), true, true);
+            if (value[index] != '"') return new(string.Empty, false, false);
             index++;
         }
-        supported = false;
-        return string.Empty;
+        return new(string.Empty, false, false);
     }
 
-    private static bool IsQuotedScalarComplete(string source)
-    {
-        var value = source.Trim();
-        if (!value.StartsWith('"')) return true;
-        var index = 1;
-        while (index < value.Length)
-        {
-            if (value[index] == '\\' && index + 1 < value.Length && value[index + 1] == '"')
-            {
-                index += 2;
-                continue;
-            }
-            if (value[index] != '"') { index++; continue; }
-            if (index + 1 < value.Length && value[index + 1] == '"')
-            {
-                index += 2;
-                continue;
-            }
-            index++;
-            while (index < value.Length && char.IsWhiteSpace(value[index])) index++;
-            if (index == value.Length) return true;
-            if (value[index] != '"') return false;
-            index++;
-        }
-        return false;
-    }
+    private readonly record struct ScalarParseResult(string Value, bool Supported, bool Complete);
 
     private static bool? ReadBoolean(string value) => value.Trim() switch
     {

@@ -348,6 +348,16 @@ internal static partial class AccessVbaProjector
                             SelectedValueFieldStableKeys = selected,
                             Coverage = selected.Count > 0 ? context.Coverage : "partial"
                         };
+                        if (binding.Coverage != "complete")
+                        {
+                            coverage = "partial";
+                            gaps.Add(new("AccessVbaRowSourceContextPartial", "vba-effect", target.StableKey, RuleIds.LegacyAccessVba));
+                        }
+                    }
+                    else
+                    {
+                        coverage = "partial";
+                        gaps.Add(new("AccessVbaRowSourceContextUnavailable", "vba-effect", target.StableKey, RuleIds.LegacyAccessVba));
                     }
                 }
                 else if (literal is not null)

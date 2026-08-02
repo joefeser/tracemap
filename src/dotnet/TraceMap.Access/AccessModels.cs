@@ -129,7 +129,7 @@ public sealed record AccessQueryCrosstabProjection(
 
 public sealed record AccessQueryStaticOutputProjection(
     int Ordinal,
-    string NameHash,
+    string? NameHash,
     IReadOnlyList<string> SourceFieldStableKeys,
     string Coverage);
 

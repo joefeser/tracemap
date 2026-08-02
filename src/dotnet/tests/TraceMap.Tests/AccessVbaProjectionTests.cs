@@ -306,12 +306,18 @@ public sealed class AccessVbaProjectionTests
                 ["Label"] = [AccessSafeValues.RoleHash("field", "personal-label")]
             }
         };
+        var rowSourceContexts = new Dictionary<string, AccessRowSourceBindingProjection>(StringComparer.Ordinal)
+        {
+            ["Form_frmHost|" + AccessSafeValues.RoleHash("access-control-name", "cboItem")] =
+                new(1, [], ["persisted-field"], ["record-source"], "complete")
+        };
 
         var result = AccessVbaProjector.Project(seed,
             [new("Form_frmHost", "form", source)],
             [new("form-owner", "after-update", "Form_frmHost", "cboMode_AfterUpdate")],
             knownObjects: known,
-            fieldsByTable: fields);
+            fieldsByTable: fields,
+            rowSourceContexts: rowSourceContexts);
 
         var procedure = Assert.Single(result.Modules.Single().Procedures);
         var effects = procedure.Effects!.Where(effect => effect.EffectKind == "row-source-assignment").ToArray();
@@ -324,6 +330,60 @@ public sealed class AccessVbaProjectionTests
         Assert.Contains(effects, effect => effect.RowSourceProjection!.Dependencies.Any(item => item.TargetStableKey == personal.StableKey));
         Assert.Contains(result.EventBindings, binding => binding.ProcedureStableKey == procedure.Identity.StableKey
             && binding.Coverage == "complete");
+        Assert.Contains(effects, effect => effect.Coverage == "partial"
+            && effect.RowSourceProjection!.FunctionNameHashes.Count == 1);
+        Assert.Contains(effects, effect => effect.Coverage == "complete"
+            && effect.RowSourceProjection!.FunctionNameHashes.Count == 0);
+        Assert.All(effects, effect => Assert.Equal("complete", effect.RowSourceBinding?.Coverage));
+    }
+
+    [Fact]
+    public void Projector_downgrades_literal_rowsource_when_control_context_is_unavailable_or_partial()
+    {
+        const string source = """
+            Private Sub Form_Load()
+                Me.cboMissing.RowSource = "SELECT Id FROM Lookup;"
+            End Sub
+            """;
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('7', 40), "fixture.accdb", "hash");
+        var lookup = AccessSafeValues.Identity(seed, "table", "Lookup");
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Lookup"] = [(lookup.StableKey, "table")]
+        };
+        var fields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            [lookup.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Id"] = ["field-id"]
+            }
+        };
+
+        var result = AccessVbaProjector.Project(
+            seed,
+            [new("Form_frmHost", "form", source)],
+            knownObjects: known,
+            fieldsByTable: fields,
+            rowSourceContexts: new Dictionary<string, AccessRowSourceBindingProjection>(StringComparer.Ordinal));
+
+        var effect = Assert.Single(result.Modules.Single().Procedures.Single().Effects!);
+        Assert.Equal("partial", effect.Coverage);
+        Assert.Contains(result.Gaps, gap => gap.Classification == "AccessVbaRowSourceContextUnavailable");
+
+        var partialContexts = new Dictionary<string, AccessRowSourceBindingProjection>(StringComparer.Ordinal)
+        {
+            ["Form_frmHost|" + AccessSafeValues.RoleHash("access-control-name", "cboMissing")] =
+                new(1, [], [], [], "partial")
+        };
+        var partial = AccessVbaProjector.Project(
+            seed,
+            [new("Form_frmHost", "form", source)],
+            knownObjects: known,
+            fieldsByTable: fields,
+            rowSourceContexts: partialContexts);
+
+        Assert.Equal("partial", Assert.Single(partial.Modules.Single().Procedures.Single().Effects!).Coverage);
+        Assert.Contains(partial.Gaps, gap => gap.Classification == "AccessVbaRowSourceContextPartial");
     }
 
     [Fact]

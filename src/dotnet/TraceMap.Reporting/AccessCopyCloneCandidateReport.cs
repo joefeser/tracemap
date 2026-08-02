@@ -249,10 +249,12 @@ public static class AccessCopyCloneCandidateReporter
             var queryDependencies = dependencies.GetValueOrDefault(fact.TargetSymbol!) ?? [];
             var actionFacts = actionLineage.GetValueOrDefault(fact.TargetSymbol!) ?? [];
             var actionTargets = actionFacts
-                .Select(item => item.TargetSymbol)
-                .Where(SafeStableKey)
-                .Select(target => new AccessCopyCloneParticipant(
-                    NodeId(target!), "table", "action-target", Evidence(actionFacts.First(item => item.TargetSymbol == target))))
+                .Where(item => SafeStableKey(item.TargetSymbol))
+                .Select(item => new AccessCopyCloneParticipant(
+                    NodeId(item.TargetSymbol!),
+                    SafeTargetKind(item.Properties.GetValueOrDefault("targetKind")),
+                    "action-target",
+                    Evidence(item)))
                 .ToArray();
             var participants = queryDependencies
                 .Where(dependency => SafeStableKey(dependency.TargetSymbol))
@@ -263,7 +265,11 @@ public static class AccessCopyCloneCandidateReporter
                     Evidence(dependency)))
                 .Concat(actionTargets)
                 .GroupBy(participant => participant.NodeId, StringComparer.Ordinal)
-                .Select(group => group.OrderBy(participant => participant.Role, StringComparer.Ordinal).First())
+                .Select(group => group
+                    .OrderBy(participant => participant.Role == "dependency-role-unknown" ? 0 : 1)
+                    .ThenBy(participant => participant.NodeKind == "unknown" ? 1 : 0)
+                    .ThenBy(participant => participant.Role, StringComparer.Ordinal)
+                    .First())
                 .OrderBy(participant => participant.NodeId, StringComparer.Ordinal)
                 .ThenBy(participant => participant.Evidence.FactId, StringComparer.Ordinal)
                 .ToArray();
