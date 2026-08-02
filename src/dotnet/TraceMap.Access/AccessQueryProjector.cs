@@ -331,48 +331,54 @@ public static partial class AccessQueryProjector
     }
 
     private static IReadOnlyList<string> ResolveExpressionFields(string expression, IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> known, IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fields)
-    {
-        var result = new List<string>();
-        foreach (var match in ExpressionFieldReferences(expression))
-        {
-            var tableName = match.Groups["table"].Success ? match.Groups["table"].Value : null;
-            var fieldName = match.Groups["field"].Value;
-            var tables = tableName is null ? known.Values.SelectMany(value => value).Where(value => value.Kind == "table") : (known.TryGetValue(tableName, out var found) ? found : []);
-            var matches = tables.Where(value => value.Kind == "table")
-                .Where(table => fields.TryGetValue(table.StableKey, out var lookup)
-                    && lookup.TryGetValue(fieldName, out var candidates)
-                    && candidates.Count == 1)
-                .SelectMany(table => fields[table.StableKey][fieldName].Select(field => (table.StableKey, Field: field.Identity.StableKey)))
-                .ToArray();
-            if (tableName is null && matches.Select(value => value.StableKey).Distinct(StringComparer.Ordinal).Count() != 1)
-                continue;
-            result.AddRange(matches.Select(value => value.Field));
-        }
-        return result.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
-    }
+        => ResolveExpressionFieldStableKeys(expression, known, (stableKey, fieldName) =>
+            fields.TryGetValue(stableKey, out var lookup)
+                && lookup.TryGetValue(fieldName, out var candidates)
+                && candidates.Count == 1
+                    ? candidates.Select(candidate => candidate.Identity.StableKey).ToArray()
+                    : []);
 
     private static IReadOnlyList<string> ResolveExpressionFieldKeys(
         string expression,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> known,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fields)
+        => ResolveExpressionFieldStableKeys(expression, known, (stableKey, fieldName) =>
+            fields.TryGetValue(stableKey, out var lookup)
+                && lookup.TryGetValue(fieldName, out var candidates)
+                && candidates.Count == 1
+                    ? candidates
+                    : []);
+
+    private static IReadOnlyList<string> ResolveExpressionFieldStableKeys(
+        string expression,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> known,
+        Func<string, string, IReadOnlyList<string>> resolveFields)
     {
         var result = new List<string>();
-        foreach (var match in ExpressionFieldReferences(expression))
-        {
-            var tableName = match.Groups["table"].Success ? match.Groups["table"].Value : null;
-            var fieldName = match.Groups["field"].Value;
-            var tables = tableName is null
-                ? known.Values.SelectMany(value => value).Where(value => value.Kind == "table")
-                : known.TryGetValue(tableName, out var found) ? found : [];
-            var matches = tables.Where(table => fields.TryGetValue(table.StableKey, out var lookup)
-                    && lookup.TryGetValue(fieldName, out var candidates)
-                    && candidates.Count == 1)
-                .SelectMany(table => fields[table.StableKey][fieldName])
-                .ToArray();
-            if (tableName is null && matches.Length != 1) continue;
-            result.AddRange(matches);
-        }
+        foreach (var reference in ExpressionFieldReferences(expression))
+            result.AddRange(ResolveFieldReferenceStableKeys(reference, known, resolveFields));
         return result.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+    }
+
+    private static IReadOnlyList<string> ResolveFieldReferenceStableKeys(
+        Match reference,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> known,
+        Func<string, string, IReadOnlyList<string>> resolveFields)
+    {
+        var objectName = reference.Groups["table"].Success ? reference.Groups["table"].Value : null;
+        var fieldName = reference.Groups["field"].Value;
+        var objects = objectName is null
+            ? known.Values.SelectMany(value => value)
+            : known.TryGetValue(objectName, out var found) ? found : [];
+        var matches = objects
+            .Where(value => value.Kind is "table" or "query")
+            .Select(value => (value.StableKey, Fields: resolveFields(value.StableKey, fieldName)))
+            .Where(value => value.Fields.Count == 1)
+            .ToArray();
+        if (objectName is null
+            && matches.Select(value => value.StableKey).Distinct(StringComparer.Ordinal).Count() != 1)
+            return [];
+        return matches.SelectMany(value => value.Fields).ToArray();
     }
 
     private static bool ResolvesExpressionFieldKeys(
@@ -381,7 +387,12 @@ public static partial class AccessQueryProjector
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fields)
     {
         var matches = ExpressionFieldReferences(expression);
-        return matches.All(match => ResolveExpressionFieldKeys(match.Value, known, fields).Count == 1);
+        return matches.All(match => ResolveFieldReferenceStableKeys(match, known, (stableKey, fieldName) =>
+            fields.TryGetValue(stableKey, out var lookup)
+                && lookup.TryGetValue(fieldName, out var candidates)
+                && candidates.Count == 1
+                    ? candidates
+                    : []).Count == 1);
     }
 
     private static bool IsStaticDirectProjection(string expression) =>
@@ -393,7 +404,12 @@ public static partial class AccessQueryProjector
         IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fields)
     {
         var references = ExpressionFieldReferences(expression);
-        return references.All(reference => ResolveExpressionFields(reference.Value, known, fields).Count == 1);
+        return references.All(reference => ResolveFieldReferenceStableKeys(reference, known, (stableKey, fieldName) =>
+            fields.TryGetValue(stableKey, out var lookup)
+                && lookup.TryGetValue(fieldName, out var candidates)
+                && candidates.Count == 1
+                    ? candidates.Select(candidate => candidate.Identity.StableKey).ToArray()
+                    : []).Count == 1);
     }
 
     private static Match[] ExpressionFieldReferences(string expression) =>
