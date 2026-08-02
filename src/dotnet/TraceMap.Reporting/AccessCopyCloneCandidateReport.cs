@@ -172,6 +172,10 @@ public static class AccessCopyCloneCandidateReporter
             .Where(fact => fact.FactType == FactTypes.AccessQueryDependencyCandidate && SafeStableKey(fact.SourceSymbol))
             .GroupBy(fact => fact.SourceSymbol!, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+        var actionLineage = safeFacts
+            .Where(fact => fact.FactType == FactTypes.AccessQueryActionLineageCandidate && SafeStableKey(fact.SourceSymbol))
+            .GroupBy(fact => fact.SourceSymbol!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
         var externalObjects = safeFacts
             .Where(fact => fact.FactType == FactTypes.AccessExternalLinkDeclared && SafeStableKey(fact.SourceSymbol))
             .Select(fact => fact.SourceSymbol!)
@@ -243,6 +247,15 @@ public static class AccessCopyCloneCandidateReporter
 
             var queryNodeId = NodeId(fact.TargetSymbol!);
             var queryDependencies = dependencies.GetValueOrDefault(fact.TargetSymbol!) ?? [];
+            var actionFacts = actionLineage.GetValueOrDefault(fact.TargetSymbol!) ?? [];
+            var actionTargets = actionFacts
+                .Where(item => SafeStableKey(item.TargetSymbol))
+                .Select(item => new AccessCopyCloneParticipant(
+                    NodeId(item.TargetSymbol!),
+                    SafeTargetKind(item.Properties.GetValueOrDefault("targetKind")),
+                    "action-target",
+                    Evidence(item)))
+                .ToArray();
             var participants = queryDependencies
                 .Where(dependency => SafeStableKey(dependency.TargetSymbol))
                 .Select(dependency => new AccessCopyCloneParticipant(
@@ -250,6 +263,13 @@ public static class AccessCopyCloneCandidateReporter
                     SafeTargetKind(dependency.Properties.GetValueOrDefault("targetKind")),
                     "dependency-role-unknown",
                     Evidence(dependency)))
+                .Concat(actionTargets)
+                .GroupBy(participant => participant.NodeId, StringComparer.Ordinal)
+                .Select(group => group
+                    .OrderBy(participant => participant.Role == "dependency-role-unknown" ? 0 : 1)
+                    .ThenBy(participant => participant.NodeKind == "unknown" ? 1 : 0)
+                    .ThenBy(participant => participant.Role, StringComparer.Ordinal)
+                    .First())
                 .OrderBy(participant => participant.NodeId, StringComparer.Ordinal)
                 .ThenBy(participant => participant.Evidence.FactId, StringComparer.Ordinal)
                 .ToArray();
@@ -262,6 +282,7 @@ public static class AccessCopyCloneCandidateReporter
                     .Distinct(StringComparer.Ordinal)
                     .Where(safeFactsById.ContainsKey)
                     .Select(factId => safeFactsById[factId]))
+                .Concat(actionFacts)
                 .Append(fact)
                 .GroupBy(item => item.FactId, StringComparer.Ordinal)
                 .Select(group => Evidence(group.First()))
@@ -270,11 +291,12 @@ public static class AccessCopyCloneCandidateReporter
             var supportingFacts = evidence.Select(item => item.FactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
             var limitations = evidence.SelectMany(item => item.Limitations)
                 .Append("dependency-role-unknown")
-                .Append("no-field-correspondence")
                 .Append("no-copy-or-clone-conclusion")
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(value => value, StringComparer.Ordinal)
-                .ToArray();
+                .ToList();
+            if (!actionFacts.Any(action => action.Properties.GetValueOrDefault("coverageLabel") == "complete"))
+                limitations.Add("no-field-correspondence");
             var coverageLabels = evidence.Select(item => item.CoverageLabel)
                 .Append(paths.Length == 0 ? "flow-path-unavailable" : "flow-path-candidate")
                 .Concat(referenceCoverage is null ? [] : [SafeCategory(referenceCoverage, "unknown")])
@@ -304,12 +326,13 @@ public static class AccessCopyCloneCandidateReporter
                 evidence.Select(item => item.EvidenceTier).Distinct(StringComparer.Ordinal)
                     .OrderBy(TierRank).ThenBy(value => value, StringComparer.Ordinal).ToArray(),
                 coverageLabels,
-                limitations);
+                limitations.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
             candidates.Add(candidate);
 
             AddGap(gaps, maxGaps, ref truncated, Gap(
                 "AccessCopyCloneRoleDirectionUnavailable", "candidate", candidate.CandidateId, flow.CommitSha, fact, supportingFactIds: supportingFacts));
-            if (queryKind is "append" or "make-table" or "bulk" or "compound")
+            if (queryKind is "append" or "make-table" or "bulk" or "compound"
+                && !actionFacts.Any(action => action.Properties.GetValueOrDefault("coverageLabel") == "complete"))
                 AddGap(gaps, maxGaps, ref truncated, Gap(
                     "AccessCopyCloneFieldCorrespondenceUnavailable", "candidate", candidate.CandidateId, flow.CommitSha, fact, supportingFactIds: supportingFacts));
             if (paths.Length == 0)

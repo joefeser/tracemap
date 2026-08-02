@@ -4,13 +4,17 @@ using TraceMap.Core;
 
 namespace TraceMap.Access;
 
-internal sealed record AccessRawVbaModule(string Name, string ModuleKind, string Source);
+internal sealed record AccessRawVbaModule(string Name, string ModuleKind, string? Source, string? SourceHash = null, int? DeclaredLineCount = null);
 
 internal sealed record AccessRawEventProcedureReference(
     string OwnerStableKey,
     string EventRole,
     string ModuleName,
-    string ProcedureName);
+    string ProcedureName,
+    string OwnerKind = "unknown",
+    string BindingKind = "event-procedure",
+    string? EventExpressionHash = null,
+    int EventExpressionLength = 0);
 
 internal sealed record AccessVbaProjectionResult(
     IReadOnlyList<AccessVbaModuleProjection> Modules,
@@ -35,6 +39,8 @@ internal static partial class AccessVbaProjector
         IReadOnlyList<AccessRawVbaModule> rawModules,
         IReadOnlyList<AccessRawEventProcedureReference>? eventReferences = null,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? knownObjects = null,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? fieldsByTable = null,
+        IReadOnlyDictionary<string, AccessRowSourceBindingProjection>? rowSourceContexts = null,
         AccessLimits? limits = null,
         AccessIdentityDisclosurePolicy disclosurePolicy = AccessIdentityDisclosurePolicy.SafeIdentifier)
     {
@@ -46,6 +52,19 @@ internal static partial class AccessVbaProjector
                      .ThenBy(item => AccessSafeValues.RoleHash("access-vba-module-sort", item.Name), StringComparer.Ordinal)
                      .Take(limits.MaxObjectsPerCollection))
         {
+            if (raw.Source is null)
+            {
+                var unavailableIdentity = AccessSafeValues.Identity(databaseIdentitySeed, "vba-module", raw.Name, disclosurePolicy: disclosurePolicy);
+                gaps.Add(new("AccessVbaModuleSourceUnavailable", "vba-module", unavailableIdentity.StableKey, RuleIds.LegacyAccessVba));
+                modules.Add(new(raw.Name, new(
+                    unavailableIdentity,
+                    NormalizeModuleKind(raw.ModuleKind),
+                    raw.SourceHash ?? AccessSafeValues.RoleHash("access-vba-module-source", string.Empty),
+                    raw.DeclaredLineCount ?? 0,
+                    [],
+                    "partial"), []));
+                continue;
+            }
             if (raw.Source.Length > limits.MaxVbaModuleTextLength)
             {
                 gaps.Add(new("AccessVbaModuleTextLimitReached", "vba-module", null, RuleIds.LegacyAccessVba));
@@ -65,7 +84,8 @@ internal static partial class AccessVbaProjector
             var procedures = procedureWork
                 .Select(work => work.Projection with
                 {
-                    Calls = ProjectCalls(databaseIdentitySeed, moduleIdentity, work, procedureWork, lines, knownObjects, limits, gaps, disclosurePolicy)
+                    Calls = ProjectCalls(databaseIdentitySeed, moduleIdentity, work, procedureWork, lines, knownObjects, limits, gaps, disclosurePolicy),
+                    Effects = ProjectEffects(databaseIdentitySeed, raw.Name, work, lines, disclosurePolicy, knownObjects, fieldsByTable, rowSourceContexts, gaps)
                 })
                 .ToArray();
             var updatedWork = procedureWork.Zip(procedures, (work, projection) => work with { Projection = projection }).ToArray();
@@ -74,7 +94,7 @@ internal static partial class AccessVbaProjector
                 new(
                     moduleIdentity,
                     NormalizeModuleKind(raw.ModuleKind),
-                    AccessSafeValues.RoleHash("access-vba-module-source", raw.Source),
+                    raw.SourceHash ?? AccessSafeValues.RoleHash("access-vba-module-source", raw.Source),
                     lines.Length,
                     procedures,
                     procedures.Any(procedure => procedure.Calls.Any(call => call.Coverage != "complete"))
@@ -239,6 +259,198 @@ internal static partial class AccessVbaProjector
             .ToArray();
     }
 
+    private static IReadOnlyList<AccessVbaEffectProjection> ProjectEffects(
+        string databaseIdentitySeed,
+        string moduleName,
+        ProcedureWork procedure,
+        string[] lines,
+        AccessIdentityDisclosurePolicy disclosurePolicy,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? knownObjects,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? fieldsByTable,
+        IReadOnlyDictionary<string, AccessRowSourceBindingProjection>? rowSourceContexts,
+        List<AccessGapProjection> gaps)
+    {
+        var effects = new List<AccessVbaEffectProjection>();
+        var conditions = new Stack<(string Hash, int Length, string Text, int Alternative)>();
+        for (var index = procedure.BodyStartIndex; index <= procedure.BodyEndIndex && index < lines.Length; index++)
+        {
+            var source = CodeWithoutComment(lines[index]);
+            var masked = MaskCommentsAndStrings(lines[index]);
+            var trimmed = masked.Trim();
+            (string Hash, int Length, string Text, int Alternative)? inlineCondition = null;
+            if (trimmed.Length == 0) continue;
+            if (EndIfPattern().IsMatch(trimmed))
+            {
+                if (conditions.Count > 0) conditions.Pop();
+                continue;
+            }
+            if (ElsePattern().IsMatch(trimmed))
+            {
+                if (conditions.Count > 0)
+                {
+                    var prior = conditions.Pop();
+                    var alternateText = $"Else({prior.Text})";
+                    conditions.Push((AccessSafeValues.RoleHash("access-vba-condition", alternateText), alternateText.Length, alternateText, prior.Alternative + 1));
+                }
+                continue;
+            }
+            var elseIf = ElseIfPattern().Match(trimmed);
+            if (elseIf.Success)
+            {
+                var priorAlternative = conditions.Count > 0 ? conditions.Pop().Alternative : -1;
+                var alternateText = source.Trim();
+                conditions.Push((AccessSafeValues.RoleHash("access-vba-condition", alternateText), alternateText.Length, alternateText, priorAlternative + 1));
+                continue;
+            }
+            var condition = IfConditionPattern().Match(trimmed);
+            if (condition.Success)
+            {
+                var conditionText = source.Trim();
+                if (trimmed.EndsWith("Then", StringComparison.OrdinalIgnoreCase))
+                    conditions.Push((AccessSafeValues.RoleHash("access-vba-condition", conditionText), conditionText.Length, conditionText, 0));
+                else
+                {
+                    var thenOffset = source.IndexOf("Then", StringComparison.OrdinalIgnoreCase);
+                    var maskedThenOffset = masked.IndexOf("Then", StringComparison.OrdinalIgnoreCase);
+                    if (thenOffset < 0 || maskedThenOffset < 0) continue;
+                    source = source[(thenOffset + 4)..].TrimStart();
+                    masked = masked[(maskedThenOffset + 4)..].TrimStart();
+                    inlineCondition = (AccessSafeValues.RoleHash("access-vba-condition", conditionText), conditionText.Length, conditionText, 0);
+                }
+                if (inlineCondition is null) continue;
+            }
+
+            var line = index + 1;
+            var activeCondition = inlineCondition ?? (conditions.Count > 0 ? conditions.Peek() : ((string Hash, int Length, string Text, int Alternative)?)null);
+            foreach (Match match in RowSourceAssignmentPattern().Matches(masked))
+            {
+                var targetName = match.Groups["name"].Value;
+                var target = AccessSafeValues.Identity(databaseIdentitySeed, "vba-control-state-target", targetName, disclosurePolicy: disclosurePolicy);
+                var argument = ArgumentAt(source, match.Index + match.Length, 0);
+                var literal = TryExactStringLiteral(argument, out var sql) ? sql : null;
+                AccessQueryStaticProjection? projection = null;
+                AccessRowSourceBindingProjection? binding = null;
+                var coverage = "partial";
+                if (literal is not null && knownObjects is not null && fieldsByTable is not null)
+                {
+                    projection = AccessQueryProjector.ProjectStaticSelect(literal, knownObjects, fieldsByTable);
+                    coverage = projection.Coverage;
+                    if (coverage != "complete")
+                        gaps.Add(new("AccessVbaRowSourceProjectionPartial", "vba-effect", target.StableKey, RuleIds.LegacyAccessVba));
+                    if (rowSourceContexts is not null
+                        && TryGetRowSourceContext(rowSourceContexts, moduleName, targetName, out var context))
+                    {
+                        var selected = context.BoundColumn is > 0 && context.BoundColumn.Value <= projection.Outputs.Count
+                            ? projection.Outputs[context.BoundColumn.Value - 1].SourceFieldStableKeys
+                            : [];
+                        binding = context with
+                        {
+                            SelectedValueFieldStableKeys = selected,
+                            Coverage = selected.Count > 0 ? context.Coverage : "partial"
+                        };
+                        if (binding.Coverage != "complete")
+                        {
+                            coverage = "partial";
+                            gaps.Add(new("AccessVbaRowSourceContextPartial", "vba-effect", target.StableKey, RuleIds.LegacyAccessVba));
+                        }
+                    }
+                    else
+                    {
+                        coverage = "partial";
+                        gaps.Add(new("AccessVbaRowSourceContextUnavailable", "vba-effect", target.StableKey, RuleIds.LegacyAccessVba));
+                    }
+                }
+                else if (literal is not null)
+                {
+                    gaps.Add(new("AccessVbaRowSourceProjectionInputsMissing", "vba-effect", target.StableKey, RuleIds.LegacyAccessVba));
+                }
+                else
+                {
+                    gaps.Add(new("AccessVbaRowSourceDynamic", "vba-effect", target.StableKey, RuleIds.LegacyAccessVba));
+                }
+                effects.Add(NewEffect(databaseIdentitySeed, procedure, effects.Count, "row-source-assignment", line, target,
+                    argument ?? string.Empty,
+                    activeCondition is null ? null : (activeCondition.Value.Hash, activeCondition.Value.Length),
+                    disclosurePolicy, coverage, projection, binding,
+                    activeCondition?.Alternative ?? 0));
+            }
+            foreach (Match match in MeStateAssignmentPattern().Matches(masked))
+            {
+                var target = AccessSafeValues.Identity(databaseIdentitySeed, "vba-control-state-target", match.Groups["name"].Value, disclosurePolicy: disclosurePolicy);
+                var expression = source[(source.IndexOf('=') + 1)..].Trim();
+                effects.Add(NewEffect(databaseIdentitySeed, procedure, effects.Count, "control-state-assignment", line, target,
+                    expression, activeCondition is null ? null : (activeCondition.Value.Hash, activeCondition.Value.Length), disclosurePolicy));
+            }
+            if (MeRequeryPattern().IsMatch(masked))
+                effects.Add(NewEffect(databaseIdentitySeed, procedure, effects.Count, "surface-requery", line, null, string.Empty,
+                    activeCondition is null ? null : (activeCondition.Value.Hash, activeCondition.Value.Length), disclosurePolicy));
+            if (SaveCurrentRecordPattern().IsMatch(masked))
+                effects.Add(NewEffect(databaseIdentitySeed, procedure, effects.Count, "save-current-record-command", line, null,
+                    source.Trim(), activeCondition is null ? null : (activeCondition.Value.Hash, activeCondition.Value.Length), disclosurePolicy));
+            else if (RunCommandPattern().IsMatch(masked))
+                gaps.Add(new("AccessVbaCommandDynamic", "vba-effect", procedure.Projection.Identity.StableKey, RuleIds.LegacyAccessVba));
+            foreach (Match match in FormsReferencePattern().Matches(masked))
+            {
+                var argument = ArgumentAt(source, match.Index + match.Length, 0);
+                var target = TryExactStringLiteral(argument, out var literal)
+                    ? AccessSafeValues.Identity(databaseIdentitySeed, "vba-form-reference-target", literal, disclosurePolicy: disclosurePolicy)
+                    : null;
+                effects.Add(NewEffect(databaseIdentitySeed, procedure, effects.Count, "forms-reference", line, target,
+                    argument ?? string.Empty,
+                    activeCondition is null ? null : (activeCondition.Value.Hash, activeCondition.Value.Length),
+                    disclosurePolicy, target is null ? "partial" : "complete"));
+            }
+        }
+        return effects.OrderBy(item => item.StartLine).ThenBy(item => item.EffectKind, StringComparer.Ordinal).ToArray();
+    }
+
+    private static bool TryGetRowSourceContext(
+        IReadOnlyDictionary<string, AccessRowSourceBindingProjection> contexts,
+        string moduleName,
+        string controlName,
+        out AccessRowSourceBindingProjection context)
+    {
+        var controlHash = AccessSafeValues.RoleHash("access-control-name", controlName);
+        var names = new[] { moduleName,
+                moduleName.StartsWith("Form_", StringComparison.OrdinalIgnoreCase) ? moduleName[5..]
+                : moduleName.StartsWith("Report_", StringComparison.OrdinalIgnoreCase) ? moduleName[7..]
+                : moduleName };
+        foreach (var name in names)
+            if (contexts.TryGetValue(name + "|" + controlHash, out context!)) return true;
+        context = null!;
+        return false;
+    }
+
+    private static AccessVbaEffectProjection NewEffect(
+        string seed,
+        ProcedureWork procedure,
+        int ordinal,
+        string kind,
+        int line,
+        AccessSafeIdentity? target,
+        string expression,
+        (string Hash, int Length)? condition,
+        AccessIdentityDisclosurePolicy disclosurePolicy,
+        string coverage = "complete",
+        AccessQueryStaticProjection? rowSourceProjection = null,
+        AccessRowSourceBindingProjection? rowSourceBinding = null,
+        int? branchOrder = null) =>
+        new(
+            AccessSafeValues.Identity(seed, $"vba-effect-{procedure.Projection.Identity.StableKey}", $"{kind}-{line}", ordinal, disclosurePolicy),
+            procedure.Projection.Identity.StableKey,
+            kind,
+            line,
+            line,
+            target,
+            expression.Length == 0 ? null : AccessSafeValues.RoleHash($"access-vba-{kind}-expression", expression),
+            expression.Length,
+            condition?.Hash,
+            condition?.Length ?? 0,
+            coverage,
+            rowSourceProjection,
+            branchOrder,
+            rowSourceBinding);
+
     private static void AddLiteralTargetCall(
         string databaseIdentitySeed,
         ProcedureWork procedure,
@@ -337,11 +549,39 @@ internal static partial class AccessVbaProjector
             var moduleStableKey = moduleCandidates.Length == 1
                 ? moduleCandidates[0].Projection.Identity.StableKey
                 : AccessSafeValues.Identity(databaseIdentitySeed, "vba-event-module-target", reference.ModuleName, disclosurePolicy: disclosurePolicy).StableKey;
-            var procedureStableKey = procedureCandidates.Length == 1 ? procedureCandidates[0].Procedure.Projection.Identity.StableKey : null;
+            var procedure = procedureCandidates.Length == 1 ? procedureCandidates[0].Procedure.Projection : null;
+            var procedureStableKey = procedure?.Identity.StableKey;
+            var moduleResolved = moduleCandidates.Length == 1;
+            var classification = moduleCandidates.Length switch
+            {
+                0 when reference.BindingKind == "dynamic-event-expression" => "unsupported-dynamic-target",
+                0 => "declared-handler-missing",
+                > 1 => "ambiguous",
+                _ => procedureCandidates.Length switch
+                {
+                    1 when reference.BindingKind == "event-procedure" => "resolved",
+                    1 when reference.BindingKind == "expression-function" => "expression-handler",
+                    1 => "resolved",
+                    > 1 => "ambiguous",
+                    _ when reference.BindingKind == "dynamic-event-expression" => "unsupported-dynamic-target",
+                    _ => "declared-handler-missing"
+                }
+            };
+            var command = procedure?.Effects?.FirstOrDefault(effect => effect.EffectKind == "save-current-record-command");
             result.Add(new(reference.OwnerStableKey, reference.EventRole, moduleStableKey, procedureStableKey,
-                procedureCandidates.Length == 1 ? "complete" : "partial"));
-            if (procedureCandidates.Length != 1)
-                gaps.Add(new(procedureCandidates.Length == 0 ? "AccessEventProcedureUnresolved" : "AccessEventProcedureAmbiguous",
+                moduleResolved && procedureCandidates.Length == 1 ? "complete" : "partial",
+                reference.OwnerKind, reference.BindingKind, reference.EventExpressionHash, reference.EventExpressionLength,
+                procedure?.StartLine ?? 0, procedure?.EndLine ?? 0, classification,
+                command is null ? null : "save-current-record",
+                command?.Coverage,
+                command?.ExpressionHash,
+                command?.ExpressionLength ?? 0,
+                command?.StartLine ?? 0,
+                command?.EndLine ?? 0));
+            if (moduleCandidates.Length != 1 || procedureCandidates.Length != 1)
+                gaps.Add(new(moduleCandidates.Length == 0 || procedureCandidates.Length == 0
+                        ? "AccessEventProcedureUnresolved"
+                        : "AccessEventProcedureAmbiguous",
                     "event-binding", reference.OwnerStableKey, RuleIds.LegacyAccessEventBinding));
         }
         return result.OrderBy(item => item.OwnerStableKey, StringComparer.Ordinal).ThenBy(item => item.EventRole, StringComparer.Ordinal).ToArray();
@@ -471,7 +711,7 @@ internal static partial class AccessVbaProjector
 
     private static readonly HashSet<string> AllowedEventRoles = new(StringComparer.Ordinal)
     {
-        "after-update", "before-update", "on-click", "on-current", "on-dbl-click", "on-load", "on-no-data", "on-open"
+        "after-update", "on-activate", "before-update", "on-click", "on-close", "on-current", "on-deactivate", "on-dbl-click", "on-error", "on-load", "on-no-data", "on-open", "on-resize", "on-timer", "on-unload"
     };
 
     [GeneratedRegex(@"^\s*(?:(?:Public|Private|Friend|Static)\s+)?(?<kind>Sub|Function|Property\s+(?:Get|Let|Set))\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
@@ -497,6 +737,36 @@ internal static partial class AccessVbaProjector
 
     [GeneratedRegex(@"\bCall\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ExplicitLocalCallPattern();
+
+    [GeneratedRegex(@"^\s*If\s+.+?\s+Then\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex IfConditionPattern();
+
+    [GeneratedRegex(@"^\s*End\s+If\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex EndIfPattern();
+
+    [GeneratedRegex(@"^\s*Else\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ElsePattern();
+
+    [GeneratedRegex(@"^\s*ElseIf\s+.+?\s+Then\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ElseIfPattern();
+
+    [GeneratedRegex(@"\bMe\s*\.\s*(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*(?:Visible|Enabled|Locked|Caption)\s*=", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex MeStateAssignmentPattern();
+
+    [GeneratedRegex(@"\bMe\s*\.\s*(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*RowSource\s*=", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex RowSourceAssignmentPattern();
+
+    [GeneratedRegex(@"\bMe\s*\.\s*Requery\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex MeRequeryPattern();
+
+    [GeneratedRegex(@"\bDoCmd\s*\.\s*RunCommand\s*(?:\(\s*)?\bacCmdSaveRecord\b\s*\)?\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex SaveCurrentRecordPattern();
+
+    [GeneratedRegex(@"\bDoCmd\s*\.\s*RunCommand\b(?:\s*\(|\s+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex RunCommandPattern();
+
+    [GeneratedRegex(@"\bForms\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex FormsReferencePattern();
 
     [GeneratedRegex("^\\s*\"(?<value>(?:\"\"|[^\"])*)\"\\s*$", RegexOptions.CultureInvariant)]
     private static partial Regex ExactStringLiteralPattern();

@@ -10,6 +10,27 @@ namespace TraceMap.Tests;
 [Collection("AccessGitEnvironment")]
 public sealed class AccessFoundationTests
 {
+    [Fact]
+    public void Conflicting_query_kinds_are_omitted_independently_of_input_order()
+    {
+        var first = AccessDesignEvidenceComposer.BuildConsistentQueryKinds(
+            [("query-a", "select"), ("query-a", "crosstab"), ("query-b", "select")]);
+        var second = AccessDesignEvidenceComposer.BuildConsistentQueryKinds(
+            [("query-b", "select"), ("query-a", "crosstab"), ("query-a", "select")]);
+
+        Assert.Equal(first, second);
+        Assert.False(first.ContainsKey("query-a"));
+        Assert.Equal("select", first["query-b"]);
+    }
+
+    [Fact]
+    public void Wildcard_projection_detection_is_limited_to_projection_items()
+    {
+        Assert.True(AccessQueryProjector.HasWildcardProjection("SELECT * FROM Orders"));
+        Assert.True(AccessQueryProjector.HasWildcardProjection("SELECT Orders.* FROM Orders"));
+        Assert.False(AccessQueryProjector.HasWildcardProjection("SELECT OrderId FROM Orders WHERE Note='*'"));
+    }
+
     private const string SecretMarker = "Password_ProdVault_92817";
     private const string SqlMarker = "SELECT * FROM PayrollSecrets_92817";
     private const string ConnectionMarker = "ODBC;DSN=PrivateLedger_92817;PWD=NeverPersistThis";
@@ -129,6 +150,415 @@ public sealed class AccessFoundationTests
         Assert.False(AccessQueryProjector.IsDirectOutputField(
             "SELECT Count(Orders.OrderId) AS OrderCount FROM Orders;",
             "OrderCount"));
+
+        Assert.True(AccessQueryProjector.HasStaticOutputName(
+            "SELECT Orders.OrderId AS Identifier, Total: Sum(Orders.Amount) FROM Orders;",
+            "Identifier"));
+        Assert.True(AccessQueryProjector.HasStaticOutputName(
+            "SELECT Orders.OrderId AS Identifier, Total: Sum(Orders.Amount) FROM Orders;",
+            "Total"));
+        Assert.False(AccessQueryProjector.HasStaticOutputName(
+            "SELECT Orders.OrderId AS Identifier FROM Orders;",
+            "Missing"));
+    }
+
+    [Fact]
+    public void Query_projector_projects_append_field_correspondence_without_retaining_sql()
+    {
+        var sourceField = new AccessSafeIdentity(null, "source-name", "field-source");
+        var targetField = new AccessSafeIdentity(null, "target-name", "field-target");
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SourceTable"] = [("table-source", "table")],
+            ["TargetTable"] = [("table-target", "table")]
+        };
+        var fields = new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+        {
+            ["table-source"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SourceId"] = [new(sourceField, 0, "long", 4, true)]
+            },
+            ["table-target"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["TargetId"] = [new(targetField, 0, "long", 4, true)]
+            }
+        };
+
+        var projected = AccessQueryProjector.ProjectActionLineage(
+            "INSERT INTO TargetTable (TargetId) SELECT SourceId FROM SourceTable WHERE SourceId = [pId];",
+            "append", known, fields);
+
+        Assert.Equal("table-target", projected.TargetStableKey);
+        Assert.Equal(["field-target"], projected.TargetFieldStableKeys);
+        var mapping = Assert.Single(projected.FieldMappings);
+        Assert.Equal(["field-source"], mapping.SourceFieldStableKeys);
+        Assert.Equal("field-target", mapping.TargetFieldStableKey);
+        Assert.Equal("complete", mapping.Coverage);
+        Assert.NotNull(projected.PredicateExpressionHash);
+        Assert.DoesNotContain("INSERT", JsonSerializer.Serialize(projected), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Query_projector_preserves_unresolved_append_target_ordinals()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SourceTable"] = [("table-source", "table")],
+            ["TargetTable"] = [("table-target", "table")]
+        };
+        var fields = new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+        {
+            ["table-source"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SourceA"] = [new(new(null, "source-a", "field-source-a"), 0, "long", 4, false)],
+                ["SourceB"] = [new(new(null, "source-b", "field-source-b"), 1, "long", 4, false)]
+            },
+            ["table-target"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["KnownField"] = [new(new(null, "known", "field-known"), 0, "long", 4, false)]
+            }
+        };
+
+        var projected = AccessQueryProjector.ProjectActionLineage(
+            "INSERT INTO TargetTable (UnknownField, KnownField) SELECT SourceA, SourceB FROM SourceTable;",
+            "append", known, fields);
+
+        Assert.Equal(["", "field-known"], projected.TargetFieldStableKeys);
+        Assert.Equal("partial", projected.FieldMappings[0].Coverage);
+        Assert.Equal("field-known", projected.FieldMappings[1].TargetFieldStableKey);
+        Assert.Equal(["field-source-b"], projected.FieldMappings[1].SourceFieldStableKeys);
+    }
+
+    [Fact]
+    public void Query_projector_keeps_partially_resolved_action_expressions_partial_and_source_scoped()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SourceTable"] = [("table-source", "table")],
+            ["UnrelatedTable"] = [("table-unrelated", "table")],
+            ["TargetTable"] = [("table-target", "table")]
+        };
+        var fields = new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+        {
+            ["table-source"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SourceId"] = [new(new(null, "source", "field-source"), 0, "long", 4, false)]
+            },
+            ["table-unrelated"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["MissingId"] = [new(new(null, "unrelated", "field-unrelated"), 0, "long", 4, false)]
+            },
+            ["table-target"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["TargetId"] = [new(new(null, "target", "field-target"), 0, "long", 4, false)]
+            }
+        };
+
+        var projected = AccessQueryProjector.ProjectActionLineage(
+            "INSERT INTO TargetTable (TargetId) SELECT SourceId + MissingId FROM SourceTable;",
+            "append",
+            known,
+            fields);
+
+        var mapping = Assert.Single(projected.FieldMappings);
+        Assert.Equal(["field-source"], mapping.SourceFieldStableKeys);
+        Assert.DoesNotContain("field-unrelated", mapping.SourceFieldStableKeys);
+        Assert.Equal("partial", mapping.Coverage);
+        Assert.Equal("partial", projected.Coverage);
+    }
+
+    [Fact]
+    public void Query_projector_projects_bounded_crosstab_shape_and_keeps_dynamic_pivots_partial()
+    {
+        var field = new AccessSafeIdentity(null, "row-name", "field-row");
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Events"] = [("table-events", "table")]
+        };
+        var fields = new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+        {
+            ["table-events"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Category"] = [new(field, 0, "text", 64, false)],
+                ["Amount"] = [new(new(null, "amount", "field-amount"), 1, "decimal", 16, false)],
+                ["Month"] = [new(new(null, "month", "field-month"), 2, "text", 16, false)]
+            }
+        };
+
+        var staticShape = AccessQueryProjector.ProjectCrosstabLineage(
+            "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan','Feb');",
+            known, fields);
+        var dynamicShape = AccessQueryProjector.ProjectCrosstabLineage(
+            "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month;",
+            known, fields);
+        var alternateStaticShape = AccessQueryProjector.ProjectCrosstabLineage(
+            "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN (\"Q1\",2025);",
+            known, fields);
+        var partiallyResolvedRows = AccessQueryProjector.ProjectCrosstabLineage(
+            "TRANSFORM Sum(Events.Amount) SELECT Events.Category, MissingCategory FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
+            known, fields);
+        var unsupportedFunction = AccessQueryProjector.ProjectCrosstabLineage(
+            "TRANSFORM Sum(CustomNormalize(Events.Amount)) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
+            known, fields);
+
+        Assert.Equal(["field-row"], staticShape.RowHeadingFieldStableKeys);
+        Assert.Equal(2, staticShape.StaticColumnHashes.Count);
+        Assert.NotEqual(staticShape.AggregateExpressionHash, staticShape.ValueExpressionHash);
+        Assert.Equal("complete", staticShape.Coverage);
+        Assert.Equal(2, alternateStaticShape.StaticColumnHashes.Count);
+        Assert.Equal("partial", partiallyResolvedRows.Coverage);
+        Assert.Equal("partial", unsupportedFunction.Coverage);
+        Assert.Empty(dynamicShape.StaticColumnHashes);
+        Assert.Equal("partial", dynamicShape.Coverage);
+    }
+
+    [Fact]
+    public void Com_reader_labels_crosstab_lineage_as_not_yet_composed_downstream()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "MonthlyTotals");
+        var database = new FakeDaoDatabase(new FakeDaoQuery(
+            "MonthlyTotals",
+            "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
+            16));
+        var gaps = new List<AccessGapProjection>();
+
+        _ = new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["MonthlyTotals"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal),
+            gaps,
+            []);
+
+        Assert.Contains(gaps, gap =>
+            gap.Classification == "AccessQueryCrosstabDownstreamCompositionUnavailable"
+            && gap.StableScopeKey == queryIdentity.StableKey
+            && gap.RuleId == RuleIds.LegacyAccessQuery);
+    }
+
+    [Fact]
+    public void Query_projector_preserves_update_and_delete_targets_with_predicate_hashes()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["TargetTable"] = [("table-target", "table")]
+        };
+        var fields = new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+        {
+            ["table-target"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Status"] = [new(new(null, "status", "field-status"), 0, "text", 32, false)],
+                ["Id"] = [new(new(null, "id", "field-id"), 1, "long", 4, true)]
+            }
+        };
+
+        var update = AccessQueryProjector.ProjectActionLineage(
+            "UPDATE TargetTable SET Status = 'Ready' WHERE Id = [pId];", "update", known, fields);
+        var unresolvedUpdate = AccessQueryProjector.ProjectActionLineage(
+            "UPDATE TargetTable SET Status = MissingField WHERE Id = [pId];", "update", known, fields);
+        var delete = AccessQueryProjector.ProjectActionLineage(
+            "DELETE FROM TargetTable WHERE Id = [pId];", "delete", known, fields);
+
+        Assert.Equal("table-target", update.TargetStableKey);
+        Assert.Equal("field-status", Assert.Single(update.FieldMappings).TargetFieldStableKey);
+        Assert.NotNull(update.PredicateExpressionHash);
+        Assert.Equal("partial", unresolvedUpdate.Coverage);
+        Assert.Equal("partial", Assert.Single(unresolvedUpdate.FieldMappings).Coverage);
+        Assert.Equal("table-target", delete.TargetStableKey);
+        Assert.NotNull(delete.PredicateExpressionHash);
+    }
+
+    [Fact]
+    public void Query_projector_marks_unsupported_action_predicates_partial_and_accepts_constant_static_predicates()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["TargetTable"] = [("table-target", "table")]
+        };
+        var actionFields = new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+        {
+            ["table-target"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Id"] = [new(new(null, "id", "field-id"), 0, "long", 4, true)]
+            }
+        };
+
+        var unsupported = AccessQueryProjector.ProjectActionLineage(
+            "DELETE FROM TargetTable WHERE Eval(Id);", "delete", known, actionFields);
+
+        Assert.Equal("partial", unsupported.Coverage);
+        Assert.NotNull(unsupported.PredicateExpressionHash);
+
+        var staticFields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            ["table-target"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Id"] = ["field-id"]
+            }
+        };
+        var constant = AccessQueryProjector.ProjectStaticSelect(
+            "SELECT TargetTable.Id FROM TargetTable WHERE 1=1;", known, staticFields);
+
+        Assert.Equal("complete", constant.Coverage);
+        Assert.Equal(AccessSafeValues.RoleHash("access-query-predicate", "1=1"), constant.PredicateHash);
+    }
+
+    [Fact]
+    public void Query_projector_keeps_unsupported_order_by_functions_partial()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SourceTable"] = [("table-source", "table")]
+        };
+        var fields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            ["table-source"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Id"] = ["field-id"]
+            }
+        };
+
+        var projected = AccessQueryProjector.ProjectStaticSelect(
+            "SELECT SourceTable.Id FROM SourceTable ORDER BY CustomSort(SourceTable.Id);",
+            known,
+            fields);
+
+        Assert.Equal("partial", projected.Coverage);
+        Assert.Single(projected.FunctionNameHashes);
+        Assert.Equal(
+            AccessSafeValues.RoleHash("access-query-function-name", "CustomSort"),
+            projected.FunctionNameHashes[0]);
+    }
+
+    [Fact]
+    public void Query_projector_resolves_saved_query_output_fields_for_action_and_crosstab_lineage()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SourceQuery"] = [("query-source", "query")],
+            ["TargetTable"] = [("table-target", "table")]
+        };
+        var fields = new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+        {
+            ["query-source"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SourceId"] = [new(new(null, "source-id", "query-field-source-id"), 0, "query-output", 0, false)],
+                ["Amount"] = [new(new(null, "amount", "query-field-amount"), 1, "query-output", 0, false)],
+                ["Month"] = [new(new(null, "month", "query-field-month"), 2, "query-output", 0, false)]
+            },
+            ["table-target"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["TargetId"] = [new(new(null, "target-id", "field-target-id"), 0, "long", 4, true)]
+            }
+        };
+
+        var action = AccessQueryProjector.ProjectActionLineage(
+            "INSERT INTO TargetTable (TargetId) SELECT SourceQuery.SourceId FROM SourceQuery;",
+            "append", known, fields);
+        var crosstab = AccessQueryProjector.ProjectCrosstabLineage(
+            "TRANSFORM Sum(SourceQuery.Amount) SELECT SourceQuery.SourceId FROM SourceQuery GROUP BY SourceQuery.SourceId PIVOT SourceQuery.Month IN ('Jan');",
+            known, fields);
+
+        Assert.Equal("complete", action.Coverage);
+        Assert.Equal(["query-field-source-id"], Assert.Single(action.FieldMappings).SourceFieldStableKeys);
+        Assert.Equal("complete", crosstab.Coverage);
+        Assert.Equal(["query-field-source-id"], crosstab.RowHeadingFieldStableKeys);
+    }
+
+    [Fact]
+    public void Com_reader_preloads_saved_query_output_fields_before_action_lineage_projection()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var sourceQuery = AccessSafeValues.Identity(seed, "query", "SourceQuery");
+        var appendQuery = AccessSafeValues.Identity(seed, "query", "AppendQuery");
+        var targetTable = AccessSafeValues.Identity(seed, "table", "TargetTable");
+        var targetField = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{targetTable.StableKey}", "TargetId"),
+            0,
+            "long",
+            4,
+            true);
+        var appendDefinition = new FakeDaoQuery(
+                "AppendQuery",
+                "INSERT INTO TargetTable (TargetId) SELECT SourceQuery.SourceId FROM SourceQuery;",
+                64);
+        var sourceDefinition = new FakeDaoQuery(
+                "SourceQuery",
+                "SELECT SourceId FROM SourceTable;",
+                new FakeDaoField("SourceId"));
+        var database = new FakeDaoDatabase(appendDefinition, sourceDefinition);
+        var identities = new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["AppendQuery"] = appendQuery,
+            ["SourceQuery"] = sourceQuery
+        };
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["AppendQuery"] = [(appendQuery.StableKey, "query")],
+            ["SourceQuery"] = [(sourceQuery.StableKey, "query")],
+            ["TargetTable"] = [(targetTable.StableKey, "table")]
+        };
+        var targetProjection = new AccessTableProjection(targetTable, [targetField], []);
+        var gaps = new List<AccessGapProjection>();
+
+        var queries = new AccessComReader().ReadQueries(
+            database,
+            seed,
+            identities,
+            known,
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["TargetTable"] = [targetProjection]
+            },
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+            {
+                [targetTable.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["TargetId"] = [targetField]
+                }
+            },
+            gaps,
+            []);
+
+        var action = queries.Single(query => query.Identity == appendQuery).ActionLineage;
+        Assert.NotNull(action);
+        Assert.Equal("partial", action!.Coverage);
+        Assert.Empty(Assert.Single(action.FieldMappings).SourceFieldStableKeys);
+        Assert.Contains(gaps, gap =>
+            gap.Classification == "AccessQueryActionLineagePartial"
+            && gap.StableScopeKey == appendQuery.StableKey);
+        Assert.Equal(1, sourceDefinition.FieldsReadCount);
+        Assert.Equal(0, appendDefinition.FieldsReadCount);
+    }
+
+    [Fact]
+    public void Query_projector_hashes_declared_output_names_instead_of_select_expressions()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["TargetTable"] = [("table-target", "table")]
+        };
+        var fields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            ["table-target"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Id"] = ["field-id"]
+            }
+        };
+
+        var projection = AccessQueryProjector.ProjectStaticSelect(
+            "SELECT TargetTable.Id AS Identifier, Abs(TargetTable.Id) FROM TargetTable;", known, fields);
+
+        Assert.Equal(AccessSafeValues.RoleHash("access-query-output-name", "Identifier"), projection.Outputs[0].NameHash);
+        Assert.Null(projection.Outputs[1].NameHash);
+        Assert.True(AccessQueryProjector.HasStaticOutputName(
+            "SELECT TargetTable.Id AS Identifier FROM TargetTable;", "Identifier"));
     }
 
     [Fact]
@@ -1297,13 +1727,34 @@ public sealed class AccessFoundationTests
         public FakeDaoCollection<FakeDaoQuery> QueryDefs { get; } = new(queries);
     }
 
-    public sealed class FakeDaoQuery(string name, string sql, params FakeDaoField[] fields)
+    public sealed class FakeDaoQuery
     {
-        public string Name { get; } = name;
-        public int Type => 0;
-        public string SQL { get; } = sql;
+        private readonly FakeDaoCollection<FakeDaoField> _fields;
+
+        public FakeDaoQuery(string name, string sql, params FakeDaoField[] fields)
+            : this(name, sql, 0, fields) { }
+
+        public FakeDaoQuery(string name, string sql, int type, params FakeDaoField[] fields)
+        {
+            Name = name;
+            SQL = sql;
+            Type = type;
+            _fields = new(fields);
+        }
+
+        public string Name { get; }
+        public int Type { get; }
+        public string SQL { get; }
         public FakeDaoCollection<FakeDaoParameter> Parameters { get; } = new([]);
-        public FakeDaoCollection<FakeDaoField> Fields { get; } = new(fields);
+        public int FieldsReadCount { get; private set; }
+        public FakeDaoCollection<FakeDaoField> Fields
+        {
+            get
+            {
+                FieldsReadCount++;
+                return _fields;
+            }
+        }
     }
 
     public sealed class FakeDaoField(

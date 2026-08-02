@@ -37,22 +37,53 @@ internal static partial class AccessUiTextParser
         long lineCount = 0;
         long characterCount = 0;
         var sawSurfaceBlock = false;
+        string? pendingProperty = null;
 
         string? line;
-        while ((line = reader.ReadLine()) is not null)
+        string? bufferedLine = null;
+        while ((line = bufferedLine ?? reader.ReadLine()) is not null)
         {
+            bufferedLine = null;
             lineCount++;
             characterCount += line.Length + 1L;
             if (lineCount > limits.MaxUiDesignLines || characterCount > limits.MaxUiDesignTextLength)
                 throw new AccessScanException("AccessUiDesignTextLimitReached");
+            var quotedProperty = PropertyPattern().Match(line);
+            if (quotedProperty.Success && quotedProperty.Groups["value"].Value.TrimStart().StartsWith('"'))
+            {
+                while (reader.ReadLine() is { } continuation)
+                {
+                    if (!continuation.TrimStart().StartsWith('"'))
+                    {
+                        bufferedLine = continuation;
+                        break;
+                    }
+                    lineCount++;
+                    characterCount += continuation.Length + 1L;
+                    if (lineCount > limits.MaxUiDesignLines || characterCount > limits.MaxUiDesignTextLength)
+                        throw new AccessScanException("AccessUiDesignTextLimitReached");
+                    line += "\n" + continuation;
+                }
+            }
+            if (pendingProperty is not null)
+            {
+                pendingProperty += "\n" + line;
+                var pendingValue = pendingProperty[(pendingProperty.IndexOf('=') + 1)..];
+                if (!IsQuotedScalarComplete(pendingValue))
+                    continue;
+                line = pendingProperty;
+                pendingProperty = null;
+            }
             var trimmed = line.Trim();
-            if (trimmed is "CodeBehindForm" or "CodeBehindReport") break;
+            if (blocks.Count == 0 && (trimmed is "CodeBehindForm" or "CodeBehindReport")) break;
 
             var begin = BeginPattern().Match(trimmed);
             if (begin.Success)
             {
                 var block = begin.Groups["block"].Success ? begin.Groups["block"].Value : "anonymous";
                 blocks.Push(block);
+                if (blocks.Skip(1).Any(item => item == "property-opaque"))
+                    continue;
                 if (block.Equals(surfaceKind, StringComparison.OrdinalIgnoreCase)) sawSurfaceBlock = true;
                 if (control is null && TryControlType(block, out var controlType))
                 {
@@ -108,8 +139,24 @@ internal static partial class AccessUiTextParser
 
             var property = PropertyPattern().Match(line);
             if (!property.Success) continue;
+            if (blocks.Contains("property-opaque")) continue;
             var name = property.Groups["name"].Value;
             var sourceValue = property.Groups["value"].Value;
+            if (sourceValue.TrimStart().StartsWith('"') && !IsQuotedScalarComplete(sourceValue))
+            {
+                pendingProperty = line;
+                continue;
+            }
+            if (sourceValue.TrimStart().Contains('{')
+                && sourceValue.TrimEnd().EndsWith("Begin", StringComparison.OrdinalIgnoreCase))
+            {
+                blocks.Push("property-opaque");
+                gaps.Add(new(ProtectedPropertyNames.Contains(name)
+                    ? "AccessUiProtectedPropertyShapeUnsupported"
+                    : "AccessUiCompoundPropertyShapeUnsupported",
+                    control is null ? "ui-surface" : "control", null, RuleIds.LegacyAccessUiSurface));
+                continue;
+            }
             if (sourceValue.Trim().Equals("Begin", StringComparison.Ordinal))
             {
                 blocks.Push("property-value");
@@ -190,8 +237,14 @@ internal static partial class AccessUiTextParser
             }
         }
 
+        if (pendingProperty is not null)
+            gaps.Add(new("AccessUiPropertyValueMalformed", control is null ? "ui-surface" : "control", null, RuleIds.LegacyAccessUiSurface));
+
         var malformed = !sawSurfaceBlock || blocks.Count != 0
-            || gaps.Any(item => item.Classification == "AccessUiDesignTextMalformed");
+            || gaps.Any(item => item.Classification is "AccessUiDesignTextMalformed"
+                or "AccessUiProtectedPropertyShapeUnsupported"
+                or "AccessUiCompoundPropertyShapeUnsupported"
+                or "AccessUiPropertyValueMalformed");
         if (!sawSurfaceBlock || blocks.Count != 0)
             gaps.Add(new("AccessUiDesignTextMalformed", "ui-surface", null, RuleIds.LegacyAccessUiSurface));
         return new(
@@ -207,21 +260,46 @@ internal static partial class AccessUiTextParser
 
     private static string ReadScalar(string source, out bool supported)
     {
+        var parsed = ParseScalar(source);
+        supported = parsed.Supported;
+        return parsed.Value;
+    }
+
+    private static bool IsQuotedScalarComplete(string source) => ParseScalar(source).Complete;
+
+    private static ScalarParseResult ParseScalar(string source)
+    {
         var value = source.Trim();
-        if (value.Length == 0) { supported = true; return string.Empty; }
-        if (value[0] != '"') { supported = true; return value; }
+        if (value.Length == 0) return new(string.Empty, true, true);
+        if (value[0] != '"') return new(value, true, true);
         var builder = new StringBuilder(value.Length);
-        for (var index = 1; index < value.Length; index++)
+        var index = 1;
+        while (index < value.Length)
         {
             var current = value[index];
-            if (current != '"') { builder.Append(current); continue; }
-            if (index + 1 < value.Length && value[index + 1] == '"') { builder.Append('"'); index++; continue; }
-            supported = string.IsNullOrWhiteSpace(value[(index + 1)..]);
-            return supported ? builder.ToString() : string.Empty;
+            if (current == '\\' && index + 1 < value.Length && value[index + 1] == '"')
+            {
+                builder.Append('"');
+                index += 2;
+                continue;
+            }
+            if (current != '"') { builder.Append(current); index++; continue; }
+            if (index + 1 < value.Length && value[index + 1] == '"')
+            {
+                builder.Append('"');
+                index += 2;
+                continue;
+            }
+            index++;
+            while (index < value.Length && char.IsWhiteSpace(value[index])) index++;
+            if (index == value.Length) return new(builder.ToString(), true, true);
+            if (value[index] != '"') return new(string.Empty, false, false);
+            index++;
         }
-        supported = false;
-        return string.Empty;
+        return new(string.Empty, false, false);
     }
+
+    private readonly record struct ScalarParseResult(string Value, bool Supported, bool Complete);
 
     private static bool? ReadBoolean(string value) => value.Trim() switch
     {
@@ -269,13 +347,20 @@ internal static partial class AccessUiTextParser
     private static readonly Dictionary<string, string> EventRoles = new(StringComparer.Ordinal)
     {
         ["AfterUpdate"] = "after-update",
+        ["OnActivate"] = "on-activate",
         ["BeforeUpdate"] = "before-update",
         ["OnClick"] = "on-click",
+        ["OnClose"] = "on-close",
         ["OnCurrent"] = "on-current",
+        ["OnDeactivate"] = "on-deactivate",
         ["OnDblClick"] = "on-dbl-click",
+        ["OnError"] = "on-error",
         ["OnLoad"] = "on-load",
         ["OnNoData"] = "on-no-data",
-        ["OnOpen"] = "on-open"
+        ["OnOpen"] = "on-open",
+        ["OnResize"] = "on-resize",
+        ["OnTimer"] = "on-timer",
+        ["OnUnload"] = "on-unload"
     };
 
     private static readonly IReadOnlyDictionary<string, int> ControlTypes =
@@ -326,6 +411,6 @@ internal static partial class AccessUiTextParser
     [GeneratedRegex(@"^\s*(?<ordinal>[0-9]+)\s*=\s*Begin\s*$", RegexOptions.CultureInvariant)]
     private static partial Regex IndexedGroupPattern();
 
-    [GeneratedRegex(@"^\s*(?<name>[A-Za-z][A-Za-z0-9]*)\s*=\s*(?<value>.*)$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^\s*(?<name>[A-Za-z][A-Za-z0-9]*)\s*=\s*(?<value>.*)$", RegexOptions.CultureInvariant | RegexOptions.Singleline)]
     private static partial Regex PropertyPattern();
 }
