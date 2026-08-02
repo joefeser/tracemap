@@ -298,6 +298,64 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Projector_marks_control_and_scoped_field_expression_lineage_as_mixed()
+    {
+        var parsed = AccessUiTextParser.Parse(
+            new StringReader("Begin Form\nRecordSource =\"Customers\"\nBegin TextBox\nName =\"txtStartDate\"\nControlSource =\"StartDate\"\nEnd\nBegin TextBox\nName =\"txtOffset\"\nControlSource =\"=[txtStartDate]+[Days]\"\nEnd\nEnd\n"),
+            "frmCustomers",
+            "form");
+        var surface = Assert.IsType<AccessRawUiSurface>(parsed.Surface);
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('d', 40), "fixture.accdb", "hash");
+        var table = AccessSafeValues.Identity(seed, "table", "Customers");
+        var startDate = AccessSafeValues.Identity(seed, $"field-{table.StableKey}", "StartDate");
+        var days = AccessSafeValues.Identity(seed, $"field-{table.StableKey}", "Days");
+
+        var projected = AccessUiProjector.Project(
+            seed,
+            [surface],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Customers"] = [(table.StableKey, "table")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [table.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["StartDate"] = [startDate.StableKey],
+                    ["Days"] = [days.StableKey]
+                }
+            });
+
+        var binding = projected.Surfaces.Single().Controls.Single(control => control.Ordinal == 1).Bindings.Single();
+        Assert.Equal("mixed", binding.TargetKind);
+        Assert.Equal("complete", binding.Coverage);
+        Assert.Contains(days.StableKey, binding.Expression!.FieldStableKeys);
+        Assert.Single(binding.Expression.ControlStableKeys);
+    }
+
+    [Fact]
+    public void Unscoped_filter_does_not_resolve_an_identifier_by_object_name_collision()
+    {
+        var parsed = AccessUiTextParser.Parse(
+            new StringReader("Begin Form\nFilter =\"[Active]\"\nEnd\n"),
+            "frmUnbound",
+            "form");
+        var surface = Assert.IsType<AccessRawUiSurface>(parsed.Surface);
+        var projected = AccessUiProjector.Project(
+            AccessSafeValues.DatabaseIdentitySeed("repo", new string('e', 40), "fixture.accdb", "hash"),
+            [surface],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Active"] = [("query-active", "query")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal));
+
+        var binding = Assert.Single(projected.Surfaces.Single().Bindings);
+        Assert.Equal("partial", binding.Coverage);
+        Assert.DoesNotContain("query-active", binding.TargetStableKeys);
+    }
+
+    [Fact]
     public void Text_design_parser_enforces_character_and_line_limits()
     {
         var limits = AccessLimits.Default with { MaxUiDesignTextLength = 20, MaxUiDesignLines = 2 };

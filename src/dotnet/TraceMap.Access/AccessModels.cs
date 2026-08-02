@@ -205,7 +205,42 @@ public sealed record AccessExpressionProjection(
     IReadOnlyList<string> CriteriaFieldReferenceHashes,
     IReadOnlyList<string> LiteralKinds,
     string Coverage,
-    string? GapClassification = null);
+    string? GapClassification = null)
+{
+    [Obsolete("Use the constructor that preserves control, external-context, and unresolved role evidence.")]
+    public AccessExpressionProjection(
+        string classification,
+        string structureHash,
+        IReadOnlyList<string> functionNameHashes,
+        IReadOnlyList<string> operatorNameHashes,
+        IReadOnlyList<string> fieldStableKeys,
+        IReadOnlyList<string> controlReferenceHashes,
+        IReadOnlyList<string> queryStableKeys,
+        IReadOnlyList<string> selectedFieldStableKeys,
+        IReadOnlyList<string> criteriaFieldStableKeys,
+        IReadOnlyList<string> literalKinds,
+        string coverage,
+        string? gapClassification = null)
+        : this(
+            classification,
+            structureHash,
+            functionNameHashes,
+            operatorNameHashes,
+            fieldStableKeys,
+            [],
+            controlReferenceHashes,
+            [],
+            queryStableKeys,
+            selectedFieldStableKeys,
+            [],
+            criteriaFieldStableKeys,
+            [],
+            literalKinds,
+            coverage,
+            gapClassification)
+    {
+    }
+}
 
 public sealed record AccessControlProjection(
     AccessSafeIdentity Identity,
