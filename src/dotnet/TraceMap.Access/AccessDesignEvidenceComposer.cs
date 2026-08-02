@@ -15,6 +15,31 @@ public static class AccessDesignEvidenceComposer
         PropertyNameCaseInsensitive = true
     };
 
+    private static string[] BuildOrdinalOutputs(IEnumerable<CodeFact> facts)
+    {
+        var entries = facts
+            .Select(fact => (
+                Ordinal: int.Parse(fact.Properties["ordinal"], System.Globalization.CultureInfo.InvariantCulture),
+                Target: fact.TargetSymbol!))
+            .Where(entry => entry.Ordinal >= 0)
+            .GroupBy(entry => entry.Ordinal)
+            .ToArray();
+        var maxOrdinal = entries.Length == 0 ? 0 : entries.Max(group => group.Key);
+        var outputs = Enumerable.Repeat(string.Empty, maxOrdinal + 1).ToArray();
+        foreach (var group in entries)
+        {
+            var targets = group.Select(entry => entry.Target)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            // A duplicate ordinal is ambiguous; preserve its position as an explicit
+            // hole so BoundColumn cannot silently shift to a different projection.
+            if (targets.Length == 1)
+                outputs[group.Key] = targets[0];
+        }
+        return outputs;
+    }
+
     public static async Task<ScanResult> ComposeAsync(
         string baseScanDirectory,
         string designEvidenceDirectory,
@@ -444,8 +469,18 @@ public static class AccessDesignEvidenceComposer
                 field => field.Key,
                 field => (IReadOnlyList<string>)field.Value.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                 StringComparer.OrdinalIgnoreCase),
-            StringComparer.Ordinal);
-        var ui = AccessUiProjector.Project(databaseSeed, rawSurfaces, known, fields, AccessIdentityDisclosurePolicy.HashOnly);
+                StringComparer.Ordinal);
+        var queryOutputs = baseFacts
+            .Where(fact => fact.FactType == FactTypes.AccessQueryOutputDeclared
+                && fact.SourceSymbol is not null
+                && fact.TargetSymbol is not null
+                && int.TryParse(fact.Properties.GetValueOrDefault("ordinal"), out _))
+            .GroupBy(fact => fact.SourceSymbol!, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)BuildOrdinalOutputs(group),
+                StringComparer.Ordinal);
+        var ui = AccessUiProjector.Project(databaseSeed, rawSurfaces, known, fields, AccessIdentityDisclosurePolicy.HashOnly, queryOutputs);
         var rowSourceContexts = ui.Surfaces
             .SelectMany(surface => surface.Controls.Select(control =>
             {
