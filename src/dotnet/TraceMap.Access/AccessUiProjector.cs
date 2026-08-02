@@ -113,8 +113,11 @@ internal static partial class AccessUiProjector
                             candidate.Name,
                             disclosurePolicy: disclosurePolicy).StableKey == sourceObject.TargetStableKeys[0]) is { } childSurface)
                 {
+                    var childControlNames = childSurface.Controls
+                        .Select(control => control.Name)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
                     var childRecord = ProjectBinding(databaseIdentitySeed, sourceObject.TargetStableKeys[0], "record-source",
-                        childSurface.RecordSource, 0, knownObjects, null, [], disclosurePolicy, controlNames, fieldsByTable);
+                        childSurface.RecordSource, 0, knownObjects, null, [], disclosurePolicy, childControlNames, fieldsByTable);
                     if (childRecord is { SourceKind: "direct-object", TargetStableKeys.Count: 1 }
                         && fieldsByTable.TryGetValue(childRecord.TargetStableKeys[0], out var resolvedChildFields))
                         childFields = resolvedChildFields;
@@ -127,21 +130,27 @@ internal static partial class AccessUiProjector
                 var valueClassification = controlSourceBinding is null
                     ? "unbound"
                     : controlSourceBinding.SourceKind == "direct-field" ? "bound-field"
-                    : controlSourceBinding.Expression?.Classification == "calculated-expression" ? "calculated-expression"
+                    : controlSourceBinding.Expression?.Classification is "calculated-expression" or "domain-lookup" ? "calculated-expression"
                     : "unresolved-or-dynamic";
-                var populationType = rowSourceBinding is null
-                    ? "none"
-                    : NormalizeRowSourceType(rawControl.RowSourceType) == "value-list" ? "value-list"
-                    : rowSourceBinding.SourceKind == "direct-object"
-                        ? (rowSourceBinding.TargetKind == "query" ? "saved-query" : "table")
-                    : rawControl.RowSource?.TrimStart().StartsWith("select", StringComparison.OrdinalIgnoreCase) == true ? "inline-sql"
-                    : "dynamic";
+                var populationType = rowSourceBinding switch
+                {
+                    null => "none",
+                    _ when NormalizeRowSourceType(rawControl.RowSourceType) == "value-list" => "value-list",
+                    { SourceKind: "direct-object", TargetKind: "query" } => "saved-query",
+                    { SourceKind: "direct-object" } => "table",
+                    _ when rawControl.RowSource?.TrimStart().StartsWith("select", StringComparison.OrdinalIgnoreCase) == true => "inline-sql",
+                    _ => "dynamic"
+                };
                 IReadOnlyList<int> selectedOrdinals = rawControl.BoundColumn is > 0 ? [rawControl.BoundColumn.Value - 1] : Array.Empty<int>();
                 IReadOnlyList<string> selectedValues = rowSourceBinding?.TargetStableKeys.Count == 1
                     && queryOutputStableKeys?.TryGetValue(rowSourceBinding.TargetStableKeys[0], out var outputs) == true
                     && rawControl.BoundColumn is > 0
                     && rawControl.BoundColumn.Value <= outputs.Count
+                    && !string.IsNullOrWhiteSpace(outputs[rawControl.BoundColumn.Value - 1])
                     ? new[] { outputs[rawControl.BoundColumn.Value - 1] }
+                    : Array.Empty<string>();
+                var persistenceTargets = controlSourceBinding?.SourceKind == "direct-field"
+                    ? controlSourceBinding.TargetStableKeys
                     : Array.Empty<string>();
                 controls.Add(new(
                     controlIdentity,
@@ -159,7 +168,7 @@ internal static partial class AccessUiProjector
                     rowSourceBinding?.Coverage ?? "none",
                     selectedOrdinals,
                     selectedValues,
-                    controlSourceBinding?.TargetStableKeys ?? [],
+                    persistenceTargets,
                     valueClassification == "unbound" && populationType is "saved-query" or "table" ? "query-backed-selector" : "none"));
             }
 
