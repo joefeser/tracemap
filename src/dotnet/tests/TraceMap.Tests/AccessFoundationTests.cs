@@ -133,6 +133,24 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Query_projector_does_not_treat_bracketed_object_names_as_unsupported_clauses()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Union"] = [("table-union", "table")],
+            ["Transform"] = [("table-transform", "table")]
+        };
+
+        var projected = AccessQueryProjector.ProjectDependencies(
+            "SELECT * FROM [Union] INNER JOIN [Transform] ON [Union].Id = [Transform].Id;",
+            known);
+
+        Assert.Equal(["table-transform", "table-union"], projected.Dependencies.Select(item => item.TargetStableKey));
+        Assert.Equal("complete", projected.Coverage);
+        Assert.False(projected.UnsupportedShape);
+    }
+
+    [Fact]
     public void Query_output_shape_accepts_only_direct_select_fields()
     {
         Assert.True(AccessQueryProjector.IsDirectOutputField(

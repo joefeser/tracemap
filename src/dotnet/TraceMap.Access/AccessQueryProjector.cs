@@ -539,7 +539,7 @@ public static partial class AccessQueryProjector
             dependencies[candidate.StableKey] = new AccessQueryDependencyProjection(candidate.StableKey, candidate.Kind, "direct-static-reference");
         }
 
-        var unsupported = UnsupportedPattern().IsMatch(masked);
+        var unsupported = UnsupportedPattern().IsMatch(MaskBracketedIdentifiers(masked));
         var coverage = ambiguous || unresolved || unsupported ? "partial" : "complete";
         return (dependencies.Values.ToArray(), coverage, unsupported || ambiguous || unresolved);
     }
@@ -612,6 +612,39 @@ public static partial class AccessQueryProjector
 
             builder.Append(current);
         }
+        return builder.ToString();
+    }
+
+    private static string MaskBracketedIdentifiers(string sql)
+    {
+        var builder = new StringBuilder(sql.Length);
+        var bracketed = false;
+        for (var index = 0; index < sql.Length; index++)
+        {
+            var current = sql[index];
+            if (!bracketed)
+            {
+                if (current == '[')
+                {
+                    bracketed = true;
+                    builder.Append(' ');
+                }
+                else builder.Append(current);
+                continue;
+            }
+
+            builder.Append(char.IsWhiteSpace(current) ? current : ' ');
+            if (current != ']') continue;
+            if (index + 1 < sql.Length && sql[index + 1] == ']')
+            {
+                builder.Append(' ');
+                index++;
+                continue;
+            }
+
+            bracketed = false;
+        }
+
         return builder.ToString();
     }
 
