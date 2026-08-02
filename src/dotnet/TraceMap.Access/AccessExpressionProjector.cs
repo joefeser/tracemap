@@ -39,7 +39,7 @@ public static partial class AccessExpressionProjector
         var controlRefs = new SortedSet<string>(StringComparer.Ordinal);
         var literals = new SortedSet<string>(StringComparer.Ordinal);
         var unresolved = false;
-        var domainMatches = DomainPattern().Matches(normalized);
+        var domainMatches = FindDomainCalls(normalized);
 
         foreach (Match literal in LiteralPattern().Matches(normalized))
             literals.Add(literal.Groups["kind"].Value.StartsWith('"') ? "string" : "number");
@@ -70,9 +70,9 @@ public static partial class AccessExpressionProjector
                 unresolved = true;
         }
 
-        foreach (Match dlookup in domainMatches)
+        foreach (var dlookup in domainMatches)
         {
-            var args = SplitArguments(dlookup.Groups["args"].Value);
+            var args = SplitArguments(dlookup.Args);
             if (args.Count >= 2)
             {
                 var queryCandidate = ResolveObject(args[1], objects, queryKeys);
@@ -175,15 +175,46 @@ public static partial class AccessExpressionProjector
 
     private static string MaskLiterals(string value) => Regex.Replace(value, "\"(?:\"\"|[^\"])*\"", " ");
 
-    private static string MaskDomainCalls(string value, MatchCollection matches)
+    private static string MaskDomainCalls(string value, IReadOnlyList<DomainCall> matches)
     {
         if (matches.Count == 0) return MaskLiterals(value);
         var chars = MaskLiterals(value).ToCharArray();
-        foreach (Match match in matches)
+        foreach (var match in matches)
             for (var index = match.Index; index < match.Index + match.Length && index < chars.Length; index++)
                 chars[index] = ' ';
         return new string(chars);
     }
+
+    private static IReadOnlyList<DomainCall> FindDomainCalls(string value)
+    {
+        var calls = new List<DomainCall>();
+        foreach (Match match in DomainNamePattern().Matches(value))
+        {
+            var open = value.IndexOf('(', match.Index);
+            if (open < 0) continue;
+            var depth = 1;
+            var quoted = false;
+            var close = -1;
+            for (var index = open + 1; index < value.Length; index++)
+            {
+                var current = value[index];
+                if (current == '"')
+                {
+                    if (quoted && index + 1 < value.Length && value[index + 1] == '"') { index++; continue; }
+                    quoted = !quoted;
+                    continue;
+                }
+                if (quoted) continue;
+                if (current == '(') depth++;
+                else if (current == ')' && --depth == 0) { close = index; break; }
+            }
+            if (close > open)
+                calls.Add(new(match.Index, close - match.Index + 1, value[match.Index..open], value[(open + 1)..close]));
+        }
+        return calls;
+    }
+
+    private sealed record DomainCall(int Index, int Length, string Name, string Args);
 
     [GeneratedRegex(@"\b(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex FunctionPattern();
@@ -191,6 +222,8 @@ public static partial class AccessExpressionProjector
     private static partial Regex IdentifierPattern();
     [GeneratedRegex(@"(?<name>\bDLookup|\bDCount|\bDSum|\bDAvg|\bDMax|\bDMin)\s*\((?<args>[^()]*(?:\([^)]*\)[^()]*)*)\)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DomainPattern();
+    [GeneratedRegex(@"\bD(?:Lookup|Count|Sum|Avg|Max|Min)\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex DomainNamePattern();
     [GeneratedRegex("(?<kind>\"(?:\"\"|[^\"])*\"|[-+]?\\d+(?:\\.\\d+)?)", RegexOptions.CultureInvariant)]
     private static partial Regex LiteralPattern();
     [GeneratedRegex(@"[+\-*/&<>=]|\b(?:AND|OR|NOT)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
