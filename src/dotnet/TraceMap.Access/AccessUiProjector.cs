@@ -141,14 +141,26 @@ internal static partial class AccessUiProjector
                     _ when rawControl.RowSource?.TrimStart().StartsWith("select", StringComparison.OrdinalIgnoreCase) == true => "inline-sql",
                     _ => "dynamic"
                 };
-                IReadOnlyList<int> selectedOrdinals = rawControl.BoundColumn is > 0 ? [rawControl.BoundColumn.Value - 1] : Array.Empty<int>();
-                IReadOnlyList<string> selectedValues = rowSourceBinding?.TargetStableKeys.Count == 1
-                    && queryOutputStableKeys?.TryGetValue(rowSourceBinding.TargetStableKeys[0], out var outputs) == true
-                    && rawControl.BoundColumn is > 0
-                    && rawControl.BoundColumn.Value <= outputs.Count
-                    && !string.IsNullOrWhiteSpace(outputs[rawControl.BoundColumn.Value - 1])
-                    ? new[] { outputs[rawControl.BoundColumn.Value - 1] }
-                    : Array.Empty<string>();
+                var selectedOrdinals = new List<int>();
+                var selectedValues = new List<string>();
+                if (rawControl.BoundColumn is > 0
+                    && rowSourceBinding?.TargetStableKeys.Count == 1
+                    && queryOutputStableKeys?.TryGetValue(rowSourceBinding.TargetStableKeys[0], out var outputs) == true)
+                {
+                    var boundIndex = rawControl.BoundColumn.Value - 1;
+                    var valid = boundIndex < outputs.Count
+                        && (rawControl.ColumnCount is null || rawControl.BoundColumn.Value <= rawControl.ColumnCount.Value)
+                        && !string.IsNullOrWhiteSpace(outputs[boundIndex]);
+                    if (valid)
+                    {
+                        selectedOrdinals.Add(boundIndex);
+                        selectedValues.Add(outputs[boundIndex]);
+                    }
+                    else
+                    {
+                        gaps.Add(new("AccessBindingBoundColumnOutOfRange", "binding", controlIdentity.StableKey, RuleIds.LegacyAccessBinding));
+                    }
+                }
                 var persistenceTargets = controlSourceBinding?.SourceKind == "direct-field"
                     ? controlSourceBinding.TargetStableKeys
                     : Array.Empty<string>();
@@ -166,8 +178,8 @@ internal static partial class AccessUiProjector
                     populationType,
                     rowSourceBinding?.TargetStableKeys ?? [],
                     rowSourceBinding?.Coverage ?? "none",
-                    selectedOrdinals,
-                    selectedValues,
+                    selectedOrdinals.ToArray(),
+                    selectedValues.ToArray(),
                     persistenceTargets,
                     valueClassification == "unbound" && populationType is "saved-query" or "table" ? "query-backed-selector" : "none"));
             }
