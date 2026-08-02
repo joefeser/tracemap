@@ -338,6 +338,104 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Query_projector_resolves_saved_query_output_fields_for_action_and_crosstab_lineage()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SourceQuery"] = [("query-source", "query")],
+            ["TargetTable"] = [("table-target", "table")]
+        };
+        var fields = new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+        {
+            ["query-source"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SourceId"] = [new(new(null, "source-id", "query-field-source-id"), 0, "query-output", 0, false)],
+                ["Amount"] = [new(new(null, "amount", "query-field-amount"), 1, "query-output", 0, false)],
+                ["Month"] = [new(new(null, "month", "query-field-month"), 2, "query-output", 0, false)]
+            },
+            ["table-target"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["TargetId"] = [new(new(null, "target-id", "field-target-id"), 0, "long", 4, true)]
+            }
+        };
+
+        var action = AccessQueryProjector.ProjectActionLineage(
+            "INSERT INTO TargetTable (TargetId) SELECT SourceQuery.SourceId FROM SourceQuery;",
+            "append", known, fields);
+        var crosstab = AccessQueryProjector.ProjectCrosstabLineage(
+            "TRANSFORM Sum(SourceQuery.Amount) SELECT SourceQuery.SourceId FROM SourceQuery GROUP BY SourceQuery.SourceId PIVOT SourceQuery.Month IN ('Jan');",
+            known, fields);
+
+        Assert.Equal("complete", action.Coverage);
+        Assert.Equal(["query-field-source-id"], Assert.Single(action.FieldMappings).SourceFieldStableKeys);
+        Assert.Equal("complete", crosstab.Coverage);
+        Assert.Equal(["query-field-source-id"], crosstab.RowHeadingFieldStableKeys);
+    }
+
+    [Fact]
+    public void Com_reader_preloads_saved_query_output_fields_before_action_lineage_projection()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var sourceQuery = AccessSafeValues.Identity(seed, "query", "SourceQuery");
+        var appendQuery = AccessSafeValues.Identity(seed, "query", "AppendQuery");
+        var targetTable = AccessSafeValues.Identity(seed, "table", "TargetTable");
+        var targetField = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{targetTable.StableKey}", "TargetId"),
+            0,
+            "long",
+            4,
+            true);
+        var database = new FakeDaoDatabase(
+            new FakeDaoQuery(
+                "AppendQuery",
+                "INSERT INTO TargetTable (TargetId) SELECT SourceQuery.SourceId FROM SourceQuery;",
+                64),
+            new FakeDaoQuery(
+                "SourceQuery",
+                "SELECT SourceId FROM SourceTable;",
+                new FakeDaoField("SourceId")));
+        var identities = new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["AppendQuery"] = appendQuery,
+            ["SourceQuery"] = sourceQuery
+        };
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["AppendQuery"] = [(appendQuery.StableKey, "query")],
+            ["SourceQuery"] = [(sourceQuery.StableKey, "query")],
+            ["TargetTable"] = [(targetTable.StableKey, "table")]
+        };
+        var targetProjection = new AccessTableProjection(targetTable, [targetField], []);
+        var gaps = new List<AccessGapProjection>();
+
+        var queries = new AccessComReader().ReadQueries(
+            database,
+            seed,
+            identities,
+            known,
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["TargetTable"] = [targetProjection]
+            },
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+            {
+                [targetTable.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["TargetId"] = [targetField]
+                }
+            },
+            gaps,
+            []);
+
+        var action = queries.Single(query => query.Identity == appendQuery).ActionLineage;
+        Assert.NotNull(action);
+        Assert.Equal("complete", action!.Coverage);
+        Assert.Equal(
+            [AccessSafeValues.Identity(seed, $"query-field-{sourceQuery.StableKey}", "SourceId", 0).StableKey],
+            Assert.Single(action.FieldMappings).SourceFieldStableKeys);
+    }
+
+    [Fact]
     public void Query_projector_hashes_declared_output_names_instead_of_select_expressions()
     {
         var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
@@ -1527,13 +1625,24 @@ public sealed class AccessFoundationTests
         public FakeDaoCollection<FakeDaoQuery> QueryDefs { get; } = new(queries);
     }
 
-    public sealed class FakeDaoQuery(string name, string sql, params FakeDaoField[] fields)
+    public sealed class FakeDaoQuery
     {
-        public string Name { get; } = name;
-        public int Type => 0;
-        public string SQL { get; } = sql;
+        public FakeDaoQuery(string name, string sql, params FakeDaoField[] fields)
+            : this(name, sql, 0, fields) { }
+
+        public FakeDaoQuery(string name, string sql, int type, params FakeDaoField[] fields)
+        {
+            Name = name;
+            SQL = sql;
+            Type = type;
+            Fields = new(fields);
+        }
+
+        public string Name { get; }
+        public int Type { get; }
+        public string SQL { get; }
         public FakeDaoCollection<FakeDaoParameter> Parameters { get; } = new([]);
-        public FakeDaoCollection<FakeDaoField> Fields { get; } = new(fields);
+        public FakeDaoCollection<FakeDaoField> Fields { get; }
     }
 
     public sealed class FakeDaoField(

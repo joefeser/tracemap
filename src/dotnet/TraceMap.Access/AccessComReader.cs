@@ -549,6 +549,12 @@ public sealed class AccessComReader
         List<AccessExternalLinkProjection> external)
     {
         var result = new List<AccessQueryProjection>();
+        var objectFieldLookups = fieldLookups.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value,
+            StringComparer.Ordinal);
+        foreach (var pair in ReadQueryOutputFieldLookups(database, databaseIdentitySeed, identities))
+            objectFieldLookups[pair.Key] = pair.Value;
         dynamic? queries = null;
         try
         {
@@ -736,14 +742,14 @@ public sealed class AccessComReader
                             sql,
                             kind,
                             known,
-                            fieldLookups,
+                            objectFieldLookups,
                             parameterRows.Select(parameter => parameter.Ordinal).ToArray());
                         if (actionLineage.Coverage == "partial")
                             gaps.Add(new("AccessQueryActionLineagePartial", "query", identity.StableKey, RuleIds.LegacyAccessQuery));
                     }
                     else if (kind == "crosstab")
                     {
-                        crosstabLineage = AccessQueryProjector.ProjectCrosstabLineage(sql, known, fieldLookups);
+                        crosstabLineage = AccessQueryProjector.ProjectCrosstabLineage(sql, known, objectFieldLookups);
                         if (crosstabLineage.Coverage == "partial")
                             gaps.Add(new("AccessQueryCrosstabLineagePartial", "query", identity.StableKey, RuleIds.LegacyAccessQuery));
                     }
@@ -759,6 +765,65 @@ public sealed class AccessComReader
         }
         catch (AccessScanException ex) { gaps.Add(new(ex.Classification, "database-queries", null)); }
         catch { gaps.Add(new("AccessQueryCatalogUnavailable", "database-queries", null)); }
+        finally { Release(queries); }
+        return result;
+    }
+
+    private Dictionary<string, Dictionary<string, List<AccessFieldProjection>>> ReadQueryOutputFieldLookups(
+        dynamic database,
+        string databaseIdentitySeed,
+        IReadOnlyDictionary<string, AccessSafeIdentity> identities)
+    {
+        var result = new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal);
+        dynamic? queries = null;
+        try
+        {
+            queries = database.QueryDefs;
+            var count = BoundedCount(queries, "AccessQueryCollectionLimit");
+            for (var index = 0; index < count; index++)
+            {
+                dynamic? query = null;
+                dynamic? fields = null;
+                try
+                {
+                    query = queries[index];
+                    if (SafeInt(() => (int)query.Type) != 0) continue;
+                    var name = BoundedString(() => (string)query.Name, 512, "AccessQueryNameUnavailable");
+                    if (!identities.TryGetValue(name, out var identity)) continue;
+                    fields = query.Fields;
+                    var fieldCount = BoundedChildCount(fields, "AccessQueryOutputFieldCollectionLimit");
+                    var lookup = new Dictionary<string, List<AccessFieldProjection>>(StringComparer.OrdinalIgnoreCase);
+                    for (var ordinal = 0; ordinal < fieldCount; ordinal++)
+                    {
+                        dynamic? field = null;
+                        try
+                        {
+                            field = fields[ordinal];
+                            var fieldName = BoundedString(() => (string)field.Name, 512, "AccessQueryOutputFieldNameUnavailable");
+                            var projection = new AccessFieldProjection(
+                                AccessSafeValues.Identity(databaseIdentitySeed, $"query-field-{identity.StableKey}", fieldName, ordinal),
+                                ordinal,
+                                "query-output",
+                                0,
+                                false);
+                            if (!lookup.TryGetValue(fieldName, out var candidates)) lookup[fieldName] = candidates = [];
+                            candidates.Add(projection);
+                        }
+                        finally { Release(field); }
+                    }
+                    result[identity.StableKey] = lookup;
+                }
+                catch
+                {
+                    // The normal query read records the bounded output-metadata gap.
+                }
+                finally { Release(fields); Release(query); }
+            }
+        }
+        catch
+        {
+            // The normal query read records the bounded catalog gap.
+        }
         finally { Release(queries); }
         return result;
     }
