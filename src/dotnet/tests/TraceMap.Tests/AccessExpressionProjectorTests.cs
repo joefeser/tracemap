@@ -85,6 +85,18 @@ public sealed class AccessExpressionProjectorTests
         var zeroArgumentFunction = AccessExpressionProjector.Project("=Date", null, null);
         Assert.Equal("complete", zeroArgumentFunction.Coverage);
         Assert.Null(zeroArgumentFunction.GapClassification);
+
+        var collidingFunction = AccessExpressionProjector.Project(
+            "=CustomLookup([StartDate])",
+            null,
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["CustomLookup"] = ["field-collision"],
+                ["StartDate"] = ["field-start-date"]
+            });
+        Assert.Equal("AccessBindingExpressionFunctionUnresolved", collidingFunction.GapClassification);
+        Assert.DoesNotContain("field-collision", collidingFunction.FieldStableKeys);
+        Assert.Contains("field-start-date", collidingFunction.FieldStableKeys);
     }
 
     [Fact]

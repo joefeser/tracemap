@@ -66,7 +66,7 @@ public static partial class AccessExpressionProjector
         foreach (Match match in IdentifierPattern().Matches(MaskMatches(nonDomainExpression, generalExternalMatches)))
         {
             var name = NormalizeIdentifier(match.Groups["name"].Value);
-            if (IsKeyword(name)) continue;
+            if (IsKeyword(name) || functionNames.Contains(name) || Functions.Contains(name)) continue;
             var resolved = false;
             if (fields is not null && fields.TryGetValue(name, out var candidates))
             {
@@ -94,8 +94,6 @@ public static partial class AccessExpressionProjector
                 else ambiguous = true;
                 continue;
             }
-            if (functionNames.Contains(name) || Functions.Contains(name))
-                continue;
             if (controlNames is not null && controlNames.Contains(name))
                 controlRefs.Add(AccessSafeValues.RoleHash("access-expression-control", name));
             else
@@ -174,10 +172,10 @@ public static partial class AccessExpressionProjector
             : "expression";
         var coverage = dynamic || ambiguous || unresolved || unresolvedFunction || domainFieldCatalogIncomplete ? "partial" : "complete";
         var gap = dynamic ? "AccessBindingExpressionDynamic"
+            : unresolvedFunction ? "AccessBindingExpressionFunctionUnresolved"
             : ambiguous ? "AccessBindingExpressionTargetAmbiguous"
             : domainFieldCatalogIncomplete ? "AccessBindingDomainFieldCatalogIncomplete"
             : unresolved ? "AccessBindingExpressionPartial"
-            : unresolvedFunction ? "AccessBindingExpressionFunctionUnresolved"
             : null;
         return new(
             classification,
