@@ -10,4 +10,4 @@
 - [x] Rerun deterministic representative enrichment and downstream Access compositions.
 - [x] Record before/after counts and irreducible cases.
 - [x] Run focused/full validation and safety guards.
-- [ ] Open a ready PR to `dev` and follow ACK without merging.
+- [x] Open a ready PR to `dev` and follow ACK without merging.

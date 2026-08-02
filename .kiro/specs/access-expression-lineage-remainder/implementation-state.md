@@ -11,6 +11,7 @@
 - Private review projection: 122-row workbook with exact private surface/control context and separate human annotation columns; stored outside the repository and independently deletable.
 - Downstream rerun: 100 bounded flow paths and 32 copy/clone candidates, both correctly labeled partial.
 - Tracking: issue #579.
+- Pull request: #580 targeting `dev`; ACK review is pending and merge is not authorized by this slice.
 - Determinism: two final representative enrichments emitted byte-identical 7,548-fact streams and manifests.
 - Downstream validation: 100 bounded flow paths and 32 copy/clone candidates, both correctly labeled partial.
 - Validation: 96 focused tests passed; changed-file format verification passed; full solution build passed with zero warnings/errors; full solution test command exited successfully; private-path guard and `git diff --check` passed.
