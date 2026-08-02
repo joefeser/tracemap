@@ -45,7 +45,11 @@ public static partial class AccessQueryProjector
         };
         var targetFieldKeys = ResolveFieldsAligned(target?.StableKey, targetFields, fieldLookups);
         var mappings = new List<AccessQueryFieldMappingProjection>();
-        var coverage = targetName is null ? "partial" : target is null ? "partial" : "complete";
+        var coverage = targetName is not null
+            && target is not null
+            && dependencyProjection.Coverage == "complete"
+            ? "complete"
+            : "partial";
         if (operationKind is "append" or "make-table")
         {
             var select = SelectList(masked);
