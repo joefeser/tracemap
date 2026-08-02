@@ -650,13 +650,10 @@ public sealed class AccessComReader
                             var coverage = isComplete ? "complete" : "partial";
                             if (coverage == "partial")
                                 gaps.Add(new(
-                                    distinctSources.Length > 1
-                                        ? "AccessQueryOutputSourceAmbiguous"
-                                        : !directOutput
-                                            ? "AccessQueryOutputExpressionPartial"
-                                            : dependencyProjection.Coverage != "complete"
-                                                ? "AccessQueryOutputDependencyPartial"
-                                                : "AccessQueryOutputSourceUnavailable",
+                                    QueryOutputGapClassification(
+                                        distinctSources.Length,
+                                        directOutput,
+                                        dependencyProjection.Coverage),
                                     "query-output-field",
                                     metadata.Identity.StableKey,
                                     RuleIds.LegacyAccessQuery));
@@ -722,6 +719,17 @@ public sealed class AccessComReader
         return result;
     }
 
+    private static string QueryOutputGapClassification(
+        int distinctSourceCount,
+        bool directOutput,
+        string dependencyCoverage)
+    {
+        if (distinctSourceCount > 1) return "AccessQueryOutputSourceAmbiguous";
+        if (!directOutput) return "AccessQueryOutputExpressionPartial";
+        if (dependencyCoverage != "complete") return "AccessQueryOutputDependencyPartial";
+        return "AccessQueryOutputSourceUnavailable";
+    }
+
     private sealed record QueryOutputMetadata(
         AccessSafeIdentity Identity,
         int Ordinal,
@@ -746,12 +754,14 @@ public sealed class AccessComReader
             {
                 dynamic? query = null;
                 dynamic? fields = null;
+                AccessSafeIdentity? identity = null;
                 try
                 {
                     query = queries[index];
                     if (SafeInt(() => (int)query.Type) != 0) continue;
                     var name = BoundedString(() => (string)query.Name, 512, "AccessQueryNameUnavailable");
-                    if (!identities.TryGetValue(name, out var identity)) continue;
+                    if (!identities.TryGetValue(name, out var resolvedIdentity)) continue;
+                    identity = resolvedIdentity;
                     fields = query.Fields;
                     var fieldCount = BoundedChildCount(fields, "AccessQueryOutputFieldCollectionLimit");
                     var metadata = new List<QueryOutputMetadata>();
@@ -795,10 +805,10 @@ public sealed class AccessComReader
                     }
                     result[identity.StableKey] = metadata;
                 }
-                catch (AccessScanException ex) { gaps.Add(new(ex.Classification, "query", null, RuleIds.LegacyAccessQuery)); }
+                catch (AccessScanException ex) { gaps.Add(new(ex.Classification, "query", identity?.StableKey, RuleIds.LegacyAccessQuery)); }
                 catch
                 {
-                    gaps.Add(new("AccessQueryOutputMetadataUnavailable", "query", null, RuleIds.LegacyAccessQuery));
+                    gaps.Add(new("AccessQueryOutputMetadataUnavailable", "query", identity?.StableKey, RuleIds.LegacyAccessQuery));
                 }
                 finally { Release(fields); Release(query); }
             }
