@@ -282,6 +282,33 @@ public sealed class AccessExpressionProjectorTests
     }
 
     [Fact]
+    public void Domain_multi_candidate_fields_are_ambiguous_instead_of_missing()
+    {
+        const string queryKey = "query-duplicate-fields";
+        var result = AccessExpressionProjector.Project(
+            "=DLookUp([Value], \"qDuplicate\", \"[Status]=1\")",
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qDuplicate"] = [(queryKey, "query")]
+            },
+            null,
+            null,
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Value"] = ["field-value-1", "field-value-2"],
+                    ["Status"] = ["field-status-1", "field-status-2"]
+                }
+            });
+
+        Assert.Equal("partial", result.Coverage);
+        Assert.Equal("AccessBindingExpressionTargetAmbiguous", result.GapClassification);
+        Assert.Empty(result.SelectedFieldReferenceHashes);
+        Assert.Empty(result.CriteriaFieldReferenceHashes);
+    }
+
+    [Fact]
     public void Projects_multiline_export_style_metrics_domain_lookup()
     {
         const string queryKey = "query-metrics-day";
