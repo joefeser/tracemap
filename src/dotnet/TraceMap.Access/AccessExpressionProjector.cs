@@ -39,7 +39,9 @@ public static partial class AccessExpressionProjector
         var controlRefs = new SortedSet<string>(StringComparer.Ordinal);
         var literals = new SortedSet<string>(StringComparer.Ordinal);
         var unresolved = false;
-        var domainMatches = FindDomainCalls(normalized);
+        var domainSyntaxMatches = DomainNamePattern().Matches(MaskLiterals(normalized));
+        var domainMatches = FindDomainCalls(normalized, domainSyntaxMatches);
+        unresolved = domainSyntaxMatches.Count != domainMatches.Count;
 
         foreach (Match literal in LiteralPattern().Matches(normalized))
             literals.Add(literal.Groups["kind"].Value.StartsWith('"') ? "string" : "number");
@@ -173,7 +175,34 @@ public static partial class AccessExpressionProjector
 
     private static string NormalizeIdentifier(string value) => value.Trim().Trim('[', ']');
 
-    private static string MaskLiterals(string value) => Regex.Replace(value, "\"(?:\"\"|[^\"])*\"", " ");
+    private static string MaskLiterals(string value)
+    {
+        var chars = value.ToCharArray();
+        var quote = '\0';
+        for (var index = 0; index < chars.Length; index++)
+        {
+            var current = chars[index];
+            if (quote == '\0')
+            {
+                if (current is '\'' or '"')
+                {
+                    quote = current;
+                    chars[index] = ' ';
+                }
+                continue;
+            }
+
+            chars[index] = ' ';
+            if (current == quote)
+            {
+                if (index + 1 < chars.Length && chars[index + 1] == quote)
+                    chars[++index] = ' ';
+                else
+                    quote = '\0';
+            }
+        }
+        return new string(chars);
+    }
 
     private static string MaskDomainCalls(string value, IReadOnlyList<DomainCall> matches)
     {
@@ -185,10 +214,10 @@ public static partial class AccessExpressionProjector
         return new string(chars);
     }
 
-    private static IReadOnlyList<DomainCall> FindDomainCalls(string value)
+    private static IReadOnlyList<DomainCall> FindDomainCalls(string value, MatchCollection syntaxMatches)
     {
         var calls = new List<DomainCall>();
-        foreach (Match match in DomainNamePattern().Matches(value))
+        foreach (Match match in syntaxMatches)
         {
             var open = value.IndexOf('(', match.Index);
             if (open < 0) continue;
