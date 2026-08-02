@@ -631,6 +631,34 @@ public sealed class AccessUiProjectionTests
         Assert.Contains("Raw record sources", catalog, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Query_backed_unbound_selector_keeps_population_separate_from_value_binding()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('c', 40), "fixture.accdb", "hash");
+        var query = AccessSafeValues.Identity(seed, "query", "qryChoices");
+        var output = AccessSafeValues.Identity(seed, $"query-field-{query.StableKey}", "ChoiceId");
+        var raw = new AccessRawUiSurface(
+            "frmSelector", "form", false, "tblHost",
+            [new("cboChoice", 0, 111, null, "qryChoices", [], RowSourceType: "Table/Query", BoundColumn: 1)], []);
+        var projected = AccessUiProjector.Project(
+            seed,
+            [raw],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["tblHost"] = [(AccessSafeValues.Identity(seed, "table", "tblHost").StableKey, "table")],
+                ["qryChoices"] = [(query.StableKey, "query")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal),
+            queryOutputStableKeys: new Dictionary<string, IReadOnlyList<string>> { [query.StableKey] = [output.StableKey] });
+
+        var control = Assert.Single(Assert.Single(projected.Surfaces).Controls);
+        Assert.Equal("unbound", control.ValueBindingClassification);
+        Assert.Equal("saved-query", control.PopulationSourceType);
+        Assert.Equal("query-backed-selector", control.FunctionalRole);
+        Assert.Equal([output.StableKey], control.SelectedValueStableKeys);
+        Assert.Empty(control.PersistenceTargetStableKeys!);
+    }
+
     private static string FindRepoRoot()
     {
         var current = AppContext.BaseDirectory;

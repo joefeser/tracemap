@@ -186,7 +186,22 @@ public sealed record AccessBindingProjection(
     int ExpressionLength,
     IReadOnlyList<string> TargetStableKeys,
     string TargetKind,
-    string Coverage);
+    string Coverage,
+    AccessExpressionProjection? Expression = null);
+
+public sealed record AccessExpressionProjection(
+    string Classification,
+    string StructureHash,
+    IReadOnlyList<string> FunctionNameHashes,
+    IReadOnlyList<string> OperatorNameHashes,
+    IReadOnlyList<string> FieldStableKeys,
+    IReadOnlyList<string> ControlReferenceHashes,
+    IReadOnlyList<string> QueryStableKeys,
+    IReadOnlyList<string> SelectedFieldStableKeys,
+    IReadOnlyList<string> CriteriaFieldStableKeys,
+    IReadOnlyList<string> LiteralKinds,
+    string Coverage,
+    string? GapClassification = null);
 
 public sealed record AccessControlProjection(
     AccessSafeIdentity Identity,
@@ -197,7 +212,15 @@ public sealed record AccessControlProjection(
     IReadOnlyList<AccessUiEventProjection> Events,
     string RowSourceType = "unspecified",
     int? BoundColumn = null,
-    int? ColumnCount = null);
+    int? ColumnCount = null,
+    string ValueBindingClassification = "unbound",
+    string PopulationSourceType = "none",
+    IReadOnlyList<string>? PopulationTargetStableKeys = null,
+    string PopulationCoverage = "none",
+    IReadOnlyList<int>? SelectedProjectionOrdinals = null,
+    IReadOnlyList<string>? SelectedValueStableKeys = null,
+    IReadOnlyList<string>? PersistenceTargetStableKeys = null,
+    string FunctionalRole = "none");
 
 public sealed record AccessReportGroupProjection(
     int Ordinal,
