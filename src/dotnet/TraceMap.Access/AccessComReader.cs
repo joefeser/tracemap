@@ -549,7 +549,14 @@ public sealed class AccessComReader
         List<AccessExternalLinkProjection> external)
     {
         var result = new List<AccessQueryProjection>();
-        var queryOutputMetadata = ReadQueryOutputMetadata((object)database, databaseIdentitySeed, identities, gaps);
+        var queryOutputMetadata = ReadQueryOutputMetadata(
+            (object)database,
+            databaseIdentitySeed,
+            identities,
+            known,
+            tableLookup,
+            fieldLookups,
+            gaps);
         var objectFieldLookups = fieldLookups.ToDictionary(
             pair => pair.Key,
             pair => pair.Value,
@@ -557,7 +564,7 @@ public sealed class AccessComReader
         foreach (var pair in queryOutputMetadata)
         {
             var lookup = new Dictionary<string, List<AccessFieldProjection>>(StringComparer.OrdinalIgnoreCase);
-            foreach (var metadata in pair.Value)
+            foreach (var metadata in pair.Value.Where(metadata => metadata.Coverage == "complete"))
             {
                 if (!lookup.TryGetValue(metadata.Name, out var candidates)) lookup[metadata.Name] = candidates = [];
                 candidates.Add(new(metadata.Identity, metadata.Ordinal, metadata.TypeFamily, 0, false));
@@ -630,34 +637,18 @@ public sealed class AccessComReader
                     {
                         foreach (var metadata in outputMetadata)
                         {
-                            var sources = new List<string>();
-                            if (!string.IsNullOrWhiteSpace(metadata.SourceTable)
-                                && !string.IsNullOrWhiteSpace(metadata.SourceField)
-                                && tableLookup.TryGetValue(metadata.SourceTable, out var tableCandidates))
-                            {
-                                foreach (var tableCandidate in tableCandidates)
-                                {
-                                    if (fieldLookups.TryGetValue(tableCandidate.Identity.StableKey, out var fields)
-                                        && fields.TryGetValue(metadata.SourceField, out var fieldCandidates))
-                                        sources.AddRange(fieldCandidates.Select(candidate => candidate.Identity.StableKey));
-                                }
-                            }
-                            var distinctSources = sources.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
-                            var directOutput = AccessQueryProjector.IsDirectOutputField(sql, metadata.Name);
-                            var isComplete = distinctSources.Length == 1
-                                && directOutput
-                                && dependencyProjection.Coverage == "complete";
-                            var coverage = isComplete ? "complete" : "partial";
-                            if (coverage == "partial")
+                            if (metadata.GapClassification is not null)
                                 gaps.Add(new(
-                                    QueryOutputGapClassification(
-                                        distinctSources.Length,
-                                        directOutput,
-                                        dependencyProjection.Coverage),
+                                    metadata.GapClassification,
                                     "query-output-field",
                                     metadata.Identity.StableKey,
                                     RuleIds.LegacyAccessQuery));
-                            outputRows.Add(new(metadata.Identity, metadata.Ordinal, metadata.TypeFamily, distinctSources, coverage));
+                            outputRows.Add(new(
+                                metadata.Identity,
+                                metadata.Ordinal,
+                                metadata.TypeFamily,
+                                metadata.SourceFieldStableKeys,
+                                metadata.Coverage));
                         }
                     }
                     string? connectHash = null;
@@ -735,13 +726,17 @@ public sealed class AccessComReader
         int Ordinal,
         string Name,
         string TypeFamily,
-        string? SourceTable,
-        string? SourceField);
+        IReadOnlyList<string> SourceFieldStableKeys,
+        string Coverage,
+        string? GapClassification);
 
     private Dictionary<string, IReadOnlyList<QueryOutputMetadata>> ReadQueryOutputMetadata(
         dynamic database,
         string databaseIdentitySeed,
         IReadOnlyDictionary<string, AccessSafeIdentity> identities,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> known,
+        IReadOnlyDictionary<string, List<AccessTableProjection>> tableLookup,
+        IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fieldLookups,
         List<AccessGapProjection> gaps)
     {
         var result = new Dictionary<string, IReadOnlyList<QueryOutputMetadata>>(StringComparer.Ordinal);
@@ -762,6 +757,8 @@ public sealed class AccessComReader
                     var name = BoundedString(() => (string)query.Name, 512, "AccessQueryNameUnavailable");
                     if (!identities.TryGetValue(name, out var resolvedIdentity)) continue;
                     identity = resolvedIdentity;
+                    var sql = BoundedString(() => (string)query.SQL, _limits.MaxQueryTextLength, "AccessQueryTextLimitReached");
+                    var dependencyCoverage = AccessQueryProjector.ProjectDependencies(sql, known).Coverage;
                     fields = query.Fields;
                     var fieldCount = BoundedChildCount(fields, "AccessQueryOutputFieldCollectionLimit");
                     var metadata = new List<QueryOutputMetadata>();
@@ -785,13 +782,38 @@ public sealed class AccessComReader
                             {
                                 // The declared output remains useful without a unique source.
                             }
+                            var sources = new List<string>();
+                            if (!string.IsNullOrWhiteSpace(sourceTable)
+                                && !string.IsNullOrWhiteSpace(sourceField)
+                                && tableLookup.TryGetValue(sourceTable, out var tableCandidates))
+                            {
+                                foreach (var tableCandidate in tableCandidates)
+                                {
+                                    if (fieldLookups.TryGetValue(tableCandidate.Identity.StableKey, out var sourceFields)
+                                        && sourceFields.TryGetValue(sourceField, out var fieldCandidates))
+                                        sources.AddRange(fieldCandidates.Select(candidate => candidate.Identity.StableKey));
+                                }
+                            }
+                            var distinctSources = sources
+                                .Distinct(StringComparer.Ordinal)
+                                .OrderBy(value => value, StringComparer.Ordinal)
+                                .ToArray();
+                            var directOutput = AccessQueryProjector.IsDirectOutputField(sql, fieldName);
+                            var coverage = distinctSources.Length == 1
+                                && directOutput
+                                && dependencyCoverage == "complete"
+                                ? "complete"
+                                : "partial";
                             metadata.Add(new(
                                 outputIdentity,
                                 ordinal,
                                 fieldName,
                                 AccessSafeValues.DaoTypeFamily(SafeInt(() => (int)field.Type)),
-                                sourceTable,
-                                sourceField));
+                                distinctSources,
+                                coverage,
+                                coverage == "partial"
+                                    ? QueryOutputGapClassification(distinctSources.Length, directOutput, dependencyCoverage)
+                                    : null));
                         }
                         catch (AccessScanException ex)
                         {

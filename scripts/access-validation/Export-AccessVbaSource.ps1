@@ -317,6 +317,7 @@ $guardDatabase = $null
 $createdOutput = $false
 $succeeded = $false
 $primaryFailure = $null
+$cleanupFailure = $null
 try {
     if (Test-Path -LiteralPath $innerScratch) { Stop-Export "AccessVbaInnerScratchExists" }
     New-Item -ItemType Directory -Path $innerScratch -ErrorAction Stop | Out-Null
@@ -580,9 +581,8 @@ finally {
     [GC]::Collect(); [GC]::WaitForPendingFinalizers()
     $innerScratchCleanupFailed = (Test-Path -LiteralPath $innerScratch) -and -not (Remove-DirectoryWithRetry $innerScratch)
     $outputCleanupFailed = -not $succeeded -and (Test-Path -LiteralPath $output) -and -not (Remove-DirectoryWithRetry $output)
-    if ($null -eq $primaryFailure) {
-        if ($innerScratchCleanupFailed) { Stop-Export "AccessVbaInnerScratchCleanupFailed" }
-        if ($outputCleanupFailed) { Stop-Export "AccessVbaOutputCleanupFailed" }
-    }
+    if ($innerScratchCleanupFailed) { $cleanupFailure = "AccessVbaInnerScratchCleanupFailed" }
+    elseif ($outputCleanupFailed) { $cleanupFailure = "AccessVbaOutputCleanupFailed" }
 }
+if ($null -ne $cleanupFailure) { Stop-Export $cleanupFailure }
 if ($null -ne $primaryFailure) { throw $primaryFailure }

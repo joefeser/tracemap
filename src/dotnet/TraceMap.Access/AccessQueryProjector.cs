@@ -96,7 +96,11 @@ public static partial class AccessQueryProjector
             && ResolvesExpressionCompletely(value, knownObjects, fieldLookups);
         var pivotResolves = pivot is not null
             && ResolvesExpressionCompletely(pivot, knownObjects, fieldLookups);
+        var expressionsUseOnlySupportedFunctions = rowExpressions.All(expression => !HasUnsupportedNamedFunction(expression))
+            && (aggregate is null || !HasUnsupportedNamedFunction(aggregate))
+            && (pivot is null || !HasUnsupportedNamedFunction(pivot));
         var coverage = rowsResolve && valueResolves && pivotResolves && staticColumns.Count > 0
+            && expressionsUseOnlySupportedFunctions
             ? "complete"
             : "partial";
         return new(row,
