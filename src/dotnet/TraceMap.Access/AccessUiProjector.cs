@@ -405,7 +405,6 @@ internal static partial class AccessUiProjector
         {
             var projection = AccessQueryProjector.ProjectStaticSelect(trimmed, objects, fieldSetsByObject);
             var targets = projection.Dependencies.Select(dependency => dependency.TargetStableKey)
-                .Concat(projection.Outputs.SelectMany(output => output.SourceFieldStableKeys))
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .ToArray();

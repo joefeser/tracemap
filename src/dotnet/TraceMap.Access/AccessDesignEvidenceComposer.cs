@@ -40,6 +40,22 @@ public static class AccessDesignEvidenceComposer
         return outputs;
     }
 
+    internal static IReadOnlyDictionary<string, string> BuildConsistentQueryKinds(
+        IEnumerable<(string TargetStableKey, string QueryKind)> declarations) =>
+        declarations
+            .GroupBy(item => item.TargetStableKey, StringComparer.Ordinal)
+            .Select(group => new
+            {
+                TargetStableKey = group.Key,
+                Kinds = group.Select(item => item.QueryKind)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
+            })
+            .Where(item => item.Kinds.Length == 1)
+            .OrderBy(item => item.TargetStableKey, StringComparer.Ordinal)
+            .ToDictionary(item => item.TargetStableKey, item => item.Kinds[0], StringComparer.Ordinal);
+
     public static async Task<ScanResult> ComposeAsync(
         string baseScanDirectory,
         string designEvidenceDirectory,
@@ -510,15 +526,11 @@ public static class AccessDesignEvidenceComposer
                 group => group.Key,
                 group => (IReadOnlyList<string>)BuildOrdinalOutputs(group),
                 StringComparer.Ordinal);
-        var queryKinds = baseFacts
+        var queryKinds = BuildConsistentQueryKinds(baseFacts
             .Where(fact => fact.FactType == FactTypes.AccessQueryDeclared
                 && fact.TargetSymbol is not null
                 && fact.Properties.TryGetValue("queryKind", out _))
-            .GroupBy(fact => fact.TargetSymbol!, StringComparer.Ordinal)
-            .ToDictionary(
-                group => group.Key,
-                group => group.First().Properties["queryKind"],
-                StringComparer.Ordinal);
+            .Select(fact => (fact.TargetSymbol!, fact.Properties["queryKind"])));
         var ui = AccessUiProjector.Project(
             databaseSeed,
             rawSurfaces,

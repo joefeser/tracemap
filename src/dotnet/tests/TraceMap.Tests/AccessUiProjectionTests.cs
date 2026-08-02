@@ -833,6 +833,9 @@ public sealed class AccessUiProjectionTests
             },
             new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal));
 
+        var recordBinding = Assert.Single(Assert.Single(projected.Surfaces).Bindings, item => item.BindingKind == "record-source");
+        Assert.Equal([table.StableKey], recordBinding.TargetStableKeys);
+        Assert.Equal("query", recordBinding.TargetKind);
         var binding = Assert.Single(Assert.Single(Assert.Single(projected.Surfaces).Controls).Bindings);
         Assert.Equal("inline-source-output-candidate", binding.SourceKind);
         Assert.Equal("query-output-candidate", binding.TargetKind);
