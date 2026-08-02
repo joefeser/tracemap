@@ -510,7 +510,23 @@ public static class AccessDesignEvidenceComposer
                 group => group.Key,
                 group => (IReadOnlyList<string>)BuildOrdinalOutputs(group),
                 StringComparer.Ordinal);
-        var ui = AccessUiProjector.Project(databaseSeed, rawSurfaces, known, fields, AccessIdentityDisclosurePolicy.HashOnly, queryOutputs);
+        var queryKinds = baseFacts
+            .Where(fact => fact.FactType == FactTypes.AccessQueryDeclared
+                && fact.TargetSymbol is not null
+                && fact.Properties.TryGetValue("queryKind", out _))
+            .GroupBy(fact => fact.TargetSymbol!, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First().Properties["queryKind"],
+                StringComparer.Ordinal);
+        var ui = AccessUiProjector.Project(
+            databaseSeed,
+            rawSurfaces,
+            known,
+            fields,
+            AccessIdentityDisclosurePolicy.HashOnly,
+            queryOutputs,
+            queryKinds);
         var rowSourceContexts = ui.Surfaces
             .SelectMany(surface => surface.Controls.Select(control =>
             {
