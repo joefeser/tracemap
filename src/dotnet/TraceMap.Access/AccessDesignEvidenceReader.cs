@@ -31,7 +31,13 @@ public static class AccessDesignEvidenceReader
     private static readonly HashSet<string> CoordinateStatuses = ["exact-lines", "container-only", "unavailable"];
     private static readonly HashSet<string> CompletenessStatuses = ["complete", "partial", "unavailable"];
     private static readonly HashSet<string> CopyBindings = ["hash-identical", "owner-attested-derived-copy", "unbound"];
-    private static readonly HashSet<string> Mechanisms = ["preexisting-text-export", "synthetic-hand-authored", "access-save-as-text-metadata"];
+    private static readonly HashSet<string> Mechanisms =
+    [
+        "preexisting-text-export",
+        "synthetic-hand-authored",
+        "access-save-as-text-metadata",
+        "access-save-as-text-vba"
+    ];
     private static readonly HashSet<string> ProducerIds = ["owner-controlled-export", "tracemap-synthetic-fixture", "tracemap-access-windows-export"];
     private static readonly HashSet<string> DocumentRoles =
     [
@@ -45,13 +51,20 @@ public static class AccessDesignEvidenceReader
     private static readonly HashSet<string> EventRoles =
     [
         "after-update",
+        "on-activate",
         "before-update",
         "on-click",
+        "on-close",
         "on-current",
+        "on-deactivate",
         "on-dbl-click",
+        "on-error",
         "on-load",
         "on-no-data",
-        "on-open"
+        "on-open",
+        "on-resize",
+        "on-timer",
+        "on-unload"
     ];
 
     private static readonly IReadOnlyDictionary<string, PayloadShape> PayloadShapes =
@@ -80,8 +93,9 @@ public static class AccessDesignEvidenceReader
                 ["ordinal"],
                 ["ordinal"]),
             ["vba-module"] = new(
-                ["moduleRole", "identity", "moduleKind", "sourceText", "sourceSha256", "lineCount", "coordinateBasis"],
-                ["moduleRole", "identity", "moduleKind", "sourceText", "sourceSha256", "lineCount", "coordinateBasis"],
+                ["moduleRole", "identity", "moduleKind", "sourceText", "sourceSha256", "lineCount", "coordinateBasis",
+                    "sourceDocumentSha256", "sourceDocumentStartLine", "extractionMechanism"],
+                ["moduleRole", "identity", "moduleKind", "sourceSha256", "lineCount", "coordinateBasis"],
                 ["moduleRole", "identity", "moduleKind"]),
             ["event-reference"] = new(
                 ["eventRole", "value", "ordinal"],
@@ -511,6 +525,7 @@ public static class AccessDesignEvidenceReader
                 case "controlType":
                 case "boundColumn":
                 case "columnCount":
+                case "sourceDocumentStartLine":
                     if (!property.Value.TryGetInt32(out var number) || number < 0)
                         throw new AccessScanException("AccessDesignInputRecordMalformed");
                     break;
@@ -536,10 +551,27 @@ public static class AccessDesignEvidenceReader
         }
         if (kind == "vba-module")
         {
-            ValidateProtectedText(payload, "sourceText", "sourceSha256", "lineCount",
-                limits.MaxVbaModuleTextLength, limits.MaxVbaModuleLines);
+            if (payload.TryGetProperty("sourceText", out _))
+                ValidateProtectedText(payload, "sourceText", "sourceSha256", "lineCount",
+                    limits.MaxVbaModuleTextLength, limits.MaxVbaModuleLines);
+            else
+            {
+                RequireSha256(payload, "sourceSha256", "AccessDesignInputFieldRejected");
+                RequireNonNegativeInt(payload, "lineCount", "AccessDesignInputRecordMalformed");
+            }
             RequireClosedString(payload, "moduleKind", ["standard", "class", "form", "report"], "AccessDesignInputRecordMalformed");
             RequireClosedString(payload, "coordinateBasis", ["module-relative"], "AccessDesignInputRecordMalformed");
+            if (payload.TryGetProperty("sourceDocumentSha256", out var sourceDocumentHash)
+                && (sourceDocumentHash.ValueKind != JsonValueKind.String
+                    || !IsHex(sourceDocumentHash.GetString(), 64)))
+                throw new AccessScanException("AccessDesignInputRecordMalformed");
+            if (payload.TryGetProperty("sourceDocumentStartLine", out var sourceDocumentStartLine)
+                && (!sourceDocumentStartLine.TryGetInt32(out var startLine) || startLine < 1))
+                throw new AccessScanException("AccessDesignInputRecordMalformed");
+            if (payload.TryGetProperty("extractionMechanism", out var extractionMechanism)
+                && (extractionMechanism.ValueKind != JsonValueKind.String
+                    || !string.Equals(extractionMechanism.GetString(), "save-as-text-code-behind", StringComparison.Ordinal)))
+                throw new AccessScanException("AccessDesignInputRecordMalformed");
         }
         if (kind == "catalog-object")
         {
@@ -598,10 +630,12 @@ public static class AccessDesignEvidenceReader
         if (kind == "source-gap")
         {
             RequireClosedString(payload, "classification",
-                ["catalog-partial", "coordinates-unavailable", "source-unavailable", "unsupported-object", "producer-limit-reached"],
+                ["catalog-partial", "coordinates-unavailable", "source-unavailable", "unsupported-object", "producer-limit-reached",
+                    "AccessVbaCodeBehindOwnerUnavailable", "AccessVbaCodeBehindSourceUnavailable",
+                    "AccessVbaCodeBehindProcedureUnavailable"],
                 "AccessDesignInputRecordMalformed");
             RequireClosedString(payload, "affectedScope",
-                ["database", "catalog", "ui", "vba", "macro"],
+                ["database", "catalog", "ui", "ui-surface", "vba", "macro", "form", "report"],
                 "AccessDesignInputRecordMalformed");
             RequireClosedString(payload, "coverageCategory",
                 ["source-declared-partial", "source-unavailable", "unsupported", "limit-reached"],

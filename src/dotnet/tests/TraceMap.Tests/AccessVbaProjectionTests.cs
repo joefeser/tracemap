@@ -66,6 +66,20 @@ public sealed class AccessVbaProjectionTests
     }
 
     [Fact]
+    public void Projector_marks_hash_only_vba_modules_partial_without_source_facts()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var result = AccessVbaProjector.Project(seed,
+            [new AccessRawVbaModule("ModuleA", "standard", null, new string('b', 64), 12)]);
+
+        var module = Assert.Single(result.Modules);
+        Assert.Equal("partial", module.Coverage);
+        Assert.Equal(12, module.LineCount);
+        Assert.Empty(module.Procedures);
+        Assert.Contains(result.Gaps, gap => gap.Classification == "AccessVbaModuleSourceUnavailable");
+    }
+
+    [Fact]
     public async Task Count_only_vba_inventory_emits_metadata_and_gap_without_identity_or_flow_facts()
     {
         using var temp = new TempDirectory();
@@ -207,6 +221,212 @@ public sealed class AccessVbaProjectionTests
         Assert.Equal("partial", wrongKind.Coverage);
         Assert.Contains(result.Gaps, gap => gap.Classification == "AccessVbaLiteralTargetUnresolved"
             && gap.StableScopeKey == wrongKind.Identity.StableKey);
+    }
+
+    [Fact]
+    public void Projector_collects_active_lifecycle_state_effects_and_ignores_commented_out_statements()
+    {
+        const string source = """
+            Private Sub Form_Open(Cancel As Integer)
+                DoCmd.OpenForm "frmTarget"
+            End Sub
+
+            Private Sub Form_Current()
+                If Me.IsArchived Then
+                    Me.txtStatus.Visible = False
+                    Me.txtStatus.Enabled = False
+                    Forms("frmTarget").Visible = True
+                End If
+                Me.Requery
+                ' Me.txtCommented.Locked = True
+            End Sub
+
+            Private Sub lstSelection_AfterUpdate()
+                Me.txtStatus.Caption = "Changed"
+                Call Helper
+            End Sub
+
+            Private Sub Helper()
+            End Sub
+            """;
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('c', 40), "fixture.accdb", "hash");
+        var result = AccessVbaProjector.Project(seed,
+            [new("Form_frmHost", "form", source)],
+            [
+                new("form-owner", "on-open", "Form_frmHost", "Form_Open"),
+                new("form-owner", "on-current", "Form_frmHost", "Form_Current"),
+                new("control-owner", "after-update", "Form_frmHost", "lstSelection_AfterUpdate")
+            ]);
+
+        var procedures = result.Modules.Single().Procedures;
+        Assert.Equal(3, result.EventBindings.Count);
+        Assert.All(result.EventBindings, binding => Assert.Equal("complete", binding.Coverage));
+        var current = procedures.Single(procedure => procedure.Identity.DisplayName == "Form_Current");
+        var effects = current.Effects!;
+        Assert.Equal(2, effects.Count(effect => effect.EffectKind == "control-state-assignment"));
+        Assert.Contains(effects, effect => effect.EffectKind == "forms-reference" && effect.TargetIdentity is not null);
+        Assert.Contains(effects, effect => effect.EffectKind == "surface-requery");
+        Assert.All(effects.Where(effect => effect.EffectKind != "surface-requery"), effect => Assert.NotNull(effect.ConditionHash));
+        Assert.DoesNotContain(effects, effect => effect.TargetIdentity?.DisplayName == "txtCommented");
+        Assert.Contains(procedures.Single(procedure => procedure.Identity.DisplayName == "lstSelection_AfterUpdate").Calls,
+            call => call.CallKind == "local-procedure-call");
+    }
+
+    [Fact]
+    public void Projector_composes_conditional_literal_rowsources_with_static_projection_and_event_evidence()
+    {
+        const string source = """
+            Private Sub cboMode_AfterUpdate()
+                If Me.cboMode = "general" Then
+                    Me.cboItem.RowSource = "SELECT GeneralId, Label FROM GeneralLookup WHERE OwnerId = glngCurrentUser();"
+                Else
+                    Me.cboItem.RowSource = "SELECT PersonalId, Label FROM PersonalLookup;"
+                End If
+            End Sub
+            """;
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('2', 40), "fixture.accdb", "hash");
+        var general = AccessSafeValues.Identity(seed, "table", "GeneralLookup");
+        var personal = AccessSafeValues.Identity(seed, "table", "PersonalLookup");
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["GeneralLookup"] = [(general.StableKey, "table")],
+            ["PersonalLookup"] = [(personal.StableKey, "table")]
+        };
+        var fields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            [general.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["GeneralId"] = [AccessSafeValues.RoleHash("field", "general-id")],
+                ["Label"] = [AccessSafeValues.RoleHash("field", "general-label")],
+                ["OwnerId"] = [AccessSafeValues.RoleHash("field", "general-owner")]
+            },
+            [personal.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["PersonalId"] = [AccessSafeValues.RoleHash("field", "personal-id")],
+                ["Label"] = [AccessSafeValues.RoleHash("field", "personal-label")]
+            }
+        };
+
+        var result = AccessVbaProjector.Project(seed,
+            [new("Form_frmHost", "form", source)],
+            [new("form-owner", "after-update", "Form_frmHost", "cboMode_AfterUpdate")],
+            knownObjects: known,
+            fieldsByTable: fields);
+
+        var procedure = Assert.Single(result.Modules.Single().Procedures);
+        var effects = procedure.Effects!.Where(effect => effect.EffectKind == "row-source-assignment").ToArray();
+        Assert.Equal(2, effects.Length);
+        Assert.All(effects, effect => Assert.NotNull(effect.ConditionHash));
+        Assert.All(effects, effect => Assert.NotNull(effect.RowSourceProjection));
+        Assert.All(effects, effect => Assert.Equal(new[] { 0, 1 }, effect.RowSourceProjection!.Outputs.Select(output => output.Ordinal)));
+        Assert.Contains(effects, effect => effect.RowSourceProjection!.Dependencies.Any(item => item.TargetStableKey == general.StableKey)
+            && effect.RowSourceProjection.FunctionNameHashes.Count == 1);
+        Assert.Contains(effects, effect => effect.RowSourceProjection!.Dependencies.Any(item => item.TargetStableKey == personal.StableKey));
+        Assert.Contains(result.EventBindings, binding => binding.ProcedureStableKey == procedure.Identity.StableKey
+            && binding.Coverage == "complete");
+    }
+
+    [Fact]
+    public void Projector_preserves_dynamic_rowsource_as_gap_and_partial_effect()
+    {
+        const string source = """
+            Private Sub Form_Load()
+                Me.cboItem.RowSource = "SELECT " & Me.txtField & " FROM Lookup"
+            End Sub
+            """;
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('3', 40), "fixture.accdb", "hash");
+        var result = AccessVbaProjector.Project(seed, [new("Form_frmHost", "form", source)]);
+        var effect = Assert.Single(result.Modules.Single().Procedures.Single().Effects!);
+        Assert.Equal("row-source-assignment", effect.EffectKind);
+        Assert.Equal("partial", effect.Coverage);
+        Assert.Contains(result.Gaps, gap => gap.Classification == "AccessVbaRowSourceDynamic");
+    }
+
+    [Fact]
+    public void Projector_reconciles_event_handler_with_static_save_current_record_command()
+    {
+        const string source = """
+            Private Sub Form_Current()
+                DoCmd.RunCommand(acCmdSaveRecord)
+            End Sub
+            """;
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('4', 40), "fixture.accdb", "hash");
+        var result = AccessVbaProjector.Project(seed,
+            [new("Form_frmHost", "form", source)],
+            [new("form-owner", "on-current", "Form_frmHost", "Form_Current")]);
+
+        var binding = Assert.Single(result.EventBindings);
+        Assert.Equal("resolved", binding.Classification);
+        Assert.Equal("save-current-record", binding.CommandKind);
+        Assert.Equal("complete", binding.CommandCoverage);
+        Assert.Contains(result.Modules.Single().Procedures.Single().Effects!,
+            effect => effect.EffectKind == "save-current-record-command");
+    }
+
+    [Fact]
+    public void Projector_recognizes_statement_form_run_command_and_keeps_other_commands_dynamic()
+    {
+        const string source = """
+            Private Sub Form_Current()
+                DoCmd.RunCommand acCmdSaveRecord
+                DoCmd.RunCommand acCmdSomethingElse
+            End Sub
+            """;
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('6', 40), "fixture.accdb", "hash");
+        var result = AccessVbaProjector.Project(seed,
+            [new("Form_frmHost", "form", source)],
+            [new("form-owner", "on-current", "Form_frmHost", "Form_Current")]);
+
+        var effects = result.Modules.Single().Procedures.Single().Effects!;
+        Assert.Contains(effects, effect => effect.EffectKind == "save-current-record-command");
+        Assert.Contains(result.Gaps, gap => gap.Classification == "AccessVbaCommandDynamic");
+    }
+
+    [Fact]
+    public void Projector_does_not_promote_save_record_prefixes_or_extra_arguments()
+    {
+        const string source = """
+            Private Sub Form_Current()
+                DoCmd.RunCommand(acCmdSaveRecordExtra)
+                DoCmd.RunCommand(acCmdSaveRecord, otherArg)
+            End Sub
+            """;
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('7', 40), "fixture.accdb", "hash");
+        var result = AccessVbaProjector.Project(seed,
+            [new("Form_frmHost", "form", source)],
+            [new("form-owner", "on-current", "Form_frmHost", "Form_Current")]);
+
+        Assert.DoesNotContain(result.Modules.Single().Procedures.Single().Effects!,
+            effect => effect.EffectKind == "save-current-record-command");
+        Assert.Equal(2, result.Gaps.Count(gap => gap.Classification == "AccessVbaCommandDynamic"));
+    }
+
+    [Fact]
+    public void Projector_keeps_dynamic_event_expression_as_explicit_gap()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('5', 40), "fixture.accdb", "hash");
+        var result = AccessVbaProjector.Project(seed,
+            [new("Form_frmHost", "form", "Private Sub Form_Load()\nEnd Sub")],
+            [new("form-owner", "on-load", "Form_frmHost", "", "form", "dynamic-event-expression", "hash", 12)]);
+
+        var binding = Assert.Single(result.EventBindings);
+        Assert.Equal("unsupported-dynamic-target", binding.Classification);
+        Assert.Equal("partial", binding.Coverage);
+        Assert.Contains(result.Gaps, gap => gap.Classification == "AccessEventProcedureUnresolved");
+    }
+
+    [Fact]
+    public void Projector_classifies_missing_event_module_as_unresolved_not_ambiguous()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('8', 40), "fixture.accdb", "hash");
+        var result = AccessVbaProjector.Project(seed,
+            [new("Form_frmHost", "form", "Private Sub Form_Load()\nEnd Sub")],
+            [new("form-owner", "on-load", "MissingModule", "Form_Load")]);
+
+        var binding = Assert.Single(result.EventBindings);
+        Assert.Equal("declared-handler-missing", binding.Classification);
+        Assert.Contains(result.Gaps, gap => gap.Classification == "AccessEventProcedureUnresolved");
+        Assert.DoesNotContain(result.Gaps, gap => gap.Classification == "AccessEventProcedureAmbiguous");
     }
 
     [Fact]
