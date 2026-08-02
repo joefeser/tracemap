@@ -110,17 +110,19 @@ public static partial class AccessExpressionProjector
                     : null;
                 var wildcardSelection = dlookup.Name.Equals("DCount", StringComparison.OrdinalIgnoreCase)
                     && NormalizeArgumentIdentifier(args[0]) == "*";
-                var selected = wildcardSelection
-                    ? "*"
+                var selectedResolution = wildcardSelection
+                    ? FieldResolution.Unique
                     : queryCandidate is not null
                         ? ResolveField(args[0], domainFields, selectedFields)
-                        : null;
+                        : FieldResolution.Missing;
                 if (wildcardSelection) literals.Add("wildcard");
-                if (selected is null)
+                if (selectedResolution == FieldResolution.Missing)
                 {
                     AddIdentifierReferenceHash(args[0], "access-expression-selected-field", selectedFieldRefs);
                     unresolved = true;
                 }
+                else if (selectedResolution == FieldResolution.Ambiguous)
+                    ambiguous = true;
                 if (queryCandidate is null) unresolved = true;
                 if (args.Count >= 3)
                 {
@@ -129,9 +131,11 @@ public static partial class AccessExpressionProjector
                     AddExternalReferences(externalMatches, externalRefs);
                     foreach (var candidate in ExtractIdentifiers(MaskMatches(criteriaExpression, externalMatches)))
                     {
-                        var criteria = queryCandidate is not null
+                        var criteriaResolution = queryCandidate is not null
                             ? ResolveField(candidate, domainFields, criteriaFields)
-                            : null;
+                            : FieldResolution.Missing;
+                        if (criteriaResolution == FieldResolution.Ambiguous)
+                            ambiguous = true;
                         var controlMatched = false;
                         if (controlStableKeys?.TryGetValue(candidate, out var stableControlCandidates) == true)
                         {
@@ -145,9 +149,9 @@ public static partial class AccessExpressionProjector
                             controlMatched = true;
                             controlRefs.Add(AccessSafeValues.RoleHash("access-expression-control", candidate));
                         }
-                        if (criteria is not null && controlMatched)
+                        if (criteriaResolution == FieldResolution.Unique && controlMatched)
                             ambiguous = true;
-                        else if (criteria is null && !controlMatched)
+                        else if (criteriaResolution == FieldResolution.Missing && !controlMatched)
                         {
                             AddIdentifierReferenceHash(candidate, "access-expression-criteria-field", criteriaFieldRefs);
                             unresolved = true;
@@ -187,15 +191,24 @@ public static partial class AccessExpressionProjector
             gap);
     }
 
-    private static string? ResolveField(string value, IReadOnlyDictionary<string, IReadOnlyList<string>>? fields, ISet<string> output)
+    private static FieldResolution ResolveField(string value, IReadOnlyDictionary<string, IReadOnlyList<string>>? fields, ISet<string> output)
     {
         var name = NormalizeArgumentIdentifier(value);
-        if (fields is not null && fields.TryGetValue(name, out var candidates) && candidates.Count == 1)
+        if (fields is null || !fields.TryGetValue(name, out var candidates) || candidates.Count == 0)
+            return FieldResolution.Missing;
+        if (candidates.Count == 1)
         {
             output.Add(candidates[0]);
-            return candidates[0];
+            return FieldResolution.Unique;
         }
-        return null;
+        return FieldResolution.Ambiguous;
+    }
+
+    private enum FieldResolution
+    {
+        Missing,
+        Unique,
+        Ambiguous
     }
 
     private static string? ResolveObject(string value, IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? objects, ISet<string> output)
