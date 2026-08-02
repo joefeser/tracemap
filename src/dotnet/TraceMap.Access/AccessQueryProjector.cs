@@ -539,7 +539,8 @@ public static partial class AccessQueryProjector
             dependencies[candidate.StableKey] = new AccessQueryDependencyProjection(candidate.StableKey, candidate.Kind, "direct-static-reference");
         }
 
-        var unsupported = UnsupportedPattern().IsMatch(MaskBracketedIdentifiers(masked));
+        var bracketMask = MaskBracketedIdentifiers(masked);
+        var unsupported = !bracketMask.Complete || UnsupportedPattern().IsMatch(bracketMask.Sql);
         var coverage = ambiguous || unresolved || unsupported ? "partial" : "complete";
         return (dependencies.Values.ToArray(), coverage, unsupported || ambiguous || unresolved);
     }
@@ -615,7 +616,7 @@ public static partial class AccessQueryProjector
         return builder.ToString();
     }
 
-    private static string MaskBracketedIdentifiers(string sql)
+    private static (string Sql, bool Complete) MaskBracketedIdentifiers(string sql)
     {
         var builder = new StringBuilder(sql.Length);
         var bracketed = false;
@@ -645,7 +646,7 @@ public static partial class AccessQueryProjector
             bracketed = false;
         }
 
-        return builder.ToString();
+        return (builder.ToString(), !bracketed);
     }
 
     [GeneratedRegex(@"(?ix)\b(?:from|join|update|into|table)\s+\(*\s*(?:\[(?<bracketed>[^\]]+)\]|(?<plain>[A-Za-z_][A-Za-z0-9_.$]*))", RegexOptions.CultureInvariant)]
