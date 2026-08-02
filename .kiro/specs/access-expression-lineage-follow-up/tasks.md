@@ -7,4 +7,4 @@
 - [x] Resolve the high-leverage metrics report expressions and remaining bounded deterministic cases.
 - [x] Rerun the protected representative bundle and record exact before/after counts.
 - [x] Run focused and full validation.
-- [ ] Open a focused PR to `dev` and follow ACK.
+- [x] Open a focused PR to `dev` and follow ACK.
