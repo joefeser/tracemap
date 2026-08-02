@@ -224,6 +224,61 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Linked_inline_sql_child_uses_selected_output_field_scope()
+    {
+        const string parentDesign = """
+            Begin Form
+                RecordSource ="qryParent"
+                Begin Subform
+                    Name ="subDetails"
+                    SourceObject ="Form.frmDetails"
+                    LinkMasterFields ="ParentId"
+                    LinkChildFields ="ChildId"
+                End
+            End
+            """;
+        var parent = Assert.IsType<AccessRawUiSurface>(
+            AccessUiTextParser.Parse(new StringReader(parentDesign), "frmParent", "form").Surface);
+        var child = new AccessRawUiSurface("frmDetails", "form", false, "SELECT ChildId FROM tblDetails", [], []);
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('3', 40), "fixture.accdb", "hash");
+        var parentQuery = AccessSafeValues.Identity(seed, "query", "qryParent");
+        var detailTable = AccessSafeValues.Identity(seed, "table", "tblDetails");
+        var detailSurface = AccessSafeValues.Identity(seed, "form", "frmDetails");
+        var parentId = AccessSafeValues.Identity(seed, $"query-field-{parentQuery.StableKey}", "ParentId");
+        var childId = AccessSafeValues.Identity(seed, $"field-{detailTable.StableKey}", "ChildId");
+        var excluded = AccessSafeValues.Identity(seed, $"field-{detailTable.StableKey}", "ExcludedField");
+
+        var projected = AccessUiProjector.Project(
+            seed,
+            [parent, child],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qryParent"] = [(parentQuery.StableKey, "query")],
+                ["tblDetails"] = [(detailTable.StableKey, "table")],
+                ["frmDetails"] = [(detailSurface.StableKey, "form")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [parentQuery.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["ParentId"] = [parentId.StableKey]
+                },
+                [detailTable.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["ChildId"] = [childId.StableKey],
+                    ["ExcludedField"] = [excluded.StableKey]
+                }
+            });
+
+        var projectedParent = projected.Surfaces.Single(surface => surface.Identity.StableKey
+            == AccessSafeValues.Identity(seed, "form", "frmParent").StableKey);
+        var subform = Assert.Single(projectedParent.Controls);
+        var childLink = Assert.Single(subform.Bindings, binding => binding.BindingKind == "link-child-field-0");
+        Assert.Equal([childId.StableKey], childLink.TargetStableKeys);
+        Assert.DoesNotContain(excluded.StableKey, childLink.TargetStableKeys);
+    }
+
+    [Fact]
     public void Text_design_parser_stops_before_code_hashes_protected_design_and_balances_unsupported_property_blocks()
     {
         const string design = """"
@@ -835,7 +890,7 @@ public sealed class AccessUiProjectionTests
 
         var recordBinding = Assert.Single(Assert.Single(projected.Surfaces).Bindings, item => item.BindingKind == "record-source");
         Assert.Equal([table.StableKey], recordBinding.TargetStableKeys);
-        Assert.Equal("query", recordBinding.TargetKind);
+        Assert.Equal("table", recordBinding.TargetKind);
         var binding = Assert.Single(Assert.Single(Assert.Single(projected.Surfaces).Controls).Bindings);
         Assert.Equal("inline-source-output-candidate", binding.SourceKind);
         Assert.Equal("query-output-candidate", binding.TargetKind);

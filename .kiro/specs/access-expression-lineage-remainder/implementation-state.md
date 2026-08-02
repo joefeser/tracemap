@@ -14,5 +14,5 @@
 - Pull request: #580 targeting `dev`; ACK review is pending and merge is not authorized by this slice.
 - Determinism: after review fixes, two final representative enrichments emitted byte-identical 7,525-fact streams and manifests. The 23 removed facts were field identities that had been incorrectly mixed into query-target bindings.
 - Downstream validation: 100 bounded flow paths and 32 copy/clone candidates, both correctly labeled partial.
-- Validation: 99 focused tests passed; changed-file format verification passed; full solution build passed with zero warnings/errors; full solution test command exited successfully; private-path guard and `git diff --check` passed.
+- Validation: 100 focused tests passed; changed-file format verification passed; full solution build passed with zero warnings/errors; full solution test command exited successfully; private-path guard and `git diff --check` passed.
 - Repository-wide format note: the unscoped formatter reports pre-existing whitespace findings in unrelated files, so this slice uses the changed-file format gate and does not rewrite unrelated code.
