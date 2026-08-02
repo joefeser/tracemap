@@ -151,6 +151,23 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Query_projector_marks_unterminated_bracketed_identifiers_partial()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Orders"] = [("table-orders", "table")]
+        };
+
+        var projected = AccessQueryProjector.ProjectDependencies(
+            "SELECT * FROM Orders WHERE [Malformed = 1 UNION SELECT * FROM Orders;",
+            known);
+
+        Assert.Equal(["table-orders"], projected.Dependencies.Select(item => item.TargetStableKey));
+        Assert.Equal("partial", projected.Coverage);
+        Assert.True(projected.UnsupportedShape);
+    }
+
+    [Fact]
     public void Query_output_shape_accepts_only_direct_select_fields()
     {
         Assert.True(AccessQueryProjector.IsDirectOutputField(
