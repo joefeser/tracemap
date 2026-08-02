@@ -309,13 +309,20 @@ internal static partial class AccessUiProjector
 
         var candidates = ResolveExpressionCandidates(trimmed, objects, fields, out var ambiguous);
         var expression = AccessExpressionProjector.Project(trimmed, objects, fields, controlNames, fieldSetsByObject);
+        var expressionTargets = candidates
+            .Concat(expression.QueryStableKeys)
+            .Concat(expression.FieldStableKeys)
+            .Concat(expression.SelectedFieldStableKeys)
+            .Concat(expression.CriteriaFieldStableKeys)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
         if (expression.GapClassification is not null)
             gaps.Add(new(expression.GapClassification, "binding", identity.StableKey, RuleIds.LegacyAccessBinding));
         else if (ambiguous)
             gaps.Add(new("AccessBindingTargetAmbiguous", "binding", identity.StableKey, RuleIds.LegacyAccessBinding));
         return new(identity, ownerStableKey, bindingKind, "expression",
             AccessSafeValues.RoleHash($"access-{bindingKind}-expression", trimmed), trimmed.Length,
-            candidates, fields is not null ? "field" : "object", expression.Coverage, expression);
+            expressionTargets, fields is not null ? "field" : "object", expression.Coverage, expression);
     }
 
     private static AccessBindingProjection MissingReportGroupBinding(

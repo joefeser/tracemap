@@ -21,11 +21,11 @@ public static class AccessDesignEvidenceComposer
             .Select(fact => (
                 Ordinal: int.Parse(fact.Properties["ordinal"], System.Globalization.CultureInfo.InvariantCulture),
                 Target: fact.TargetSymbol!))
-            .Where(entry => entry.Ordinal > 0)
+            .Where(entry => entry.Ordinal >= 0)
             .GroupBy(entry => entry.Ordinal)
             .ToArray();
         var maxOrdinal = entries.Length == 0 ? 0 : entries.Max(group => group.Key);
-        var outputs = Enumerable.Repeat(string.Empty, maxOrdinal).ToArray();
+        var outputs = Enumerable.Repeat(string.Empty, maxOrdinal + 1).ToArray();
         foreach (var group in entries)
         {
             var targets = group.Select(entry => entry.Target)
@@ -35,7 +35,7 @@ public static class AccessDesignEvidenceComposer
             // A duplicate ordinal is ambiguous; preserve its position as an explicit
             // hole so BoundColumn cannot silently shift to a different projection.
             if (targets.Length == 1)
-                outputs[group.Key - 1] = targets[0];
+                outputs[group.Key] = targets[0];
         }
         return outputs;
     }
