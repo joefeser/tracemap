@@ -44,7 +44,7 @@ public static partial class AccessExpressionProjector
             .Any(name => !Functions.Contains(name));
         var domainSyntaxMatches = DomainNamePattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
         var domainMatches = FindDomainCalls(normalized, domainSyntaxMatches);
-        unresolved = domainSyntaxMatches.Count != domainMatches.Count;
+        unresolved |= domainSyntaxMatches.Count != domainMatches.Count;
 
         foreach (Match literal in LiteralPattern().Matches(MaskBracketedIdentifiers(normalized)))
             literals.Add(literal.Groups["kind"].Value.StartsWith('"') ? "string" : "number");
