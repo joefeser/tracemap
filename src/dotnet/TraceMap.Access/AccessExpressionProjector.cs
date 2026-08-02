@@ -20,7 +20,8 @@ public static partial class AccessExpressionProjector
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? fieldSetsByObject = null)
     {
         var normalized = expression.Trim();
-        var functions = FunctionPattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized))
+        var functionMatches = FunctionPattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
+        var functions = functionMatches
             .Select(match => match.Groups["name"].Value)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(name => AccessSafeValues.RoleHash("access-expression-function", name.ToLowerInvariant()))
@@ -38,7 +39,9 @@ public static partial class AccessExpressionProjector
         var criteriaFields = new SortedSet<string>(StringComparer.Ordinal);
         var controlRefs = new SortedSet<string>(StringComparer.Ordinal);
         var literals = new SortedSet<string>(StringComparer.Ordinal);
-        var unresolved = false;
+        var unresolved = functionMatches
+            .Select(match => match.Groups["name"].Value)
+            .Any(name => !Functions.Contains(name));
         var domainSyntaxMatches = DomainNamePattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
         var domainMatches = FindDomainCalls(normalized, domainSyntaxMatches);
         unresolved = domainSyntaxMatches.Count != domainMatches.Count;
