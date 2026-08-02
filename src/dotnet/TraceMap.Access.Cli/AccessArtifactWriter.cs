@@ -84,6 +84,8 @@ public static class AccessArtifactWriter
         lines.Add("- Public claim level: `hidden` (promotion requires a separate public-safe fixture and claim review).");
         lines.Add($"- Schema/relationship facts: {CountEvidenceByRules(result, RuleIds.LegacyAccessSchema)}");
         lines.Add($"- Saved-query/external-boundary facts: {CountEvidenceByRules(result, RuleIds.LegacyAccessQuery, RuleIds.LegacyAccessExternalLink)}");
+        lines.Add($"- Action-query lineage candidates: {result.Facts.Count(fact => fact.FactType == FactTypes.AccessQueryActionLineageCandidate)}");
+        lines.Add($"- Crosstab lineage candidates: {result.Facts.Count(fact => fact.FactType == FactTypes.AccessQueryCrosstabLineageCandidate)}");
         lines.Add($"- Form/report/control/binding facts: {CountEvidenceByRules(result, RuleIds.LegacyAccessUiSurface, RuleIds.LegacyAccessBinding)}");
         lines.Add($"- VBA/event/navigation facts: {CountEvidenceByRules(result, RuleIds.LegacyAccessVba, RuleIds.LegacyAccessEventBinding)}");
         lines.Add($"- Macro inventory facts: {result.Facts.Count(fact => fact.FactType == FactTypes.AccessMacroDeclared)}");

@@ -210,6 +210,39 @@ public static class AccessFactBuilder
                             ("limitations", "static-query-output-source-candidate;no-query-execution;no-row-read"))));
                 }
             }
+
+            if (query.ActionLineage is { } action)
+            {
+                facts.Add(Create(manifest, FactTypes.AccessQueryActionLineageCandidate, RuleIds.LegacyAccessQuery,
+                    EvidenceTiers.Tier3SyntaxOrTextual, span, sourceSymbol: query.Identity.StableKey,
+                    targetSymbol: action.TargetStableKey,
+                    properties: Props(
+                        ("queryStableKey", query.Identity.StableKey),
+                        ("operationKind", action.OperationKind),
+                        ("targetStableKey", action.TargetStableKey ?? ""),
+                        ("targetFieldStableKeys", string.Join(';', action.TargetFieldStableKeys)),
+                        ("fieldMappings", string.Join(';', action.FieldMappings.Select(mapping =>
+                            $"{mapping.Ordinal}:{mapping.TargetFieldStableKey ?? ""}:{string.Join(',', mapping.SourceFieldStableKeys)}:{mapping.SourceExpressionHash ?? ""}:{mapping.Coverage}"))),
+                        ("predicateExpressionHash", action.PredicateExpressionHash ?? ""),
+                        ("parameterOrdinals", string.Join(';', action.ParameterOrdinals)),
+                        ("coverageLabel", action.Coverage),
+                        ("limitations", "static-sql-shape-only;no-query-execution;no-row-read;dynamic-targets-remain-gaps"))));
+            }
+
+            if (query.CrosstabLineage is { } crosstab)
+            {
+                facts.Add(Create(manifest, FactTypes.AccessQueryCrosstabLineageCandidate, RuleIds.LegacyAccessQuery,
+                    EvidenceTiers.Tier3SyntaxOrTextual, span, sourceSymbol: query.Identity.StableKey,
+                    properties: Props(
+                        ("queryStableKey", query.Identity.StableKey),
+                        ("rowHeadingFieldStableKeys", string.Join(';', crosstab.RowHeadingFieldStableKeys)),
+                        ("aggregateExpressionHash", crosstab.AggregateExpressionHash ?? ""),
+                        ("valueExpressionHash", crosstab.ValueExpressionHash ?? ""),
+                        ("pivotExpressionHash", crosstab.PivotExpressionHash ?? ""),
+                        ("staticColumnHashes", string.Join(';', crosstab.StaticColumnHashes)),
+                        ("coverageLabel", crosstab.Coverage),
+                        ("limitations", "static-crosstab-shape-only;no-row-read;dynamic-pivot-values-remain-gaps"))));
+            }
         }
 
         foreach (var boundary in projection.ExternalLinks)
@@ -247,6 +280,14 @@ public static class AccessFactBuilder
                         ("rowSourceType", control.RowSourceType),
                         ("boundColumn", control.BoundColumn?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                         ("columnCount", control.ColumnCount?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                        ("valueBindingClassification", control.ValueBindingClassification),
+                        ("populationSourceType", control.PopulationSourceType),
+                        ("populationTargetStableKeys", control.PopulationTargetStableKeys is null ? null : string.Join(';', control.PopulationTargetStableKeys)),
+                        ("populationCoverage", control.PopulationCoverage),
+                        ("selectedProjectionOrdinals", control.SelectedProjectionOrdinals is null ? null : string.Join(';', control.SelectedProjectionOrdinals)),
+                        ("selectedValueStableKeys", control.SelectedValueStableKeys is null ? null : string.Join(';', control.SelectedValueStableKeys)),
+                        ("persistenceTargetStableKeys", control.PersistenceTargetStableKeys is null ? null : string.Join(';', control.PersistenceTargetStableKeys)),
+                        ("functionalRole", control.FunctionalRole),
                         ("eventDescriptors", EventDescriptors(control.Events)), ("coverageLabel", "static-design-metadata"),
                         ("limitations", "no-render;no-value-read;no-event-execution"))));
                 AddBindingFacts(facts, manifest, span, control.Bindings);
@@ -298,19 +339,88 @@ public static class AccessFactBuilder
                         targetSymbol: call.TargetStableKey,
                         properties: properties));
                 }
+
+                foreach (var effect in procedure.Effects ?? [])
+                {
+                    facts.Add(Create(manifest, FactTypes.AccessUiStateEffectCandidate, RuleIds.LegacyAccessVba,
+                        EvidenceTiers.Tier3SyntaxOrTextual,
+                        VbaSpan(input.DatabaseRelativePath, effect.StartLine, effect.EndLine),
+                        sourceSymbol: effect.ProcedureStableKey,
+                        targetSymbol: effect.TargetIdentity?.StableKey,
+                        properties: IdentityProps(effect.Identity,
+                            ("procedureStableKey", effect.ProcedureStableKey),
+                            ("stableEffectKey", effect.Identity.StableKey),
+                            ("effectKind", effect.EffectKind),
+                            ("targetNameHash", effect.TargetIdentity?.NameHash),
+                            ("expressionHash", effect.ExpressionHash),
+                            ("expressionLength", effect.ExpressionLength > 0 ? effect.ExpressionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                            ("conditionHash", effect.ConditionHash),
+                            ("conditionLength", effect.ConditionLength > 0 ? effect.ConditionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                            ("branchOrder", effect.BranchOrder?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                            ("rowSourceCoverage", effect.RowSourceProjection?.Coverage),
+                            ("rowSourceSqlHash", effect.RowSourceProjection?.SqlHash),
+                            ("rowSourceSqlLength", effect.RowSourceProjection is not null ? effect.RowSourceProjection.SqlLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                            ("rowSourceDependencyStableKeys", effect.RowSourceProjection is null ? null : string.Join(';', effect.RowSourceProjection.Dependencies.Select(item => item.TargetStableKey))),
+                            ("rowSourceOutputOrdinals", effect.RowSourceProjection is null ? null : string.Join(';', effect.RowSourceProjection.Outputs.Select(item => item.Ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)))),
+                            ("rowSourceOutputCoverage", effect.RowSourceProjection is null ? null : string.Join(';', effect.RowSourceProjection.Outputs.Select(item => item.Coverage))),
+                            ("rowSourcePredicateHash", effect.RowSourceProjection?.PredicateHash),
+                            ("rowSourceOrderByHash", effect.RowSourceProjection?.OrderByHash),
+                            ("rowSourceFunctionNameHashes", effect.RowSourceProjection is null ? null : string.Join(';', effect.RowSourceProjection.FunctionNameHashes)),
+                            ("rowSourceBoundColumn", effect.RowSourceBinding?.BoundColumn?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                            ("rowSourceSelectedValueFieldStableKeys", effect.RowSourceBinding is null ? null : string.Join(';', effect.RowSourceBinding.SelectedValueFieldStableKeys)),
+                            ("rowSourceControlSourceFieldStableKeys", effect.RowSourceBinding is null ? null : string.Join(';', effect.RowSourceBinding.ControlSourceFieldStableKeys)),
+                            ("rowSourceSurfaceRecordSourceStableKeys", effect.RowSourceBinding is null ? null : string.Join(';', effect.RowSourceBinding.SurfaceRecordSourceStableKeys)),
+                            ("rowSourceBindingCoverage", effect.RowSourceBinding?.Coverage),
+                            ("coverageLabel", effect.Coverage),
+                            ("limitations", "bounded-static-effect-candidate;literal-row-source-only;no-event-execution;no-runtime-state-or-order-proof"))));
+                }
             }
         }
 
         foreach (var binding in projection.EventBindings ?? [])
         {
-            facts.Add(Create(manifest, FactTypes.AccessEventBindingCandidate, RuleIds.LegacyAccessEventBinding, EvidenceTiers.Tier3SyntaxOrTextual, span,
+            var bindingSpan = binding.ProcedureStartLine > 0
+                ? VbaSpan(input.DatabaseRelativePath, binding.ProcedureStartLine, binding.ProcedureEndLine)
+                : span;
+            facts.Add(Create(manifest, FactTypes.AccessEventBindingCandidate, RuleIds.LegacyAccessEventBinding, EvidenceTiers.Tier3SyntaxOrTextual, bindingSpan,
                 sourceSymbol: binding.OwnerStableKey,
                 targetSymbol: binding.ProcedureStableKey,
                 properties: Props(
                     ("ownerStableKey", binding.OwnerStableKey), ("eventRole", binding.EventRole),
+                    ("ownerKind", binding.OwnerKind), ("bindingKind", binding.BindingKind),
                     ("moduleStableKey", binding.ModuleStableKey), ("procedureStableKey", binding.ProcedureStableKey),
+                    ("eventExpressionHash", binding.EventExpressionHash),
+                    ("eventExpressionLength", binding.EventExpressionLength > 0 ? binding.EventExpressionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                    ("procedureStartLine", binding.ProcedureStartLine > 0 ? binding.ProcedureStartLine.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                    ("procedureEndLine", binding.ProcedureEndLine > 0 ? binding.ProcedureEndLine.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                    ("classification", binding.Classification),
+                    ("commandKind", binding.CommandKind),
+                    ("commandCoverage", binding.CommandCoverage),
+                    ("commandExpressionHash", binding.CommandExpressionHash),
+                    ("commandExpressionLength", binding.CommandExpressionLength > 0 ? binding.CommandExpressionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                    ("commandStartLine", binding.CommandStartLine > 0 ? binding.CommandStartLine.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                    ("commandEndLine", binding.CommandEndLine > 0 ? binding.CommandEndLine.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
                     ("coverageLabel", binding.Coverage),
-                    ("limitations", "exact-same-module-static-candidate;no-event-execution-or-runtime-dispatch-proof"))));
+                    ("limitations", "exact-same-module-static-candidate;save-command-is-static-candidate-only;no-event-execution-or-runtime-dispatch-proof"))));
+            if (binding.CommandKind is not null)
+                facts.Add(Create(manifest, FactTypes.AccessCommandCandidate, RuleIds.LegacyAccessEventBinding,
+                    EvidenceTiers.Tier3SyntaxOrTextual,
+                    binding.CommandStartLine > 0
+                        ? VbaSpan(input.DatabaseRelativePath, binding.CommandStartLine, binding.CommandEndLine)
+                        : bindingSpan,
+                    sourceSymbol: binding.ProcedureStableKey ?? binding.OwnerStableKey,
+                    targetSymbol: binding.OwnerStableKey,
+                    properties: Props(
+                        ("ownerStableKey", binding.OwnerStableKey),
+                        ("eventRole", binding.EventRole),
+                        ("commandKind", binding.CommandKind),
+                        ("commandCoverage", binding.CommandCoverage),
+                        ("commandExpressionHash", binding.CommandExpressionHash),
+                        ("commandExpressionLength", binding.CommandExpressionLength > 0 ? binding.CommandExpressionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                        ("commandStartLine", binding.CommandStartLine > 0 ? binding.CommandStartLine.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                        ("commandEndLine", binding.CommandEndLine > 0 ? binding.CommandEndLine.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
+                        ("coverageLabel", binding.CommandCoverage ?? "partial"),
+                        ("limitations", "static-command-candidate;no-command-execution;no-persistence-proof"))));
         }
 
         foreach (var macro in projection.Macros ?? [])
@@ -406,6 +516,22 @@ public static class AccessFactBuilder
                         ("expressionHash", binding.ExpressionHash),
                         ("expressionLength", binding.ExpressionLength > 0 ? binding.ExpressionLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : null),
                         ("targetStableKey", target), ("targetKind", binding.TargetKind), ("coverageLabel", binding.Coverage),
+                        ("expressionClassification", binding.Expression?.Classification),
+                        ("expressionStructureHash", binding.Expression?.StructureHash),
+                        ("expressionFunctionNameHashes", binding.Expression is null ? null : string.Join(';', binding.Expression.FunctionNameHashes)),
+                        ("expressionOperatorNameHashes", binding.Expression is null ? null : string.Join(';', binding.Expression.OperatorNameHashes)),
+                        ("expressionFieldStableKeys", binding.Expression is null ? null : string.Join(';', binding.Expression.FieldStableKeys)),
+                        ("expressionControlStableKeys", binding.Expression is null ? null : string.Join(';', binding.Expression.ControlStableKeys)),
+                        ("expressionControlReferenceHashes", binding.Expression is null ? null : string.Join(';', binding.Expression.ControlReferenceHashes)),
+                        ("expressionExternalReferenceHashes", binding.Expression is null ? null : string.Join(';', binding.Expression.ExternalReferenceHashes)),
+                        ("expressionQueryStableKeys", binding.Expression is null ? null : string.Join(';', binding.Expression.QueryStableKeys)),
+                        ("expressionSelectedFieldStableKeys", binding.Expression is null ? null : string.Join(';', binding.Expression.SelectedFieldStableKeys)),
+                        ("expressionSelectedFieldReferenceHashes", binding.Expression is null ? null : string.Join(';', binding.Expression.SelectedFieldReferenceHashes)),
+                        ("expressionCriteriaFieldStableKeys", binding.Expression is null ? null : string.Join(';', binding.Expression.CriteriaFieldStableKeys)),
+                        ("expressionCriteriaFieldReferenceHashes", binding.Expression is null ? null : string.Join(';', binding.Expression.CriteriaFieldReferenceHashes)),
+                        ("expressionLiteralKinds", binding.Expression is null ? null : string.Join(';', binding.Expression.LiteralKinds)),
+                        ("expressionCoverage", binding.Expression?.Coverage),
+                        ("expressionGapClassification", binding.Expression?.GapClassification),
                         ("limitations", "declared-static-binding-only;no-evaluation;no-runtime-target-proof"))));
             }
         }
