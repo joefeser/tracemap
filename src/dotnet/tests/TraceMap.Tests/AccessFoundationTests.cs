@@ -259,6 +259,9 @@ public sealed class AccessFoundationTests
         var partiallyResolvedRows = AccessQueryProjector.ProjectCrosstabLineage(
             "TRANSFORM Sum(Events.Amount) SELECT Events.Category, MissingCategory FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
             known, fields);
+        var unsupportedFunction = AccessQueryProjector.ProjectCrosstabLineage(
+            "TRANSFORM Sum(CustomNormalize(Events.Amount)) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
+            known, fields);
 
         Assert.Equal(["field-row"], staticShape.RowHeadingFieldStableKeys);
         Assert.Equal(2, staticShape.StaticColumnHashes.Count);
@@ -266,6 +269,7 @@ public sealed class AccessFoundationTests
         Assert.Equal("complete", staticShape.Coverage);
         Assert.Equal(2, alternateStaticShape.StaticColumnHashes.Count);
         Assert.Equal("partial", partiallyResolvedRows.Coverage);
+        Assert.Equal("partial", unsupportedFunction.Coverage);
         Assert.Empty(dynamicShape.StaticColumnHashes);
         Assert.Equal("partial", dynamicShape.Coverage);
     }
@@ -429,10 +433,11 @@ public sealed class AccessFoundationTests
 
         var action = queries.Single(query => query.Identity == appendQuery).ActionLineage;
         Assert.NotNull(action);
-        Assert.Equal("complete", action!.Coverage);
-        Assert.Equal(
-            [AccessSafeValues.Identity(seed, $"query-field-{sourceQuery.StableKey}", "SourceId", 0).StableKey],
-            Assert.Single(action.FieldMappings).SourceFieldStableKeys);
+        Assert.Equal("partial", action!.Coverage);
+        Assert.Empty(Assert.Single(action.FieldMappings).SourceFieldStableKeys);
+        Assert.Contains(gaps, gap =>
+            gap.Classification == "AccessQueryActionLineagePartial"
+            && gap.StableScopeKey == appendQuery.StableKey);
         Assert.Equal(1, sourceDefinition.FieldsReadCount);
         Assert.Equal(0, appendDefinition.FieldsReadCount);
     }
