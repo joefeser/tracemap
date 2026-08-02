@@ -463,6 +463,42 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Calculated_control_source_keeps_general_identifiers_surface_scoped_but_resolves_domain_objects()
+    {
+        var parsed = AccessUiTextParser.Parse(
+            new StringReader("Begin Form\nRecordSource =\"Customers\"\nBegin TextBox\nName =\"txtActive\"\nControlSource =\"=[Active]+DLookUp([Value], \\\"qDomain\\\", \\\"[Id]=1\\\")\"\nEnd\nEnd\n"),
+            "frmCustomers",
+            "form");
+        var surface = Assert.IsType<AccessRawUiSurface>(parsed.Surface);
+        var projected = AccessUiProjector.Project(
+            AccessSafeValues.DatabaseIdentitySeed("repo", new string('e', 40), "fixture.accdb", "hash"),
+            [surface],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Customers"] = [("table-customers", "table")],
+                ["Active"] = [("query-active", "query")],
+                ["qDomain"] = [("query-domain", "query")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                ["table-customers"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Active"] = ["field-active"]
+                },
+                ["query-domain"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Value"] = ["field-domain-value"],
+                    ["Id"] = ["field-domain-id"]
+                }
+            });
+
+        var binding = Assert.Single(Assert.Single(projected.Surfaces).Controls.Single().Bindings);
+        Assert.Contains("field-active", binding.TargetStableKeys);
+        Assert.Contains("query-domain", binding.TargetStableKeys);
+        Assert.DoesNotContain("query-active", binding.TargetStableKeys);
+    }
+
+    [Fact]
     public void Text_design_parser_enforces_character_and_line_limits()
     {
         var limits = AccessLimits.Default with { MaxUiDesignTextLength = 20, MaxUiDesignLines = 2 };

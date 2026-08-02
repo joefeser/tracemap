@@ -88,7 +88,15 @@ internal static partial class AccessUiProjector
                 scopedFields = fieldLookup;
             else if (recordBinding is { SourceKind: "inline-sql" })
                 scopedFields = BuildInlineFieldScope(raw.RecordSource, knownObjects, fieldsByTable, recordBinding.TargetStableKeys);
-            var scopedObjects = scopedFields is null ? null : knownObjects;
+            var scopedObjectKeys = recordBinding?.TargetStableKeys.ToHashSet(StringComparer.Ordinal) ?? [];
+            var scopedObjects = scopedFields is null
+                ? null
+                : knownObjects.ToDictionary(
+                    item => item.Key,
+                    item => (IReadOnlyList<(string StableKey, string Kind)>)item.Value
+                        .Where(candidate => scopedObjectKeys.Contains(candidate.StableKey))
+                        .ToArray(),
+                    StringComparer.OrdinalIgnoreCase);
             var filterBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "filter", raw.Filter, 0, scopedObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys);
             if (filterBinding is not null) bindings.Add(filterBinding);
             var orderByBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "order-by", raw.OrderBy, 0, scopedObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys);
@@ -101,14 +109,15 @@ internal static partial class AccessUiProjector
                 var controlIdentity = AccessSafeValues.Identity(databaseIdentitySeed, $"control-{identity.StableKey}", rawControl.Name, rawControl.Ordinal, disclosurePolicy);
                 var controlBindings = new List<AccessBindingProjection>();
                 var controlSource = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "control-source", rawControl.ControlSource,
-                    rawControl.Ordinal, knownObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys,
-                    recordBinding, raw.RecordSource, queryKindsByStableKey);
+                    rawControl.Ordinal, scopedObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys,
+                    recordBinding, raw.RecordSource, queryKindsByStableKey, knownObjects);
                 if (controlSource is not null) controlBindings.Add(controlSource);
                 var rowSource = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "row-source", rawControl.RowSource,
                     rawControl.Ordinal, knownObjects, null, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys);
                 if (rowSource is not null) controlBindings.Add(rowSource);
                 var validation = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "validation-rule", rawControl.ValidationRule,
-                    rawControl.Ordinal, knownObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys);
+                    rawControl.Ordinal, scopedObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys,
+                    domainObjects: knownObjects);
                 if (validation is not null) controlBindings.Add(validation);
                 var sourceObject = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "source-object", NormalizeSourceObject(rawControl.SourceObject),
                     rawControl.Ordinal, knownObjects, null, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys);
@@ -310,7 +319,8 @@ internal static partial class AccessUiProjector
         IReadOnlyDictionary<string, IReadOnlyList<string>>? controlStableKeys = null,
         AccessBindingProjection? owningRecordBinding = null,
         string? owningRecordSource = null,
-        IReadOnlyDictionary<string, string>? queryKindsByStableKey = null)
+        IReadOnlyDictionary<string, string>? queryKindsByStableKey = null,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? domainObjects = null)
     {
         var trimmed = value?.Trim() ?? string.Empty;
         if (trimmed.Length == 0) return null;
@@ -437,7 +447,14 @@ internal static partial class AccessUiProjector
                 AccessSafeValues.RoleHash($"access-{bindingKind}-expression", trimmed), trimmed.Length, [], "unknown", "partial");
         }
         var candidates = ResolveExpressionCandidates(trimmed, objects, fields, out var ambiguous);
-        var expression = AccessExpressionProjector.Project(trimmed, objects, fields, controlNames, fieldSetsByObject, controlStableKeys);
+        var expression = AccessExpressionProjector.Project(
+            trimmed,
+            objects,
+            fields,
+            controlNames,
+            fieldSetsByObject,
+            controlStableKeys,
+            domainObjects);
         var expressionTargets = candidates
             .Concat(expression.QueryStableKeys)
             .Concat(expression.FieldStableKeys)
