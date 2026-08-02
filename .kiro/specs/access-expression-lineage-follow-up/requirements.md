@@ -22,4 +22,3 @@ Improve bounded Microsoft Access expression lineage so a design review can conne
 - No runtime branch, data outcome, or reachability proof.
 - No proof that a candidate control, field, query, or table was used at runtime.
 - No widening of Access COM or Windows extraction behavior.
-
