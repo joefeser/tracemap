@@ -47,6 +47,10 @@ public sealed class AccessVbaSourceExportTests
         Assert.Contains("AccessVbaCanaryFired", script, StringComparison.Ordinal);
         Assert.Contains("Wait-Job -Job $job -Timeout $TimeoutSeconds", script, StringComparison.Ordinal);
         Assert.Contains("AccessVbaProcessCleanupFailed", script, StringComparison.Ordinal);
+        Assert.Contains("AccessVbaOutputCleanupFailed", script, StringComparison.Ordinal);
+        Assert.Contains("AccessVbaInnerScratchCleanupFailed", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Remove-DirectoryWithRetry $output | Out-Null", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Remove-DirectoryWithRetry $innerScratch | Out-Null", script, StringComparison.Ordinal);
         Assert.Contains("FormReportMetadataDirectory", script, StringComparison.Ordinal);
         Assert.Contains("AccessVbaMetadataBundleBindingMismatch", script, StringComparison.Ordinal);
         Assert.Contains("Windows PowerShell 5.1 lacks the hashtable conversion switch", script, StringComparison.Ordinal);

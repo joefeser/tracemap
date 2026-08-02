@@ -303,6 +303,65 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Query_projector_marks_unsupported_action_predicates_partial_and_accepts_constant_static_predicates()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["TargetTable"] = [("table-target", "table")]
+        };
+        var actionFields = new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+        {
+            ["table-target"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Id"] = [new(new(null, "id", "field-id"), 0, "long", 4, true)]
+            }
+        };
+
+        var unsupported = AccessQueryProjector.ProjectActionLineage(
+            "DELETE FROM TargetTable WHERE Eval(Id);", "delete", known, actionFields);
+
+        Assert.Equal("partial", unsupported.Coverage);
+        Assert.NotNull(unsupported.PredicateExpressionHash);
+
+        var staticFields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            ["table-target"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Id"] = ["field-id"]
+            }
+        };
+        var constant = AccessQueryProjector.ProjectStaticSelect(
+            "SELECT TargetTable.Id FROM TargetTable WHERE 1=1;", known, staticFields);
+
+        Assert.Equal("complete", constant.Coverage);
+        Assert.Equal(AccessSafeValues.RoleHash("access-query-predicate", "1=1"), constant.PredicateHash);
+    }
+
+    [Fact]
+    public void Query_projector_hashes_declared_output_names_instead_of_select_expressions()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["TargetTable"] = [("table-target", "table")]
+        };
+        var fields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            ["table-target"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Id"] = ["field-id"]
+            }
+        };
+
+        var projection = AccessQueryProjector.ProjectStaticSelect(
+            "SELECT TargetTable.Id AS Identifier, Abs(TargetTable.Id) FROM TargetTable;", known, fields);
+
+        Assert.Equal(AccessSafeValues.RoleHash("access-query-output-name", "Identifier"), projection.Outputs[0].NameHash);
+        Assert.Null(projection.Outputs[1].NameHash);
+        Assert.True(AccessQueryProjector.HasStaticOutputName(
+            "SELECT TargetTable.Id AS Identifier FROM TargetTable;", "Identifier"));
+    }
+
+    [Fact]
     public void Com_reader_keeps_query_outputs_when_dependency_coverage_is_partial()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");

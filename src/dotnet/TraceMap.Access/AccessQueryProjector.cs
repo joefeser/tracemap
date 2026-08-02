@@ -68,6 +68,10 @@ public static partial class AccessQueryProjector
             }
         }
         var predicate = PredicateClause(masked);
+        if (predicate is not null
+            && (!ResolvesExpressionCompletely(predicate, knownObjects, fieldLookups)
+                || HasUnsupportedNamedFunction(predicate)))
+            coverage = "partial";
         var parameters = parameterOrdinals?.Distinct().OrderBy(value => value).ToArray() ?? [];
         return new(operationKind, target?.StableKey, targetFieldKeys, mappings,
             predicate is null ? null : AccessSafeValues.RoleHash("access-query-predicate", predicate), parameters, coverage);
@@ -120,7 +124,10 @@ public static partial class AccessQueryProjector
         {
             var trimmed = expression.Trim();
             var sourceFields = ResolveExpressionFieldKeys(trimmed, scopedKnownObjects, fieldsByTable);
-            var nameHash = AccessSafeValues.RoleHash("access-query-output-name", trimmed);
+            var outputName = StaticOutputName(trimmed);
+            var nameHash = outputName is null
+                ? null
+                : AccessSafeValues.RoleHash("access-query-output-name", outputName);
             return new AccessQueryStaticOutputProjection(
                 ordinal,
                 nameHash,
@@ -186,26 +193,11 @@ public static partial class AccessQueryProjector
             return false;
         var select = SelectListAfterKeyword(MaskLiteralsAndComments(sql), "select");
         if (select is null) return false;
-        var names = new List<string>();
-        foreach (var item in SplitSelectItems(select))
-        {
-            var trimmed = item.Trim();
-            var alias = OutputAliasPattern().Match(trimmed);
-            if (alias.Success)
-            {
-                names.Add(MatchedOutputName(alias));
-                continue;
-            }
-            var accessAlias = AccessOutputAliasPattern().Match(trimmed);
-            if (accessAlias.Success)
-            {
-                names.Add(MatchedOutputName(accessAlias));
-                continue;
-            }
-            var direct = DirectSelectFieldPattern().Match(trimmed);
-            if (direct.Success)
-                names.Add((direct.Groups["bracketed"].Success ? direct.Groups["bracketed"].Value : direct.Groups["plain"].Value).Trim());
-        }
+        var names = SplitSelectItems(select)
+            .Select(StaticOutputName)
+            .Where(name => name is not null)
+            .Cast<string>()
+            .ToArray();
         return names.Count(name => string.Equals(name, outputName.Trim(), StringComparison.OrdinalIgnoreCase)) == 1;
     }
 
@@ -222,6 +214,19 @@ public static partial class AccessQueryProjector
 
     private static string MatchedOutputName(Match match) =>
         (match.Groups["bracketed"].Success ? match.Groups["bracketed"].Value : match.Groups["plain"].Value).Trim();
+
+    private static string? StaticOutputName(string expression)
+    {
+        var trimmed = expression.Trim();
+        var alias = OutputAliasPattern().Match(trimmed);
+        if (alias.Success) return MatchedOutputName(alias);
+        var accessAlias = AccessOutputAliasPattern().Match(trimmed);
+        if (accessAlias.Success) return MatchedOutputName(accessAlias);
+        var direct = DirectSelectFieldPattern().Match(trimmed);
+        return direct.Success
+            ? (direct.Groups["bracketed"].Success ? direct.Groups["bracketed"].Value : direct.Groups["plain"].Value).Trim()
+            : null;
+    }
 
     private static IReadOnlyList<string> SplitSelectItems(string value)
     {
@@ -379,14 +384,16 @@ public static partial class AccessQueryProjector
     private static bool ResolvesExpressionFieldKeys(
         string expression,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> known,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fields) =>
-        FieldReferencePattern().Matches(expression).Cast<Match>().Where(match =>
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fields)
+    {
+        var matches = FieldReferencePattern().Matches(expression).Cast<Match>().Where(match =>
         {
             var next = match.Index + match.Length;
             while (next < expression.Length && char.IsWhiteSpace(expression[next])) next++;
             return next >= expression.Length || expression[next] != '(';
-        }).ToArray() is { Length: > 0 } matches
-        && matches.All(match => ResolveExpressionFieldKeys(match.Value, known, fields).Count == 1);
+        }).ToArray();
+        return matches.All(match => ResolveExpressionFieldKeys(match.Value, known, fields).Count == 1);
+    }
 
     private static bool IsStaticDirectProjection(string expression) =>
         DirectSelectFieldPattern().IsMatch(expression.Trim());
@@ -404,9 +411,14 @@ public static partial class AccessQueryProjector
                 return end >= expression.Length || expression[end] != '(';
             })
             .ToArray();
-        return references.Length > 0
-            && references.All(reference => ResolveExpressionFields(reference.Value, known, fields).Count == 1);
+        return references.All(reference => ResolveExpressionFields(reference.Value, known, fields).Count == 1);
     }
+
+    private static bool HasUnsupportedNamedFunction(string expression) =>
+        NamedFunctionPattern().Matches(expression)
+            .Select(match => match.Groups["name"].Value)
+            .Any(name => !SqlFunctionNames.Contains(name, StringComparer.OrdinalIgnoreCase)
+                && !SqlKeywordCallNames.Contains(name, StringComparer.OrdinalIgnoreCase));
 
     private static string? SetClause(string masked) => Clause(masked, "set", ["where", "order", ";", "$"]);
     private static string? PredicateClause(string masked) => Clause(masked, "where", ["group", "order", ";", "$"]);
@@ -415,8 +427,8 @@ public static partial class AccessQueryProjector
         var start = Regex.Match(masked, $@"(?is)\b{keyword}\b");
         if (!start.Success) return null;
         var tail = masked[(start.Index + start.Length)..];
-        var end = Regex.Match(tail, $@"(?is)\s+(?:{string.Join('|', boundaries.Where(x => x != "$"))})\b|;").Index;
-        return tail[..(end == 0 ? tail.Length : end)].Trim();
+        var end = Regex.Match(tail, $@"(?is)\s+(?:{string.Join('|', boundaries.Where(x => x != "$"))})\b|;");
+        return tail[..(end.Success ? end.Index : tail.Length)].Trim();
     }
 
     private static IReadOnlyList<string> ParsePivotColumns(string sql)

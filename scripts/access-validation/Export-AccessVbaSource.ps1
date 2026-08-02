@@ -106,6 +106,12 @@ function Remove-DirectoryWithRetry([string]$Path) {
     return $false
 }
 
+function Remove-OutputOrStop([string]$Path) {
+    if ((Test-Path -LiteralPath $Path) -and -not (Remove-DirectoryWithRetry $Path)) {
+        Stop-Export "AccessVbaOutputCleanupFailed"
+    }
+}
+
 function Test-HashUnchanged([string]$Path, [string]$ExpectedHash) {
     try {
         return (Get-Sha256 $Path) -eq $ExpectedHash
@@ -257,7 +263,7 @@ if (-not $InternalWorker) {
         Stop-Job -Job $job -ErrorAction SilentlyContinue
         Stop-OwnedAccessProcess $marker
         Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
-        if (Test-Path -LiteralPath $output) { Remove-DirectoryWithRetry $output | Out-Null }
+        Remove-OutputOrStop $output
         Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
         if (-not (Test-HashUnchanged $original $originalBefore)) { Stop-Export "AccessVbaOriginalSourceChanged" }
         if (-not (Test-HashUnchanged $copy $copyBefore)) { Stop-Export "AccessVbaSuppliedCopyChanged" }
@@ -274,21 +280,21 @@ if (-not $InternalWorker) {
     }
     if (Get-Process -Name "MSACCESS" -ErrorAction SilentlyContinue) {
         Stop-OwnedAccessProcess $marker
-        if (Test-Path -LiteralPath $output) { Remove-DirectoryWithRetry $output | Out-Null }
+        Remove-OutputOrStop $output
         Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
         Stop-Export "AccessVbaProcessCleanupFailed"
     }
     Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
     if (-not (Test-HashUnchanged $original $originalBefore)) {
-        if (Test-Path -LiteralPath $output) { Remove-DirectoryWithRetry $output | Out-Null }
+        Remove-OutputOrStop $output
         Stop-Export "AccessVbaOriginalSourceChanged"
     }
     if (-not (Test-HashUnchanged $copy $copyBefore)) {
-        if (Test-Path -LiteralPath $output) { Remove-DirectoryWithRetry $output | Out-Null }
+        Remove-OutputOrStop $output
         Stop-Export "AccessVbaSuppliedCopyChanged"
     }
     if ((Test-Path -LiteralPath $generationCanary) -or (Test-Path -LiteralPath $extractionCanary)) {
-        if (Test-Path -LiteralPath $output) { Remove-DirectoryWithRetry $output | Out-Null }
+        Remove-OutputOrStop $output
         Stop-Export "AccessVbaCanaryFired"
     }
     if (-not [string]::IsNullOrWhiteSpace($workerReason)) { Stop-Export $workerReason }
@@ -568,6 +574,8 @@ finally {
     }
     Close-ComObject $access
     [GC]::Collect(); [GC]::WaitForPendingFinalizers()
-    if (Test-Path -LiteralPath $innerScratch) { Remove-DirectoryWithRetry $innerScratch | Out-Null }
-    if (-not $succeeded -and (Test-Path -LiteralPath $output)) { Remove-DirectoryWithRetry $output | Out-Null }
+    $innerScratchCleanupFailed = (Test-Path -LiteralPath $innerScratch) -and -not (Remove-DirectoryWithRetry $innerScratch)
+    $outputCleanupFailed = -not $succeeded -and (Test-Path -LiteralPath $output) -and -not (Remove-DirectoryWithRetry $output)
+    if ($innerScratchCleanupFailed) { Stop-Export "AccessVbaInnerScratchCleanupFailed" }
+    if ($outputCleanupFailed) { Stop-Export "AccessVbaOutputCleanupFailed" }
 }

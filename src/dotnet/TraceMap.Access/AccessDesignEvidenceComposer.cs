@@ -540,20 +540,22 @@ public static class AccessDesignEvidenceComposer
             queryOutputs,
             queryKinds);
         var rowSourceContexts = ui.Surfaces
-            .SelectMany(surface => surface.Controls.Select(control =>
+            .SelectMany(surface => surface.Controls.SelectMany(control =>
             {
                 var rawSurface = rawSurfaces.FirstOrDefault(raw => SurfaceStableKey(databaseSeed, raw) == surface.Identity.StableKey);
                 var rawControl = rawSurface?.Controls.FirstOrDefault(item => item.Ordinal == control.Ordinal);
+                if (string.IsNullOrWhiteSpace(rawSurface?.Name) || string.IsNullOrWhiteSpace(rawControl?.Name))
+                    return [];
                 var controlSource = control.Bindings.FirstOrDefault(binding => binding.BindingKind == "control-source");
                 var recordSource = surface.Bindings.FirstOrDefault(binding => binding.BindingKind == "record-source");
-                return new KeyValuePair<string, AccessRowSourceBindingProjection>(
-                    (rawSurface?.Name ?? surface.Identity.NameHash) + "|" + AccessSafeValues.RoleHash("access-control-name", rawControl?.Name ?? control.Identity.NameHash),
+                return new[] { new KeyValuePair<string, AccessRowSourceBindingProjection>(
+                    rawSurface.Name + "|" + AccessSafeValues.RoleHash("access-control-name", rawControl.Name),
                     new(
                         control.BoundColumn,
                         [],
                         controlSource?.TargetStableKeys ?? [],
                         recordSource?.TargetStableKeys ?? [],
-                        controlSource?.Coverage == "complete" && recordSource?.Coverage == "complete" ? "complete" : "partial"));
+                        controlSource?.Coverage == "complete" && recordSource?.Coverage == "complete" ? "complete" : "partial")) };
             }))
             .GroupBy(item => item.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key,
@@ -772,15 +774,15 @@ public static class AccessDesignEvidenceComposer
         };
         if (properties.TryGetValue("coverageLabel", out var projectorCoverage))
             properties["projectorCoverage"] = projectorCoverage;
-        if (record?.Kind == "vba-module"
-            && record.Payload.TryGetProperty("sourceDocumentSha256", out var sourceDocumentHash))
-            properties["sourceDocumentSha256"] = sourceDocumentHash.GetString()!;
-        if (record?.Kind == "vba-module"
-            && record.Payload.TryGetProperty("sourceDocumentStartLine", out var sourceDocumentStartLine))
-            properties["sourceDocumentStartLine"] = sourceDocumentStartLine.GetInt32().ToString(System.Globalization.CultureInfo.InvariantCulture);
-        if (record?.Kind == "vba-module"
-            && record.Payload.TryGetProperty("extractionMechanism", out var extractionMechanism))
-            properties["sourceExtractionMechanism"] = extractionMechanism.GetString()!;
+        if (record?.Kind == "vba-module")
+        {
+            if (record.Payload.TryGetProperty("sourceDocumentSha256", out var sourceDocumentHash))
+                properties["sourceDocumentSha256"] = sourceDocumentHash.GetString()!;
+            if (record.Payload.TryGetProperty("sourceDocumentStartLine", out var sourceDocumentStartLine))
+                properties["sourceDocumentStartLine"] = sourceDocumentStartLine.GetInt32().ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (record.Payload.TryGetProperty("extractionMechanism", out var extractionMechanism))
+                properties["sourceExtractionMechanism"] = extractionMechanism.GetString()!;
+        }
         properties["coverageLabel"] = manifest.CopyBinding == "owner-attested-derived-copy"
             ? "copy-lineage-owner-attested"
             : record?.Completeness is "partial" or "unavailable"
