@@ -144,6 +144,27 @@ public sealed class AccessCopyCloneCandidateTests
     }
 
     [Fact]
+    public void Builder_preserves_dependency_kind_when_action_target_has_no_kind()
+    {
+        var facts = CandidateFacts().Append(Fact(
+            "fact-append-action",
+            FactTypes.AccessQueryActionLineageCandidate,
+            RuleIds.LegacyAccessQuery,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            AppendQuery,
+            TableA,
+            ("operationKind", "append"),
+            ("coverageLabel", "complete"))).ToArray();
+
+        var report = AccessCopyCloneCandidateReporter.Build("synthetic", Commit, facts, 100, 100, 100);
+
+        var candidate = Assert.Single(report.Candidates, item => item.Shape == "bulk-append-shape");
+        var participant = Assert.Single(candidate.Participants, item => item.Evidence.FactId == "fact-append-table-a");
+        Assert.Equal("table", participant.NodeKind);
+        Assert.Equal("dependency-role-unknown", participant.Role);
+    }
+
+    [Fact]
     public void Builder_preserves_flow_depth_truncation_without_claiming_a_path_limit()
     {
         var facts = CandidateFacts().ToList();

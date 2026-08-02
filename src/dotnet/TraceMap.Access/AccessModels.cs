@@ -103,6 +103,53 @@ public sealed record AccessQueryOutputFieldProjection(
     IReadOnlyList<string> SourceFieldStableKeys,
     string Coverage);
 
+public sealed record AccessQueryFieldMappingProjection(
+    int Ordinal,
+    string? SourceExpressionHash,
+    IReadOnlyList<string> SourceFieldStableKeys,
+    string? TargetFieldStableKey,
+    string Coverage);
+
+public sealed record AccessQueryActionProjection(
+    string OperationKind,
+    string? TargetStableKey,
+    IReadOnlyList<string> TargetFieldStableKeys,
+    IReadOnlyList<AccessQueryFieldMappingProjection> FieldMappings,
+    string? PredicateExpressionHash,
+    IReadOnlyList<int> ParameterOrdinals,
+    string Coverage);
+
+public sealed record AccessQueryCrosstabProjection(
+    IReadOnlyList<string> RowHeadingFieldStableKeys,
+    string? AggregateExpressionHash,
+    string? ValueExpressionHash,
+    string? PivotExpressionHash,
+    IReadOnlyList<string> StaticColumnHashes,
+    string Coverage);
+
+public sealed record AccessQueryStaticOutputProjection(
+    int Ordinal,
+    string? NameHash,
+    IReadOnlyList<string> SourceFieldStableKeys,
+    string Coverage);
+
+public sealed record AccessQueryStaticProjection(
+    string SqlHash,
+    int SqlLength,
+    IReadOnlyList<AccessQueryDependencyProjection> Dependencies,
+    string? PredicateHash,
+    string? OrderByHash,
+    IReadOnlyList<string> FunctionNameHashes,
+    IReadOnlyList<AccessQueryStaticOutputProjection> Outputs,
+    string Coverage);
+
+public sealed record AccessRowSourceBindingProjection(
+    int? BoundColumn,
+    IReadOnlyList<string> SelectedValueFieldStableKeys,
+    IReadOnlyList<string> ControlSourceFieldStableKeys,
+    IReadOnlyList<string> SurfaceRecordSourceStableKeys,
+    string Coverage);
+
 public sealed record AccessQueryProjection(
     AccessSafeIdentity Identity,
     string QueryKind,
@@ -114,7 +161,9 @@ public sealed record AccessQueryProjection(
     bool IsPassThrough,
     string? ConnectionHash,
     string? ProviderFamily,
-    IReadOnlyList<AccessQueryOutputFieldProjection>? OutputFields = null);
+    IReadOnlyList<AccessQueryOutputFieldProjection>? OutputFields = null,
+    AccessQueryActionProjection? ActionLineage = null,
+    AccessQueryCrosstabProjection? CrosstabLineage = null);
 
 public sealed record AccessExternalLinkProjection(
     AccessSafeIdentity Identity,
@@ -137,7 +186,64 @@ public sealed record AccessBindingProjection(
     int ExpressionLength,
     IReadOnlyList<string> TargetStableKeys,
     string TargetKind,
-    string Coverage);
+    string Coverage,
+    AccessExpressionProjection? Expression = null);
+
+public sealed record AccessExpressionProjection(
+    string Classification,
+    string StructureHash,
+    IReadOnlyList<string> FunctionNameHashes,
+    IReadOnlyList<string> OperatorNameHashes,
+    IReadOnlyList<string> FieldStableKeys,
+    IReadOnlyList<string> ControlStableKeys,
+    IReadOnlyList<string> ControlReferenceHashes,
+    IReadOnlyList<string> ExternalReferenceHashes,
+    IReadOnlyList<string> QueryStableKeys,
+    IReadOnlyList<string> SelectedFieldStableKeys,
+    IReadOnlyList<string> SelectedFieldReferenceHashes,
+    IReadOnlyList<string> CriteriaFieldStableKeys,
+    IReadOnlyList<string> CriteriaFieldReferenceHashes,
+    IReadOnlyList<string> LiteralKinds,
+    string Coverage,
+    string? GapClassification = null)
+{
+    // Preserves source and binary construction compatibility for consumers built
+    // against the original public positional record constructor. New projection
+    // code must use the primary constructor so no lineage collections are dropped.
+    [Obsolete("Use the constructor that preserves control, external-context, and unresolved role evidence.")]
+    public AccessExpressionProjection(
+        string classification,
+        string structureHash,
+        IReadOnlyList<string> functionNameHashes,
+        IReadOnlyList<string> operatorNameHashes,
+        IReadOnlyList<string> fieldStableKeys,
+        IReadOnlyList<string> controlReferenceHashes,
+        IReadOnlyList<string> queryStableKeys,
+        IReadOnlyList<string> selectedFieldStableKeys,
+        IReadOnlyList<string> criteriaFieldStableKeys,
+        IReadOnlyList<string> literalKinds,
+        string coverage,
+        string? gapClassification = null)
+        : this(
+            classification,
+            structureHash,
+            functionNameHashes,
+            operatorNameHashes,
+            fieldStableKeys,
+            [],
+            controlReferenceHashes,
+            [],
+            queryStableKeys,
+            selectedFieldStableKeys,
+            [],
+            criteriaFieldStableKeys,
+            [],
+            literalKinds,
+            coverage,
+            gapClassification)
+    {
+    }
+}
 
 public sealed record AccessControlProjection(
     AccessSafeIdentity Identity,
@@ -148,7 +254,15 @@ public sealed record AccessControlProjection(
     IReadOnlyList<AccessUiEventProjection> Events,
     string RowSourceType = "unspecified",
     int? BoundColumn = null,
-    int? ColumnCount = null);
+    int? ColumnCount = null,
+    string ValueBindingClassification = "unbound",
+    string PopulationSourceType = "none",
+    IReadOnlyList<string>? PopulationTargetStableKeys = null,
+    string PopulationCoverage = "none",
+    IReadOnlyList<int>? SelectedProjectionOrdinals = null,
+    IReadOnlyList<string>? SelectedValueStableKeys = null,
+    IReadOnlyList<string>? PersistenceTargetStableKeys = null,
+    string FunctionalRole = "none");
 
 public sealed record AccessReportGroupProjection(
     int Ordinal,
@@ -187,7 +301,24 @@ public sealed record AccessVbaProcedureProjection(
     string ProcedureKind,
     int StartLine,
     int EndLine,
-    IReadOnlyList<AccessVbaCallProjection> Calls);
+    IReadOnlyList<AccessVbaCallProjection> Calls,
+    IReadOnlyList<AccessVbaEffectProjection>? Effects = null);
+
+public sealed record AccessVbaEffectProjection(
+    AccessSafeIdentity Identity,
+    string ProcedureStableKey,
+    string EffectKind,
+    int StartLine,
+    int EndLine,
+    AccessSafeIdentity? TargetIdentity,
+    string? ExpressionHash,
+    int ExpressionLength,
+    string? ConditionHash,
+    int ConditionLength,
+    string Coverage,
+    AccessQueryStaticProjection? RowSourceProjection = null,
+    int? BranchOrder = null,
+    AccessRowSourceBindingProjection? RowSourceBinding = null);
 
 public sealed record AccessVbaModuleProjection(
     AccessSafeIdentity Identity,
@@ -202,7 +333,20 @@ public sealed record AccessEventBindingProjection(
     string EventRole,
     string ModuleStableKey,
     string? ProcedureStableKey,
-    string Coverage);
+    string Coverage,
+    string OwnerKind = "unknown",
+    string BindingKind = "event-procedure",
+    string? EventExpressionHash = null,
+    int EventExpressionLength = 0,
+    int ProcedureStartLine = 0,
+    int ProcedureEndLine = 0,
+    string Classification = "resolved",
+    string? CommandKind = null,
+    string? CommandCoverage = null,
+    string? CommandExpressionHash = null,
+    int CommandExpressionLength = 0,
+    int CommandStartLine = 0,
+    int CommandEndLine = 0);
 
 public sealed record AccessMacroProjection(
     AccessSafeIdentity Identity,

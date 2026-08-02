@@ -1503,6 +1503,15 @@ rules:
       - Raw record sources, control sources, row sources, filters, ordering expressions, validation expressions, calculated expressions, SQL, VBA, and macro bodies never persist; complex values retain only role-separated hashes, lengths, safe target keys, and coverage labels.
       - Ambiguous, dynamic, unsupported, or unresolved targets are explicit gaps; the extractor does not choose an arbitrary object or field.
       - Binding extraction never opens a recordset, executes a query, renders a surface, invokes an event, or reads a submitted/control value.
+      - Calculated bindings expose only a bounded function/operator summary, role-separated structure hash, resolved field/query/control candidates, safe literal classes, and coverage; expressions are never evaluated or persisted.
+      - Same-surface control stable keys are static name-match candidates only. A name matching both a scoped field and a control, or multiple controls, remains an explicit ambiguity gap.
+      - Recognized Access session/surface namespaces such as TempVars, Forms, and Reports persist only role-separated hashes; they do not prove the referenced value, object identity, availability, or runtime resolution.
+      - A design-catalog query-field candidate is accepted only beneath a query already matched to the immutable base scan; TraceMap derives its stable key and the candidate does not prove query execution, returned values, or runtime availability.
+      - Unresolved domain selected/criteria identifiers retain role-separated hashes only. They are never resolved against the owning surface when the named domain's field catalog is unavailable.
+      - List and combo controls keep value/persistence binding separate from population binding. A query-backed unbound selector has no persistence target unless a ControlSource provides one; BoundColumn is only a static projection-ordinal candidate.
+      - A surface-declared crosstab output candidate proves only that a control names an expected output beneath a known crosstab source. It does not prove that row-derived pivot values generated the output or that the query ran.
+      - Inline SQL sources are projected only through a bounded static subset. Dependency-scoped fields and statically named outputs remain candidates; unmatched, computed, wildcard, ambiguous, or dynamic outputs retain precise partial classifications.
+      - A resolved domain object with an incomplete field catalog remains partial even when selected and criteria identifier hashes are available; those hashes are not field identities.
 
   - id: legacy.access.vba.v1
     name: Microsoft Access bounded VBA declaration and call candidate
@@ -1512,12 +1521,14 @@ rules:
       - AccessVbaModuleDeclared
       - AccessVbaProcedureDeclared
       - AccessNavigationCandidate
+      - AccessUiStateEffectCandidate
       - AnalysisGap
     limitations:
       - The Access v0 product reader does not acquire VBA source and therefore emits no module, procedure, call, navigation, or event-binding facts from a database scan; it records only bounded module-count metadata plus AccessVbaProjectUnavailable. Richer evidence requires a separately security-reviewed source mechanism.
       - VBA evidence is bounded textual evidence and does not prove runtime dispatch, branch feasibility, error-handler outcome, query execution, record access, navigation, COM resolution, external process execution, deployment, or production use.
       - Raw source, declaration text, comments, string literals, SQL, connection values, command bodies, and local paths never persist; modules and dynamic expressions retain only role-separated hashes, lengths, counts, safe identities, and real module line coordinates.
       - Ordinary call matching excludes comments and string contents. Literal targets are considered only for allowlisted Access/DAO call shapes and are emitted through the role-specific safe identifier policy or as hashes.
+      - State-effect candidates cover only visibly textual `Me` property assignments, `Me.Requery`, and literal `Forms(...)` references. Condition text remains hash-only syntax context; no condition is interpreted as business intent or a runtime branch result.
       - Variables, concatenation, Eval, Run, callbacks, reflection-like dispatch, external libraries, conditional targets, malformed modules, and limit hits are explicit gaps rather than inferred targets.
 
   - id: legacy.access.event-binding.v1
@@ -1526,10 +1537,12 @@ rules:
     evidenceTier: Tier3SyntaxOrTextual
     emits:
       - AccessEventBindingCandidate
+      - AccessCommandCandidate
       - AnalysisGap
     limitations:
       - Event binding candidates prove only an exact static naming match in the owning module; they do not prove event firing, runtime dispatch, user interaction, branch feasibility, rendering, navigation, deployment, or production use.
       - Missing, ambiguous, dynamic, expression, and embedded-macro handlers remain gaps or separately classified surface evidence; the extractor never invokes an event or persists an event expression or macro body.
+      - Literal save-current-record command candidates are static syntax evidence only; they do not prove a save occurred, a record was available, or that the event fired.
       - Procedure and owner identities follow safe/hash policy, and VBA source never crosses worker IPC or enters artifacts.
 
   - id: legacy.access.macro-gap.v1

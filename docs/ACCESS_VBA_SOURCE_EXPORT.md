@@ -1,0 +1,68 @@
+# Microsoft Access VBA Source Export
+
+`Export-AccessVbaSource.ps1` is a separate Windows-only source-export boundary.
+It is not used by `tracemap-access scan` or `tracemap-access scan-file`.
+It supports the built-in Windows PowerShell 5.1 runtime; no PowerShell 7
+installation is required for the synthetic validation.
+
+It accepts a disposable Access copy plus a compatible protected form/report
+metadata bundle and creates:
+
+```text
+<output>/private-access-source/            # raw VBA plus form/report definitions
+<output>/normalized-design-evidence/      # pass this directory to enrich-design
+```
+
+The exporter sets force-disabled automation and invisibility, verifies separate
+canaries and the original hash, and uses a count-only loaded-module canary. It
+fails closed on timeout, visible UI, fired canary, original-source mutation, or
+cleanup failure. It never accesses VBE, recordsets, forms/reports, queries,
+macros, or procedures.
+
+Before opening Access, the exporter makes a new bounded inner scratch copy of
+the hash-identical supplied copy. It removes only the `StartupForm` database
+property from that inner copy with DAO, following the established metadata
+exporter pattern, so the synthetic startup sentinel cannot execute. The
+original and supplied-copy hashes remain strict integrity gates. Access may
+write internal bookkeeping to the inner copy while opening it; the manifests
+record sanitized pre/post hashes and either `AccessVbaWorkingCopyUnchanged` or
+`AccessVbaWorkingCopyChanged` before that inner copy is removed. This does not
+make the supplied copy filesystem read-only: that would be an unvalidated
+change to the Access open/export contract and may prevent the bounded export.
+A working-copy change is not evidence of original-source mutation, nor proof
+that the copy's logical contents are unchanged.
+
+The compatible form/report definitions also supply class-module source. For an
+exact `CodeBehindForm` or `CodeBehindReport` marker, the exporter emits only
+the following code suffix as a protected `vba-module`, with its source hash,
+module-relative lines, originating definition hash, and definition start line.
+The full definition remains private. It does not add a dummy standard module;
+missing or procedure-unparseable code-behind sections become explicit gaps.
+
+The normalized directory is protected local input. `enrich-design` processes
+source only in memory; normal facts, indexes, reports, and logs omit raw source
+and event-expression text. Static same-module candidates do not prove runtime
+behavior. Run the synthetic fixture first; a representative input needs a
+separate owner authorization.
+
+The pure projector also records bounded lifecycle linkage for populated
+form/report/control event properties. It supports conventional event procedure
+names and exact zero-argument expression functions, and may describe textual
+`Me` state assignments, `Me.Requery`, and literal `Forms(...)` references with
+module-relative spans and hash-only condition context. Embedded macros and
+dynamic handlers are gaps. This does not establish event firing, lifecycle
+ordering, runtime state, or a user workflow.
+
+On the isolated Windows VM, validate only the synthetic fixture before any
+owner-authorized representative discussion:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/access-validation/Invoke-AccessVbaSourceProducerSmoke.ps1 `
+  -Generator scripts/access-validation/New-SyntheticAccessFixture.ps1 `
+  -MetadataProducer scripts/access-validation/Export-AccessFormReportMetadata.ps1 `
+  -VbaProducer scripts/access-validation/Export-AccessVbaSource.ps1 `
+  -SmokeRoot C:\TraceMapDev\runs\access-vba-source-smoke
+```
+
+The smoke deletes its protected output. It is not an authorization to use a
+customer database.
