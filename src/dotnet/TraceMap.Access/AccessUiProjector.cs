@@ -101,14 +101,14 @@ internal static partial class AccessUiProjector
                 var controlIdentity = AccessSafeValues.Identity(databaseIdentitySeed, $"control-{identity.StableKey}", rawControl.Name, rawControl.Ordinal, disclosurePolicy);
                 var controlBindings = new List<AccessBindingProjection>();
                 var controlSource = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "control-source", rawControl.ControlSource,
-                    rawControl.Ordinal, scopedObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys,
+                    rawControl.Ordinal, knownObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys,
                     recordBinding, raw.RecordSource, queryKindsByStableKey);
                 if (controlSource is not null) controlBindings.Add(controlSource);
                 var rowSource = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "row-source", rawControl.RowSource,
                     rawControl.Ordinal, knownObjects, null, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys);
                 if (rowSource is not null) controlBindings.Add(rowSource);
                 var validation = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "validation-rule", rawControl.ValidationRule,
-                    rawControl.Ordinal, scopedObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys);
+                    rawControl.Ordinal, knownObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys);
                 if (validation is not null) controlBindings.Add(validation);
                 var sourceObject = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "source-object", NormalizeSourceObject(rawControl.SourceObject),
                     rawControl.Ordinal, knownObjects, null, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys);
@@ -340,14 +340,25 @@ internal static partial class AccessUiProjector
 
         if (TryDirectName(trimmed, out var directName))
         {
-            if (objects is not null && objects.TryGetValue(directName, out var objectCandidates))
+            var fieldOnlyDirectName = bindingKind is "control-source" or "validation-rule";
+            if (fieldOnlyDirectName)
+            {
+                if (fields is not null && fields.TryGetValue(directName, out var fieldCandidates))
+                {
+                    if (fieldCandidates.Count == 1)
+                        return new(identity, ownerStableKey, bindingKind, "direct-field", null, 0,
+                            [fieldCandidates[0]], "field", "complete");
+                    return Ambiguous(identity, ownerStableKey, bindingKind, trimmed, "field", gaps);
+                }
+            }
+            else if (objects is not null && objects.TryGetValue(directName, out var objectCandidates))
             {
                 if (objectCandidates.Count == 1)
                     return new(identity, ownerStableKey, bindingKind, "direct-object", null, 0,
                         [objectCandidates[0].StableKey], objectCandidates[0].Kind, "complete");
                 return Ambiguous(identity, ownerStableKey, bindingKind, trimmed, "object", gaps);
             }
-            if (fields is not null && fields.TryGetValue(directName, out var fieldCandidates))
+            else if (fields is not null && fields.TryGetValue(directName, out var fieldCandidates))
             {
                 if (fieldCandidates.Count == 1)
                     return new(identity, ownerStableKey, bindingKind, "direct-field", null, 0,

@@ -433,6 +433,36 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Scoped_control_source_prefers_the_record_field_over_an_object_name_collision()
+    {
+        var parsed = AccessUiTextParser.Parse(
+            new StringReader("Begin Form\nRecordSource =\"Customers\"\nBegin TextBox\nName =\"txtActive\"\nControlSource =\"Active\"\nEnd\nEnd\n"),
+            "frmCustomers",
+            "form");
+        var surface = Assert.IsType<AccessRawUiSurface>(parsed.Surface);
+        var projected = AccessUiProjector.Project(
+            AccessSafeValues.DatabaseIdentitySeed("repo", new string('e', 40), "fixture.accdb", "hash"),
+            [surface],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Customers"] = [("table-customers", "table")],
+                ["Active"] = [("query-active", "query")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                ["table-customers"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Active"] = ["field-active"]
+                }
+            });
+
+        var binding = Assert.Single(Assert.Single(projected.Surfaces).Controls.Single().Bindings);
+        Assert.Equal("direct-field", binding.SourceKind);
+        Assert.Equal(["field-active"], binding.TargetStableKeys);
+        Assert.DoesNotContain("query-active", binding.TargetStableKeys);
+    }
+
+    [Fact]
     public void Text_design_parser_enforces_character_and_line_limits()
     {
         var limits = AccessLimits.Default with { MaxUiDesignTextLength = 20, MaxUiDesignLines = 2 };
