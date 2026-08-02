@@ -15,6 +15,31 @@ public static class AccessDesignEvidenceComposer
         PropertyNameCaseInsensitive = true
     };
 
+    private static string[] BuildOrdinalOutputs(IEnumerable<CodeFact> facts)
+    {
+        var entries = facts
+            .Select(fact => (
+                Ordinal: int.Parse(fact.Properties["ordinal"], System.Globalization.CultureInfo.InvariantCulture),
+                Target: fact.TargetSymbol!))
+            .Where(entry => entry.Ordinal > 0)
+            .GroupBy(entry => entry.Ordinal)
+            .ToArray();
+        var maxOrdinal = entries.Length == 0 ? 0 : entries.Max(group => group.Key);
+        var outputs = Enumerable.Repeat(string.Empty, maxOrdinal).ToArray();
+        foreach (var group in entries)
+        {
+            var targets = group.Select(entry => entry.Target)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            // A duplicate ordinal is ambiguous; preserve its position as an explicit
+            // hole so BoundColumn cannot silently shift to a different projection.
+            if (targets.Length == 1)
+                outputs[group.Key - 1] = targets[0];
+        }
+        return outputs;
+    }
+
     public static async Task<ScanResult> ComposeAsync(
         string baseScanDirectory,
         string designEvidenceDirectory,
@@ -453,10 +478,7 @@ public static class AccessDesignEvidenceComposer
             .GroupBy(fact => fact.SourceSymbol!, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
-                group => (IReadOnlyList<string>)group
-                    .OrderBy(fact => int.Parse(fact.Properties["ordinal"], System.Globalization.CultureInfo.InvariantCulture))
-                    .Select(fact => fact.TargetSymbol!)
-                    .ToArray(),
+                group => (IReadOnlyList<string>)BuildOrdinalOutputs(group),
                 StringComparer.Ordinal);
         var ui = AccessUiProjector.Project(databaseSeed, rawSurfaces, known, fields, AccessIdentityDisclosurePolicy.HashOnly, queryOutputs);
         var rowSourceContexts = ui.Surfaces

@@ -74,4 +74,50 @@ public sealed class AccessExpressionProjectorTests
         Assert.Equal("partial", dynamic.Coverage);
         Assert.Equal("AccessBindingExpressionDynamic", dynamic.GapClassification);
     }
+
+    [Fact]
+    public void Projects_multiple_domain_calls_and_operator_only_expressions()
+    {
+        var domainKey = "query-domain";
+        var domainField = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["DisplayName"] = ["domain-display"],
+            ["StatusId"] = ["domain-status"]
+        };
+        var objects = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["qDomain"] = [(domainKey, "query")]
+        };
+        var fieldsByObject = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            [domainKey] = domainField
+        };
+
+        var domains = AccessExpressionProjector.Project(
+            "=IIf([UsePrimary], DLookup([DisplayName], \"qDomain\", \"[StatusId] = [txtStatus]\"), DCount([StatusId], \"qDomain\"))",
+            objects,
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["UsePrimary"] = ["surface-use-primary"]
+            },
+            new HashSet<string>(["txtStatus"], StringComparer.OrdinalIgnoreCase),
+            fieldsByObject);
+
+        Assert.Equal("domain-lookup", domains.Classification);
+        Assert.Equal("complete", domains.Coverage);
+        Assert.Single(domains.QueryStableKeys);
+        Assert.Contains("domain-display", domains.SelectedFieldStableKeys);
+        Assert.Contains("domain-status", domains.CriteriaFieldStableKeys);
+
+        var calculated = AccessExpressionProjector.Project(
+            "=[Price] * [Quantity]",
+            null,
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Price"] = ["field-price"],
+                ["Quantity"] = ["field-quantity"]
+            });
+        Assert.Equal("calculated-expression", calculated.Classification);
+        Assert.Equal("complete", calculated.Coverage);
+    }
 }

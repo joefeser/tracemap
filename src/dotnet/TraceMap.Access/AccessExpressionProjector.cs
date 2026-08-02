@@ -8,7 +8,8 @@ public static partial class AccessExpressionProjector
     private static readonly HashSet<string> Functions = new(StringComparer.OrdinalIgnoreCase)
     {
         "abs", "avg", "count", "date", "dateadd", "datediff", "dlookup", "dsum", "first", "format",
-        "iif", "instr", "isnull", "len", "max", "min", "nz", "sum", "val"
+        "iif", "instr", "isnull", "len", "max", "min", "nz", "sum", "val",
+        "dcount", "davg", "dmax", "dmin"
     };
 
     public static AccessExpressionProjection Project(
@@ -25,7 +26,9 @@ public static partial class AccessExpressionProjector
             .Select(name => AccessSafeValues.RoleHash("access-expression-function", name.ToLowerInvariant()))
             .OrderBy(value => value, StringComparer.Ordinal).ToArray();
         var operators = OperatorPattern().Matches(MaskLiterals(normalized))
-            .Select(match => match.Value)
+            .Select(match => match.Value.Any(char.IsLetter)
+                ? match.Value.ToLowerInvariant()
+                : match.Value)
             .Distinct(StringComparer.Ordinal)
             .Select(value => AccessSafeValues.RoleHash("access-expression-operator", value))
             .OrderBy(value => value, StringComparer.Ordinal).ToArray();
@@ -36,11 +39,16 @@ public static partial class AccessExpressionProjector
         var controlRefs = new SortedSet<string>(StringComparer.Ordinal);
         var literals = new SortedSet<string>(StringComparer.Ordinal);
         var unresolved = false;
+        var domainMatches = DomainPattern().Matches(normalized);
 
         foreach (Match literal in LiteralPattern().Matches(normalized))
             literals.Add(literal.Groups["kind"].Value.StartsWith('"') ? "string" : "number");
 
-        foreach (Match match in IdentifierPattern().Matches(MaskLiterals(normalized)))
+        // Domain-call arguments are resolved below against the domain object's
+        // field set. Mask the complete calls here so their identifiers are not
+        // incorrectly resolved against the owning surface (or marked missing)
+        // by the general expression pass.
+        foreach (Match match in IdentifierPattern().Matches(MaskDomainCalls(normalized, domainMatches)))
         {
             var name = NormalizeIdentifier(match.Groups["name"].Value);
             if (Functions.Contains(name) || IsKeyword(name)) continue;
@@ -62,15 +70,17 @@ public static partial class AccessExpressionProjector
                 unresolved = true;
         }
 
-        var dlookup = DomainPattern().Match(normalized);
-        if (dlookup.Success)
+        foreach (Match dlookup in domainMatches)
         {
             var args = SplitArguments(dlookup.Groups["args"].Value);
             if (args.Count >= 2)
             {
                 var queryCandidate = ResolveObject(args[1], objects, queryKeys);
-                var selected = queryCandidate is not null && fieldSetsByObject?.TryGetValue(queryCandidate, out var queryFields) == true
-                    ? ResolveField(args[0], queryFields, selectedFields)
+                var domainFields = queryCandidate is not null && fieldSetsByObject?.TryGetValue(queryCandidate, out var queryFields) == true
+                    ? queryFields
+                    : null;
+                var selected = domainFields is not null
+                    ? ResolveField(args[0], domainFields, selectedFields)
                     : ResolveField(args[0], fields, selectedFields);
                 if (selected is null) unresolved = true;
                 if (queryCandidate is null) unresolved = true;
@@ -78,7 +88,9 @@ public static partial class AccessExpressionProjector
                 {
                     foreach (var candidate in ExtractIdentifiers(args[2]))
                     {
-                        var criteria = ResolveField(candidate, fields, criteriaFields);
+                        var criteria = domainFields is not null
+                            ? ResolveField(candidate, domainFields, criteriaFields)
+                            : ResolveField(candidate, fields, criteriaFields);
                         if (criteria is null && controlNames?.Contains(candidate) == true)
                             controlRefs.Add(AccessSafeValues.RoleHash("access-expression-control", candidate));
                         else if (criteria is null)
@@ -91,8 +103,8 @@ public static partial class AccessExpressionProjector
 
         var dynamic = Regex.IsMatch(normalized, @"\b(?:Eval|Run|Call)\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
             || normalized.Contains("&", StringComparison.Ordinal) && normalized.Contains("[", StringComparison.Ordinal);
-        var classification = dlookup.Success ? "domain-lookup"
-            : functions.Length > 0 ? "calculated-expression"
+        var classification = domainMatches.Count > 0 ? "domain-lookup"
+            : functions.Length > 0 || normalized.StartsWith('=') || operators.Length > 0 ? "calculated-expression"
             : "expression";
         var coverage = dynamic ? "partial" : unresolved ? "partial" : "complete";
         var gap = dynamic ? "AccessBindingExpressionDynamic" : unresolved ? "AccessBindingExpressionPartial" : null;
@@ -162,6 +174,16 @@ public static partial class AccessExpressionProjector
     private static string NormalizeIdentifier(string value) => value.Trim().Trim('[', ']');
 
     private static string MaskLiterals(string value) => Regex.Replace(value, "\"(?:\"\"|[^\"])*\"", " ");
+
+    private static string MaskDomainCalls(string value, MatchCollection matches)
+    {
+        if (matches.Count == 0) return MaskLiterals(value);
+        var chars = MaskLiterals(value).ToCharArray();
+        foreach (Match match in matches)
+            for (var index = match.Index; index < match.Index + match.Length && index < chars.Length; index++)
+                chars[index] = ' ';
+        return new string(chars);
+    }
 
     [GeneratedRegex(@"\b(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex FunctionPattern();
