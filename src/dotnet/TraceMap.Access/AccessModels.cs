@@ -207,6 +207,9 @@ public sealed record AccessExpressionProjection(
     string Coverage,
     string? GapClassification = null)
 {
+    // Preserves source and binary construction compatibility for consumers built
+    // against the original public positional record constructor. New projection
+    // code must use the primary constructor so no lineage collections are dropped.
     [Obsolete("Use the constructor that preserves control, external-context, and unresolved role evidence.")]
     public AccessExpressionProjection(
         string classification,

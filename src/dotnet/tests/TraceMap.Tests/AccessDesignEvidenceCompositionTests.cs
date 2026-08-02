@@ -428,6 +428,25 @@ public sealed class AccessDesignEvidenceCompositionTests
             && fact.Properties.GetValueOrDefault("scopeKind") == "query-field");
     }
 
+    [Fact]
+    public async Task Enrichment_rejects_a_query_field_stable_key_without_a_derivable_identity()
+    {
+        using var temp = new TempDirectory();
+        var baseScan = await WriteBaseScanAsync(temp.Path);
+        var design = WriteDesignBundle(
+            temp.Path,
+            baseScan,
+            includeQueryFieldLineage: true,
+            omitQueryFieldIdentity: true);
+
+        var result = await AccessDesignEvidenceComposer.ComposeAsync(baseScan, design);
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("classification") == "AccessDesignInputCatalogStableKeyUnmatched"
+            && fact.Properties.GetValueOrDefault("scopeKind") == "query-field");
+    }
+
     private static async Task<string> WriteBaseScanAsync(string root)
     {
         var database = Path.Combine(root, "fixture.accdb");
@@ -493,7 +512,8 @@ public sealed class AccessDesignEvidenceCompositionTests
         bool includeExpressionEvent = false,
         bool includeQueryFieldLineage = false,
         int queryFieldOrdinal = 0,
-        string queryFieldParent = "SharedQuery")
+        string queryFieldParent = "SharedQuery",
+        bool omitQueryFieldIdentity = false)
     {
         var directory = Path.Combine(root, "protected-design-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -567,7 +587,7 @@ public sealed class AccessDesignEvidenceCompositionTests
                 "complete",
                 Object(
                     ("objectRole", "query-field"),
-                    ("identity", ProtectedQueryField),
+                    ("identity", omitQueryFieldIdentity ? null : ProtectedQueryField),
                     ("stableKey", queryField.StableKey),
                     ("ordinal", queryFieldOrdinal))));
         }
