@@ -49,6 +49,8 @@ public sealed class AccessVbaSourceExportTests
         Assert.Contains("AccessVbaProcessCleanupFailed", script, StringComparison.Ordinal);
         Assert.Contains("AccessVbaOutputCleanupFailed", script, StringComparison.Ordinal);
         Assert.Contains("AccessVbaInnerScratchCleanupFailed", script, StringComparison.Ordinal);
+        Assert.Contains("$primaryFailure = $_", script, StringComparison.Ordinal);
+        Assert.Contains("if ($null -ne $primaryFailure) { throw $primaryFailure }", script, StringComparison.Ordinal);
         Assert.DoesNotContain("Remove-DirectoryWithRetry $output | Out-Null", script, StringComparison.Ordinal);
         Assert.DoesNotContain("Remove-DirectoryWithRetry $innerScratch | Out-Null", script, StringComparison.Ordinal);
         Assert.Contains("FormReportMetadataDirectory", script, StringComparison.Ordinal);

@@ -333,11 +333,8 @@ public static partial class AccessQueryProjector
     private static IReadOnlyList<string> ResolveExpressionFields(string expression, IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> known, IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fields)
     {
         var result = new List<string>();
-        foreach (Match match in FieldReferencePattern().Matches(expression))
+        foreach (var match in ExpressionFieldReferences(expression))
         {
-            var next = match.Index + match.Length;
-            while (next < expression.Length && char.IsWhiteSpace(expression[next])) next++;
-            if (next < expression.Length && expression[next] == '(') continue;
             var tableName = match.Groups["table"].Success ? match.Groups["table"].Value : null;
             var fieldName = match.Groups["field"].Value;
             var tables = tableName is null ? known.Values.SelectMany(value => value).Where(value => value.Kind == "table") : (known.TryGetValue(tableName, out var found) ? found : []);
@@ -360,11 +357,8 @@ public static partial class AccessQueryProjector
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fields)
     {
         var result = new List<string>();
-        foreach (Match match in FieldReferencePattern().Matches(expression))
+        foreach (var match in ExpressionFieldReferences(expression))
         {
-            var next = match.Index + match.Length;
-            while (next < expression.Length && char.IsWhiteSpace(expression[next])) next++;
-            if (next < expression.Length && expression[next] == '(') continue;
             var tableName = match.Groups["table"].Success ? match.Groups["table"].Value : null;
             var fieldName = match.Groups["field"].Value;
             var tables = tableName is null
@@ -386,12 +380,7 @@ public static partial class AccessQueryProjector
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> known,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fields)
     {
-        var matches = FieldReferencePattern().Matches(expression).Cast<Match>().Where(match =>
-        {
-            var next = match.Index + match.Length;
-            while (next < expression.Length && char.IsWhiteSpace(expression[next])) next++;
-            return next >= expression.Length || expression[next] != '(';
-        }).ToArray();
+        var matches = ExpressionFieldReferences(expression);
         return matches.All(match => ResolveExpressionFieldKeys(match.Value, known, fields).Count == 1);
     }
 
@@ -403,7 +392,12 @@ public static partial class AccessQueryProjector
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> known,
         IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fields)
     {
-        var references = FieldReferencePattern().Matches(expression)
+        var references = ExpressionFieldReferences(expression);
+        return references.All(reference => ResolveExpressionFields(reference.Value, known, fields).Count == 1);
+    }
+
+    private static Match[] ExpressionFieldReferences(string expression) =>
+        FieldReferencePattern().Matches(expression)
             .Where(match =>
             {
                 var end = match.Index + match.Length;
@@ -411,8 +405,6 @@ public static partial class AccessQueryProjector
                 return end >= expression.Length || expression[end] != '(';
             })
             .ToArray();
-        return references.All(reference => ResolveExpressionFields(reference.Value, known, fields).Count == 1);
-    }
 
     private static bool HasUnsupportedNamedFunction(string expression) =>
         NamedFunctionPattern().Matches(expression)
