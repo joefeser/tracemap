@@ -376,6 +376,7 @@ public static class AccessDesignEvidenceComposer
             }
             var stableKey = projectedStableKey ?? declaredStableKey;
             if (stableKey is null
+                || fieldRole == "query-field" && projectedStableKey is null
                 || fieldRole == "table-field" && !baseFacts.Any(fact =>
                     fact.TargetSymbol == stableKey
                     && fact.FactType == FactTypes.LegacyDataColumnDeclared))
