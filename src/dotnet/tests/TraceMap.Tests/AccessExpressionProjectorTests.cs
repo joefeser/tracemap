@@ -77,6 +77,26 @@ public sealed class AccessExpressionProjectorTests
         var dynamic = AccessExpressionProjector.Project("=Eval([ExpressionText])", null, fields);
         Assert.Equal("partial", dynamic.Coverage);
         Assert.Equal("AccessBindingExpressionDynamic", dynamic.GapClassification);
+
+        var customFunction = AccessExpressionProjector.Project("=CustomLookup([StartDate])", null, fields);
+        Assert.Equal("partial", customFunction.Coverage);
+        Assert.Equal("AccessBindingExpressionFunctionUnresolved", customFunction.GapClassification);
+
+        var zeroArgumentFunction = AccessExpressionProjector.Project("=Date", null, null);
+        Assert.Equal("complete", zeroArgumentFunction.Coverage);
+        Assert.Null(zeroArgumentFunction.GapClassification);
+
+        var collidingFunction = AccessExpressionProjector.Project(
+            "=CustomLookup([StartDate])",
+            null,
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["CustomLookup"] = ["field-collision"],
+                ["StartDate"] = ["field-start-date"]
+            });
+        Assert.Equal("AccessBindingExpressionFunctionUnresolved", collidingFunction.GapClassification);
+        Assert.DoesNotContain("field-collision", collidingFunction.FieldStableKeys);
+        Assert.Contains("field-start-date", collidingFunction.FieldStableKeys);
     }
 
     [Fact]
@@ -224,6 +244,7 @@ public sealed class AccessExpressionProjectorTests
         Assert.Empty(result.CriteriaFieldStableKeys);
         Assert.Single(result.SelectedFieldReferenceHashes);
         Assert.Single(result.CriteriaFieldReferenceHashes);
+        Assert.Equal("AccessBindingDomainFieldCatalogIncomplete", result.GapClassification);
     }
 
     [Fact]
