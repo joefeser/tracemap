@@ -23,6 +23,14 @@ public sealed class AccessFoundationTests
         Assert.Equal("select", first["query-b"]);
     }
 
+    [Fact]
+    public void Wildcard_projection_detection_is_limited_to_projection_items()
+    {
+        Assert.True(AccessQueryProjector.HasWildcardProjection("SELECT * FROM Orders"));
+        Assert.True(AccessQueryProjector.HasWildcardProjection("SELECT Orders.* FROM Orders"));
+        Assert.False(AccessQueryProjector.HasWildcardProjection("SELECT OrderId FROM Orders WHERE Note='*'"));
+    }
+
     private const string SecretMarker = "Password_ProdVault_92817";
     private const string SqlMarker = "SELECT * FROM PayrollSecrets_92817";
     private const string ConnectionMarker = "ODBC;DSN=PrivateLedger_92817;PWD=NeverPersistThis";

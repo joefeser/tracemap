@@ -882,6 +882,38 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Inline_record_source_limits_field_scope_to_selected_outputs()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('2', 40), "fixture.accdb", "hash");
+        var table = AccessSafeValues.Identity(seed, "table", "tblOrders");
+        var orderId = AccessSafeValues.Identity(seed, $"field-{table.StableKey}", "OrderId");
+        var excluded = AccessSafeValues.Identity(seed, $"field-{table.StableKey}", "ExcludedField");
+        var projected = AccessUiProjector.Project(
+            seed,
+            [new("frmInline", "form", false, "SELECT OrderId FROM tblOrders", [new("txtExcluded", 0, 109, "ExcludedField", null, [])], [])],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["tblOrders"] = [(table.StableKey, "table")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [table.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["OrderId"] = [orderId.StableKey],
+                    ["ExcludedField"] = [excluded.StableKey]
+                }
+            });
+
+        var surface = Assert.Single(projected.Surfaces);
+        var recordBinding = Assert.Single(surface.Bindings, item => item.BindingKind == "record-source");
+        Assert.Equal("inline-sql", recordBinding.SourceKind);
+        Assert.Equal([table.StableKey], recordBinding.TargetStableKeys);
+        var controlBinding = Assert.Single(Assert.Single(surface.Controls).Bindings);
+        Assert.NotEqual("direct-field", controlBinding.SourceKind);
+        Assert.DoesNotContain(excluded.StableKey, controlBinding.TargetStableKeys);
+    }
+
+    [Fact]
     public void Unmatched_control_sources_preserve_specific_record_source_limitations()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('1', 40), "fixture.accdb", "hash");

@@ -87,7 +87,7 @@ internal static partial class AccessUiProjector
                 && fieldsByTable.TryGetValue(recordBinding.TargetStableKeys[0], out var fieldLookup))
                 scopedFields = fieldLookup;
             else if (recordBinding is { SourceKind: "inline-sql" })
-                scopedFields = MergeFieldScopes(recordBinding.TargetStableKeys, fieldsByTable);
+                scopedFields = BuildInlineFieldScope(raw.RecordSource, knownObjects, fieldsByTable, recordBinding.TargetStableKeys);
             var scopedObjects = scopedFields is null ? null : knownObjects;
             var filterBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "filter", raw.Filter, 0, scopedObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys);
             if (filterBinding is not null) bindings.Add(filterBinding);
@@ -310,6 +310,21 @@ internal static partial class AccessUiProjector
         if (trimmed.Length == 0) return null;
         var identity = AccessSafeValues.Identity(databaseIdentitySeed, $"binding-{ownerStableKey}-{bindingKind}", bindingKind, ordinal, disclosurePolicy);
 
+        if (trimmed.StartsWith("select", StringComparison.OrdinalIgnoreCase)
+            && objects is not null
+            && fieldSetsByObject is not null)
+        {
+            var projection = AccessQueryProjector.ProjectStaticSelect(trimmed, objects, fieldSetsByObject);
+            var targets = projection.Dependencies.Select(dependency => dependency.TargetStableKey)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            if (projection.Coverage != "complete")
+                gaps.Add(new("AccessBindingInlineSqlProjectionPartial", "binding", identity.StableKey, RuleIds.LegacyAccessBinding));
+            return new(identity, ownerStableKey, bindingKind, "inline-sql",
+                projection.SqlHash, projection.SqlLength, targets, "query", projection.Coverage);
+        }
+
         if (TryDirectName(trimmed, out var directName))
         {
             if (objects is not null && objects.TryGetValue(directName, out var objectCandidates))
@@ -397,23 +412,6 @@ internal static partial class AccessUiProjector
             return new(identity, ownerStableKey, bindingKind, "unresolved-identifier",
                 AccessSafeValues.RoleHash($"access-{bindingKind}-expression", trimmed), trimmed.Length, [], "unknown", "partial");
         }
-
-
-        if (trimmed.StartsWith("select", StringComparison.OrdinalIgnoreCase)
-            && objects is not null
-            && fieldSetsByObject is not null)
-        {
-            var projection = AccessQueryProjector.ProjectStaticSelect(trimmed, objects, fieldSetsByObject);
-            var targets = projection.Dependencies.Select(dependency => dependency.TargetStableKey)
-                .Distinct(StringComparer.Ordinal)
-                .OrderBy(value => value, StringComparer.Ordinal)
-                .ToArray();
-            if (projection.Coverage != "complete")
-                gaps.Add(new("AccessBindingInlineSqlProjectionPartial", "binding", identity.StableKey, RuleIds.LegacyAccessBinding));
-            return new(identity, ownerStableKey, bindingKind, "inline-sql",
-                projection.SqlHash, projection.SqlLength, targets, "query", projection.Coverage);
-        }
-
         var candidates = ResolveExpressionCandidates(trimmed, objects, fields, out var ambiguous);
         var expression = AccessExpressionProjector.Project(trimmed, objects, fields, controlNames, fieldSetsByObject, controlStableKeys);
         var expressionTargets = candidates
@@ -692,6 +690,34 @@ internal static partial class AccessUiProjector
             : merged.ToDictionary(
                 item => item.Key,
                 item => (IReadOnlyList<string>)item.Value.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>>? BuildInlineFieldScope(
+        string? sql,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> knownObjects,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fieldsByObject,
+        IReadOnlyList<string> dependencyStableKeys)
+    {
+        if (string.IsNullOrWhiteSpace(sql)) return null;
+        if (AccessQueryProjector.HasWildcardProjection(sql))
+            return MergeFieldScopes(dependencyStableKeys, fieldsByObject);
+
+        var selectedFieldKeys = AccessQueryProjector.ProjectStaticSelect(sql, knownObjects, fieldsByObject)
+            .Outputs.SelectMany(output => output.SourceFieldStableKeys)
+            .ToHashSet(StringComparer.Ordinal);
+        if (selectedFieldKeys.Count == 0) return null;
+
+        var scoped = MergeFieldScopes(dependencyStableKeys, fieldsByObject);
+        return scoped?.Select(entry => new
+        {
+            entry.Key,
+            Candidates = entry.Value.Where(selectedFieldKeys.Contains).ToArray()
+        })
+            .Where(entry => entry.Candidates.Length > 0)
+            .ToDictionary(
+                entry => entry.Key,
+                entry => (IReadOnlyList<string>)entry.Candidates,
                 StringComparer.OrdinalIgnoreCase);
     }
 

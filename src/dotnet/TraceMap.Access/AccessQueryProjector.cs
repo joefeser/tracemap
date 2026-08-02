@@ -209,6 +209,17 @@ public static partial class AccessQueryProjector
         return names.Count(name => string.Equals(name, outputName.Trim(), StringComparison.OrdinalIgnoreCase)) == 1;
     }
 
+    internal static bool HasWildcardProjection(string sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql)) return false;
+        var select = SelectListAfterKeyword(MaskLiteralsAndComments(sql), "select");
+        return select is not null && SplitSelectItems(select).Any(item =>
+        {
+            var normalized = item.Trim();
+            return normalized == "*" || normalized.EndsWith(".*", StringComparison.Ordinal);
+        });
+    }
+
     private static string MatchedOutputName(Match match) =>
         (match.Groups["bracketed"].Success ? match.Groups["bracketed"].Value : match.Groups["plain"].Value).Trim();
 
