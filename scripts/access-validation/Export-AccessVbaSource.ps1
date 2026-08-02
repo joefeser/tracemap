@@ -316,6 +316,7 @@ $dbEngine = $null
 $guardDatabase = $null
 $createdOutput = $false
 $succeeded = $false
+$primaryFailure = $null
 try {
     if (Test-Path -LiteralPath $innerScratch) { Stop-Export "AccessVbaInnerScratchExists" }
     New-Item -ItemType Directory -Path $innerScratch -ErrorAction Stop | Out-Null
@@ -563,6 +564,9 @@ try {
     $createdOutput = $true
     $succeeded = $true
 }
+catch {
+    $primaryFailure = $_
+}
 finally {
     Close-ComObject $modules
     Close-ComObject $project
@@ -576,6 +580,9 @@ finally {
     [GC]::Collect(); [GC]::WaitForPendingFinalizers()
     $innerScratchCleanupFailed = (Test-Path -LiteralPath $innerScratch) -and -not (Remove-DirectoryWithRetry $innerScratch)
     $outputCleanupFailed = -not $succeeded -and (Test-Path -LiteralPath $output) -and -not (Remove-DirectoryWithRetry $output)
-    if ($innerScratchCleanupFailed) { Stop-Export "AccessVbaInnerScratchCleanupFailed" }
-    if ($outputCleanupFailed) { Stop-Export "AccessVbaOutputCleanupFailed" }
+    if ($null -eq $primaryFailure) {
+        if ($innerScratchCleanupFailed) { Stop-Export "AccessVbaInnerScratchCleanupFailed" }
+        if ($outputCleanupFailed) { Stop-Export "AccessVbaOutputCleanupFailed" }
+    }
 }
+if ($null -ne $primaryFailure) { throw $primaryFailure }
