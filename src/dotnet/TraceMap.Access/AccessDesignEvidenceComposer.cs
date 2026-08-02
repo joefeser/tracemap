@@ -220,6 +220,7 @@ public static class AccessDesignEvidenceComposer
         var fieldsByTable = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
         var fieldsByTableAndHash = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
         var stableKeyByCanonicalRecordId = new Dictionary<string, string>(StringComparer.Ordinal);
+        var baseMatchedCatalogStableKeys = new HashSet<string>(StringComparer.Ordinal);
         foreach (var fact in baseFacts)
         {
             if (fact.TargetSymbol is null) continue;
@@ -308,6 +309,15 @@ public static class AccessDesignEvidenceComposer
             {
                 stableKeyByCanonicalRecordId[record.CanonicalRecordId] = stableKey;
                 SetSupport(support, stableKey, [record]);
+                var baseMatched = baseStableKey is not null || baseFacts.Any(fact =>
+                    fact.TargetSymbol == stableKey
+                    && fact.FactType == (normalizedKind == "query"
+                        ? FactTypes.AccessQueryDeclared
+                        : normalizedKind == "table"
+                            ? FactTypes.LegacyDataEntityDeclared
+                            : string.Empty));
+                if (baseMatched)
+                    baseMatchedCatalogStableKeys.Add(stableKey);
             }
         }
 
@@ -322,6 +332,16 @@ public static class AccessDesignEvidenceComposer
                 && stableKeyByCanonicalRecordId.TryGetValue(record.ParentCanonicalRecordId, out var parentStableKey)
                     ? parentStableKey
                     : null;
+            if (fieldRole == "query-field"
+                && (tableStableKey is null || !baseMatchedCatalogStableKeys.Contains(tableStableKey)))
+            {
+                normalizationGaps.Add(new(
+                    "AccessDesignInputCatalogStableKeyUnmatched",
+                    fieldRole,
+                    record.CanonicalRecordId,
+                    RuleIds.LegacyAccessDesignInput));
+                continue;
+            }
             string? projectedStableKey = null;
             if (identity is not null && tableStableKey is not null)
             {
@@ -332,7 +352,15 @@ public static class AccessDesignEvidenceComposer
                     && matches.Distinct(StringComparer.Ordinal).ToArray() is { Length: 1 } distinct)
                 {
                     projectedStableKey = distinct[0];
-                    AddField(fieldsByTable, tableStableKey, identity, projectedStableKey);
+                }
+                else if (fieldRole == "query-field")
+                {
+                    projectedStableKey = AccessSafeValues.Identity(
+                        databaseSeed,
+                        $"query-field-{tableStableKey}",
+                        identity,
+                        Int(record.Payload, "ordinal"),
+                        disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly).StableKey;
                 }
             }
             if (declaredStableKey is not null
@@ -348,10 +376,10 @@ public static class AccessDesignEvidenceComposer
             }
             var stableKey = projectedStableKey ?? declaredStableKey;
             if (stableKey is null
-                || !baseFacts.Any(fact => fact.TargetSymbol == stableKey
-                    && fact.FactType == (fieldRole == "query-field"
-                        ? FactTypes.AccessQueryOutputDeclared
-                        : FactTypes.LegacyDataColumnDeclared)))
+                || fieldRole == "query-field" && projectedStableKey is null
+                || fieldRole == "table-field" && !baseFacts.Any(fact =>
+                    fact.TargetSymbol == stableKey
+                    && fact.FactType == FactTypes.LegacyDataColumnDeclared))
             {
                 normalizationGaps.Add(new(
                     "AccessDesignInputCatalogStableKeyUnmatched",
@@ -360,6 +388,8 @@ public static class AccessDesignEvidenceComposer
                     RuleIds.LegacyAccessDesignInput));
                 continue;
             }
+            if (identity is not null && tableStableKey is not null)
+                AddField(fieldsByTable, tableStableKey, identity, stableKey);
             stableKeyByCanonicalRecordId[record.CanonicalRecordId] = stableKey;
             SetSupport(support, stableKey, [record]);
         }

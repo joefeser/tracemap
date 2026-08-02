@@ -46,7 +46,11 @@ public sealed class AccessExpressionProjectorTests
             "=DLookUp([WeeklyPlanID], \"qWeeklyPlans\", \"[StartDate] = [txtPriorDate]\")",
             objects,
             fields,
-            new HashSet<string>(["txtPriorDate"], StringComparer.OrdinalIgnoreCase));
+            new HashSet<string>(["txtPriorDate"], StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [queryKey] = fields
+            });
 
         Assert.Equal("domain-lookup", result.Classification);
         Assert.Equal("complete", result.Coverage);
@@ -119,5 +123,255 @@ public sealed class AccessExpressionProjectorTests
             });
         Assert.Equal("calculated-expression", calculated.Classification);
         Assert.Equal("complete", calculated.Coverage);
+    }
+
+    [Fact]
+    public void Resolves_unique_same_surface_control_references_to_stable_keys()
+    {
+        var controls = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["MonActAcntPts"] = ["control-mon-accountability"],
+            ["MonActAchPts"] = ["control-mon-achievement"]
+        };
+
+        var result = AccessExpressionProjector.Project(
+            "=[MonActAcntPts]+[MonActAchPts]",
+            null,
+            null,
+            new HashSet<string>(controls.Keys, StringComparer.OrdinalIgnoreCase),
+            null,
+            controls);
+
+        Assert.Equal("complete", result.Coverage);
+        Assert.Equal(
+            ["control-mon-accountability", "control-mon-achievement"],
+            result.ControlStableKeys);
+        Assert.Empty(result.ControlReferenceHashes);
+    }
+
+    [Fact]
+    public void Preserves_field_control_ambiguity_as_an_explicit_gap()
+    {
+        var result = AccessExpressionProjector.Project(
+            "=[StartDate]",
+            null,
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["StartDate"] = ["field-start-date"]
+            },
+            new HashSet<string>(["StartDate"], StringComparer.OrdinalIgnoreCase),
+            null,
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["StartDate"] = ["control-start-date"]
+            });
+
+        Assert.Equal("partial", result.Coverage);
+        Assert.Equal("AccessBindingExpressionTargetAmbiguous", result.GapClassification);
+        Assert.Contains("field-start-date", result.FieldStableKeys);
+        Assert.Contains("control-start-date", result.ControlStableKeys);
+    }
+
+    [Fact]
+    public void Domain_lookup_retains_proven_fields_when_external_context_is_unresolved()
+    {
+        const string queryKey = "query-metrics";
+        var objects = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["qryMetrics"] = [(queryKey, "query")]
+        };
+        var queryFields = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["WeeklyPlanID"] = ["field-weekly-plan"],
+            ["MetricValue"] = ["field-metric-value"]
+        };
+
+        var result = AccessExpressionProjector.Project(
+            "=DLookUp([MetricValue], \"qryMetrics\", \"[WeeklyPlanID]=[TempVars]![PlanId]\")",
+            objects,
+            null,
+            null,
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [queryKey] = queryFields
+            });
+
+        Assert.Equal("complete", result.Coverage);
+        Assert.Null(result.GapClassification);
+        Assert.Contains(queryKey, result.QueryStableKeys);
+        Assert.Contains("field-metric-value", result.SelectedFieldStableKeys);
+        Assert.Contains("field-weekly-plan", result.CriteriaFieldStableKeys);
+        Assert.Single(result.ExternalReferenceHashes);
+    }
+
+    [Fact]
+    public void Domain_fields_do_not_fall_back_to_the_owning_surface_scope()
+    {
+        const string queryKey = "query-domain-without-fields";
+        var result = AccessExpressionProjector.Project(
+            "=DLookUp([SharedName], \"qDomain\", \"[SharedName]=1\")",
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qDomain"] = [(queryKey, "query")]
+            },
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SharedName"] = ["surface-field"]
+            });
+
+        Assert.Equal("partial", result.Coverage);
+        Assert.Empty(result.SelectedFieldStableKeys);
+        Assert.Empty(result.CriteriaFieldStableKeys);
+        Assert.Single(result.SelectedFieldReferenceHashes);
+        Assert.Single(result.CriteriaFieldReferenceHashes);
+    }
+
+    [Fact]
+    public void Unresolved_domain_preserves_hash_only_field_roles_without_surface_fallback()
+    {
+        var result = AccessExpressionProjector.Project(
+            "=DLookUp([Status], \"MissingQuery\", \"[Status]=[txtStatus]\")",
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Status"] = ["surface-status"]
+            },
+            new HashSet<string>(["txtStatus"], StringComparer.OrdinalIgnoreCase),
+            null,
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["txtStatus"] = ["control-status"]
+            });
+
+        Assert.Equal("partial", result.Coverage);
+        Assert.Empty(result.SelectedFieldStableKeys);
+        Assert.Empty(result.CriteriaFieldStableKeys);
+        Assert.Single(result.SelectedFieldReferenceHashes);
+        Assert.Contains("control-status", result.ControlStableKeys);
+    }
+
+    [Fact]
+    public void Domain_criteria_field_control_collision_is_explicitly_ambiguous()
+    {
+        const string queryKey = "query-status";
+        var result = AccessExpressionProjector.Project(
+            "=DLookUp([Value], \"qStatus\", \"[Status]=1\")",
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qStatus"] = [(queryKey, "query")]
+            },
+            null,
+            new HashSet<string>(["Status"], StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Value"] = ["field-value"],
+                    ["Status"] = ["field-status"]
+                }
+            },
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Status"] = ["control-status"]
+            });
+
+        Assert.Equal("partial", result.Coverage);
+        Assert.Equal("AccessBindingExpressionTargetAmbiguous", result.GapClassification);
+        Assert.Contains("field-status", result.CriteriaFieldStableKeys);
+        Assert.Contains("control-status", result.ControlStableKeys);
+    }
+
+    [Fact]
+    public void Domain_multi_candidate_fields_are_ambiguous_instead_of_missing()
+    {
+        const string queryKey = "query-duplicate-fields";
+        var result = AccessExpressionProjector.Project(
+            "=DLookUp([Value], \"qDuplicate\", \"[Status]=1\")",
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qDuplicate"] = [(queryKey, "query")]
+            },
+            null,
+            null,
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Value"] = ["field-value-1", "field-value-2"],
+                    ["Status"] = ["field-status-1", "field-status-2"]
+                }
+            });
+
+        Assert.Equal("partial", result.Coverage);
+        Assert.Equal("AccessBindingExpressionTargetAmbiguous", result.GapClassification);
+        Assert.Empty(result.SelectedFieldReferenceHashes);
+        Assert.Empty(result.CriteriaFieldReferenceHashes);
+    }
+
+    [Fact]
+    public void Projects_multiline_export_style_metrics_domain_lookup()
+    {
+        const string queryKey = "query-metrics-day";
+        var result = AccessExpressionProjector.Project(
+            "=DLookUp(\"[EngagementPoints] \",\"[qrptMetricsByDay]\",\"[WeeklyPlanID]=[TempVars]![TempPlanID]  AND [Dow]=1\")",
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qrptMetricsByDay"] = [(queryKey, "query")]
+            },
+            null,
+            null,
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["EngagementPoints"] = ["field-engagement"],
+                    ["WeeklyPlanID"] = ["field-weekly-plan"],
+                    ["Dow"] = ["field-day-of-week"]
+                }
+            });
+
+        Assert.Equal("domain-lookup", result.Classification);
+        Assert.Equal("complete", result.Coverage);
+        Assert.Contains("field-engagement", result.SelectedFieldStableKeys);
+        Assert.Equal(2, result.CriteriaFieldStableKeys.Count);
+        Assert.Single(result.ExternalReferenceHashes);
+    }
+
+    [Fact]
+    public void Projects_domain_count_wildcard_and_general_tempvars_reference()
+    {
+        const string queryKey = "query-actions";
+        var objects = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["qryActions"] = [(queryKey, "query")]
+        };
+        var fieldsByObject = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlanID"] = ["field-weekly-plan"]
+            }
+        };
+
+        var count = AccessExpressionProjector.Project(
+            "=DCount(\"*\",\"qryActions\",\"[WeeklyPlanID]=[TempVars]![PlanId]\")",
+            objects,
+            null,
+            null,
+            fieldsByObject);
+        Assert.Equal("complete", count.Coverage);
+        Assert.Contains("wildcard", count.LiteralKinds);
+        Assert.Contains("field-weekly-plan", count.CriteriaFieldStableKeys);
+
+        var filter = AccessExpressionProjector.Project(
+            "=[WeeklyPlanID]=[TempVars]![PlanId]",
+            null,
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlanID"] = ["field-weekly-plan"]
+            });
+        Assert.Equal("complete", filter.Coverage);
+        Assert.Contains("field-weekly-plan", filter.FieldStableKeys);
+        Assert.Single(filter.ExternalReferenceHashes);
     }
 }

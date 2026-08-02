@@ -62,17 +62,33 @@ internal static partial class AccessUiProjector
             var kind = raw.SurfaceKind is "form" or "report" ? raw.SurfaceKind : "unknown";
             var identity = AccessSafeValues.Identity(databaseIdentitySeed, kind, raw.Name, disclosurePolicy: disclosurePolicy);
             var controlNames = raw.Controls.Select(control => control.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var controlStableKeys = raw.Controls
+                .GroupBy(control => control.Name, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => (IReadOnlyList<string>)group
+                        .Select(control => AccessSafeValues.Identity(
+                            databaseIdentitySeed,
+                            $"control-{identity.StableKey}",
+                            control.Name,
+                            control.Ordinal,
+                            disclosurePolicy).StableKey)
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(value => value, StringComparer.Ordinal)
+                        .ToArray(),
+                    StringComparer.OrdinalIgnoreCase);
             var bindings = new List<AccessBindingProjection>();
-            var recordBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "record-source", raw.RecordSource, 0, knownObjects, null, gaps, disclosurePolicy, controlNames, fieldsByTable);
+            var recordBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "record-source", raw.RecordSource, 0, knownObjects, null, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys);
             if (recordBinding is not null) bindings.Add(recordBinding);
 
             IReadOnlyDictionary<string, IReadOnlyList<string>>? scopedFields = null;
             if (recordBinding is { SourceKind: "direct-object", TargetStableKeys.Count: 1 }
                 && fieldsByTable.TryGetValue(recordBinding.TargetStableKeys[0], out var fieldLookup))
                 scopedFields = fieldLookup;
-            var filterBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "filter", raw.Filter, 0, null, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable);
+            var scopedObjects = scopedFields is null ? null : knownObjects;
+            var filterBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "filter", raw.Filter, 0, scopedObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys);
             if (filterBinding is not null) bindings.Add(filterBinding);
-            var orderByBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "order-by", raw.OrderBy, 0, null, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable);
+            var orderByBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "order-by", raw.OrderBy, 0, scopedObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys);
             if (orderByBinding is not null) bindings.Add(orderByBinding);
 
             var controls = new List<AccessControlProjection>();
@@ -82,16 +98,16 @@ internal static partial class AccessUiProjector
                 var controlIdentity = AccessSafeValues.Identity(databaseIdentitySeed, $"control-{identity.StableKey}", rawControl.Name, rawControl.Ordinal, disclosurePolicy);
                 var controlBindings = new List<AccessBindingProjection>();
                 var controlSource = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "control-source", rawControl.ControlSource,
-                    rawControl.Ordinal, null, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable);
+                    rawControl.Ordinal, knownObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys);
                 if (controlSource is not null) controlBindings.Add(controlSource);
                 var rowSource = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "row-source", rawControl.RowSource,
-                    rawControl.Ordinal, knownObjects, null, gaps, disclosurePolicy, controlNames, fieldsByTable);
+                    rawControl.Ordinal, knownObjects, null, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys);
                 if (rowSource is not null) controlBindings.Add(rowSource);
                 var validation = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "validation-rule", rawControl.ValidationRule,
-                    rawControl.Ordinal, null, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable);
+                    rawControl.Ordinal, knownObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys);
                 if (validation is not null) controlBindings.Add(validation);
                 var sourceObject = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "source-object", NormalizeSourceObject(rawControl.SourceObject),
-                    rawControl.Ordinal, knownObjects, null, gaps, disclosurePolicy, controlNames, fieldsByTable);
+                    rawControl.Ordinal, knownObjects, null, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys);
                 if (sourceObject is not null) controlBindings.Add(sourceObject);
                 var masterCount = CountLinkFields(rawControl.LinkMasterFields);
                 var childCount = CountLinkFields(rawControl.LinkChildFields);
@@ -202,12 +218,13 @@ internal static partial class AccessUiProjector
                             "report-group-sort",
                             group.Expression,
                             group.Ordinal,
-                            null,
+                            knownObjects,
                             scopedFields,
                             gaps,
                             disclosurePolicy,
                             controlNames,
-                            fieldsByTable)!;
+                            fieldsByTable,
+                            controlStableKeys)!;
                     return new AccessReportGroupProjection(
                         group.Ordinal,
                         binding,
@@ -279,7 +296,8 @@ internal static partial class AccessUiProjector
         List<AccessGapProjection> gaps,
         AccessIdentityDisclosurePolicy disclosurePolicy,
         IReadOnlySet<string>? controlNames = null,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? fieldSetsByObject = null)
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? fieldSetsByObject = null,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? controlStableKeys = null)
     {
         var trimmed = value?.Trim() ?? string.Empty;
         if (trimmed.Length == 0) return null;
@@ -308,10 +326,11 @@ internal static partial class AccessUiProjector
         }
 
         var candidates = ResolveExpressionCandidates(trimmed, objects, fields, out var ambiguous);
-        var expression = AccessExpressionProjector.Project(trimmed, objects, fields, controlNames, fieldSetsByObject);
+        var expression = AccessExpressionProjector.Project(trimmed, objects, fields, controlNames, fieldSetsByObject, controlStableKeys);
         var expressionTargets = candidates
             .Concat(expression.QueryStableKeys)
             .Concat(expression.FieldStableKeys)
+            .Concat(expression.ControlStableKeys)
             .Concat(expression.SelectedFieldStableKeys)
             .Concat(expression.CriteriaFieldStableKeys)
             .Distinct(StringComparer.Ordinal)
@@ -320,9 +339,12 @@ internal static partial class AccessUiProjector
             gaps.Add(new(expression.GapClassification, "binding", identity.StableKey, RuleIds.LegacyAccessBinding));
         else if (ambiguous)
             gaps.Add(new("AccessBindingTargetAmbiguous", "binding", identity.StableKey, RuleIds.LegacyAccessBinding));
+        var targetKind = expression.ControlStableKeys.Count > 0
+            ? expressionTargets.Except(expression.ControlStableKeys, StringComparer.Ordinal).Any() ? "mixed" : "control"
+            : fields is not null ? "field" : "object";
         return new(identity, ownerStableKey, bindingKind, "expression",
             AccessSafeValues.RoleHash($"access-{bindingKind}-expression", trimmed), trimmed.Length,
-            expressionTargets, fields is not null ? "field" : "object", expression.Coverage, expression);
+            expressionTargets, targetKind, expression.Coverage, expression);
     }
 
     private static AccessBindingProjection MissingReportGroupBinding(

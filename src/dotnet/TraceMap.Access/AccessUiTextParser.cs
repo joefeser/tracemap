@@ -40,12 +40,31 @@ internal static partial class AccessUiTextParser
         string? pendingProperty = null;
 
         string? line;
-        while ((line = reader.ReadLine()) is not null)
+        string? bufferedLine = null;
+        while ((line = bufferedLine ?? reader.ReadLine()) is not null)
         {
+            bufferedLine = null;
             lineCount++;
             characterCount += line.Length + 1L;
             if (lineCount > limits.MaxUiDesignLines || characterCount > limits.MaxUiDesignTextLength)
                 throw new AccessScanException("AccessUiDesignTextLimitReached");
+            var quotedProperty = PropertyPattern().Match(line);
+            if (quotedProperty.Success && quotedProperty.Groups["value"].Value.TrimStart().StartsWith('"'))
+            {
+                while (reader.ReadLine() is { } continuation)
+                {
+                    if (!continuation.TrimStart().StartsWith('"'))
+                    {
+                        bufferedLine = continuation;
+                        break;
+                    }
+                    lineCount++;
+                    characterCount += continuation.Length + 1L;
+                    if (lineCount > limits.MaxUiDesignLines || characterCount > limits.MaxUiDesignTextLength)
+                        throw new AccessScanException("AccessUiDesignTextLimitReached");
+                    line += "\n" + continuation;
+                }
+            }
             if (pendingProperty is not null)
             {
                 pendingProperty += "\n" + line;
@@ -245,19 +264,28 @@ internal static partial class AccessUiTextParser
         if (value.Length == 0) { supported = true; return string.Empty; }
         if (value[0] != '"') { supported = true; return value; }
         var builder = new StringBuilder(value.Length);
-        for (var index = 1; index < value.Length; index++)
+        var index = 1;
+        while (index < value.Length)
         {
             var current = value[index];
             if (current == '\\' && index + 1 < value.Length && value[index + 1] == '"')
             {
                 builder.Append('"');
-                index++;
+                index += 2;
                 continue;
             }
-            if (current != '"') { builder.Append(current); continue; }
-            if (index + 1 < value.Length && value[index + 1] == '"') { builder.Append('"'); index++; continue; }
-            supported = string.IsNullOrWhiteSpace(value[(index + 1)..]);
-            return supported ? builder.ToString() : string.Empty;
+            if (current != '"') { builder.Append(current); index++; continue; }
+            if (index + 1 < value.Length && value[index + 1] == '"')
+            {
+                builder.Append('"');
+                index += 2;
+                continue;
+            }
+            index++;
+            while (index < value.Length && char.IsWhiteSpace(value[index])) index++;
+            if (index == value.Length) { supported = true; return builder.ToString(); }
+            if (value[index] != '"') { supported = false; return string.Empty; }
+            index++;
         }
         supported = false;
         return string.Empty;
@@ -267,20 +295,25 @@ internal static partial class AccessUiTextParser
     {
         var value = source.Trim();
         if (!value.StartsWith('"')) return true;
-        for (var index = 1; index < value.Length; index++)
+        var index = 1;
+        while (index < value.Length)
         {
             if (value[index] == '\\' && index + 1 < value.Length && value[index + 1] == '"')
             {
-                index++;
+                index += 2;
                 continue;
             }
-            if (value[index] != '"') continue;
+            if (value[index] != '"') { index++; continue; }
             if (index + 1 < value.Length && value[index + 1] == '"')
             {
-                index++;
+                index += 2;
                 continue;
             }
-            return string.IsNullOrWhiteSpace(value[(index + 1)..]);
+            index++;
+            while (index < value.Length && char.IsWhiteSpace(value[index])) index++;
+            if (index == value.Length) return true;
+            if (value[index] != '"') return false;
+            index++;
         }
         return false;
     }
