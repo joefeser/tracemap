@@ -1077,6 +1077,7 @@ public sealed class AccessUiProjectionTests
         var reportBinding = Assert.Single(Assert.Single(Assert.Single(report.Surfaces).Controls).Bindings);
         Assert.Equal("complete", reportBinding.Coverage);
         Assert.Equal("partial", reportBinding.RuntimeValueCoverage);
+        Assert.Equal("unknown", reportBinding.TargetKind);
         Assert.DoesNotContain(report.Gaps, gap => gap.Classification == "AccessBindingExpressionPartial");
 
         var form = AccessUiProjector.Project(

@@ -499,7 +499,9 @@ internal static partial class AccessUiProjector
             ? expressionTargets.Except(expression.VbaProcedureStableKeys, StringComparer.Ordinal).Any() ? "mixed" : "vba-procedure"
             : expression.ControlStableKeys.Count > 0
             ? expressionTargets.Except(expression.ControlStableKeys, StringComparer.Ordinal).Any() ? "mixed" : "control"
-            : fields is not null ? "field" : "object";
+            : expression.FieldStableKeys.Count > 0 || expression.SelectedFieldStableKeys.Count > 0 || expression.CriteriaFieldStableKeys.Count > 0
+            ? "field"
+            : expression.QueryStableKeys.Count > 0 ? "object" : "unknown";
         return new(identity, ownerStableKey, bindingKind, "expression",
             AccessSafeValues.RoleHash($"access-{bindingKind}-expression", trimmed), trimmed.Length,
             expressionTargets, targetKind, expression.Coverage, expression, expression.RuntimeValueCoverage);

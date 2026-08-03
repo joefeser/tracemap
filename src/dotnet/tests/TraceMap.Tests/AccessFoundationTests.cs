@@ -42,6 +42,11 @@ public sealed class AccessFoundationTests
 
         Assert.Equal(outputStableKey, Assert.Single(fieldsByName[queryStableKey][outputName]));
 
+        fieldsByName.Clear();
+        AccessDesignEvidenceComposer.ReconcileSurfaceQueryOutputNames(
+            [surface with { SurfaceKind = "form" }], knownObjects, fieldsByHash, fieldsByName);
+        Assert.Empty(fieldsByName);
+
         fieldsByHash[queryStableKey][outputHash].Add("access-query-output-ambiguous");
         fieldsByName.Clear();
         AccessDesignEvidenceComposer.ReconcileSurfaceQueryOutputNames(
@@ -387,7 +392,8 @@ public sealed class AccessFoundationTests
             {
                 ["Category"] = [new(field, 0, "text", 64, false)],
                 ["Amount"] = [new(new(null, "amount", "field-amount"), 1, "decimal", 16, false)],
-                ["Month"] = [new(new(null, "month", "field-month"), 2, "text", 16, false)]
+                ["Month"] = [new(new(null, "month", "field-month"), 2, "text", 16, false)],
+                ["EventDate"] = [new(new(null, "event-date", "field-event-date"), 3, "date", 8, false)]
             }
         };
 
@@ -428,6 +434,35 @@ public sealed class AccessFoundationTests
         Assert.Equal(["field-amount"], outputs[1].SourceFieldStableKeys);
         Assert.Equal(["field-amount"], outputs[2].SourceFieldStableKeys);
 
+        var aliasedOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Format(Events.EventDate, 'yyyy'), Events.Category AS CategoryLabel FROM Events GROUP BY Format(Events.EventDate, 'yyyy'), Events.Category PIVOT Events.Month IN ('Jan');",
+            known,
+            fields);
+        Assert.Equal([1, 2, 3], aliasedOutputs.Select(output => output.Ordinal));
+        Assert.Equal(["CategoryLabel", "TotalAmount", "Jan"], aliasedOutputs.Select(output => output.Name));
+        Assert.All(aliasedOutputs, output => Assert.Equal("complete", output.Coverage));
+        Assert.Equal(["field-row"], aliasedOutputs[0].SourceFieldStableKeys);
+
+        var accessAliasedOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT CategoryLabel: Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
+            known,
+            fields);
+        Assert.Equal("complete", accessAliasedOutputs[0].Coverage);
+        Assert.Equal(["field-row"], accessAliasedOutputs[0].SourceFieldStableKeys);
+
+        var malformedOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Events.[Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
+            known,
+            fields);
+        Assert.NotEmpty(malformedOutputs);
+        Assert.All(malformedOutputs, output => Assert.Equal("partial", output.Coverage));
+
+        var unsupportedPivotOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT CustomNormalize(Events.Month) IN ('Jan');",
+            known,
+            fields);
+        Assert.Equal("partial", unsupportedPivotOutputs.Single(output => output.Name == "Jan").Coverage);
+
         var dynamicOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
             "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month;",
             known,
@@ -439,9 +474,15 @@ public sealed class AccessFoundationTests
             "TRANSFORM Sum(Events.Amount) AS Category SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
             known,
             fields);
-        Assert.DoesNotContain(duplicateOutputs, output => output.Name == "Category");
-        Assert.Single(duplicateOutputs);
-        Assert.Equal("Jan", duplicateOutputs[0].Name);
+        Assert.Equal([0, 1, 2], duplicateOutputs.Select(output => output.Ordinal));
+        var duplicateCategories = duplicateOutputs.Where(output => output.Name == "Category").ToArray();
+        Assert.Equal(2, duplicateCategories.Length);
+        Assert.All(duplicateCategories, output =>
+        {
+            Assert.Equal("partial", output.Coverage);
+            Assert.EndsWith("-duplicate-name", output.OutputKind, StringComparison.Ordinal);
+        });
+        Assert.Equal("Jan", duplicateOutputs[2].Name);
     }
 
     [Fact]
