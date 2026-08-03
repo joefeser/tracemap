@@ -20,7 +20,8 @@ public static partial class AccessExpressionProjector
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? fieldSetsByObject = null,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? controlStableKeys = null,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? domainObjects = null,
-        IReadOnlyDictionary<string, IReadOnlyList<string>>? vbaProcedureStableKeys = null)
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? vbaProcedureStableKeys = null,
+        IReadOnlySet<string>? contextIdentifierNames = null)
     {
         var normalized = expression.Trim();
         var functionMatches = FunctionPattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
@@ -103,6 +104,13 @@ public static partial class AccessExpressionProjector
             {
                 if (objectCandidates.Count == 1 && objectCandidates[0].Kind is "query" or "table") queryKeys.Add(objectCandidates[0].StableKey);
                 else ambiguous = true;
+                continue;
+            }
+            if (contextIdentifierNames?.Contains(name) == true)
+            {
+                externalRefs.Add(AccessSafeValues.RoleHash(
+                    "access-expression-context-identifier",
+                    name.ToLowerInvariant()));
                 continue;
             }
             if (controlNames is not null && controlNames.Contains(name))
