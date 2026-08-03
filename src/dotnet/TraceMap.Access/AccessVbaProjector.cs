@@ -64,8 +64,12 @@ internal static partial class AccessVbaProjector
                     name,
                     ordinal,
                     disclosurePolicy);
-                if (!result.TryGetValue(name, out var candidates)) result[name] = candidates = [];
-                candidates.Add(identity.StableKey);
+                var kind = ProcedureKind(match.Groups["kind"].Value);
+                if (kind is "function" or "property-get")
+                {
+                    if (!result.TryGetValue(name, out var candidates)) result[name] = candidates = [];
+                    candidates.Add(identity.StableKey);
+                }
                 ordinal++;
             }
         }

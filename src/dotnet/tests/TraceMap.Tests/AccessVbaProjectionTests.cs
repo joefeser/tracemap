@@ -27,6 +27,18 @@ public sealed class AccessVbaProjectionTests
     }
 
     [Fact]
+    public void Procedure_catalog_exposes_only_value_returning_declarations()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var catalog = AccessVbaProjector.BuildProcedureCatalog(
+            seed,
+            [new AccessRawVbaModule("ModuleA", "standard", "Sub DoWork()\nEnd Sub\nProperty Let Status(value)\nEnd Property\nProperty Get Status()\nEnd Property")]);
+
+        Assert.DoesNotContain("DoWork", catalog.Keys, StringComparer.OrdinalIgnoreCase);
+        Assert.Single(catalog["Status"]);
+    }
+
+    [Fact]
     public void Product_vba_inventory_reads_only_counts_and_never_accesses_vbe_or_catalog_items()
     {
         var catalog = new FakeCountCollection(4);

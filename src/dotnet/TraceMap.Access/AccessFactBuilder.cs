@@ -185,7 +185,12 @@ public static class AccessFactBuilder
                 {
                     queryOutputOwnerStableKeys.Add(output.Identity.StableKey, query.Identity.StableKey);
                 }
-                facts.Add(Create(manifest, FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, span,
+                var outputTier = output.Coverage == "partial"
+                    && output.TypeFamily == "unknown"
+                    && output.SourceFieldStableKeys.Count == 0
+                    ? EvidenceTiers.Tier3SyntaxOrTextual
+                    : EvidenceTiers.Tier2Structural;
+                facts.Add(Create(manifest, FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery, outputTier, span,
                     sourceSymbol: query.Identity.StableKey,
                     targetSymbol: output.Identity.StableKey,
                     properties: IdentityProps(output.Identity,

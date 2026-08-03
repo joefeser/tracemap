@@ -144,7 +144,22 @@ public sealed record AccessQueryStaticProjection(
     string Coverage,
     string DependencyCoverage = "partial",
     string OutputCoverage = "partial",
-    string RuntimeValueCoverage = "partial");
+    string RuntimeValueCoverage = "partial")
+{
+    public AccessQueryStaticProjection(
+        string sqlHash,
+        int sqlLength,
+        IReadOnlyList<AccessQueryDependencyProjection> dependencies,
+        string? predicateHash,
+        string? orderByHash,
+        IReadOnlyList<string> functionNameHashes,
+        IReadOnlyList<AccessQueryStaticOutputProjection> outputs,
+        string coverage)
+        : this(sqlHash, sqlLength, dependencies, predicateHash, orderByHash, functionNameHashes, outputs,
+            coverage, coverage, coverage, "unknown")
+    {
+    }
+}
 
 public sealed record AccessRowSourceBindingProjection(
     int? BoundColumn,
@@ -191,7 +206,23 @@ public sealed record AccessBindingProjection(
     string TargetKind,
     string Coverage,
     AccessExpressionProjection? Expression = null,
-    string RuntimeValueCoverage = "unknown");
+    string RuntimeValueCoverage = "unknown")
+{
+    public AccessBindingProjection(
+        AccessSafeIdentity identity,
+        string ownerStableKey,
+        string bindingKind,
+        string sourceKind,
+        string? expressionHash,
+        int expressionLength,
+        IReadOnlyList<string> targetStableKeys,
+        string targetKind,
+        string coverage)
+        : this(identity, ownerStableKey, bindingKind, sourceKind, expressionHash, expressionLength,
+            targetStableKeys, targetKind, coverage, null, "unknown")
+    {
+    }
+}
 
 public sealed record AccessExpressionProjection(
     string Classification,
