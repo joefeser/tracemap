@@ -119,6 +119,18 @@ public sealed class AccessExpressionProjectorTests
         Assert.Equal(2, report.ExternalReferenceHashes.Count);
         Assert.Empty(report.FieldStableKeys);
 
+        var collidingReport = AccessExpressionProjector.Project(
+            "=[Page]",
+            null,
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Page"] = ["field-page"]
+            },
+            contextIdentifierNames: new HashSet<string>(["Page", "Pages"], StringComparer.OrdinalIgnoreCase));
+        Assert.Equal("complete", collidingReport.Coverage);
+        Assert.Single(collidingReport.ExternalReferenceHashes);
+        Assert.Empty(collidingReport.FieldStableKeys);
+
         var unscoped = AccessExpressionProjector.Project(
             "=\"Page \" & [Page] & \" of \" & [Pages]",
             null,

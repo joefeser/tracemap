@@ -79,6 +79,13 @@ public static partial class AccessExpressionProjector
         {
             var name = NormalizeIdentifier(match.Groups["name"].Value);
             if (IsKeyword(name) || functionNames.Contains(name) || Functions.Contains(name)) continue;
+            if (contextIdentifierNames?.Contains(name) == true)
+            {
+                externalRefs.Add(AccessSafeValues.RoleHash(
+                    "access-expression-context-identifier",
+                    name.ToLowerInvariant()));
+                continue;
+            }
             var resolved = false;
             if (fields is not null && fields.TryGetValue(name, out var candidates))
             {
@@ -104,13 +111,6 @@ public static partial class AccessExpressionProjector
             {
                 if (objectCandidates.Count == 1 && objectCandidates[0].Kind is "query" or "table") queryKeys.Add(objectCandidates[0].StableKey);
                 else ambiguous = true;
-                continue;
-            }
-            if (contextIdentifierNames?.Contains(name) == true)
-            {
-                externalRefs.Add(AccessSafeValues.RoleHash(
-                    "access-expression-context-identifier",
-                    name.ToLowerInvariant()));
                 continue;
             }
             if (controlNames is not null && controlNames.Contains(name))

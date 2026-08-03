@@ -153,47 +153,58 @@ public static partial class AccessQueryProjector
         if (string.IsNullOrWhiteSpace(sql)) return [];
         var masked = MaskLiteralsAndComments(sql);
         var outputs = new List<CrosstabOutputCatalogEntry>();
-        var ordinal = 0;
         var select = SelectListAfterKeyword(masked, "select");
-        foreach (var expression in select is null ? [] : SplitSelectItems(select))
+        IReadOnlyList<string> selectItems = select is null ? [] : SplitSelectItems(select);
+        var selectComplete = select is not null && ProjectionStructureComplete(select);
+        for (var ordinal = 0; ordinal < selectItems.Count; ordinal++)
         {
+            var expression = selectItems[ordinal];
             var name = StaticOutputName(expression);
             if (name is null) continue;
-            var sources = ResolveExpressionFields(expression, knownObjects, fieldLookups);
-            var coverage = sources.Count > 0
-                && ResolvesExpressionCompletely(expression, knownObjects, fieldLookups)
-                && !HasUnsupportedNamedFunction(expression)
+            var analysisExpression = RemoveOutputAlias(expression);
+            var sources = ResolveExpressionFields(analysisExpression, knownObjects, fieldLookups);
+            var coverage = selectComplete
+                && sources.Count > 0
+                && ResolvesExpressionCompletely(analysisExpression, knownObjects, fieldLookups)
+                && !HasUnsupportedNamedFunction(analysisExpression)
                 ? "complete"
                 : "partial";
-            outputs.Add(new(ordinal++, name, sources, coverage, "row-heading"));
+            outputs.Add(new(ordinal, name, sources, coverage, "row-heading"));
         }
 
+        var nextOrdinal = selectItems.Count;
         var aggregate = MatchValue(masked, TransformPattern());
         var aggregateName = aggregate is null ? null : StaticOutputName(aggregate);
         if (aggregate is not null && aggregateName is not null)
         {
             var aggregateExpression = RemoveOutputAlias(aggregate);
             var sources = ResolveExpressionFields(aggregateExpression, knownObjects, fieldLookups);
-            var coverage = sources.Count > 0
+            var coverage = selectComplete
+                && sources.Count > 0
                 && ResolvesExpressionCompletely(aggregateExpression, knownObjects, fieldLookups)
                 && !HasUnsupportedNamedFunction(aggregateExpression)
                 ? "complete"
                 : "partial";
-            outputs.Add(new(ordinal++, aggregateName, sources, coverage, "aggregate"));
+            outputs.Add(new(nextOrdinal++, aggregateName, sources, coverage, "aggregate"));
         }
 
         var aggregateValue = aggregate is null ? null : ExtractAggregateValue(RemoveOutputAlias(aggregate));
         var aggregateSources = aggregateValue is null
             ? []
             : ResolveExpressionFields(aggregateValue, knownObjects, fieldLookups);
-        var aggregateSourceCoverage = aggregateValue is not null
+        var pivot = MatchValue(masked, PivotPattern());
+        var aggregateSourceCoverage = selectComplete
+            && aggregateValue is not null
             && aggregateSources.Count > 0
             && ResolvesExpressionCompletely(aggregateValue, knownObjects, fieldLookups)
             && !HasUnsupportedNamedFunction(aggregateValue)
+            && pivot is not null
+            && ResolvesExpressionCompletely(pivot, knownObjects, fieldLookups)
+            && !HasUnsupportedNamedFunction(pivot)
             ? "complete"
             : "partial";
         foreach (var name in ParsePivotColumnNames(sql))
-            outputs.Add(new(ordinal++, name, aggregateSources, aggregateSourceCoverage, "static-pivot"));
+            outputs.Add(new(nextOrdinal++, name, aggregateSources, aggregateSourceCoverage, "static-pivot"));
 
         var duplicateNames = outputs
             .GroupBy(output => output.Name, StringComparer.OrdinalIgnoreCase)
@@ -201,7 +212,9 @@ public static partial class AccessQueryProjector
             .Select(group => group.Key)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         return outputs
-            .Where(output => !duplicateNames.Contains(output.Name))
+            .Select(output => duplicateNames.Contains(output.Name)
+                ? output with { Coverage = "partial", OutputKind = $"{output.OutputKind}-duplicate-name" }
+                : output)
             .ToArray();
     }
 
@@ -369,7 +382,38 @@ public static partial class AccessQueryProjector
     private static string RemoveOutputAlias(string expression)
     {
         var alias = OutputAliasPattern().Match(expression);
-        return alias.Success ? expression[..alias.Index].Trim() : expression.Trim();
+        if (alias.Success) return expression[..alias.Index].Trim();
+        var accessAlias = AccessOutputAliasPattern().Match(expression);
+        return accessAlias.Success ? expression[(accessAlias.Index + accessAlias.Length)..].Trim() : expression.Trim();
+    }
+
+    private static bool ProjectionStructureComplete(string value)
+    {
+        var parentheses = 0;
+        var bracket = false;
+        foreach (var current in value)
+        {
+            if (current == '[')
+            {
+                if (bracket) return false;
+                bracket = true;
+            }
+            else if (current == ']')
+            {
+                if (!bracket) return false;
+                bracket = false;
+            }
+            else if (!bracket && current == '(')
+            {
+                parentheses++;
+            }
+            else if (!bracket && current == ')')
+            {
+                if (parentheses == 0) return false;
+                parentheses--;
+            }
+        }
+        return !bracket && parentheses == 0;
     }
 
     private static IReadOnlyList<string> SplitSelectItems(string value)

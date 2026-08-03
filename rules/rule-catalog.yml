@@ -1455,6 +1455,7 @@ rules:
     limitations:
       - Query evidence does not prove execution, result shape, parameter values, branch selection, provider behavior, linked-source availability, permissions, runtime reachability, or production use.
       - A statically recovered output name proves only a unique declared projection name; source-field lineage and runtime result shape remain partial unless independently resolved.
+      - Static crosstab output catalogs cover only named row headings, named aggregates, and literal pivot values. Unnamed projections preserve ordinal holes; malformed projections, unsupported pivot expressions, and duplicate output names remain partial and emit gaps.
       - Raw query SQL never persists; only a full SHA-256, length, safe kind, parameters, and deterministically parsed local-object candidates may be emitted.
       - Dynamic, malformed, ambiguous, unsupported, action, DDL, union, crosstab, and pass-through shapes remain partial or gaps where dependency projection is not credible.
       - Query-specific gaps retain the owning stable query key and declaration fact only when identity was established before the failure; no owner is invented otherwise.

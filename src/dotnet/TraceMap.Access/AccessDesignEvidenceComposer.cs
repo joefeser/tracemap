@@ -1013,6 +1013,7 @@ public static class AccessDesignEvidenceComposer
     {
         foreach (var surface in surfaces)
         {
+            if (surface.SurfaceKind != "report") continue;
             var recordSource = DirectIdentifier(surface.RecordSource);
             if (recordSource is null
                 || !knownObjects.TryGetValue(recordSource, out var sourceMatches)
