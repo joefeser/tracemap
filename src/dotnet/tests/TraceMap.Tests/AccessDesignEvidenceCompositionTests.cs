@@ -296,6 +296,7 @@ public sealed class AccessDesignEvidenceCompositionTests
         var factsPath = Path.Combine(baseScan, "facts.ndjson");
         var lines = await File.ReadAllLinesAsync(factsPath);
         var first = JsonNode.Parse(lines[0])!.AsObject();
+        var originalProperties = first["properties"]!.DeepClone();
         first["properties"] = null;
         lines[0] = first.ToJsonString();
         await File.WriteAllLinesAsync(factsPath, lines, new UTF8Encoding(false));
@@ -307,6 +308,18 @@ public sealed class AccessDesignEvidenceCompositionTests
                 CancellationToken.None));
 
         Assert.Equal("AccessBaseScanFactsInvalid", error.Classification);
+
+        first["properties"] = originalProperties;
+        first["scanId"] = "different-scan";
+        lines[0] = first.ToJsonString();
+        await File.WriteAllLinesAsync(factsPath, lines, new UTF8Encoding(false));
+        var mismatch = await Assert.ThrowsAsync<AccessScanException>(() =>
+            AccessDesignEvidenceComposer.ReadBaseScanAsync(
+                baseScan,
+                AccessLimits.Default,
+                CancellationToken.None));
+
+        Assert.Equal("AccessBaseScanFactsMismatch", mismatch.Classification);
     }
 
     [Fact]
