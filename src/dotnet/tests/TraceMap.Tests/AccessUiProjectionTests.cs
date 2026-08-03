@@ -1058,6 +1058,36 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Report_page_expression_uses_host_context_while_the_same_form_expression_remains_partial()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('d', 40), "fixture.accdb", "hash");
+        AccessRawUiSurface Surface(string kind) => new(
+            $"surface-{kind}",
+            kind,
+            false,
+            null,
+            [new("txtPage", 0, 109, "=\"Page \" & [Page] & \" of \" & [Pages]", null, [])],
+            []);
+
+        var report = AccessUiProjector.Project(
+            seed,
+            [Surface("report")],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal));
+        var reportBinding = Assert.Single(Assert.Single(Assert.Single(report.Surfaces).Controls).Bindings);
+        Assert.Equal("complete", reportBinding.Coverage);
+        Assert.Equal("partial", reportBinding.RuntimeValueCoverage);
+        Assert.DoesNotContain(report.Gaps, gap => gap.Classification == "AccessBindingExpressionPartial");
+
+        var form = AccessUiProjector.Project(
+            seed,
+            [Surface("form")],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal));
+        Assert.Contains(form.Gaps, gap => gap.Classification == "AccessBindingExpressionPartial");
+    }
+
+    [Fact]
     public void Inline_record_source_direct_output_is_preserved_as_a_bounded_candidate()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('e', 40), "fixture.accdb", "hash");

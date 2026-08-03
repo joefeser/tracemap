@@ -11,6 +11,45 @@ namespace TraceMap.Tests;
 public sealed class AccessFoundationTests
 {
     [Fact]
+    public void Design_composer_reconciles_only_unique_hash_only_query_outputs_named_by_direct_controls()
+    {
+        const string queryStableKey = "access-query-1";
+        const string outputStableKey = "access-query-output-1";
+        const string outputName = "Total Of NSAPoints";
+        var surface = new AccessRawUiSurface(
+            "ReportOne",
+            "report",
+            false,
+            "[Pivot Query]",
+            [
+                new AccessRawControl("direct", 0, 109, $"[{outputName}]", null, []),
+                new AccessRawControl("expression", 1, 109, $"=Sum([{outputName}])", null, [])
+            ],
+            []);
+        var knownObjects = new Dictionary<string, List<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Pivot Query"] = [(queryStableKey, "query")]
+        };
+        var outputHash = AccessSafeValues.RoleHash($"access-query-field-{queryStableKey}-name", outputName);
+        var fieldsByHash = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new(StringComparer.Ordinal) { [outputHash] = [outputStableKey] }
+        };
+        var fieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
+
+        AccessDesignEvidenceComposer.ReconcileSurfaceQueryOutputNames(
+            [surface], knownObjects, fieldsByHash, fieldsByName);
+
+        Assert.Equal(outputStableKey, Assert.Single(fieldsByName[queryStableKey][outputName]));
+
+        fieldsByHash[queryStableKey][outputHash].Add("access-query-output-ambiguous");
+        fieldsByName.Clear();
+        AccessDesignEvidenceComposer.ReconcileSurfaceQueryOutputNames(
+            [surface], knownObjects, fieldsByHash, fieldsByName);
+        Assert.Empty(fieldsByName);
+    }
+
+    [Fact]
     public void Conflicting_query_kinds_are_omitted_independently_of_input_order()
     {
         var first = AccessDesignEvidenceComposer.BuildConsistentQueryKinds(

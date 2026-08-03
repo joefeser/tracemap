@@ -504,6 +504,11 @@ public static class AccessDesignEvidenceComposer
             .OrderBy(input => SurfaceStableKey(databaseSeed, input.Raw), StringComparer.Ordinal)
             .ToArray();
         var rawSurfaces = mergedSurfaceInputs.Select(input => input.Raw).ToArray();
+        ReconcileSurfaceQueryOutputNames(
+            rawSurfaces,
+            knownObjects,
+            fieldsByTableAndHash,
+            fieldsByTable);
         var known = knownObjects.ToDictionary(
             item => item.Key,
             item => (IReadOnlyList<(string StableKey, string Kind)>)item.Value
@@ -998,6 +1003,60 @@ public static class AccessDesignEvidenceComposer
     {
         if (!values.TryGetValue(name, out var entries)) values[name] = entries = [];
         entries.Add((stableKey, kind));
+    }
+
+    internal static void ReconcileSurfaceQueryOutputNames(
+        IReadOnlyList<AccessRawUiSurface> surfaces,
+        IReadOnlyDictionary<string, List<(string StableKey, string Kind)>> knownObjects,
+        IReadOnlyDictionary<string, Dictionary<string, List<string>>> fieldsByTableAndHash,
+        Dictionary<string, Dictionary<string, List<string>>> fieldsByTable)
+    {
+        foreach (var surface in surfaces)
+        {
+            var recordSource = DirectIdentifier(surface.RecordSource);
+            if (recordSource is null
+                || !knownObjects.TryGetValue(recordSource, out var sourceMatches)
+                || sourceMatches.Where(match => match.Kind == "query")
+                    .Select(match => match.StableKey)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray() is not { Length: 1 } queryMatches
+                || !fieldsByTableAndHash.TryGetValue(queryMatches[0], out var fieldsByHash))
+            {
+                continue;
+            }
+
+            var queryStableKey = queryMatches[0];
+            foreach (var control in surface.Controls)
+            {
+                var outputName = DirectIdentifier(control.ControlSource);
+                if (outputName is null) continue;
+                var outputHash = AccessSafeValues.RoleHash(
+                    $"access-query-field-{queryStableKey}-name",
+                    outputName);
+                if (!fieldsByHash.TryGetValue(outputHash, out var outputMatches)
+                    || outputMatches.Distinct(StringComparer.Ordinal).ToArray() is not { Length: 1 } distinct)
+                {
+                    continue;
+                }
+                AddField(fieldsByTable, queryStableKey, outputName, distinct[0]);
+            }
+        }
+    }
+
+    private static string? DirectIdentifier(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed)) return null;
+        if (trimmed.Length >= 2 && trimmed[0] == '[' && trimmed[^1] == ']')
+        {
+            var identifier = trimmed[1..^1].Trim();
+            return identifier.Length > 0 && !identifier.Contains('[') && !identifier.Contains(']')
+                ? identifier
+                : null;
+        }
+        if (trimmed[0] == '=' || trimmed.IndexOfAny(['(', ')', ';', '.', '\'', '"', '[', ']']) >= 0)
+            return null;
+        return trimmed;
     }
 
     private static string? ResolveBaseStableKey(
