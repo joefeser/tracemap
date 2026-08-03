@@ -54,6 +54,7 @@ public sealed class AccessExpressionProjectorTests
 
         Assert.Equal("domain-lookup", result.Classification);
         Assert.Equal("complete", result.Coverage);
+        Assert.Equal("partial", result.RuntimeValueCoverage);
         Assert.Contains(queryKey, result.QueryStableKeys);
         Assert.Contains("field-weekly-plan", result.SelectedFieldStableKeys);
         Assert.Contains("field-start-date", result.CriteriaFieldStableKeys);
@@ -86,6 +87,10 @@ public sealed class AccessExpressionProjectorTests
         Assert.Equal("complete", zeroArgumentFunction.Coverage);
         Assert.Null(zeroArgumentFunction.GapClassification);
 
+        var runtimeDate = AccessExpressionProjector.Project("=Date()", null, null);
+        Assert.Equal("complete", runtimeDate.Coverage);
+        Assert.Equal("partial", runtimeDate.RuntimeValueCoverage);
+
         var collidingFunction = AccessExpressionProjector.Project(
             "=CustomLookup([StartDate])",
             null,
@@ -97,6 +102,28 @@ public sealed class AccessExpressionProjectorTests
         Assert.Equal("AccessBindingExpressionFunctionUnresolved", collidingFunction.GapClassification);
         Assert.DoesNotContain("field-collision", collidingFunction.FieldStableKeys);
         Assert.Contains("field-start-date", collidingFunction.FieldStableKeys);
+    }
+
+    [Fact]
+    public void Resolves_declared_vba_function_as_static_input_without_claiming_runtime_value()
+    {
+        var result = AccessExpressionProjector.Project(
+            "=[UserId] = glngUserID()",
+            null,
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["UserId"] = ["field-user-id"]
+            },
+            vbaProcedureStableKeys: new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["glngUserID"] = ["vba-procedure-user-id"]
+            });
+
+        Assert.Equal("complete", result.Coverage);
+        Assert.Equal("partial", result.RuntimeValueCoverage);
+        Assert.Null(result.GapClassification);
+        Assert.Equal(["vba-procedure-user-id"], result.VbaProcedureStableKeys);
+        Assert.Equal(["field-user-id"], result.FieldStableKeys);
     }
 
     [Fact]
@@ -129,6 +156,7 @@ public sealed class AccessExpressionProjectorTests
 
         Assert.Equal("domain-lookup", domains.Classification);
         Assert.Equal("complete", domains.Coverage);
+        Assert.Equal("partial", domains.RuntimeValueCoverage);
         Assert.Single(domains.QueryStableKeys);
         Assert.Contains("domain-display", domains.SelectedFieldStableKeys);
         Assert.Contains("domain-status", domains.CriteriaFieldStableKeys);

@@ -1443,7 +1443,7 @@ rules:
 
   - id: legacy.access.query.v1
     name: Microsoft Access saved-query shape
-    description: Records saved-query kind, parameter metadata, full text hash/length, bounded local-object dependencies, and bounded QueryDef output-field/source candidates without executing or materializing queries.
+    description: Records saved-query kind, parameter metadata, full text hash/length, bounded local-object dependencies, and bounded QueryDef or static SELECT output-name/source candidates without executing or materializing queries.
     evidenceTier: Tier2Structural
     possibleEvidenceTiers: [Tier2Structural, Tier3SyntaxOrTextual, Tier4Unknown]
     emits:
@@ -1454,6 +1454,7 @@ rules:
       - AnalysisGap
     limitations:
       - Query evidence does not prove execution, result shape, parameter values, branch selection, provider behavior, linked-source availability, permissions, runtime reachability, or production use.
+      - A statically recovered output name proves only a unique declared projection name; source-field lineage and runtime result shape remain partial unless independently resolved.
       - Raw query SQL never persists; only a full SHA-256, length, safe kind, parameters, and deterministically parsed local-object candidates may be emitted.
       - Dynamic, malformed, ambiguous, unsupported, action, DDL, union, crosstab, and pass-through shapes remain partial or gaps where dependency projection is not credible.
       - Query-specific gaps retain the owning stable query key and declaration fact only when identity was established before the failure; no owner is invented otherwise.
@@ -1502,6 +1503,7 @@ rules:
       - Direct bindings prove only a declared design reference; expression candidates are bounded textual evidence and do not prove evaluation, runtime target selection, data access, event execution, filter outcomes, navigation, or production use.
       - Raw record sources, control sources, row sources, filters, ordering expressions, validation expressions, calculated expressions, SQL, VBA, and macro bodies never persist; complex values retain only role-separated hashes, lengths, safe target keys, and coverage labels.
       - Ambiguous, dynamic, unsupported, or unresolved targets are explicit gaps; the extractor does not choose an arbitrary object or field.
+      - Static lineage coverage is separate from runtime-value coverage; a declared VBA-backed input or predicate can have complete static references while its runtime value and branch outcome remain unknown.
       - Binding extraction never opens a recordset, executes a query, renders a surface, invokes an event, or reads a submitted/control value.
       - Calculated bindings expose only a bounded function/operator summary, role-separated structure hash, resolved field/query/control candidates, safe literal classes, and coverage; expressions are never evaluated or persisted.
       - Same-surface control stable keys are static name-match candidates only. A name matching both a scoped field and a control, or multiple controls, remains an explicit ambiguity gap.
