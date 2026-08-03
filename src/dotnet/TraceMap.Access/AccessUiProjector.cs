@@ -172,6 +172,9 @@ internal static partial class AccessUiProjector
                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
                     var childRecord = ProjectBinding(databaseIdentitySeed, sourceObject.TargetStableKeys[0], "record-source",
                         childSurface.RecordSource, 0, knownObjects, null, [], disclosurePolicy, childControlNames, fieldsByTable,
+                        contextIdentifierNames: childSurface.SurfaceKind.Equals("report", StringComparison.OrdinalIgnoreCase)
+                            ? ReportContextIdentifiers
+                            : null,
                         fieldCoverageByStableKey: fieldCoverageByStableKey);
                     if (childRecord is { SourceKind: "direct-object", TargetStableKeys.Count: 1 }
                         && fieldsByTable.TryGetValue(childRecord.TargetStableKeys[0], out var resolvedChildFields))
@@ -392,11 +395,8 @@ internal static partial class AccessUiProjector
                 if (fields is not null && fields.TryGetValue(directName, out var fieldCandidates))
                 {
                     if (fieldCandidates.Count == 1)
-                        return new(identity, ownerStableKey, bindingKind, "direct-field", null, 0,
-                            [fieldCandidates[0]], "field",
-                            fieldCoverageByStableKey?.GetValueOrDefault(fieldCandidates[0]) == "partial"
-                                ? "partial"
-                                : "complete");
+                        return DirectField(
+                            identity, ownerStableKey, bindingKind, fieldCandidates[0], fieldCoverageByStableKey);
                     return Ambiguous(identity, ownerStableKey, bindingKind, trimmed, "field", gaps);
                 }
             }
@@ -410,11 +410,8 @@ internal static partial class AccessUiProjector
             else if (fields is not null && fields.TryGetValue(directName, out var fieldCandidates))
             {
                 if (fieldCandidates.Count == 1)
-                    return new(identity, ownerStableKey, bindingKind, "direct-field", null, 0,
-                        [fieldCandidates[0]], "field",
-                        fieldCoverageByStableKey?.GetValueOrDefault(fieldCandidates[0]) == "partial"
-                            ? "partial"
-                            : "complete");
+                    return DirectField(
+                        identity, ownerStableKey, bindingKind, fieldCandidates[0], fieldCoverageByStableKey);
                 return Ambiguous(identity, ownerStableKey, bindingKind, trimmed, "field", gaps);
             }
 
@@ -528,6 +525,25 @@ internal static partial class AccessUiProjector
             AccessSafeValues.RoleHash($"access-{bindingKind}-expression", trimmed), trimmed.Length,
             expressionTargets, targetKind, expression.Coverage, expression, expression.RuntimeValueCoverage);
     }
+
+    private static AccessBindingProjection DirectField(
+        AccessSafeIdentity identity,
+        string ownerStableKey,
+        string bindingKind,
+        string fieldStableKey,
+        IReadOnlyDictionary<string, string>? fieldCoverageByStableKey) =>
+        new(
+            identity,
+            ownerStableKey,
+            bindingKind,
+            "direct-field",
+            null,
+            0,
+            [fieldStableKey],
+            "field",
+            fieldCoverageByStableKey?.GetValueOrDefault(fieldStableKey) == "partial"
+                ? "partial"
+                : "complete");
 
     private static AccessBindingProjection MissingReportGroupBinding(
         string databaseIdentitySeed,

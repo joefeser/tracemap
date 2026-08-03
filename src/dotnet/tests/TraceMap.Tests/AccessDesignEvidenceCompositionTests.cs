@@ -432,6 +432,18 @@ public sealed class AccessDesignEvidenceCompositionTests
         Assert.DoesNotContain(bindings, binding => binding.TargetSymbol == wrongOrdinal);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("-1")]
+    [InlineData("10000")]
+    [InlineData("2147483647")]
+    [InlineData("not-an-ordinal")]
+    public void Query_output_ordinal_validation_rejects_values_that_cannot_be_projected_boundedly(string? value)
+    {
+        Assert.False(AccessDesignEvidenceComposer.TryValidOrdinal(value, 10_000, out _));
+    }
+
     [Fact]
     public async Task Enrichment_rejects_query_fields_beneath_an_unmatched_query()
     {
