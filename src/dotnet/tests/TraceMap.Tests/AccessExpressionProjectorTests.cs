@@ -100,6 +100,28 @@ public sealed class AccessExpressionProjectorTests
     }
 
     [Fact]
+    public void Resolves_declared_vba_function_as_static_input_without_claiming_runtime_value()
+    {
+        var result = AccessExpressionProjector.Project(
+            "=[UserId] = glngUserID()",
+            null,
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["UserId"] = ["field-user-id"]
+            },
+            vbaProcedureStableKeys: new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["glngUserID"] = ["vba-procedure-user-id"]
+            });
+
+        Assert.Equal("complete", result.Coverage);
+        Assert.Equal("partial", result.RuntimeValueCoverage);
+        Assert.Null(result.GapClassification);
+        Assert.Equal(["vba-procedure-user-id"], result.VbaProcedureStableKeys);
+        Assert.Equal(["field-user-id"], result.FieldStableKeys);
+    }
+
+    [Fact]
     public void Projects_multiple_domain_calls_and_operator_only_expressions()
     {
         var domainKey = "query-domain";

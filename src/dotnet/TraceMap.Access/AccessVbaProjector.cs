@@ -34,6 +34,47 @@ internal static partial class AccessVbaProjector
         AccessVbaModuleProjection Projection,
         IReadOnlyList<ProcedureWork> Procedures);
 
+    internal static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildProcedureCatalog(
+        string databaseIdentitySeed,
+        IReadOnlyList<AccessRawVbaModule> rawModules,
+        AccessLimits? limits = null,
+        AccessIdentityDisclosurePolicy disclosurePolicy = AccessIdentityDisclosurePolicy.SafeIdentifier)
+    {
+        limits ??= AccessLimits.Default;
+        var result = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var raw in rawModules
+                     .OrderBy(item => item.ModuleKind, StringComparer.Ordinal)
+                     .ThenBy(item => AccessSafeValues.RoleHash("access-vba-module-sort", item.Name), StringComparer.Ordinal)
+                     .Take(limits.MaxObjectsPerCollection))
+        {
+            if (raw.Source is null || raw.Source.Length > limits.MaxVbaModuleTextLength) continue;
+            var lines = NormalizeLines(raw.Source);
+            if (lines.Length > limits.MaxVbaModuleLines) continue;
+            var moduleIdentity = AccessSafeValues.Identity(databaseIdentitySeed, "vba-module", raw.Name, disclosurePolicy: disclosurePolicy);
+            var ordinal = 0;
+            foreach (var line in lines)
+            {
+                var match = ProcedureDeclarationPattern().Match(MaskCommentsAndStrings(line));
+                if (!match.Success) continue;
+                if (ordinal >= limits.MaxVbaProceduresPerModule) break;
+                var name = match.Groups["name"].Value;
+                var identity = AccessSafeValues.Identity(
+                    databaseIdentitySeed,
+                    $"vba-procedure-{moduleIdentity.StableKey}",
+                    name,
+                    ordinal,
+                    disclosurePolicy);
+                if (!result.TryGetValue(name, out var candidates)) result[name] = candidates = [];
+                candidates.Add(identity.StableKey);
+                ordinal++;
+            }
+        }
+        return result.ToDictionary(
+            item => item.Key,
+            item => (IReadOnlyList<string>)item.Value.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            StringComparer.OrdinalIgnoreCase);
+    }
+
     public static AccessVbaProjectionResult Project(
         string databaseIdentitySeed,
         IReadOnlyList<AccessRawVbaModule> rawModules,

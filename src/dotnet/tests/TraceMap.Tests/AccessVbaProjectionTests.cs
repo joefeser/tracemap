@@ -14,6 +14,19 @@ public sealed class AccessVbaProjectionTests
     private const string ProtectedCommand = "PrivateCommandBody_92817";
 
     [Fact]
+    public void Procedure_catalog_resolves_unique_declared_function_without_retaining_source()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var catalog = AccessVbaProjector.BuildProcedureCatalog(
+            seed,
+            [new AccessRawVbaModule("ModuleA", "standard", "Function glngUserID() As Long\nEnd Function")],
+            disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly);
+
+        Assert.Single(catalog["glngUserID"]);
+        Assert.DoesNotContain("glngUserID", catalog["glngUserID"][0], StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Product_vba_inventory_reads_only_counts_and_never_accesses_vbe_or_catalog_items()
     {
         var catalog = new FakeCountCollection(4);

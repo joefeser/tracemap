@@ -5,6 +5,7 @@ namespace TraceMap.Access;
 
 public static partial class AccessQueryProjector
 {
+    internal sealed record StaticOutputCatalogEntry(int Ordinal, string Name);
     private static readonly string[] SqlFunctionNames = [
         "abs", "avg", "count", "date", "dateadd", "datediff", "dlookup", "dsum", "first", "format",
         "iif", "instr", "isnull", "len", "max", "min", "nz", "sum", "val"];
@@ -189,6 +190,15 @@ public static partial class AccessQueryProjector
             && functions.Length == 0
             ? "complete"
             : "partial";
+        var outputCoverage = expressions.Count > 0
+            && outputs.All(output => output.NameHash is not null && output.Coverage == "complete")
+            ? "complete"
+            : "partial";
+        var runtimeValueCoverage = predicateComplete
+            && orderComplete
+            && functions.Length == 0
+            ? "complete"
+            : "partial";
         return new(
             AccessSafeValues.RoleHash("access-query-sql", sql),
             sql.Length,
@@ -197,7 +207,29 @@ public static partial class AccessQueryProjector
             order is null ? null : AccessSafeValues.RoleHash("access-query-order-by", order),
             functions,
             outputs,
-            coverage);
+            coverage,
+            dependencyProjection.Coverage,
+            outputCoverage,
+            runtimeValueCoverage);
+    }
+
+    internal static IReadOnlyList<StaticOutputCatalogEntry> ProjectStaticOutputCatalog(string sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql)) return [];
+        var select = SelectListAfterKeyword(MaskLiteralsAndComments(sql), "select");
+        if (select is null) return [];
+        var parsed = SplitSelectItems(select)
+            .Select((expression, ordinal) => (Name: StaticOutputName(expression), Ordinal: ordinal))
+            .Where(item => !string.IsNullOrWhiteSpace(item.Name))
+            .ToArray();
+        var duplicateNames = parsed.GroupBy(item => item.Name!, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return parsed
+            .Where(item => !duplicateNames.Contains(item.Name!))
+            .Select(item => new StaticOutputCatalogEntry(item.Ordinal, item.Name!))
+            .ToArray();
     }
 
     public static bool IsDirectOutputField(string sql, string outputName)

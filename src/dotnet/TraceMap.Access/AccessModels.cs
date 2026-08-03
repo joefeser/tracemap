@@ -141,7 +141,10 @@ public sealed record AccessQueryStaticProjection(
     string? OrderByHash,
     IReadOnlyList<string> FunctionNameHashes,
     IReadOnlyList<AccessQueryStaticOutputProjection> Outputs,
-    string Coverage);
+    string Coverage,
+    string DependencyCoverage = "partial",
+    string OutputCoverage = "partial",
+    string RuntimeValueCoverage = "partial");
 
 public sealed record AccessRowSourceBindingProjection(
     int? BoundColumn,
@@ -187,7 +190,8 @@ public sealed record AccessBindingProjection(
     IReadOnlyList<string> TargetStableKeys,
     string TargetKind,
     string Coverage,
-    AccessExpressionProjection? Expression = null);
+    AccessExpressionProjection? Expression = null,
+    string RuntimeValueCoverage = "unknown");
 
 public sealed record AccessExpressionProjection(
     string Classification,
@@ -198,6 +202,7 @@ public sealed record AccessExpressionProjection(
     IReadOnlyList<string> ControlStableKeys,
     IReadOnlyList<string> ControlReferenceHashes,
     IReadOnlyList<string> ExternalReferenceHashes,
+    IReadOnlyList<string> VbaProcedureStableKeys,
     IReadOnlyList<string> QueryStableKeys,
     IReadOnlyList<string> SelectedFieldStableKeys,
     IReadOnlyList<string> SelectedFieldReferenceHashes,
@@ -205,6 +210,7 @@ public sealed record AccessExpressionProjection(
     IReadOnlyList<string> CriteriaFieldReferenceHashes,
     IReadOnlyList<string> LiteralKinds,
     string Coverage,
+    string RuntimeValueCoverage,
     string? GapClassification = null)
 {
     // Preserves source and binary construction compatibility for consumers built
@@ -233,12 +239,14 @@ public sealed record AccessExpressionProjection(
             [],
             controlReferenceHashes,
             [],
+            [],
             queryStableKeys,
             selectedFieldStableKeys,
             [],
             criteriaFieldStableKeys,
             [],
             literalKinds,
+            coverage,
             coverage,
             gapClassification)
     {
