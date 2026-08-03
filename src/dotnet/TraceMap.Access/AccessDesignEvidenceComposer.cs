@@ -235,6 +235,8 @@ public static class AccessDesignEvidenceComposer
         var knownObjectsByHash = new Dictionary<string, List<(string StableKey, string Kind)>>(StringComparer.Ordinal);
         var fieldsByTable = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
         var fieldsByTableAndHash = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
+        var fieldCoverageByStableKey = new Dictionary<string, string>(StringComparer.Ordinal);
+        var queryOutputOrdinalByStableKey = new Dictionary<string, int>(StringComparer.Ordinal);
         var stableKeyByCanonicalRecordId = new Dictionary<string, string>(StringComparer.Ordinal);
         var baseMatchedCatalogStableKeys = new HashSet<string>(StringComparer.Ordinal);
         foreach (var fact in baseFacts)
@@ -275,6 +277,10 @@ public static class AccessDesignEvidenceComposer
                     AddField(fieldsByTable, fact.SourceSymbol, outputName, fact.TargetSymbol);
                 if (fact.Properties.TryGetValue("objectNameHash", out var outputHash))
                     AddField(fieldsByTableAndHash, fact.SourceSymbol, outputHash, fact.TargetSymbol);
+                fieldCoverageByStableKey[fact.TargetSymbol] =
+                    fact.Properties.GetValueOrDefault("coverageLabel") == "complete" ? "complete" : "partial";
+                if (int.TryParse(fact.Properties.GetValueOrDefault("ordinal"), out var outputOrdinal))
+                    queryOutputOrdinalByStableKey[fact.TargetSymbol] = outputOrdinal;
             }
         }
 
@@ -363,9 +369,12 @@ public static class AccessDesignEvidenceComposer
             {
                 var identityRole = fieldRole == "query-field" ? "query-field" : "field";
                 var fieldHash = AccessSafeValues.RoleHash($"access-{identityRole}-{tableStableKey}-name", identity);
+                var expectedOrdinal = Int(record.Payload, "ordinal");
                 if (fieldsByTableAndHash.TryGetValue(tableStableKey, out var fieldsByHash)
                     && fieldsByHash.TryGetValue(fieldHash, out var matches)
-                    && matches.Distinct(StringComparer.Ordinal).ToArray() is { Length: 1 } distinct)
+                    && matches.Distinct(StringComparer.Ordinal).ToArray() is { Length: 1 } distinct
+                    && (fieldRole != "query-field"
+                        || queryOutputOrdinalByStableKey.GetValueOrDefault(distinct[0], -1) == expectedOrdinal))
                 {
                     projectedStableKey = distinct[0];
                 }
@@ -375,7 +384,7 @@ public static class AccessDesignEvidenceComposer
                         databaseSeed,
                         $"query-field-{tableStableKey}",
                         identity,
-                        Int(record.Payload, "ordinal"),
+                        expectedOrdinal,
                         disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly).StableKey;
                 }
             }
@@ -559,7 +568,8 @@ public static class AccessDesignEvidenceComposer
             AccessIdentityDisclosurePolicy.HashOnly,
             queryOutputs,
             queryKinds,
-            vbaProcedureCatalog);
+            vbaProcedureCatalog,
+            fieldCoverageByStableKey);
         var rowSourceContexts = ui.Surfaces
             .SelectMany(surface => surface.Controls.SelectMany(control =>
             {

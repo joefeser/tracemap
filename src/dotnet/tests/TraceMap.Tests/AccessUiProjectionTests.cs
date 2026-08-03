@@ -1058,6 +1058,41 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Partial_query_output_keeps_a_direct_report_binding_partial()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('d', 40), "fixture.accdb", "hash");
+        var query = AccessSafeValues.Identity(seed, "query", "qryPivot");
+        var output = AccessSafeValues.Identity(seed, $"query-field-{query.StableKey}", "W4", 3);
+        var raw = new AccessRawUiSurface(
+            "rptPivot", "report", false, "qryPivot",
+            [new("txtWeekFour", 0, 109, "W4", null, [])], []);
+
+        var projected = AccessUiProjector.Project(
+            seed,
+            [raw],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qryPivot"] = [(query.StableKey, "query")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [query.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["W4"] = [output.StableKey]
+                }
+            },
+            fieldCoverageByStableKey: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [output.StableKey] = "partial"
+            });
+
+        var binding = Assert.Single(Assert.Single(Assert.Single(projected.Surfaces).Controls).Bindings);
+        Assert.Equal("direct-field", binding.SourceKind);
+        Assert.Equal("partial", binding.Coverage);
+        Assert.Equal([output.StableKey], binding.TargetStableKeys);
+    }
+
+    [Fact]
     public void Report_page_expression_uses_host_context_while_the_same_form_expression_remains_partial()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('d', 40), "fixture.accdb", "hash");
@@ -1077,7 +1112,7 @@ public sealed class AccessUiProjectionTests
         var reportBinding = Assert.Single(Assert.Single(Assert.Single(report.Surfaces).Controls).Bindings);
         Assert.Equal("complete", reportBinding.Coverage);
         Assert.Equal("partial", reportBinding.RuntimeValueCoverage);
-        Assert.Equal("unknown", reportBinding.TargetKind);
+        Assert.Equal("context", reportBinding.TargetKind);
         Assert.DoesNotContain(report.Gaps, gap => gap.Classification == "AccessBindingExpressionPartial");
 
         var form = AccessUiProjector.Project(

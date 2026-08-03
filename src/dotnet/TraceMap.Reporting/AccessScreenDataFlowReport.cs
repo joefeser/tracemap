@@ -280,6 +280,14 @@ public static class AccessScreenDataFlowReporter
         };
         if (kind is not null)
         {
+            if (fact.FactType == FactTypes.AccessBindingDeclared
+                && fact.Properties.GetValueOrDefault("targetKind") == "context"
+                && string.IsNullOrWhiteSpace(fact.TargetSymbol))
+            {
+                // Host-provided values such as report Page/Pages are evidence about
+                // rendering context, not a traversable data target.
+                return null;
+            }
             if (string.IsNullOrWhiteSpace(fact.SourceSymbol) || string.IsNullOrWhiteSpace(fact.TargetSymbol))
             {
                 AddGap(gaps, maxGaps, ref truncated, Gap(
