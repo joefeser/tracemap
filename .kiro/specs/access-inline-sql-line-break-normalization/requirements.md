@@ -8,9 +8,10 @@ SQL or broadening the Access extraction boundary.
 
 ## Requirements
 
-1. The Access design-text parser SHALL decode only the bounded SaveAsText line
-   break escapes `\015` and `\012` inside quoted scalar properties.
-2. Unsupported numeric escapes and ordinary backslashes SHALL remain literal.
+1. The Access design-text parser SHALL decode only the bounded contiguous
+   SaveAsText line-break pair `\015\012` inside quoted scalar properties.
+2. Standalone `\015` or `\012` tokens, unsupported numeric escapes, and
+   ordinary backslashes SHALL remain literal.
 3. Adjacent quoted property fragments SHALL retain their current deterministic
    reconstruction behavior.
 4. A multiline inline record source whose qualified wildcard dependency is

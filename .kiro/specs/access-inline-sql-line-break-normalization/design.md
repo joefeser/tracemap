@@ -2,9 +2,14 @@
 
 ## Decision
 
-Normalize the two SaveAsText line-break escapes at the quoted-scalar parsing
-boundary. This gives all protected string properties the same in-memory text
-that Access declared while preserving every other backslash sequence.
+Normalize the observed contiguous SaveAsText line-break pair at the
+quoted-scalar parsing boundary. This gives protected raw design-text properties
+the declared line break while preserving standalone `\015` or `\012` tokens
+and every other backslash sequence.
+
+Structured `ui-surface` and `ui-control` records carry semantic property values,
+not SaveAsText transport syntax, so this normalization does not run at that
+input boundary.
 
 The existing SQL projector and UI binding composer then consume the normalized
 value. Qualified wildcard sources reuse only fields already attached to their
