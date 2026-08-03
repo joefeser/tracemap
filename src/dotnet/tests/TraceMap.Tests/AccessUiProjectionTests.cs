@@ -855,6 +855,34 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Ui_projector_emits_resolved_vba_function_as_a_binding_target()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "database-hash");
+        var raw = new AccessRawUiSurface(
+            "frmRuntimeValue",
+            "form",
+            true,
+            null,
+            [new("txtValue", 0, 109, "=glngUserID()", null, [])],
+            []);
+
+        var result = AccessUiProjector.Project(
+            seed,
+            [raw],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal),
+            vbaProcedureStableKeys: new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["glngUserID"] = ["vba-procedure-user-id"]
+            });
+
+        var binding = Assert.Single(Assert.Single(result.Surfaces).Controls).Bindings.Single();
+        Assert.Equal(["vba-procedure-user-id"], binding.TargetStableKeys);
+        Assert.Equal("vba-procedure", binding.TargetKind);
+        Assert.Equal("partial", binding.RuntimeValueCoverage);
+    }
+
+    [Fact]
     public void Ui_projection_and_fact_output_are_deterministic_rule_backed_and_preserve_ambiguity_as_a_gap()
     {
         using var temp = new TempDirectory();

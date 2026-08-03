@@ -472,6 +472,7 @@ internal static partial class AccessUiProjector
             .Concat(expression.QueryStableKeys)
             .Concat(expression.FieldStableKeys)
             .Concat(expression.ControlStableKeys)
+            .Concat(expression.VbaProcedureStableKeys)
             .Concat(expression.SelectedFieldStableKeys)
             .Concat(expression.CriteriaFieldStableKeys)
             .Distinct(StringComparer.Ordinal)
@@ -480,7 +481,9 @@ internal static partial class AccessUiProjector
             gaps.Add(new(expression.GapClassification, "binding", identity.StableKey, RuleIds.LegacyAccessBinding));
         else if (ambiguous)
             gaps.Add(new("AccessBindingTargetAmbiguous", "binding", identity.StableKey, RuleIds.LegacyAccessBinding));
-        var targetKind = expression.ControlStableKeys.Count > 0
+        var targetKind = expression.VbaProcedureStableKeys.Count > 0
+            ? expressionTargets.Except(expression.VbaProcedureStableKeys, StringComparer.Ordinal).Any() ? "mixed" : "vba-procedure"
+            : expression.ControlStableKeys.Count > 0
             ? expressionTargets.Except(expression.ControlStableKeys, StringComparer.Ordinal).Any() ? "mixed" : "control"
             : fields is not null ? "field" : "object";
         return new(identity, ownerStableKey, bindingKind, "expression",

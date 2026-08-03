@@ -835,7 +835,10 @@ public sealed class AccessComReader
                     }
                     if (fieldCount == 0)
                     {
-                        foreach (var output in AccessQueryProjector.ProjectStaticOutputCatalog(sql))
+                        var staticOutputs = AccessQueryProjector.ProjectStaticOutputCatalog(sql);
+                        if (staticOutputs.Count == 0)
+                            gaps.Add(new("AccessQueryOutputCatalogUnavailable", "query", identity.StableKey, RuleIds.LegacyAccessQuery));
+                        foreach (var output in staticOutputs)
                         {
                             var outputIdentity = AccessSafeValues.Identity(
                                 databaseIdentitySeed,

@@ -87,6 +87,10 @@ public sealed class AccessExpressionProjectorTests
         Assert.Equal("complete", zeroArgumentFunction.Coverage);
         Assert.Null(zeroArgumentFunction.GapClassification);
 
+        var runtimeDate = AccessExpressionProjector.Project("=Date()", null, null);
+        Assert.Equal("complete", runtimeDate.Coverage);
+        Assert.Equal("partial", runtimeDate.RuntimeValueCoverage);
+
         var collidingFunction = AccessExpressionProjector.Project(
             "=CustomLookup([StartDate])",
             null,

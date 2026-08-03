@@ -653,6 +653,18 @@ public sealed class AccessFoundationTests
         Assert.Equal("complete", projection.OutputCoverage);
         Assert.Equal("partial", projection.RuntimeValueCoverage);
         Assert.Equal("partial", projection.Coverage);
+
+        var selectFunction = AccessQueryProjector.ProjectStaticSelect(
+            "SELECT glngUserID() AS UserId FROM Food;",
+            known,
+            fields);
+        Assert.Equal("partial", selectFunction.RuntimeValueCoverage);
+
+        var builtInPredicate = AccessQueryProjector.ProjectStaticSelect(
+            "SELECT Food.FoodId FROM Food WHERE Food.FoodId < Date();",
+            known,
+            fields);
+        Assert.Equal("partial", builtInPredicate.RuntimeValueCoverage);
     }
 
     [Fact]
@@ -685,6 +697,32 @@ public sealed class AccessFoundationTests
         Assert.Equal([0, 1, 2], query.OutputFields.Select(output => output.Ordinal));
         Assert.All(query.OutputFields, output => Assert.Equal("partial", output.Coverage));
         Assert.Equal(3, gaps.Count(gap => gap.Classification == "AccessQueryOutputSourceUnavailable"));
+    }
+
+    [Fact]
+    public void Com_reader_records_a_gap_when_zero_field_query_output_catalog_cannot_be_derived()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "UnsupportedQuery");
+        var database = new FakeDaoDatabase(new FakeDaoQuery("UnsupportedQuery", "PARAMETERS p Long;"));
+        var gaps = new List<AccessGapProjection>();
+
+        var query = Assert.Single(new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["UnsupportedQuery"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal),
+            gaps,
+            []));
+
+        Assert.Empty(query.OutputFields!);
+        Assert.Contains(gaps, gap => gap.Classification == "AccessQueryOutputCatalogUnavailable"
+            && gap.StableScopeKey == queryIdentity.StableKey);
     }
 
     [Fact]
@@ -1563,7 +1601,7 @@ public sealed class AccessFoundationTests
             $"query-field-{query.Identity.StableKey}",
             "OutputField",
             0);
-        var output = new AccessQueryOutputFieldProjection(outputIdentity, 0, "long", [], "partial");
+        var output = new AccessQueryOutputFieldProjection(outputIdentity, 0, "unknown", [], "partial");
         projection = projection with
         {
             Queries = [query with { OutputFields = [output] }],
@@ -1572,10 +1610,12 @@ public sealed class AccessFoundationTests
 
         var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath));
         var declaration = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessQueryDeclared);
+        var outputDeclaration = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessQueryOutputDeclared);
         var gap = Assert.Single(result.Facts, fact =>
             fact.Properties.GetValueOrDefault("classification") == "AccessQueryOutputSourceUnavailable");
 
         Assert.Equal(outputIdentity.StableKey, gap.TargetSymbol);
+        Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, outputDeclaration.EvidenceTier);
         Assert.Equal(declaration.FactId, gap.Properties["supportingFactIds"]);
     }
 

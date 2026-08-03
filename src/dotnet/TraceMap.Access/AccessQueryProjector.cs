@@ -169,9 +169,16 @@ public static partial class AccessQueryProjector
         }).ToArray();
         var predicate = Clause(masked, "where", ["group", "order", ";", "$"]);
         var order = Clause(masked, "order\\s+by", [";", "$"]);
-        var functions = new[] { predicate, order }
+        var runtimeExpressions = expressions
+            .Concat(new[] { predicate, order }.Where(expression => expression is not null).Cast<string>())
+            .ToArray();
+        var runtimeFunctionsPresent = runtimeExpressions
+            .SelectMany(expression => NamedFunctionPattern().Matches(expression))
+            .Select(match => match.Groups["name"].Value)
+            .Any(name => !SqlKeywordCallNames.Contains(name, StringComparer.OrdinalIgnoreCase));
+        var functions = runtimeExpressions
             .Where(expression => expression is not null)
-            .SelectMany(expression => NamedFunctionPattern().Matches(expression!))
+            .SelectMany(expression => NamedFunctionPattern().Matches(expression))
                 .Select(match => match.Groups["name"].Value)
                 .Where(name => !SqlFunctionNames.Contains(name, StringComparer.OrdinalIgnoreCase)
                     && !SqlKeywordCallNames.Contains(name, StringComparer.OrdinalIgnoreCase))
@@ -196,7 +203,7 @@ public static partial class AccessQueryProjector
             : "partial";
         var runtimeValueCoverage = predicateComplete
             && orderComplete
-            && functions.Length == 0
+            && !runtimeFunctionsPresent
             ? "complete"
             : "partial";
         return new(
