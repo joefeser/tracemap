@@ -78,7 +78,12 @@ public sealed class AccessExpressionProjectorTests
             "=DLookUp(\"[Percent]\", \"qWeekly\", \"[WeeklyPlanID]=[txtPlan] AND [StartDate]=[Forms]![Picker]![StartDate]\")");
 
         Assert.Equal(
-            [("qWeekly", "Percent"), ("qWeekly", "StartDate"), ("qWeekly", "txtPlan"), ("qWeekly", "WeeklyPlanID")],
+            [
+                new AccessExpressionProjector.AccessStaticDomainFieldCandidate("qWeekly", "Percent", "selected"),
+                new AccessExpressionProjector.AccessStaticDomainFieldCandidate("qWeekly", "StartDate", "criteria"),
+                new AccessExpressionProjector.AccessStaticDomainFieldCandidate("qWeekly", "txtPlan", "criteria"),
+                new AccessExpressionProjector.AccessStaticDomainFieldCandidate("qWeekly", "WeeklyPlanID", "criteria")
+            ],
             references);
 
         var dynamic = AccessExpressionProjector.FindStaticDomainFieldCandidates(
@@ -87,7 +92,9 @@ public sealed class AccessExpressionProjectorTests
 
         var dynamicCriteria = AccessExpressionProjector.FindStaticDomainFieldCandidates(
             "=DLookUp(\"[Percent]\", \"qWeekly\", \"[WeeklyPlanID]=\" & [txtPlan])");
-        Assert.Equal([("qWeekly", "Percent")], dynamicCriteria);
+        Assert.Equal(
+            [new AccessExpressionProjector.AccessStaticDomainFieldCandidate("qWeekly", "Percent", "selected")],
+            dynamicCriteria);
     }
 
     [Fact]

@@ -263,14 +263,14 @@ public static partial class AccessExpressionProjector
             gap);
     }
 
-    internal static IReadOnlyList<(string DomainName, string FieldName)> FindStaticDomainFieldCandidates(
+    internal static IReadOnlyList<AccessStaticDomainFieldCandidate> FindStaticDomainFieldCandidates(
         string expression)
     {
         var normalized = expression.Trim();
         var calls = FindDomainCalls(
             normalized,
             DomainNamePattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized)));
-        var references = new HashSet<(string DomainName, string FieldName)>(
+        var references = new HashSet<AccessStaticDomainFieldCandidate>(
             DomainFieldReferenceComparer.Instance);
         foreach (var call in calls)
         {
@@ -283,17 +283,18 @@ public static partial class AccessExpressionProjector
                 || NormalizeArgumentIdentifier(args[0]) != "*")
             {
                 if (TryStaticArgumentIdentifier(args[0], requireQuoted: false, out var selectedField))
-                    references.Add((domainName, selectedField));
+                    references.Add(new(domainName, selectedField, "selected"));
             }
 
             if (args.Count < 3 || !TryGetStaticStringLiteral(args[2], out var criteriaExpression)) continue;
             var externalMatches = ExternalReferencePattern().Matches(criteriaExpression);
             foreach (var fieldName in ExtractIdentifiers(MaskMatches(criteriaExpression, externalMatches)))
-                references.Add((domainName, fieldName));
+                references.Add(new(domainName, fieldName, "criteria"));
         }
         return references
             .OrderBy(item => item.DomainName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(item => item.FieldName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.ReferenceKind, StringComparer.Ordinal)
             .ToArray();
     }
 
@@ -561,20 +562,29 @@ public static partial class AccessExpressionProjector
 
     private sealed record DomainCall(int Index, int Length, string Name, string Args);
 
-    private sealed class DomainFieldReferenceComparer : IEqualityComparer<(string DomainName, string FieldName)>
+    internal sealed record AccessStaticDomainFieldCandidate(
+        string DomainName,
+        string FieldName,
+        string ReferenceKind);
+
+    private sealed class DomainFieldReferenceComparer : IEqualityComparer<AccessStaticDomainFieldCandidate>
     {
         public static readonly DomainFieldReferenceComparer Instance = new();
 
         public bool Equals(
-            (string DomainName, string FieldName) left,
-            (string DomainName, string FieldName) right) =>
-            StringComparer.OrdinalIgnoreCase.Equals(left.DomainName, right.DomainName)
-            && StringComparer.OrdinalIgnoreCase.Equals(left.FieldName, right.FieldName);
+            AccessStaticDomainFieldCandidate? left,
+            AccessStaticDomainFieldCandidate? right) =>
+            left is not null
+            && right is not null
+            && StringComparer.OrdinalIgnoreCase.Equals(left.DomainName, right.DomainName)
+            && StringComparer.OrdinalIgnoreCase.Equals(left.FieldName, right.FieldName)
+            && StringComparer.Ordinal.Equals(left.ReferenceKind, right.ReferenceKind);
 
-        public int GetHashCode((string DomainName, string FieldName) value) =>
+        public int GetHashCode(AccessStaticDomainFieldCandidate value) =>
             HashCode.Combine(
                 StringComparer.OrdinalIgnoreCase.GetHashCode(value.DomainName),
-                StringComparer.OrdinalIgnoreCase.GetHashCode(value.FieldName));
+                StringComparer.OrdinalIgnoreCase.GetHashCode(value.FieldName),
+                StringComparer.Ordinal.GetHashCode(value.ReferenceKind));
     }
 
     [GeneratedRegex(@"\b(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
