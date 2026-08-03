@@ -1455,6 +1455,7 @@ rules:
     limitations:
       - Query evidence does not prove execution, result shape, parameter values, branch selection, provider behavior, linked-source availability, permissions, runtime reachability, or production use.
       - A statically recovered output name proves only a unique declared projection name; source-field lineage and runtime result shape remain partial unless independently resolved.
+      - Static crosstab output catalogs cover only named row headings, named aggregates, and literal pivot values. Unnamed projections preserve ordinal holes; malformed projections, unsupported pivot expressions, and duplicate output names remain partial and emit gaps.
       - Raw query SQL never persists; only a full SHA-256, length, safe kind, parameters, and deterministically parsed local-object candidates may be emitted.
       - Dynamic, malformed, ambiguous, unsupported, action, DDL, union, crosstab, and pass-through shapes remain partial or gaps where dependency projection is not credible.
       - Query-specific gaps retain the owning stable query key and declaration fact only when identity was established before the failure; no owner is invented otherwise.
@@ -1508,10 +1509,14 @@ rules:
       - Calculated bindings expose only a bounded function/operator summary, role-separated structure hash, resolved field/query/control candidates, safe literal classes, and coverage; expressions are never evaluated or persisted.
       - Same-surface control stable keys are static name-match candidates only. A name matching both a scoped field and a control, or multiple controls, remains an explicit ambiguity gap.
       - Recognized Access session/surface namespaces such as TempVars, Forms, and Reports persist only role-separated hashes; they do not prove the referenced value, object identity, availability, or runtime resolution.
+      - Recognized report context identifiers such as Page and Pages are static host-context references, not database fields or rendered-value proof; they persist only role-separated hashes and retain partial runtime-value coverage.
       - A design-catalog query-field candidate is accepted only beneath a query already matched to the immutable base scan; TraceMap derives its stable key and the candidate does not prove query execution, returned values, or runtime availability.
+      - Query-field reconciliation requires both the role-separated output-name hash and the declared ordinal to agree. A partial query-output declaration keeps a matched direct binding partial; name agreement cannot upgrade incomplete output evidence.
+      - Missing, negative, non-integer, or out-of-limit query-output ordinals remain explicit design-input gaps and are excluded from ordinal projection; malformed ordinal evidence cannot abort enrichment or allocate an unbounded output array.
       - Unresolved domain selected/criteria identifiers retain role-separated hashes only. They are never resolved against the owning surface when the named domain's field catalog is unavailable.
       - List and combo controls keep value/persistence binding separate from population binding. A query-backed unbound selector has no persistence target unless a ControlSource provides one; BoundColumn is only a static projection-ordinal candidate.
       - A surface-declared crosstab output candidate proves only that a control names an expected output beneath a known crosstab source. It does not prove that row-derived pivot values generated the output or that the query ran.
+      - Crosstab output catalogs are limited to statically declared row-heading names, aggregate aliases, and literal IN-list pivot columns. Dynamic pivot values, runtime column availability, aggregate results, and rendered report values remain unproved.
       - Inline SQL sources are projected only through a bounded static subset. Dependency-scoped fields and statically named outputs remain candidates; unmatched, computed, wildcard, ambiguous, or dynamic outputs retain precise partial classifications.
       - A resolved domain object with an incomplete field catalog remains partial even when selected and criteria identifier hashes are available; those hashes are not field identities.
 

@@ -60,6 +60,41 @@ public sealed class AccessMacroReportingTests
     }
 
     [Fact]
+    public async Task Release_review_preserves_binding_runtime_value_coverage()
+    {
+        using var temp = new TempDirectory();
+        var manifest = new ScanManifest(
+            "scan-access-context-binding", "repo", null, "test", new string('a', 40),
+            ScannerVersions.TraceMap, DateTimeOffset.UnixEpoch,
+            "Level1SemanticAnalysisReduced", "FailedOrPartial", [], [], [], []);
+        var fact = FactFactory.Create(
+            manifest,
+            FactTypes.AccessBindingDeclared,
+            RuleIds.LegacyAccessBinding,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan("fixture.accdb", 1, 1, null, "AccessSourceNeutralDesignEvidence", "access-design-evidence/0.2.0"),
+            sourceSymbol: "access-report-safe",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["bindingKind"] = "control-source",
+                ["sourceKind"] = "expression",
+                ["targetKind"] = "context",
+                ["coverageLabel"] = "complete",
+                ["runtimeValueCoverage"] = "partial",
+                ["limitations"] = "static-evidence-only;no-runtime-value-proof"
+            });
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [fact]);
+
+        var review = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            index, index, Path.Combine(temp.Path, "release-review.md"), Scope: "access-evidence"));
+
+        var finding = Assert.Single(review.AccessEvidence.Findings, item =>
+            item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "binding"));
+        Assert.Contains(finding.Metadata, pair => pair.Key == "runtimeValueCoverage" && pair.Value == "partial");
+    }
+
+    [Fact]
     public void Product_macro_inventory_reads_only_counts_and_never_catalog_items()
     {
         var catalog = new FakeMacroCountCollection(3);

@@ -20,7 +20,8 @@ public static partial class AccessExpressionProjector
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? fieldSetsByObject = null,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? controlStableKeys = null,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? domainObjects = null,
-        IReadOnlyDictionary<string, IReadOnlyList<string>>? vbaProcedureStableKeys = null)
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? vbaProcedureStableKeys = null,
+        IReadOnlySet<string>? contextIdentifierNames = null)
     {
         var normalized = expression.Trim();
         var functionMatches = FunctionPattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
@@ -78,6 +79,13 @@ public static partial class AccessExpressionProjector
         {
             var name = NormalizeIdentifier(match.Groups["name"].Value);
             if (IsKeyword(name) || functionNames.Contains(name) || Functions.Contains(name)) continue;
+            if (contextIdentifierNames?.Contains(name) == true)
+            {
+                externalRefs.Add(AccessSafeValues.RoleHash(
+                    "access-expression-context-identifier",
+                    name.ToLowerInvariant()));
+                continue;
+            }
             var resolved = false;
             if (fields is not null && fields.TryGetValue(name, out var candidates))
             {
