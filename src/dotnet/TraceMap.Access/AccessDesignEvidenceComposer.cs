@@ -1133,6 +1133,12 @@ public static class AccessDesignEvidenceComposer
         IReadOnlyList<CodeFact> facts,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fieldsByObject)
     {
+        var completeQueryDependencies = facts
+            .Where(fact => fact.FactType == FactTypes.AccessQueryDeclared
+                && fact.TargetSymbol is not null
+                && fact.Properties.GetValueOrDefault("referenceCoverage") == "complete")
+            .Select(fact => fact.TargetSymbol!)
+            .ToHashSet(StringComparer.Ordinal);
         var dependencyTargetsByQuery = facts
             .Where(fact => fact.FactType == FactTypes.AccessQueryDependencyCandidate
                 && fact.SourceSymbol is not null
@@ -1153,7 +1159,8 @@ public static class AccessDesignEvidenceComposer
             if (fieldsByObject.TryGetValue(query.Key, out var directFields))
                 AddFields(names, directFields);
             foreach (var target in query.Value)
-                if (fieldsByObject.TryGetValue(target, out var dependencyFields))
+                if (completeQueryDependencies.Contains(query.Key)
+                    && fieldsByObject.TryGetValue(target, out var dependencyFields))
                     AddFields(names, dependencyFields, directFields?.Keys);
             result[query.Key] = names.ToDictionary(
                 item => item.Key,

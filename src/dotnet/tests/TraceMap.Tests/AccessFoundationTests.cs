@@ -129,6 +129,7 @@ public sealed class AccessFoundationTests
         };
         var dependencies = new[]
         {
+            QueryDeclarationFact("query-domain", "complete"),
             DependencyFact("dependency-query", "query-domain", "query-source", "query"),
             DependencyFact("dependency-table", "query-domain", "table-source", "table")
         };
@@ -139,7 +140,28 @@ public sealed class AccessFoundationTests
         Assert.Equal(["table-start-date"], scopes["query-domain"]["StartDate"]);
         Assert.Equal(2, scopes["query-domain"]["WeeklyPlanID"].Count);
         Assert.False(scopes["query-domain"].ContainsKey("Secret"));
+
+        var partialScopes = AccessDesignEvidenceComposer.BuildDomainCriteriaFieldSets(
+            dependencies.Skip(1).Append(QueryDeclarationFact("query-domain", "partial")).ToArray(),
+            fields);
+        Assert.Equal(["output-percent"], partialScopes["query-domain"]["Percent"]);
+        Assert.False(partialScopes["query-domain"].ContainsKey("StartDate"));
     }
+
+    private static CodeFact QueryDeclarationFact(string target, string referenceCoverage) => new(
+        "declaration-" + referenceCoverage,
+        "scan-access",
+        "synthetic",
+        new string('a', 40),
+        null,
+        FactTypes.AccessQueryDeclared,
+        RuleIds.LegacyAccessQuery,
+        EvidenceTiers.Tier2Structural,
+        null,
+        target,
+        null,
+        new EvidenceSpan("database.accdb", 1, 1, null, "access-query", "1.0.0"),
+        new Dictionary<string, string> { ["referenceCoverage"] = referenceCoverage });
 
     private static CodeFact DependencyFact(
         string factId,

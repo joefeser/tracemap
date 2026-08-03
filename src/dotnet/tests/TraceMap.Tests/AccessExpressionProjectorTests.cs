@@ -5,6 +5,16 @@ namespace TraceMap.Tests;
 public sealed class AccessExpressionProjectorTests
 {
     [Fact]
+    public void Public_project_contract_retains_nine_parameter_binary_signature()
+    {
+        var overload = Assert.Single(
+            typeof(AccessExpressionProjector).GetMethods(),
+            method => method.Name == nameof(AccessExpressionProjector.Project));
+
+        Assert.Equal(9, overload.GetParameters().Length);
+    }
+
+    [Fact]
     public void Projects_nested_calculation_without_persisting_expression_text()
     {
         var fields = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
@@ -74,6 +84,22 @@ public sealed class AccessExpressionProjectorTests
         var dynamic = AccessExpressionProjector.FindStaticDomainFieldCandidates(
             "=DLookUp([Percent], [DomainControl], \"[WeeklyPlanID]=1\")");
         Assert.Empty(dynamic);
+
+        var dynamicCriteria = AccessExpressionProjector.FindStaticDomainFieldCandidates(
+            "=DLookUp(\"[Percent]\", \"qWeekly\", \"[WeeklyPlanID]=\" & [txtPlan])");
+        Assert.Equal([("qWeekly", "Percent")], dynamicCriteria);
+    }
+
+    [Fact]
+    public void Malformed_bracketed_identifier_keeps_projection_partial()
+    {
+        const string expression = "=[unterminated + DLookUp(\"[Percent]\", \"qWeekly\")";
+
+        Assert.Empty(AccessExpressionProjector.FindStaticDomainFieldCandidates(expression));
+        var projected = AccessExpressionProjector.Project(expression, null, null);
+
+        Assert.Equal("partial", projected.Coverage);
+        Assert.Equal("AccessBindingExpressionPartial", projected.GapClassification);
     }
 
     [Fact]
@@ -94,7 +120,7 @@ public sealed class AccessExpressionProjectorTests
             ["WeeklyPlanID"] = ["dependency-weekly-plan"]
         };
 
-        var resolved = AccessExpressionProjector.Project(
+        var resolved = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
             "=DLookUp([Percent], \"qWeekly\", \"[WeeklyPlanID]=[txtPlan]\")",
             objects,
             null,
@@ -113,7 +139,7 @@ public sealed class AccessExpressionProjectorTests
         Assert.Equal(["output-percent"], resolved.SelectedFieldStableKeys);
         Assert.Equal(["dependency-weekly-plan"], resolved.CriteriaFieldStableKeys);
 
-        var returnFieldStillMissing = AccessExpressionProjector.Project(
+        var returnFieldStillMissing = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
             "=DLookUp([WeeklyPlanID], \"qWeekly\")",
             objects,
             null,
@@ -132,7 +158,7 @@ public sealed class AccessExpressionProjectorTests
         Assert.Empty(returnFieldStillMissing.SelectedFieldStableKeys);
 
         criteria["WeeklyPlanID"] = ["candidate-one", "candidate-two"];
-        var ambiguousCriteria = AccessExpressionProjector.Project(
+        var ambiguousCriteria = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
             "=DLookUp([Percent], \"qWeekly\", \"[WeeklyPlanID]=1\")",
             objects,
             null,
