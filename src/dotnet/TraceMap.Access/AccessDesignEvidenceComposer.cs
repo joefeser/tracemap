@@ -8,7 +8,7 @@ namespace TraceMap.Access;
 
 public static class AccessDesignEvidenceComposer
 {
-    public const string ComposerVersion = "access-design-evidence/0.2.1";
+    public const string ComposerVersion = "access-design-evidence/0.2.2";
     private const string ExtractorId = "AccessSourceNeutralDesignEvidence";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -544,6 +544,11 @@ public static class AccessDesignEvidenceComposer
             knownObjects,
             fieldsByTableAndHash,
             fieldsByTable);
+        ReconcileDomainExpressionQueryOutputNames(
+            rawSurfaces,
+            knownObjects,
+            fieldsByTableAndHash,
+            fieldsByTable);
         var known = knownObjects.ToDictionary(
             item => item.Key,
             item => (IReadOnlyList<(string StableKey, string Kind)>)item.Value
@@ -556,6 +561,7 @@ public static class AccessDesignEvidenceComposer
                 field => (IReadOnlyList<string>)field.Value.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                 StringComparer.OrdinalIgnoreCase),
                 StringComparer.Ordinal);
+        var domainCriteriaFields = BuildDomainCriteriaFieldSets(baseFacts, fields);
         var queryOutputs = baseFacts
             .Where(fact => fact.FactType == FactTypes.AccessQueryOutputDeclared
                 && fact.SourceSymbol is not null
@@ -598,7 +604,8 @@ public static class AccessDesignEvidenceComposer
             queryOutputs,
             queryKinds,
             vbaProcedureCatalog,
-            fieldCoverageByStableKey);
+            fieldCoverageByStableKey,
+            domainCriteriaFields);
         var rowSourceContexts = ui.Surfaces
             .SelectMany(surface => surface.Controls.SelectMany(control =>
             {
@@ -1081,6 +1088,110 @@ public static class AccessDesignEvidenceComposer
                 AddField(fieldsByTable, queryStableKey, outputName, distinct[0]);
             }
         }
+    }
+
+    internal static void ReconcileDomainExpressionQueryOutputNames(
+        IReadOnlyList<AccessRawUiSurface> surfaces,
+        IReadOnlyDictionary<string, List<(string StableKey, string Kind)>> knownObjects,
+        IReadOnlyDictionary<string, Dictionary<string, List<string>>> fieldsByTableAndHash,
+        Dictionary<string, Dictionary<string, List<string>>> fieldsByTable)
+    {
+        foreach (var expression in surfaces.SelectMany(DomainExpressions))
+        {
+            foreach (var reference in AccessExpressionProjector.FindStaticDomainFieldCandidates(expression))
+            {
+                if (!knownObjects.TryGetValue(reference.DomainName, out var domainMatches)
+                    || domainMatches.Where(match => match.Kind is "query" or "table")
+                        .Distinct()
+                        .ToArray() is not { Length: 1 } matches
+                    || !fieldsByTableAndHash.TryGetValue(matches[0].StableKey, out var fieldsByHash))
+                {
+                    continue;
+                }
+
+                var stableKey = matches[0].StableKey;
+                if (fieldsByTable.TryGetValue(stableKey, out var declaredFields)
+                    && declaredFields.ContainsKey(reference.FieldName))
+                {
+                    continue;
+                }
+                var fieldRole = matches[0].Kind == "query" ? "query-field" : "field";
+                var fieldHash = AccessSafeValues.RoleHash(
+                    $"access-{fieldRole}-{stableKey}-name",
+                    reference.FieldName);
+                if (!fieldsByHash.TryGetValue(fieldHash, out var fieldMatches)
+                    || fieldMatches.Distinct(StringComparer.Ordinal).ToArray() is not { Length: 1 } distinct)
+                {
+                    continue;
+                }
+                AddField(fieldsByTable, stableKey, reference.FieldName, distinct[0]);
+            }
+        }
+    }
+
+    internal static IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> BuildDomainCriteriaFieldSets(
+        IReadOnlyList<CodeFact> facts,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fieldsByObject)
+    {
+        var dependencyTargetsByQuery = facts
+            .Where(fact => fact.FactType == FactTypes.AccessQueryDependencyCandidate
+                && fact.SourceSymbol is not null
+                && fact.TargetSymbol is not null
+                && fact.Properties.GetValueOrDefault("targetKind") is "query" or "table")
+            .GroupBy(fact => fact.SourceSymbol!, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(fact => fact.TargetSymbol!)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
+        var result = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal);
+        foreach (var query in dependencyTargetsByQuery.OrderBy(item => item.Key, StringComparer.Ordinal))
+        {
+            var names = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            if (fieldsByObject.TryGetValue(query.Key, out var directFields))
+                AddFields(names, directFields);
+            foreach (var target in query.Value)
+                if (fieldsByObject.TryGetValue(target, out var dependencyFields))
+                    AddFields(names, dependencyFields, directFields?.Keys);
+            result[query.Key] = names.ToDictionary(
+                item => item.Key,
+                item => (IReadOnlyList<string>)item.Value.Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                StringComparer.OrdinalIgnoreCase);
+        }
+        return result;
+
+        static void AddFields(
+            Dictionary<string, List<string>> target,
+            IReadOnlyDictionary<string, IReadOnlyList<string>> source,
+            IEnumerable<string>? excludedNames = null)
+        {
+            var excluded = excludedNames?.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var field in source)
+            {
+                if (excluded?.Contains(field.Key) == true) continue;
+                if (!target.TryGetValue(field.Key, out var candidates))
+                    target[field.Key] = candidates = [];
+                candidates.AddRange(field.Value);
+            }
+        }
+    }
+
+    private static IEnumerable<string> DomainExpressions(AccessRawUiSurface surface)
+    {
+        if (!string.IsNullOrWhiteSpace(surface.RecordSource)) yield return surface.RecordSource;
+        if (!string.IsNullOrWhiteSpace(surface.Filter)) yield return surface.Filter;
+        if (!string.IsNullOrWhiteSpace(surface.OrderBy)) yield return surface.OrderBy;
+        foreach (var control in surface.Controls)
+        {
+            if (!string.IsNullOrWhiteSpace(control.ControlSource)) yield return control.ControlSource;
+            if (!string.IsNullOrWhiteSpace(control.RowSource)) yield return control.RowSource;
+            if (!string.IsNullOrWhiteSpace(control.ValidationRule)) yield return control.ValidationRule;
+        }
+        foreach (var group in surface.ReportGroups ?? [])
+            if (!string.IsNullOrWhiteSpace(group.Expression)) yield return group.Expression;
     }
 
     private static string? DirectIdentifier(string? value)
