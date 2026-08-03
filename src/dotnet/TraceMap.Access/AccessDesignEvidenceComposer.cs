@@ -539,6 +539,7 @@ public static class AccessDesignEvidenceComposer
             .OrderBy(input => SurfaceStableKey(databaseSeed, input.Raw), StringComparer.Ordinal)
             .ToArray();
         var rawSurfaces = mergedSurfaceInputs.Select(input => input.Raw).ToArray();
+        var reconciledDomainCriteriaFields = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
         ReconcileSurfaceQueryOutputNames(
             rawSurfaces,
             knownObjects,
@@ -548,7 +549,8 @@ public static class AccessDesignEvidenceComposer
             rawSurfaces,
             knownObjects,
             fieldsByTableAndHash,
-            fieldsByTable);
+            fieldsByTable,
+            reconciledDomainCriteriaFields);
         var known = knownObjects.ToDictionary(
             item => item.Key,
             item => (IReadOnlyList<(string StableKey, string Kind)>)item.Value
@@ -561,7 +563,10 @@ public static class AccessDesignEvidenceComposer
                 field => (IReadOnlyList<string>)field.Value.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                 StringComparer.OrdinalIgnoreCase),
                 StringComparer.Ordinal);
-        var domainCriteriaFields = BuildDomainCriteriaFieldSets(baseFacts, fields);
+        var domainCriteriaFields = BuildDomainCriteriaFieldSets(
+            baseFacts,
+            fields,
+            reconciledDomainCriteriaFields);
         var queryOutputs = baseFacts
             .Where(fact => fact.FactType == FactTypes.AccessQueryOutputDeclared
                 && fact.SourceSymbol is not null
@@ -1094,7 +1099,8 @@ public static class AccessDesignEvidenceComposer
         IReadOnlyList<AccessRawUiSurface> surfaces,
         IReadOnlyDictionary<string, List<(string StableKey, string Kind)>> knownObjects,
         IReadOnlyDictionary<string, Dictionary<string, List<string>>> fieldsByTableAndHash,
-        Dictionary<string, Dictionary<string, List<string>>> fieldsByTable)
+        Dictionary<string, Dictionary<string, List<string>>> fieldsByTable,
+        Dictionary<string, Dictionary<string, List<string>>> criteriaFieldsByDomain)
     {
         foreach (var expression in surfaces.SelectMany(DomainExpressions))
         {
@@ -1124,14 +1130,19 @@ public static class AccessDesignEvidenceComposer
                 {
                     continue;
                 }
-                AddField(fieldsByTable, stableKey, reference.FieldName, distinct[0]);
+                AddField(
+                    reference.ReferenceKind == "selected" ? fieldsByTable : criteriaFieldsByDomain,
+                    stableKey,
+                    reference.FieldName,
+                    distinct[0]);
             }
         }
     }
 
     internal static IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> BuildDomainCriteriaFieldSets(
         IReadOnlyList<CodeFact> facts,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fieldsByObject)
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fieldsByObject,
+        IReadOnlyDictionary<string, Dictionary<string, List<string>>>? additionalDirectCriteriaFields = null)
     {
         var completeQueryDependencies = facts
             .Where(fact => fact.FactType == FactTypes.AccessQueryDeclared
@@ -1152,17 +1163,30 @@ public static class AccessDesignEvidenceComposer
                     .OrderBy(value => value, StringComparer.Ordinal)
                     .ToArray(),
                 StringComparer.Ordinal);
+        var queryKeys = facts
+            .Where(fact => fact.FactType == FactTypes.AccessQueryDeclared && fact.TargetSymbol is not null)
+            .Select(fact => fact.TargetSymbol!)
+            .Concat(dependencyTargetsByQuery.Keys)
+            .Concat(additionalDirectCriteriaFields?.Keys ?? [])
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal);
         var result = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal);
-        foreach (var query in dependencyTargetsByQuery.OrderBy(item => item.Key, StringComparer.Ordinal))
+        foreach (var queryKey in queryKeys)
         {
             var names = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-            if (fieldsByObject.TryGetValue(query.Key, out var directFields))
+            if (fieldsByObject.TryGetValue(queryKey, out var directFields))
                 AddFields(names, directFields);
-            foreach (var target in query.Value)
-                if (completeQueryDependencies.Contains(query.Key)
+            if (additionalDirectCriteriaFields?.TryGetValue(queryKey, out var additionalFields) == true)
+                AddFields(names, additionalFields.ToDictionary(
+                    item => item.Key,
+                    item => (IReadOnlyList<string>)item.Value,
+                    StringComparer.OrdinalIgnoreCase));
+            var directNames = names.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var target in dependencyTargetsByQuery.GetValueOrDefault(queryKey) ?? [])
+                if (completeQueryDependencies.Contains(queryKey)
                     && fieldsByObject.TryGetValue(target, out var dependencyFields))
-                    AddFields(names, dependencyFields, directFields?.Keys);
-            result[query.Key] = names.ToDictionary(
+                    AddFields(names, dependencyFields, directNames);
+            result[queryKey] = names.ToDictionary(
                 item => item.Key,
                 item => (IReadOnlyList<string>)item.Value.Distinct(StringComparer.Ordinal)
                     .OrderBy(value => value, StringComparer.Ordinal).ToArray(),

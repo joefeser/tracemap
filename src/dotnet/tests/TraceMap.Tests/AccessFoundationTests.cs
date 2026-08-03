@@ -88,20 +88,106 @@ public sealed class AccessFoundationTests
             }
         };
         var fieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
+        var criteriaFieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
 
         AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
-            [surface], knownObjects, fieldsByHash, fieldsByName);
+            [surface], knownObjects, fieldsByHash, fieldsByName, criteriaFieldsByName);
 
         Assert.Equal(selectedStableKey, Assert.Single(fieldsByName[queryStableKey]["Percent"]));
-        Assert.Equal(criteriaStableKey, Assert.Single(fieldsByName[queryStableKey]["WeeklyPlanID"]));
+        Assert.False(fieldsByName[queryStableKey].ContainsKey("WeeklyPlanID"));
+        Assert.Equal(criteriaStableKey, Assert.Single(criteriaFieldsByName[queryStableKey]["WeeklyPlanID"]));
         Assert.False(fieldsByName[queryStableKey].ContainsKey("txtWeeklyPlanID"));
 
         fieldsByHash[queryStableKey][AccessSafeValues.RoleHash(
             $"access-query-field-{queryStableKey}-name", "WeeklyPlanID")].Add("ambiguous-output");
         fieldsByName.Clear();
+        criteriaFieldsByName.Clear();
         AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
-            [surface], knownObjects, fieldsByHash, fieldsByName);
-        Assert.False(fieldsByName[queryStableKey].ContainsKey("WeeklyPlanID"));
+            [surface], knownObjects, fieldsByHash, fieldsByName, criteriaFieldsByName);
+        Assert.False(criteriaFieldsByName.ContainsKey(queryStableKey));
+    }
+
+    [Fact]
+    public void Design_composer_criteria_scope_flows_to_ui_without_promoting_criteria_to_return_output()
+    {
+        const string queryStableKey = "query-domain";
+        const string selectedStableKey = "output-percent";
+        const string criteriaStableKey = "table-weekly-plan";
+        var fields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Percent"] = [selectedStableKey]
+            },
+            ["table-source"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlanID"] = [criteriaStableKey]
+            }
+        };
+        var facts = new[]
+        {
+            QueryDeclarationFact(queryStableKey, "complete"),
+            DependencyFact("dependency-table", queryStableKey, "table-source", "table")
+        };
+        var criteriaScopes = AccessDesignEvidenceComposer.BuildDomainCriteriaFieldSets(facts, fields);
+        var surface = new AccessRawUiSurface(
+            "frmWeekly",
+            "form",
+            true,
+            null,
+            [
+                new AccessRawControl("txtPlan", 0, 109, null, null, []),
+                new AccessRawControl(
+                    "txtPercent",
+                    1,
+                    109,
+                    "=DLookUp(\"[Percent]\",\"qWeekly\",\"[WeeklyPlanID]=[txtPlan]\")",
+                    null,
+                    [])
+            ],
+            []);
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["qWeekly"] = [(queryStableKey, "query")]
+        };
+
+        var projected = AccessUiProjector.Project(
+            "synthetic-database",
+            [surface],
+            known,
+            fields,
+            domainCriteriaFieldSetsByObject: criteriaScopes);
+        var binding = Assert.Single(
+            Assert.Single(projected.Surfaces).Controls.Single(control => control.Identity.DisplayName == "txtPercent").Bindings);
+
+        Assert.Equal("complete", binding.Coverage);
+        Assert.Equal("partial", binding.RuntimeValueCoverage);
+        Assert.Equal([selectedStableKey], binding.Expression!.SelectedFieldStableKeys);
+        Assert.Equal([criteriaStableKey], binding.Expression.CriteriaFieldStableKeys);
+        Assert.DoesNotContain(criteriaStableKey, binding.Expression.SelectedFieldStableKeys);
+
+        var returnFromCriteriaOnly = AccessUiProjector.Project(
+            "synthetic-database",
+            [surface with
+            {
+                Controls =
+                [
+                    new AccessRawControl(
+                        "txtCriteriaAsReturn",
+                        0,
+                        109,
+                        "=DLookUp(\"[WeeklyPlanID]\",\"qWeekly\")",
+                        null,
+                        [])
+                ]
+            }],
+            known,
+            fields,
+            domainCriteriaFieldSetsByObject: criteriaScopes);
+        var returnBinding = Assert.Single(Assert.Single(returnFromCriteriaOnly.Surfaces).Controls).Bindings.Single();
+        Assert.Equal("partial", returnBinding.Coverage);
+        Assert.Equal("AccessBindingDomainSelectedFieldUnmatched", returnBinding.Expression!.GapClassification);
+        Assert.Empty(returnBinding.Expression.SelectedFieldStableKeys);
     }
 
     [Fact]
