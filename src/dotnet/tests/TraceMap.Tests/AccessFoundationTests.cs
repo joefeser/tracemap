@@ -133,6 +133,41 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Query_projector_does_not_treat_bracketed_object_names_as_unsupported_clauses()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Union"] = [("table-union", "table")],
+            ["Transform"] = [("table-transform", "table")]
+        };
+
+        var projected = AccessQueryProjector.ProjectDependencies(
+            "SELECT * FROM [Union] INNER JOIN [Transform] ON [Union].Id = [Transform].Id;",
+            known);
+
+        Assert.Equal(["table-transform", "table-union"], projected.Dependencies.Select(item => item.TargetStableKey));
+        Assert.Equal("complete", projected.Coverage);
+        Assert.False(projected.UnsupportedShape);
+    }
+
+    [Fact]
+    public void Query_projector_marks_unterminated_bracketed_identifiers_partial()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Orders"] = [("table-orders", "table")]
+        };
+
+        var projected = AccessQueryProjector.ProjectDependencies(
+            "SELECT * FROM Orders WHERE [Malformed = 1 UNION SELECT * FROM Orders;",
+            known);
+
+        Assert.Equal(["table-orders"], projected.Dependencies.Select(item => item.TargetStableKey));
+        Assert.Equal("partial", projected.Coverage);
+        Assert.True(projected.UnsupportedShape);
+    }
+
+    [Fact]
     public void Query_output_shape_accepts_only_direct_select_fields()
     {
         Assert.True(AccessQueryProjector.IsDirectOutputField(
@@ -264,6 +299,38 @@ public sealed class AccessFoundationTests
         Assert.Equal(["field-source"], mapping.SourceFieldStableKeys);
         Assert.DoesNotContain("field-unrelated", mapping.SourceFieldStableKeys);
         Assert.Equal("partial", mapping.Coverage);
+        Assert.Equal("partial", projected.Coverage);
+    }
+
+    [Fact]
+    public void Query_projector_keeps_action_coverage_partial_when_a_declared_dependency_is_unresolved()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SourceTable"] = [("table-source", "table")],
+            ["TargetTable"] = [("table-target", "table")]
+        };
+        var fields = new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+        {
+            ["table-source"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["SourceId"] = [new(new(null, "source", "field-source"), 0, "long", 4, false)]
+            },
+            ["table-target"] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["TargetId"] = [new(new(null, "target", "field-target"), 0, "long", 4, false)]
+            }
+        };
+
+        var projected = AccessQueryProjector.ProjectActionLineage(
+            "INSERT INTO TargetTable (TargetId) SELECT SourceTable.SourceId FROM SourceTable LEFT JOIN MissingSource ON SourceTable.SourceId = MissingSource.Id;",
+            "append",
+            known,
+            fields);
+
+        var mapping = Assert.Single(projected.FieldMappings);
+        Assert.Equal("complete", mapping.Coverage);
+        Assert.Equal(["field-source"], mapping.SourceFieldStableKeys);
         Assert.Equal("partial", projected.Coverage);
     }
 
