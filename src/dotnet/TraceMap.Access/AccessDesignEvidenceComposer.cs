@@ -8,7 +8,7 @@ namespace TraceMap.Access;
 
 public static class AccessDesignEvidenceComposer
 {
-    public const string ComposerVersion = "access-design-evidence/0.2.0";
+    public const string ComposerVersion = "access-design-evidence/0.2.1";
     private const string ExtractorId = "AccessSourceNeutralDesignEvidence";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

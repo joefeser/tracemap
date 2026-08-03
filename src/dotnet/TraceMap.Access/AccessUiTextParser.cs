@@ -277,6 +277,12 @@ internal static partial class AccessUiTextParser
         while (index < value.Length)
         {
             var current = value[index];
+            if (current == '\\' && TryReadSaveAsTextLineBreak(value, index, out var lineBreak))
+            {
+                builder.Append(lineBreak);
+                index += 4;
+                continue;
+            }
             if (current == '\\' && index + 1 < value.Length && value[index + 1] == '"')
             {
                 builder.Append('"');
@@ -297,6 +303,24 @@ internal static partial class AccessUiTextParser
             index++;
         }
         return new(string.Empty, false, false);
+    }
+
+    private static bool TryReadSaveAsTextLineBreak(string value, int index, out char lineBreak)
+    {
+        lineBreak = default;
+        if (index + 4 > value.Length) return false;
+        var escaped = value.AsSpan(index, 4);
+        if (escaped.SequenceEqual("\\015"))
+        {
+            lineBreak = '\r';
+            return true;
+        }
+        if (escaped.SequenceEqual("\\012"))
+        {
+            lineBreak = '\n';
+            return true;
+        }
+        return false;
     }
 
     private readonly record struct ScalarParseResult(string Value, bool Supported, bool Complete);
