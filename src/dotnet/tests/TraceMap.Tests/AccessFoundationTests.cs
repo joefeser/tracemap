@@ -232,6 +232,7 @@ public sealed class AccessFoundationTests
             fields);
         Assert.Equal(["output-percent"], partialScopes["query-domain"]["Percent"]);
         Assert.False(partialScopes["query-domain"].ContainsKey("StartDate"));
+
     }
 
     private static CodeFact QueryDeclarationFact(string target, string referenceCoverage) => new(
