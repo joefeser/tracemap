@@ -6,5 +6,5 @@
 - [x] Add downstream composition and regression coverage for report controls and domain expressions.
 - [x] Regenerate the immutable private Access snapshot and record measured changes.
 - [x] Classify the remaining report-specific cases and update the private review artifacts.
-- [ ] Run focused and full validation.
+- [x] Run focused and full validation.
 - [ ] Open a focused PR to `dev` and follow ACK.
