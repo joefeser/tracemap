@@ -45,7 +45,11 @@ public static partial class AccessQueryProjector
         };
         var targetFieldKeys = ResolveFieldsAligned(target?.StableKey, targetFields, fieldLookups);
         var mappings = new List<AccessQueryFieldMappingProjection>();
-        var coverage = targetName is null ? "partial" : target is null ? "partial" : "complete";
+        var coverage = targetName is not null
+            && target is not null
+            && dependencyProjection.Coverage == "complete"
+            ? "complete"
+            : "partial";
         if (operationKind is "append" or "make-table")
         {
             var select = SelectList(masked);
@@ -535,7 +539,8 @@ public static partial class AccessQueryProjector
             dependencies[candidate.StableKey] = new AccessQueryDependencyProjection(candidate.StableKey, candidate.Kind, "direct-static-reference");
         }
 
-        var unsupported = UnsupportedPattern().IsMatch(masked);
+        var bracketMask = MaskBracketedIdentifiers(masked);
+        var unsupported = !bracketMask.Complete || UnsupportedPattern().IsMatch(bracketMask.Sql);
         var coverage = ambiguous || unresolved || unsupported ? "partial" : "complete";
         return (dependencies.Values.ToArray(), coverage, unsupported || ambiguous || unresolved);
     }
@@ -609,6 +614,39 @@ public static partial class AccessQueryProjector
             builder.Append(current);
         }
         return builder.ToString();
+    }
+
+    private static (string Sql, bool Complete) MaskBracketedIdentifiers(string sql)
+    {
+        var builder = new StringBuilder(sql.Length);
+        var bracketed = false;
+        for (var index = 0; index < sql.Length; index++)
+        {
+            var current = sql[index];
+            if (!bracketed)
+            {
+                if (current == '[')
+                {
+                    bracketed = true;
+                    builder.Append(' ');
+                }
+                else builder.Append(current);
+                continue;
+            }
+
+            builder.Append(char.IsWhiteSpace(current) ? current : ' ');
+            if (current != ']') continue;
+            if (index + 1 < sql.Length && sql[index + 1] == ']')
+            {
+                builder.Append(' ');
+                index++;
+                continue;
+            }
+
+            bracketed = false;
+        }
+
+        return (builder.ToString(), !bracketed);
     }
 
     [GeneratedRegex(@"(?ix)\b(?:from|join|update|into|table)\s+\(*\s*(?:\[(?<bracketed>[^\]]+)\]|(?<plain>[A-Za-z_][A-Za-z0-9_.$]*))", RegexOptions.CultureInvariant)]
