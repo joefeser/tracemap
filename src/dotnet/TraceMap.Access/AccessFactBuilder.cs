@@ -4,7 +4,7 @@ namespace TraceMap.Access;
 
 public static class AccessFactBuilder
 {
-    public const string ScannerVersion = "tracemap-access/0.2.0";
+    public const string ScannerVersion = "tracemap-access/0.3.0";
     private const string ExtractorId = "AccessCatalogExtractor";
 
     public static ScanResult Build(AccessValidatedInput input, AccessDatabaseProjection projection, AccessScanOptions options, AccessLimits? limits = null)

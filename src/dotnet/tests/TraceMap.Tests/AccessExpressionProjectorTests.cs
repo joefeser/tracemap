@@ -105,6 +105,41 @@ public sealed class AccessExpressionProjectorTests
     }
 
     [Fact]
+    public void Projects_declared_report_context_identifiers_without_treating_them_as_fields()
+    {
+        var report = AccessExpressionProjector.Project(
+            "=\"Page \" & [Page] & \" of \" & [Pages]",
+            null,
+            null,
+            contextIdentifierNames: new HashSet<string>(["Page", "Pages"], StringComparer.OrdinalIgnoreCase));
+
+        Assert.Equal("complete", report.Coverage);
+        Assert.Equal("partial", report.RuntimeValueCoverage);
+        Assert.Null(report.GapClassification);
+        Assert.Equal(2, report.ExternalReferenceHashes.Count);
+        Assert.Empty(report.FieldStableKeys);
+
+        var collidingReport = AccessExpressionProjector.Project(
+            "=[Page]",
+            null,
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Page"] = ["field-page"]
+            },
+            contextIdentifierNames: new HashSet<string>(["Page", "Pages"], StringComparer.OrdinalIgnoreCase));
+        Assert.Equal("complete", collidingReport.Coverage);
+        Assert.Single(collidingReport.ExternalReferenceHashes);
+        Assert.Empty(collidingReport.FieldStableKeys);
+
+        var unscoped = AccessExpressionProjector.Project(
+            "=\"Page \" & [Page] & \" of \" & [Pages]",
+            null,
+            null);
+        Assert.Equal("partial", unscoped.Coverage);
+        Assert.Equal("AccessBindingExpressionPartial", unscoped.GapClassification);
+    }
+
+    [Fact]
     public void Resolves_declared_vba_function_as_static_input_without_claiming_runtime_value()
     {
         var result = AccessExpressionProjector.Project(

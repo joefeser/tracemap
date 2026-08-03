@@ -410,6 +410,41 @@ public sealed class AccessDesignEvidenceCompositionTests
     }
 
     [Fact]
+    public async Task Enrichment_does_not_reconcile_a_query_field_to_a_same_name_output_at_another_ordinal()
+    {
+        using var temp = new TempDirectory();
+        var baseScan = await WriteBaseScanAsync(temp.Path, queryOutputOrdinal: 0);
+        var design = WriteDesignBundle(temp.Path, baseScan, includeQueryFieldLineage: true, queryFieldOrdinal: 3);
+
+        var result = await AccessDesignEvidenceComposer.ComposeAsync(baseScan, design);
+        var query = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessQueryDeclared);
+        var expected = AccessSafeValues.Identity(
+            AccessSafeValues.DatabaseIdentitySeed(RepositoryHash, CommitSha, "fixtures/synthetic.accdb", DatabaseHash),
+            $"query-field-{query.TargetSymbol}",
+            ProtectedQueryField,
+            3,
+            disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly).StableKey;
+        var wrongOrdinal = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessQueryOutputDeclared).TargetSymbol;
+        var bindings = result.Facts.Where(fact => fact.FactType == FactTypes.AccessBindingDeclared
+            && fact.Properties.GetValueOrDefault("expressionSelectedFieldStableKeys") is not null).ToArray();
+
+        Assert.Contains(bindings, binding => binding.TargetSymbol == expected);
+        Assert.DoesNotContain(bindings, binding => binding.TargetSymbol == wrongOrdinal);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("-1")]
+    [InlineData("10000")]
+    [InlineData("2147483647")]
+    [InlineData("not-an-ordinal")]
+    public void Query_output_ordinal_validation_rejects_values_that_cannot_be_projected_boundedly(string? value)
+    {
+        Assert.False(AccessDesignEvidenceComposer.TryValidOrdinal(value, 10_000, out _));
+    }
+
+    [Fact]
     public async Task Enrichment_rejects_query_fields_beneath_an_unmatched_query()
     {
         using var temp = new TempDirectory();
@@ -447,7 +482,7 @@ public sealed class AccessDesignEvidenceCompositionTests
             && fact.Properties.GetValueOrDefault("scopeKind") == "query-field");
     }
 
-    private static async Task<string> WriteBaseScanAsync(string root)
+    private static async Task<string> WriteBaseScanAsync(string root, int? queryOutputOrdinal = null)
     {
         var database = Path.Combine(root, "fixture.accdb");
         await File.WriteAllBytesAsync(database, [1, 2, 3, 4]);
@@ -471,6 +506,22 @@ public sealed class AccessDesignEvidenceCompositionTests
         var sharedQuery = AccessSafeValues.Identity(databaseSeed, "query", "SharedQuery");
         var table = AccessSafeValues.Identity(databaseSeed, "table", "BaseTable");
         var field = AccessSafeValues.Identity(databaseSeed, $"field-{table.StableKey}", ProtectedField);
+        var queryOutputs = queryOutputOrdinal is null
+            ? Array.Empty<AccessQueryOutputFieldProjection>()
+            :
+            [
+                new(
+                    AccessSafeValues.Identity(
+                        databaseSeed,
+                        $"query-field-{sharedQuery.StableKey}",
+                        ProtectedQueryField,
+                        queryOutputOrdinal.Value,
+                        disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly),
+                    queryOutputOrdinal.Value,
+                    "unknown",
+                    [],
+                    "partial")
+            ];
         var projection = new AccessDatabaseProjection(
             "tracemap.access-projection.v1",
             DatabaseHash,
@@ -492,7 +543,8 @@ public sealed class AccessDesignEvidenceCompositionTests
                 [],
                 false,
                 null,
-                null)],
+                null,
+                queryOutputs)],
             [],
             [new("AccessUiCatalogUnavailable", "ui-catalog", null, RuleIds.LegacyAccessCoverageGap)],
             []);

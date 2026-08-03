@@ -92,6 +92,25 @@ public sealed class AccessScreenDataFlowTests
     }
 
     [Fact]
+    public void Builder_does_not_treat_host_context_bindings_as_missing_flow_targets()
+    {
+        const string reportKey = "access-report-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        var facts = new[]
+        {
+            Fact("fact-report-context", FactTypes.AccessReportDeclared, RuleIds.LegacyAccessUiSurface,
+                EvidenceTiers.Tier2Structural, null, reportKey, ("coverageLabel", "structured-design-observed")),
+            Fact("fact-page-context", FactTypes.AccessBindingDeclared, RuleIds.LegacyAccessBinding,
+                EvidenceTiers.Tier3SyntaxOrTextual, reportKey, null,
+                ("targetKind", "context"), ("coverageLabel", "complete"), ("runtimeValueCoverage", "partial"))
+        };
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
+
+        Assert.DoesNotContain(report.Gaps, gap => gap.Classification == "AccessFlowTargetUnavailable"
+            && gap.SupportingFactIds.Contains("fact-page-context", StringComparer.Ordinal));
+    }
+
+    [Fact]
     public void Builder_marks_partial_edges_normalizes_tiers_and_drops_unsafe_limitations()
     {
         var facts = FlowFacts();

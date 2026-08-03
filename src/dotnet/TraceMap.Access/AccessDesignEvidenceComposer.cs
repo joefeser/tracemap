@@ -8,20 +8,23 @@ namespace TraceMap.Access;
 
 public static class AccessDesignEvidenceComposer
 {
-    public const string ComposerVersion = "access-design-evidence/0.1.0";
+    public const string ComposerVersion = "access-design-evidence/0.2.0";
     private const string ExtractorId = "AccessSourceNeutralDesignEvidence";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
     };
 
-    private static string[] BuildOrdinalOutputs(IEnumerable<CodeFact> facts)
+    private static string[] BuildOrdinalOutputs(IEnumerable<CodeFact> facts, int maximumOrdinalExclusive)
     {
         var entries = facts
-            .Select(fact => (
-                Ordinal: int.Parse(fact.Properties["ordinal"], System.Globalization.CultureInfo.InvariantCulture),
-                Target: fact.TargetSymbol!))
-            .Where(entry => entry.Ordinal >= 0)
+            .Select(fact => TryValidOrdinal(
+                    fact.Properties.GetValueOrDefault("ordinal"),
+                    maximumOrdinalExclusive,
+                    out var ordinal)
+                ? (Valid: true, Ordinal: ordinal, Target: fact.TargetSymbol!)
+                : (Valid: false, Ordinal: -1, Target: fact.TargetSymbol!))
+            .Where(entry => entry.Valid)
             .GroupBy(entry => entry.Ordinal)
             .ToArray();
         var maxOrdinal = entries.Length == 0 ? 0 : entries.Max(group => group.Key);
@@ -235,6 +238,8 @@ public static class AccessDesignEvidenceComposer
         var knownObjectsByHash = new Dictionary<string, List<(string StableKey, string Kind)>>(StringComparer.Ordinal);
         var fieldsByTable = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
         var fieldsByTableAndHash = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
+        var fieldCoverageByStableKey = new Dictionary<string, string>(StringComparer.Ordinal);
+        var queryOutputOrdinalByStableKey = new Dictionary<string, int>(StringComparer.Ordinal);
         var stableKeyByCanonicalRecordId = new Dictionary<string, string>(StringComparer.Ordinal);
         var baseMatchedCatalogStableKeys = new HashSet<string>(StringComparer.Ordinal);
         foreach (var fact in baseFacts)
@@ -275,6 +280,19 @@ public static class AccessDesignEvidenceComposer
                     AddField(fieldsByTable, fact.SourceSymbol, outputName, fact.TargetSymbol);
                 if (fact.Properties.TryGetValue("objectNameHash", out var outputHash))
                     AddField(fieldsByTableAndHash, fact.SourceSymbol, outputHash, fact.TargetSymbol);
+                fieldCoverageByStableKey[fact.TargetSymbol] =
+                    fact.Properties.GetValueOrDefault("coverageLabel") == "complete" ? "complete" : "partial";
+                if (TryValidOrdinal(
+                        fact.Properties.GetValueOrDefault("ordinal"),
+                        limits.MaxChildrenPerObject,
+                        out var outputOrdinal))
+                    queryOutputOrdinalByStableKey[fact.TargetSymbol] = outputOrdinal;
+                else
+                    normalizationGaps.Add(new(
+                        "AccessDesignInputQueryOutputOrdinalInvalid",
+                        "query-field",
+                        fact.TargetSymbol,
+                        RuleIds.LegacyAccessDesignInput));
             }
         }
 
@@ -363,9 +381,26 @@ public static class AccessDesignEvidenceComposer
             {
                 var identityRole = fieldRole == "query-field" ? "query-field" : "field";
                 var fieldHash = AccessSafeValues.RoleHash($"access-{identityRole}-{tableStableKey}-name", identity);
+                int? expectedOrdinal = null;
+                if (fieldRole == "query-field")
+                {
+                    if (!TryValidOrdinal(record.Payload, "ordinal", limits.MaxChildrenPerObject, out var parsedOrdinal))
+                    {
+                        normalizationGaps.Add(new(
+                            "AccessDesignInputQueryOutputOrdinalInvalid",
+                            fieldRole,
+                            record.CanonicalRecordId,
+                            RuleIds.LegacyAccessDesignInput));
+                        continue;
+                    }
+                    expectedOrdinal = parsedOrdinal;
+                }
                 if (fieldsByTableAndHash.TryGetValue(tableStableKey, out var fieldsByHash)
                     && fieldsByHash.TryGetValue(fieldHash, out var matches)
-                    && matches.Distinct(StringComparer.Ordinal).ToArray() is { Length: 1 } distinct)
+                    && matches.Distinct(StringComparer.Ordinal).ToArray() is { Length: 1 } distinct
+                    && (fieldRole != "query-field"
+                        || queryOutputOrdinalByStableKey.TryGetValue(distinct[0], out var baseOrdinal)
+                            && baseOrdinal == expectedOrdinal))
                 {
                     projectedStableKey = distinct[0];
                 }
@@ -375,7 +410,7 @@ public static class AccessDesignEvidenceComposer
                         databaseSeed,
                         $"query-field-{tableStableKey}",
                         identity,
-                        Int(record.Payload, "ordinal"),
+                        expectedOrdinal!.Value,
                         disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly).StableKey;
                 }
             }
@@ -504,6 +539,11 @@ public static class AccessDesignEvidenceComposer
             .OrderBy(input => SurfaceStableKey(databaseSeed, input.Raw), StringComparer.Ordinal)
             .ToArray();
         var rawSurfaces = mergedSurfaceInputs.Select(input => input.Raw).ToArray();
+        ReconcileSurfaceQueryOutputNames(
+            rawSurfaces,
+            knownObjects,
+            fieldsByTableAndHash,
+            fieldsByTable);
         var known = knownObjects.ToDictionary(
             item => item.Key,
             item => (IReadOnlyList<(string StableKey, string Kind)>)item.Value
@@ -520,11 +560,14 @@ public static class AccessDesignEvidenceComposer
             .Where(fact => fact.FactType == FactTypes.AccessQueryOutputDeclared
                 && fact.SourceSymbol is not null
                 && fact.TargetSymbol is not null
-                && int.TryParse(fact.Properties.GetValueOrDefault("ordinal"), out _))
+                && TryValidOrdinal(
+                    fact.Properties.GetValueOrDefault("ordinal"),
+                    limits.MaxChildrenPerObject,
+                    out _))
             .GroupBy(fact => fact.SourceSymbol!, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
-                group => (IReadOnlyList<string>)BuildOrdinalOutputs(group),
+                group => (IReadOnlyList<string>)BuildOrdinalOutputs(group, limits.MaxChildrenPerObject),
                 StringComparer.Ordinal);
         var queryKinds = BuildConsistentQueryKinds(baseFacts
             .Where(fact => fact.FactType == FactTypes.AccessQueryDeclared
@@ -554,7 +597,8 @@ public static class AccessDesignEvidenceComposer
             AccessIdentityDisclosurePolicy.HashOnly,
             queryOutputs,
             queryKinds,
-            vbaProcedureCatalog);
+            vbaProcedureCatalog,
+            fieldCoverageByStableKey);
         var rowSourceContexts = ui.Surfaces
             .SelectMany(surface => surface.Controls.SelectMany(control =>
             {
@@ -1000,6 +1044,61 @@ public static class AccessDesignEvidenceComposer
         entries.Add((stableKey, kind));
     }
 
+    internal static void ReconcileSurfaceQueryOutputNames(
+        IReadOnlyList<AccessRawUiSurface> surfaces,
+        IReadOnlyDictionary<string, List<(string StableKey, string Kind)>> knownObjects,
+        IReadOnlyDictionary<string, Dictionary<string, List<string>>> fieldsByTableAndHash,
+        Dictionary<string, Dictionary<string, List<string>>> fieldsByTable)
+    {
+        foreach (var surface in surfaces)
+        {
+            if (surface.SurfaceKind != "report") continue;
+            var recordSource = DirectIdentifier(surface.RecordSource);
+            if (recordSource is null
+                || !knownObjects.TryGetValue(recordSource, out var sourceMatches)
+                || sourceMatches.Where(match => match.Kind == "query")
+                    .Select(match => match.StableKey)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray() is not { Length: 1 } queryMatches
+                || !fieldsByTableAndHash.TryGetValue(queryMatches[0], out var fieldsByHash))
+            {
+                continue;
+            }
+
+            var queryStableKey = queryMatches[0];
+            foreach (var control in surface.Controls)
+            {
+                var outputName = DirectIdentifier(control.ControlSource);
+                if (outputName is null) continue;
+                var outputHash = AccessSafeValues.RoleHash(
+                    $"access-query-field-{queryStableKey}-name",
+                    outputName);
+                if (!fieldsByHash.TryGetValue(outputHash, out var outputMatches)
+                    || outputMatches.Distinct(StringComparer.Ordinal).ToArray() is not { Length: 1 } distinct)
+                {
+                    continue;
+                }
+                AddField(fieldsByTable, queryStableKey, outputName, distinct[0]);
+            }
+        }
+    }
+
+    private static string? DirectIdentifier(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed)) return null;
+        if (trimmed.Length >= 2 && trimmed[0] == '[' && trimmed[^1] == ']')
+        {
+            var identifier = trimmed[1..^1].Trim();
+            return identifier.Length > 0 && !identifier.Contains('[') && !identifier.Contains(']')
+                ? identifier
+                : null;
+        }
+        if (trimmed[0] == '=' || trimmed.IndexOfAny(['(', ')', ';', '.', '\'', '"', '[', ']']) >= 0)
+            return null;
+        return trimmed;
+    }
+
     private static string? ResolveBaseStableKey(
         string identity,
         string kind,
@@ -1256,6 +1355,29 @@ public static class AccessDesignEvidenceComposer
         payload.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
             ? value.GetInt32()
             : null;
+
+    internal static bool TryValidOrdinal(string? value, int maximumExclusive, out int ordinal) =>
+        int.TryParse(
+            value,
+            System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out ordinal)
+        && ordinal >= 0
+        && ordinal < maximumExclusive;
+
+    private static bool TryValidOrdinal(
+        JsonElement payload,
+        string name,
+        int maximumExclusive,
+        out int ordinal)
+    {
+        ordinal = -1;
+        return payload.TryGetProperty(name, out var value)
+            && value.ValueKind == JsonValueKind.Number
+            && value.TryGetInt32(out ordinal)
+            && ordinal >= 0
+            && ordinal < maximumExclusive;
+    }
 
     internal sealed record BaseScan(
         ScanManifest Manifest,

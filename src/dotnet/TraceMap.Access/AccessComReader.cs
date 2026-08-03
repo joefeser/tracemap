@@ -694,13 +694,28 @@ public sealed class AccessComReader
                     else if (kind == "crosstab")
                     {
                         crosstabLineage = AccessQueryProjector.ProjectCrosstabLineage(sql, known, objectFieldLookups);
+                        foreach (var output in AccessQueryProjector.ProjectCrosstabOutputCatalog(sql, known, objectFieldLookups))
+                        {
+                            var outputIdentity = AccessSafeValues.Identity(
+                                databaseIdentitySeed,
+                                $"query-field-{identity.StableKey}",
+                                output.Name,
+                                output.Ordinal);
+                            outputRows.Add(new(
+                                outputIdentity,
+                                output.Ordinal,
+                                "unknown",
+                                output.SourceFieldStableKeys,
+                                output.Coverage));
+                            if (output.Coverage != "complete")
+                                gaps.Add(new(
+                                    "AccessQueryOutputExpressionPartial",
+                                    "query-output-field",
+                                    outputIdentity.StableKey,
+                                    RuleIds.LegacyAccessQuery));
+                        }
                         if (crosstabLineage.Coverage == "partial")
                             gaps.Add(new("AccessQueryCrosstabLineagePartial", "query", identity.StableKey, RuleIds.LegacyAccessQuery));
-                        gaps.Add(new(
-                            "AccessQueryCrosstabDownstreamCompositionUnavailable",
-                            "query",
-                            identity.StableKey,
-                            RuleIds.LegacyAccessQuery));
                     }
 
                     result.Add(new(identity, kind, sqlHash, sql.Length, referenceCoverage, parameterRows,
