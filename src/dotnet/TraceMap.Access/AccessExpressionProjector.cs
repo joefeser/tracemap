@@ -178,7 +178,11 @@ public static partial class AccessExpressionProjector
 
         var dynamic = Regex.IsMatch(normalized, @"\b(?:Eval|Run|Call)\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         var runtimeValueDependent = dynamic
+            || domainMatches.Count > 0
             || vbaProcedureKeys.Count > 0
+            || controlKeys.Count > 0
+            || controlRefs.Count > 0
+            || externalRefs.Count > 0
             || normalized.Contains("&", StringComparison.Ordinal);
         var classification = domainMatches.Count > 0 ? "domain-lookup"
             : functions.Length > 0 || normalized.StartsWith('=') || operators.Length > 0 ? "calculated-expression"

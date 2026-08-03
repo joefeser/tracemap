@@ -54,6 +54,7 @@ public sealed class AccessExpressionProjectorTests
 
         Assert.Equal("domain-lookup", result.Classification);
         Assert.Equal("complete", result.Coverage);
+        Assert.Equal("partial", result.RuntimeValueCoverage);
         Assert.Contains(queryKey, result.QueryStableKeys);
         Assert.Contains("field-weekly-plan", result.SelectedFieldStableKeys);
         Assert.Contains("field-start-date", result.CriteriaFieldStableKeys);
@@ -151,6 +152,7 @@ public sealed class AccessExpressionProjectorTests
 
         Assert.Equal("domain-lookup", domains.Classification);
         Assert.Equal("complete", domains.Coverage);
+        Assert.Equal("partial", domains.RuntimeValueCoverage);
         Assert.Single(domains.QueryStableKeys);
         Assert.Contains("domain-display", domains.SelectedFieldStableKeys);
         Assert.Contains("domain-status", domains.CriteriaFieldStableKeys);
