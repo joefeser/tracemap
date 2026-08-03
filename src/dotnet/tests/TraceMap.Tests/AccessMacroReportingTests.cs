@@ -72,7 +72,7 @@ public sealed class AccessMacroReportingTests
             FactTypes.AccessBindingDeclared,
             RuleIds.LegacyAccessBinding,
             EvidenceTiers.Tier3SyntaxOrTextual,
-            new EvidenceSpan("fixture.accdb", 1, 1, null, "AccessSourceNeutralDesignEvidence", "access-design-evidence/0.2.0"),
+            new EvidenceSpan("fixture.accdb", 1, 1, null, "AccessSourceNeutralDesignEvidence", "access-design-evidence/0.2.1"),
             sourceSymbol: "access-report-safe",
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
