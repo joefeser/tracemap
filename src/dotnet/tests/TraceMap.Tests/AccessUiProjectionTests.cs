@@ -568,6 +568,58 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Text_design_parser_decodes_only_SaveAsText_line_break_escapes()
+    {
+        var parsed = AccessUiTextParser.Parse(
+            new StringReader("Begin Report\nRecordSource =\"SELECT qryKnown.*\\015\\012FROM qryKnown WHERE Marker='\\011'\"\nEnd\n"),
+            "rptKnown",
+            "report");
+
+        var surface = Assert.IsType<AccessRawUiSurface>(parsed.Surface);
+        Assert.Equal("SELECT qryKnown.*\r\nFROM qryKnown WHERE Marker='\\011'", surface.RecordSource);
+        Assert.DoesNotContain(parsed.Gaps, gap => gap.Classification == "AccessUiPropertyValueMalformed");
+    }
+
+    [Fact]
+    public void Multiline_qualified_wildcard_record_source_scopes_declared_query_outputs()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('3', 40), "fixture.accdb", "hash");
+        var query = AccessSafeValues.Identity(seed, "query", "qryKnown");
+        var field = AccessSafeValues.Identity(seed, $"field-{query.StableKey}", "OrderId");
+        var parsed = AccessUiTextParser.Parse(
+            new StringReader("Begin Report\nRecordSource =\"SELECT qryKnown.*\\015\\012FROM qryKnown;\"\nBegin TextBox\nName =\"txtOrderId\"\nControlSource =\"OrderId\"\nEnd\nEnd\n"),
+            "rptKnown",
+            "report");
+
+        var projected = AccessUiProjector.Project(
+            seed,
+            [Assert.IsType<AccessRawUiSurface>(parsed.Surface)],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qryKnown"] = [(query.StableKey, "query")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [query.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["OrderId"] = [field.StableKey]
+                }
+            });
+
+        var surface = Assert.Single(projected.Surfaces);
+        var recordBinding = Assert.Single(surface.Bindings, binding => binding.BindingKind == "record-source");
+        Assert.Equal("inline-sql", recordBinding.SourceKind);
+        Assert.Equal([query.StableKey], recordBinding.TargetStableKeys);
+        Assert.Equal("partial", recordBinding.Coverage);
+        Assert.NotNull(recordBinding.ExpressionHash);
+        var controlBinding = Assert.Single(Assert.Single(surface.Controls).Bindings);
+        Assert.Equal("direct-field", controlBinding.SourceKind);
+        Assert.Equal([field.StableKey], controlBinding.TargetStableKeys);
+        Assert.DoesNotContain(projected.Gaps, gap => gap.Classification == "AccessBindingInlineSqlOutputUnmatched");
+        Assert.Contains(projected.Gaps, gap => gap.Classification == "AccessBindingInlineSqlProjectionPartial");
+    }
+
+    [Fact]
     public void Malformed_design_is_partial_and_does_not_claim_an_unbound_surface()
     {
         var parsed = AccessUiTextParser.Parse(

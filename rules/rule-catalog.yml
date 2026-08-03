@@ -1518,6 +1518,7 @@ rules:
       - A surface-declared crosstab output candidate proves only that a control names an expected output beneath a known crosstab source. It does not prove that row-derived pivot values generated the output or that the query ran.
       - Crosstab output catalogs are limited to statically declared row-heading names, aggregate aliases, and literal IN-list pivot columns. Dynamic pivot values, runtime column availability, aggregate results, and rendered report values remain unproved.
       - Inline SQL sources are projected only through a bounded static subset. Dependency-scoped fields and statically named outputs remain candidates; unmatched, computed, wildcard, ambiguous, or dynamic outputs retain precise partial classifications.
+      - SaveAsText quoted scalars normalize only the declared `\015` and `\012` line-break escapes before static parsing. Other numeric escapes and ordinary backslashes remain literal; normalization does not prove SQL execution or runtime output availability.
       - A resolved domain object with an incomplete field catalog remains partial even when selected and criteria identifier hashes are available; those hashes are not field identities.
 
   - id: legacy.access.vba.v1
