@@ -8,5 +8,5 @@
 - [x] Update rule limitations and composer version.
 - [x] Regenerate the immutable private snapshot and record exact before/after classifications.
 - [x] Run focused tests, full build/test, private-path guard, formatting, and diff validation.
-- [ ] Commit, push, and open a focused PR to `dev`.
+- [x] Commit, push, and open a focused PR to `dev`.
 - [ ] Run ACK and follow its exact-head decision without merging unless separately authorized.
