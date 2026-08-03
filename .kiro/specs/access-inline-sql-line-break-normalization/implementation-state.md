@@ -30,6 +30,7 @@
   tests passed; changed-file whitespace verification, private-path guard, and
   `git diff --check` passed. Repository-wide whitespace verification still
   reports unrelated pre-existing drift outside this slice.
+- Pull request: #585 targets `dev`; ACK pending on the final exact head.
 - Deferred: the 12 DCount/query-output mismatches, owner identity/obsolescence
   confirmations, genuinely ambiguous record sources, unresolved functions,
   dynamic wildcard outputs, and report-layout reconstruction.

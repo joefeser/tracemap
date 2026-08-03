@@ -6,4 +6,5 @@
 - [x] Update rule limitations and extractor/composer versions if behavior changes.
 - [x] Regenerate the immutable private snapshot and record before/after counts.
 - [x] Run focused tests, full build/test, private-path guard, and diff check.
-- [ ] Commit, push, open a focused PR to `dev`, and run ACK.
+- [x] Commit, push, and open a focused PR to `dev`.
+- [ ] Run ACK and follow its exact-head decision.
