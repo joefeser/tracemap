@@ -183,6 +183,36 @@ public sealed class AccessExpressionProjectorTests
     }
 
     [Fact]
+    public void Reports_unmatched_domain_return_before_ambiguous_criteria()
+    {
+        const string queryKey = "query-weekly";
+        var projected = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
+            "=DLookUp([MissingReturn], \"qWeekly\", \"[WeeklyPlanID]=1\")",
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qWeekly"] = [(queryKey, "query")]
+            },
+            null,
+            fieldSetsByObject:
+                new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+                {
+                    [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                },
+            domainCriteriaFieldSetsByObject:
+                new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+                {
+                    [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["WeeklyPlanID"] = ["candidate-one", "candidate-two"]
+                    }
+                });
+
+        Assert.Equal("partial", projected.Coverage);
+        Assert.Equal("AccessBindingDomainSelectedFieldUnmatched", projected.GapClassification);
+        Assert.NotEmpty(projected.SelectedFieldReferenceHashes);
+    }
+
+    [Fact]
     public void Projects_date_offset_literals_and_preserves_dynamic_gap()
     {
         var fields = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)

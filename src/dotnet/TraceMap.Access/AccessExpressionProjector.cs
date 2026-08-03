@@ -235,10 +235,10 @@ public static partial class AccessExpressionProjector
         var coverage = dynamic || ambiguous || unresolved || unresolvedFunction || domainFieldCatalogIncomplete ? "partial" : "complete";
         var gap = dynamic ? "AccessBindingExpressionDynamic"
             : unresolvedFunction ? "AccessBindingExpressionFunctionUnresolved"
-            : domainCriteriaFieldAmbiguous ? "AccessBindingDomainCriteriaFieldAmbiguous"
-            : ambiguous ? "AccessBindingExpressionTargetAmbiguous"
             : domainFieldCatalogIncomplete ? "AccessBindingDomainFieldCatalogIncomplete"
             : domainSelectedFieldUnresolved ? "AccessBindingDomainSelectedFieldUnmatched"
+            : domainCriteriaFieldAmbiguous ? "AccessBindingDomainCriteriaFieldAmbiguous"
+            : ambiguous ? "AccessBindingExpressionTargetAmbiguous"
             : domainCriteriaFieldUnresolved ? "AccessBindingDomainCriteriaFieldUnmatched"
             : unresolved ? "AccessBindingExpressionPartial"
             : null;

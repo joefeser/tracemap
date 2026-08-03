@@ -986,8 +986,16 @@ public static class AccessDesignEvidenceComposer
                 {
                     var fact = JsonSerializer.Deserialize<CodeFact>(line, JsonOptions)
                         ?? throw new AccessScanException("AccessBaseScanFactsInvalid");
-                    if (fact.ScanId != manifest.ScanId || fact.CommitSha != manifest.CommitSha || fact.Repo != manifest.RepoName)
-                        throw new AccessScanException("AccessBaseScanFactsMismatch");
+                    if (fact.Properties is null
+                        || fact.Evidence is null
+                        || string.IsNullOrWhiteSpace(fact.FactId)
+                        || string.IsNullOrWhiteSpace(fact.FactType)
+                        || string.IsNullOrWhiteSpace(fact.RuleId)
+                        || string.IsNullOrWhiteSpace(fact.EvidenceTier)
+                        || fact.ScanId != manifest.ScanId
+                        || fact.CommitSha != manifest.CommitSha
+                        || fact.Repo != manifest.RepoName)
+                        throw new AccessScanException("AccessBaseScanFactsInvalid");
                     facts.Add(fact);
                 }
                 catch (AccessScanException) { throw; }
