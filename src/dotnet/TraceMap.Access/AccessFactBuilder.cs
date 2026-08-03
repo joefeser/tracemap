@@ -185,7 +185,12 @@ public static class AccessFactBuilder
                 {
                     queryOutputOwnerStableKeys.Add(output.Identity.StableKey, query.Identity.StableKey);
                 }
-                facts.Add(Create(manifest, FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, span,
+                var outputTier = output.Coverage == "partial"
+                    && output.TypeFamily == "unknown"
+                    && output.SourceFieldStableKeys.Count == 0
+                    ? EvidenceTiers.Tier3SyntaxOrTextual
+                    : EvidenceTiers.Tier2Structural;
+                facts.Add(Create(manifest, FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery, outputTier, span,
                     sourceSymbol: query.Identity.StableKey,
                     targetSymbol: output.Identity.StableKey,
                     properties: IdentityProps(output.Identity,
@@ -194,7 +199,7 @@ public static class AccessFactBuilder
                         ("ordinal", output.Ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                         ("typeFamily", output.TypeFamily),
                         ("coverageLabel", output.Coverage),
-                        ("limitations", "querydef-field-metadata-only;no-query-execution;no-row-read"))));
+                        ("limitations", "querydef-or-static-select-output-name;source-lineage-may-be-partial;no-query-execution;no-row-read"))));
                 foreach (var sourceField in output.SourceFieldStableKeys)
                 {
                     facts.Add(Create(manifest, FactTypes.AccessQueryOutputSourceCandidate, RuleIds.LegacyAccessQuery,
@@ -524,6 +529,7 @@ public static class AccessFactBuilder
                         ("expressionControlStableKeys", binding.Expression is null ? null : string.Join(';', binding.Expression.ControlStableKeys)),
                         ("expressionControlReferenceHashes", binding.Expression is null ? null : string.Join(';', binding.Expression.ControlReferenceHashes)),
                         ("expressionExternalReferenceHashes", binding.Expression is null ? null : string.Join(';', binding.Expression.ExternalReferenceHashes)),
+                        ("expressionVbaProcedureStableKeys", binding.Expression is null ? null : string.Join(';', binding.Expression.VbaProcedureStableKeys)),
                         ("expressionQueryStableKeys", binding.Expression is null ? null : string.Join(';', binding.Expression.QueryStableKeys)),
                         ("expressionSelectedFieldStableKeys", binding.Expression is null ? null : string.Join(';', binding.Expression.SelectedFieldStableKeys)),
                         ("expressionSelectedFieldReferenceHashes", binding.Expression is null ? null : string.Join(';', binding.Expression.SelectedFieldReferenceHashes)),
@@ -531,6 +537,7 @@ public static class AccessFactBuilder
                         ("expressionCriteriaFieldReferenceHashes", binding.Expression is null ? null : string.Join(';', binding.Expression.CriteriaFieldReferenceHashes)),
                         ("expressionLiteralKinds", binding.Expression is null ? null : string.Join(';', binding.Expression.LiteralKinds)),
                         ("expressionCoverage", binding.Expression?.Coverage),
+                        ("runtimeValueCoverage", binding.RuntimeValueCoverage),
                         ("expressionGapClassification", binding.Expression?.GapClassification),
                         ("limitations", "declared-static-binding-only;no-evaluation;no-runtime-target-proof"))));
             }

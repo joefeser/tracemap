@@ -531,6 +531,21 @@ public static class AccessDesignEvidenceComposer
                 && fact.TargetSymbol is not null
                 && fact.Properties.TryGetValue("queryKind", out _))
             .Select(fact => (fact.TargetSymbol!, fact.Properties["queryKind"])));
+        var rawModules = bundle.Records.Where(record => record.Kind == "vba-module")
+            .Select(record => new AccessRawVbaModule(
+                String(record.Payload, "identity"),
+                String(record.Payload, "moduleKind"),
+                OptionalString(record.Payload, "sourceText"),
+                OptionalString(record.Payload, "sourceSha256"),
+                record.Payload.TryGetProperty("lineCount", out var lineCount) && lineCount.ValueKind == JsonValueKind.Number
+                    ? lineCount.GetInt32()
+                    : null))
+            .ToArray();
+        var vbaProcedureCatalog = AccessVbaProjector.BuildProcedureCatalog(
+            databaseSeed,
+            rawModules,
+            limits,
+            AccessIdentityDisclosurePolicy.HashOnly);
         var ui = AccessUiProjector.Project(
             databaseSeed,
             rawSurfaces,
@@ -538,7 +553,8 @@ public static class AccessDesignEvidenceComposer
             fields,
             AccessIdentityDisclosurePolicy.HashOnly,
             queryOutputs,
-            queryKinds);
+            queryKinds,
+            vbaProcedureCatalog);
         var rowSourceContexts = ui.Surfaces
             .SelectMany(surface => surface.Controls.SelectMany(control =>
             {
@@ -620,16 +636,6 @@ public static class AccessDesignEvidenceComposer
             AddUiChildSupport(projectedSurface, support, sources);
         }
 
-        var rawModules = bundle.Records.Where(record => record.Kind == "vba-module")
-            .Select(record => new AccessRawVbaModule(
-                String(record.Payload, "identity"),
-                String(record.Payload, "moduleKind"),
-                OptionalString(record.Payload, "sourceText"),
-                OptionalString(record.Payload, "sourceSha256"),
-                record.Payload.TryGetProperty("lineCount", out var lineCount) && lineCount.ValueKind == JsonValueKind.Number
-                    ? lineCount.GetInt32()
-                    : null))
-            .ToArray();
         var vba = AccessVbaProjector.Project(
             databaseSeed,
             rawModules,

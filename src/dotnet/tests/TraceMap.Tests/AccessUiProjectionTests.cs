@@ -17,6 +17,40 @@ public sealed class AccessUiProjectionTests
     private const string ProtectedValidation = "[CustomerId] <> \"SecretValidation_92817\"";
 
     [Fact]
+    public void Surface_filter_prefers_scoped_record_field_over_same_named_control()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var table = AccessSafeValues.Identity(seed, "table", "FoodGroups");
+        var field = AccessSafeValues.Identity(seed, $"field-{table.StableKey}", "WeeklyPlanID");
+        var result = AccessUiProjector.Project(
+            seed,
+            [new AccessRawUiSurface(
+                "frmFoodGroupsPerWeeklyPlan_subf",
+                "form",
+                false,
+                "FoodGroups",
+                [new("WeeklyPlanID", 0, 109, "WeeklyPlanID", null, [])],
+                [],
+                Filter: "[WeeklyPlanID] > 0")],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["FoodGroups"] = [(table.StableKey, "table")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [table.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["WeeklyPlanID"] = [field.StableKey]
+                }
+            });
+
+        var filter = Assert.Single(Assert.Single(result.Surfaces).Bindings, binding => binding.BindingKind == "filter");
+        Assert.Equal("complete", filter.Coverage);
+        Assert.Equal([field.StableKey], filter.TargetStableKeys);
+        Assert.DoesNotContain(result.Gaps, gap => gap.Classification == "AccessBindingExpressionTargetAmbiguous");
+    }
+
+    [Fact]
     public void Text_design_parser_projects_each_indexed_report_group()
     {
         const string design = """
@@ -799,12 +833,13 @@ public sealed class AccessUiProjectionTests
         Assert.Equal(query.StableKey, surface.Controls.Single(item => item.Ordinal == 1).Bindings.Single().TargetStableKeys.Single());
         var expression = surface.Controls.Single(item => item.Ordinal == 2).Bindings.Single(binding => binding.BindingKind == "control-source");
         Assert.Equal("expression", expression.SourceKind);
-        Assert.Equal("partial", expression.Coverage);
+        Assert.Equal("complete", expression.Coverage);
+        Assert.Equal("partial", expression.RuntimeValueCoverage);
         Assert.Equal([field.StableKey], expression.TargetStableKeys);
         var validation = surface.Controls.Single(item => item.Ordinal == 2).Bindings.Single(binding => binding.BindingKind == "validation-rule");
         Assert.Equal("expression", validation.SourceKind);
         Assert.Equal([field.StableKey], validation.TargetStableKeys);
-        Assert.Contains(result.Gaps, gap => gap.Classification == "AccessBindingExpressionPartial" && gap.RuleId == RuleIds.LegacyAccessBinding);
+        Assert.Null(expression.Expression!.GapClassification);
         Assert.Equal("event-procedure", surface.Events.Single(item => item.EventRole == "on-open").Category);
         Assert.Equal("dynamic", surface.Events.Single(item => item.EventRole == "on-load").Category);
         Assert.Equal("embedded-macro", surface.Controls.Single(item => item.Ordinal == 1).Events.Single().Category);
@@ -817,6 +852,34 @@ public sealed class AccessUiProjectionTests
         Assert.DoesNotContain("SecretFilter_92817", wire, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("SecretOrder_92817", wire, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("SecretValidation_92817", wire, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Ui_projector_emits_resolved_vba_function_as_a_binding_target()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "database-hash");
+        var raw = new AccessRawUiSurface(
+            "frmRuntimeValue",
+            "form",
+            true,
+            null,
+            [new("txtValue", 0, 109, "=glngUserID()", null, [])],
+            []);
+
+        var result = AccessUiProjector.Project(
+            seed,
+            [raw],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal),
+            vbaProcedureStableKeys: new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["glngUserID"] = ["vba-procedure-user-id"]
+            });
+
+        var binding = Assert.Single(Assert.Single(result.Surfaces).Controls).Bindings.Single();
+        Assert.Equal(["vba-procedure-user-id"], binding.TargetStableKeys);
+        Assert.Equal("vba-procedure", binding.TargetKind);
+        Assert.Equal("partial", binding.RuntimeValueCoverage);
     }
 
     [Fact]
