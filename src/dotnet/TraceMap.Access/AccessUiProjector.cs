@@ -497,7 +497,7 @@ internal static partial class AccessUiProjector
                 AccessSafeValues.RoleHash($"access-{bindingKind}-expression", trimmed), trimmed.Length, [], "unknown", "partial");
         }
         var candidates = ResolveExpressionCandidates(trimmed, objects, fields, out var ambiguous);
-        var expression = AccessExpressionProjector.Project(
+        var expression = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
             trimmed,
             objects,
             fields,
