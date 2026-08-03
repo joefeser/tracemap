@@ -377,36 +377,84 @@ public sealed class AccessFoundationTests
         Assert.Equal("partial", unsupportedFunction.Coverage);
         Assert.Empty(dynamicShape.StaticColumnHashes);
         Assert.Equal("partial", dynamicShape.Coverage);
+
+        var outputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan','Feb');",
+            known,
+            fields);
+        Assert.Equal(["Category", "TotalAmount", "Jan", "Feb"], outputs.Select(output => output.Name));
+        Assert.Equal(["row-heading", "aggregate", "static-pivot", "static-pivot"], outputs.Select(output => output.OutputKind));
+        Assert.All(outputs, output => Assert.Equal("complete", output.Coverage));
+        Assert.Equal(["field-row"], outputs[0].SourceFieldStableKeys);
+        Assert.Equal(["field-amount"], outputs[1].SourceFieldStableKeys);
+        Assert.Equal(["field-amount"], outputs[2].SourceFieldStableKeys);
+
+        var dynamicOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month;",
+            known,
+            fields);
+        Assert.Single(dynamicOutputs);
+        Assert.Equal("row-heading", dynamicOutputs[0].OutputKind);
+
+        var duplicateOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            "TRANSFORM Sum(Events.Amount) AS Category SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
+            known,
+            fields);
+        Assert.DoesNotContain(duplicateOutputs, output => output.Name == "Category");
+        Assert.Single(duplicateOutputs);
+        Assert.Equal("Jan", duplicateOutputs[0].Name);
     }
 
     [Fact]
-    public void Com_reader_labels_crosstab_lineage_as_not_yet_composed_downstream()
+    public void Com_reader_emits_static_crosstab_outputs_for_downstream_composition()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
         var queryIdentity = AccessSafeValues.Identity(seed, "query", "MonthlyTotals");
+        var tableIdentity = AccessSafeValues.Identity(seed, "table", "Events");
+        var category = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{tableIdentity.StableKey}", "Category"), 0, "text", 64, false);
+        var amount = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{tableIdentity.StableKey}", "Amount"), 1, "decimal", 16, false);
+        var month = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{tableIdentity.StableKey}", "Month"), 2, "text", 16, false);
         var database = new FakeDaoDatabase(new FakeDaoQuery(
             "MonthlyTotals",
-            "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
+            "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
             16));
         var gaps = new List<AccessGapProjection>();
 
-        _ = new AccessComReader().ReadQueries(
+        var queries = new AccessComReader().ReadQueries(
             database,
             seed,
             new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
             {
-                ["MonthlyTotals"] = queryIdentity
+                ["MonthlyTotals"] = queryIdentity,
+                ["Events"] = tableIdentity
             },
-            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase),
-            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase),
-            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal),
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Events"] = [(tableIdentity.StableKey, "table")]
+            },
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Events"] = [new(tableIdentity, [category, amount, month], [])]
+            },
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+            {
+                [tableIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Category"] = [category],
+                    ["Amount"] = [amount],
+                    ["Month"] = [month]
+                }
+            },
             gaps,
             []);
 
-        Assert.Contains(gaps, gap =>
-            gap.Classification == "AccessQueryCrosstabDownstreamCompositionUnavailable"
-            && gap.StableScopeKey == queryIdentity.StableKey
-            && gap.RuleId == RuleIds.LegacyAccessQuery);
+        var query = Assert.Single(queries);
+        Assert.Equal(["Category", "TotalAmount", "Jan"], query.OutputFields!.Select(output => output.Identity.DisplayName));
+        Assert.All(query.OutputFields!, output => Assert.Equal("complete", output.Coverage));
+        Assert.DoesNotContain(gaps, gap => gap.Classification == "AccessQueryCrosstabDownstreamCompositionUnavailable");
     }
 
     [Fact]

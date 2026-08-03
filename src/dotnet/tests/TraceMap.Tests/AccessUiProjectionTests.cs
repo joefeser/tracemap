@@ -1018,6 +1018,46 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Statically_declared_crosstab_output_resolves_report_control_without_runtime_claims()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('d', 40), "fixture.accdb", "hash");
+        var query = AccessSafeValues.Identity(seed, "query", "qryPivot");
+        var output = AccessSafeValues.Identity(seed, $"query-field-{query.StableKey}", "W4", 3);
+        var raw = new AccessRawUiSurface(
+            "rptPivot",
+            "report",
+            false,
+            "qryPivot",
+            [new("txtWeekFour", 0, 109, "W4", null, [])],
+            []);
+
+        var projected = AccessUiProjector.Project(
+            seed,
+            [raw],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qryPivot"] = [(query.StableKey, "query")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [query.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["W4"] = [output.StableKey]
+                }
+            },
+            queryKindsByStableKey: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [query.StableKey] = "crosstab"
+            });
+
+        var binding = Assert.Single(Assert.Single(Assert.Single(projected.Surfaces).Controls).Bindings);
+        Assert.Equal("direct-field", binding.SourceKind);
+        Assert.Equal("complete", binding.Coverage);
+        Assert.Equal([output.StableKey], binding.TargetStableKeys);
+        Assert.DoesNotContain(projected.Gaps, gap => gap.Classification == "AccessBindingCrosstabOutputCandidate");
+    }
+
+    [Fact]
     public void Inline_record_source_direct_output_is_preserved_as_a_bounded_candidate()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('e', 40), "fixture.accdb", "hash");
