@@ -9,15 +9,17 @@
 - Root cause: the retained Access SaveAsText property contains `\015\012`
   line-break escapes. The quoted-scalar parser preserves those bytes literally,
   so the otherwise supported `FROM` boundary cannot be recognized.
-- Decision: decode only the two observed SaveAsText newline escapes at the
-  scalar boundary and reuse the existing dependency-scoped wildcard field
+- Decision: decode only the observed contiguous SaveAsText newline pair at the
+  raw design-text scalar boundary and reuse the existing dependency-scoped wildcard field
   composition. Do not invent wildcard output order or upgrade the record source
   beyond available evidence.
 - Corpus observation: the immutable design bundle contains nine `\015` and nine
   `\012` occurrences and no other three-digit escaped property codes.
-- Implementation: `AccessUiTextParser` now converts only `\015` to carriage
-  return and `\012` to line feed while parsing quoted SaveAsText scalars. The
-  existing inline-SQL and dependency-scoped field projectors remain unchanged.
+- Implementation: `AccessUiTextParser` now converts only contiguous
+  `\015\012` to CRLF while parsing quoted SaveAsText scalars. Standalone tokens
+  remain literal, and semantic structured UI records are not reinterpreted as
+  SaveAsText transport. The existing inline-SQL and dependency-scoped field
+  projectors remain unchanged.
 - Regenerated evidence: the immutable base scan and normalized design bundle
   produced 8,972 facts and passed adapter-artifact validation. Deterministic
   binding remainders fell from 40 to 34. All six
@@ -31,6 +33,11 @@
   `git diff --check` passed. Repository-wide whitespace verification still
   reports unrelated pre-existing drift outside this slice.
 - Pull request: #585 targets `dev`; ACK pending on the final exact head.
+- Review tightening: Baz identified ambiguity between raw SaveAsText transport
+  escapes and semantic structured UI values. The parser now requires the exact
+  contiguous CRLF pair and preserves standalone tokens. Structured records
+  remain semantic and are intentionally not transport-decoded. The immutable
+  regeneration still produces 8,972 facts and 34 binding remainders.
 - Deferred: the 12 DCount/query-output mismatches, owner identity/obsolescence
   confirmations, genuinely ambiguous record sources, unresolved functions,
   dynamic wildcard outputs, and report-layout reconstruction.

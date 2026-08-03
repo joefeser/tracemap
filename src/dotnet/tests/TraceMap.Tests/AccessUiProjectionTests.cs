@@ -571,12 +571,12 @@ public sealed class AccessUiProjectionTests
     public void Text_design_parser_decodes_only_SaveAsText_line_break_escapes()
     {
         var parsed = AccessUiTextParser.Parse(
-            new StringReader("Begin Report\nRecordSource =\"SELECT qryKnown.*\\015\\012FROM qryKnown WHERE Marker='\\011'\"\nEnd\n"),
+            new StringReader("Begin Report\nRecordSource =\"SELECT qryKnown.*\\015\\012FROM qryKnown WHERE Marker='\\011' AND Cr='\\015' AND Lf='\\012'\"\nEnd\n"),
             "rptKnown",
             "report");
 
         var surface = Assert.IsType<AccessRawUiSurface>(parsed.Surface);
-        Assert.Equal("SELECT qryKnown.*\r\nFROM qryKnown WHERE Marker='\\011'", surface.RecordSource);
+        Assert.Equal("SELECT qryKnown.*\r\nFROM qryKnown WHERE Marker='\\011' AND Cr='\\015' AND Lf='\\012'", surface.RecordSource);
         Assert.DoesNotContain(parsed.Gaps, gap => gap.Classification == "AccessUiPropertyValueMalformed");
     }
 
