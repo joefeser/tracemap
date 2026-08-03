@@ -991,11 +991,12 @@ public static class AccessDesignEvidenceComposer
                         || string.IsNullOrWhiteSpace(fact.FactId)
                         || string.IsNullOrWhiteSpace(fact.FactType)
                         || string.IsNullOrWhiteSpace(fact.RuleId)
-                        || string.IsNullOrWhiteSpace(fact.EvidenceTier)
-                        || fact.ScanId != manifest.ScanId
+                        || string.IsNullOrWhiteSpace(fact.EvidenceTier))
+                        throw new AccessScanException("AccessBaseScanFactsInvalid");
+                    if (fact.ScanId != manifest.ScanId
                         || fact.CommitSha != manifest.CommitSha
                         || fact.Repo != manifest.RepoName)
-                        throw new AccessScanException("AccessBaseScanFactsInvalid");
+                        throw new AccessScanException("AccessBaseScanFactsMismatch");
                     facts.Add(fact);
                 }
                 catch (AccessScanException) { throw; }
