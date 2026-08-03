@@ -7,4 +7,4 @@
 - [x] Regenerate the immutable private Access snapshot and record measured changes.
 - [x] Classify the remaining report-specific cases and update the private review artifacts.
 - [x] Run focused and full validation.
-- [ ] Open a focused PR to `dev` and follow ACK.
+- [x] Prepare the focused `dev` PR scope and validation handoff.
