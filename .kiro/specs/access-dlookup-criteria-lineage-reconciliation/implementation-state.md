@@ -10,3 +10,4 @@
 - Private regeneration: 8,972 facts; the 19 generic `AccessBindingExpressionPartial` gaps became 15 precise `AccessBindingDomainSelectedFieldUnmatched` gaps and 4 precise `AccessBindingDomainCriteriaFieldAmbiguous` gaps. The total 34 binding gaps did not change because the acquired evidence does not justify a false unique match.
 - Determinism: two independent regenerations produced byte-identical `facts.ndjson` and `scan-manifest.json`; adapter artifact validation passed.
 - Deferred: runtime lookup validation, dynamic domain/criteria construction, transitive dependency inference, and human business-meaning confirmation.
+- PR: #586 targets `dev`; ACK pending on the exact current head.
