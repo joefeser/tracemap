@@ -247,7 +247,7 @@ public sealed record AccessExpressionProjection(
             [],
             literalKinds,
             coverage,
-            coverage,
+            "unknown",
             gapClassification)
     {
     }
