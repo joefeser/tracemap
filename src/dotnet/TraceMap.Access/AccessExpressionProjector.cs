@@ -19,7 +19,8 @@ public static partial class AccessExpressionProjector
         IReadOnlySet<string>? controlNames = null,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? fieldSetsByObject = null,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? controlStableKeys = null,
-        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? domainObjects = null)
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? domainObjects = null,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? vbaProcedureStableKeys = null)
     {
         var normalized = expression.Trim();
         var functionMatches = FunctionPattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
@@ -45,8 +46,17 @@ public static partial class AccessExpressionProjector
         var controlKeys = new SortedSet<string>(StringComparer.Ordinal);
         var controlRefs = new SortedSet<string>(StringComparer.Ordinal);
         var externalRefs = new SortedSet<string>(StringComparer.Ordinal);
+        var vbaProcedureKeys = new SortedSet<string>(StringComparer.Ordinal);
         var literals = new SortedSet<string>(StringComparer.Ordinal);
-        var unresolvedFunction = functionNames.Any(name => !Functions.Contains(name));
+        var unresolvedFunction = false;
+        foreach (var functionName in functionNames.Where(name => !Functions.Contains(name)))
+        {
+            if (vbaProcedureStableKeys?.TryGetValue(functionName, out var procedureCandidates) == true
+                && procedureCandidates.Count == 1)
+                vbaProcedureKeys.Add(procedureCandidates[0]);
+            else
+                unresolvedFunction = true;
+        }
         var unresolved = false;
         var ambiguous = false;
         var domainFieldCatalogIncomplete = false;
@@ -166,8 +176,10 @@ public static partial class AccessExpressionProjector
             else unresolved = true;
         }
 
-        var dynamic = Regex.IsMatch(normalized, @"\b(?:Eval|Run|Call)\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
-            || normalized.Contains("&", StringComparison.Ordinal) && normalized.Contains("[", StringComparison.Ordinal);
+        var dynamic = Regex.IsMatch(normalized, @"\b(?:Eval|Run|Call)\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var runtimeValueDependent = dynamic
+            || vbaProcedureKeys.Count > 0
+            || normalized.Contains("&", StringComparison.Ordinal);
         var classification = domainMatches.Count > 0 ? "domain-lookup"
             : functions.Length > 0 || normalized.StartsWith('=') || operators.Length > 0 ? "calculated-expression"
             : "expression";
@@ -187,6 +199,7 @@ public static partial class AccessExpressionProjector
             controlKeys.ToArray(),
             controlRefs.ToArray(),
             externalRefs.ToArray(),
+            vbaProcedureKeys.ToArray(),
             queryKeys.ToArray(),
             selectedFields.ToArray(),
             selectedFieldRefs.ToArray(),
@@ -194,6 +207,7 @@ public static partial class AccessExpressionProjector
             criteriaFieldRefs.ToArray(),
             literals.ToArray(),
             coverage,
+            runtimeValueDependent ? "partial" : "complete",
             gap);
     }
 

@@ -595,9 +595,9 @@ public sealed class AccessFoundationTests
 
         var action = queries.Single(query => query.Identity == appendQuery).ActionLineage;
         Assert.NotNull(action);
-        Assert.Equal("partial", action!.Coverage);
-        Assert.Empty(Assert.Single(action.FieldMappings).SourceFieldStableKeys);
-        Assert.Contains(gaps, gap =>
+        Assert.Equal("complete", action!.Coverage);
+        Assert.NotEmpty(Assert.Single(action.FieldMappings).SourceFieldStableKeys);
+        Assert.DoesNotContain(gaps, gap =>
             gap.Classification == "AccessQueryActionLineagePartial"
             && gap.StableScopeKey == appendQuery.StableKey);
         Assert.Equal(1, sourceDefinition.FieldsReadCount);
@@ -626,6 +626,65 @@ public sealed class AccessFoundationTests
         Assert.Null(projection.Outputs[1].NameHash);
         Assert.True(AccessQueryProjector.HasStaticOutputName(
             "SELECT TargetTable.Id AS Identifier FROM TargetTable;", "Identifier"));
+    }
+
+    [Fact]
+    public void Query_projector_separates_static_output_lineage_from_runtime_value_coverage()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Food"] = [("table-food", "table")]
+        };
+        var fields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            ["table-food"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["FoodId"] = ["field-food-id"],
+                ["UserId"] = ["field-user-id"]
+            }
+        };
+
+        var projection = AccessQueryProjector.ProjectStaticSelect(
+            "SELECT Food.FoodId FROM Food WHERE Food.UserId = glngUserID();",
+            known,
+            fields);
+
+        Assert.Equal("complete", projection.DependencyCoverage);
+        Assert.Equal("complete", projection.OutputCoverage);
+        Assert.Equal("partial", projection.RuntimeValueCoverage);
+        Assert.Equal("partial", projection.Coverage);
+    }
+
+    [Fact]
+    public void Com_reader_falls_back_to_unique_static_output_names_when_dao_catalog_is_empty()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "qWeeklyPlans");
+        var database = new FakeDaoDatabase(new FakeDaoQuery(
+            "qWeeklyPlans",
+            "SELECT WeeklyPlanID, StartDate, PercentComplete AS PlanPercent FROM WeeklyPlans;"));
+        var gaps = new List<AccessGapProjection>();
+
+        var query = Assert.Single(new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qWeeklyPlans"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlans"] = [("table-weekly-plans", "table")]
+            },
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal),
+            gaps,
+            []));
+
+        Assert.Equal(3, query.OutputFields!.Count);
+        Assert.Equal([0, 1, 2], query.OutputFields.Select(output => output.Ordinal));
+        Assert.All(query.OutputFields, output => Assert.Equal("partial", output.Coverage));
+        Assert.Equal(3, gaps.Count(gap => gap.Classification == "AccessQueryOutputSourceUnavailable"));
     }
 
     [Fact]

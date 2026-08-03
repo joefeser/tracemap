@@ -564,7 +564,10 @@ public sealed class AccessComReader
         foreach (var pair in queryOutputMetadata)
         {
             var lookup = new Dictionary<string, List<AccessFieldProjection>>(StringComparer.OrdinalIgnoreCase);
-            foreach (var metadata in pair.Value.Where(metadata => metadata.Coverage == "complete"))
+            // Output-name identity and source-lineage coverage are separate claims.
+            // A unique declared output remains a valid field-catalog entry even when
+            // its source field cannot be proven.
+            foreach (var metadata in pair.Value)
             {
                 if (!lookup.TryGetValue(metadata.Name, out var candidates)) lookup[metadata.Name] = candidates = [];
                 candidates.Add(new(metadata.Identity, metadata.Ordinal, metadata.TypeFamily, 0, false));
@@ -829,6 +832,25 @@ public sealed class AccessComReader
                             gaps.Add(new("AccessQueryOutputMetadataUnavailable", outputIdentity is null ? "query" : "query-output-field", outputIdentity?.StableKey ?? identity.StableKey, RuleIds.LegacyAccessQuery));
                         }
                         finally { Release(field); }
+                    }
+                    if (fieldCount == 0)
+                    {
+                        foreach (var output in AccessQueryProjector.ProjectStaticOutputCatalog(sql))
+                        {
+                            var outputIdentity = AccessSafeValues.Identity(
+                                databaseIdentitySeed,
+                                $"query-field-{identity.StableKey}",
+                                output.Name,
+                                output.Ordinal);
+                            metadata.Add(new(
+                                outputIdentity,
+                                output.Ordinal,
+                                output.Name,
+                                "unknown",
+                                [],
+                                "partial",
+                                "AccessQueryOutputSourceUnavailable"));
+                        }
                     }
                     result[identity.StableKey] = metadata;
                 }
