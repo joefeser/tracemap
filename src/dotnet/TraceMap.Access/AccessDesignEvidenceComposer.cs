@@ -296,6 +296,10 @@ public static class AccessDesignEvidenceComposer
             }
         }
 
+        var completeTableFieldCatalogStableKeys = BuildCompleteTableFieldCatalogStableKeys(
+            baseFacts,
+            fieldsByTable.Keys.ToHashSet(StringComparer.Ordinal));
+
         foreach (var record in bundle.Records.Where(record =>
                      record.Kind == "catalog-object"
                      && String(record.Payload, "objectRole") is not ("table-field" or "query-field")))
@@ -613,7 +617,8 @@ public static class AccessDesignEvidenceComposer
             queryKinds,
             vbaProcedureCatalog,
             fieldCoverageByStableKey,
-            domainCriteriaFields);
+            domainCriteriaFields,
+            completeTableFieldCatalogStableKeys);
         var rowSourceContexts = ui.Surfaces
             .SelectMany(surface => surface.Controls.SelectMany(control =>
             {
@@ -794,6 +799,31 @@ public static class AccessDesignEvidenceComposer
             .ToArray();
         foreach (var record in bundle.Records) support.TryAdd(record.CanonicalRecordId, [record]);
         return new(ui, vba, macros, gaps, support);
+    }
+
+    internal static IReadOnlySet<string> BuildCompleteTableFieldCatalogStableKeys(
+        IReadOnlyList<CodeFact> baseFacts,
+        IReadOnlySet<string> tableStableKeysWithFields)
+    {
+        var globallyIncomplete = baseFacts.Any(fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("classification") == "AccessFieldCollectionLimit"
+            && fact.TargetSymbol is null);
+        if (globallyIncomplete) return new HashSet<string>(StringComparer.Ordinal);
+
+        var incomplete = baseFacts
+            .Where(fact => fact.FactType == FactTypes.AnalysisGap
+                && fact.TargetSymbol is not null
+                && fact.Properties.GetValueOrDefault("scopeKind") == "field")
+            .Select(fact => fact.TargetSymbol!)
+            .ToHashSet(StringComparer.Ordinal);
+        return baseFacts
+            .Where(fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+                && fact.TargetSymbol is not null
+                && tableStableKeysWithFields.Contains(fact.TargetSymbol)
+                && !incomplete.Contains(fact.TargetSymbol))
+            .Select(fact => fact.TargetSymbol!)
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     private static void AddUiChildSupport(

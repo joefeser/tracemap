@@ -59,7 +59,8 @@ internal static partial class AccessUiProjector
         IReadOnlyDictionary<string, string>? queryKindsByStableKey = null,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? vbaProcedureStableKeys = null,
         IReadOnlyDictionary<string, string>? fieldCoverageByStableKey = null,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? domainCriteriaFieldSetsByObject = null)
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? domainCriteriaFieldSetsByObject = null,
+        IReadOnlySet<string>? completeTableFieldCatalogStableKeys = null)
     {
         var surfaces = new List<AccessUiSurfaceProjection>();
         var gaps = new List<AccessGapProjection>();
@@ -90,7 +91,8 @@ internal static partial class AccessUiProjector
                 vbaProcedureStableKeys: vbaProcedureStableKeys,
                 contextIdentifierNames: contextIdentifierNames,
                 fieldCoverageByStableKey: fieldCoverageByStableKey,
-                domainCriteriaFieldSetsByObject: domainCriteriaFieldSetsByObject);
+                domainCriteriaFieldSetsByObject: domainCriteriaFieldSetsByObject,
+                completeTableFieldCatalogStableKeys: completeTableFieldCatalogStableKeys);
             if (recordBinding is not null) bindings.Add(recordBinding);
 
             IReadOnlyDictionary<string, IReadOnlyList<string>>? scopedFields = null;
@@ -184,7 +186,8 @@ internal static partial class AccessUiProjector
                             ? ReportContextIdentifiers
                             : null,
                         fieldCoverageByStableKey: fieldCoverageByStableKey,
-                        domainCriteriaFieldSetsByObject: domainCriteriaFieldSetsByObject);
+                        domainCriteriaFieldSetsByObject: domainCriteriaFieldSetsByObject,
+                        completeTableFieldCatalogStableKeys: completeTableFieldCatalogStableKeys);
                     if (childRecord is { SourceKind: "direct-object", TargetStableKeys.Count: 1 }
                         && fieldsByTable.TryGetValue(childRecord.TargetStableKeys[0], out var resolvedChildFields))
                         childFields = resolvedChildFields;
@@ -365,7 +368,8 @@ internal static partial class AccessUiProjector
         IReadOnlyDictionary<string, IReadOnlyList<string>>? vbaProcedureStableKeys = null,
         IReadOnlySet<string>? contextIdentifierNames = null,
         IReadOnlyDictionary<string, string>? fieldCoverageByStableKey = null,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? domainCriteriaFieldSetsByObject = null)
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? domainCriteriaFieldSetsByObject = null,
+        IReadOnlySet<string>? completeTableFieldCatalogStableKeys = null)
     {
         var trimmed = value?.Trim() ?? string.Empty;
         if (trimmed.Length == 0) return null;
@@ -387,8 +391,14 @@ internal static partial class AccessUiProjector
             var dependencyTargetKind = dependencyKinds.Length == 1 ? dependencyKinds[0]
                 : dependencyKinds.Length == 0 ? "unknown"
                 : "mixed";
+            var completeTableWildcard = projection.DependencyCoverage == "complete"
+                && AccessQueryProjector.HasWildcardProjection(trimmed)
+                && targets.Length == 1
+                && dependencyKinds.Length == 1
+                && dependencyKinds[0] == "table"
+                && completeTableFieldCatalogStableKeys?.Contains(targets[0]) == true;
             var staticLineageCoverage = projection.DependencyCoverage == "complete"
-                && projection.OutputCoverage == "complete"
+                && (projection.OutputCoverage == "complete" || completeTableWildcard)
                 ? "complete"
                 : "partial";
             if (staticLineageCoverage != "complete")

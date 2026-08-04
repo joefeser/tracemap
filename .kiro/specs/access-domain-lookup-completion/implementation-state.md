@@ -10,3 +10,12 @@
 - Workbook: refreshed private remainder register preserves seven owner dispositions and 27 active cases; all sheets render and contain no formula errors.
 - Deferred: runtime lookup results, dynamic domain/criteria construction, and any alias equivalence not proven by existing source-to-output lineage.
 - PR: #587 targets `dev`; no merge is authorized by this goal.
+
+## Full-register follow-up
+
+- Scope decision: extend the same PR with two deterministic fixes found while reconciling all 34 populated remainder cases. A single-table wildcard record source can be statically complete only when the table field catalog has no acquisition gaps. Access `IN (...)` predicate syntax is an operator and must not be classified as a custom function.
+- Owner decisions: the seven `qlkpActionTabs` cases and one `WeekAtAGlanceJohnAcceleratedwk1` case correspond to objects already identified as not required for the rebuild. Preserve those as owner dispositions in the private register; do not alter or delete the source database.
+- Preserved gaps: four domain-criteria and three domain-return ambiguities lack source-to-output candidates in the immutable evidence and cannot be resolved honestly. Twelve numeric-versus-`W` crosstab cases are source-design contradictions, not aliases.
+- Private regeneration checkpoint: two independent runs emitted 8,982 facts with byte-identical `facts.ndjson` and `scan-manifest.json`. The generic remainder dropped by two: the complete `Users.*` table wildcard and the report `IN (...)` predicate no longer emit gaps.
+- Validation: 131 focused projector/composer/UI tests and all 281 Access-filtered tests pass. The full solution builds with zero warnings/errors and all 1,159 tests pass. Changed-file formatting, adapter-artifact validation, private-path guard, diff validation, workbook formula scan, and visual rendering of all three workbook sheets pass.
+- Refreshed private register: 32 deterministic remainder cases; 15 carry confirmed owner do-not-port dispositions and 17 remain active. The register contains no formulas or formula errors and preserves the deterministic fact ID for every row.

@@ -39,6 +39,27 @@ public sealed class AccessExpressionProjectorTests
     }
 
     [Fact]
+    public void Treats_access_in_predicate_as_an_operator_not_a_custom_function()
+    {
+        var fields = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["DOWText"] = ["field-dow-text"]
+        };
+
+        var result = AccessExpressionProjector.Project(
+            "[DOWText] in('Friday','Saturday')",
+            null,
+            fields);
+
+        Assert.Equal("calculated-expression", result.Classification);
+        Assert.Equal("complete", result.Coverage);
+        Assert.Equal("complete", result.RuntimeValueCoverage);
+        Assert.Equal(["field-dow-text"], result.FieldStableKeys);
+        Assert.Empty(result.FunctionNameHashes);
+        Assert.Null(result.GapClassification);
+    }
+
+    [Fact]
     public void Projects_domain_lookup_query_field_and_criteria_control()
     {
         var queryKey = "query-weekly-plan";
