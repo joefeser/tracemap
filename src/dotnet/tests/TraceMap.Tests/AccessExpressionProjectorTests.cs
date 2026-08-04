@@ -396,6 +396,32 @@ public sealed class AccessExpressionProjectorTests
     }
 
     [Fact]
+    public void Preserves_unique_query_output_source_alias_as_an_explicit_return_name_mismatch()
+    {
+        const string queryKey = "query-weekly";
+        var aliasCandidate = AccessSafeValues.QueryOutputAliasMismatchCandidate(
+            "database-seed", queryKey, "WeeklyPlanID").StableKey;
+        var projected = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
+            "=DLookUp(\"[WeeklyPlanID]\", \"qWeekly\")",
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qWeekly"] = [(queryKey, "query")]
+            },
+            null,
+            fieldSetsByObject: new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["WeeklyPlanID"] = [aliasCandidate]
+                }
+            });
+
+        Assert.Equal("partial", projected.Coverage);
+        Assert.Equal("AccessBindingDomainSelectedFieldAliasMismatch", projected.GapClassification);
+        Assert.Equal([aliasCandidate], projected.SelectedFieldStableKeys);
+    }
+
+    [Fact]
     public void Mixed_domain_lookups_keep_per_lookup_outputs_and_prefer_unmatched_return_gaps()
     {
         const string pivotQuery = "query-pivot";

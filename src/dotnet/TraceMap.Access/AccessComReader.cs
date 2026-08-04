@@ -553,7 +553,6 @@ public sealed class AccessComReader
             (object)database,
             databaseIdentitySeed,
             identities,
-            known,
             tableLookup,
             fieldLookups,
             gaps);
@@ -574,6 +573,17 @@ public sealed class AccessComReader
             }
             objectFieldLookups[pair.Key] = lookup;
         }
+        var staticFieldSets = objectFieldLookups.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyDictionary<string, IReadOnlyList<string>>)pair.Value.ToDictionary(
+                field => field.Key,
+                field => (IReadOnlyList<string>)field.Value
+                    .Select(candidate => candidate.Identity.StableKey)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.OrdinalIgnoreCase),
+            StringComparer.Ordinal);
         dynamic? queries = null;
         try
         {
@@ -594,6 +604,11 @@ public sealed class AccessComReader
                     var sql = BoundedString(() => (string)query.SQL, _limits.MaxQueryTextLength, "AccessQueryTextLimitReached");
                     var sqlHash = AccessSafeValues.RoleHash("access-query-sql", sql);
                     var dependencyProjection = AccessQueryProjector.ProjectDependencies(sql, known);
+                    var staticProjection = AccessQueryProjector.ProjectStaticSelect(
+                        sql,
+                        known,
+                        staticFieldSets,
+                        dependencyProjection);
                     var referenceCoverage = type switch
                     {
                         0 => dependencyProjection.Coverage,
@@ -640,9 +655,41 @@ public sealed class AccessComReader
                     {
                         foreach (var metadata in outputMetadata)
                         {
-                            if (metadata.GapClassification is not null)
+                            var staticOutput = staticProjection.Outputs
+                                .SingleOrDefault(output => output.Ordinal == metadata.Ordinal);
+                            var staticOrdinalAligned = AccessQueryProjector.CanReconcileStaticOutputByOrdinal(
+                                sql,
+                                metadata.Ordinal,
+                                metadata.Name);
+                            var daoSources = metadata.SourceFieldStableKeys
+                                .Distinct(StringComparer.Ordinal)
+                                .ToArray();
+                            var sourceCandidates = daoSources.ToList();
+                            if (staticOutput is not null && staticOrdinalAligned)
+                                sourceCandidates.AddRange(staticOutput.SourceFieldStableKeys);
+                            var distinctSources = sourceCandidates
+                                .Distinct(StringComparer.Ordinal)
+                                .OrderBy(value => value, StringComparer.Ordinal)
+                                .ToArray();
+                            var directOutput = AccessQueryProjector.IsDirectOutputField(sql, metadata.Name)
+                                || (staticOrdinalAligned && staticOutput?.Coverage == "complete");
+                            var trustedSource = daoSources.Length == 1
+                                || (staticOrdinalAligned
+                                    && staticOutput is { Coverage: "complete", SourceFieldStableKeys.Count: 1 });
+                            var syntaxComplete = AccessQueryProjector.HasBalancedStaticSelectSyntax(sql);
+                            var coverage = distinctSources.Length == 1
+                                && directOutput
+                                && trustedSource
+                                && syntaxComplete
+                                && dependencyProjection.Coverage == "complete"
+                                ? "complete"
+                                : "partial";
+                            if (coverage == "partial")
                                 gaps.Add(new(
-                                    metadata.GapClassification,
+                                    QueryOutputGapClassification(
+                                        distinctSources.Length,
+                                        directOutput && syntaxComplete,
+                                        dependencyProjection.Coverage),
                                     "query-output-field",
                                     metadata.Identity.StableKey,
                                     RuleIds.LegacyAccessQuery));
@@ -650,8 +697,8 @@ public sealed class AccessComReader
                                 metadata.Identity,
                                 metadata.Ordinal,
                                 metadata.TypeFamily,
-                                metadata.SourceFieldStableKeys,
-                                metadata.Coverage));
+                                distinctSources,
+                                coverage));
                         }
                     }
                     string? connectHash = null;
@@ -749,15 +796,12 @@ public sealed class AccessComReader
         int Ordinal,
         string Name,
         string TypeFamily,
-        IReadOnlyList<string> SourceFieldStableKeys,
-        string Coverage,
-        string? GapClassification);
+        IReadOnlyList<string> SourceFieldStableKeys);
 
     private Dictionary<string, IReadOnlyList<QueryOutputMetadata>> ReadQueryOutputMetadata(
         dynamic database,
         string databaseIdentitySeed,
         IReadOnlyDictionary<string, AccessSafeIdentity> identities,
-        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> known,
         IReadOnlyDictionary<string, List<AccessTableProjection>> tableLookup,
         IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fieldLookups,
         List<AccessGapProjection> gaps)
@@ -781,7 +825,6 @@ public sealed class AccessComReader
                     if (!identities.TryGetValue(name, out var resolvedIdentity)) continue;
                     identity = resolvedIdentity;
                     var sql = BoundedString(() => (string)query.SQL, _limits.MaxQueryTextLength, "AccessQueryTextLimitReached");
-                    var dependencyCoverage = AccessQueryProjector.ProjectDependencies(sql, known).Coverage;
                     fields = query.Fields;
                     var fieldCount = BoundedChildCount(fields, "AccessQueryOutputFieldCollectionLimit");
                     var metadata = new List<QueryOutputMetadata>();
@@ -821,22 +864,12 @@ public sealed class AccessComReader
                                 .Distinct(StringComparer.Ordinal)
                                 .OrderBy(value => value, StringComparer.Ordinal)
                                 .ToArray();
-                            var directOutput = AccessQueryProjector.IsDirectOutputField(sql, fieldName);
-                            var coverage = distinctSources.Length == 1
-                                && directOutput
-                                && dependencyCoverage == "complete"
-                                ? "complete"
-                                : "partial";
                             metadata.Add(new(
                                 outputIdentity,
                                 ordinal,
                                 fieldName,
                                 AccessSafeValues.DaoTypeFamily(SafeInt(() => (int)field.Type)),
-                                distinctSources,
-                                coverage,
-                                coverage == "partial"
-                                    ? QueryOutputGapClassification(distinctSources.Length, directOutput, dependencyCoverage)
-                                    : null));
+                                distinctSources));
                         }
                         catch (AccessScanException ex)
                         {
@@ -865,9 +898,7 @@ public sealed class AccessComReader
                                 output.Ordinal,
                                 output.Name,
                                 "unknown",
-                                [],
-                                "partial",
-                                "AccessQueryOutputSourceUnavailable"));
+                                []));
                         }
                     }
                     result[identity.StableKey] = metadata;

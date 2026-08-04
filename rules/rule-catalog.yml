@@ -1461,7 +1461,7 @@ rules:
       - Query-specific gaps retain the owning stable query key and declaration fact only when identity was established before the failure; no owner is invented otherwise.
       - Query result fields and recordsets are never enumerated for pass-through, action, DDL, or unsafe query kinds.
       - QueryDef output-field metadata is enumerated only for supported select queries; no recordset is opened and pass-through, action, DDL, or unsafe query kinds retain no output-field conclusion.
-      - Blank, calculated, aliased, ambiguous, or unavailable SourceTable/SourceField metadata remains partial and does not prove result values or runtime lineage.
+      - Blank, calculated, ambiguous, or unavailable SourceTable/SourceField metadata remains partial unless a bounded direct SELECT projection independently resolves exactly one source field. Static aliases can recover a source-lineage candidate but do not prove result values or runtime execution.
 
   - id: legacy.access.external-link.v1
     name: Microsoft Access external boundary
@@ -1523,6 +1523,7 @@ rules:
       - A resolved domain object with an incomplete field catalog remains partial even when selected and criteria identifier hashes are available; those hashes are not field identities.
       - A static domain return field resolves only against the domain object's declared output catalog. A criteria field may additionally resolve against fields exposed by the domain query's direct declared dependencies, but only when the name has one candidate; duplicate dependency names remain an explicit domain-criteria ambiguity gap.
       - A domain return identifier found only in the criteria/dependency scope remains partial and is classified as dependency-only or dependency-ambiguous; dependency presence never promotes it to a declared return field.
+      - A domain criteria identifier may resolve through exactly one declared query-output source candidate. A return identifier that names that source instead of the query's declared output alias remains partial with an explicit alias-mismatch gap; TraceMap does not equate the names.
       - A domain return identifier that exactly matches a statically declared crosstab pivot-heading hash is retained as a hash-only pivot candidate. It does not prove that Access materialized an output column, that the query ran, or that a lookup returned a value.
       - A numeric domain return identifier paired with exactly one declared `W`-prefixed crosstab heading and output is reported as a prefix-mismatch candidate, not resolved as an equivalent field. The declaration does not prove that Access accepts the unprefixed identifier.
       - Domain criteria reconciliation proves a bounded static name relationship. It does not prove predicate evaluation, parameter values, selected rows, query success, or that dependency-scoped fields are available at runtime.

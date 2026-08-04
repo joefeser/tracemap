@@ -244,6 +244,9 @@ public static class AccessDesignEvidenceComposer
         var fieldsByTableAndHash = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
         var fieldCoverageByStableKey = new Dictionary<string, string>(StringComparer.Ordinal);
         var supportingFactIdsByStableKey = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        var fieldNamesByStableKey = new Dictionary<string, string>(StringComparer.Ordinal);
+        var queryOutputSourcesByOutput = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var queryOutputSourceFactIdsByOutput = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var queryOutputOrdinalByStableKey = new Dictionary<string, int>(StringComparer.Ordinal);
         var stableKeyByCanonicalRecordId = new Dictionary<string, string>(StringComparer.Ordinal);
         var baseMatchedCatalogStableKeys = new HashSet<string>(StringComparer.Ordinal);
@@ -274,7 +277,10 @@ public static class AccessDesignEvidenceComposer
                 && fact.SourceSymbol is not null)
             {
                 if (fact.Properties.TryGetValue("objectName", out var fieldName))
+                {
                     AddField(fieldsByTable, fact.SourceSymbol, fieldName, fact.TargetSymbol);
+                    fieldNamesByStableKey[fact.TargetSymbol] = fieldName;
+                }
                 if (fact.Properties.TryGetValue("objectNameHash", out var fieldHash))
                     AddField(fieldsByTableAndHash, fact.SourceSymbol, fieldHash, fact.TargetSymbol);
             }
@@ -282,7 +288,10 @@ public static class AccessDesignEvidenceComposer
                 && fact.SourceSymbol is not null)
             {
                 if (fact.Properties.TryGetValue("objectName", out var outputName))
+                {
                     AddField(fieldsByTable, fact.SourceSymbol, outputName, fact.TargetSymbol);
+                    fieldNamesByStableKey[fact.TargetSymbol] = outputName;
+                }
                 if (fact.Properties.TryGetValue("objectNameHash", out var outputHash))
                     AddField(fieldsByTableAndHash, fact.SourceSymbol, outputHash, fact.TargetSymbol);
                 fieldCoverageByStableKey[fact.TargetSymbol] =
@@ -298,6 +307,16 @@ public static class AccessDesignEvidenceComposer
                         "query-field",
                         fact.TargetSymbol,
                         RuleIds.LegacyAccessDesignInput));
+            }
+            if (fact.FactType == FactTypes.AccessQueryOutputSourceCandidate
+                && fact.SourceSymbol is not null)
+            {
+                if (!queryOutputSourcesByOutput.TryGetValue(fact.SourceSymbol, out var sourceCandidates))
+                    queryOutputSourcesByOutput[fact.SourceSymbol] = sourceCandidates = [];
+                sourceCandidates.Add(fact.TargetSymbol);
+                if (!queryOutputSourceFactIdsByOutput.TryGetValue(fact.SourceSymbol, out var sourceFactIds))
+                    queryOutputSourceFactIdsByOutput[fact.SourceSymbol] = sourceFactIds = [];
+                sourceFactIds.Add(fact.FactId);
             }
         }
 
@@ -571,7 +590,10 @@ public static class AccessDesignEvidenceComposer
             staticCrosstabPivotHashes,
             fieldCoverageByStableKey,
             staticCrosstabPivotFactIds,
-            supportingFactIdsByStableKey);
+            supportingFactIdsByStableKey,
+            fieldNamesByStableKey,
+            queryOutputSourcesByOutput,
+            queryOutputSourceFactIdsByOutput);
         var known = knownObjects.ToDictionary(
             item => item.Key,
             item => (IReadOnlyList<(string StableKey, string Kind)>)item.Value
@@ -628,6 +650,7 @@ public static class AccessDesignEvidenceComposer
             fieldCoverageByStableKey,
             domainCriteriaFields,
             completeTableFieldCatalogStableKeys);
+        PropagateBindingSupportingFactIds(ui, supportingFactIdsByStableKey);
         var rowSourceContexts = ui.Surfaces
             .SelectMany(surface => surface.Controls.SelectMany(control =>
             {
@@ -808,6 +831,24 @@ public static class AccessDesignEvidenceComposer
             .ToArray();
         foreach (var record in bundle.Records) support.TryAdd(record.CanonicalRecordId, [record]);
         return new(ui, vba, macros, gaps, support, supportingFactIdsByStableKey);
+    }
+
+    internal static void PropagateBindingSupportingFactIds(
+        AccessUiProjectionResult ui,
+        Dictionary<string, IReadOnlyList<string>> supportingFactIdsByStableKey)
+    {
+        var bindings = ui.Surfaces.SelectMany(surface =>
+            surface.Bindings.Concat(surface.Controls.SelectMany(control => control.Bindings)));
+        foreach (var binding in bindings)
+        {
+            var supportingFactIds = binding.TargetStableKeys
+                .SelectMany(target => supportingFactIdsByStableKey.GetValueOrDefault(target) ?? [])
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            if (supportingFactIds.Length > 0)
+                supportingFactIdsByStableKey[binding.Identity.StableKey] = supportingFactIds;
+        }
     }
 
     internal static IReadOnlySet<string> BuildCompleteTableFieldCatalogStableKeys(
@@ -1196,7 +1237,10 @@ public static class AccessDesignEvidenceComposer
         IReadOnlyDictionary<string, IReadOnlySet<string>>? staticCrosstabPivotHashes = null,
         Dictionary<string, string>? fieldCoverageByStableKey = null,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? staticCrosstabPivotFactIds = null,
-        Dictionary<string, IReadOnlyList<string>>? supportingFactIdsByStableKey = null)
+        Dictionary<string, IReadOnlyList<string>>? supportingFactIdsByStableKey = null,
+        IReadOnlyDictionary<string, string>? fieldNamesByStableKey = null,
+        IReadOnlyDictionary<string, List<string>>? queryOutputSourcesByOutput = null,
+        IReadOnlyDictionary<string, List<string>>? queryOutputSourceFactIdsByOutput = null)
     {
         foreach (var expression in surfaces.SelectMany(DomainExpressions))
         {
@@ -1249,6 +1293,35 @@ public static class AccessDesignEvidenceComposer
                 if (!fieldsByHash.TryGetValue(fieldHash, out var fieldMatches)
                     || fieldMatches.Distinct(StringComparer.Ordinal).ToArray() is not { Length: 1 } distinct)
                 {
+                    if (fieldsByTable.TryGetValue(stableKey, out var outputFields)
+                        && TryResolveUniqueQueryOutputSourceAlias(
+                            reference.FieldName,
+                            outputFields,
+                            fieldNamesByStableKey,
+                            fieldCoverageByStableKey,
+                            queryOutputSourcesByOutput,
+                            queryOutputSourceFactIdsByOutput,
+                            out var sourceFieldStableKey,
+                            out var sourceFactIds))
+                    {
+                        if (reference.ReferenceKind == "selected")
+                        {
+                            var candidate = AccessSafeValues.QueryOutputAliasMismatchCandidate(
+                                databaseIdentitySeed,
+                                stableKey,
+                                reference.FieldName).StableKey;
+                            AddField(fieldsByTable, stableKey, reference.FieldName, candidate);
+                            if (fieldCoverageByStableKey is not null)
+                                fieldCoverageByStableKey[candidate] = "partial";
+                            if (supportingFactIdsByStableKey is not null && sourceFactIds.Count > 0)
+                                supportingFactIdsByStableKey[candidate] = sourceFactIds;
+                        }
+                        else
+                        {
+                            AddField(criteriaFieldsByDomain, stableKey, reference.FieldName, sourceFieldStableKey);
+                        }
+                        continue;
+                    }
                     if (reference.ReferenceKind == "selected"
                         && reference.FieldName.Length > 0
                         && reference.FieldName.All(char.IsDigit)
@@ -1278,6 +1351,46 @@ public static class AccessDesignEvidenceComposer
                     distinct[0]);
             }
         }
+    }
+
+    private static bool TryResolveUniqueQueryOutputSourceAlias(
+        string requestedFieldName,
+        IReadOnlyDictionary<string, List<string>> outputFields,
+        IReadOnlyDictionary<string, string>? fieldNamesByStableKey,
+        IReadOnlyDictionary<string, string>? fieldCoverageByStableKey,
+        IReadOnlyDictionary<string, List<string>>? queryOutputSourcesByOutput,
+        IReadOnlyDictionary<string, List<string>>? queryOutputSourceFactIdsByOutput,
+        out string sourceFieldStableKey,
+        out IReadOnlyList<string> sourceFactIds)
+    {
+        sourceFieldStableKey = string.Empty;
+        sourceFactIds = [];
+        if (fieldNamesByStableKey is null
+            || fieldCoverageByStableKey is null
+            || queryOutputSourcesByOutput is null) return false;
+        var matches = outputFields.Values
+            .SelectMany(value => value)
+            .Distinct(StringComparer.Ordinal)
+            .Select(outputStableKey =>
+            {
+                var sources = queryOutputSourcesByOutput.GetValueOrDefault(outputStableKey)?
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray() ?? [];
+                return (OutputStableKey: outputStableKey, Sources: sources);
+            })
+            .Where(candidate => fieldCoverageByStableKey.TryGetValue(candidate.OutputStableKey, out var coverage)
+                && string.Equals(coverage, "complete", StringComparison.Ordinal)
+                && candidate.Sources.Length == 1
+                && fieldNamesByStableKey.TryGetValue(candidate.Sources[0], out var sourceName)
+                && string.Equals(sourceName, requestedFieldName, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (matches.Length != 1) return false;
+        sourceFieldStableKey = matches[0].Sources[0];
+        sourceFactIds = queryOutputSourceFactIdsByOutput?.GetValueOrDefault(matches[0].OutputStableKey)?
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray() ?? [];
+        return true;
     }
 
     internal static IReadOnlyDictionary<string, IReadOnlySet<string>> BuildStaticCrosstabPivotHashes(
