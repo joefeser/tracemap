@@ -657,20 +657,24 @@ public sealed class AccessComReader
                         {
                             var staticOutput = staticProjection.Outputs
                                 .SingleOrDefault(output => output.Ordinal == metadata.Ordinal);
+                            var staticOrdinalAligned = AccessQueryProjector.CanReconcileStaticOutputByOrdinal(
+                                sql,
+                                metadata.Ordinal);
                             var daoSources = metadata.SourceFieldStableKeys
                                 .Distinct(StringComparer.Ordinal)
                                 .ToArray();
                             var sourceCandidates = daoSources.ToList();
-                            if (staticOutput is not null)
+                            if (staticOutput is not null && staticOrdinalAligned)
                                 sourceCandidates.AddRange(staticOutput.SourceFieldStableKeys);
                             var distinctSources = sourceCandidates
                                 .Distinct(StringComparer.Ordinal)
                                 .OrderBy(value => value, StringComparer.Ordinal)
                                 .ToArray();
                             var directOutput = AccessQueryProjector.IsDirectOutputField(sql, metadata.Name)
-                                || staticOutput?.Coverage == "complete";
+                                || (staticOrdinalAligned && staticOutput?.Coverage == "complete");
                             var trustedSource = daoSources.Length == 1
-                                || staticOutput is { Coverage: "complete", SourceFieldStableKeys.Count: 1 };
+                                || (staticOrdinalAligned
+                                    && staticOutput is { Coverage: "complete", SourceFieldStableKeys.Count: 1 });
                             var syntaxComplete = AccessQueryProjector.HasBalancedStaticSelectSyntax(sql);
                             var coverage = distinctSources.Length == 1
                                 && directOutput
