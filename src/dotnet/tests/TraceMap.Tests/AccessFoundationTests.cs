@@ -1569,6 +1569,82 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Com_reader_does_not_reconcile_static_alias_ordinals_after_expanding_wildcards()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "MixedWildcardQuery");
+        var ordersIdentity = AccessSafeValues.Identity(seed, "table", "Orders");
+        var customersIdentity = AccessSafeValues.Identity(seed, "table", "Customers");
+        var orderId = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{ordersIdentity.StableKey}", "OrderId"),
+            0,
+            "long",
+            4,
+            true);
+        var amount = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{ordersIdentity.StableKey}", "Amount"),
+            1,
+            "decimal",
+            7,
+            false);
+        var customerId = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{customersIdentity.StableKey}", "Id"),
+            0,
+            "long",
+            4,
+            true);
+        var database = new FakeDaoDatabase(new FakeDaoQuery(
+            "MixedWildcardQuery",
+            "SELECT Orders.*, Customers.Id AS CustomerAlias FROM Orders, Customers;",
+            new FakeDaoField("OrderId", throwOnSource: true),
+            new FakeDaoField("Amount", throwOnSource: true),
+            new FakeDaoField("CustomerAlias", throwOnSource: true)));
+        var gaps = new List<AccessGapProjection>();
+
+        var query = Assert.Single(new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["MixedWildcardQuery"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Orders"] = [(ordersIdentity.StableKey, "table")],
+                ["Customers"] = [(customersIdentity.StableKey, "table")]
+            },
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Orders"] = [new AccessTableProjection(ordersIdentity, [orderId, amount], [])],
+                ["Customers"] = [new AccessTableProjection(customersIdentity, [customerId], [])]
+            },
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+            {
+                [ordersIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["OrderId"] = [orderId],
+                    ["Amount"] = [amount]
+                },
+                [customersIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Id"] = [customerId]
+                }
+            },
+            gaps,
+            []));
+
+        Assert.Equal(3, query.OutputFields!.Count);
+        Assert.All(query.OutputFields, output =>
+        {
+            Assert.Equal("partial", output.Coverage);
+            Assert.DoesNotContain(customerId.Identity.StableKey, output.SourceFieldStableKeys);
+        });
+        Assert.Contains(gaps, gap =>
+            gap.Classification == "AccessQueryOutputSourceUnavailable"
+            && gap.StableScopeKey == query.OutputFields[2].Identity.StableKey);
+    }
+
+    [Fact]
     public void Com_reader_keeps_malformed_direct_alias_lineage_partial()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");

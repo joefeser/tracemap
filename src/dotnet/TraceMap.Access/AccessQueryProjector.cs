@@ -344,6 +344,17 @@ public static partial class AccessQueryProjector
                 StringComparison.OrdinalIgnoreCase)) == 1;
     }
 
+    internal static bool CanReconcileStaticOutputByOrdinal(string sql, int ordinal)
+    {
+        if (string.IsNullOrWhiteSpace(sql) || ordinal < 0)
+            return false;
+        var select = SelectListAfterKeyword(MaskLiteralsAndComments(sql), "select");
+        if (select is null) return false;
+        var expressions = SplitSelectItems(select);
+        return ordinal < expressions.Count
+            && !expressions.Take(ordinal + 1).Any(IsWildcardProjectionItem);
+    }
+
     public static bool HasStaticOutputName(string sql, string outputName)
     {
         if (string.IsNullOrWhiteSpace(sql) || string.IsNullOrWhiteSpace(outputName))
