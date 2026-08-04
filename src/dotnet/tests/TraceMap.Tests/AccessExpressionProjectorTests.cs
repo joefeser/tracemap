@@ -5,6 +5,16 @@ namespace TraceMap.Tests;
 public sealed class AccessExpressionProjectorTests
 {
     [Fact]
+    public void Public_project_contract_retains_nine_parameter_binary_signature()
+    {
+        var overload = Assert.Single(
+            typeof(AccessExpressionProjector).GetMethods(),
+            method => method.Name == nameof(AccessExpressionProjector.Project));
+
+        Assert.Equal(9, overload.GetParameters().Length);
+    }
+
+    [Fact]
     public void Projects_nested_calculation_without_persisting_expression_text()
     {
         var fields = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
@@ -59,6 +69,147 @@ public sealed class AccessExpressionProjectorTests
         Assert.Contains("field-weekly-plan", result.SelectedFieldStableKeys);
         Assert.Contains("field-start-date", result.CriteriaFieldStableKeys);
         Assert.Single(result.ControlReferenceHashes);
+    }
+
+    [Fact]
+    public void Finds_only_static_domain_selected_and_criteria_field_references()
+    {
+        var references = AccessExpressionProjector.FindStaticDomainFieldCandidates(
+            "=DLookUp(\"[Percent]\", \"qWeekly\", \"[WeeklyPlanID]=[txtPlan] AND [StartDate]=[Forms]![Picker]![StartDate]\")");
+
+        Assert.Equal(
+            [
+                new AccessExpressionProjector.AccessStaticDomainFieldCandidate("qWeekly", "Percent", "selected"),
+                new AccessExpressionProjector.AccessStaticDomainFieldCandidate("qWeekly", "StartDate", "criteria"),
+                new AccessExpressionProjector.AccessStaticDomainFieldCandidate("qWeekly", "txtPlan", "criteria"),
+                new AccessExpressionProjector.AccessStaticDomainFieldCandidate("qWeekly", "WeeklyPlanID", "criteria")
+            ],
+            references);
+
+        var dynamic = AccessExpressionProjector.FindStaticDomainFieldCandidates(
+            "=DLookUp([Percent], [DomainControl], \"[WeeklyPlanID]=1\")");
+        Assert.Empty(dynamic);
+
+        var dynamicCriteria = AccessExpressionProjector.FindStaticDomainFieldCandidates(
+            "=DLookUp(\"[Percent]\", \"qWeekly\", \"[WeeklyPlanID]=\" & [txtPlan])");
+        Assert.Equal(
+            [new AccessExpressionProjector.AccessStaticDomainFieldCandidate("qWeekly", "Percent", "selected")],
+            dynamicCriteria);
+    }
+
+    [Fact]
+    public void Malformed_bracketed_identifier_keeps_projection_partial()
+    {
+        const string expression = "=[unterminated + DLookUp(\"[Percent]\", \"qWeekly\")";
+
+        Assert.Empty(AccessExpressionProjector.FindStaticDomainFieldCandidates(expression));
+        var projected = AccessExpressionProjector.Project(expression, null, null);
+
+        Assert.Equal("partial", projected.Coverage);
+        Assert.Equal("AccessBindingExpressionPartial", projected.GapClassification);
+    }
+
+    [Fact]
+    public void Resolves_domain_criteria_from_dependency_scope_without_exposing_it_as_a_return_field()
+    {
+        const string queryKey = "query-weekly";
+        var objects = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["qWeekly"] = [(queryKey, "query")]
+        };
+        var outputs = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Percent"] = ["output-percent"]
+        };
+        var criteria = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Percent"] = ["output-percent"],
+            ["WeeklyPlanID"] = ["dependency-weekly-plan"]
+        };
+
+        var resolved = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
+            "=DLookUp([Percent], \"qWeekly\", \"[WeeklyPlanID]=[txtPlan]\")",
+            objects,
+            null,
+            new HashSet<string>(["txtPlan"], StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [queryKey] = outputs
+            },
+            domainCriteriaFieldSetsByObject:
+                new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+                {
+                    [queryKey] = criteria
+                });
+
+        Assert.Equal("complete", resolved.Coverage);
+        Assert.Equal(["output-percent"], resolved.SelectedFieldStableKeys);
+        Assert.Equal(["dependency-weekly-plan"], resolved.CriteriaFieldStableKeys);
+
+        var returnFieldStillMissing = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
+            "=DLookUp([WeeklyPlanID], \"qWeekly\")",
+            objects,
+            null,
+            fieldSetsByObject:
+                new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+                {
+                    [queryKey] = outputs
+                },
+            domainCriteriaFieldSetsByObject:
+                new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+                {
+                    [queryKey] = criteria
+                });
+        Assert.Equal("partial", returnFieldStillMissing.Coverage);
+        Assert.Equal("AccessBindingDomainSelectedFieldUnmatched", returnFieldStillMissing.GapClassification);
+        Assert.Empty(returnFieldStillMissing.SelectedFieldStableKeys);
+
+        criteria["WeeklyPlanID"] = ["candidate-one", "candidate-two"];
+        var ambiguousCriteria = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
+            "=DLookUp([Percent], \"qWeekly\", \"[WeeklyPlanID]=1\")",
+            objects,
+            null,
+            fieldSetsByObject:
+                new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+                {
+                    [queryKey] = outputs
+                },
+            domainCriteriaFieldSetsByObject:
+                new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+                {
+                    [queryKey] = criteria
+                });
+        Assert.Equal("AccessBindingDomainCriteriaFieldAmbiguous", ambiguousCriteria.GapClassification);
+    }
+
+    [Fact]
+    public void Reports_unmatched_domain_return_before_ambiguous_criteria()
+    {
+        const string queryKey = "query-weekly";
+        var projected = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
+            "=DLookUp([MissingReturn], \"qWeekly\", \"[WeeklyPlanID]=1\")",
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qWeekly"] = [(queryKey, "query")]
+            },
+            null,
+            fieldSetsByObject:
+                new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+                {
+                    [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                },
+            domainCriteriaFieldSetsByObject:
+                new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+                {
+                    [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["WeeklyPlanID"] = ["candidate-one", "candidate-two"]
+                    }
+                });
+
+        Assert.Equal("partial", projected.Coverage);
+        Assert.Equal("AccessBindingDomainSelectedFieldUnmatched", projected.GapClassification);
+        Assert.NotEmpty(projected.SelectedFieldReferenceHashes);
     }
 
     [Fact]
@@ -387,7 +538,7 @@ public sealed class AccessExpressionProjectorTests
             });
 
         Assert.Equal("partial", result.Coverage);
-        Assert.Equal("AccessBindingExpressionTargetAmbiguous", result.GapClassification);
+        Assert.Equal("AccessBindingDomainCriteriaFieldAmbiguous", result.GapClassification);
         Assert.Empty(result.SelectedFieldReferenceHashes);
         Assert.Empty(result.CriteriaFieldReferenceHashes);
     }
