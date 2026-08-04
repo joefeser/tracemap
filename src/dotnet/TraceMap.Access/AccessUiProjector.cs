@@ -58,7 +58,8 @@ internal static partial class AccessUiProjector
         IReadOnlyDictionary<string, IReadOnlyList<string>>? queryOutputStableKeys = null,
         IReadOnlyDictionary<string, string>? queryKindsByStableKey = null,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? vbaProcedureStableKeys = null,
-        IReadOnlyDictionary<string, string>? fieldCoverageByStableKey = null)
+        IReadOnlyDictionary<string, string>? fieldCoverageByStableKey = null,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? domainCriteriaFieldSetsByObject = null)
     {
         var surfaces = new List<AccessUiSurfaceProjection>();
         var gaps = new List<AccessGapProjection>();
@@ -88,7 +89,8 @@ internal static partial class AccessUiProjector
             var recordBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "record-source", raw.RecordSource, 0, knownObjects, null, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys,
                 vbaProcedureStableKeys: vbaProcedureStableKeys,
                 contextIdentifierNames: contextIdentifierNames,
-                fieldCoverageByStableKey: fieldCoverageByStableKey);
+                fieldCoverageByStableKey: fieldCoverageByStableKey,
+                domainCriteriaFieldSetsByObject: domainCriteriaFieldSetsByObject);
             if (recordBinding is not null) bindings.Add(recordBinding);
 
             IReadOnlyDictionary<string, IReadOnlyList<string>>? scopedFields = null;
@@ -109,12 +111,14 @@ internal static partial class AccessUiProjector
             var filterBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "filter", raw.Filter, 0, scopedObjects, scopedFields, gaps, disclosurePolicy,
                 fieldSetsByObject: fieldsByTable, vbaProcedureStableKeys: vbaProcedureStableKeys,
                 contextIdentifierNames: contextIdentifierNames,
-                fieldCoverageByStableKey: fieldCoverageByStableKey);
+                fieldCoverageByStableKey: fieldCoverageByStableKey,
+                domainCriteriaFieldSetsByObject: domainCriteriaFieldSetsByObject);
             if (filterBinding is not null) bindings.Add(filterBinding);
             var orderByBinding = ProjectBinding(databaseIdentitySeed, identity.StableKey, "order-by", raw.OrderBy, 0, scopedObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys,
                 vbaProcedureStableKeys: vbaProcedureStableKeys,
                 contextIdentifierNames: contextIdentifierNames,
-                fieldCoverageByStableKey: fieldCoverageByStableKey);
+                fieldCoverageByStableKey: fieldCoverageByStableKey,
+                domainCriteriaFieldSetsByObject: domainCriteriaFieldSetsByObject);
             if (orderByBinding is not null) bindings.Add(orderByBinding);
 
             var controls = new List<AccessControlProjection>();
@@ -127,25 +131,29 @@ internal static partial class AccessUiProjector
                     rawControl.Ordinal, scopedObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys,
                     recordBinding, raw.RecordSource, queryKindsByStableKey, knownObjects, vbaProcedureStableKeys,
                     contextIdentifierNames,
-                    fieldCoverageByStableKey);
+                    fieldCoverageByStableKey,
+                    domainCriteriaFieldSetsByObject);
                 if (controlSource is not null) controlBindings.Add(controlSource);
                 var rowSource = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "row-source", rawControl.RowSource,
                     rawControl.Ordinal, knownObjects, null, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys,
                     vbaProcedureStableKeys: vbaProcedureStableKeys,
                     contextIdentifierNames: contextIdentifierNames,
-                    fieldCoverageByStableKey: fieldCoverageByStableKey);
+                    fieldCoverageByStableKey: fieldCoverageByStableKey,
+                    domainCriteriaFieldSetsByObject: domainCriteriaFieldSetsByObject);
                 if (rowSource is not null) controlBindings.Add(rowSource);
                 var validation = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "validation-rule", rawControl.ValidationRule,
                     rawControl.Ordinal, scopedObjects, scopedFields, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys,
                     domainObjects: knownObjects, vbaProcedureStableKeys: vbaProcedureStableKeys,
                     contextIdentifierNames: contextIdentifierNames,
-                    fieldCoverageByStableKey: fieldCoverageByStableKey);
+                    fieldCoverageByStableKey: fieldCoverageByStableKey,
+                    domainCriteriaFieldSetsByObject: domainCriteriaFieldSetsByObject);
                 if (validation is not null) controlBindings.Add(validation);
                 var sourceObject = ProjectBinding(databaseIdentitySeed, controlIdentity.StableKey, "source-object", NormalizeSourceObject(rawControl.SourceObject),
                     rawControl.Ordinal, knownObjects, null, gaps, disclosurePolicy, controlNames, fieldsByTable, controlStableKeys,
                     vbaProcedureStableKeys: vbaProcedureStableKeys,
                     contextIdentifierNames: contextIdentifierNames,
-                    fieldCoverageByStableKey: fieldCoverageByStableKey);
+                    fieldCoverageByStableKey: fieldCoverageByStableKey,
+                    domainCriteriaFieldSetsByObject: domainCriteriaFieldSetsByObject);
                 if (sourceObject is not null) controlBindings.Add(sourceObject);
                 var masterCount = CountLinkFields(rawControl.LinkMasterFields);
                 var childCount = CountLinkFields(rawControl.LinkChildFields);
@@ -175,7 +183,8 @@ internal static partial class AccessUiProjector
                         contextIdentifierNames: childSurface.SurfaceKind.Equals("report", StringComparison.OrdinalIgnoreCase)
                             ? ReportContextIdentifiers
                             : null,
-                        fieldCoverageByStableKey: fieldCoverageByStableKey);
+                        fieldCoverageByStableKey: fieldCoverageByStableKey,
+                        domainCriteriaFieldSetsByObject: domainCriteriaFieldSetsByObject);
                     if (childRecord is { SourceKind: "direct-object", TargetStableKeys.Count: 1 }
                         && fieldsByTable.TryGetValue(childRecord.TargetStableKeys[0], out var resolvedChildFields))
                         childFields = resolvedChildFields;
@@ -274,7 +283,8 @@ internal static partial class AccessUiProjector
                             fieldsByTable,
                             controlStableKeys,
                             contextIdentifierNames: contextIdentifierNames,
-                            fieldCoverageByStableKey: fieldCoverageByStableKey)!;
+                            fieldCoverageByStableKey: fieldCoverageByStableKey,
+                            domainCriteriaFieldSetsByObject: domainCriteriaFieldSetsByObject)!;
                     return new AccessReportGroupProjection(
                         group.Ordinal,
                         binding,
@@ -354,7 +364,8 @@ internal static partial class AccessUiProjector
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? domainObjects = null,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? vbaProcedureStableKeys = null,
         IReadOnlySet<string>? contextIdentifierNames = null,
-        IReadOnlyDictionary<string, string>? fieldCoverageByStableKey = null)
+        IReadOnlyDictionary<string, string>? fieldCoverageByStableKey = null,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? domainCriteriaFieldSetsByObject = null)
     {
         var trimmed = value?.Trim() ?? string.Empty;
         if (trimmed.Length == 0) return null;
@@ -486,7 +497,7 @@ internal static partial class AccessUiProjector
                 AccessSafeValues.RoleHash($"access-{bindingKind}-expression", trimmed), trimmed.Length, [], "unknown", "partial");
         }
         var candidates = ResolveExpressionCandidates(trimmed, objects, fields, out var ambiguous);
-        var expression = AccessExpressionProjector.Project(
+        var expression = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
             trimmed,
             objects,
             fields,
@@ -495,7 +506,8 @@ internal static partial class AccessUiProjector
             controlStableKeys,
             domainObjects,
             vbaProcedureStableKeys,
-            contextIdentifierNames);
+            contextIdentifierNames,
+            domainCriteriaFieldSetsByObject);
         var expressionTargets = candidates
             .Concat(expression.QueryStableKeys)
             .Concat(expression.FieldStableKeys)

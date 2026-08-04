@@ -21,7 +21,30 @@ public static partial class AccessExpressionProjector
         IReadOnlyDictionary<string, IReadOnlyList<string>>? controlStableKeys = null,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? domainObjects = null,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? vbaProcedureStableKeys = null,
-        IReadOnlySet<string>? contextIdentifierNames = null)
+        IReadOnlySet<string>? contextIdentifierNames = null) =>
+        ProjectWithDomainCriteriaFields(
+            expression,
+            objects,
+            fields,
+            controlNames,
+            fieldSetsByObject,
+            controlStableKeys,
+            domainObjects,
+            vbaProcedureStableKeys,
+            contextIdentifierNames,
+            null);
+
+    internal static AccessExpressionProjection ProjectWithDomainCriteriaFields(
+        string expression,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? objects,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? fields,
+        IReadOnlySet<string>? controlNames = null,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? fieldSetsByObject = null,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? controlStableKeys = null,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? domainObjects = null,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? vbaProcedureStableKeys = null,
+        IReadOnlySet<string>? contextIdentifierNames = null,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? domainCriteriaFieldSetsByObject = null)
     {
         var normalized = expression.Trim();
         var functionMatches = FunctionPattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
@@ -60,10 +83,14 @@ public static partial class AccessExpressionProjector
         }
         var unresolved = false;
         var ambiguous = false;
+        var domainSelectedFieldUnresolved = false;
+        var domainCriteriaFieldUnresolved = false;
+        var domainCriteriaFieldAmbiguous = false;
         var domainFieldCatalogIncomplete = false;
+        var malformedBracketedIdentifier = HasUnbalancedBracketedIdentifier(normalized);
         var domainSyntaxMatches = DomainNamePattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
         var domainMatches = FindDomainCalls(normalized, domainSyntaxMatches);
-        unresolved |= domainSyntaxMatches.Count != domainMatches.Count;
+        unresolved |= malformedBracketedIdentifier || domainSyntaxMatches.Count != domainMatches.Count;
 
         foreach (Match literal in LiteralPattern().Matches(MaskBracketedIdentifiers(normalized)))
             literals.Add(literal.Groups["kind"].Value.StartsWith('"') ? "string" : "number");
@@ -141,6 +168,7 @@ public static partial class AccessExpressionProjector
                 if (selectedResolution == FieldResolution.Missing)
                 {
                     AddIdentifierReferenceHash(args[0], "access-expression-selected-field", selectedFieldRefs);
+                    domainSelectedFieldUnresolved |= queryCandidate is not null;
                     unresolved = true;
                 }
                 else if (selectedResolution == FieldResolution.Ambiguous)
@@ -148,16 +176,23 @@ public static partial class AccessExpressionProjector
                 if (queryCandidate is null) unresolved = true;
                 if (args.Count >= 3)
                 {
+                    var domainCriteriaFields = queryCandidate is not null
+                        && domainCriteriaFieldSetsByObject?.TryGetValue(queryCandidate, out var criteriaFieldsForQuery) == true
+                            ? criteriaFieldsForQuery
+                            : domainFields;
                     var criteriaExpression = args[2].Trim().Trim('"');
                     var externalMatches = ExternalReferencePattern().Matches(criteriaExpression);
                     AddExternalReferences(externalMatches, externalRefs);
                     foreach (var candidate in ExtractIdentifiers(MaskMatches(criteriaExpression, externalMatches)))
                     {
                         var criteriaResolution = queryCandidate is not null
-                            ? ResolveField(candidate, domainFields, criteriaFields)
+                            ? ResolveField(candidate, domainCriteriaFields, criteriaFields)
                             : FieldResolution.Missing;
                         if (criteriaResolution == FieldResolution.Ambiguous)
+                        {
+                            domainCriteriaFieldAmbiguous = true;
                             ambiguous = true;
+                        }
                         var controlMatched = false;
                         if (controlStableKeys?.TryGetValue(candidate, out var stableControlCandidates) == true)
                         {
@@ -176,6 +211,7 @@ public static partial class AccessExpressionProjector
                         else if (criteriaResolution == FieldResolution.Missing && !controlMatched)
                         {
                             AddIdentifierReferenceHash(candidate, "access-expression-criteria-field", criteriaFieldRefs);
+                            domainCriteriaFieldUnresolved = true;
                             unresolved = true;
                         }
                     }
@@ -199,8 +235,11 @@ public static partial class AccessExpressionProjector
         var coverage = dynamic || ambiguous || unresolved || unresolvedFunction || domainFieldCatalogIncomplete ? "partial" : "complete";
         var gap = dynamic ? "AccessBindingExpressionDynamic"
             : unresolvedFunction ? "AccessBindingExpressionFunctionUnresolved"
-            : ambiguous ? "AccessBindingExpressionTargetAmbiguous"
             : domainFieldCatalogIncomplete ? "AccessBindingDomainFieldCatalogIncomplete"
+            : domainSelectedFieldUnresolved ? "AccessBindingDomainSelectedFieldUnmatched"
+            : domainCriteriaFieldAmbiguous ? "AccessBindingDomainCriteriaFieldAmbiguous"
+            : ambiguous ? "AccessBindingExpressionTargetAmbiguous"
+            : domainCriteriaFieldUnresolved ? "AccessBindingDomainCriteriaFieldUnmatched"
             : unresolved ? "AccessBindingExpressionPartial"
             : null;
         return new(
@@ -222,6 +261,41 @@ public static partial class AccessExpressionProjector
             coverage,
             runtimeValueDependent ? "partial" : "complete",
             gap);
+    }
+
+    internal static IReadOnlyList<AccessStaticDomainFieldCandidate> FindStaticDomainFieldCandidates(
+        string expression)
+    {
+        var normalized = expression.Trim();
+        var calls = FindDomainCalls(
+            normalized,
+            DomainNamePattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized)));
+        var references = new HashSet<AccessStaticDomainFieldCandidate>(
+            DomainFieldReferenceComparer.Instance);
+        foreach (var call in calls)
+        {
+            var args = SplitArguments(call.Args);
+            if (args.Count < 2
+                || !TryStaticArgumentIdentifier(args[1], requireQuoted: true, out var domainName))
+                continue;
+
+            if (!call.Name.Equals("DCount", StringComparison.OrdinalIgnoreCase)
+                || NormalizeArgumentIdentifier(args[0]) != "*")
+            {
+                if (TryStaticArgumentIdentifier(args[0], requireQuoted: false, out var selectedField))
+                    references.Add(new(domainName, selectedField, "selected"));
+            }
+
+            if (args.Count < 3 || !TryGetStaticStringLiteral(args[2], out var criteriaExpression)) continue;
+            var externalMatches = ExternalReferencePattern().Matches(criteriaExpression);
+            foreach (var fieldName in ExtractIdentifiers(MaskMatches(criteriaExpression, externalMatches)))
+                references.Add(new(domainName, fieldName, "criteria"));
+        }
+        return references
+            .OrderBy(item => item.DomainName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.FieldName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.ReferenceKind, StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static FieldResolution ResolveField(string value, IReadOnlyDictionary<string, IReadOnlyList<string>>? fields, ISet<string> output)
@@ -291,6 +365,70 @@ public static partial class AccessExpressionProjector
         if (normalized.Length >= 2 && normalized[0] == '[' && normalized[^1] == ']')
             normalized = normalized[1..^1].Trim();
         return normalized;
+    }
+
+    private static bool TryStaticArgumentIdentifier(
+        string value,
+        bool requireQuoted,
+        out string identifier)
+    {
+        identifier = NormalizeArgumentIdentifier(value);
+        if (identifier.Length == 0) return false;
+        var trimmed = value.Trim();
+        var quoted = trimmed.Length >= 2 && trimmed[0] == '"' && trimmed[^1] == '"';
+        var bracketed = trimmed.Length >= 2 && trimmed[0] == '[' && trimmed[^1] == ']';
+        if (requireQuoted ? !quoted : !quoted && !bracketed) return false;
+        return identifier.All(character => !char.IsControl(character))
+            && identifier.IndexOfAny(['"', '\'', '[', ']', '!', '&', '(', ')', ',']) < 0;
+    }
+
+    private static bool TryGetStaticStringLiteral(string value, out string literal)
+    {
+        literal = string.Empty;
+        var trimmed = value.Trim();
+        if (trimmed.Length < 2 || trimmed[0] != '"' || trimmed[^1] != '"') return false;
+        var builder = new System.Text.StringBuilder(trimmed.Length - 2);
+        for (var index = 1; index < trimmed.Length - 1; index++)
+        {
+            if (trimmed[index] != '"')
+            {
+                builder.Append(trimmed[index]);
+                continue;
+            }
+            if (index + 1 < trimmed.Length - 1 && trimmed[index + 1] == '"')
+            {
+                builder.Append('"');
+                index++;
+                continue;
+            }
+            return false;
+        }
+        literal = builder.ToString();
+        return true;
+    }
+
+    private static bool HasUnbalancedBracketedIdentifier(string value)
+    {
+        var inString = false;
+        var inBracket = false;
+        for (var index = 0; index < value.Length; index++)
+        {
+            var current = value[index];
+            if (current == '"' && !inBracket)
+            {
+                if (inString && index + 1 < value.Length && value[index + 1] == '"')
+                {
+                    index++;
+                    continue;
+                }
+                inString = !inString;
+            }
+            else if (!inString && current == '[')
+                inBracket = true;
+            else if (!inString && current == ']' && inBracket)
+                inBracket = false;
+        }
+        return inBracket;
     }
 
     private static string MaskMatches(string value, MatchCollection matches)
@@ -423,6 +561,31 @@ public static partial class AccessExpressionProjector
     }
 
     private sealed record DomainCall(int Index, int Length, string Name, string Args);
+
+    internal sealed record AccessStaticDomainFieldCandidate(
+        string DomainName,
+        string FieldName,
+        string ReferenceKind);
+
+    private sealed class DomainFieldReferenceComparer : IEqualityComparer<AccessStaticDomainFieldCandidate>
+    {
+        public static readonly DomainFieldReferenceComparer Instance = new();
+
+        public bool Equals(
+            AccessStaticDomainFieldCandidate? left,
+            AccessStaticDomainFieldCandidate? right) =>
+            left is not null
+            && right is not null
+            && StringComparer.OrdinalIgnoreCase.Equals(left.DomainName, right.DomainName)
+            && StringComparer.OrdinalIgnoreCase.Equals(left.FieldName, right.FieldName)
+            && StringComparer.Ordinal.Equals(left.ReferenceKind, right.ReferenceKind);
+
+        public int GetHashCode(AccessStaticDomainFieldCandidate value) =>
+            HashCode.Combine(
+                StringComparer.OrdinalIgnoreCase.GetHashCode(value.DomainName),
+                StringComparer.OrdinalIgnoreCase.GetHashCode(value.FieldName),
+                StringComparer.Ordinal.GetHashCode(value.ReferenceKind));
+    }
 
     [GeneratedRegex(@"\b(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex FunctionPattern();
