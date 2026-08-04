@@ -6,4 +6,4 @@
 - [x] Add regression coverage and update rule limitations.
 - [x] Regenerate the immutable private snapshot and remainder workbook.
 - [x] Run focused and full validation.
-- [ ] Commit, push, and open a focused PR to `dev` without merging.
+- [x] Commit, push, and open a focused PR to `dev` without merging.

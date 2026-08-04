@@ -9,3 +9,4 @@
 - Private regeneration: two independent runs each emitted 8,984 facts; `facts.ndjson` and `scan-manifest.json` are byte-identical. The 19 prior generic cases now comprise 12 `AccessBindingDomainCrosstabPivotPrefixMismatch`, three `AccessBindingDomainSelectedFieldDependencyAmbiguous`, and four `AccessBindingDomainCriteriaFieldAmbiguous` gaps.
 - Workbook: refreshed private remainder register preserves seven owner dispositions and 27 active cases; all sheets render and contain no formula errors.
 - Deferred: runtime lookup results, dynamic domain/criteria construction, and any alias equivalence not proven by existing source-to-output lineage.
+- PR: #587 targets `dev`; no merge is authorized by this goal.
