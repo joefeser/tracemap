@@ -1285,16 +1285,11 @@ public static class AccessDesignEvidenceComposer
         IReadOnlyDictionary<string, string> queryKinds)
     {
         var result = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
-        foreach (var group in facts
-                     .Where(fact => fact.FactType == FactTypes.AccessQueryCrosstabLineageCandidate
-                         && fact.SourceSymbol is not null
-                         && queryKinds.GetValueOrDefault(fact.SourceSymbol) == "crosstab")
-                     .GroupBy(fact => fact.SourceSymbol!, StringComparer.Ordinal))
+        foreach (var group in StaticCrosstabPivotEntries(facts, queryKinds)
+                     .GroupBy(item => item.QueryStableKey, StringComparer.Ordinal))
         {
             var hashes = group
-                .SelectMany(fact => (fact.Properties.GetValueOrDefault("staticColumnHashes") ?? string.Empty)
-                    .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                .Where(hash => hash.Length == 64 && hash.All(Uri.IsHexDigit))
+                .Select(item => item.Hash)
                 .Distinct(StringComparer.Ordinal)
                 .ToHashSet(StringComparer.Ordinal);
             if (hashes.Count > 0)
@@ -1308,17 +1303,11 @@ public static class AccessDesignEvidenceComposer
         IReadOnlyDictionary<string, string> queryKinds)
     {
         var result = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal);
-        foreach (var group in facts
-                     .Where(fact => fact.FactType == FactTypes.AccessQueryCrosstabLineageCandidate
-                         && fact.SourceSymbol is not null
-                         && queryKinds.GetValueOrDefault(fact.SourceSymbol) == "crosstab")
-                     .GroupBy(fact => fact.SourceSymbol!, StringComparer.Ordinal))
+        foreach (var group in StaticCrosstabPivotEntries(facts, queryKinds)
+                     .GroupBy(item => item.QueryStableKey, StringComparer.Ordinal))
         {
             var byHash = group
-                .SelectMany(fact => (fact.Properties.GetValueOrDefault("staticColumnHashes") ?? string.Empty)
-                    .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .Where(hash => hash.Length == 64 && hash.All(Uri.IsHexDigit))
-                    .Select(hash => (Hash: hash, fact.FactId)))
+                .Select(item => (item.Hash, item.FactId))
                 .GroupBy(item => item.Hash, StringComparer.Ordinal)
                 .OrderBy(item => item.Key, StringComparer.Ordinal)
                 .ToDictionary(
@@ -1333,6 +1322,23 @@ public static class AccessDesignEvidenceComposer
         }
         return result;
     }
+
+    private static IReadOnlyList<(string QueryStableKey, string Hash, string FactId)> StaticCrosstabPivotEntries(
+        IReadOnlyList<CodeFact> facts,
+        IReadOnlyDictionary<string, string> queryKinds) =>
+        facts
+            .Where(fact => fact.FactType == FactTypes.AccessQueryCrosstabLineageCandidate
+                && fact.SourceSymbol is not null
+                && queryKinds.GetValueOrDefault(fact.SourceSymbol) == "crosstab")
+            .SelectMany(fact => (fact.Properties.GetValueOrDefault("staticColumnHashes") ?? string.Empty)
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(hash => hash.Length == 64 && hash.All(Uri.IsHexDigit))
+                .Select(hash => (fact.SourceSymbol!, Hash: hash, fact.FactId)))
+            .OrderBy(item => item.Item1, StringComparer.Ordinal)
+            .ThenBy(item => item.Hash, StringComparer.Ordinal)
+            .ThenBy(item => item.FactId, StringComparer.Ordinal)
+            .Select(item => (QueryStableKey: item.Item1, item.Hash, item.FactId))
+            .ToArray();
 
     internal static IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> BuildDomainCriteriaFieldSets(
         IReadOnlyList<CodeFact> facts,

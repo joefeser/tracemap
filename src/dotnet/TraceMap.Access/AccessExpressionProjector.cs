@@ -52,6 +52,7 @@ public static partial class AccessExpressionProjector
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? domainCriteriaFieldSetsByObject = null)
     {
         var normalized = expression.Trim();
+        var delimitersBalanced = HasBalancedExpressionDelimiters(normalized);
         var functionMatches = FunctionPattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
         var functionNames = functionMatches
             .Select(match => match.Groups["name"].Value)
@@ -79,7 +80,7 @@ public static partial class AccessExpressionProjector
         var vbaProcedureKeys = new SortedSet<string>(StringComparer.Ordinal);
         var literals = new SortedSet<string>(StringComparer.Ordinal);
         var unresolvedFunction = false;
-        var malformedPredicateOperator = !HasBalancedExpressionDelimiters(normalized) || functionMatches
+        var malformedPredicateOperator = !delimitersBalanced || functionMatches
             .Where(match => PredicateOperatorKeywords.Contains(match.Groups["name"].Value))
             .Any(match => !HasCompleteParenthesizedOperand(normalized, match));
         foreach (var functionName in functionNames.Where(name => !Functions.Contains(name)))
@@ -102,7 +103,9 @@ public static partial class AccessExpressionProjector
         var domainFieldCatalogIncomplete = false;
         var malformedBracketedIdentifier = HasUnbalancedBracketedIdentifier(normalized);
         var domainSyntaxMatches = DomainNamePattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
-        var domainMatches = FindDomainCalls(normalized, domainSyntaxMatches);
+        var domainMatches = delimitersBalanced
+            ? FindDomainCalls(normalized, domainSyntaxMatches)
+            : [];
         unresolved |= malformedBracketedIdentifier || domainSyntaxMatches.Count != domainMatches.Count;
 
         foreach (Match literal in LiteralPattern().Matches(MaskBracketedIdentifiers(normalized)))
@@ -300,6 +303,7 @@ public static partial class AccessExpressionProjector
         string expression)
     {
         var normalized = expression.Trim();
+        if (!HasBalancedExpressionDelimiters(normalized)) return [];
         var calls = FindDomainCalls(
             normalized,
             DomainNamePattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized)));

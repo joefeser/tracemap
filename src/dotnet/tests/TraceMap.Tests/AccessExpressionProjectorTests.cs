@@ -125,6 +125,32 @@ public sealed class AccessExpressionProjectorTests
     }
 
     [Fact]
+    public void Malformed_domain_lookup_delimiters_do_not_seed_field_candidates()
+    {
+        const string expression = "=DLookUp(\"[4]\",\"qPivot\") ]";
+        var queryKey = "query-pivot";
+        var result = AccessExpressionProjector.Project(
+            expression,
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qPivot"] = [(queryKey, "query")]
+            },
+            null,
+            fieldSetsByObject: new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["4"] = ["field-four"]
+                }
+            });
+
+        Assert.Equal("partial", result.Coverage);
+        Assert.Empty(result.QueryStableKeys);
+        Assert.Empty(result.SelectedFieldStableKeys);
+        Assert.Empty(AccessExpressionProjector.FindStaticDomainFieldCandidates(expression));
+    }
+
+    [Fact]
     public void Finds_only_static_domain_selected_and_criteria_field_references()
     {
         var references = AccessExpressionProjector.FindStaticDomainFieldCandidates(
