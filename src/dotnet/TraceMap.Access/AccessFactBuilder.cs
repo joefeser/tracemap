@@ -14,10 +14,16 @@ public static class AccessFactBuilder
             throw new AccessScanException("AccessProjectionHashMismatch");
 
         if (limits.MaxFacts < 1 || limits.MaxGaps < 1) throw new AccessScanException("AccessInvalidLimitConfiguration");
-        var gapsTruncated = projection.Gaps.Count > limits.MaxGaps;
-        var projectedGaps = projection.Gaps
+        var distinctProjectedGaps = projection.Gaps
+            .GroupBy(gap => (gap.Classification, gap.ScopeKind, gap.StableScopeKey, gap.RuleId))
+            .Select(group => group.First())
             .OrderBy(gap => gap.Classification, StringComparer.Ordinal)
+            .ThenBy(gap => gap.ScopeKind, StringComparer.Ordinal)
             .ThenBy(gap => gap.StableScopeKey, StringComparer.Ordinal)
+            .ThenBy(gap => gap.RuleId, StringComparer.Ordinal)
+            .ToArray();
+        var gapsTruncated = distinctProjectedGaps.Length > limits.MaxGaps;
+        var projectedGaps = distinctProjectedGaps
             .Take(gapsTruncated ? Math.Max(0, limits.MaxGaps - 1) : limits.MaxGaps)
             .ToList();
         if (gapsTruncated)
@@ -442,16 +448,6 @@ public static class AccessFactBuilder
                     ("limitations", "inventory-only;body-protected-omitted;no-open-export-execution-or-command-semantics"))));
         }
 
-        var declarationFactIdsByStableKey = facts
-            .Where(fact => fact.TargetSymbol is not null)
-            .GroupBy(fact => fact.TargetSymbol!, StringComparer.Ordinal)
-            .ToDictionary(
-                group => group.Key,
-                group => (IReadOnlyList<string>)group.Select(fact => fact.FactId)
-                    .Distinct(StringComparer.Ordinal)
-                    .OrderBy(factId => factId, StringComparer.Ordinal)
-                    .ToArray(),
-                StringComparer.Ordinal);
         var bindingDeclarationFactIdsByStableKey = facts
             .Where(fact => fact.FactType == FactTypes.AccessBindingDeclared
                 && fact.Properties.TryGetValue("stableBindingKey", out _))
@@ -479,9 +475,6 @@ public static class AccessFactBuilder
             else if (gap.ScopeKind == "binding" && gap.StableScopeKey is not null
                 && bindingDeclarationFactIdsByStableKey.TryGetValue(gap.StableScopeKey, out var bindingFactIds))
                 supportingFactIds = bindingFactIds;
-            else if (gap.ScopeKind != "query-output-field" && gap.StableScopeKey is not null
-                && declarationFactIdsByStableKey.TryGetValue(gap.StableScopeKey, out var declarationFactIds))
-                supportingFactIds = declarationFactIds;
             var emittedScopeKind = gap.ScopeKind == "query-output-field"
                 && supportingQueryStableKey is null
                     ? "query-output-field-owner-unknown"

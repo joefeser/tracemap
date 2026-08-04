@@ -1448,6 +1448,50 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Repeated_controls_for_the_same_child_surface_reuse_child_field_projection()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('7', 40), "fixture.accdb", "hash");
+        var table = AccessSafeValues.Identity(seed, "table", "Users");
+        var child = AccessSafeValues.Identity(seed, "form", "frmChild");
+        var field = AccessSafeValues.Identity(seed, $"field-{table.StableKey}", "UserId");
+        var knownObjects = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Users"] = [(table.StableKey, "table")],
+            ["frmChild"] = [(child.StableKey, "form")]
+        };
+        var fields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            [table.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["UserId"] = [field.StableKey]
+            }
+        };
+        AccessRawUiSurface Child() => new("frmChild", "form", false, "SELECT Users.* FROM Users", [], [], Coverage: "partial");
+        AccessRawControl Control(string name, int ordinal) =>
+            new(name, ordinal, 112, null, null, [], SourceObject: "Form.frmChild", LinkChildFields: "UserId");
+
+        var one = AccessUiProjector.Project(
+            seed,
+            [new("frmParent", "form", false, null, [Control("subChildOne", 0)], []), Child()],
+            knownObjects,
+            fields,
+            completeTableFieldCatalogStableKeys: new HashSet<string>([table.StableKey], StringComparer.Ordinal));
+        var two = AccessUiProjector.Project(
+            seed,
+            [new("frmParent", "form", false, null, [Control("subChildOne", 0), Control("subChildTwo", 1)], []), Child()],
+            knownObjects,
+            fields,
+            completeTableFieldCatalogStableKeys: new HashSet<string>([table.StableKey], StringComparer.Ordinal));
+
+        Assert.Equal(
+            one.Gaps.Count(gap => gap.Classification == "AccessBindingInlineSqlProjectionPartial"),
+            two.Gaps.Count(gap => gap.Classification == "AccessBindingInlineSqlProjectionPartial"));
+        Assert.All(
+            two.Surfaces.Single(surface => surface.Identity.DisplayName == "frmParent").Controls,
+            control => Assert.Equal("partial", Assert.Single(control.Bindings, binding => binding.BindingKind == "link-child-field-0").Coverage));
+    }
+
+    [Fact]
     public void Inline_record_source_limits_field_scope_to_selected_outputs()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('2', 40), "fixture.accdb", "hash");
