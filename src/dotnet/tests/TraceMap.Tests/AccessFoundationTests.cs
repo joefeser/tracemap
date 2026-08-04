@@ -176,6 +176,31 @@ public sealed class AccessFoundationTests
         Assert.Equal(["fact-output-source"], supportingFacts[aliasCandidate]);
         Assert.Equal(sourceStableKey, Assert.Single(criteriaFieldsByName[queryStableKey]["WeeklyPlanID"]));
 
+        var binding = new AccessBindingProjection(
+            new(null, "binding-hash", "access-binding-test"),
+            "access-control-test",
+            "control-source",
+            "calculated-expression",
+            null,
+            0,
+            [aliasCandidate],
+            "query-field",
+            "partial");
+        AccessDesignEvidenceComposer.PropagateBindingSupportingFactIds(
+            new(
+                [new(
+                    new(null, "surface-hash", "access-form-test"),
+                    "form",
+                    "present",
+                    "bound",
+                    "design-hash",
+                    [binding],
+                    [],
+                    [])],
+                []),
+            supportingFacts);
+        Assert.Equal(["fact-output-source"], supportingFacts[binding.Identity.StableKey]);
+
         fieldsByName[queryStableKey].Remove("WeeklyPlanID");
         criteriaFieldsByName.Clear();
         fieldCoverage[outputStableKey] = "partial";
@@ -1331,6 +1356,12 @@ public sealed class AccessFoundationTests
         Assert.Null(projection.Outputs[1].NameHash);
         Assert.True(AccessQueryProjector.HasStaticOutputName(
             "SELECT TargetTable.Id AS Identifier FROM TargetTable;", "Identifier"));
+
+        var malformed = AccessQueryProjector.ProjectStaticSelect(
+            "SELECT TargetTable.Id AS Identifier FROM TargetTable WHERE (", known, fields);
+        Assert.Equal("partial", malformed.Coverage);
+        Assert.Equal("partial", malformed.OutputCoverage);
+        Assert.Equal("partial", malformed.RuntimeValueCoverage);
     }
 
     [Fact]

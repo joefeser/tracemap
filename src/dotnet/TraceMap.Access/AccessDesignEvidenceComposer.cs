@@ -650,6 +650,7 @@ public static class AccessDesignEvidenceComposer
             fieldCoverageByStableKey,
             domainCriteriaFields,
             completeTableFieldCatalogStableKeys);
+        PropagateBindingSupportingFactIds(ui, supportingFactIdsByStableKey);
         var rowSourceContexts = ui.Surfaces
             .SelectMany(surface => surface.Controls.SelectMany(control =>
             {
@@ -830,6 +831,24 @@ public static class AccessDesignEvidenceComposer
             .ToArray();
         foreach (var record in bundle.Records) support.TryAdd(record.CanonicalRecordId, [record]);
         return new(ui, vba, macros, gaps, support, supportingFactIdsByStableKey);
+    }
+
+    internal static void PropagateBindingSupportingFactIds(
+        AccessUiProjectionResult ui,
+        Dictionary<string, IReadOnlyList<string>> supportingFactIdsByStableKey)
+    {
+        var bindings = ui.Surfaces.SelectMany(surface =>
+            surface.Bindings.Concat(surface.Controls.SelectMany(control => control.Bindings)));
+        foreach (var binding in bindings)
+        {
+            var supportingFactIds = binding.TargetStableKeys
+                .SelectMany(target => supportingFactIdsByStableKey.GetValueOrDefault(target) ?? [])
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            if (supportingFactIds.Length > 0)
+                supportingFactIdsByStableKey[binding.Identity.StableKey] = supportingFactIds;
+        }
     }
 
     internal static IReadOnlySet<string> BuildCompleteTableFieldCatalogStableKeys(
