@@ -158,7 +158,7 @@ internal static class AccessDesignReviewComposer
             FactTypes.AccessFormDeclared => ("form", DesignMetadata(fact.Properties, "surfaceKind", "modulePresence", "boundState", "controlCount", "coverageLabel"), DesignClassification(fact.Properties)),
             FactTypes.AccessReportDeclared => ("report", DesignMetadata(fact.Properties, "surfaceKind", "modulePresence", "boundState", "controlCount", "coverageLabel"), DesignClassification(fact.Properties)),
             FactTypes.AccessControlDeclared => ("control", DesignMetadata(fact.Properties, "controlType", "ordinal", "valueBindingClassification", "populationSourceType", "populationTargetStableKeys", "populationCoverage", "boundColumn", "selectedProjectionOrdinals", "selectedValueStableKeys", "persistenceTargetStableKeys", "functionalRole", "coverageLabel"), DesignClassification(fact.Properties)),
-            FactTypes.AccessBindingDeclared => ("binding", DesignMetadata(fact.Properties, "bindingKind", "sourceKind", "targetKind", "expressionClassification", "expressionCoverage", "expressionGapClassification", "runtimeValueCoverage", "expressionFieldStableKeys", "expressionControlStableKeys", "expressionControlReferenceHashes", "expressionExternalReferenceHashes", "expressionQueryStableKeys", "expressionSelectedFieldStableKeys", "expressionSelectedFieldReferenceHashes", "expressionCriteriaFieldStableKeys", "expressionCriteriaFieldReferenceHashes", "coverageLabel"), DesignClassification(fact.Properties)),
+            FactTypes.AccessBindingDeclared => ("binding", DesignMetadata(fact.Properties, "bindingKind", "sourceKind", "targetKind", "expressionClassification", "expressionCoverage", "expressionGapClassification", "runtimeValueCoverage", "expressionFieldStableKeys", "expressionControlStableKeys", "expressionControlReferenceHashes", "expressionExternalReferenceHashes", "expressionQueryStableKeys", "expressionSelectedFieldStableKeys", "expressionSelectedFieldReferenceHashes", "expressionCriteriaFieldStableKeys", "expressionCriteriaFieldReferenceHashes", "coverageLabel"), BindingDesignClassification(fact.Properties)),
             FactTypes.AccessVbaModuleDeclared => ("vba-module", DesignMetadata(fact.Properties, "moduleKind", "lineCount", "procedureCount", "coverageLabel"), DesignClassification(fact.Properties)),
             FactTypes.AccessVbaProcedureDeclared => ("vba-procedure", DesignMetadata(fact.Properties, "procedureKind", "callCount", "coverageLabel"), DesignClassification(fact.Properties)),
             FactTypes.AccessNavigationCandidate => ("navigation-candidate", DesignMetadata(fact.Properties, "callKind", "targetKind", "coverageLabel"), DesignClassification(fact.Properties)),
@@ -355,6 +355,12 @@ internal static class AccessDesignReviewComposer
         properties.GetValueOrDefault("coverageLabel") is "complete" or "structured-design-observed"
             ? ReleaseReviewClassifications.NoActionableEvidence
             : ReleaseReviewClassifications.ReviewRecommended;
+
+    private static string BindingDesignClassification(IReadOnlyDictionary<string, string> properties) =>
+        !string.IsNullOrWhiteSpace(properties.GetValueOrDefault("expressionGapClassification"))
+        && !string.Equals(properties.GetValueOrDefault("expressionGapClassification"), "none", StringComparison.OrdinalIgnoreCase)
+            ? ReleaseReviewClassifications.ReviewRecommended
+            : DesignClassification(properties);
 
     private static string Coverage(CodeFact fact, IReadOnlyList<KeyValuePair<string, string>> metadata) =>
         metadata.FirstOrDefault(pair => pair.Key is "coverageLabel" or "referenceCoverage").Value

@@ -95,6 +95,7 @@ public sealed class AccessMacroReportingTests
         Assert.Contains(finding.Metadata, pair => pair.Key == "runtimeValueCoverage" && pair.Value == "partial");
         Assert.Contains(finding.Metadata, pair => pair.Key == "expressionGapClassification"
             && pair.Value == "AccessBindingDomainSelectedFieldDependencyOnly");
+        Assert.Equal(ReleaseReviewClassifications.ReviewRecommended, finding.Classification);
     }
 
     [Fact]

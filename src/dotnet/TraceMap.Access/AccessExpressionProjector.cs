@@ -79,7 +79,7 @@ public static partial class AccessExpressionProjector
         var vbaProcedureKeys = new SortedSet<string>(StringComparer.Ordinal);
         var literals = new SortedSet<string>(StringComparer.Ordinal);
         var unresolvedFunction = false;
-        var malformedPredicateOperator = functionMatches
+        var malformedPredicateOperator = !HasBalancedExpressionDelimiters(normalized) || functionMatches
             .Where(match => PredicateOperatorKeywords.Contains(match.Groups["name"].Value))
             .Any(match => !HasCompleteParenthesizedOperand(normalized, match));
         foreach (var functionName in functionNames.Where(name => !Functions.Contains(name)))
@@ -470,10 +470,56 @@ public static partial class AccessExpressionProjector
             }
             else if (!inString && current == '[')
                 inBracket = true;
-            else if (!inString && current == ']' && inBracket)
+            else if (!inString && current == ']')
+            {
+                if (!inBracket) return true;
                 inBracket = false;
+            }
         }
         return inBracket;
+    }
+
+    private static bool HasBalancedExpressionDelimiters(string value)
+    {
+        var quote = '\0';
+        var bracketDepth = 0;
+        var parenthesisDepth = 0;
+        for (var index = 0; index < value.Length; index++)
+        {
+            var current = value[index];
+            if (quote != '\0')
+            {
+                if (current != quote) continue;
+                if (index + 1 < value.Length && value[index + 1] == quote)
+                    index++;
+                else
+                    quote = '\0';
+                continue;
+            }
+            if (current is '\'' or '"')
+            {
+                quote = current;
+                continue;
+            }
+            if (current == '[')
+            {
+                if (bracketDepth > 0) return false;
+                bracketDepth = 1;
+                continue;
+            }
+            if (current == ']')
+            {
+                if (bracketDepth == 0) return false;
+                bracketDepth = 0;
+                continue;
+            }
+            if (bracketDepth > 0) continue;
+            if (current == '(')
+                parenthesisDepth++;
+            else if (current == ')' && --parenthesisDepth < 0)
+                return false;
+        }
+        return quote == '\0' && bracketDepth == 0 && parenthesisDepth == 0;
     }
 
     private static string MaskMatches(string value, MatchCollection matches)
@@ -522,8 +568,9 @@ public static partial class AccessExpressionProjector
                 hasContent = true;
                 continue;
             }
-            if (current == ']' && bracketDepth > 0)
+            if (current == ']')
             {
+                if (bracketDepth == 0) return false;
                 bracketDepth--;
                 continue;
             }
@@ -538,7 +585,14 @@ public static partial class AccessExpressionProjector
                 hasContent = true;
             }
             else if (current == ')' && --depth == 0)
-                return hasContent && quote == '\0' && bracketDepth == 0;
+            {
+                if (!hasContent || quote != '\0' || bracketDepth != 0) return false;
+                if (!match.Groups["name"].Value.Equals("exists", StringComparison.OrdinalIgnoreCase))
+                    return true;
+                var operand = value[(open + 1)..index];
+                return IdentifierPattern().Matches(MaskLiterals(operand))
+                    .Any(candidate => !IsKeywordIdentifier(candidate.Groups["name"].Value));
+            }
             else if (!char.IsWhiteSpace(current)) hasContent = true;
         }
         return false;

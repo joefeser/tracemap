@@ -72,6 +72,10 @@ public sealed class AccessExpressionProjectorTests
         var bracketed = AccessExpressionProjector.Project("=[In] + [Exists]", null, fields);
         var incompleteIn = AccessExpressionProjector.Project("=[Status] IN (", null, fields);
         var emptyExists = AccessExpressionProjector.Project("=EXISTS ()", null, fields);
+        var strayBracket = AccessExpressionProjector.Project("=EXISTS ([Status]])", null, fields);
+        var strayParenthesis = AccessExpressionProjector.Project("=EXISTS ([Status]))", null, fields);
+        var literalExists = AccessExpressionProjector.Project("=EXISTS (1)", null, fields);
+        var literalIn = AccessExpressionProjector.Project("=[Status] IN (1)", null, fields);
 
         Assert.Equal("complete", bracketed.Coverage);
         Assert.Equal(["field-exists", "field-in"], bracketed.FieldStableKeys);
@@ -79,6 +83,12 @@ public sealed class AccessExpressionProjectorTests
         Assert.Equal("AccessBindingExpressionPartial", incompleteIn.GapClassification);
         Assert.Equal("partial", emptyExists.Coverage);
         Assert.Equal("AccessBindingExpressionPartial", emptyExists.GapClassification);
+        Assert.All([strayBracket, strayParenthesis, literalExists], result =>
+        {
+            Assert.Equal("partial", result.Coverage);
+            Assert.Equal("AccessBindingExpressionPartial", result.GapClassification);
+        });
+        Assert.Equal("complete", literalIn.Coverage);
     }
 
     [Fact]
