@@ -406,19 +406,7 @@ public static partial class AccessQueryProjector
     private static bool HasCompleteSingleSourceSelectShape(string masked)
     {
         if (!HasBalancedSqlDelimiters(masked)) return false;
-        var topLevelFromIndexes = new List<int>();
-        var squareBrackets = 0;
-        var parentheses = 0;
-        for (var index = 0; index < masked.Length; index++)
-        {
-            var current = masked[index];
-            if (current == '[') squareBrackets++;
-            else if (current == ']') squareBrackets--;
-            else if (squareBrackets == 0 && current == '(') parentheses++;
-            else if (squareBrackets == 0 && current == ')') parentheses--;
-            else if (squareBrackets == 0 && parentheses == 0 && IsKeywordAt(masked, index, "from"))
-                topLevelFromIndexes.Add(index);
-        }
+        var topLevelFromIndexes = TopLevelKeywordIndexes(masked, "from", 0);
         if (topLevelFromIndexes.Count != 1) return false;
 
         var tail = masked[(topLevelFromIndexes[0] + "from".Length)..].Trim();
@@ -429,8 +417,9 @@ public static partial class AccessQueryProjector
                 @"(?is)(?:,|=|<>|<=|>=|<|>|\+|-|\*|/|\b(?:where|having|group\s+by|order\s+by|join|on|and|or)\b)\s*$"))
             return false;
 
-        squareBrackets = 0;
-        parentheses = 0;
+        var squareBrackets = 0;
+        var parentheses = 0;
+        var clauseStart = tail.Length;
         for (var index = 0; index < tail.Length; index++)
         {
             var current = tail[index];
@@ -452,10 +441,35 @@ public static partial class AccessQueryProjector
                     || IsKeywordAt(tail, index, "full")
                     || IsKeywordAt(tail, index, "cross")
                     || IsKeywordAt(tail, index, "union"))
+                {
+                    clauseStart = index;
                     break;
+                }
             }
         }
-        return true;
+        var identifier = @"(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*)";
+        var source = tail[..clauseStart].Trim();
+        return Regex.IsMatch(
+            source,
+            $@"(?is)^{identifier}(?:\s*\.\s*{identifier})*(?:\s+as\s+{identifier})?$",
+            RegexOptions.CultureInvariant);
+    }
+
+    private static IReadOnlyList<int> TopLevelKeywordIndexes(string value, string keyword, int start)
+    {
+        var result = new List<int>();
+        var depth = 0;
+        var bracket = false;
+        for (var index = start; index < value.Length; index++)
+        {
+            var current = value[index];
+            if (current == '[') bracket = true;
+            else if (current == ']') bracket = false;
+            else if (!bracket && current == '(') depth++;
+            else if (!bracket && current == ')' && depth > 0) depth--;
+            else if (!bracket && depth == 0 && IsKeywordAt(value, index, keyword)) result.Add(index);
+        }
+        return result;
     }
 
     private static string MatchedOutputName(Match match) =>
@@ -541,19 +555,8 @@ public static partial class AccessQueryProjector
         var prefix = Regex.Match(masked, $@"(?is)\b{keyword}\b\s+(?:(?:distinct|distinctrow|top\s+\d+(?:\s+percent)?)\s+)*");
         if (!prefix.Success) return null;
         var start = prefix.Index + prefix.Length;
-        var depth = 0;
-        var bracket = false;
-        for (var index = start; index < masked.Length; index++)
-        {
-            var current = masked[index];
-            if (current == '[') bracket = true;
-            else if (current == ']') bracket = false;
-            else if (!bracket && current == '(') depth++;
-            else if (!bracket && current == ')' && depth > 0) depth--;
-            else if (!bracket && depth == 0 && IsKeywordAt(masked, index, "from"))
-                return masked[start..index].Trim();
-        }
-        return null;
+        var fromIndexes = TopLevelKeywordIndexes(masked, "from", start);
+        return fromIndexes.Count == 0 ? null : masked[start..fromIndexes[0]].Trim();
     }
 
     private static bool IsKeywordAt(string value, int index, string keyword) =>

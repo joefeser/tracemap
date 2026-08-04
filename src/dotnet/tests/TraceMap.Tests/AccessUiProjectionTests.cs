@@ -1349,6 +1349,7 @@ public sealed class AccessUiProjectionTests
     [Theory]
     [InlineData("SELECT Users.* FROM Users,")]
     [InlineData("SELECT Users.* FROM Users FROM")]
+    [InlineData("SELECT Users.* FROM Users nonsense")]
     public void Structurally_incomplete_wildcard_record_sources_remain_partial(string sql)
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('7', 40), "fixture.accdb", "hash");
@@ -1356,6 +1357,31 @@ public sealed class AccessUiProjectionTests
         var projected = AccessUiProjector.Project(
             seed,
             [new("frmUsers", "form", false, sql, [], [])],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Users"] = [(table.StableKey, "table")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [table.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            },
+            completeTableFieldCatalogStableKeys: new HashSet<string>([table.StableKey], StringComparer.Ordinal));
+
+        var binding = Assert.Single(
+            Assert.Single(projected.Surfaces).Bindings,
+            candidate => candidate.BindingKind == "record-source");
+        Assert.Equal("partial", binding.Coverage);
+        Assert.Contains(projected.Gaps, gap => gap.Classification == "AccessBindingInlineSqlProjectionPartial");
+    }
+
+    [Fact]
+    public void Partial_surface_wildcard_record_source_cannot_claim_complete_binding_coverage()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('7', 40), "fixture.accdb", "hash");
+        var table = AccessSafeValues.Identity(seed, "table", "Users");
+        var projected = AccessUiProjector.Project(
+            seed,
+            [new("frmUsers", "form", false, "SELECT Users.* FROM Users", [], [], Coverage: "partial")],
             new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
             {
                 ["Users"] = [(table.StableKey, "table")]
