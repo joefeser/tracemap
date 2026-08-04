@@ -92,7 +92,8 @@ internal static partial class AccessUiProjector
                 contextIdentifierNames: contextIdentifierNames,
                 fieldCoverageByStableKey: fieldCoverageByStableKey,
                 domainCriteriaFieldSetsByObject: domainCriteriaFieldSetsByObject,
-                completeTableFieldCatalogStableKeys: completeTableFieldCatalogStableKeys);
+                completeTableFieldCatalogStableKeys: completeTableFieldCatalogStableKeys,
+                evidenceCoverage: raw.Coverage);
             if (recordBinding is not null) bindings.Add(recordBinding);
 
             IReadOnlyDictionary<string, IReadOnlyList<string>>? scopedFields = null;
@@ -369,7 +370,8 @@ internal static partial class AccessUiProjector
         IReadOnlySet<string>? contextIdentifierNames = null,
         IReadOnlyDictionary<string, string>? fieldCoverageByStableKey = null,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? domainCriteriaFieldSetsByObject = null,
-        IReadOnlySet<string>? completeTableFieldCatalogStableKeys = null)
+        IReadOnlySet<string>? completeTableFieldCatalogStableKeys = null,
+        string evidenceCoverage = "complete")
     {
         var trimmed = value?.Trim() ?? string.Empty;
         if (trimmed.Length == 0) return null;
@@ -398,6 +400,7 @@ internal static partial class AccessUiProjector
                 && dependencyKinds[0] == "table"
                 && completeTableFieldCatalogStableKeys?.Contains(targets[0]) == true;
             var staticLineageCoverage = projection.DependencyCoverage == "complete"
+                && evidenceCoverage == "complete"
                 && (projection.OutputCoverage == "complete" || completeTableWildcard)
                 ? "complete"
                 : "partial";
