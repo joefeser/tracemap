@@ -322,20 +322,14 @@ public static partial class AccessQueryProjector
     {
         if (string.IsNullOrWhiteSpace(sql) || string.IsNullOrWhiteSpace(outputName))
             return false;
-        var masked = MaskLiteralsAndComments(sql);
-        var match = SelectListPattern().Match(masked);
-        if (!match.Success) return false;
-        var fields = new List<string>();
-        foreach (var item in SplitSelectItems(match.Groups["list"].Value))
-        {
-            if (item.Contains('*')) return false;
-            var direct = DirectSelectFieldPattern().Match(item.Trim());
-            if (!direct.Success) continue;
-            fields.Add((direct.Groups["bracketed"].Success
-                ? direct.Groups["bracketed"].Value
-                : direct.Groups["plain"].Value).Trim());
-        }
-        return fields.Count(field => string.Equals(field, outputName.Trim(), StringComparison.OrdinalIgnoreCase)) == 1;
+        var select = SelectListAfterKeyword(MaskLiteralsAndComments(sql), "select");
+        if (select is null) return false;
+        return SplitSelectItems(select).Count(item =>
+            IsStaticDirectProjection(item)
+            && string.Equals(
+                StaticOutputName(item),
+                outputName.Trim(),
+                StringComparison.OrdinalIgnoreCase)) == 1;
     }
 
     public static bool HasStaticOutputName(string sql, string outputName)
@@ -696,7 +690,7 @@ public static partial class AccessQueryProjector
     }
 
     private static bool IsStaticDirectProjection(string expression) =>
-        DirectSelectFieldPattern().IsMatch(expression.Trim());
+        DirectSelectFieldPattern().IsMatch(RemoveOutputAlias(expression));
 
     private static bool ResolvesExpressionCompletely(
         string expression,

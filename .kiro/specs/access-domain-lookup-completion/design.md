@@ -26,6 +26,13 @@
 - Treat truncated or malformed field catalogs as incomplete before completing a table wildcard. Preserve bracketed field names that collide with predicate keywords, and keep malformed `IN`/`EXISTS` operands partial.
 - Preserve `expressionGapClassification` in release-review binding metadata so dependency-only and dependency-ambiguous evidence remains distinguishable downstream.
 
+## Output-source alias follow-up
+
+- Reuse the bounded SELECT projection parser against SQL already acquired by the Access reader. A direct field projection with a static alias and exactly one resolved source field may supplement missing DAO `SourceTable`/`SourceField` metadata; this performs no additional COM read and opens no recordset.
+- Emit the recovered source as the existing `AccessQueryOutputSourceCandidate` fact. If DAO and static candidates disagree, preserve all candidates and partial coverage.
+- At design composition time, use one output-to-source candidate to resolve a criteria identifier to its source field. If a DLookup return names that source while the query declares a different output alias, emit a hash-only alias-mismatch candidate and `AccessBindingDomainSelectedFieldAliasMismatch` rather than promoting it to the declared output.
+- Multiple matching outputs or multiple sources remain ambiguous. The twelve numeric-versus-`W` crosstab cases remain source-design contradictions and are not affected by alias reconciliation.
+
 ## Non-claims
 
-This slice does not prove query execution, pivot-column availability, returned values, predicate outcomes, runtime reachability, business intent, or correctness. It does not widen Access COM or retain raw SQL/expressions.
+This slice does not prove query execution, pivot-column availability, returned values, predicate outcomes, runtime reachability, business intent, or correctness. It adds no COM reads and does not retain raw SQL/expressions.

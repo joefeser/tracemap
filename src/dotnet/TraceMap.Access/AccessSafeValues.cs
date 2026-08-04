@@ -13,6 +13,7 @@ public static class AccessSafeValues
 {
     private const string CrosstabPivotColumnCandidatePrefix = "access-query-pivot-column-candidate-";
     private const string CrosstabPivotPrefixMismatchCandidatePrefix = "access-query-pivot-prefix-mismatch-candidate-";
+    private const string QueryOutputAliasMismatchCandidatePrefix = "access-query-output-alias-mismatch-candidate-";
 
     public static string DatabaseIdentitySeed(string repositoryIdentityHash, string commitSha, string relativePath, string databaseHash) =>
         RoleHash("access-database-identity", string.Join('|', repositoryIdentityHash, commitSha, relativePath.Replace('\\', '/'), databaseHash));
@@ -59,6 +60,18 @@ public static class AccessSafeValues
 
     internal static bool IsCrosstabPivotPrefixMismatchCandidate(string stableKey) =>
         stableKey.StartsWith(CrosstabPivotPrefixMismatchCandidatePrefix, StringComparison.Ordinal);
+
+    internal static AccessSafeIdentity QueryOutputAliasMismatchCandidate(
+        string databaseIdentitySeed,
+        string queryStableKey,
+        string requestedFieldName) =>
+        HashOnlyCandidate(
+            databaseIdentitySeed,
+            $"query-output-alias-mismatch-candidate-{queryStableKey}",
+            requestedFieldName);
+
+    internal static bool IsQueryOutputAliasMismatchCandidate(string stableKey) =>
+        stableKey.StartsWith(QueryOutputAliasMismatchCandidatePrefix, StringComparison.Ordinal);
 
     internal static AccessSafeIdentity HashOnlyCandidate(
         string databaseIdentitySeed,
