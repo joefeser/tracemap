@@ -221,10 +221,17 @@ public static partial class AccessQueryProjector
     public static AccessQueryStaticProjection ProjectStaticSelect(
         string sql,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> knownObjects,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fieldsByTable) =>
+        ProjectStaticSelect(sql, knownObjects, fieldsByTable, null);
+
+    internal static AccessQueryStaticProjection ProjectStaticSelect(
+        string sql,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> knownObjects,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fieldsByTable,
-        (IReadOnlyList<AccessQueryDependencyProjection> Dependencies, string Coverage, bool UnsupportedShape)? precomputedDependencies = null)
+        (IReadOnlyList<AccessQueryDependencyProjection> Dependencies, string Coverage, bool UnsupportedShape)? precomputedDependencies)
     {
         var masked = MaskLiteralsAndComments(sql);
+        var balanced = HasBalancedSqlDelimiters(masked);
         var dependencyProjection = precomputedDependencies ?? ProjectDependencies(sql, knownObjects);
         var dependencyKeys = dependencyProjection.Dependencies.Select(item => item.TargetStableKey).ToHashSet(StringComparer.Ordinal);
         var scopedKnownObjects = knownObjects.ToDictionary(
@@ -271,6 +278,7 @@ public static partial class AccessQueryProjector
         var orderComplete = order is null || ResolvesExpressionFieldKeys(order, scopedKnownObjects, fieldsByTable);
         orderComplete = orderComplete && (order is null || !HasUnsupportedNamedFunction(order));
         var coverage = expressions.Count > 0
+            && balanced
             && outputs.All(output => output.Coverage == "complete")
             && dependencyProjection.Coverage == "complete"
             && predicateComplete
@@ -279,10 +287,12 @@ public static partial class AccessQueryProjector
             ? "complete"
             : "partial";
         var outputCoverage = expressions.Count > 0
+            && balanced
             && outputs.All(output => output.NameHash is not null && output.Coverage == "complete")
             ? "complete"
             : "partial";
         var runtimeValueCoverage = predicateComplete
+            && balanced
             && orderComplete
             && !runtimeFunctionsPresent
             ? "complete"
