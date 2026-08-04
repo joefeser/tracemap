@@ -11,6 +11,9 @@ public enum AccessIdentityDisclosurePolicy
 
 public static class AccessSafeValues
 {
+    private const string CrosstabPivotColumnCandidatePrefix = "access-query-pivot-column-candidate-";
+    private const string CrosstabPivotPrefixMismatchCandidatePrefix = "access-query-pivot-prefix-mismatch-candidate-";
+
     public static string DatabaseIdentitySeed(string repositoryIdentityHash, string commitSha, string relativePath, string databaseHash) =>
         RoleHash("access-database-identity", string.Join('|', repositoryIdentityHash, commitSha, relativePath.Replace('\\', '/'), databaseHash));
 
@@ -32,6 +35,32 @@ public static class AccessSafeValues
         var keyMaterial = string.Join('|', "access-object/v1", databaseIdentitySeed, objectKind, display ?? $"hash:{nameHash}", occurrence);
         return new AccessSafeIdentity(display, nameHash, $"access-{objectKind}-{FactFactory.Hash(keyMaterial, 32)}");
     }
+
+    internal static AccessSafeIdentity CrosstabPivotColumnCandidate(
+        string databaseIdentitySeed,
+        string queryStableKey,
+        string columnName) =>
+        Identity(
+            databaseIdentitySeed,
+            $"query-pivot-column-candidate-{queryStableKey}",
+            columnName,
+            disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly);
+
+    internal static bool IsCrosstabPivotColumnCandidate(string stableKey) =>
+        stableKey.StartsWith(CrosstabPivotColumnCandidatePrefix, StringComparison.Ordinal);
+
+    internal static AccessSafeIdentity CrosstabPivotPrefixMismatchCandidate(
+        string databaseIdentitySeed,
+        string queryStableKey,
+        string requestedColumnName) =>
+        Identity(
+            databaseIdentitySeed,
+            $"query-pivot-prefix-mismatch-candidate-{queryStableKey}",
+            requestedColumnName,
+            disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly);
+
+    internal static bool IsCrosstabPivotPrefixMismatchCandidate(string stableKey) =>
+        stableKey.StartsWith(CrosstabPivotPrefixMismatchCandidatePrefix, StringComparison.Ordinal);
 
     public static string RoleHash(string role, string value) => FactFactory.Hash($"{role}\0{value}", 64);
 

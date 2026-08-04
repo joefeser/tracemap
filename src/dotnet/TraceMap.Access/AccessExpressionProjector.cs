@@ -86,6 +86,10 @@ public static partial class AccessExpressionProjector
         var domainSelectedFieldUnresolved = false;
         var domainCriteriaFieldUnresolved = false;
         var domainCriteriaFieldAmbiguous = false;
+        var domainSelectedFieldDependencyOnly = false;
+        var domainSelectedFieldDependencyAmbiguous = false;
+        var domainCrosstabPivotCandidate = false;
+        var domainCrosstabPivotPrefixMismatch = false;
         var domainFieldCatalogIncomplete = false;
         var malformedBracketedIdentifier = HasUnbalancedBracketedIdentifier(normalized);
         var domainSyntaxMatches = DomainNamePattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
@@ -155,6 +159,10 @@ public static partial class AccessExpressionProjector
                 var domainFields = queryCandidate is not null && fieldSetsByObject?.TryGetValue(queryCandidate, out var queryFields) == true
                     ? queryFields
                     : null;
+                var domainCriteriaFields = queryCandidate is not null
+                    && domainCriteriaFieldSetsByObject?.TryGetValue(queryCandidate, out var criteriaFieldsForQuery) == true
+                        ? criteriaFieldsForQuery
+                        : domainFields;
                 if (queryCandidate is not null && domainFields is null)
                     domainFieldCatalogIncomplete = true;
                 var wildcardSelection = dlookup.Name.Equals("DCount", StringComparison.OrdinalIgnoreCase)
@@ -164,11 +172,22 @@ public static partial class AccessExpressionProjector
                     : queryCandidate is not null
                         ? ResolveField(args[0], domainFields, selectedFields)
                         : FieldResolution.Missing;
+                if (selectedFields.Any(AccessSafeValues.IsCrosstabPivotColumnCandidate))
+                    domainCrosstabPivotCandidate = true;
+                if (selectedFields.Any(AccessSafeValues.IsCrosstabPivotPrefixMismatchCandidate))
+                    domainCrosstabPivotPrefixMismatch = true;
                 if (wildcardSelection) literals.Add("wildcard");
                 if (selectedResolution == FieldResolution.Missing)
                 {
                     AddIdentifierReferenceHash(args[0], "access-expression-selected-field", selectedFieldRefs);
                     domainSelectedFieldUnresolved |= queryCandidate is not null;
+                    if (queryCandidate is not null)
+                    {
+                        var dependencyCandidates = new SortedSet<string>(StringComparer.Ordinal);
+                        var dependencyResolution = ResolveField(args[0], domainCriteriaFields, dependencyCandidates);
+                        domainSelectedFieldDependencyOnly |= dependencyResolution == FieldResolution.Unique;
+                        domainSelectedFieldDependencyAmbiguous |= dependencyResolution == FieldResolution.Ambiguous;
+                    }
                     unresolved = true;
                 }
                 else if (selectedResolution == FieldResolution.Ambiguous)
@@ -176,10 +195,6 @@ public static partial class AccessExpressionProjector
                 if (queryCandidate is null) unresolved = true;
                 if (args.Count >= 3)
                 {
-                    var domainCriteriaFields = queryCandidate is not null
-                        && domainCriteriaFieldSetsByObject?.TryGetValue(queryCandidate, out var criteriaFieldsForQuery) == true
-                            ? criteriaFieldsForQuery
-                            : domainFields;
                     var criteriaExpression = args[2].Trim().Trim('"');
                     var externalMatches = ExternalReferencePattern().Matches(criteriaExpression);
                     AddExternalReferences(externalMatches, externalRefs);
@@ -232,10 +247,15 @@ public static partial class AccessExpressionProjector
         var classification = domainMatches.Count > 0 ? "domain-lookup"
             : functions.Length > 0 || normalized.StartsWith('=') || operators.Length > 0 ? "calculated-expression"
             : "expression";
-        var coverage = dynamic || ambiguous || unresolved || unresolvedFunction || domainFieldCatalogIncomplete ? "partial" : "complete";
+        var coverage = dynamic || ambiguous || unresolved || unresolvedFunction || domainFieldCatalogIncomplete
+            || domainCrosstabPivotCandidate || domainCrosstabPivotPrefixMismatch ? "partial" : "complete";
         var gap = dynamic ? "AccessBindingExpressionDynamic"
             : unresolvedFunction ? "AccessBindingExpressionFunctionUnresolved"
             : domainFieldCatalogIncomplete ? "AccessBindingDomainFieldCatalogIncomplete"
+            : domainCrosstabPivotPrefixMismatch ? "AccessBindingDomainCrosstabPivotPrefixMismatch"
+            : domainCrosstabPivotCandidate ? "AccessBindingDomainCrosstabPivotCandidate"
+            : domainSelectedFieldDependencyAmbiguous ? "AccessBindingDomainSelectedFieldDependencyAmbiguous"
+            : domainSelectedFieldDependencyOnly ? "AccessBindingDomainSelectedFieldDependencyOnly"
             : domainSelectedFieldUnresolved ? "AccessBindingDomainSelectedFieldUnmatched"
             : domainCriteriaFieldAmbiguous ? "AccessBindingDomainCriteriaFieldAmbiguous"
             : ambiguous ? "AccessBindingExpressionTargetAmbiguous"

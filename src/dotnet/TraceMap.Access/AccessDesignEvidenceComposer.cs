@@ -8,7 +8,7 @@ namespace TraceMap.Access;
 
 public static class AccessDesignEvidenceComposer
 {
-    public const string ComposerVersion = "access-design-evidence/0.2.2";
+    public const string ComposerVersion = "access-design-evidence/0.2.3";
     private const string ExtractorId = "AccessSourceNeutralDesignEvidence";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -539,6 +539,12 @@ public static class AccessDesignEvidenceComposer
             .OrderBy(input => SurfaceStableKey(databaseSeed, input.Raw), StringComparer.Ordinal)
             .ToArray();
         var rawSurfaces = mergedSurfaceInputs.Select(input => input.Raw).ToArray();
+        var queryKinds = BuildConsistentQueryKinds(baseFacts
+            .Where(fact => fact.FactType == FactTypes.AccessQueryDeclared
+                && fact.TargetSymbol is not null
+                && fact.Properties.TryGetValue("queryKind", out _))
+            .Select(fact => (fact.TargetSymbol!, fact.Properties["queryKind"])));
+        var staticCrosstabPivotHashes = BuildStaticCrosstabPivotHashes(baseFacts, queryKinds);
         var reconciledDomainCriteriaFields = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
         ReconcileSurfaceQueryOutputNames(
             rawSurfaces,
@@ -546,11 +552,13 @@ public static class AccessDesignEvidenceComposer
             fieldsByTableAndHash,
             fieldsByTable);
         ReconcileDomainExpressionQueryOutputNames(
+            databaseSeed,
             rawSurfaces,
             knownObjects,
             fieldsByTableAndHash,
             fieldsByTable,
-            reconciledDomainCriteriaFields);
+            reconciledDomainCriteriaFields,
+            staticCrosstabPivotHashes);
         var known = knownObjects.ToDictionary(
             item => item.Key,
             item => (IReadOnlyList<(string StableKey, string Kind)>)item.Value
@@ -580,11 +588,6 @@ public static class AccessDesignEvidenceComposer
                 group => group.Key,
                 group => (IReadOnlyList<string>)BuildOrdinalOutputs(group, limits.MaxChildrenPerObject),
                 StringComparer.Ordinal);
-        var queryKinds = BuildConsistentQueryKinds(baseFacts
-            .Where(fact => fact.FactType == FactTypes.AccessQueryDeclared
-                && fact.TargetSymbol is not null
-                && fact.Properties.TryGetValue("queryKind", out _))
-            .Select(fact => (fact.TargetSymbol!, fact.Properties["queryKind"])));
         var rawModules = bundle.Records.Where(record => record.Kind == "vba-module")
             .Select(record => new AccessRawVbaModule(
                 String(record.Payload, "identity"),
@@ -1105,11 +1108,13 @@ public static class AccessDesignEvidenceComposer
     }
 
     internal static void ReconcileDomainExpressionQueryOutputNames(
+        string databaseIdentitySeed,
         IReadOnlyList<AccessRawUiSurface> surfaces,
         IReadOnlyDictionary<string, List<(string StableKey, string Kind)>> knownObjects,
         IReadOnlyDictionary<string, Dictionary<string, List<string>>> fieldsByTableAndHash,
         Dictionary<string, Dictionary<string, List<string>>> fieldsByTable,
-        Dictionary<string, Dictionary<string, List<string>>> criteriaFieldsByDomain)
+        Dictionary<string, Dictionary<string, List<string>>> criteriaFieldsByDomain,
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? staticCrosstabPivotHashes = null)
     {
         foreach (var expression in surfaces.SelectMany(DomainExpressions))
         {
@@ -1137,6 +1142,41 @@ public static class AccessDesignEvidenceComposer
                 if (!fieldsByHash.TryGetValue(fieldHash, out var fieldMatches)
                     || fieldMatches.Distinct(StringComparer.Ordinal).ToArray() is not { Length: 1 } distinct)
                 {
+                    if (reference.ReferenceKind == "selected"
+                        && staticCrosstabPivotHashes?.TryGetValue(stableKey, out var pivotHashes) == true
+                        && pivotHashes.Contains(AccessSafeValues.RoleHash(
+                            "access-query-pivot-column",
+                            reference.FieldName)))
+                    {
+                        AddField(
+                            fieldsByTable,
+                            stableKey,
+                            reference.FieldName,
+                            AccessSafeValues.CrosstabPivotColumnCandidate(
+                                databaseIdentitySeed,
+                                stableKey,
+                                reference.FieldName).StableKey);
+                    }
+                    else if (reference.ReferenceKind == "selected"
+                        && reference.FieldName.Length > 0
+                        && reference.FieldName.All(char.IsDigit)
+                        && staticCrosstabPivotHashes?.TryGetValue(stableKey, out pivotHashes) == true
+                        && pivotHashes.Contains(AccessSafeValues.RoleHash(
+                            "access-query-pivot-column",
+                            "W" + reference.FieldName))
+                        && fieldsByTable.TryGetValue(stableKey, out var crosstabFields)
+                        && crosstabFields.TryGetValue("W" + reference.FieldName, out var prefixedMatches)
+                        && prefixedMatches.Distinct(StringComparer.Ordinal).Count() == 1)
+                    {
+                        AddField(
+                            fieldsByTable,
+                            stableKey,
+                            reference.FieldName,
+                            AccessSafeValues.CrosstabPivotPrefixMismatchCandidate(
+                                databaseIdentitySeed,
+                                stableKey,
+                                reference.FieldName).StableKey);
+                    }
                     continue;
                 }
                 AddField(
@@ -1146,6 +1186,30 @@ public static class AccessDesignEvidenceComposer
                     distinct[0]);
             }
         }
+    }
+
+    internal static IReadOnlyDictionary<string, IReadOnlySet<string>> BuildStaticCrosstabPivotHashes(
+        IReadOnlyList<CodeFact> facts,
+        IReadOnlyDictionary<string, string> queryKinds)
+    {
+        var result = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
+        foreach (var group in facts
+                     .Where(fact => fact.FactType == FactTypes.AccessQueryCrosstabLineageCandidate
+                         && fact.SourceSymbol is not null
+                         && queryKinds.GetValueOrDefault(fact.SourceSymbol) == "crosstab")
+                     .GroupBy(fact => fact.SourceSymbol!, StringComparer.Ordinal))
+        {
+            var hashes = group
+                .SelectMany(fact => (fact.Properties.GetValueOrDefault("staticColumnHashes") ?? string.Empty)
+                    .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Where(hash => hash.Length == 64 && hash.All(Uri.IsHexDigit))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(hash => hash, StringComparer.Ordinal)
+                .ToHashSet(StringComparer.Ordinal);
+            if (hashes.Count > 0)
+                result[group.Key] = hashes;
+        }
+        return result;
     }
 
     internal static IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> BuildDomainCriteriaFieldSets(
