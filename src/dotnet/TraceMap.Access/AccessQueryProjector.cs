@@ -363,6 +363,19 @@ public static partial class AccessQueryProjector
         });
     }
 
+    internal static bool HasOnlyWildcardProjection(string sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql)) return false;
+        var select = SelectListAfterKeyword(MaskLiteralsAndComments(sql), "select");
+        if (select is null) return false;
+        var items = SplitSelectItems(select);
+        return items.Count == 1 && items.All(item =>
+        {
+            var normalized = item.Trim();
+            return normalized == "*" || normalized.EndsWith(".*", StringComparison.Ordinal);
+        });
+    }
+
     private static string MatchedOutputName(Match match) =>
         (match.Groups["bracketed"].Success ? match.Groups["bracketed"].Value : match.Groups["plain"].Value).Trim();
 
