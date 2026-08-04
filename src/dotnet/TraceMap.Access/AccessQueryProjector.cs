@@ -354,13 +354,122 @@ public static partial class AccessQueryProjector
 
     internal static bool HasWildcardProjection(string sql)
     {
+        return TryGetSelectItems(sql, out var items) && items.Any(IsWildcardProjectionItem);
+    }
+
+    internal static bool HasOnlyWildcardProjection(string sql)
+    {
+        if (!TryGetSelectItems(sql, out var items) || items.Count != 1 || !items.All(IsWildcardProjectionItem))
+            return false;
+        var masked = MaskLiteralsAndComments(sql);
+        return HasCompleteSingleSourceSelectShape(masked);
+    }
+
+    private static bool TryGetSelectItems(string sql, out IReadOnlyList<string> items)
+    {
+        items = [];
         if (string.IsNullOrWhiteSpace(sql)) return false;
         var select = SelectListAfterKeyword(MaskLiteralsAndComments(sql), "select");
-        return select is not null && SplitSelectItems(select).Any(item =>
+        if (select is null) return false;
+        items = SplitSelectItems(select);
+        return items.Count > 0;
+    }
+
+    private static bool IsWildcardProjectionItem(string item)
+    {
+        var normalized = item.Trim();
+        return normalized == "*" || normalized.EndsWith(".*", StringComparison.Ordinal);
+    }
+
+    private static bool HasBalancedSqlDelimiters(string value)
+    {
+        var squareBrackets = 0;
+        var parentheses = 0;
+        foreach (var current in value)
         {
-            var normalized = item.Trim();
-            return normalized == "*" || normalized.EndsWith(".*", StringComparison.Ordinal);
-        });
+            if (current == '[') squareBrackets++;
+            else if (current == ']')
+            {
+                if (squareBrackets == 0) return false;
+                squareBrackets--;
+            }
+            else if (squareBrackets == 0 && current == '(') parentheses++;
+            else if (squareBrackets == 0 && current == ')')
+            {
+                if (parentheses == 0) return false;
+                parentheses--;
+            }
+        }
+        return squareBrackets == 0 && parentheses == 0;
+    }
+
+    private static bool HasCompleteSingleSourceSelectShape(string masked)
+    {
+        if (!HasBalancedSqlDelimiters(masked)) return false;
+        var topLevelFromIndexes = TopLevelKeywordIndexes(masked, "from", 0);
+        if (topLevelFromIndexes.Count != 1) return false;
+
+        var tail = masked[(topLevelFromIndexes[0] + "from".Length)..].Trim();
+        if (tail.EndsWith(';')) tail = tail[..^1].TrimEnd();
+        if (tail.Length == 0
+            || Regex.IsMatch(
+                tail,
+                @"(?is)(?:,|=|<>|<=|>=|<|>|\+|-|\*|/|\b(?:where|having|group\s+by|order\s+by|join|on|and|or)\b)\s*$"))
+            return false;
+
+        var squareBrackets = 0;
+        var parentheses = 0;
+        var clauseStart = tail.Length;
+        for (var index = 0; index < tail.Length; index++)
+        {
+            var current = tail[index];
+            if (current == '[') squareBrackets++;
+            else if (current == ']') squareBrackets--;
+            else if (squareBrackets == 0 && current == '(') parentheses++;
+            else if (squareBrackets == 0 && current == ')') parentheses--;
+            else if (squareBrackets == 0 && parentheses == 0)
+            {
+                if (current == ',') return false;
+                if (IsKeywordAt(tail, index, "where")
+                    || IsKeywordAt(tail, index, "group")
+                    || IsKeywordAt(tail, index, "having")
+                    || IsKeywordAt(tail, index, "order")
+                    || IsKeywordAt(tail, index, "join")
+                    || IsKeywordAt(tail, index, "inner")
+                    || IsKeywordAt(tail, index, "left")
+                    || IsKeywordAt(tail, index, "right")
+                    || IsKeywordAt(tail, index, "full")
+                    || IsKeywordAt(tail, index, "cross")
+                    || IsKeywordAt(tail, index, "union"))
+                {
+                    clauseStart = index;
+                    break;
+                }
+            }
+        }
+        var identifier = @"(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*)";
+        var source = tail[..clauseStart].Trim();
+        return Regex.IsMatch(
+            source,
+            $@"(?is)^{identifier}(?:\s*\.\s*{identifier})*(?:\s+as\s+{identifier})?$",
+            RegexOptions.CultureInvariant);
+    }
+
+    private static IReadOnlyList<int> TopLevelKeywordIndexes(string value, string keyword, int start)
+    {
+        var result = new List<int>();
+        var depth = 0;
+        var bracket = false;
+        for (var index = start; index < value.Length; index++)
+        {
+            var current = value[index];
+            if (current == '[') bracket = true;
+            else if (current == ']') bracket = false;
+            else if (!bracket && current == '(') depth++;
+            else if (!bracket && current == ')' && depth > 0) depth--;
+            else if (!bracket && depth == 0 && IsKeywordAt(value, index, keyword)) result.Add(index);
+        }
+        return result;
     }
 
     private static string MatchedOutputName(Match match) =>
@@ -446,19 +555,8 @@ public static partial class AccessQueryProjector
         var prefix = Regex.Match(masked, $@"(?is)\b{keyword}\b\s+(?:(?:distinct|distinctrow|top\s+\d+(?:\s+percent)?)\s+)*");
         if (!prefix.Success) return null;
         var start = prefix.Index + prefix.Length;
-        var depth = 0;
-        var bracket = false;
-        for (var index = start; index < masked.Length; index++)
-        {
-            var current = masked[index];
-            if (current == '[') bracket = true;
-            else if (current == ']') bracket = false;
-            else if (!bracket && current == '(') depth++;
-            else if (!bracket && current == ')' && depth > 0) depth--;
-            else if (!bracket && depth == 0 && IsKeywordAt(masked, index, "from"))
-                return masked[start..index].Trim();
-        }
-        return null;
+        var fromIndexes = TopLevelKeywordIndexes(masked, "from", start);
+        return fromIndexes.Count == 0 ? null : masked[start..fromIndexes[0]].Trim();
     }
 
     private static bool IsKeywordAt(string value, int index, string keyword) =>

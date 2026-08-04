@@ -267,6 +267,74 @@ public sealed class AccessScreenDataFlowTests
         Assert.Equal(["fact-output-gap"], gap.SupportingFactIds);
     }
 
+    [Fact]
+    public void Builder_prefers_valid_persisted_gap_supporting_fact_ids()
+    {
+        const string binding = "access-binding-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        var facts = new[]
+        {
+            Fact("fact-binding-declaration", FactTypes.AccessBindingDeclared, RuleIds.LegacyAccessBinding,
+                EvidenceTiers.Tier3SyntaxOrTextual, null, null,
+                ("stableBindingKey", binding),
+                ("coverageLabel", "partial")),
+            Fact("fact-binding-gap", FactTypes.AnalysisGap, RuleIds.LegacyAccessBinding,
+                EvidenceTiers.Tier4Unknown, null, binding,
+                ("classification", "AccessBindingInlineSqlProjectionPartial"),
+                ("scopeKind", "binding"),
+                ("supportingFactIds", "fact-binding-declaration"))
+        };
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
+
+        var gap = Assert.Single(report.Gaps, item =>
+            item.Classification == "AccessBindingInlineSqlProjectionPartial");
+        Assert.Equal(["fact-binding-declaration", "fact-binding-gap"], gap.SupportingFactIds);
+    }
+
+    [Fact]
+    public void Builder_rejects_existing_but_unrelated_persisted_gap_support()
+    {
+        const string binding = "access-binding-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string unrelatedQuery = "access-query-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        var facts = new[]
+        {
+            Fact("fact-unrelated-query", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural, null, unrelatedQuery, ("coverageLabel", "complete")),
+            Fact("fact-binding-gap", FactTypes.AnalysisGap, RuleIds.LegacyAccessBinding,
+                EvidenceTiers.Tier4Unknown, null, binding,
+                ("classification", "AccessBindingInlineSqlProjectionPartial"),
+                ("scopeKind", "binding"),
+                ("supportingFactIds", "fact-unrelated-query"))
+        };
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
+
+        var gap = Assert.Single(report.Gaps, item =>
+            item.Classification == "AccessBindingInlineSqlProjectionPartial");
+        Assert.Equal(["fact-binding-gap"], gap.SupportingFactIds);
+    }
+
+    [Fact]
+    public void Builder_reconstructs_gap_support_when_persisted_ids_are_unsafe()
+    {
+        const string query = "access-query-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        var facts = new[]
+        {
+            Fact("fact-query-declaration", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural, null, query, ("coverageLabel", "partial")),
+            Fact("fact-query-gap", FactTypes.AnalysisGap, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier4Unknown, null, query,
+                ("classification", "AccessQueryOutputProjectionPartial"),
+                ("scopeKind", "query"),
+                ("supportingFactIds", "../../private-source"))
+        };
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
+
+        var gap = Assert.Single(report.Gaps, item => item.Classification == "AccessQueryOutputProjectionPartial");
+        Assert.Equal(["fact-query-declaration", "fact-query-gap"], gap.SupportingFactIds);
+    }
+
     [Theory]
     [InlineData(@"C:\SecretDriveMarker91827\db.accdb", "SecretDriveMarker91827")]
     [InlineData(@"\\SecretServerMarker91827\share\db.accdb", "SecretServerMarker91827")]
