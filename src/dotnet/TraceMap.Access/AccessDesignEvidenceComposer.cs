@@ -1279,6 +1279,7 @@ public static class AccessDesignEvidenceComposer
                             reference.FieldName,
                             outputFields,
                             fieldNamesByStableKey,
+                            fieldCoverageByStableKey,
                             queryOutputSourcesByOutput,
                             queryOutputSourceFactIdsByOutput,
                             out var sourceFieldStableKey,
@@ -1337,6 +1338,7 @@ public static class AccessDesignEvidenceComposer
         string requestedFieldName,
         IReadOnlyDictionary<string, List<string>> outputFields,
         IReadOnlyDictionary<string, string>? fieldNamesByStableKey,
+        IReadOnlyDictionary<string, string>? fieldCoverageByStableKey,
         IReadOnlyDictionary<string, List<string>>? queryOutputSourcesByOutput,
         IReadOnlyDictionary<string, List<string>>? queryOutputSourceFactIdsByOutput,
         out string sourceFieldStableKey,
@@ -1344,7 +1346,9 @@ public static class AccessDesignEvidenceComposer
     {
         sourceFieldStableKey = string.Empty;
         sourceFactIds = [];
-        if (fieldNamesByStableKey is null || queryOutputSourcesByOutput is null) return false;
+        if (fieldNamesByStableKey is null
+            || fieldCoverageByStableKey is null
+            || queryOutputSourcesByOutput is null) return false;
         var matches = outputFields.Values
             .SelectMany(value => value)
             .Distinct(StringComparer.Ordinal)
@@ -1355,7 +1359,9 @@ public static class AccessDesignEvidenceComposer
                     .ToArray() ?? [];
                 return (OutputStableKey: outputStableKey, Sources: sources);
             })
-            .Where(candidate => candidate.Sources.Length == 1
+            .Where(candidate => fieldCoverageByStableKey.TryGetValue(candidate.OutputStableKey, out var coverage)
+                && string.Equals(coverage, "complete", StringComparison.Ordinal)
+                && candidate.Sources.Length == 1
                 && fieldNamesByStableKey.TryGetValue(candidate.Sources[0], out var sourceName)
                 && string.Equals(sourceName, requestedFieldName, StringComparison.OrdinalIgnoreCase))
             .ToArray();
