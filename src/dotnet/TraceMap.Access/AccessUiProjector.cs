@@ -392,7 +392,7 @@ internal static partial class AccessUiProjector
                 : dependencyKinds.Length == 0 ? "unknown"
                 : "mixed";
             var completeTableWildcard = projection.DependencyCoverage == "complete"
-                && AccessQueryProjector.HasWildcardProjection(trimmed)
+                && AccessQueryProjector.HasOnlyWildcardProjection(trimmed)
                 && targets.Length == 1
                 && dependencyKinds.Length == 1
                 && dependencyKinds[0] == "table"
