@@ -1246,6 +1246,252 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Single_table_wildcard_record_source_is_complete_only_with_a_complete_field_catalog()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('7', 40), "fixture.accdb", "hash");
+        var table = AccessSafeValues.Identity(seed, "table", "Users");
+        var field = AccessSafeValues.Identity(seed, $"field-{table.StableKey}", "UserId");
+        var raw = new AccessRawUiSurface(
+            "frmUsers",
+            "form",
+            false,
+            "SELECT Users.* FROM Users;",
+            [],
+            []);
+        var objects = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Users"] = [(table.StableKey, "table")]
+        };
+        var fields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            [table.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["UserId"] = [field.StableKey]
+            }
+        };
+
+        var partial = AccessUiProjector.Project(seed, [raw], objects, fields);
+        var complete = AccessUiProjector.Project(
+            seed,
+            [raw],
+            objects,
+            fields,
+            completeTableFieldCatalogStableKeys: new HashSet<string>([table.StableKey], StringComparer.Ordinal));
+
+        Assert.Equal(
+            "partial",
+            Assert.Single(Assert.Single(partial.Surfaces).Bindings, binding => binding.BindingKind == "record-source").Coverage);
+        Assert.Contains(partial.Gaps, gap => gap.Classification == "AccessBindingInlineSqlProjectionPartial");
+        Assert.Equal(
+            "complete",
+            Assert.Single(Assert.Single(complete.Surfaces).Bindings, binding => binding.BindingKind == "record-source").Coverage);
+        Assert.DoesNotContain(complete.Gaps, gap => gap.Classification == "AccessBindingInlineSqlProjectionPartial");
+    }
+
+    [Fact]
+    public void Mixed_wildcard_and_unresolved_projection_remains_partial_with_a_complete_field_catalog()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('7', 40), "fixture.accdb", "hash");
+        var table = AccessSafeValues.Identity(seed, "table", "Users");
+        var field = AccessSafeValues.Identity(seed, $"field-{table.StableKey}", "UserId");
+        var projected = AccessUiProjector.Project(
+            seed,
+            [new("frmUsers", "form", false, "SELECT Users.*, Unknown(UserId) AS X FROM Users;", [], [])],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Users"] = [(table.StableKey, "table")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [table.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["UserId"] = [field.StableKey]
+                }
+            },
+            completeTableFieldCatalogStableKeys: new HashSet<string>([table.StableKey], StringComparer.Ordinal));
+
+        var binding = Assert.Single(
+            Assert.Single(projected.Surfaces).Bindings,
+            candidate => candidate.BindingKind == "record-source");
+        Assert.Equal("partial", binding.Coverage);
+        Assert.Contains(projected.Gaps, gap => gap.Classification == "AccessBindingInlineSqlProjectionPartial");
+    }
+
+    [Fact]
+    public void Malformed_wildcard_record_source_remains_partial_with_a_complete_field_catalog()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('7', 40), "fixture.accdb", "hash");
+        var table = AccessSafeValues.Identity(seed, "table", "Users");
+        var field = AccessSafeValues.Identity(seed, $"field-{table.StableKey}", "UserId");
+        var projected = AccessUiProjector.Project(
+            seed,
+            [new("frmUsers", "form", false, "SELECT Users.* FROM Users WHERE", [], [])],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Users"] = [(table.StableKey, "table")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [table.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["UserId"] = [field.StableKey]
+                }
+            },
+            completeTableFieldCatalogStableKeys: new HashSet<string>([table.StableKey], StringComparer.Ordinal));
+
+        var binding = Assert.Single(
+            Assert.Single(projected.Surfaces).Bindings,
+            candidate => candidate.BindingKind == "record-source");
+        Assert.Equal("partial", binding.Coverage);
+        Assert.Contains(projected.Gaps, gap => gap.Classification == "AccessBindingInlineSqlProjectionPartial");
+    }
+
+    [Theory]
+    [InlineData("SELECT Users.* FROM Users,")]
+    [InlineData("SELECT Users.* FROM Users FROM")]
+    [InlineData("SELECT Users.* FROM Users nonsense")]
+    public void Structurally_incomplete_wildcard_record_sources_remain_partial(string sql)
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('7', 40), "fixture.accdb", "hash");
+        var table = AccessSafeValues.Identity(seed, "table", "Users");
+        var projected = AccessUiProjector.Project(
+            seed,
+            [new("frmUsers", "form", false, sql, [], [])],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Users"] = [(table.StableKey, "table")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [table.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            },
+            completeTableFieldCatalogStableKeys: new HashSet<string>([table.StableKey], StringComparer.Ordinal));
+
+        var binding = Assert.Single(
+            Assert.Single(projected.Surfaces).Bindings,
+            candidate => candidate.BindingKind == "record-source");
+        Assert.Equal("partial", binding.Coverage);
+        Assert.Contains(projected.Gaps, gap => gap.Classification == "AccessBindingInlineSqlProjectionPartial");
+    }
+
+    [Fact]
+    public void Partial_surface_wildcard_record_source_cannot_claim_complete_binding_coverage()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('7', 40), "fixture.accdb", "hash");
+        var table = AccessSafeValues.Identity(seed, "table", "Users");
+        var projected = AccessUiProjector.Project(
+            seed,
+            [new(
+                "frmUsers",
+                "form",
+                false,
+                "SELECT Users.* FROM Users",
+                [new("txtUserId", 0, 109, "UserId", null, [])],
+                [],
+                Coverage: "partial")],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Users"] = [(table.StableKey, "table")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [table.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            },
+            completeTableFieldCatalogStableKeys: new HashSet<string>([table.StableKey], StringComparer.Ordinal));
+
+        var binding = Assert.Single(
+            Assert.Single(projected.Surfaces).Bindings,
+            candidate => candidate.BindingKind == "record-source");
+        Assert.Equal("partial", binding.Coverage);
+        Assert.Equal(
+            "partial",
+            Assert.Single(Assert.Single(projected.Surfaces).Controls).Bindings.Single().Coverage);
+        Assert.Contains(projected.Gaps, gap => gap.Classification == "AccessBindingInlineSqlProjectionPartial");
+    }
+
+    [Fact]
+    public void Partial_child_wildcard_surface_cannot_prove_complete_link_field_binding()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('7', 40), "fixture.accdb", "hash");
+        var table = AccessSafeValues.Identity(seed, "table", "Users");
+        var child = AccessSafeValues.Identity(seed, "form", "frmChild");
+        var field = AccessSafeValues.Identity(seed, $"field-{table.StableKey}", "UserId");
+        var projected = AccessUiProjector.Project(
+            seed,
+            [
+                new(
+                    "frmParent",
+                    "form",
+                    false,
+                    null,
+                    [new("subChild", 0, 112, null, null, [], SourceObject: "Form.frmChild", LinkChildFields: "UserId")],
+                    []),
+                new("frmChild", "form", false, "SELECT Users.* FROM Users", [], [], Coverage: "partial")
+            ],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Users"] = [(table.StableKey, "table")],
+                ["frmChild"] = [(child.StableKey, "form")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [table.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["UserId"] = [field.StableKey]
+                }
+            },
+            completeTableFieldCatalogStableKeys: new HashSet<string>([table.StableKey], StringComparer.Ordinal));
+
+        var parent = projected.Surfaces.Single(surface => surface.Identity.DisplayName == "frmParent");
+        var childLink = Assert.Single(Assert.Single(parent.Controls).Bindings, binding => binding.BindingKind == "link-child-field-0");
+        Assert.Equal("partial", childLink.Coverage);
+    }
+
+    [Fact]
+    public void Repeated_controls_for_the_same_child_surface_reuse_child_field_projection()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('7', 40), "fixture.accdb", "hash");
+        var table = AccessSafeValues.Identity(seed, "table", "Users");
+        var child = AccessSafeValues.Identity(seed, "form", "frmChild");
+        var field = AccessSafeValues.Identity(seed, $"field-{table.StableKey}", "UserId");
+        var knownObjects = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Users"] = [(table.StableKey, "table")],
+            ["frmChild"] = [(child.StableKey, "form")]
+        };
+        var fields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            [table.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["UserId"] = [field.StableKey]
+            }
+        };
+        AccessRawUiSurface Child() => new("frmChild", "form", false, "SELECT Users.* FROM Users", [], [], Coverage: "partial");
+        AccessRawControl Control(string name, int ordinal) =>
+            new(name, ordinal, 112, null, null, [], SourceObject: "Form.frmChild", LinkChildFields: "UserId");
+
+        var one = AccessUiProjector.Project(
+            seed,
+            [new("frmParent", "form", false, null, [Control("subChildOne", 0)], []), Child()],
+            knownObjects,
+            fields,
+            completeTableFieldCatalogStableKeys: new HashSet<string>([table.StableKey], StringComparer.Ordinal));
+        var two = AccessUiProjector.Project(
+            seed,
+            [new("frmParent", "form", false, null, [Control("subChildOne", 0), Control("subChildTwo", 1)], []), Child()],
+            knownObjects,
+            fields,
+            completeTableFieldCatalogStableKeys: new HashSet<string>([table.StableKey], StringComparer.Ordinal));
+
+        Assert.Equal(
+            one.Gaps.Count(gap => gap.Classification == "AccessBindingInlineSqlProjectionPartial"),
+            two.Gaps.Count(gap => gap.Classification == "AccessBindingInlineSqlProjectionPartial"));
+        Assert.All(
+            two.Surfaces.Single(surface => surface.Identity.DisplayName == "frmParent").Controls,
+            control => Assert.Equal("partial", Assert.Single(control.Bindings, binding => binding.BindingKind == "link-child-field-0").Coverage));
+    }
+
+    [Fact]
     public void Inline_record_source_limits_field_scope_to_selected_outputs()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('2', 40), "fixture.accdb", "hash");

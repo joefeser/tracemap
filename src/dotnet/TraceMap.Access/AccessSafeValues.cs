@@ -11,6 +11,9 @@ public enum AccessIdentityDisclosurePolicy
 
 public static class AccessSafeValues
 {
+    private const string CrosstabPivotColumnCandidatePrefix = "access-query-pivot-column-candidate-";
+    private const string CrosstabPivotPrefixMismatchCandidatePrefix = "access-query-pivot-prefix-mismatch-candidate-";
+
     public static string DatabaseIdentitySeed(string repositoryIdentityHash, string commitSha, string relativePath, string databaseHash) =>
         RoleHash("access-database-identity", string.Join('|', repositoryIdentityHash, commitSha, relativePath.Replace('\\', '/'), databaseHash));
 
@@ -32,6 +35,40 @@ public static class AccessSafeValues
         var keyMaterial = string.Join('|', "access-object/v1", databaseIdentitySeed, objectKind, display ?? $"hash:{nameHash}", occurrence);
         return new AccessSafeIdentity(display, nameHash, $"access-{objectKind}-{FactFactory.Hash(keyMaterial, 32)}");
     }
+
+    internal static AccessSafeIdentity CrosstabPivotColumnCandidate(
+        string databaseIdentitySeed,
+        string queryStableKey,
+        string columnName) =>
+        HashOnlyCandidate(
+            databaseIdentitySeed,
+            $"query-pivot-column-candidate-{queryStableKey}",
+            columnName);
+
+    internal static bool IsCrosstabPivotColumnCandidate(string stableKey) =>
+        stableKey.StartsWith(CrosstabPivotColumnCandidatePrefix, StringComparison.Ordinal);
+
+    internal static AccessSafeIdentity CrosstabPivotPrefixMismatchCandidate(
+        string databaseIdentitySeed,
+        string queryStableKey,
+        string requestedColumnName) =>
+        HashOnlyCandidate(
+            databaseIdentitySeed,
+            $"query-pivot-prefix-mismatch-candidate-{queryStableKey}",
+            requestedColumnName);
+
+    internal static bool IsCrosstabPivotPrefixMismatchCandidate(string stableKey) =>
+        stableKey.StartsWith(CrosstabPivotPrefixMismatchCandidatePrefix, StringComparison.Ordinal);
+
+    internal static AccessSafeIdentity HashOnlyCandidate(
+        string databaseIdentitySeed,
+        string objectKind,
+        string value) =>
+        Identity(
+            databaseIdentitySeed,
+            objectKind,
+            value,
+            disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly);
 
     public static string RoleHash(string role, string value) => FactFactory.Hash($"{role}\0{value}", 64);
 

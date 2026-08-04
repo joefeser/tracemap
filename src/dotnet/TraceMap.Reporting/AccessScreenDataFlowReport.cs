@@ -442,6 +442,18 @@ public static class AccessScreenDataFlowReporter
     private static IReadOnlyList<string> SupportingGapFactIds(CodeFact gap, IReadOnlyList<CodeFact> facts)
     {
         var supporting = new SortedSet<string>(StringComparer.Ordinal) { gap.FactId };
+        if (gap.Properties.TryGetValue("supportingFactIds", out var persistedFactIds))
+        {
+            var parsed = persistedFactIds.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parsed.Length > 0
+                && parsed.All(factId => SafeFactId(factId)
+                    && facts.Any(candidate => candidate.FactId == factId
+                        && IsValidPersistedGapSupport(gap, candidate, facts))))
+            {
+                supporting.UnionWith(parsed);
+                return supporting.ToArray();
+            }
+        }
         if (!SafeStableKey(gap.TargetSymbol))
             return supporting.ToArray();
 
@@ -471,6 +483,20 @@ public static class AccessScreenDataFlowReporter
         }
         return supporting.ToArray();
     }
+
+    private static bool IsValidPersistedGapSupport(CodeFact gap, CodeFact candidate, IReadOnlyList<CodeFact> facts) =>
+        gap.Properties.GetValueOrDefault("scopeKind") switch
+        {
+            "binding" => candidate.FactType == FactTypes.AccessBindingDeclared
+                && candidate.Properties.GetValueOrDefault("stableBindingKey") == gap.TargetSymbol,
+            "query" => candidate.FactType == FactTypes.AccessQueryDeclared
+                && candidate.TargetSymbol == gap.TargetSymbol,
+            "query-output-field" => candidate.FactType == FactTypes.AccessQueryDeclared
+                && facts.Any(output => output.FactType == FactTypes.AccessQueryOutputDeclared
+                    && output.TargetSymbol == gap.TargetSymbol
+                    && output.SourceSymbol == candidate.TargetSymbol),
+            _ => false
+        };
 
     private static void EnsureReferencedNode(IDictionary<string, MutableNode> nodes, string key, CodeFact fact, bool source)
     {
@@ -581,6 +607,10 @@ public static class AccessScreenDataFlowReporter
         && value.Length <= 192
         && value.StartsWith("access-", StringComparison.Ordinal)
         && value.All(character => char.IsAsciiLetterOrDigit(character) || character == '-');
+    private static bool SafeFactId(string? value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.Length <= 128
+        && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.');
     private static string SafeEvidencePath(string value)
     {
         var normalized = value.Replace('\\', '/');

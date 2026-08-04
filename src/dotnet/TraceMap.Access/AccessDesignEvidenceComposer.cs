@@ -8,7 +8,7 @@ namespace TraceMap.Access;
 
 public static class AccessDesignEvidenceComposer
 {
-    public const string ComposerVersion = "access-design-evidence/0.2.2";
+    public const string ComposerVersion = "access-design-evidence/0.2.3";
     private const string ExtractorId = "AccessSourceNeutralDesignEvidence";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -199,10 +199,14 @@ public static class AccessDesignEvidenceComposer
             FactTypes.AccessQueryCrosstabLineageCandidate,
             FactTypes.AnalysisGap
         };
+        var composedBaseFactIds = baseScan.Facts.ToDictionary(
+            fact => fact.FactId,
+            fact => Recreate(manifest, fact).FactId,
+            StringComparer.Ordinal);
         var designFacts = generated.Facts
             .Where(fact => designTypes.Contains(fact.FactType))
             .Select(fact => AddProvenance(
-                fact,
+                AddSupportingFactIds(fact, projected.SupportingFactIdsByStableKey, composedBaseFactIds),
                 projected.Support,
                 bundle.Manifest,
                 designContractHash,
@@ -239,6 +243,7 @@ public static class AccessDesignEvidenceComposer
         var fieldsByTable = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
         var fieldsByTableAndHash = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
         var fieldCoverageByStableKey = new Dictionary<string, string>(StringComparer.Ordinal);
+        var supportingFactIdsByStableKey = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         var queryOutputOrdinalByStableKey = new Dictionary<string, int>(StringComparer.Ordinal);
         var stableKeyByCanonicalRecordId = new Dictionary<string, string>(StringComparer.Ordinal);
         var baseMatchedCatalogStableKeys = new HashSet<string>(StringComparer.Ordinal);
@@ -295,6 +300,10 @@ public static class AccessDesignEvidenceComposer
                         RuleIds.LegacyAccessDesignInput));
             }
         }
+
+        var completeTableFieldCatalogStableKeys = BuildCompleteTableFieldCatalogStableKeys(
+            baseFacts,
+            fieldsByTable.Keys.ToHashSet(StringComparer.Ordinal));
 
         foreach (var record in bundle.Records.Where(record =>
                      record.Kind == "catalog-object"
@@ -539,6 +548,13 @@ public static class AccessDesignEvidenceComposer
             .OrderBy(input => SurfaceStableKey(databaseSeed, input.Raw), StringComparer.Ordinal)
             .ToArray();
         var rawSurfaces = mergedSurfaceInputs.Select(input => input.Raw).ToArray();
+        var queryKinds = BuildConsistentQueryKinds(baseFacts
+            .Where(fact => fact.FactType == FactTypes.AccessQueryDeclared
+                && fact.TargetSymbol is not null
+                && fact.Properties.TryGetValue("queryKind", out _))
+            .Select(fact => (fact.TargetSymbol!, fact.Properties["queryKind"])));
+        var staticCrosstabPivotHashes = BuildStaticCrosstabPivotHashes(baseFacts, queryKinds);
+        var staticCrosstabPivotFactIds = BuildStaticCrosstabPivotFactIds(baseFacts, queryKinds);
         var reconciledDomainCriteriaFields = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
         ReconcileSurfaceQueryOutputNames(
             rawSurfaces,
@@ -546,11 +562,16 @@ public static class AccessDesignEvidenceComposer
             fieldsByTableAndHash,
             fieldsByTable);
         ReconcileDomainExpressionQueryOutputNames(
+            databaseSeed,
             rawSurfaces,
             knownObjects,
             fieldsByTableAndHash,
             fieldsByTable,
-            reconciledDomainCriteriaFields);
+            reconciledDomainCriteriaFields,
+            staticCrosstabPivotHashes,
+            fieldCoverageByStableKey,
+            staticCrosstabPivotFactIds,
+            supportingFactIdsByStableKey);
         var known = knownObjects.ToDictionary(
             item => item.Key,
             item => (IReadOnlyList<(string StableKey, string Kind)>)item.Value
@@ -580,11 +601,6 @@ public static class AccessDesignEvidenceComposer
                 group => group.Key,
                 group => (IReadOnlyList<string>)BuildOrdinalOutputs(group, limits.MaxChildrenPerObject),
                 StringComparer.Ordinal);
-        var queryKinds = BuildConsistentQueryKinds(baseFacts
-            .Where(fact => fact.FactType == FactTypes.AccessQueryDeclared
-                && fact.TargetSymbol is not null
-                && fact.Properties.TryGetValue("queryKind", out _))
-            .Select(fact => (fact.TargetSymbol!, fact.Properties["queryKind"])));
         var rawModules = bundle.Records.Where(record => record.Kind == "vba-module")
             .Select(record => new AccessRawVbaModule(
                 String(record.Payload, "identity"),
@@ -610,7 +626,8 @@ public static class AccessDesignEvidenceComposer
             queryKinds,
             vbaProcedureCatalog,
             fieldCoverageByStableKey,
-            domainCriteriaFields);
+            domainCriteriaFields,
+            completeTableFieldCatalogStableKeys);
         var rowSourceContexts = ui.Surfaces
             .SelectMany(surface => surface.Controls.SelectMany(control =>
             {
@@ -790,7 +807,49 @@ public static class AccessDesignEvidenceComposer
             .ThenBy(gap => gap.StableScopeKey, StringComparer.Ordinal)
             .ToArray();
         foreach (var record in bundle.Records) support.TryAdd(record.CanonicalRecordId, [record]);
-        return new(ui, vba, macros, gaps, support);
+        return new(ui, vba, macros, gaps, support, supportingFactIdsByStableKey);
+    }
+
+    internal static IReadOnlySet<string> BuildCompleteTableFieldCatalogStableKeys(
+        IReadOnlyList<CodeFact> baseFacts,
+        IReadOnlySet<string> tableStableKeysWithFields)
+    {
+        var globallyIncomplete = baseFacts.Any(fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && IsGlobalFieldCatalogGap(fact));
+        globallyIncomplete |= baseFacts.Any(fact =>
+            fact.FactType == FactTypes.LegacyDataColumnDeclared
+            && fact.SourceSymbol is null);
+        if (globallyIncomplete) return new HashSet<string>(StringComparer.Ordinal);
+
+        var incomplete = baseFacts
+            .Where(fact => fact.FactType == FactTypes.AnalysisGap
+                && fact.TargetSymbol is not null
+                && (fact.Properties.GetValueOrDefault("scopeKind") == "field"
+                    || fact.Properties.GetValueOrDefault("classification") == "AccessFieldCollectionLimit"))
+            .Select(fact => fact.TargetSymbol!)
+            .Concat(baseFacts
+                .Where(fact => fact.FactType == FactTypes.LegacyDataColumnDeclared
+                    && fact.SourceSymbol is not null
+                    && (fact.TargetSymbol is null
+                        || !fact.Properties.ContainsKey("objectName")
+                            && !fact.Properties.ContainsKey("objectNameHash")))
+                .Select(fact => fact.SourceSymbol!))
+            .ToHashSet(StringComparer.Ordinal);
+        return baseFacts
+            .Where(fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
+                && fact.TargetSymbol is not null
+                && tableStableKeysWithFields.Contains(fact.TargetSymbol)
+                && !incomplete.Contains(fact.TargetSymbol))
+            .Select(fact => fact.TargetSymbol!)
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static bool IsGlobalFieldCatalogGap(CodeFact fact)
+    {
+        var classification = fact.Properties.GetValueOrDefault("classification");
+        if (classification == "AccessGapLimitReached") return true;
+        return classification == "AccessFieldCollectionLimit" && fact.TargetSymbol is null;
     }
 
     private static void AddUiChildSupport(
@@ -859,6 +918,29 @@ public static class AccessDesignEvidenceComposer
                 ? EvidenceTiers.Tier3SyntaxOrTextual
                 : fact.EvidenceTier;
         return fact with { Properties = properties, Evidence = evidence, EvidenceTier = tier };
+    }
+
+    private static CodeFact AddSupportingFactIds(
+        CodeFact fact,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> supportingFactIdsByStableKey,
+        IReadOnlyDictionary<string, string> composedBaseFactIds)
+    {
+        if (fact.TargetSymbol is null
+            || !supportingFactIdsByStableKey.TryGetValue(fact.TargetSymbol, out var supportingFactIds)
+            || supportingFactIds.Count == 0)
+            return fact;
+        var merged = (fact.Properties.GetValueOrDefault("supportingFactIds") ?? string.Empty)
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Concat(supportingFactIds.Select(factId => composedBaseFactIds.GetValueOrDefault(factId) ?? factId))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal);
+        var properties = new SortedDictionary<string, string>(
+            fact.Properties.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
+            StringComparer.Ordinal)
+        {
+            ["supportingFactIds"] = string.Join(';', merged)
+        };
+        return fact with { Properties = properties };
     }
 
     private static IReadOnlyList<AccessDesignEvidenceRecord> FindSupport(
@@ -1105,11 +1187,16 @@ public static class AccessDesignEvidenceComposer
     }
 
     internal static void ReconcileDomainExpressionQueryOutputNames(
+        string databaseIdentitySeed,
         IReadOnlyList<AccessRawUiSurface> surfaces,
         IReadOnlyDictionary<string, List<(string StableKey, string Kind)>> knownObjects,
         IReadOnlyDictionary<string, Dictionary<string, List<string>>> fieldsByTableAndHash,
         Dictionary<string, Dictionary<string, List<string>>> fieldsByTable,
-        Dictionary<string, Dictionary<string, List<string>>> criteriaFieldsByDomain)
+        Dictionary<string, Dictionary<string, List<string>>> criteriaFieldsByDomain,
+        IReadOnlyDictionary<string, IReadOnlySet<string>>? staticCrosstabPivotHashes = null,
+        Dictionary<string, string>? fieldCoverageByStableKey = null,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? staticCrosstabPivotFactIds = null,
+        Dictionary<string, IReadOnlyList<string>>? supportingFactIdsByStableKey = null)
     {
         foreach (var expression in surfaces.SelectMany(DomainExpressions))
         {
@@ -1125,6 +1212,31 @@ public static class AccessDesignEvidenceComposer
                 }
 
                 var stableKey = matches[0].StableKey;
+                var pivotHashes = staticCrosstabPivotHashes?.GetValueOrDefault(stableKey);
+                var exactPivotHash = AccessSafeValues.RoleHash(
+                    "access-query-pivot-column",
+                    reference.FieldName);
+                if (reference.ReferenceKind == "selected"
+                    && pivotHashes?.Contains(exactPivotHash) == true)
+                {
+                    var candidate = AccessSafeValues.CrosstabPivotColumnCandidate(
+                        databaseIdentitySeed,
+                        stableKey,
+                        reference.FieldName).StableKey;
+                    SetField(
+                        fieldsByTable,
+                        stableKey,
+                        reference.FieldName,
+                        candidate);
+                    if (fieldCoverageByStableKey is not null)
+                        fieldCoverageByStableKey[candidate] = "partial";
+                    if (supportingFactIdsByStableKey is not null
+                        && staticCrosstabPivotFactIds?.TryGetValue(stableKey, out var factIdsByHash) == true
+                        && factIdsByHash.TryGetValue(exactPivotHash, out var factIds)
+                        && factIds.Count > 0)
+                        supportingFactIdsByStableKey[candidate] = factIds;
+                    continue;
+                }
                 if (fieldsByTable.TryGetValue(stableKey, out var declaredFields)
                     && declaredFields.ContainsKey(reference.FieldName))
                 {
@@ -1137,6 +1249,26 @@ public static class AccessDesignEvidenceComposer
                 if (!fieldsByHash.TryGetValue(fieldHash, out var fieldMatches)
                     || fieldMatches.Distinct(StringComparer.Ordinal).ToArray() is not { Length: 1 } distinct)
                 {
+                    if (reference.ReferenceKind == "selected"
+                        && reference.FieldName.Length > 0
+                        && reference.FieldName.All(char.IsDigit)
+                        && pivotHashes?.Contains(AccessSafeValues.RoleHash(
+                            "access-query-pivot-column",
+                            "W" + reference.FieldName)) == true
+                        && fieldsByHash.TryGetValue(AccessSafeValues.RoleHash(
+                            $"access-query-field-{stableKey}-name",
+                            "W" + reference.FieldName), out var prefixedMatches)
+                        && prefixedMatches.Distinct(StringComparer.Ordinal).Count() == 1)
+                    {
+                        AddField(
+                            fieldsByTable,
+                            stableKey,
+                            reference.FieldName,
+                            AccessSafeValues.CrosstabPivotPrefixMismatchCandidate(
+                                databaseIdentitySeed,
+                                stableKey,
+                                reference.FieldName).StableKey);
+                    }
                     continue;
                 }
                 AddField(
@@ -1147,6 +1279,66 @@ public static class AccessDesignEvidenceComposer
             }
         }
     }
+
+    internal static IReadOnlyDictionary<string, IReadOnlySet<string>> BuildStaticCrosstabPivotHashes(
+        IReadOnlyList<CodeFact> facts,
+        IReadOnlyDictionary<string, string> queryKinds)
+    {
+        var result = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
+        foreach (var group in StaticCrosstabPivotEntries(facts, queryKinds)
+                     .GroupBy(item => item.QueryStableKey, StringComparer.Ordinal))
+        {
+            var hashes = group
+                .Select(item => item.Hash)
+                .Distinct(StringComparer.Ordinal)
+                .ToHashSet(StringComparer.Ordinal);
+            if (hashes.Count > 0)
+                result[group.Key] = hashes;
+        }
+        return result;
+    }
+
+    internal static IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> BuildStaticCrosstabPivotFactIds(
+        IReadOnlyList<CodeFact> facts,
+        IReadOnlyDictionary<string, string> queryKinds)
+    {
+        var result = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal);
+        foreach (var group in StaticCrosstabPivotEntries(facts, queryKinds)
+                     .GroupBy(item => item.QueryStableKey, StringComparer.Ordinal))
+        {
+            var byHash = group
+                .Select(item => (item.Hash, item.FactId))
+                .GroupBy(item => item.Hash, StringComparer.Ordinal)
+                .OrderBy(item => item.Key, StringComparer.Ordinal)
+                .ToDictionary(
+                    item => item.Key,
+                    item => (IReadOnlyList<string>)item.Select(value => value.FactId)
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(value => value, StringComparer.Ordinal)
+                        .ToArray(),
+                    StringComparer.Ordinal);
+            if (byHash.Count > 0)
+                result[group.Key] = byHash;
+        }
+        return result;
+    }
+
+    private static IReadOnlyList<(string QueryStableKey, string Hash, string FactId)> StaticCrosstabPivotEntries(
+        IReadOnlyList<CodeFact> facts,
+        IReadOnlyDictionary<string, string> queryKinds) =>
+        facts
+            .Where(fact => fact.FactType == FactTypes.AccessQueryCrosstabLineageCandidate
+                && fact.SourceSymbol is not null
+                && queryKinds.GetValueOrDefault(fact.SourceSymbol) == "crosstab")
+            .SelectMany(fact => (fact.Properties.GetValueOrDefault("staticColumnHashes") ?? string.Empty)
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(hash => hash.Length == 64 && hash.All(Uri.IsHexDigit))
+                .Select(hash => (fact.SourceSymbol!, Hash: hash, fact.FactId)))
+            .OrderBy(item => item.Item1, StringComparer.Ordinal)
+            .ThenBy(item => item.Hash, StringComparer.Ordinal)
+            .ThenBy(item => item.FactId, StringComparer.Ordinal)
+            .Select(item => (QueryStableKey: item.Item1, item.Hash, item.FactId))
+            .ToArray();
 
     internal static IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> BuildDomainCriteriaFieldSets(
         IReadOnlyList<CodeFact> facts,
@@ -1474,6 +1666,17 @@ public static class AccessDesignEvidenceComposer
         entries.Add(stableKey);
     }
 
+    private static void SetField(
+        Dictionary<string, Dictionary<string, List<string>>> values,
+        string table,
+        string name,
+        string stableKey)
+    {
+        if (!values.TryGetValue(table, out var fields))
+            values[table] = fields = new(StringComparer.OrdinalIgnoreCase);
+        fields[name] = [stableKey];
+    }
+
     private static string NormalizeCatalogKind(string value) => value switch
     {
         "saved-query" => "query",
@@ -1551,5 +1754,6 @@ public static class AccessDesignEvidenceComposer
         AccessVbaProjectionResult Vba,
         AccessMacroProjectionResult Macros,
         IReadOnlyList<AccessGapProjection> Gaps,
-        IReadOnlyDictionary<string, IReadOnlyList<AccessDesignEvidenceRecord>> Support);
+        IReadOnlyDictionary<string, IReadOnlyList<AccessDesignEvidenceRecord>> Support,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> SupportingFactIdsByStableKey);
 }

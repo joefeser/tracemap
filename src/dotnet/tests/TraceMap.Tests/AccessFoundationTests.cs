@@ -91,7 +91,7 @@ public sealed class AccessFoundationTests
         var criteriaFieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
 
         AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
-            [surface], knownObjects, fieldsByHash, fieldsByName, criteriaFieldsByName);
+            "database-seed", [surface], knownObjects, fieldsByHash, fieldsByName, criteriaFieldsByName);
 
         Assert.Equal(selectedStableKey, Assert.Single(fieldsByName[queryStableKey]["Percent"]));
         Assert.False(fieldsByName[queryStableKey].ContainsKey("WeeklyPlanID"));
@@ -103,8 +103,127 @@ public sealed class AccessFoundationTests
         fieldsByName.Clear();
         criteriaFieldsByName.Clear();
         AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
-            [surface], knownObjects, fieldsByHash, fieldsByName, criteriaFieldsByName);
+            "database-seed", [surface], knownObjects, fieldsByHash, fieldsByName, criteriaFieldsByName);
         Assert.False(criteriaFieldsByName.ContainsKey(queryStableKey));
+    }
+
+    [Fact]
+    public void Design_composer_reconciles_only_exact_declared_crosstab_pivot_headings_as_candidates()
+    {
+        const string databaseSeed = "database-seed";
+        const string queryStableKey = "access-query-pivot";
+        var surface = new AccessRawUiSurface(
+            "ReportOne",
+            "report",
+            false,
+            null,
+            [new AccessRawControl("week", 0, 109, "=DLookUp(\"[4]\",\"qPivot\")", null, [])],
+            []);
+        var knownObjects = new Dictionary<string, List<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["qPivot"] = [(queryStableKey, "query")]
+        };
+        var fieldsByHash = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new(StringComparer.Ordinal)
+            {
+                [AccessSafeValues.RoleHash($"access-query-field-{queryStableKey}-name", "4")] = ["declared-four"]
+            }
+        };
+        var fieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["4"] = ["declared-four"]
+            }
+        };
+        var criteriaFieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
+        var pivotHashes = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new HashSet<string>(StringComparer.Ordinal)
+            {
+                AccessSafeValues.RoleHash("access-query-pivot-column", "4")
+            }
+        };
+        var pivotHash = AccessSafeValues.RoleHash("access-query-pivot-column", "4");
+        var pivotFactIds = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+            {
+                [pivotHash] = ["crosstab-lineage-fact"]
+            }
+        };
+        var fieldCoverage = new Dictionary<string, string>(StringComparer.Ordinal);
+        var supportingFactIds = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            databaseSeed,
+            [surface],
+            knownObjects,
+            fieldsByHash,
+            fieldsByName,
+            criteriaFieldsByName,
+            pivotHashes,
+            fieldCoverage,
+            pivotFactIds,
+            supportingFactIds);
+
+        var candidate = Assert.Single(fieldsByName[queryStableKey]["4"]);
+        Assert.True(AccessSafeValues.IsCrosstabPivotColumnCandidate(candidate));
+        Assert.Equal("partial", fieldCoverage[candidate]);
+        Assert.Equal(["crosstab-lineage-fact"], supportingFactIds[candidate]);
+
+        fieldsByName.Clear();
+        fieldsByName[queryStableKey] = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["W5"] = ["declared-week-five"]
+        };
+        pivotHashes[queryStableKey] = new HashSet<string>(StringComparer.Ordinal)
+        {
+            AccessSafeValues.RoleHash("access-query-pivot-column", "W5")
+        };
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            databaseSeed,
+            [surface with
+            {
+                Controls = [new AccessRawControl("week", 0, 109, "=DLookUp(\"[5]\",\"qPivot\")", null, [])]
+            }],
+            knownObjects,
+            fieldsByHash,
+            fieldsByName,
+            criteriaFieldsByName,
+            pivotHashes);
+        Assert.False(fieldsByName[queryStableKey].ContainsKey("5"));
+
+        fieldsByHash[queryStableKey][AccessSafeValues.RoleHash(
+            $"access-query-field-{queryStableKey}-name", "W5")] = ["declared-week-five"];
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            databaseSeed,
+            [surface with
+            {
+                Controls = [new AccessRawControl("week", 0, 109, "=DLookUp(\"[5]\",\"qPivot\")", null, [])]
+            }],
+            knownObjects,
+            fieldsByHash,
+            fieldsByName,
+            criteriaFieldsByName,
+            pivotHashes);
+        Assert.True(AccessSafeValues.IsCrosstabPivotPrefixMismatchCandidate(
+            Assert.Single(fieldsByName[queryStableKey]["5"])));
+
+        fieldsByName.Clear();
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            databaseSeed,
+            [surface with
+            {
+                Controls = [new AccessRawControl("week", 0, 109, "=DLookUp(\"[6]\",\"qPivot\")", null, [])]
+            }],
+            knownObjects,
+            fieldsByHash,
+            fieldsByName,
+            criteriaFieldsByName,
+            pivotHashes);
+        Assert.Empty(fieldsByName);
     }
 
     [Fact]
@@ -186,7 +305,7 @@ public sealed class AccessFoundationTests
             domainCriteriaFieldSetsByObject: criteriaScopes);
         var returnBinding = Assert.Single(Assert.Single(returnFromCriteriaOnly.Surfaces).Controls).Bindings.Single();
         Assert.Equal("partial", returnBinding.Coverage);
-        Assert.Equal("AccessBindingDomainSelectedFieldUnmatched", returnBinding.Expression!.GapClassification);
+        Assert.Equal("AccessBindingDomainSelectedFieldDependencyOnly", returnBinding.Expression!.GapClassification);
         Assert.Empty(returnBinding.Expression.SelectedFieldStableKeys);
     }
 
@@ -235,6 +354,49 @@ public sealed class AccessFoundationTests
 
     }
 
+    [Fact]
+    public void Design_composer_marks_table_field_catalog_complete_only_without_acquisition_gaps()
+    {
+        var tables = new[]
+        {
+            EntityFact("table-complete"),
+            EntityFact("table-field-gap"),
+            EntityFact("table-no-fields")
+        };
+        var withScopedGap = tables.Append(GapFact(
+            "AccessObjectMetadataUnavailable",
+            "field",
+            "table-field-gap")).ToArray();
+
+        var complete = AccessDesignEvidenceComposer.BuildCompleteTableFieldCatalogStableKeys(
+            withScopedGap,
+            new HashSet<string>(["table-complete", "table-field-gap"], StringComparer.Ordinal));
+        var disabledByGlobalGap = AccessDesignEvidenceComposer.BuildCompleteTableFieldCatalogStableKeys(
+            withScopedGap.Append(GapFact("AccessFieldCollectionLimit", "table", null)).ToArray(),
+            new HashSet<string>(["table-complete", "table-field-gap"], StringComparer.Ordinal));
+        var disabledByGapTruncation = AccessDesignEvidenceComposer.BuildCompleteTableFieldCatalogStableKeys(
+            withScopedGap.Append(GapFact("AccessGapLimitReached", "database", null)).ToArray(),
+            new HashSet<string>(["table-complete", "table-field-gap"], StringComparer.Ordinal));
+        var malformedGap = AccessDesignEvidenceComposer.BuildCompleteTableFieldCatalogStableKeys(
+            tables.Append(GapFact("AccessFieldCollectionLimit", "unknown", "table-complete")).ToArray(),
+            new HashSet<string>(["table-complete", "table-field-gap"], StringComparer.Ordinal));
+        var malformedColumn = EntityFact("column-malformed") with
+        {
+            FactType = FactTypes.LegacyDataColumnDeclared,
+            SourceSymbol = "table-complete",
+            Properties = new Dictionary<string, string>()
+        };
+        var malformedCatalog = AccessDesignEvidenceComposer.BuildCompleteTableFieldCatalogStableKeys(
+            tables.Append(malformedColumn).ToArray(),
+            new HashSet<string>(["table-complete", "table-field-gap"], StringComparer.Ordinal));
+
+        Assert.Equal(["table-complete"], complete);
+        Assert.Empty(disabledByGlobalGap);
+        Assert.Empty(disabledByGapTruncation);
+        Assert.DoesNotContain("table-complete", malformedGap);
+        Assert.DoesNotContain("table-complete", malformedCatalog);
+    }
+
     private static CodeFact QueryDeclarationFact(string target, string referenceCoverage) => new(
         "declaration-" + referenceCoverage,
         "scan-access",
@@ -248,7 +410,41 @@ public sealed class AccessFoundationTests
         target,
         null,
         new EvidenceSpan("database.accdb", 1, 1, null, "access-query", "1.0.0"),
-        new Dictionary<string, string> { ["referenceCoverage"] = referenceCoverage });
+            new Dictionary<string, string> { ["referenceCoverage"] = referenceCoverage });
+
+    private static CodeFact EntityFact(string target) => new(
+        "entity-" + target,
+        "scan-access",
+        "synthetic",
+        new string('a', 40),
+        null,
+        FactTypes.LegacyDataEntityDeclared,
+        RuleIds.LegacyAccessSchema,
+        EvidenceTiers.Tier2Structural,
+        null,
+        target,
+        null,
+        new EvidenceSpan("database.accdb", 1, 1, null, "access-schema", "1.0.0"),
+        new Dictionary<string, string>());
+
+    private static CodeFact GapFact(string classification, string scopeKind, string? target) => new(
+        "gap-" + classification + "-" + (target ?? "global"),
+        "scan-access",
+        "synthetic",
+        new string('a', 40),
+        null,
+        FactTypes.AnalysisGap,
+        RuleIds.LegacyAccessCoverageGap,
+        EvidenceTiers.Tier4Unknown,
+        null,
+        target,
+        null,
+        new EvidenceSpan("database.accdb", 1, 1, null, "access-gap", "1.0.0"),
+        new Dictionary<string, string>
+        {
+            ["classification"] = classification,
+            ["scopeKind"] = scopeKind
+        });
 
     private static CodeFact DependencyFact(
         string factId,
@@ -269,6 +465,21 @@ public sealed class AccessFoundationTests
             new EvidenceSpan("database.accdb", 1, 1, null, "access-query", "1.0.0"),
             new Dictionary<string, string> { ["targetKind"] = targetKind });
 
+    private static CodeFact CrosstabLineageFact(string source, string staticColumnHashes) => new(
+        "crosstab-" + source,
+        "scan-access",
+        "synthetic",
+        new string('a', 40),
+        null,
+        FactTypes.AccessQueryCrosstabLineageCandidate,
+        RuleIds.LegacyAccessQuery,
+        EvidenceTiers.Tier3SyntaxOrTextual,
+        source,
+        null,
+        null,
+        new EvidenceSpan("database.accdb", 1, 1, null, "access-query", "1.0.0"),
+        new Dictionary<string, string> { ["staticColumnHashes"] = staticColumnHashes });
+
     [Fact]
     public void Conflicting_query_kinds_are_omitted_independently_of_input_order()
     {
@@ -280,6 +491,32 @@ public sealed class AccessFoundationTests
         Assert.Equal(first, second);
         Assert.False(first.ContainsKey("query-a"));
         Assert.Equal("select", first["query-b"]);
+    }
+
+    [Fact]
+    public void Static_crosstab_pivot_hashes_require_a_consistent_crosstab_declaration()
+    {
+        var pivotHash = AccessSafeValues.RoleHash("access-query-pivot-column", "W4");
+        var projected = AccessDesignEvidenceComposer.BuildStaticCrosstabPivotHashes(
+            [
+                CrosstabLineageFact("query-pivot", pivotHash + ";invalid"),
+                CrosstabLineageFact("query-select", pivotHash)
+            ],
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["query-pivot"] = "crosstab",
+                ["query-select"] = "select"
+            });
+
+        Assert.Equal([pivotHash], projected["query-pivot"]);
+        Assert.False(projected.ContainsKey("query-select"));
+
+        var supportingFacts = AccessDesignEvidenceComposer.BuildStaticCrosstabPivotFactIds(
+            [CrosstabLineageFact("query-pivot", pivotHash + ";invalid")],
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["query-pivot"] = "crosstab" });
+        Assert.Equal(
+            ["crosstab-query-pivot"],
+            supportingFacts["query-pivot"][pivotHash]);
     }
 
     [Fact]
@@ -1883,6 +2120,31 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Duplicate_gaps_do_not_consume_the_gap_limit_before_distinct_gaps_are_selected()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        File.WriteAllBytes(databasePath, [1, 2, 3, 4]);
+        var input = Input(databasePath, Path.Combine(temp.Path, "out"));
+        var limits = AccessLimits.Default with { MaxGaps = 2 };
+        var projection = Projection(input) with
+        {
+            Gaps =
+            [
+                new("GapA", "database", null),
+                new("GapA", "database", null),
+                new("GapB", "database", null)
+            ]
+        };
+
+        var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath), limits);
+
+        Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("classification") == "GapA");
+        Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("classification") == "GapB");
+        Assert.DoesNotContain(result.Facts, fact => fact.Properties.GetValueOrDefault("classification") == "AccessGapLimitReached");
+    }
+
+    [Fact]
     public void Relationship_masks_are_normalized_without_losing_raw_or_unknown_bits()
     {
         using var temp = new TempDirectory();
@@ -1996,6 +2258,76 @@ public sealed class AccessFoundationTests
         Assert.Equal(sharedOutputIdentity.StableKey, gap.TargetSymbol);
         Assert.False(gap.Properties.ContainsKey("supportingFactIds"));
         Assert.Equal("query-output-field-owner-unknown", gap.Properties["scopeKind"]);
+    }
+
+    [Fact]
+    public void Binding_owned_gaps_reference_the_supporting_binding_declaration_fact()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        File.WriteAllBytes(databasePath, [1, 2, 3, 4]);
+        var input = Input(databasePath, Path.Combine(temp.Path, "out"));
+        var seed = AccessSafeValues.DatabaseIdentitySeed(
+            input.RepositoryIdentityHash,
+            input.CommitSha,
+            input.DatabaseRelativePath,
+            input.DatabaseHash);
+        var surfaceIdentity = AccessSafeValues.Identity(seed, "form", "frmUsers");
+        var bindingIdentity = AccessSafeValues.Identity(seed, $"binding-{surfaceIdentity.StableKey}-record-source", "record-source", 0);
+        var binding = new AccessBindingProjection(
+            bindingIdentity,
+            surfaceIdentity.StableKey,
+            "record-source",
+            "inline-sql",
+            AccessSafeValues.RoleHash("access-query-sql", "SELECT Users.* FROM Users"),
+            "SELECT Users.* FROM Users".Length,
+            [],
+            "table",
+            "partial");
+        var surface = new AccessUiSurfaceProjection(
+            surfaceIdentity,
+            "form",
+            "absent",
+            "bound",
+            AccessSafeValues.RoleHash("access-ui-design", "frmUsers"),
+            [binding],
+            [],
+            [],
+            "partial");
+        var projection = Projection(input) with
+        {
+            UiSurfaces = [surface],
+            Gaps = [new("AccessBindingInlineSqlProjectionPartial", "binding", bindingIdentity.StableKey, RuleIds.LegacyAccessBinding)]
+        };
+
+        var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath));
+        var declaration = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessBindingDeclared);
+        var gap = Assert.Single(result.Facts, fact =>
+            fact.Properties.GetValueOrDefault("classification") == "AccessBindingInlineSqlProjectionPartial");
+
+        Assert.Equal(bindingIdentity.StableKey, gap.TargetSymbol);
+        Assert.Equal(declaration.FactId, gap.Properties["supportingFactIds"]);
+    }
+
+    [Fact]
+    public void Non_binding_gap_stable_key_collisions_do_not_attach_unrelated_declarations()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        File.WriteAllBytes(databasePath, [1, 2, 3, 4]);
+        var input = Input(databasePath, Path.Combine(temp.Path, "out"));
+        var projection = Projection(input);
+        var table = projection.Tables[0];
+        projection = projection with
+        {
+            Gaps = [new("AccessSyntheticFieldGap", "field", table.Identity.StableKey, RuleIds.LegacyAccessCoverageGap)]
+        };
+
+        var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath));
+        var gap = Assert.Single(result.Facts, fact =>
+            fact.Properties.GetValueOrDefault("classification") == "AccessSyntheticFieldGap");
+
+        Assert.False(gap.Properties.ContainsKey("supportingFactIds"));
     }
 
     [Fact]
