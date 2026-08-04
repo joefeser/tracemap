@@ -126,8 +126,17 @@ public sealed class AccessFoundationTests
         var fieldsByHash = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
         {
             [queryStableKey] = new(StringComparer.Ordinal)
+            {
+                [AccessSafeValues.RoleHash($"access-query-field-{queryStableKey}-name", "4")] = ["declared-four"]
+            }
         };
-        var fieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
+        var fieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["4"] = ["declared-four"]
+            }
+        };
         var criteriaFieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
         var pivotHashes = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
         {
@@ -158,6 +167,21 @@ public sealed class AccessFoundationTests
         {
             AccessSafeValues.RoleHash("access-query-pivot-column", "W5")
         };
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            databaseSeed,
+            [surface with
+            {
+                Controls = [new AccessRawControl("week", 0, 109, "=DLookUp(\"[5]\",\"qPivot\")", null, [])]
+            }],
+            knownObjects,
+            fieldsByHash,
+            fieldsByName,
+            criteriaFieldsByName,
+            pivotHashes);
+        Assert.False(fieldsByName[queryStableKey].ContainsKey("5"));
+
+        fieldsByHash[queryStableKey][AccessSafeValues.RoleHash(
+            $"access-query-field-{queryStableKey}-name", "W5")] = ["declared-week-five"];
         AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
             databaseSeed,
             [surface with
@@ -335,9 +359,27 @@ public sealed class AccessFoundationTests
         var disabledByGlobalGap = AccessDesignEvidenceComposer.BuildCompleteTableFieldCatalogStableKeys(
             withScopedGap.Append(GapFact("AccessFieldCollectionLimit", "table", null)).ToArray(),
             new HashSet<string>(["table-complete", "table-field-gap"], StringComparer.Ordinal));
+        var disabledByGapTruncation = AccessDesignEvidenceComposer.BuildCompleteTableFieldCatalogStableKeys(
+            withScopedGap.Append(GapFact("AccessGapLimitReached", "database", null)).ToArray(),
+            new HashSet<string>(["table-complete", "table-field-gap"], StringComparer.Ordinal));
+        var malformedGap = AccessDesignEvidenceComposer.BuildCompleteTableFieldCatalogStableKeys(
+            tables.Append(GapFact("AccessFieldCollectionLimit", "unknown", "table-complete")).ToArray(),
+            new HashSet<string>(["table-complete", "table-field-gap"], StringComparer.Ordinal));
+        var malformedColumn = EntityFact("column-malformed") with
+        {
+            FactType = FactTypes.LegacyDataColumnDeclared,
+            SourceSymbol = "table-complete",
+            Properties = new Dictionary<string, string>()
+        };
+        var malformedCatalog = AccessDesignEvidenceComposer.BuildCompleteTableFieldCatalogStableKeys(
+            tables.Append(malformedColumn).ToArray(),
+            new HashSet<string>(["table-complete", "table-field-gap"], StringComparer.Ordinal));
 
         Assert.Equal(["table-complete"], complete);
         Assert.Empty(disabledByGlobalGap);
+        Assert.Empty(disabledByGapTruncation);
+        Assert.DoesNotContain("table-complete", malformedGap);
+        Assert.DoesNotContain("table-complete", malformedCatalog);
     }
 
     private static CodeFact QueryDeclarationFact(string target, string referenceCoverage) => new(

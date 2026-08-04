@@ -807,15 +807,25 @@ public static class AccessDesignEvidenceComposer
     {
         var globallyIncomplete = baseFacts.Any(fact =>
             fact.FactType == FactTypes.AnalysisGap
-            && fact.Properties.GetValueOrDefault("classification") == "AccessFieldCollectionLimit"
-            && fact.TargetSymbol is null);
+            && IsGlobalFieldCatalogGap(fact));
+        globallyIncomplete |= baseFacts.Any(fact =>
+            fact.FactType == FactTypes.LegacyDataColumnDeclared
+            && fact.SourceSymbol is null);
         if (globallyIncomplete) return new HashSet<string>(StringComparer.Ordinal);
 
         var incomplete = baseFacts
             .Where(fact => fact.FactType == FactTypes.AnalysisGap
                 && fact.TargetSymbol is not null
-                && fact.Properties.GetValueOrDefault("scopeKind") == "field")
+                && (fact.Properties.GetValueOrDefault("scopeKind") == "field"
+                    || fact.Properties.GetValueOrDefault("classification") == "AccessFieldCollectionLimit"))
             .Select(fact => fact.TargetSymbol!)
+            .Concat(baseFacts
+                .Where(fact => fact.FactType == FactTypes.LegacyDataColumnDeclared
+                    && fact.SourceSymbol is not null
+                    && (fact.TargetSymbol is null
+                        || !fact.Properties.ContainsKey("objectName")
+                            && !fact.Properties.ContainsKey("objectNameHash")))
+                .Select(fact => fact.SourceSymbol!))
             .ToHashSet(StringComparer.Ordinal);
         return baseFacts
             .Where(fact => fact.FactType == FactTypes.LegacyDataEntityDeclared
@@ -824,6 +834,13 @@ public static class AccessDesignEvidenceComposer
                 && !incomplete.Contains(fact.TargetSymbol))
             .Select(fact => fact.TargetSymbol!)
             .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static bool IsGlobalFieldCatalogGap(CodeFact fact)
+    {
+        var classification = fact.Properties.GetValueOrDefault("classification");
+        if (classification == "AccessGapLimitReached") return true;
+        return classification == "AccessFieldCollectionLimit" && fact.TargetSymbol is null;
     }
 
     private static void AddUiChildSupport(
@@ -1160,6 +1177,23 @@ public static class AccessDesignEvidenceComposer
                 }
 
                 var stableKey = matches[0].StableKey;
+                var pivotHashes = staticCrosstabPivotHashes?.GetValueOrDefault(stableKey);
+                var exactPivotHash = AccessSafeValues.RoleHash(
+                    "access-query-pivot-column",
+                    reference.FieldName);
+                if (reference.ReferenceKind == "selected"
+                    && pivotHashes?.Contains(exactPivotHash) == true)
+                {
+                    SetField(
+                        fieldsByTable,
+                        stableKey,
+                        reference.FieldName,
+                        AccessSafeValues.CrosstabPivotColumnCandidate(
+                            databaseIdentitySeed,
+                            stableKey,
+                            reference.FieldName).StableKey);
+                    continue;
+                }
                 if (fieldsByTable.TryGetValue(stableKey, out var declaredFields)
                     && declaredFields.ContainsKey(reference.FieldName))
                 {
@@ -1173,29 +1207,14 @@ public static class AccessDesignEvidenceComposer
                     || fieldMatches.Distinct(StringComparer.Ordinal).ToArray() is not { Length: 1 } distinct)
                 {
                     if (reference.ReferenceKind == "selected"
-                        && staticCrosstabPivotHashes?.TryGetValue(stableKey, out var pivotHashes) == true
-                        && pivotHashes.Contains(AccessSafeValues.RoleHash(
-                            "access-query-pivot-column",
-                            reference.FieldName)))
-                    {
-                        AddField(
-                            fieldsByTable,
-                            stableKey,
-                            reference.FieldName,
-                            AccessSafeValues.CrosstabPivotColumnCandidate(
-                                databaseIdentitySeed,
-                                stableKey,
-                                reference.FieldName).StableKey);
-                    }
-                    else if (reference.ReferenceKind == "selected"
                         && reference.FieldName.Length > 0
                         && reference.FieldName.All(char.IsDigit)
-                        && staticCrosstabPivotHashes?.TryGetValue(stableKey, out pivotHashes) == true
-                        && pivotHashes.Contains(AccessSafeValues.RoleHash(
+                        && pivotHashes?.Contains(AccessSafeValues.RoleHash(
                             "access-query-pivot-column",
-                            "W" + reference.FieldName))
-                        && fieldsByTable.TryGetValue(stableKey, out var crosstabFields)
-                        && crosstabFields.TryGetValue("W" + reference.FieldName, out var prefixedMatches)
+                            "W" + reference.FieldName)) == true
+                        && fieldsByHash.TryGetValue(AccessSafeValues.RoleHash(
+                            $"access-query-field-{stableKey}-name",
+                            "W" + reference.FieldName), out var prefixedMatches)
                         && prefixedMatches.Distinct(StringComparer.Ordinal).Count() == 1)
                     {
                         AddField(
@@ -1234,7 +1253,6 @@ public static class AccessDesignEvidenceComposer
                     .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 .Where(hash => hash.Length == 64 && hash.All(Uri.IsHexDigit))
                 .Distinct(StringComparer.Ordinal)
-                .OrderBy(hash => hash, StringComparer.Ordinal)
                 .ToHashSet(StringComparer.Ordinal);
             if (hashes.Count > 0)
                 result[group.Key] = hashes;
@@ -1566,6 +1584,17 @@ public static class AccessDesignEvidenceComposer
             values[table] = fields = new(StringComparer.OrdinalIgnoreCase);
         if (!fields.TryGetValue(name, out var entries)) fields[name] = entries = [];
         entries.Add(stableKey);
+    }
+
+    private static void SetField(
+        Dictionary<string, Dictionary<string, List<string>>> values,
+        string table,
+        string name,
+        string stableKey)
+    {
+        if (!values.TryGetValue(table, out var fields))
+            values[table] = fields = new(StringComparer.OrdinalIgnoreCase);
+        fields[name] = [stableKey];
     }
 
     private static string NormalizeCatalogKind(string value) => value switch

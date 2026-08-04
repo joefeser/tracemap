@@ -80,6 +80,7 @@ public sealed class AccessMacroReportingTests
                 ["sourceKind"] = "expression",
                 ["targetKind"] = "context",
                 ["coverageLabel"] = "complete",
+                ["expressionGapClassification"] = "AccessBindingDomainSelectedFieldDependencyOnly",
                 ["runtimeValueCoverage"] = "partial",
                 ["limitations"] = "static-evidence-only;no-runtime-value-proof"
             });
@@ -92,6 +93,8 @@ public sealed class AccessMacroReportingTests
         var finding = Assert.Single(review.AccessEvidence.Findings, item =>
             item.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "binding"));
         Assert.Contains(finding.Metadata, pair => pair.Key == "runtimeValueCoverage" && pair.Value == "partial");
+        Assert.Contains(finding.Metadata, pair => pair.Key == "expressionGapClassification"
+            && pair.Value == "AccessBindingDomainSelectedFieldDependencyOnly");
     }
 
     [Fact]
