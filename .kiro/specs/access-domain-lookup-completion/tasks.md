@@ -15,3 +15,6 @@
 - [x] Patch exact-head reviewer findings with fail-closed crosstab, wildcard, predicate, and reporting behavior.
 - [x] Add focused regressions for every correctness cluster.
 - [x] Run full review-hardening validation.
+- [x] Recover unique direct query-output alias source lineage from bounded static SELECT evidence.
+- [x] Resolve criteria through unique output-source lineage and classify return-name alias mismatches precisely.
+- [x] Preserve ambiguous and contradictory source shapes with focused regression coverage.

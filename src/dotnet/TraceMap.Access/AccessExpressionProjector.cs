@@ -100,6 +100,7 @@ public static partial class AccessExpressionProjector
         var domainSelectedFieldDependencyAmbiguous = false;
         var domainCrosstabPivotCandidate = false;
         var domainCrosstabPivotPrefixMismatch = false;
+        var domainSelectedFieldAliasMismatch = false;
         var domainFieldCatalogIncomplete = false;
         var malformedBracketedIdentifier = HasUnbalancedBracketedIdentifier(normalized);
         var domainSyntaxMatches = DomainNamePattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
@@ -190,6 +191,8 @@ public static partial class AccessExpressionProjector
                     domainCrosstabPivotCandidate = true;
                 if (currentSelectedFields.Any(AccessSafeValues.IsCrosstabPivotPrefixMismatchCandidate))
                     domainCrosstabPivotPrefixMismatch = true;
+                if (currentSelectedFields.Any(AccessSafeValues.IsQueryOutputAliasMismatchCandidate))
+                    domainSelectedFieldAliasMismatch = true;
                 selectedFields.UnionWith(currentSelectedFields);
                 if (wildcardSelection) literals.Add("wildcard");
                 if (selectedResolution == FieldResolution.Missing)
@@ -267,7 +270,9 @@ public static partial class AccessExpressionProjector
             : functions.Length > 0 || normalized.StartsWith('=') || operators.Length > 0 ? "calculated-expression"
             : "expression";
         var coverage = dynamic || ambiguous || unresolved || unresolvedFunction || malformedPredicateOperator || domainFieldCatalogIncomplete
-            || domainCrosstabPivotCandidate || domainCrosstabPivotPrefixMismatch ? "partial" : "complete";
+            || domainCrosstabPivotCandidate || domainCrosstabPivotPrefixMismatch || domainSelectedFieldAliasMismatch
+            ? "partial"
+            : "complete";
         var gap = dynamic ? "AccessBindingExpressionDynamic"
             : unresolvedFunction ? "AccessBindingExpressionFunctionUnresolved"
             : malformedPredicateOperator ? "AccessBindingExpressionPartial"
@@ -275,6 +280,7 @@ public static partial class AccessExpressionProjector
             : domainSelectedFieldUnmatched ? "AccessBindingDomainSelectedFieldUnmatched"
             : domainSelectedFieldDependencyAmbiguous ? "AccessBindingDomainSelectedFieldDependencyAmbiguous"
             : domainSelectedFieldDependencyOnly ? "AccessBindingDomainSelectedFieldDependencyOnly"
+            : domainSelectedFieldAliasMismatch ? "AccessBindingDomainSelectedFieldAliasMismatch"
             : domainCrosstabPivotPrefixMismatch ? "AccessBindingDomainCrosstabPivotPrefixMismatch"
             : domainCrosstabPivotCandidate ? "AccessBindingDomainCrosstabPivotCandidate"
             : domainCriteriaFieldAmbiguous ? "AccessBindingDomainCriteriaFieldAmbiguous"

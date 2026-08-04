@@ -108,6 +108,154 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Design_composer_uses_unique_output_source_lineage_to_classify_alias_mismatches_and_criteria_fields()
+    {
+        const string queryStableKey = "access-query-domain";
+        const string outputStableKey = "access-query-output-plan-id";
+        const string sourceStableKey = "access-table-field-weekly-plan-id";
+        var surface = new AccessRawUiSurface(
+            "FormOne",
+            "form",
+            true,
+            null,
+            [new AccessRawControl(
+                "calculated",
+                0,
+                109,
+                "=DLookUp(\"[WeeklyPlanID]\",\"qWeekly\",\"[WeeklyPlanID]=[txtWeeklyPlanID]\")",
+                null,
+                [])],
+            []);
+        var knownObjects = new Dictionary<string, List<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["qWeekly"] = [(queryStableKey, "query")]
+        };
+        var fieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["PlanID"] = [outputStableKey]
+            }
+        };
+        var criteriaFieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
+        var fieldCoverage = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [outputStableKey] = "complete"
+        };
+        var supportingFacts = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            "database-seed",
+            [surface],
+            knownObjects,
+            new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
+            {
+                [queryStableKey] = new(StringComparer.Ordinal)
+            },
+            fieldsByName,
+            criteriaFieldsByName,
+            fieldCoverageByStableKey: fieldCoverage,
+            supportingFactIdsByStableKey: supportingFacts,
+            fieldNamesByStableKey: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [outputStableKey] = "PlanID",
+                [sourceStableKey] = "WeeklyPlanID"
+            },
+            queryOutputSourcesByOutput: new Dictionary<string, List<string>>(StringComparer.Ordinal)
+            {
+                [outputStableKey] = [sourceStableKey]
+            },
+            queryOutputSourceFactIdsByOutput: new Dictionary<string, List<string>>(StringComparer.Ordinal)
+            {
+                [outputStableKey] = ["fact-output-source"]
+            });
+
+        var aliasCandidate = Assert.Single(fieldsByName[queryStableKey]["WeeklyPlanID"]);
+        Assert.True(AccessSafeValues.IsQueryOutputAliasMismatchCandidate(aliasCandidate));
+        Assert.Equal("partial", fieldCoverage[aliasCandidate]);
+        Assert.Equal(["fact-output-source"], supportingFacts[aliasCandidate]);
+        Assert.Equal(sourceStableKey, Assert.Single(criteriaFieldsByName[queryStableKey]["WeeklyPlanID"]));
+
+        var binding = new AccessBindingProjection(
+            new(null, "binding-hash", "access-binding-test"),
+            "access-control-test",
+            "control-source",
+            "calculated-expression",
+            null,
+            0,
+            [aliasCandidate],
+            "query-field",
+            "partial");
+        AccessDesignEvidenceComposer.PropagateBindingSupportingFactIds(
+            new(
+                [new(
+                    new(null, "surface-hash", "access-form-test"),
+                    "form",
+                    "present",
+                    "bound",
+                    "design-hash",
+                    [binding],
+                    [],
+                    [])],
+                []),
+            supportingFacts);
+        Assert.Equal(["fact-output-source"], supportingFacts[binding.Identity.StableKey]);
+
+        fieldsByName[queryStableKey].Remove("WeeklyPlanID");
+        criteriaFieldsByName.Clear();
+        fieldCoverage[outputStableKey] = "partial";
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            "database-seed",
+            [surface],
+            knownObjects,
+            new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
+            {
+                [queryStableKey] = new(StringComparer.Ordinal)
+            },
+            fieldsByName,
+            criteriaFieldsByName,
+            fieldCoverageByStableKey: fieldCoverage,
+            fieldNamesByStableKey: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [outputStableKey] = "PlanID",
+                [sourceStableKey] = "WeeklyPlanID"
+            },
+            queryOutputSourcesByOutput: new Dictionary<string, List<string>>(StringComparer.Ordinal)
+            {
+                [outputStableKey] = [sourceStableKey]
+            });
+        Assert.False(fieldsByName[queryStableKey].ContainsKey("WeeklyPlanID"));
+        Assert.False(criteriaFieldsByName.ContainsKey(queryStableKey));
+
+        fieldsByName[queryStableKey]["PlanID"].Add("another-output");
+        fieldCoverage[outputStableKey] = "complete";
+        fieldCoverage["another-output"] = "complete";
+        var ambiguousSources = new Dictionary<string, List<string>>(StringComparer.Ordinal)
+        {
+            [outputStableKey] = [sourceStableKey],
+            ["another-output"] = [sourceStableKey]
+        };
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            "database-seed",
+            [surface],
+            knownObjects,
+            new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
+            {
+                [queryStableKey] = new(StringComparer.Ordinal)
+            },
+            fieldsByName,
+            criteriaFieldsByName,
+            fieldCoverageByStableKey: fieldCoverage,
+            fieldNamesByStableKey: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [sourceStableKey] = "WeeklyPlanID"
+            },
+            queryOutputSourcesByOutput: ambiguousSources);
+        Assert.False(fieldsByName[queryStableKey].ContainsKey("WeeklyPlanID"));
+        Assert.False(criteriaFieldsByName.ContainsKey(queryStableKey));
+    }
+
+    [Fact]
     public void Design_composer_reconciles_only_exact_declared_crosstab_pivot_headings_as_candidates()
     {
         const string databaseSeed = "database-seed";
@@ -664,7 +812,7 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
-    public void Query_output_shape_accepts_only_direct_select_fields()
+    public void Query_output_shape_accepts_direct_select_fields_and_static_aliases()
     {
         Assert.True(AccessQueryProjector.IsDirectOutputField(
             "SELECT Orders.OrderId, [Orders].[Order Status] FROM Orders;",
@@ -672,7 +820,7 @@ public sealed class AccessFoundationTests
         Assert.True(AccessQueryProjector.IsDirectOutputField(
             "SELECT Orders.OrderId, [Orders].[Order Status] FROM Orders;",
             "Order Status"));
-        Assert.False(AccessQueryProjector.IsDirectOutputField(
+        Assert.True(AccessQueryProjector.IsDirectOutputField(
             "SELECT Orders.OrderId AS Identifier FROM Orders;",
             "Identifier"));
         Assert.False(AccessQueryProjector.IsDirectOutputField(
@@ -1195,7 +1343,8 @@ public sealed class AccessFoundationTests
         {
             ["table-target"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
             {
-                ["Id"] = ["field-id"]
+                ["Id"] = ["field-id"],
+                ["Identifier"] = ["field-identifier"]
             }
         };
 
@@ -1203,9 +1352,16 @@ public sealed class AccessFoundationTests
             "SELECT TargetTable.Id AS Identifier, Abs(TargetTable.Id) FROM TargetTable;", known, fields);
 
         Assert.Equal(AccessSafeValues.RoleHash("access-query-output-name", "Identifier"), projection.Outputs[0].NameHash);
+        Assert.Equal(["field-id"], projection.Outputs[0].SourceFieldStableKeys);
         Assert.Null(projection.Outputs[1].NameHash);
         Assert.True(AccessQueryProjector.HasStaticOutputName(
             "SELECT TargetTable.Id AS Identifier FROM TargetTable;", "Identifier"));
+
+        var malformed = AccessQueryProjector.ProjectStaticSelect(
+            "SELECT TargetTable.Id AS Identifier FROM TargetTable WHERE (", known, fields);
+        Assert.Equal("partial", malformed.Coverage);
+        Assert.Equal("partial", malformed.OutputCoverage);
+        Assert.Equal("partial", malformed.RuntimeValueCoverage);
     }
 
     [Fact]
@@ -1358,6 +1514,274 @@ public sealed class AccessFoundationTests
             && gap.ScopeKind == "query-output-field"
             && gap.StableScopeKey == output.Identity.StableKey);
         Assert.DoesNotContain(gaps, gap => gap.Classification == "AccessQueryOutputMetadataUnavailable");
+    }
+
+    [Fact]
+    public void Com_reader_recovers_unique_direct_alias_source_from_static_select_lineage()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "WeeklyPlanQuery");
+        var tableIdentity = AccessSafeValues.Identity(seed, "table", "WeeklyPlans");
+        var field = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{tableIdentity.StableKey}", "WeeklyPlanID"),
+            0,
+            "long",
+            4,
+            true);
+        var table = new AccessTableProjection(tableIdentity, [field], []);
+        var database = new FakeDaoDatabase(new FakeDaoQuery(
+            "WeeklyPlanQuery",
+            "SELECT WeeklyPlans.WeeklyPlanID AS PlanID FROM WeeklyPlans;",
+            new FakeDaoField("PlanID", throwOnSource: true)));
+        var gaps = new List<AccessGapProjection>();
+
+        var queries = new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlanQuery"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlans"] = [(tableIdentity.StableKey, "table")]
+            },
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlans"] = [table]
+            },
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+            {
+                [tableIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["WeeklyPlanID"] = [field]
+                }
+            },
+            gaps,
+            []);
+
+        var output = Assert.Single(Assert.Single(queries).OutputFields!);
+        Assert.Equal("complete", output.Coverage);
+        Assert.Equal([field.Identity.StableKey], output.SourceFieldStableKeys);
+        Assert.DoesNotContain(gaps, gap =>
+            gap.Classification == "AccessQueryOutputSourceUnavailable"
+            && gap.StableScopeKey == output.Identity.StableKey);
+    }
+
+    [Fact]
+    public void Com_reader_does_not_reconcile_static_alias_ordinals_after_expanding_wildcards()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "MixedWildcardQuery");
+        var ordersIdentity = AccessSafeValues.Identity(seed, "table", "Orders");
+        var customersIdentity = AccessSafeValues.Identity(seed, "table", "Customers");
+        var orderId = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{ordersIdentity.StableKey}", "OrderId"),
+            0,
+            "long",
+            4,
+            true);
+        var amount = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{ordersIdentity.StableKey}", "Amount"),
+            1,
+            "decimal",
+            7,
+            false);
+        var customerId = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{customersIdentity.StableKey}", "Id"),
+            0,
+            "long",
+            4,
+            true);
+        var database = new FakeDaoDatabase(new FakeDaoQuery(
+            "MixedWildcardQuery",
+            "SELECT Orders.*, Customers.Id AS CustomerAlias FROM Orders, Customers;",
+            new FakeDaoField("OrderId", throwOnSource: true),
+            new FakeDaoField("Amount", throwOnSource: true),
+            new FakeDaoField("CustomerAlias", throwOnSource: true)));
+        var gaps = new List<AccessGapProjection>();
+
+        var query = Assert.Single(new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["MixedWildcardQuery"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Orders"] = [(ordersIdentity.StableKey, "table")],
+                ["Customers"] = [(customersIdentity.StableKey, "table")]
+            },
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Orders"] = [new AccessTableProjection(ordersIdentity, [orderId, amount], [])],
+                ["Customers"] = [new AccessTableProjection(customersIdentity, [customerId], [])]
+            },
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+            {
+                [ordersIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["OrderId"] = [orderId],
+                    ["Amount"] = [amount]
+                },
+                [customersIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Id"] = [customerId]
+                }
+            },
+            gaps,
+            []));
+
+        Assert.Equal(3, query.OutputFields!.Count);
+        Assert.All(query.OutputFields, output =>
+        {
+            Assert.Equal("partial", output.Coverage);
+            Assert.DoesNotContain(customerId.Identity.StableKey, output.SourceFieldStableKeys);
+        });
+        Assert.Contains(gaps, gap =>
+            gap.Classification == "AccessQueryOutputSourceUnavailable"
+            && gap.StableScopeKey == query.OutputFields[2].Identity.StableKey);
+    }
+
+    [Theory]
+    [InlineData("Orders.*")]
+    [InlineData("Orders . *")]
+    [InlineData("[Orders].*")]
+    public void Static_output_ordinal_reconciliation_rejects_expanding_wildcard_spellings(string wildcard)
+    {
+        var sql = $"SELECT {wildcard}, Customers.Id AS CustomerAlias FROM Orders, Customers;";
+
+        Assert.False(AccessQueryProjector.CanReconcileStaticOutputByOrdinal(sql, 1, "CustomerAlias"));
+    }
+
+    [Fact]
+    public void Static_output_ordinal_reconciliation_requires_complete_shape_and_matching_output_name()
+    {
+        const string complete = "SELECT Orders.Id AS OrderAlias FROM Orders;";
+        const string incomplete = "SELECT Orders.Id AS OrderAlias FROM Orders WHERE";
+
+        Assert.True(AccessQueryProjector.CanReconcileStaticOutputByOrdinal(complete, 0, "OrderAlias"));
+        Assert.False(AccessQueryProjector.CanReconcileStaticOutputByOrdinal(complete, 0, "DifferentAlias"));
+        Assert.False(AccessQueryProjector.CanReconcileStaticOutputByOrdinal(incomplete, 0, "OrderAlias"));
+    }
+
+    [Fact]
+    public void Com_reader_rejects_malformed_direct_alias_lineage_as_unavailable()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "WeeklyPlanQuery");
+        var tableIdentity = AccessSafeValues.Identity(seed, "table", "WeeklyPlans");
+        var field = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{tableIdentity.StableKey}", "WeeklyPlanID"),
+            0,
+            "long",
+            4,
+            true);
+        var table = new AccessTableProjection(tableIdentity, [field], []);
+        var database = new FakeDaoDatabase(new FakeDaoQuery(
+            "WeeklyPlanQuery",
+            "SELECT WeeklyPlans.WeeklyPlanID AS PlanID FROM WeeklyPlans WHERE (",
+            new FakeDaoField("PlanID", throwOnSource: true)));
+        var gaps = new List<AccessGapProjection>();
+
+        var query = Assert.Single(new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlanQuery"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlans"] = [(tableIdentity.StableKey, "table")]
+            },
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlans"] = [table]
+            },
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+            {
+                [tableIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["WeeklyPlanID"] = [field]
+                }
+            },
+            gaps,
+            []));
+
+        var output = Assert.Single(query.OutputFields!);
+        Assert.Equal("partial", output.Coverage);
+        Assert.Empty(output.SourceFieldStableKeys);
+        Assert.Contains(gaps, gap =>
+            gap.Classification == "AccessQueryOutputExpressionPartial"
+            && gap.StableScopeKey == output.Identity.StableKey);
+    }
+
+    [Fact]
+    public void Com_reader_keeps_dao_and_static_alias_source_disagreement_ambiguous()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "WeeklyPlanQuery");
+        var weeklyTableIdentity = AccessSafeValues.Identity(seed, "table", "WeeklyPlans");
+        var otherTableIdentity = AccessSafeValues.Identity(seed, "table", "OtherPlans");
+        var weeklyField = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{weeklyTableIdentity.StableKey}", "WeeklyPlanID"),
+            0,
+            "long",
+            4,
+            true);
+        var otherField = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{otherTableIdentity.StableKey}", "OtherPlanID"),
+            0,
+            "long",
+            4,
+            true);
+        var database = new FakeDaoDatabase(new FakeDaoQuery(
+            "WeeklyPlanQuery",
+            "SELECT WeeklyPlans.WeeklyPlanID AS PlanID FROM WeeklyPlans;",
+            new FakeDaoField("PlanID", "OtherPlans", "OtherPlanID")));
+        var gaps = new List<AccessGapProjection>();
+
+        var queries = new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlanQuery"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlans"] = [(weeklyTableIdentity.StableKey, "table")]
+            },
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlans"] = [new AccessTableProjection(weeklyTableIdentity, [weeklyField], [])],
+                ["OtherPlans"] = [new AccessTableProjection(otherTableIdentity, [otherField], [])]
+            },
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+            {
+                [weeklyTableIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["WeeklyPlanID"] = [weeklyField]
+                },
+                [otherTableIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["OtherPlanID"] = [otherField]
+                }
+            },
+            gaps,
+            []);
+
+        var output = Assert.Single(Assert.Single(queries).OutputFields!);
+        Assert.Equal("partial", output.Coverage);
+        Assert.Equal(
+            new[] { otherField.Identity.StableKey, weeklyField.Identity.StableKey }
+                .OrderBy(value => value, StringComparer.Ordinal),
+            output.SourceFieldStableKeys.OrderBy(value => value, StringComparer.Ordinal));
+        Assert.Contains(gaps, gap =>
+            gap.Classification == "AccessQueryOutputSourceAmbiguous"
+            && gap.StableScopeKey == output.Identity.StableKey);
     }
 
     [Fact]
