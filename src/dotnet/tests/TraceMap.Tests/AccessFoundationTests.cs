@@ -2236,6 +2236,55 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Binding_owned_gaps_reference_the_supporting_binding_declaration_fact()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        File.WriteAllBytes(databasePath, [1, 2, 3, 4]);
+        var input = Input(databasePath, Path.Combine(temp.Path, "out"));
+        var seed = AccessSafeValues.DatabaseIdentitySeed(
+            input.RepositoryIdentityHash,
+            input.CommitSha,
+            input.DatabaseRelativePath,
+            input.DatabaseHash);
+        var surfaceIdentity = AccessSafeValues.Identity(seed, "form", "frmUsers");
+        var bindingIdentity = AccessSafeValues.Identity(seed, $"binding-{surfaceIdentity.StableKey}-record-source", "record-source", 0);
+        var binding = new AccessBindingProjection(
+            bindingIdentity,
+            surfaceIdentity.StableKey,
+            "record-source",
+            "inline-sql",
+            AccessSafeValues.RoleHash("access-query-sql", "SELECT Users.* FROM Users"),
+            "SELECT Users.* FROM Users".Length,
+            [],
+            "table",
+            "partial");
+        var surface = new AccessUiSurfaceProjection(
+            surfaceIdentity,
+            "form",
+            "absent",
+            "bound",
+            AccessSafeValues.RoleHash("access-ui-design", "frmUsers"),
+            [binding],
+            [],
+            [],
+            "partial");
+        var projection = Projection(input) with
+        {
+            UiSurfaces = [surface],
+            Gaps = [new("AccessBindingInlineSqlProjectionPartial", "binding", bindingIdentity.StableKey, RuleIds.LegacyAccessBinding)]
+        };
+
+        var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath));
+        var declaration = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessBindingDeclared);
+        var gap = Assert.Single(result.Facts, fact =>
+            fact.Properties.GetValueOrDefault("classification") == "AccessBindingInlineSqlProjectionPartial");
+
+        Assert.Equal(bindingIdentity.StableKey, gap.TargetSymbol);
+        Assert.Equal(declaration.FactId, gap.Properties["supportingFactIds"]);
+    }
+
+    [Fact]
     public void Query_parameter_limit_preserves_query_declaration_and_attributes_the_gap()
     {
         using var temp = new TempDirectory();

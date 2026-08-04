@@ -442,6 +442,27 @@ public static class AccessFactBuilder
                     ("limitations", "inventory-only;body-protected-omitted;no-open-export-execution-or-command-semantics"))));
         }
 
+        var declarationFactIdsByStableKey = facts
+            .Where(fact => fact.TargetSymbol is not null)
+            .GroupBy(fact => fact.TargetSymbol!, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group.Select(fact => fact.FactId)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(factId => factId, StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
+        var bindingDeclarationFactIdsByStableKey = facts
+            .Where(fact => fact.FactType == FactTypes.AccessBindingDeclared
+                && fact.Properties.TryGetValue("stableBindingKey", out _))
+            .GroupBy(fact => fact.Properties["stableBindingKey"], StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group.Select(fact => fact.FactId)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(factId => factId, StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
         foreach (var gap in projectedGaps)
         {
             var supportingQueryStableKey = gap.ScopeKind switch
@@ -451,10 +472,16 @@ public static class AccessFactBuilder
                     && queryOutputOwnerStableKeys.TryGetValue(gap.StableScopeKey, out var ownerStableKey) => ownerStableKey,
                 _ => null
             };
-            var supportingFactId = supportingQueryStableKey is not null
-                && queryDeclarationFactIds.TryGetValue(supportingQueryStableKey, out var queryFactId)
-                    ? queryFactId
-                    : null;
+            IReadOnlyList<string> supportingFactIds = [];
+            if (supportingQueryStableKey is not null
+                && queryDeclarationFactIds.TryGetValue(supportingQueryStableKey, out var queryFactId))
+                supportingFactIds = [queryFactId];
+            else if (gap.ScopeKind == "binding" && gap.StableScopeKey is not null
+                && bindingDeclarationFactIdsByStableKey.TryGetValue(gap.StableScopeKey, out var bindingFactIds))
+                supportingFactIds = bindingFactIds;
+            else if (gap.ScopeKind != "query-output-field" && gap.StableScopeKey is not null
+                && declarationFactIdsByStableKey.TryGetValue(gap.StableScopeKey, out var declarationFactIds))
+                supportingFactIds = declarationFactIds;
             var emittedScopeKind = gap.ScopeKind == "query-output-field"
                 && supportingQueryStableKey is null
                     ? "query-output-field-owner-unknown"
@@ -462,7 +489,8 @@ public static class AccessFactBuilder
             facts.Add(Create(manifest, FactTypes.AnalysisGap, gap.RuleId ?? RuleIds.LegacyAccessCoverageGap, EvidenceTiers.Tier4Unknown, span,
                 targetSymbol: gap.StableScopeKey,
                 properties: Props(("classification", gap.Classification), ("gapKind", "access-design"), ("scopeKind", emittedScopeKind),
-                    ("scopeStableKey", gap.StableScopeKey), ("supportingFactIds", supportingFactId),
+                    ("scopeStableKey", gap.StableScopeKey),
+                    ("supportingFactIds", supportingFactIds.Count == 0 ? null : string.Join(';', supportingFactIds)),
                     ("limitations", "unable-to-prove;not-clean-absence"))));
         }
 

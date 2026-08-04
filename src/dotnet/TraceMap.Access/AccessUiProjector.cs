@@ -181,7 +181,7 @@ internal static partial class AccessUiProjector
                         .Select(control => control.Name)
                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
                     var childRecord = ConstrainBindingEvidence(ProjectBinding(databaseIdentitySeed, sourceObject.TargetStableKeys[0], "record-source",
-                        childSurface.RecordSource, 0, knownObjects, null, [], disclosurePolicy, childControlNames, fieldsByTable,
+                        childSurface.RecordSource, 0, knownObjects, null, gaps, disclosurePolicy, childControlNames, fieldsByTable,
                         contextIdentifierNames: childSurface.SurfaceKind.Equals("report", StringComparison.OrdinalIgnoreCase)
                             ? ReportContextIdentifiers
                             : null,
