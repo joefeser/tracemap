@@ -659,7 +659,8 @@ public sealed class AccessComReader
                                 .SingleOrDefault(output => output.Ordinal == metadata.Ordinal);
                             var staticOrdinalAligned = AccessQueryProjector.CanReconcileStaticOutputByOrdinal(
                                 sql,
-                                metadata.Ordinal);
+                                metadata.Ordinal,
+                                metadata.Name);
                             var daoSources = metadata.SourceFieldStableKeys
                                 .Distinct(StringComparer.Ordinal)
                                 .ToArray();

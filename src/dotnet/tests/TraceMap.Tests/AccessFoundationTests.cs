@@ -1644,8 +1644,30 @@ public sealed class AccessFoundationTests
             && gap.StableScopeKey == query.OutputFields[2].Identity.StableKey);
     }
 
+    [Theory]
+    [InlineData("Orders.*")]
+    [InlineData("Orders . *")]
+    [InlineData("[Orders].*")]
+    public void Static_output_ordinal_reconciliation_rejects_expanding_wildcard_spellings(string wildcard)
+    {
+        var sql = $"SELECT {wildcard}, Customers.Id AS CustomerAlias FROM Orders, Customers;";
+
+        Assert.False(AccessQueryProjector.CanReconcileStaticOutputByOrdinal(sql, 1, "CustomerAlias"));
+    }
+
     [Fact]
-    public void Com_reader_keeps_malformed_direct_alias_lineage_partial()
+    public void Static_output_ordinal_reconciliation_requires_complete_shape_and_matching_output_name()
+    {
+        const string complete = "SELECT Orders.Id AS OrderAlias FROM Orders;";
+        const string incomplete = "SELECT Orders.Id AS OrderAlias FROM Orders WHERE";
+
+        Assert.True(AccessQueryProjector.CanReconcileStaticOutputByOrdinal(complete, 0, "OrderAlias"));
+        Assert.False(AccessQueryProjector.CanReconcileStaticOutputByOrdinal(complete, 0, "DifferentAlias"));
+        Assert.False(AccessQueryProjector.CanReconcileStaticOutputByOrdinal(incomplete, 0, "OrderAlias"));
+    }
+
+    [Fact]
+    public void Com_reader_rejects_malformed_direct_alias_lineage_as_unavailable()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
         var queryIdentity = AccessSafeValues.Identity(seed, "query", "WeeklyPlanQuery");
@@ -1690,7 +1712,7 @@ public sealed class AccessFoundationTests
 
         var output = Assert.Single(query.OutputFields!);
         Assert.Equal("partial", output.Coverage);
-        Assert.Equal([field.Identity.StableKey], output.SourceFieldStableKeys);
+        Assert.Empty(output.SourceFieldStableKeys);
         Assert.Contains(gaps, gap =>
             gap.Classification == "AccessQueryOutputExpressionPartial"
             && gap.StableScopeKey == output.Identity.StableKey);

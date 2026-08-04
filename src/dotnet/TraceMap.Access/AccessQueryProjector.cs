@@ -344,15 +344,24 @@ public static partial class AccessQueryProjector
                 StringComparison.OrdinalIgnoreCase)) == 1;
     }
 
-    internal static bool CanReconcileStaticOutputByOrdinal(string sql, int ordinal)
+    internal static bool CanReconcileStaticOutputByOrdinal(string sql, int ordinal, string outputName)
     {
-        if (string.IsNullOrWhiteSpace(sql) || ordinal < 0)
+        if (string.IsNullOrWhiteSpace(sql) || ordinal < 0 || string.IsNullOrWhiteSpace(outputName))
             return false;
-        var select = SelectListAfterKeyword(MaskLiteralsAndComments(sql), "select");
+        var masked = MaskLiteralsAndComments(sql);
+        if (!HasCompleteStaticSelectShape(masked)) return false;
+        var select = SelectListAfterKeyword(masked, "select");
         if (select is null) return false;
         var expressions = SplitSelectItems(select);
         return ordinal < expressions.Count
-            && !expressions.Take(ordinal + 1).Any(IsWildcardProjectionItem);
+            && ProjectionStructureComplete(select)
+            && expressions.All(expression => !string.IsNullOrWhiteSpace(expression))
+            && !expressions.Take(ordinal + 1).Any(IsWildcardProjectionItem)
+            && IsStaticDirectProjection(expressions[ordinal])
+            && string.Equals(
+                StaticOutputName(expressions[ordinal]),
+                outputName.Trim(),
+                StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool HasStaticOutputName(string sql, string outputName)
@@ -399,7 +408,11 @@ public static partial class AccessQueryProjector
     private static bool IsWildcardProjectionItem(string item)
     {
         var normalized = item.Trim();
-        return normalized == "*" || normalized.EndsWith(".*", StringComparison.Ordinal);
+        const string identifier = @"(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*)";
+        return Regex.IsMatch(
+            normalized,
+            $@"(?is)^(?:{identifier}\s*\.\s*)*\*$",
+            RegexOptions.CultureInvariant);
     }
 
     private static bool HasBalancedSqlDelimiters(string value)
@@ -474,6 +487,20 @@ public static partial class AccessQueryProjector
             source,
             $@"(?is)^{identifier}(?:\s*\.\s*{identifier})*(?:\s+as\s+{identifier})?$",
             RegexOptions.CultureInvariant);
+    }
+
+    private static bool HasCompleteStaticSelectShape(string masked)
+    {
+        if (!HasBalancedSqlDelimiters(masked)) return false;
+        var topLevelFromIndexes = TopLevelKeywordIndexes(masked, "from", 0);
+        if (topLevelFromIndexes.Count != 1) return false;
+        var tail = masked[(topLevelFromIndexes[0] + "from".Length)..].Trim();
+        if (tail.EndsWith(';')) tail = tail[..^1].TrimEnd();
+        return tail.Length > 0
+            && !Regex.IsMatch(
+                tail,
+                @"(?is)(?:,|=|<>|<=|>=|<|>|\+|-|\*|/|\b(?:where|having|group\s+by|order\s+by|join|on|and|or)\b)\s*$",
+                RegexOptions.CultureInvariant);
     }
 
     private static IReadOnlyList<int> TopLevelKeywordIndexes(string value, string keyword, int start)
