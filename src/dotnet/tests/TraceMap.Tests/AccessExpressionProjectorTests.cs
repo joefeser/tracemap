@@ -161,7 +161,7 @@ public sealed class AccessExpressionProjectorTests
                     [queryKey] = criteria
                 });
         Assert.Equal("partial", returnFieldStillMissing.Coverage);
-        Assert.Equal("AccessBindingDomainSelectedFieldUnmatched", returnFieldStillMissing.GapClassification);
+        Assert.Equal("AccessBindingDomainSelectedFieldDependencyOnly", returnFieldStillMissing.GapClassification);
         Assert.Empty(returnFieldStillMissing.SelectedFieldStableKeys);
 
         criteria["WeeklyPlanID"] = ["candidate-one", "candidate-two"];
@@ -210,6 +210,87 @@ public sealed class AccessExpressionProjectorTests
         Assert.Equal("partial", projected.Coverage);
         Assert.Equal("AccessBindingDomainSelectedFieldUnmatched", projected.GapClassification);
         Assert.NotEmpty(projected.SelectedFieldReferenceHashes);
+    }
+
+    [Fact]
+    public void Distinguishes_crosstab_pivot_and_dependency_only_domain_return_candidates()
+    {
+        const string queryKey = "query-weekly";
+        var objects = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["qWeekly"] = [(queryKey, "query")]
+        };
+        var pivotCandidate = AccessSafeValues.CrosstabPivotColumnCandidate("database-seed", queryKey, "4").StableKey;
+        var pivot = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
+            "=DLookUp(\"[4]\", \"qWeekly\")",
+            objects,
+            null,
+            fieldSetsByObject: new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["4"] = [pivotCandidate]
+                }
+            });
+
+        Assert.Equal("partial", pivot.Coverage);
+        Assert.Equal("AccessBindingDomainCrosstabPivotCandidate", pivot.GapClassification);
+        Assert.Equal([pivotCandidate], pivot.SelectedFieldStableKeys);
+
+        var mismatchCandidate = AccessSafeValues.CrosstabPivotPrefixMismatchCandidate(
+            "database-seed", queryKey, "4").StableKey;
+        var prefixMismatch = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
+            "=DLookUp(\"[4]\", \"qWeekly\")",
+            objects,
+            null,
+            fieldSetsByObject: new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["4"] = [mismatchCandidate]
+                }
+            });
+        Assert.Equal("partial", prefixMismatch.Coverage);
+        Assert.Equal("AccessBindingDomainCrosstabPivotPrefixMismatch", prefixMismatch.GapClassification);
+        Assert.Equal([mismatchCandidate], prefixMismatch.SelectedFieldStableKeys);
+
+        var dependencyOnly = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
+            "=DLookUp(\"[WeeklyPlanID]\", \"qWeekly\")",
+            objects,
+            null,
+            fieldSetsByObject: new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            },
+            domainCriteriaFieldSetsByObject:
+                new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+                {
+                    [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["WeeklyPlanID"] = ["dependency-weekly-plan"]
+                    }
+                });
+        Assert.Equal("AccessBindingDomainSelectedFieldDependencyOnly", dependencyOnly.GapClassification);
+        Assert.Empty(dependencyOnly.SelectedFieldStableKeys);
+
+        var ambiguous = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
+            "=DLookUp(\"[WeeklyPlanID]\", \"qWeekly\")",
+            objects,
+            null,
+            fieldSetsByObject: new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            },
+            domainCriteriaFieldSetsByObject:
+                new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+                {
+                    [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["WeeklyPlanID"] = ["dependency-one", "dependency-two"]
+                    }
+                });
+        Assert.Equal("AccessBindingDomainSelectedFieldDependencyAmbiguous", ambiguous.GapClassification);
+        Assert.Empty(ambiguous.SelectedFieldStableKeys);
     }
 
     [Fact]

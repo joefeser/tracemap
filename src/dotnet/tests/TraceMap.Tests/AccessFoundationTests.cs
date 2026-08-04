@@ -91,7 +91,7 @@ public sealed class AccessFoundationTests
         var criteriaFieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
 
         AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
-            [surface], knownObjects, fieldsByHash, fieldsByName, criteriaFieldsByName);
+            "database-seed", [surface], knownObjects, fieldsByHash, fieldsByName, criteriaFieldsByName);
 
         Assert.Equal(selectedStableKey, Assert.Single(fieldsByName[queryStableKey]["Percent"]));
         Assert.False(fieldsByName[queryStableKey].ContainsKey("WeeklyPlanID"));
@@ -103,8 +103,88 @@ public sealed class AccessFoundationTests
         fieldsByName.Clear();
         criteriaFieldsByName.Clear();
         AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
-            [surface], knownObjects, fieldsByHash, fieldsByName, criteriaFieldsByName);
+            "database-seed", [surface], knownObjects, fieldsByHash, fieldsByName, criteriaFieldsByName);
         Assert.False(criteriaFieldsByName.ContainsKey(queryStableKey));
+    }
+
+    [Fact]
+    public void Design_composer_reconciles_only_exact_declared_crosstab_pivot_headings_as_candidates()
+    {
+        const string databaseSeed = "database-seed";
+        const string queryStableKey = "access-query-pivot";
+        var surface = new AccessRawUiSurface(
+            "ReportOne",
+            "report",
+            false,
+            null,
+            [new AccessRawControl("week", 0, 109, "=DLookUp(\"[4]\",\"qPivot\")", null, [])],
+            []);
+        var knownObjects = new Dictionary<string, List<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["qPivot"] = [(queryStableKey, "query")]
+        };
+        var fieldsByHash = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new(StringComparer.Ordinal)
+        };
+        var fieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
+        var criteriaFieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
+        var pivotHashes = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new HashSet<string>(StringComparer.Ordinal)
+            {
+                AccessSafeValues.RoleHash("access-query-pivot-column", "4")
+            }
+        };
+
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            databaseSeed,
+            [surface],
+            knownObjects,
+            fieldsByHash,
+            fieldsByName,
+            criteriaFieldsByName,
+            pivotHashes);
+
+        var candidate = Assert.Single(fieldsByName[queryStableKey]["4"]);
+        Assert.True(AccessSafeValues.IsCrosstabPivotColumnCandidate(candidate));
+
+        fieldsByName.Clear();
+        fieldsByName[queryStableKey] = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["W5"] = ["declared-week-five"]
+        };
+        pivotHashes[queryStableKey] = new HashSet<string>(StringComparer.Ordinal)
+        {
+            AccessSafeValues.RoleHash("access-query-pivot-column", "W5")
+        };
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            databaseSeed,
+            [surface with
+            {
+                Controls = [new AccessRawControl("week", 0, 109, "=DLookUp(\"[5]\",\"qPivot\")", null, [])]
+            }],
+            knownObjects,
+            fieldsByHash,
+            fieldsByName,
+            criteriaFieldsByName,
+            pivotHashes);
+        Assert.True(AccessSafeValues.IsCrosstabPivotPrefixMismatchCandidate(
+            Assert.Single(fieldsByName[queryStableKey]["5"])));
+
+        fieldsByName.Clear();
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            databaseSeed,
+            [surface with
+            {
+                Controls = [new AccessRawControl("week", 0, 109, "=DLookUp(\"[6]\",\"qPivot\")", null, [])]
+            }],
+            knownObjects,
+            fieldsByHash,
+            fieldsByName,
+            criteriaFieldsByName,
+            pivotHashes);
+        Assert.Empty(fieldsByName);
     }
 
     [Fact]
@@ -186,7 +266,7 @@ public sealed class AccessFoundationTests
             domainCriteriaFieldSetsByObject: criteriaScopes);
         var returnBinding = Assert.Single(Assert.Single(returnFromCriteriaOnly.Surfaces).Controls).Bindings.Single();
         Assert.Equal("partial", returnBinding.Coverage);
-        Assert.Equal("AccessBindingDomainSelectedFieldUnmatched", returnBinding.Expression!.GapClassification);
+        Assert.Equal("AccessBindingDomainSelectedFieldDependencyOnly", returnBinding.Expression!.GapClassification);
         Assert.Empty(returnBinding.Expression.SelectedFieldStableKeys);
     }
 
@@ -269,6 +349,21 @@ public sealed class AccessFoundationTests
             new EvidenceSpan("database.accdb", 1, 1, null, "access-query", "1.0.0"),
             new Dictionary<string, string> { ["targetKind"] = targetKind });
 
+    private static CodeFact CrosstabLineageFact(string source, string staticColumnHashes) => new(
+        "crosstab-" + source,
+        "scan-access",
+        "synthetic",
+        new string('a', 40),
+        null,
+        FactTypes.AccessQueryCrosstabLineageCandidate,
+        RuleIds.LegacyAccessQuery,
+        EvidenceTiers.Tier3SyntaxOrTextual,
+        source,
+        null,
+        null,
+        new EvidenceSpan("database.accdb", 1, 1, null, "access-query", "1.0.0"),
+        new Dictionary<string, string> { ["staticColumnHashes"] = staticColumnHashes });
+
     [Fact]
     public void Conflicting_query_kinds_are_omitted_independently_of_input_order()
     {
@@ -280,6 +375,25 @@ public sealed class AccessFoundationTests
         Assert.Equal(first, second);
         Assert.False(first.ContainsKey("query-a"));
         Assert.Equal("select", first["query-b"]);
+    }
+
+    [Fact]
+    public void Static_crosstab_pivot_hashes_require_a_consistent_crosstab_declaration()
+    {
+        var pivotHash = AccessSafeValues.RoleHash("access-query-pivot-column", "W4");
+        var projected = AccessDesignEvidenceComposer.BuildStaticCrosstabPivotHashes(
+            [
+                CrosstabLineageFact("query-pivot", pivotHash + ";invalid"),
+                CrosstabLineageFact("query-select", pivotHash)
+            ],
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["query-pivot"] = "crosstab",
+                ["query-select"] = "select"
+            });
+
+        Assert.Equal([pivotHash], projected["query-pivot"]);
+        Assert.False(projected.ContainsKey("query-select"));
     }
 
     [Fact]
