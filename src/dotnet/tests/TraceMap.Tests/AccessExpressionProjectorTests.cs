@@ -333,6 +333,29 @@ public sealed class AccessExpressionProjectorTests
         Assert.Equal("AccessBindingDomainCrosstabPivotPrefixMismatch", prefixMismatch.GapClassification);
         Assert.Equal([mismatchCandidate], prefixMismatch.SelectedFieldStableKeys);
 
+        var criteriaPivot = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
+            "=DLookUp(\"[Percent]\", \"qWeekly\", \"[4]=1\")",
+            objects,
+            null,
+            fieldSetsByObject: new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Percent"] = ["field-percent"]
+                }
+            },
+            domainCriteriaFieldSetsByObject:
+                new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+                {
+                    [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["4"] = [pivotCandidate]
+                    }
+                });
+        Assert.Equal("partial", criteriaPivot.Coverage);
+        Assert.Equal("AccessBindingDomainCrosstabPivotCandidate", criteriaPivot.GapClassification);
+        Assert.Equal([pivotCandidate], criteriaPivot.CriteriaFieldStableKeys);
+
         var dependencyOnly = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
             "=DLookUp(\"[WeeklyPlanID]\", \"qWeekly\")",
             objects,

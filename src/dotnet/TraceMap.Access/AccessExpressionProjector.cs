@@ -218,6 +218,10 @@ public static partial class AccessExpressionProjector
                         var criteriaResolution = queryCandidate is not null
                             ? ResolveField(candidate, domainCriteriaFields, criteriaFields)
                             : FieldResolution.Missing;
+                        if (criteriaFields.Any(AccessSafeValues.IsCrosstabPivotColumnCandidate))
+                            domainCrosstabPivotCandidate = true;
+                        if (criteriaFields.Any(AccessSafeValues.IsCrosstabPivotPrefixMismatchCandidate))
+                            domainCrosstabPivotPrefixMismatch = true;
                         if (criteriaResolution == FieldResolution.Ambiguous)
                         {
                             domainCriteriaFieldAmbiguous = true;
