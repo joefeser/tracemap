@@ -1381,7 +1381,14 @@ public sealed class AccessUiProjectionTests
         var table = AccessSafeValues.Identity(seed, "table", "Users");
         var projected = AccessUiProjector.Project(
             seed,
-            [new("frmUsers", "form", false, "SELECT Users.* FROM Users", [], [], Coverage: "partial")],
+            [new(
+                "frmUsers",
+                "form",
+                false,
+                "SELECT Users.* FROM Users",
+                [new("txtUserId", 0, 109, "UserId", null, [])],
+                [],
+                Coverage: "partial")],
             new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
             {
                 ["Users"] = [(table.StableKey, "table")]
@@ -1396,7 +1403,48 @@ public sealed class AccessUiProjectionTests
             Assert.Single(projected.Surfaces).Bindings,
             candidate => candidate.BindingKind == "record-source");
         Assert.Equal("partial", binding.Coverage);
+        Assert.Equal(
+            "partial",
+            Assert.Single(Assert.Single(projected.Surfaces).Controls).Bindings.Single().Coverage);
         Assert.Contains(projected.Gaps, gap => gap.Classification == "AccessBindingInlineSqlProjectionPartial");
+    }
+
+    [Fact]
+    public void Partial_child_wildcard_surface_cannot_prove_complete_link_field_binding()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('7', 40), "fixture.accdb", "hash");
+        var table = AccessSafeValues.Identity(seed, "table", "Users");
+        var child = AccessSafeValues.Identity(seed, "form", "frmChild");
+        var field = AccessSafeValues.Identity(seed, $"field-{table.StableKey}", "UserId");
+        var projected = AccessUiProjector.Project(
+            seed,
+            [
+                new(
+                    "frmParent",
+                    "form",
+                    false,
+                    null,
+                    [new("subChild", 0, 112, null, null, [], SourceObject: "Form.frmChild", LinkChildFields: "UserId")],
+                    []),
+                new("frmChild", "form", false, "SELECT Users.* FROM Users", [], [], Coverage: "partial")
+            ],
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Users"] = [(table.StableKey, "table")],
+                ["frmChild"] = [(child.StableKey, "form")]
+            },
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [table.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["UserId"] = [field.StableKey]
+                }
+            },
+            completeTableFieldCatalogStableKeys: new HashSet<string>([table.StableKey], StringComparer.Ordinal));
+
+        var parent = projected.Surfaces.Single(surface => surface.Identity.DisplayName == "frmParent");
+        var childLink = Assert.Single(Assert.Single(parent.Controls).Bindings, binding => binding.BindingKind == "link-child-field-0");
+        Assert.Equal("partial", childLink.Coverage);
     }
 
     [Fact]
