@@ -145,6 +145,16 @@ public sealed class AccessFoundationTests
                 AccessSafeValues.RoleHash("access-query-pivot-column", "4")
             }
         };
+        var pivotHash = AccessSafeValues.RoleHash("access-query-pivot-column", "4");
+        var pivotFactIds = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+            {
+                [pivotHash] = ["crosstab-lineage-fact"]
+            }
+        };
+        var fieldCoverage = new Dictionary<string, string>(StringComparer.Ordinal);
+        var supportingFactIds = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
 
         AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
             databaseSeed,
@@ -153,10 +163,15 @@ public sealed class AccessFoundationTests
             fieldsByHash,
             fieldsByName,
             criteriaFieldsByName,
-            pivotHashes);
+            pivotHashes,
+            fieldCoverage,
+            pivotFactIds,
+            supportingFactIds);
 
         var candidate = Assert.Single(fieldsByName[queryStableKey]["4"]);
         Assert.True(AccessSafeValues.IsCrosstabPivotColumnCandidate(candidate));
+        Assert.Equal("partial", fieldCoverage[candidate]);
+        Assert.Equal(["crosstab-lineage-fact"], supportingFactIds[candidate]);
 
         fieldsByName.Clear();
         fieldsByName[queryStableKey] = new(StringComparer.OrdinalIgnoreCase)
@@ -495,6 +510,13 @@ public sealed class AccessFoundationTests
 
         Assert.Equal([pivotHash], projected["query-pivot"]);
         Assert.False(projected.ContainsKey("query-select"));
+
+        var supportingFacts = AccessDesignEvidenceComposer.BuildStaticCrosstabPivotFactIds(
+            [CrosstabLineageFact("query-pivot", pivotHash + ";invalid")],
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["query-pivot"] = "crosstab" });
+        Assert.Equal(
+            ["crosstab-query-pivot"],
+            supportingFacts["query-pivot"][pivotHash]);
     }
 
     [Fact]
