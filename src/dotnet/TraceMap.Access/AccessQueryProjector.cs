@@ -354,26 +354,56 @@ public static partial class AccessQueryProjector
 
     internal static bool HasWildcardProjection(string sql)
     {
-        if (string.IsNullOrWhiteSpace(sql)) return false;
-        var select = SelectListAfterKeyword(MaskLiteralsAndComments(sql), "select");
-        return select is not null && SplitSelectItems(select).Any(item =>
-        {
-            var normalized = item.Trim();
-            return normalized == "*" || normalized.EndsWith(".*", StringComparison.Ordinal);
-        });
+        return TryGetSelectItems(sql, out var items) && items.Any(IsWildcardProjectionItem);
     }
 
     internal static bool HasOnlyWildcardProjection(string sql)
     {
+        if (!TryGetSelectItems(sql, out var items) || items.Count != 1 || !items.All(IsWildcardProjectionItem))
+            return false;
+        var masked = MaskLiteralsAndComments(sql);
+        return HasBalancedSqlDelimiters(masked)
+            && !Regex.IsMatch(
+                masked,
+                @"(?is)\b(?:where|having|group\s+by|order\s+by|join|on)\b\s*;?\s*$");
+    }
+
+    private static bool TryGetSelectItems(string sql, out IReadOnlyList<string> items)
+    {
+        items = [];
         if (string.IsNullOrWhiteSpace(sql)) return false;
         var select = SelectListAfterKeyword(MaskLiteralsAndComments(sql), "select");
         if (select is null) return false;
-        var items = SplitSelectItems(select);
-        return items.Count == 1 && items.All(item =>
+        items = SplitSelectItems(select);
+        return items.Count > 0;
+    }
+
+    private static bool IsWildcardProjectionItem(string item)
+    {
+        var normalized = item.Trim();
+        return normalized == "*" || normalized.EndsWith(".*", StringComparison.Ordinal);
+    }
+
+    private static bool HasBalancedSqlDelimiters(string value)
+    {
+        var squareBrackets = 0;
+        var parentheses = 0;
+        foreach (var current in value)
         {
-            var normalized = item.Trim();
-            return normalized == "*" || normalized.EndsWith(".*", StringComparison.Ordinal);
-        });
+            if (current == '[') squareBrackets++;
+            else if (current == ']')
+            {
+                if (squareBrackets == 0) return false;
+                squareBrackets--;
+            }
+            else if (squareBrackets == 0 && current == '(') parentheses++;
+            else if (squareBrackets == 0 && current == ')')
+            {
+                if (parentheses == 0) return false;
+                parentheses--;
+            }
+        }
+        return squareBrackets == 0 && parentheses == 0;
     }
 
     private static string MatchedOutputName(Match match) =>
