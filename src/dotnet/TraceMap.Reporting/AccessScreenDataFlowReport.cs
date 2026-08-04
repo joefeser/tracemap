@@ -447,7 +447,8 @@ public static class AccessScreenDataFlowReporter
             var parsed = persistedFactIds.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             if (parsed.Length > 0
                 && parsed.All(factId => SafeFactId(factId)
-                    && facts.Any(candidate => candidate.FactId == factId)))
+                    && facts.Any(candidate => candidate.FactId == factId
+                        && IsValidPersistedGapSupport(gap, candidate, facts))))
             {
                 supporting.UnionWith(parsed);
                 return supporting.ToArray();
@@ -482,6 +483,20 @@ public static class AccessScreenDataFlowReporter
         }
         return supporting.ToArray();
     }
+
+    private static bool IsValidPersistedGapSupport(CodeFact gap, CodeFact candidate, IReadOnlyList<CodeFact> facts) =>
+        gap.Properties.GetValueOrDefault("scopeKind") switch
+        {
+            "binding" => candidate.FactType == FactTypes.AccessBindingDeclared
+                && candidate.Properties.GetValueOrDefault("stableBindingKey") == gap.TargetSymbol,
+            "query" => candidate.FactType == FactTypes.AccessQueryDeclared
+                && candidate.TargetSymbol == gap.TargetSymbol,
+            "query-output-field" => candidate.FactType == FactTypes.AccessQueryDeclared
+                && facts.Any(output => output.FactType == FactTypes.AccessQueryOutputDeclared
+                    && output.TargetSymbol == gap.TargetSymbol
+                    && output.SourceSymbol == candidate.TargetSymbol),
+            _ => false
+        };
 
     private static void EnsureReferencedNode(IDictionary<string, MutableNode> nodes, string key, CodeFact fact, bool source)
     {
