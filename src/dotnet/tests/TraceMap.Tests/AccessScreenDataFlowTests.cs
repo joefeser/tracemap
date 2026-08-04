@@ -274,7 +274,8 @@ public sealed class AccessScreenDataFlowTests
         var facts = new[]
         {
             Fact("fact-binding-declaration", FactTypes.AccessBindingDeclared, RuleIds.LegacyAccessBinding,
-                EvidenceTiers.Tier3SyntaxOrTextual, null, binding,
+                EvidenceTiers.Tier3SyntaxOrTextual, null, null,
+                ("stableBindingKey", binding),
                 ("coverageLabel", "partial")),
             Fact("fact-binding-gap", FactTypes.AnalysisGap, RuleIds.LegacyAccessBinding,
                 EvidenceTiers.Tier4Unknown, null, binding,
@@ -288,6 +289,29 @@ public sealed class AccessScreenDataFlowTests
         var gap = Assert.Single(report.Gaps, item =>
             item.Classification == "AccessBindingInlineSqlProjectionPartial");
         Assert.Equal(["fact-binding-declaration", "fact-binding-gap"], gap.SupportingFactIds);
+    }
+
+    [Fact]
+    public void Builder_rejects_existing_but_unrelated_persisted_gap_support()
+    {
+        const string binding = "access-binding-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string unrelatedQuery = "access-query-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        var facts = new[]
+        {
+            Fact("fact-unrelated-query", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural, null, unrelatedQuery, ("coverageLabel", "complete")),
+            Fact("fact-binding-gap", FactTypes.AnalysisGap, RuleIds.LegacyAccessBinding,
+                EvidenceTiers.Tier4Unknown, null, binding,
+                ("classification", "AccessBindingInlineSqlProjectionPartial"),
+                ("scopeKind", "binding"),
+                ("supportingFactIds", "fact-unrelated-query"))
+        };
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
+
+        var gap = Assert.Single(report.Gaps, item =>
+            item.Classification == "AccessBindingInlineSqlProjectionPartial");
+        Assert.Equal(["fact-binding-gap"], gap.SupportingFactIds);
     }
 
     [Fact]
