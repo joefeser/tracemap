@@ -607,7 +607,8 @@ public sealed class AccessComReader
                     var staticProjection = AccessQueryProjector.ProjectStaticSelect(
                         sql,
                         known,
-                        staticFieldSets);
+                        staticFieldSets,
+                        dependencyProjection);
                     var referenceCoverage = type switch
                     {
                         0 => dependencyProjection.Coverage,
@@ -656,17 +657,25 @@ public sealed class AccessComReader
                         {
                             var staticOutput = staticProjection.Outputs
                                 .SingleOrDefault(output => output.Ordinal == metadata.Ordinal);
-                            var sourceCandidates = metadata.SourceFieldStableKeys.ToList();
-                            if (staticOutput is { Coverage: "complete", SourceFieldStableKeys.Count: 1 })
-                                sourceCandidates.Add(staticOutput.SourceFieldStableKeys[0]);
+                            var daoSources = metadata.SourceFieldStableKeys
+                                .Distinct(StringComparer.Ordinal)
+                                .ToArray();
+                            var sourceCandidates = daoSources.ToList();
+                            if (staticOutput is not null)
+                                sourceCandidates.AddRange(staticOutput.SourceFieldStableKeys);
                             var distinctSources = sourceCandidates
                                 .Distinct(StringComparer.Ordinal)
                                 .OrderBy(value => value, StringComparer.Ordinal)
                                 .ToArray();
                             var directOutput = AccessQueryProjector.IsDirectOutputField(sql, metadata.Name)
                                 || staticOutput?.Coverage == "complete";
+                            var trustedSource = daoSources.Length == 1
+                                || staticOutput is { Coverage: "complete", SourceFieldStableKeys.Count: 1 };
+                            var syntaxComplete = AccessQueryProjector.HasBalancedStaticSelectSyntax(sql);
                             var coverage = distinctSources.Length == 1
                                 && directOutput
+                                && trustedSource
+                                && syntaxComplete
                                 && dependencyProjection.Coverage == "complete"
                                 ? "complete"
                                 : "partial";
@@ -674,7 +683,7 @@ public sealed class AccessComReader
                                 gaps.Add(new(
                                     QueryOutputGapClassification(
                                         distinctSources.Length,
-                                        directOutput,
+                                        directOutput && syntaxComplete,
                                         dependencyProjection.Coverage),
                                     "query-output-field",
                                     metadata.Identity.StableKey,

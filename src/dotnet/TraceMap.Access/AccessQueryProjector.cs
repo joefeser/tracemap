@@ -221,10 +221,11 @@ public static partial class AccessQueryProjector
     public static AccessQueryStaticProjection ProjectStaticSelect(
         string sql,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> knownObjects,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fieldsByTable)
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fieldsByTable,
+        (IReadOnlyList<AccessQueryDependencyProjection> Dependencies, string Coverage, bool UnsupportedShape)? precomputedDependencies = null)
     {
         var masked = MaskLiteralsAndComments(sql);
-        var dependencyProjection = ProjectDependencies(sql, knownObjects);
+        var dependencyProjection = precomputedDependencies ?? ProjectDependencies(sql, knownObjects);
         var dependencyKeys = dependencyProjection.Dependencies.Select(item => item.TargetStableKey).ToHashSet(StringComparer.Ordinal);
         var scopedKnownObjects = knownObjects.ToDictionary(
             item => item.Key,
@@ -235,7 +236,8 @@ public static partial class AccessQueryProjector
         var outputs = expressions.Select((expression, ordinal) =>
         {
             var trimmed = expression.Trim();
-            var sourceFields = ResolveExpressionFieldKeys(trimmed, scopedKnownObjects, fieldsByTable);
+            var analysisExpression = RemoveOutputAlias(trimmed);
+            var sourceFields = ResolveExpressionFieldKeys(analysisExpression, scopedKnownObjects, fieldsByTable);
             var outputName = StaticOutputName(trimmed);
             var nameHash = outputName is null
                 ? null
@@ -358,6 +360,10 @@ public static partial class AccessQueryProjector
         var masked = MaskLiteralsAndComments(sql);
         return HasCompleteSingleSourceSelectShape(masked);
     }
+
+    internal static bool HasBalancedStaticSelectSyntax(string sql) =>
+        !string.IsNullOrWhiteSpace(sql)
+        && HasBalancedSqlDelimiters(MaskLiteralsAndComments(sql));
 
     private static bool TryGetSelectItems(string sql, out IReadOnlyList<string> items)
     {
