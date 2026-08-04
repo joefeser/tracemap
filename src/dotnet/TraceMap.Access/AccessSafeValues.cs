@@ -40,11 +40,10 @@ public static class AccessSafeValues
         string databaseIdentitySeed,
         string queryStableKey,
         string columnName) =>
-        Identity(
+        HashOnlyCandidate(
             databaseIdentitySeed,
             $"query-pivot-column-candidate-{queryStableKey}",
-            columnName,
-            disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly);
+            columnName);
 
     internal static bool IsCrosstabPivotColumnCandidate(string stableKey) =>
         stableKey.StartsWith(CrosstabPivotColumnCandidatePrefix, StringComparison.Ordinal);
@@ -53,14 +52,23 @@ public static class AccessSafeValues
         string databaseIdentitySeed,
         string queryStableKey,
         string requestedColumnName) =>
-        Identity(
+        HashOnlyCandidate(
             databaseIdentitySeed,
             $"query-pivot-prefix-mismatch-candidate-{queryStableKey}",
-            requestedColumnName,
-            disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly);
+            requestedColumnName);
 
     internal static bool IsCrosstabPivotPrefixMismatchCandidate(string stableKey) =>
         stableKey.StartsWith(CrosstabPivotPrefixMismatchCandidatePrefix, StringComparison.Ordinal);
+
+    internal static AccessSafeIdentity HashOnlyCandidate(
+        string databaseIdentitySeed,
+        string objectKind,
+        string value) =>
+        Identity(
+            databaseIdentitySeed,
+            objectKind,
+            value,
+            disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly);
 
     public static string RoleHash(string role, string value) => FactFactory.Hash($"{role}\0{value}", 64);
 

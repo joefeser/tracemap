@@ -60,6 +60,28 @@ public sealed class AccessExpressionProjectorTests
     }
 
     [Fact]
+    public void Keeps_bracketed_predicate_keyword_fields_and_malformed_predicates_partial()
+    {
+        var fields = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["In"] = ["field-in"],
+            ["Exists"] = ["field-exists"],
+            ["Status"] = ["field-status"]
+        };
+
+        var bracketed = AccessExpressionProjector.Project("=[In] + [Exists]", null, fields);
+        var incompleteIn = AccessExpressionProjector.Project("=[Status] IN (", null, fields);
+        var emptyExists = AccessExpressionProjector.Project("=EXISTS ()", null, fields);
+
+        Assert.Equal("complete", bracketed.Coverage);
+        Assert.Equal(["field-exists", "field-in"], bracketed.FieldStableKeys);
+        Assert.Equal("partial", incompleteIn.Coverage);
+        Assert.Equal("AccessBindingExpressionPartial", incompleteIn.GapClassification);
+        Assert.Equal("partial", emptyExists.Coverage);
+        Assert.Equal("AccessBindingExpressionPartial", emptyExists.GapClassification);
+    }
+
+    [Fact]
     public void Projects_domain_lookup_query_field_and_criteria_control()
     {
         var queryKey = "query-weekly-plan";
@@ -312,6 +334,36 @@ public sealed class AccessExpressionProjectorTests
                 });
         Assert.Equal("AccessBindingDomainSelectedFieldDependencyAmbiguous", ambiguous.GapClassification);
         Assert.Empty(ambiguous.SelectedFieldStableKeys);
+    }
+
+    [Fact]
+    public void Mixed_domain_lookups_keep_per_lookup_outputs_and_prefer_unmatched_return_gaps()
+    {
+        const string pivotQuery = "query-pivot";
+        const string otherQuery = "query-other";
+        var pivotCandidate = AccessSafeValues.CrosstabPivotColumnCandidate(
+            "database-seed", pivotQuery, "4").StableKey;
+        var projected = AccessExpressionProjector.ProjectWithDomainCriteriaFields(
+            "=DLookUp(\"[4]\", \"qPivot\") + DLookUp(\"[Missing]\", \"qOther\")",
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qPivot"] = [(pivotQuery, "query")],
+                ["qOther"] = [(otherQuery, "query")]
+            },
+            null,
+            fieldSetsByObject: new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [pivotQuery] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["4"] = [pivotCandidate]
+                },
+                [otherQuery] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            });
+
+        Assert.Equal("partial", projected.Coverage);
+        Assert.Equal("AccessBindingDomainSelectedFieldUnmatched", projected.GapClassification);
+        Assert.Equal([pivotCandidate], projected.SelectedFieldStableKeys);
+        Assert.NotEmpty(projected.SelectedFieldReferenceHashes);
     }
 
     [Fact]

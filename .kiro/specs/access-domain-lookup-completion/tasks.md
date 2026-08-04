@@ -12,3 +12,6 @@
 - [x] Treat Access `IN (...)` predicates as operators rather than unresolved custom functions.
 - [x] Regenerate and verify the reduced private remainder register.
 - [x] Revalidate, commit, and push the exact-head follow-up.
+- [x] Patch exact-head reviewer findings with fail-closed crosstab, wildcard, predicate, and reporting behavior.
+- [x] Add focused regressions for every correctness cluster.
+- [x] Run full review-hardening validation.

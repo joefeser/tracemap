@@ -19,3 +19,10 @@
 - Private regeneration checkpoint: two independent runs emitted 8,982 facts with byte-identical `facts.ndjson` and `scan-manifest.json`. The generic remainder dropped by two: the complete `Users.*` table wildcard and the report `IN (...)` predicate no longer emit gaps.
 - Validation: 131 focused projector/composer/UI tests and all 281 Access-filtered tests pass. The full solution builds with zero warnings/errors and all 1,159 tests pass. Changed-file formatting, adapter-artifact validation, private-path guard, diff validation, workbook formula scan, and visual rendering of all three workbook sheets pass.
 - Refreshed private register: 32 deterministic remainder cases; 15 carry confirmed owner do-not-port dispositions and 17 remain active. The register contains no formulas or formula errors and preserves the deterministic fact ID for every row.
+
+## Review hardening
+
+- ACK authorized patching 15 unresolved exact-head review threads at `aa299b41a532d6b726e47f3dd61149626b3aa0fb`.
+- Correctness fixes cover exact crosstab headings that also have declared output facts, output-only proof for numeric-versus-`W` mismatch candidates, per-lookup aggregation and gap precedence, fail-closed wildcard completion on truncated or malformed field catalogs, bracketed `In`/`Exists` field identities, malformed predicate operands, and release-review preservation of expression gap classifications.
+- Hash-only candidate construction is centralized. Predicate terminology and the redundant set-ordering step were cleaned up without changing evidence claims.
+- Validation: 109 focused projector/composer/reporting tests and all 1,161 solution tests pass. The solution builds with zero warnings/errors; changed-file whitespace formatting, private-path guard, and diff validation pass. Repository-wide `dotnet format --verify-no-changes` still reports unrelated baseline whitespace findings outside this PR's changed files.

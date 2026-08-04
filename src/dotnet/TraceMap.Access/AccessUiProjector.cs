@@ -440,11 +440,10 @@ internal static partial class AccessUiProjector
                 && owningRecordBinding is { SourceKind: "direct-object", TargetStableKeys.Count: 1 }
                 && queryKindsByStableKey?.GetValueOrDefault(owningRecordBinding.TargetStableKeys[0]) == "crosstab")
             {
-                var candidate = AccessSafeValues.Identity(
+                var candidate = AccessSafeValues.HashOnlyCandidate(
                     databaseIdentitySeed,
                     $"crosstab-output-candidate-{owningRecordBinding.TargetStableKeys[0]}",
-                    directName,
-                    disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly).StableKey;
+                    directName).StableKey;
                 gaps.Add(new("AccessBindingCrosstabOutputCandidate", "binding", identity.StableKey, RuleIds.LegacyAccessBinding));
                 return new(identity, ownerStableKey, bindingKind, "surface-declared-crosstab-output-candidate",
                     AccessSafeValues.RoleHash($"access-{bindingKind}-expression", trimmed), trimmed.Length,
@@ -458,11 +457,10 @@ internal static partial class AccessUiProjector
             {
                 var sourceHash = owningRecordBinding.ExpressionHash
                     ?? AccessSafeValues.RoleHash("access-inline-record-source", owningRecordSource);
-                var candidate = AccessSafeValues.Identity(
+                var candidate = AccessSafeValues.HashOnlyCandidate(
                     databaseIdentitySeed,
                     $"inline-output-candidate-{sourceHash}",
-                    directName,
-                    disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly).StableKey;
+                    directName).StableKey;
                 gaps.Add(new("AccessBindingInlineSqlOutputCandidate", "binding", identity.StableKey, RuleIds.LegacyAccessBinding));
                 return new(identity, ownerStableKey, bindingKind, "inline-source-output-candidate",
                     AccessSafeValues.RoleHash($"access-{bindingKind}-expression", trimmed), trimmed.Length,
