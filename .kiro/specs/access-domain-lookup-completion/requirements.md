@@ -14,3 +14,6 @@ Complete the bounded static classification of the remaining Microsoft Access dom
 6. Dynamic, malformed, unresolved, and unsupported domain expressions shall retain precise gaps.
 7. Raw expressions, SQL, field names that fail disclosure policy, values, and row data shall not be added to standard artifacts.
 8. Outputs shall remain deterministic and use `legacy.access.binding.v1` with its documented limitations.
+9. A single-table wildcard record source shall be statically complete only when the dependency is unique and the immutable base scan proves a field catalog with no field-level acquisition gap.
+10. Access predicate keyword calls such as `IN (...)` shall not be classified as unresolved custom functions; referenced fields must still resolve independently.
+11. Owner rebuild dispositions shall remain separate from deterministic scanner facts and shall not modify the source database.

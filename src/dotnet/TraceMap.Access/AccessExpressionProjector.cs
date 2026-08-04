@@ -12,6 +12,11 @@ public static partial class AccessExpressionProjector
         "dcount", "davg", "dmax", "dmin"
     };
 
+    private static readonly HashSet<string> PredicateKeywordCalls = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "in", "exists"
+    };
+
     public static AccessExpressionProjection Project(
         string expression,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? objects,
@@ -50,6 +55,7 @@ public static partial class AccessExpressionProjector
         var functionMatches = FunctionPattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
         var functionNames = functionMatches
             .Select(match => match.Groups["name"].Value)
+            .Where(name => !PredicateKeywordCalls.Contains(name))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var functions = functionNames
             .Select(name => AccessSafeValues.RoleHash("access-expression-function", name.ToLowerInvariant()))
@@ -106,7 +112,7 @@ public static partial class AccessExpressionProjector
         var nonDomainExpression = MaskDomainCalls(normalized, domainMatches);
         var generalExternalMatches = ExternalReferencePattern().Matches(nonDomainExpression);
         AddExternalReferences(generalExternalMatches, externalRefs);
-        foreach (Match match in IdentifierPattern().Matches(MaskMatches(nonDomainExpression, generalExternalMatches)))
+        foreach (Match match in IdentifierPattern().Matches(MaskLiterals(MaskMatches(nonDomainExpression, generalExternalMatches))))
         {
             var name = NormalizeIdentifier(match.Groups["name"].Value);
             if (IsKeyword(name) || functionNames.Contains(name) || Functions.Contains(name)) continue;
@@ -373,7 +379,8 @@ public static partial class AccessExpressionProjector
 
     private static bool IsKeyword(string name) => name.Equals("and", StringComparison.OrdinalIgnoreCase)
         || name.Equals("or", StringComparison.OrdinalIgnoreCase) || name.Equals("not", StringComparison.OrdinalIgnoreCase)
-        || name.Equals("true", StringComparison.OrdinalIgnoreCase) || name.Equals("false", StringComparison.OrdinalIgnoreCase);
+        || name.Equals("true", StringComparison.OrdinalIgnoreCase) || name.Equals("false", StringComparison.OrdinalIgnoreCase)
+        || PredicateKeywordCalls.Contains(name);
 
     private static string NormalizeIdentifier(string value) => value.Trim().Trim('[', ']');
 
@@ -619,6 +626,6 @@ public static partial class AccessExpressionProjector
     private static partial Regex DomainNamePattern();
     [GeneratedRegex("(?<kind>\"(?:\"\"|[^\"])*\"|[-+]?\\d+(?:\\.\\d+)?)", RegexOptions.CultureInvariant)]
     private static partial Regex LiteralPattern();
-    [GeneratedRegex(@"[+\-*/&<>=]|\b(?:AND|OR|NOT)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"[+\-*/&<>=]|\b(?:AND|OR|NOT|IN|EXISTS)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex OperatorPattern();
 }

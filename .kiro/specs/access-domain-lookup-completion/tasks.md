@@ -7,3 +7,8 @@
 - [x] Regenerate the immutable private snapshot and remainder workbook.
 - [x] Run focused and full validation.
 - [x] Commit, push, and open a focused PR to `dev` without merging.
+- [x] Reconcile the full private remainder register into parser gaps, owner dispositions, and source contradictions.
+- [x] Resolve complete single-table wildcard record sources without inventing query-output order.
+- [x] Treat Access `IN (...)` predicates as operators rather than unresolved custom functions.
+- [x] Regenerate and verify the reduced private remainder register.
+- [x] Revalidate, commit, and push the exact-head follow-up.

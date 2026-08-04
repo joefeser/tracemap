@@ -315,6 +315,31 @@ public sealed class AccessFoundationTests
 
     }
 
+    [Fact]
+    public void Design_composer_marks_table_field_catalog_complete_only_without_acquisition_gaps()
+    {
+        var tables = new[]
+        {
+            EntityFact("table-complete"),
+            EntityFact("table-field-gap"),
+            EntityFact("table-no-fields")
+        };
+        var withScopedGap = tables.Append(GapFact(
+            "AccessObjectMetadataUnavailable",
+            "field",
+            "table-field-gap")).ToArray();
+
+        var complete = AccessDesignEvidenceComposer.BuildCompleteTableFieldCatalogStableKeys(
+            withScopedGap,
+            new HashSet<string>(["table-complete", "table-field-gap"], StringComparer.Ordinal));
+        var disabledByGlobalGap = AccessDesignEvidenceComposer.BuildCompleteTableFieldCatalogStableKeys(
+            withScopedGap.Append(GapFact("AccessFieldCollectionLimit", "table", null)).ToArray(),
+            new HashSet<string>(["table-complete", "table-field-gap"], StringComparer.Ordinal));
+
+        Assert.Equal(["table-complete"], complete);
+        Assert.Empty(disabledByGlobalGap);
+    }
+
     private static CodeFact QueryDeclarationFact(string target, string referenceCoverage) => new(
         "declaration-" + referenceCoverage,
         "scan-access",
@@ -328,7 +353,41 @@ public sealed class AccessFoundationTests
         target,
         null,
         new EvidenceSpan("database.accdb", 1, 1, null, "access-query", "1.0.0"),
-        new Dictionary<string, string> { ["referenceCoverage"] = referenceCoverage });
+            new Dictionary<string, string> { ["referenceCoverage"] = referenceCoverage });
+
+    private static CodeFact EntityFact(string target) => new(
+        "entity-" + target,
+        "scan-access",
+        "synthetic",
+        new string('a', 40),
+        null,
+        FactTypes.LegacyDataEntityDeclared,
+        RuleIds.LegacyAccessSchema,
+        EvidenceTiers.Tier2Structural,
+        null,
+        target,
+        null,
+        new EvidenceSpan("database.accdb", 1, 1, null, "access-schema", "1.0.0"),
+        new Dictionary<string, string>());
+
+    private static CodeFact GapFact(string classification, string scopeKind, string? target) => new(
+        "gap-" + classification + "-" + (target ?? "global"),
+        "scan-access",
+        "synthetic",
+        new string('a', 40),
+        null,
+        FactTypes.AnalysisGap,
+        RuleIds.LegacyAccessCoverageGap,
+        EvidenceTiers.Tier4Unknown,
+        null,
+        target,
+        null,
+        new EvidenceSpan("database.accdb", 1, 1, null, "access-gap", "1.0.0"),
+        new Dictionary<string, string>
+        {
+            ["classification"] = classification,
+            ["scopeKind"] = scopeKind
+        });
 
     private static CodeFact DependencyFact(
         string factId,

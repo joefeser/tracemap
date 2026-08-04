@@ -1246,6 +1246,49 @@ public sealed class AccessUiProjectionTests
     }
 
     [Fact]
+    public void Single_table_wildcard_record_source_is_complete_only_with_a_complete_field_catalog()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('7', 40), "fixture.accdb", "hash");
+        var table = AccessSafeValues.Identity(seed, "table", "Users");
+        var field = AccessSafeValues.Identity(seed, $"field-{table.StableKey}", "UserId");
+        var raw = new AccessRawUiSurface(
+            "frmUsers",
+            "form",
+            false,
+            "SELECT Users.* FROM Users;",
+            [],
+            []);
+        var objects = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Users"] = [(table.StableKey, "table")]
+        };
+        var fields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            [table.StableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["UserId"] = [field.StableKey]
+            }
+        };
+
+        var partial = AccessUiProjector.Project(seed, [raw], objects, fields);
+        var complete = AccessUiProjector.Project(
+            seed,
+            [raw],
+            objects,
+            fields,
+            completeTableFieldCatalogStableKeys: new HashSet<string>([table.StableKey], StringComparer.Ordinal));
+
+        Assert.Equal(
+            "partial",
+            Assert.Single(Assert.Single(partial.Surfaces).Bindings, binding => binding.BindingKind == "record-source").Coverage);
+        Assert.Contains(partial.Gaps, gap => gap.Classification == "AccessBindingInlineSqlProjectionPartial");
+        Assert.Equal(
+            "complete",
+            Assert.Single(Assert.Single(complete.Surfaces).Bindings, binding => binding.BindingKind == "record-source").Coverage);
+        Assert.DoesNotContain(complete.Gaps, gap => gap.Classification == "AccessBindingInlineSqlProjectionPartial");
+    }
+
+    [Fact]
     public void Inline_record_source_limits_field_scope_to_selected_outputs()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('2', 40), "fixture.accdb", "hash");
