@@ -2120,6 +2120,31 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Duplicate_gaps_do_not_consume_the_gap_limit_before_distinct_gaps_are_selected()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        File.WriteAllBytes(databasePath, [1, 2, 3, 4]);
+        var input = Input(databasePath, Path.Combine(temp.Path, "out"));
+        var limits = AccessLimits.Default with { MaxGaps = 2 };
+        var projection = Projection(input) with
+        {
+            Gaps =
+            [
+                new("GapA", "database", null),
+                new("GapA", "database", null),
+                new("GapB", "database", null)
+            ]
+        };
+
+        var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath), limits);
+
+        Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("classification") == "GapA");
+        Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("classification") == "GapB");
+        Assert.DoesNotContain(result.Facts, fact => fact.Properties.GetValueOrDefault("classification") == "AccessGapLimitReached");
+    }
+
+    [Fact]
     public void Relationship_masks_are_normalized_without_losing_raw_or_unknown_bits()
     {
         using var temp = new TempDirectory();
@@ -2282,6 +2307,27 @@ public sealed class AccessFoundationTests
 
         Assert.Equal(bindingIdentity.StableKey, gap.TargetSymbol);
         Assert.Equal(declaration.FactId, gap.Properties["supportingFactIds"]);
+    }
+
+    [Fact]
+    public void Non_binding_gap_stable_key_collisions_do_not_attach_unrelated_declarations()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        File.WriteAllBytes(databasePath, [1, 2, 3, 4]);
+        var input = Input(databasePath, Path.Combine(temp.Path, "out"));
+        var projection = Projection(input);
+        var table = projection.Tables[0];
+        projection = projection with
+        {
+            Gaps = [new("AccessSyntheticFieldGap", "field", table.Identity.StableKey, RuleIds.LegacyAccessCoverageGap)]
+        };
+
+        var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath));
+        var gap = Assert.Single(result.Facts, fact =>
+            fact.Properties.GetValueOrDefault("classification") == "AccessSyntheticFieldGap");
+
+        Assert.False(gap.Properties.ContainsKey("supportingFactIds"));
     }
 
     [Fact]

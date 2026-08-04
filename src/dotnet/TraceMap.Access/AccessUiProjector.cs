@@ -64,6 +64,7 @@ internal static partial class AccessUiProjector
     {
         var surfaces = new List<AccessUiSurfaceProjection>();
         var gaps = new List<AccessGapProjection>();
+        var childFieldScopes = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>?>(StringComparer.Ordinal);
         foreach (var raw in rawSurfaces.OrderBy(item => item.SurfaceKind, StringComparer.Ordinal)
                      .ThenBy(item => AccessSafeValues.RoleHash("access-ui-sort-name", item.Name), StringComparer.Ordinal))
         {
@@ -169,34 +170,41 @@ internal static partial class AccessUiProjector
                     databaseIdentitySeed, controlIdentity.StableKey, "link-master-field",
                     rawControl.LinkMasterFields, rawControl.Ordinal, scopedFields, gaps, disclosurePolicy));
                 IReadOnlyDictionary<string, IReadOnlyList<string>>? childFields = null;
-                if (sourceObject is { SourceKind: "direct-object", TargetStableKeys.Count: 1 }
-                    && rawSurfaces.FirstOrDefault(candidate =>
-                        AccessSafeValues.Identity(
-                            databaseIdentitySeed,
-                            candidate.SurfaceKind,
-                            candidate.Name,
-                            disclosurePolicy: disclosurePolicy).StableKey == sourceObject.TargetStableKeys[0]) is { } childSurface)
+                if (sourceObject is { SourceKind: "direct-object", TargetStableKeys.Count: 1 })
                 {
-                    var childControlNames = childSurface.Controls
-                        .Select(control => control.Name)
-                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
-                    var childRecord = ConstrainBindingEvidence(ProjectBinding(databaseIdentitySeed, sourceObject.TargetStableKeys[0], "record-source",
-                        childSurface.RecordSource, 0, knownObjects, null, gaps, disclosurePolicy, childControlNames, fieldsByTable,
-                        contextIdentifierNames: childSurface.SurfaceKind.Equals("report", StringComparison.OrdinalIgnoreCase)
-                            ? ReportContextIdentifiers
-                            : null,
-                        fieldCoverageByStableKey: fieldCoverageByStableKey,
-                        domainCriteriaFieldSetsByObject: domainCriteriaFieldSetsByObject,
-                        completeTableFieldCatalogStableKeys: completeTableFieldCatalogStableKeys), childSurface.Coverage, gaps);
-                    if (childRecord is { SourceKind: "direct-object", TargetStableKeys.Count: 1 }
-                        && fieldsByTable.TryGetValue(childRecord.TargetStableKeys[0], out var resolvedChildFields))
-                        childFields = resolvedChildFields;
-                    else if (childRecord is { SourceKind: "inline-sql", Coverage: "complete" })
-                        childFields = BuildInlineFieldScope(
-                            childSurface.RecordSource,
-                            knownObjects,
-                            fieldsByTable,
-                            childRecord.TargetStableKeys);
+                    var childStableKey = sourceObject.TargetStableKeys[0];
+                    if (!childFieldScopes.TryGetValue(childStableKey, out childFields))
+                    {
+                        if (rawSurfaces.FirstOrDefault(candidate =>
+                                AccessSafeValues.Identity(
+                                    databaseIdentitySeed,
+                                    candidate.SurfaceKind,
+                                    candidate.Name,
+                                    disclosurePolicy: disclosurePolicy).StableKey == childStableKey) is { } childSurface)
+                        {
+                            var childControlNames = childSurface.Controls
+                                .Select(control => control.Name)
+                                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                            var childRecord = ConstrainBindingEvidence(ProjectBinding(databaseIdentitySeed, childStableKey, "record-source",
+                                childSurface.RecordSource, 0, knownObjects, null, gaps, disclosurePolicy, childControlNames, fieldsByTable,
+                                contextIdentifierNames: childSurface.SurfaceKind.Equals("report", StringComparison.OrdinalIgnoreCase)
+                                    ? ReportContextIdentifiers
+                                    : null,
+                                fieldCoverageByStableKey: fieldCoverageByStableKey,
+                                domainCriteriaFieldSetsByObject: domainCriteriaFieldSetsByObject,
+                                completeTableFieldCatalogStableKeys: completeTableFieldCatalogStableKeys), childSurface.Coverage, gaps);
+                            if (childRecord is { SourceKind: "direct-object", TargetStableKeys.Count: 1 }
+                                && fieldsByTable.TryGetValue(childRecord.TargetStableKeys[0], out var resolvedChildFields))
+                                childFields = resolvedChildFields;
+                            else if (childRecord is { SourceKind: "inline-sql", Coverage: "complete" })
+                                childFields = BuildInlineFieldScope(
+                                    childSurface.RecordSource,
+                                    knownObjects,
+                                    fieldsByTable,
+                                    childRecord.TargetStableKeys);
+                        }
+                        childFieldScopes[childStableKey] = childFields;
+                    }
                 }
                 controlBindings.AddRange(ProjectFieldListBindings(
                     databaseIdentitySeed, controlIdentity.StableKey, "link-child-field",
