@@ -72,6 +72,15 @@ public static class ReverseImpactContract
         "interface"
     ]);
 
+    public static IReadOnlyList<string> SupportedRelationshipFilters { get; } = Array.AsReadOnly(
+    [
+        "calls",
+        "database",
+        "http",
+        "inheritance",
+        "references"
+    ]);
+
     public static bool IsSupportedSchema(string? schemaVersion) =>
         string.Equals(schemaVersion, SchemaVersion, StringComparison.Ordinal);
 }
@@ -184,6 +193,8 @@ public static class ReverseImpactTraversal
     public const string GapRuleId = RuleIds.ReverseImpactGap;
 
     private const string Calls = "calls";
+    private const string Database = "database";
+    private const string Http = "http";
     private const string References = "references";
     private const string Inheritance = "inheritance";
 
@@ -444,7 +455,7 @@ public static class ReverseImpactTraversal
         var filters = requested is null || requested.Count == 0
             ? DefaultFilters
             : requested.Select(value => value.Trim().ToLowerInvariant()).ToArray();
-        var unknown = filters.Where(value => !DefaultFilters.Contains(value, StringComparer.Ordinal)).Distinct(StringComparer.Ordinal).ToArray();
+        var unknown = filters.Where(value => !ReverseImpactContract.SupportedRelationshipFilters.Contains(value, StringComparer.Ordinal)).Distinct(StringComparer.Ordinal).ToArray();
         if (unknown.Length > 0)
         {
             throw new ArgumentException($"Unsupported reverse-impact relationship filter(s): {string.Join(", ", unknown)}.");
@@ -767,6 +778,16 @@ public static class ReverseImpactTraversal
         if (fact.FactType == FactTypes.PropertyAccessed)
         {
             return ("References", References);
+        }
+
+        if (fact.FactType == FactTypes.HttpCallDetected)
+        {
+            return ("HttpClientCall", Http);
+        }
+
+        if (fact.FactType == FactTypes.DatabaseOperationCandidate)
+        {
+            return ("DatabaseOperation", Database);
         }
 
         if (fact.FactType == FactTypes.SymbolRelationship)
