@@ -13,7 +13,10 @@ public static class ScanEngine
 
         var git = GitMetadataProvider.Detect(repoPath);
         MsBuildBinlogExtractor.ValidateCommitBinding(git.CommitSha, options.BinlogPaths, options.BinlogCommitSha);
-        var inventory = ApplyScope(FileInventory.Collect(repoPath, outputPath), repoPath, options);
+        var fullInventory = FileInventory.Collect(repoPath, outputPath);
+        var inventory = ApplyScope(fullInventory, repoPath, options);
+        var semanticResult = CSharpSemanticExtractor.Extract(repoPath, inventory, options, fullInventory);
+        inventory = IncludeSemanticallyAnalyzedFiles(inventory, fullInventory, semanticResult);
         var solutions = inventory
             .Where(item => item.Kind == "Solution")
             .Select(item => item.RelativePath)
@@ -30,8 +33,6 @@ public static class ScanEngine
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
-        var semanticResult = CSharpSemanticExtractor.Extract(repoPath, inventory, options);
-
         var semanticKnownGaps = git.KnownGaps
             .Concat(semanticResult.GapFacts.Select(GetGapMessage))
             .OrderBy(gap => gap, StringComparer.Ordinal)
@@ -426,6 +427,27 @@ public static class ScanEngine
                 || item.Kind is "Solution"
                 || projectPaths.Contains(item.RelativePath)
                 || projectDirectories.Any(directory => IsUnderScopedDirectory(item.RelativePath, directory)))
+            .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<FileInventoryItem> IncludeSemanticallyAnalyzedFiles(
+        IReadOnlyList<FileInventoryItem> scopedInventory,
+        IReadOnlyList<FileInventoryItem> fullInventory,
+        SemanticExtractionResult semanticResult)
+    {
+        if (semanticResult.AnalyzedFiles is null || semanticResult.AnalyzedFiles.Count == 0)
+        {
+            return scopedInventory;
+        }
+
+        var includedPaths = scopedInventory
+            .Select(item => item.RelativePath)
+            .ToHashSet(StringComparer.Ordinal);
+        return scopedInventory
+            .Concat(fullInventory.Where(item =>
+                semanticResult.AnalyzedFiles.Contains(item.RelativePath)
+                && includedPaths.Add(item.RelativePath)))
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .ToArray();
     }

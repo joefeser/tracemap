@@ -134,7 +134,11 @@ public static class CSharpSemanticExtractor
             SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers
             | SymbolDisplayMiscellaneousOptions.UseSpecialTypes);
 
-    public static SemanticExtractionResult Extract(string repoPath, IReadOnlyList<FileInventoryItem> inventory, ScanOptions? options = null)
+    public static SemanticExtractionResult Extract(
+        string repoPath,
+        IReadOnlyList<FileInventoryItem> inventory,
+        ScanOptions? options = null,
+        IReadOnlyList<FileInventoryItem>? fullInventory = null)
     {
         options ??= new ScanOptions(repoPath, ".");
         var facts = new List<SemanticFactCandidate>();
@@ -142,7 +146,11 @@ public static class CSharpSemanticExtractor
         var analyzedFiles = new HashSet<string>(StringComparer.Ordinal);
         var projects = inventory.Where(item => item.Kind == "Project").OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
         var solutions = inventory.Where(item => item.Kind == "Solution").OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
-        var csharpFiles = inventory.Where(item => FileInventory.IsCSharpKind(item.Kind)).ToArray();
+        var useFullSourceInventory = options.ProjectPaths is { Count: > 0 }
+            && options.IncludeGlobs is not { Count: > 0 };
+        var csharpFiles = (useFullSourceInventory ? fullInventory ?? inventory : inventory)
+            .Where(item => FileInventory.IsCSharpKind(item.Kind))
+            .ToArray();
         var sourcePathComparer = CreateSourcePathComparer(repoPath);
         var inventoriedCSharpPaths = csharpFiles
             .Select(item => item.RelativePath)
@@ -150,6 +158,9 @@ public static class CSharpSemanticExtractor
             .GroupBy(path => path, sourcePathComparer)
             .ToDictionary(group => group.Key, group => group.First(), sourcePathComparer);
         var explicitlyExcludedSourcePaths = new HashSet<string>(sourcePathComparer);
+        var selectedProjectPaths = projects
+            .Select(item => item.RelativePath)
+            .ToHashSet(StringComparer.Ordinal);
         var excludeGlobs = (options.ExcludeGlobs ?? [])
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .ToArray();
@@ -213,7 +224,8 @@ public static class CSharpSemanticExtractor
                         facts,
                         gaps,
                         loadedProjectPaths,
-                        analyzedFiles);
+                        analyzedFiles,
+                        options.ProjectPaths is { Count: > 0 } ? selectedProjectPaths : null);
                 }
                 catch (Exception ex) when (IsWorkspaceException(ex))
                 {
@@ -389,7 +401,8 @@ public static class CSharpSemanticExtractor
         List<SemanticFactCandidate> facts,
         List<SemanticFactCandidate> gaps,
         HashSet<string> loadedProjectPaths,
-        HashSet<string> analyzedFiles)
+        HashSet<string> analyzedFiles,
+        IReadOnlySet<string>? selectedProjectPaths)
     {
         solution = RemoveExplicitlyExcludedSourceDocuments(
             repoPath,
@@ -399,10 +412,16 @@ public static class CSharpSemanticExtractor
         explicitlyExcludedSourcePaths.UnionWith(excludedPaths);
         foreach (var project in solution.Projects.OrderBy(project => ToRelativePath(repoPath, project.FilePath), StringComparer.Ordinal))
         {
+            var relativeProjectPath = ToRelativePath(repoPath, project.FilePath);
+            if (selectedProjectPaths is not null && !selectedProjectPaths.Contains(relativeProjectPath))
+            {
+                continue;
+            }
+
             ExtractProject(repoPath, project, inventoriedCSharpPaths, facts, gaps, analyzedFiles);
             if (!string.IsNullOrWhiteSpace(project.FilePath))
             {
-                loadedProjectPaths.Add(ToRelativePath(repoPath, project.FilePath));
+                loadedProjectPaths.Add(relativeProjectPath);
             }
         }
     }
@@ -645,7 +664,8 @@ public static class CSharpSemanticExtractor
 
             foreach (var baseTypeSyntax in declaration.BaseList.Types)
             {
-                if (model.GetTypeInfo(baseTypeSyntax.Type).Type is not INamedTypeSymbol targetType)
+                if (model.GetTypeInfo(baseTypeSyntax.Type).Type is not INamedTypeSymbol targetType
+                    || targetType.TypeKind == TypeKind.Error)
                 {
                     continue;
                 }
@@ -1773,7 +1793,11 @@ public static class CSharpSemanticExtractor
     {
         foreach (var awaitExpression in root.DescendantNodes().OfType<AwaitExpressionSyntax>())
         {
-            facts.Add(CreateAwaitBoundaryFact(projectPath, filePath, awaitExpression, model));
+            var fact = CreateAwaitBoundaryFact(projectPath, filePath, awaitExpression, model);
+            if (fact is not null)
+            {
+                facts.Add(fact);
+            }
         }
 
         foreach (var forEach in root.DescendantNodes().OfType<CommonForEachStatementSyntax>())
@@ -1815,7 +1839,7 @@ public static class CSharpSemanticExtractor
         }
     }
 
-    private static SemanticFactCandidate CreateAwaitBoundaryFact(
+    private static SemanticFactCandidate? CreateAwaitBoundaryFact(
         string? projectPath,
         string filePath,
         AwaitExpressionSyntax awaitExpression,
@@ -1823,6 +1847,10 @@ public static class CSharpSemanticExtractor
     {
         var enclosing = model.GetEnclosingSymbol(awaitExpression.SpanStart);
         var awaitedType = model.GetTypeInfo(awaitExpression.Expression).Type;
+        if (awaitedType?.TypeKind == TypeKind.Error)
+        {
+            return null;
+        }
         var properties = AddAssemblyProperties(
             new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
