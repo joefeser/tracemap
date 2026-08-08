@@ -23,15 +23,19 @@ public sealed record ScanManifest(
     string? GitRootHash = null,
     string? SourceSnapshotDigest = null) : IJsonOnDeserialized
 {
+    public string? SourceSnapshotDigest { get; init; } = ValidateSourceSnapshotDigest(SourceSnapshotDigest);
+
     void IJsonOnDeserialized.OnDeserialized()
     {
-        if (SourceSnapshotDigest is not null
-            && (SourceSnapshotDigest.Length != 64
-                || SourceSnapshotDigest.Any(character => character is not (>= '0' and <= '9') and not (>= 'a' and <= 'f'))))
-        {
-            throw new JsonException("sourceSnapshotDigest must be null or a 64-character lowercase hexadecimal SHA-256 digest.");
-        }
+        ValidateSourceSnapshotDigest(SourceSnapshotDigest);
     }
+
+    private static string? ValidateSourceSnapshotDigest(string? value) =>
+        value is null
+        || (value.Length == 64
+            && value.All(character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f')))
+            ? value
+            : throw new JsonException("sourceSnapshotDigest must be null or a 64-character lowercase hexadecimal SHA-256 digest.");
 
     public ScanManifest(
         string ScanId,
