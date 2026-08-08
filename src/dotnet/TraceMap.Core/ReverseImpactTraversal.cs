@@ -7,6 +7,7 @@ public sealed record ReverseImpactOptions(
     bool IncludeContainedMembers = true);
 
 public sealed record ReverseImpactResult(
+    string SchemaVersion,
     string Resolution,
     string TraversalRuleId,
     string Selector,
@@ -19,6 +20,48 @@ public sealed record ReverseImpactResult(
     IReadOnlyList<ReverseImpactItem> Impacts,
     IReadOnlyList<ReverseImpactGap> Gaps,
     IReadOnlyList<string> Limitations);
+
+public static class ReverseImpactContract
+{
+    public const string SchemaVersion = "tracemap.reverse-impact.v1";
+
+    public static IReadOnlyList<string> SupportedResolutions { get; } = Array.AsReadOnly(
+    [
+        ReverseImpactResolutions.Resolved,
+        ReverseImpactResolutions.NotFound,
+        ReverseImpactResolutions.Ambiguous
+    ]);
+
+    public static IReadOnlyList<string> SupportedGapKinds { get; } = Array.AsReadOnly(
+    [
+        ReverseImpactGapKinds.AmbiguousSelector,
+        ReverseImpactGapKinds.AnalysisGap,
+        ReverseImpactGapKinds.AnalysisGapMissingEvidence,
+        ReverseImpactGapKinds.RelationshipMissingCanonicalIdentity,
+        ReverseImpactGapKinds.RelationshipMissingEvidence,
+        ReverseImpactGapKinds.SelectorNotFound
+    ]);
+
+    public static bool IsSupportedSchema(string? schemaVersion) =>
+        string.Equals(schemaVersion, SchemaVersion, StringComparison.Ordinal);
+}
+
+public static class ReverseImpactResolutions
+{
+    public const string Resolved = "Resolved";
+    public const string NotFound = "NotFound";
+    public const string Ambiguous = "Ambiguous";
+}
+
+public static class ReverseImpactGapKinds
+{
+    public const string AmbiguousSelector = "AmbiguousSelector";
+    public const string AnalysisGap = "AnalysisGap";
+    public const string AnalysisGapMissingEvidence = "AnalysisGapMissingEvidence";
+    public const string RelationshipMissingCanonicalIdentity = "RelationshipMissingCanonicalIdentity";
+    public const string RelationshipMissingEvidence = "RelationshipMissingEvidence";
+    public const string SelectorNotFound = "SelectorNotFound";
+}
 
 public sealed record ReverseImpactSnapshot(
     string ScanId,
@@ -149,17 +192,18 @@ public static class ReverseImpactTraversal
         var resolution = ResolveSelector(selector, symbols);
         if (resolution.Seed is null)
         {
-            var resolutionKind = resolution.Candidates.Count == 0 ? "NotFound" : "Ambiguous";
-            var gapKind = resolutionKind == "NotFound" ? "SelectorNotFound" : "AmbiguousSelector";
-            var message = resolutionKind == "NotFound"
+            var resolutionKind = resolution.Candidates.Count == 0 ? ReverseImpactResolutions.NotFound : ReverseImpactResolutions.Ambiguous;
+            var gapKind = resolutionKind == ReverseImpactResolutions.NotFound ? ReverseImpactGapKinds.SelectorNotFound : ReverseImpactGapKinds.AmbiguousSelector;
+            var message = resolutionKind == ReverseImpactResolutions.NotFound
                 ? $"Selector `{selector}` did not exactly match a canonical symbol id or display name."
                 : $"Selector `{selector}` matched {resolution.Candidates.Count} canonical symbols; traversal was not performed.";
             var candidateIds = resolution.Candidates.Select(candidate => candidate.SymbolId).ToHashSet(StringComparer.Ordinal);
             var applicableGaps = ApplicableAnalysisGaps(
                 facts,
                 candidateIds,
-                includeUnscoped: resolutionKind == "NotFound");
+                includeUnscoped: resolutionKind == ReverseImpactResolutions.NotFound);
             return new ReverseImpactResult(
+                ReverseImpactContract.SchemaVersion,
                 resolutionKind,
                 TraversalRuleId,
                 selector,
@@ -202,7 +246,16 @@ public static class ReverseImpactTraversal
                 group => group.OrderBy(EdgeSortKey, StringComparer.Ordinal).ToArray(),
                 StringComparer.Ordinal);
         var startIds = traversalSeeds.Select(symbol => symbol.SymbolId).ToHashSet(StringComparer.Ordinal);
-        var visited = new HashSet<string>(startIds, StringComparer.Ordinal);
+        var visitedSymbols = new HashSet<string>(startIds, StringComparer.Ordinal);
+        var visitedStates = new HashSet<(string TraversalSeedSymbolId, string SymbolId)>();
+        foreach (var traversalSeed in traversalSeeds)
+        {
+            foreach (var startId in startIds)
+            {
+                visitedStates.Add((traversalSeed.SymbolId, startId));
+            }
+        }
+
         var frontier = new Queue<TraversalState>(traversalSeeds.Select(symbol => new TraversalState(symbol.SymbolId, symbol.SymbolId, [])));
         var impacts = new List<ReverseImpactItem>();
 
@@ -216,11 +269,12 @@ public static class ReverseImpactTraversal
 
             foreach (var edge in candidates)
             {
-                if (!visited.Add(edge.SourceSymbolId))
+                if (!visitedStates.Add((state.TraversalSeedSymbolId, edge.SourceSymbolId)))
                 {
                     continue;
                 }
 
+                visitedSymbols.Add(edge.SourceSymbolId);
                 var path = state.Path.Append(edge).ToArray();
                 var symbol = symbols.GetValueOrDefault(edge.SourceSymbolId) ?? UnknownSymbol(edge.SourceSymbolId);
                 impacts.Add(new ReverseImpactItem(
@@ -234,12 +288,15 @@ public static class ReverseImpactTraversal
             }
         }
 
-        var gaps = ApplicableAnalysisGaps(facts, visited, includeUnscoped: false)
-            .Concat(relationshipGaps.Where(gap => gap.RelatedSymbolIds.Any(visited.Contains)))
+        var gaps = ApplicableAnalysisGaps(facts, visitedSymbols, includeUnscoped: false)
+            .Concat(relationshipGaps.Where(gap =>
+                gap.RelatedSymbolIds.Any(visitedSymbols.Contains)
+                || (gap.GapKind == ReverseImpactGapKinds.RelationshipMissingCanonicalIdentity && gap.RelatedSymbolIds.Count == 0)))
             .ToArray();
 
         return new ReverseImpactResult(
-            "Resolved",
+            ReverseImpactContract.SchemaVersion,
+            ReverseImpactResolutions.Resolved,
             TraversalRuleId,
             selector,
             options.MaxDepth,
@@ -339,7 +396,7 @@ public static class ReverseImpactTraversal
                 ValidateRequired(fact.Evidence.FilePath, "Evidence.FilePath", fact.FactId, index);
                 ValidateRequired(fact.Evidence.ExtractorId, "Evidence.ExtractorId", fact.FactId, index);
                 ValidateRequired(fact.Evidence.ExtractorVersion, "Evidence.ExtractorVersion", fact.FactId, index);
-                if (fact.Evidence.StartLine < 0 || fact.Evidence.EndLine < fact.Evidence.StartLine)
+                if (fact.Evidence.StartLine < 1 || fact.Evidence.EndLine < 1 || fact.Evidence.EndLine < fact.Evidence.StartLine)
                 {
                     throw new ReverseImpactInputException(
                         "InvalidEvidenceSpan",
@@ -410,14 +467,9 @@ public static class ReverseImpactTraversal
                 continue;
             }
 
-            if (relatedIds.Count == 0 && !includeUnscoped)
-            {
-                continue;
-            }
-
             gaps.Add(fact.Evidence is null
                 ? CreateDerivedGap(
-                    "AnalysisGapMissingEvidence",
+                    ReverseImpactGapKinds.AnalysisGapMissingEvidence,
                     $"Analysis-gap fact `{fact.FactId}` has missing evidence provenance and cannot be represented as ordinary gap evidence.",
                     relatedIds,
                     fact)
@@ -550,7 +602,7 @@ public static class ReverseImpactTraversal
             if (string.IsNullOrWhiteSpace(sourceId) || string.IsNullOrWhiteSpace(targetId))
             {
                 gaps.Add(CreateDerivedGap(
-                    "RelationshipMissingCanonicalIdentity",
+                    ReverseImpactGapKinds.RelationshipMissingCanonicalIdentity,
                     $"Impact-relevant fact `{fact.FactId}` was excluded because both canonical relationship endpoints were not present.",
                     RelatedSymbolIds(fact),
                     fact));
@@ -560,7 +612,7 @@ public static class ReverseImpactTraversal
             if (fact.Evidence is null)
             {
                 gaps.Add(CreateDerivedGap(
-                    "RelationshipMissingEvidence",
+                    ReverseImpactGapKinds.RelationshipMissingEvidence,
                     $"Impact-relevant fact `{fact.FactId}` was excluded because its relationship-site evidence was missing.",
                     RelatedSymbolIds(fact),
                     fact));
@@ -615,7 +667,7 @@ public static class ReverseImpactTraversal
 
     private static ReverseImpactGap FromAnalysisGap(CodeFact fact, IReadOnlyList<string> relatedIds) => new(
         fact.FactId,
-        "AnalysisGap",
+        ReverseImpactGapKinds.AnalysisGap,
         fact.RuleId,
         fact.EvidenceTier,
         Property(fact, "message") ?? fact.ContractElement ?? "Analysis is incomplete for this scan.",
