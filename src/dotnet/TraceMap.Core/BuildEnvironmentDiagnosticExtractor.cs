@@ -11,6 +11,7 @@ public static class BuildEnvironmentDiagnosticExtractor
     public const string DiagnosticKindRestore = "restore";
     public const string DiagnosticKindGeneratedFile = "generated-file";
     public const string DiagnosticKindWorkspace = "workspace";
+    public const string DiagnosticKindScanScope = "scan-scope";
 
     private static readonly HashSet<string> WebApplicationProjectGuids = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -474,6 +475,7 @@ public static class BuildEnvironmentDiagnosticExtractor
     private static IReadOnlyList<BuildEnvironmentDiagnosticCandidate> ReadWorkspaceDiagnostics(IReadOnlyList<SemanticFactCandidate> gaps)
     {
         return gaps
+            .Where(gap => gap.Properties?.GetValueOrDefault("diagnosticKind") != DiagnosticKindScanScope)
             .Select(gap =>
             {
                 var code = gap.Properties?.GetValueOrDefault("diagnosticCode") ?? "UncategorizedWorkspaceFailure";
