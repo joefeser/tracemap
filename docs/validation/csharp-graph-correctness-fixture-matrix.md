@@ -7,10 +7,17 @@ The dangerous failure is a plausible graph that silently joins, drops, guesses,
 or reverses evidence.
 
 Issue [#591](https://github.com/joefeser/tracemap/issues/591) tracks the full
-matrix. This first bounded slice covers canonical identity, partial types, and
-receiver resolution only. Later slices must add direction persistence,
-incremental rebuild behavior, and incomplete legacy project inputs. Reverse
+matrix. Implemented slices cover canonical identity, partial types, receiver
+resolution, and full-snapshot stability. Direction persistence is being handled
+as a separate bounded slice; incomplete legacy project inputs remain. Reverse
 impact traversal belongs to #590 and is explicitly outside this matrix.
+
+TraceMap currently rebuilds immutable full snapshots. It does not expose an
+in-place incremental replacement API. `EvidenceSpan.FilePath` identifies where
+evidence was observed; it is not entity ownership or replacement/deletion
+authority. A referenced target location likewise grants no mutation authority.
+If incremental replacement is introduced later, only an explicit
+changed/deleted/excluded extraction-unit record may authorize pruning.
 
 | ID | Category | Minimal source/project shape | Dangerous naive result | Required TraceMap contract | Status |
 |---|---|---|---|---|---|
@@ -32,7 +39,7 @@ impact traversal belongs to #590 and is explicitly outside this matrix.
 | RX-04 | Receiver resolution | A missing receiver type is invoked in an otherwise extractable file | Analyzer invents a Tier 1 target or reports a clean graph | No Tier 1 call exists at the unresolved site; Tier 3 syntax call remains; CS0246 is a Tier 4 `AnalysisGap` with line and extractor provenance | Implemented in the RX-01 test |
 | RX-05 | Receiver resolution | Static, extension, and interface-typed calls | Dispatch shape or reduced extension identity is mislabeled | Preserve compiler-selected method identity and declared evidence limitations | Planned follow-up |
 | DIR-01 | Directionality | Caller/callee, project-reference, inheritance, route/service, and supported boundary edges survive persistence | A reversed edge produces plausible but incorrect paths | Serialized and loaded source/target IDs exactly preserve each rule's declared direction | Planned later slice; no reverse traversal in this work |
-| INC-01 | Snapshot state transitions | Full scan, caller-only edit, file move, target deletion, and scoped exclusion | A new snapshot drops unchanged evidence, retains old paths/semantic edges, or analyzes a file excluded from inventory | Canonical endpoints survive caller edits/moves; old paths disappear; target deletion degrades to syntax plus a Tier 4 gap; scoped exclusions are recorded and cannot emit semantic facts; unrelated SQL evidence remains stable | Implemented in `CSharpGraphStateTransitionTests`; TraceMap does not currently expose an in-place incremental graph-update API, so true partial-update merge/prune behavior remains unclaimed |
+| SNAP-01 | Full-snapshot stability | Full scan, caller-only edit, file move, target deletion, and scoped exclusion followed by complete snapshot rebuilds | A rebuilt snapshot drops unchanged evidence, retains old paths/semantic edges, or analyzes a file excluded from inventory | Canonical endpoints survive caller edits/moves; old paths disappear; target deletion degrades to syntax plus a Tier 4 gap; scoped exclusions are recorded and cannot emit or influence semantic facts; unrelated SQL evidence remains stable | Implemented in `CSharpFullSnapshotStabilityTests`; in-place incremental replacement remains unsupported and unclaimed |
 | LEG-01 | Legacy/incomplete .NET | Legacy project, unavailable reference, outside-root project, or conditional compilation fails full load | Failed compilation becomes a clean empty graph | Preserve extractable syntax/structural evidence, emit explicit gaps, and label coverage reduced | Planned later slice |
 
 ## Assertion contract
