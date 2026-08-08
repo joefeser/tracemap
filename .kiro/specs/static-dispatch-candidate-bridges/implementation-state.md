@@ -1,17 +1,17 @@
 # Static Dispatch Candidate Bridges Implementation State
 
-Status: implementation-task-7-complete-awaiting-pr
+Status: implementation-task-8-complete-awaiting-pr
 Readiness: ready-for-pr-review
 Merged PR 1: #331 (`086ad376e387ea8d87e430175ef2673cbc74c0f1`)
 Merged PR 2: #333 (`84f72e0faa9dd6c106c625de175a194d9c1515ff`)
 
 ## Branch
 
-- Branch: `codex/static-dispatch-di-context`
+- Branch: `codex/static-dispatch-route-flow`
 - Base: `origin/dev`
-- Base SHA: `5a7da1058f0978b57c3eaf322182ae349959f13b`
-- Scope: Task 7 DI registration-context annotations over the existing shared
-  candidate builder and relationship-backed interface/override candidates
+- Base SHA: `6a8b5bd14187e5258a9805ee73cad6ff66cb9079`
+- Scope: Task 8 route-flow consumption of the existing shared dispatch
+  candidate edges and gaps
 - Suggested PR target: `dev`
 
 ## Task 7 Pre-Implementation Decision
@@ -34,16 +34,33 @@ Merged PR 2: #333 (`84f72e0faa9dd6c106c625de175a194d9c1515ff`)
 
 ## Current Implementation State
 
-This branch completes Task 7 over the Task 6 builder shipped by PRs #331 and
-#333. It adds optional registration-context fields to `tracemap paths` JSON and
-a bounded Markdown note while keeping every candidate review-tier.
+This branch completes Task 8 over the Task 6/7 shared builder. Route-flow now
+consumes the candidate edges and gaps already present in the combined path
+inventory instead of reconstructing them from normalized `implements` and
+`overrides` labels. This preserves candidate IDs, underlying dispatch rule IDs,
+supporting relationship IDs, registration context, registration fact IDs, and
+fan-out counts while keeping route-flow presentation under
+`combined.route-flow.interface-bridge.v1`.
 
 The slice intentionally does not add type-level fallback candidates,
-route-flow threading, reverse/impact/report/vault/docs-export consumption, or
-new persisted candidate tables. Unsupported registration families that the
-current scanner cannot identify remain documented extraction limitations; if
-present as `DependencyRegistered` observations, non-closed shapes fail closed
-to `UnsupportedRegistrationShape`.
+reverse/impact/report/vault/docs-export consumption, or new persisted candidate
+tables. It does not add extraction rules or infer runtime DI selection.
+
+## Task 8 Pre-Implementation Decision
+
+- The route-flow consumer already invoked `StaticDispatchCandidateBuilder`,
+  but did so through a second adapter over normalized relationship edges.
+  That adapter discarded the original relationship kind, canonical containing
+  type identities, shared candidate ID, and Task 7 registration annotations.
+- `CombinedDependencyPathReporter.BuildGraphInventoryAsync` already returns
+  the shared builder's `combined.dispatch-candidate.v1` edges and
+  `combined.dispatch-gap.v1` gaps. Task 8 therefore needs no new extraction or
+  persisted schema; route-flow can consume those existing in-memory records.
+- Route-flow candidate rows remain additive presentation rows. Existing entry,
+  call, HTTP, SQL, data-surface, and logic row behavior remains unchanged.
+- Fan-out gap records now retain structured candidate count and limit values so
+  route-flow can report exact candidate and omitted counts without parsing
+  human-readable gap messages.
 
 ## Scope Decisions
 
@@ -76,6 +93,28 @@ to `UnsupportedRegistrationShape`.
 - `.kiro/specs/static-dispatch-candidate-bridges/implementation-state.md`
 
 ## Implementation Slice Notes
+
+Task 8 route-flow slice:
+
+- Removed route-flow's duplicate candidate reconstruction over normalized
+  `implements`/`overrides` edges. Route-flow now consumes the shared
+  `interface-candidate` and `override-candidate` edges by underlying dispatch
+  rule ID.
+- Preserved `combined.route-flow.interface-bridge.v1` as the presentation rule
+  while carrying `combined.dispatch-candidate.v1` in supporting rule IDs.
+- Added optional route-flow row fields for shared candidate ID, supporting call
+  and relationship edge IDs, registration context, registration fact IDs,
+  candidate count, and omitted count. Non-candidate row JSON remains unchanged
+  because optional fields are omitted when absent.
+- Propagated shared registration, generic, compatibility, fan-out, and
+  truncation gap kinds instead of collapsing them into an unknown route-flow
+  gap.
+- Added structured candidate count and limit fields to dispatch fan-out gaps;
+  route-flow derives exact omitted counts without parsing gap prose.
+- Added end-to-end route-flow tests for DI-context provenance and override
+  candidates. Existing focused tests continue to cover single/multiple/no
+  candidates, high fan-out, reduced Tier3 evidence, deterministic output, and
+  forbidden runtime wording.
 
 - Audited the shipped `DependencyRegistered` shape and added deterministic
   service/implementation type symbol IDs plus a closed-set registration shape
@@ -213,6 +252,23 @@ dotnet test src/dotnet/TraceMap.sln
 ```
 
 Results:
+
+- Task 8 focused route-flow/path/catalog validation: passed, 115 tests.
+- Full `.NET` solution validation after Task 8: passed, 1,306 tests.
+- `dotnet format --verify-no-changes` over changed C# files: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Restored the pinned TypeScript toolchain with `npm ci` and built it for the
+  required combined smoke. npm repeated two existing high-severity dependency
+  advisories; no dependency files changed.
+- `./scripts/smoke-combined-paths.sh
+  /tmp/tracemap-static-dispatch-route-flow-smoke`: passed over checked-in
+  public samples.
+- Ran `tracemap route-flow` twice against that generated combined index with
+  the same output path and verified Markdown/JSON byte identity. The sample
+  correctly reported reduced coverage and `UnknownAnalysisGap`; it contains no
+  member relationship facts, so shared candidate projection is covered by the
+  focused end-to-end fixtures rather than claimed from this smoke.
 
 - Focused `CombinedDependencyPathTests` plus
   `CSharpSemanticExtractorTests`: passed, 44 tests after review patches.

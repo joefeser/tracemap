@@ -474,7 +474,9 @@ internal static class StaticDispatchCandidateBuilder
             extractorVersionFor(abstractionNode.SourceIndexId),
             "combined-symbol-relationships",
             abstractionNode.EndLine,
-            []));
+            [],
+            candidateCount,
+            candidateLimit));
     }
 
     private static void AddOverrideDepthGapIfNeeded(
@@ -897,4 +899,6 @@ internal sealed record StaticDispatchCandidateGap(
     string? ExtractorVersion,
     string? EvidenceScope,
     int? EndLine,
-    IReadOnlyList<string> SupportingFactIds);
+    IReadOnlyList<string> SupportingFactIds,
+    int? CandidateCount = null,
+    int? CandidateLimit = null);
