@@ -93,17 +93,17 @@ not part of this spec-only branch.
   - [x] Add deterministic ordering, caps, cycle protection, and byte-stability
         tests.
 
-- [ ] 7. Add DI registration-context annotations.
-  - [ ] Audit existing `DependencyRegistered` fact shape and fact-symbol
+- [x] 7. Add DI registration-context annotations.
+  - [x] Audit existing `DependencyRegistered` fact shape and fact-symbol
         attachments.
-  - [ ] Annotate candidates as `registration-context-candidate` only when DI
+  - [x] Annotate candidates as `registration-context-candidate` only when DI
         service/implementation evidence and relationship compatibility agree.
-  - [ ] Emit `RegistrationCompatibilityUnproven` when registration evidence
+  - [x] Emit `RegistrationCompatibilityUnproven` when registration evidence
         lacks relationship compatibility.
-  - [ ] Emit unsupported registration gaps for factories, scanning,
+  - [x] Emit unsupported registration gaps for factories, scanning,
         keyed/named services, decorators, service locators, reflection,
         config, dynamic branches, custom containers, and open generics.
-  - [ ] Add tests for multiple registrations, open generics, syntax-only
+  - [x] Add tests for multiple registrations, open generics, syntax-only
         registrations, deterministic ordering, and safety.
 
 - [ ] 8. Thread candidates into route-flow.

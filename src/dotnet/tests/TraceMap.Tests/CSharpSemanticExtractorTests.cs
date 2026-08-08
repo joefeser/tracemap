@@ -347,6 +347,14 @@ public sealed class CSharpSemanticExtractorTests
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.DynamicInvocation && fact.RuleId == RuleIds.CSharpSemanticFlowBoundary);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.BranchCondition && fact.RuleId == RuleIds.CSharpSemanticFlowBoundary);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.DependencyRegistered && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence);
+        var registrations = result.Facts.Where(fact => fact.FactType == FactTypes.DependencyRegistered).ToArray();
+        Assert.Equal(2, registrations.Length);
+        Assert.All(registrations, registration =>
+        {
+            Assert.Equal("closed-type-pair", registration.Properties["registrationShape"]);
+            Assert.StartsWith("csharp type ", registration.Properties["serviceTypeSymbolId"], StringComparison.Ordinal);
+            Assert.StartsWith("csharp type ", registration.Properties["implementationTypeSymbolId"], StringComparison.Ordinal);
+        });
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.SerializerContractMember && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence && fact.ContractElement == "customer_name");
         var serializerMember = Assert.Single(result.Facts, fact =>
             fact.FactType == FactTypes.SerializerContractMember
