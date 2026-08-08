@@ -15,7 +15,7 @@
 ## Full-register follow-up
 
 - Derive a set of table identities whose base field catalogs are present and have no field-scoped acquisition gaps. Only a unique table wildcard in that set can complete an inline record-source binding. Keep query wildcards and any incomplete catalog partial; do not fabricate projection order.
-- Remove `IN` and `EXISTS` keyword-call syntax from the custom-function set and retain them as operator hashes. Continue resolving every nonliteral operand normally.
+- Remove Access predicate operators such as `IN` and `EXISTS` from the custom-function set and retain them as operator hashes. Continue resolving every nonliteral operand normally.
 - Keep private owner dispositions in the review workbook. They affect rebuild scope, not source evidence or scanner output.
 
 ## Review hardening

@@ -18,6 +18,8 @@ public static class AccessDesignEvidenceComposer
     private static string[] BuildOrdinalOutputs(IEnumerable<CodeFact> facts, int maximumOrdinalExclusive)
     {
         var entries = facts
+            .Where(fact => fact.Properties.GetValueOrDefault("coverageLabel") == "complete"
+                && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
             .Select(fact => TryValidOrdinal(
                     fact.Properties.GetValueOrDefault("ordinal"),
                     maximumOrdinalExclusive,
@@ -609,7 +611,8 @@ public static class AccessDesignEvidenceComposer
         var domainCriteriaFields = BuildDomainCriteriaFieldSets(
             baseFacts,
             fields,
-            reconciledDomainCriteriaFields);
+            reconciledDomainCriteriaFields,
+            completeTableFieldCatalogStableKeys);
         var queryOutputs = baseFacts
             .Where(fact => fact.FactType == FactTypes.AccessQueryOutputDeclared
                 && fact.SourceSymbol is not null
@@ -966,8 +969,11 @@ public static class AccessDesignEvidenceComposer
         IReadOnlyDictionary<string, IReadOnlyList<string>> supportingFactIdsByStableKey,
         IReadOnlyDictionary<string, string> composedBaseFactIds)
     {
-        if (fact.TargetSymbol is null
-            || !supportingFactIdsByStableKey.TryGetValue(fact.TargetSymbol, out var supportingFactIds)
+        var supportKey = fact.FactType == FactTypes.AccessBindingDeclared
+            ? fact.Properties.GetValueOrDefault("stableBindingKey") ?? fact.TargetSymbol
+            : fact.TargetSymbol;
+        if (string.IsNullOrWhiteSpace(supportKey)
+            || !supportingFactIdsByStableKey.TryGetValue(supportKey, out var supportingFactIds)
             || supportingFactIds.Count == 0)
             return fact;
         var merged = (fact.Properties.GetValueOrDefault("supportingFactIds") ?? string.Empty)
@@ -1115,6 +1121,9 @@ public static class AccessDesignEvidenceComposer
                         || string.IsNullOrWhiteSpace(fact.FactType)
                         || string.IsNullOrWhiteSpace(fact.RuleId)
                         || string.IsNullOrWhiteSpace(fact.EvidenceTier))
+                        throw new AccessScanException("AccessBaseScanFactsInvalid");
+                    if (fact.FactType == FactTypes.AccessQueryOutputDeclared
+                        && string.IsNullOrWhiteSpace(fact.TargetSymbol))
                         throw new AccessScanException("AccessBaseScanFactsInvalid");
                     if (fact.ScanId != manifest.ScanId
                         || fact.CommitSha != manifest.CommitSha
@@ -1341,6 +1350,20 @@ public static class AccessDesignEvidenceComposer
                                 databaseIdentitySeed,
                                 stableKey,
                                 reference.FieldName).StableKey);
+                        var candidate = AccessSafeValues.CrosstabPivotPrefixMismatchCandidate(
+                            databaseIdentitySeed,
+                            stableKey,
+                            reference.FieldName).StableKey;
+                        if (fieldCoverageByStableKey is not null)
+                            fieldCoverageByStableKey[candidate] = "partial";
+                        var prefixedPivotHash = AccessSafeValues.RoleHash(
+                            "access-query-pivot-column",
+                            "W" + reference.FieldName);
+                        if (supportingFactIdsByStableKey is not null
+                            && staticCrosstabPivotFactIds?.TryGetValue(stableKey, out var prefixFactIdsByHash) == true
+                            && prefixFactIdsByHash.TryGetValue(prefixedPivotHash, out var prefixFactIds)
+                            && prefixFactIds.Count > 0)
+                            supportingFactIdsByStableKey[candidate] = prefixFactIds;
                     }
                     continue;
                 }
@@ -1456,13 +1479,23 @@ public static class AccessDesignEvidenceComposer
     internal static IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> BuildDomainCriteriaFieldSets(
         IReadOnlyList<CodeFact> facts,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fieldsByObject,
-        IReadOnlyDictionary<string, Dictionary<string, List<string>>>? additionalDirectCriteriaFields = null)
+        IReadOnlyDictionary<string, Dictionary<string, List<string>>>? additionalDirectCriteriaFields = null,
+        IReadOnlySet<string>? completeTableFieldCatalogStableKeys = null)
     {
         var completeQueryDependencies = facts
             .Where(fact => fact.FactType == FactTypes.AccessQueryDeclared
                 && fact.TargetSymbol is not null
                 && fact.Properties.GetValueOrDefault("referenceCoverage") == "complete")
             .Select(fact => fact.TargetSymbol!)
+            .ToHashSet(StringComparer.Ordinal);
+        var completeQueryOutputCatalogs = facts
+            .Where(fact => fact.FactType == FactTypes.AccessQueryOutputDeclared
+                && fact.SourceSymbol is not null)
+            .GroupBy(fact => fact.SourceSymbol!, StringComparer.Ordinal)
+            .Where(group => group.Any()
+                && group.All(fact => fact.TargetSymbol is not null
+                    && fact.Properties.GetValueOrDefault("coverageLabel") == "complete"))
+            .Select(group => group.Key)
             .ToHashSet(StringComparer.Ordinal);
         var dependencyTargetsByQuery = facts
             .Where(fact => fact.FactType == FactTypes.AccessQueryDependencyCandidate
@@ -1498,6 +1531,9 @@ public static class AccessDesignEvidenceComposer
             var directNames = names.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var target in dependencyTargetsByQuery.GetValueOrDefault(queryKey) ?? [])
                 if (completeQueryDependencies.Contains(queryKey)
+                    && (completeTableFieldCatalogStableKeys is null
+                        || completeTableFieldCatalogStableKeys.Contains(target)
+                        || completeQueryOutputCatalogs.Contains(target))
                     && fieldsByObject.TryGetValue(target, out var dependencyFields))
                     AddFields(names, dependencyFields, directNames);
             result[queryKey] = names.ToDictionary(
