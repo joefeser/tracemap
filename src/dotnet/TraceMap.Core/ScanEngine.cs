@@ -57,7 +57,8 @@ public static class ScanEngine
         }
 
         inventory = IncludeSemanticallyAnalyzedFiles(inventory, fullInventory, semanticResult);
-        var sourceSnapshotDigest = CreateSourceSnapshotDigest(repoPath, inventory);
+        var authoritativeSnapshotInventory = IncludeSemanticMetadataInputs(inventory, fullInventory);
+        var sourceSnapshotDigest = CreateSourceSnapshotDigest(repoPath, authoritativeSnapshotInventory);
         var solutions = inventory
             .Where(item => item.Kind == "Solution")
             .Select(item => item.RelativePath)
@@ -144,7 +145,7 @@ public static class ScanEngine
         string verificationDigest;
         try
         {
-            verificationDigest = CreateSourceSnapshotDigest(repoPath, inventory);
+            verificationDigest = CreateSourceSnapshotDigest(repoPath, authoritativeSnapshotInventory);
         }
         catch (SourceInventoryException ex)
         {
@@ -255,6 +256,18 @@ public static class ScanEngine
 
     private static bool IsSemanticMetadataKind(string kind) =>
         kind is "Solution" or "Project" or "MSBuildProps" or "MSBuildTargets";
+
+    private static IReadOnlyList<FileInventoryItem> IncludeSemanticMetadataInputs(
+        IReadOnlyList<FileInventoryItem> inventory,
+        IReadOnlyList<FileInventoryItem> fullInventory)
+    {
+        return inventory
+            .Concat(fullInventory.Where(item => IsSemanticMetadataKind(item.Kind)))
+            .GroupBy(item => item.RelativePath, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
+            .ToArray();
+    }
 
     private static void AppendString(IncrementalHash hash, string value, Span<byte> lengthBuffer)
     {
