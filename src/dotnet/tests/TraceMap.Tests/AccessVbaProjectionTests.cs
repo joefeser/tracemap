@@ -55,6 +55,47 @@ public sealed class AccessVbaProjectionTests
     }
 
     [Fact]
+    public void Procedure_catalog_preserves_projector_ordinals_when_private_declarations_precede_public_functions()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var modules = new[]
+        {
+            new AccessRawVbaModule(
+                "ModuleA",
+                "standard",
+                "Private Function HiddenValue() As Long\nEnd Function\nPublic Function SharedValue() As Long\nEnd Function")
+        };
+
+        var catalog = AccessVbaProjector.BuildProcedureCatalog(seed, modules);
+        var projected = AccessVbaProjector.Project(seed, modules);
+
+        var moduleIdentity = AccessSafeValues.Identity(seed, "vba-module", "ModuleA");
+        var expected = AccessSafeValues.Identity(
+            seed,
+            $"vba-procedure-{moduleIdentity.StableKey}",
+            "SharedValue",
+            1).StableKey;
+        Assert.Contains(Assert.Single(projected.Modules).Procedures, procedure => procedure.Identity.StableKey == expected);
+        Assert.Equal(expected, Assert.Single(catalog["SharedValue"]));
+    }
+
+    [Fact]
+    public void Procedure_catalog_reports_incomplete_when_module_or_source_limits_hide_candidates()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var result = AccessVbaProjector.BuildProcedureCatalogWithCoverage(
+            seed,
+            [
+                new AccessRawVbaModule("ModuleA", "standard", "Function SharedValue() As Long\nEnd Function"),
+                new AccessRawVbaModule("ModuleB", "standard", "Function SharedValue() As Long\nEnd Function")
+            ],
+            AccessLimits.Default with { MaxObjectsPerCollection = 1 });
+
+        Assert.False(result.Complete);
+        Assert.Single(result.Procedures["SharedValue"]);
+    }
+
+    [Fact]
     public void Product_vba_inventory_reads_only_counts_and_never_accesses_vbe_or_catalog_items()
     {
         var catalog = new FakeCountCollection(4);
