@@ -214,7 +214,7 @@ public sealed class CSharpGraphCorrectnessFixtureTests
                 public sealed class Consumer
                 {
                     private readonly Alpha.Receiver receiver = new();
-                    public Beta.Receiver Property { get; } = new();
+                    public PropertyReceiver Property { get; } = new();
 
                     public void Exercise(Beta.Receiver parameter, object candidate)
                     {
@@ -222,7 +222,7 @@ public sealed class CSharpGraphCorrectnessFixtureTests
                         parameter.Touch();
                         Property.Touch();
                         if (TryResolve(out var inline)) inline.Touch();
-                        if (candidate is Alpha.Receiver patterned) patterned.Touch();
+                        if (candidate is PatternReceiver patterned) patterned.Touch();
                         {
                             var receiver = new Beta.Receiver();
                             receiver.Touch();
@@ -230,9 +230,9 @@ public sealed class CSharpGraphCorrectnessFixtureTests
                         }
                     }
 
-                    private static bool TryResolve(out Alpha.Receiver value)
+                    private static bool TryResolve(out InlineReceiver value)
                     {
-                        value = new Alpha.Receiver();
+                        value = new InlineReceiver();
                         return true;
                     }
 
@@ -241,6 +241,10 @@ public sealed class CSharpGraphCorrectnessFixtureTests
                         missing.Touch();
                     }
                 }
+
+                public sealed class PropertyReceiver { public void Touch() { } }
+                public sealed class InlineReceiver { public void Touch() { } }
+                public sealed class PatternReceiver { public void Touch() { } }
             }
             """);
 
@@ -251,13 +255,16 @@ public sealed class CSharpGraphCorrectnessFixtureTests
         const string exerciseId = "csharp method csharp%20type%20ReceiverSample%25401.0.0.0%20ReceiverSample.Consumer Exercise(ReceiverSample%401.0.0.0%3ABeta.Receiver%2CSystem.Runtime%4010.0.0.0%3Aobject)->void";
         const string alphaTouchId = "csharp method csharp%20type%20ReceiverSample%25401.0.0.0%20Alpha.Receiver Touch()->void";
         const string betaTouchId = "csharp method csharp%20type%20ReceiverSample%25401.0.0.0%20Beta.Receiver Touch()->void";
+        const string propertyTouchId = "csharp method csharp%20type%20ReceiverSample%25401.0.0.0%20ReceiverSample.PropertyReceiver Touch()->void";
+        const string inlineTouchId = "csharp method csharp%20type%20ReceiverSample%25401.0.0.0%20ReceiverSample.InlineReceiver Touch()->void";
+        const string patternTouchId = "csharp method csharp%20type%20ReceiverSample%25401.0.0.0%20ReceiverSample.PatternReceiver Touch()->void";
         var expectedCalls = new[]
         {
             (Line: 20, TargetId: alphaTouchId),
             (Line: 21, TargetId: betaTouchId),
-            (Line: 22, TargetId: betaTouchId),
-            (Line: 23, TargetId: alphaTouchId),
-            (Line: 24, TargetId: alphaTouchId),
+            (Line: 22, TargetId: propertyTouchId),
+            (Line: 23, TargetId: inlineTouchId),
+            (Line: 24, TargetId: patternTouchId),
             (Line: 27, TargetId: betaTouchId),
             (Line: 28, TargetId: alphaTouchId)
         };
