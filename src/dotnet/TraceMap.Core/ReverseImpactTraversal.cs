@@ -4,7 +4,15 @@ public sealed record ReverseImpactOptions(
     string Selector,
     int MaxDepth,
     IReadOnlyList<string>? RelationshipFilters = null,
-    bool IncludeContainedMembers = true);
+    bool IncludeContainedMembers = true,
+    int MaxTraversalStates = ReverseImpactContract.DefaultMaxTraversalStates,
+    int MaxFrontierSize = ReverseImpactContract.DefaultMaxFrontierSize,
+    int MaxResults = ReverseImpactContract.DefaultMaxResults);
+
+public sealed record ReverseImpactLimits(
+    int MaxTraversalStates,
+    int MaxFrontierSize,
+    int MaxResults);
 
 public sealed record ReverseImpactResult(
     string SchemaVersion,
@@ -12,6 +20,8 @@ public sealed record ReverseImpactResult(
     string TraversalRuleId,
     string Selector,
     int MaxDepth,
+    ReverseImpactLimits Limits,
+    bool Truncated,
     IReadOnlyList<string> RelationshipFilters,
     ReverseImpactSnapshot? Snapshot,
     ReverseImpactSymbol? Seed,
@@ -24,6 +34,10 @@ public sealed record ReverseImpactResult(
 public static class ReverseImpactContract
 {
     public const string SchemaVersion = "tracemap.reverse-impact.v1";
+    public const int DefaultMaxTraversalStates = 100_000;
+    public const int DefaultMaxFrontierSize = 10_000;
+    public const int DefaultMaxResults = 10_000;
+    public const int MaximumLimit = 1_000_000;
 
     public static IReadOnlyList<string> SupportedResolutions { get; } = Array.AsReadOnly(
     [
@@ -39,7 +53,23 @@ public static class ReverseImpactContract
         ReverseImpactGapKinds.AnalysisGapMissingEvidence,
         ReverseImpactGapKinds.RelationshipMissingCanonicalIdentity,
         ReverseImpactGapKinds.RelationshipMissingEvidence,
-        ReverseImpactGapKinds.SelectorNotFound
+        ReverseImpactGapKinds.SelectorNotFound,
+        ReverseImpactGapKinds.TruncatedByLimit
+    ]);
+
+    public static IReadOnlyList<string> SupportedTruncationReasons { get; } = Array.AsReadOnly(
+    [
+        ReverseImpactTruncationReasons.Frontier,
+        ReverseImpactTruncationReasons.Results,
+        ReverseImpactTruncationReasons.TraversalStates
+    ]);
+
+    public static IReadOnlyList<string> SupportedTypeSeedKinds { get; } = Array.AsReadOnly(
+    [
+        "NamedType",
+        "Type",
+        "class",
+        "interface"
     ]);
 
     public static bool IsSupportedSchema(string? schemaVersion) =>
@@ -61,6 +91,14 @@ public static class ReverseImpactGapKinds
     public const string RelationshipMissingCanonicalIdentity = "RelationshipMissingCanonicalIdentity";
     public const string RelationshipMissingEvidence = "RelationshipMissingEvidence";
     public const string SelectorNotFound = "SelectorNotFound";
+    public const string TruncatedByLimit = "TruncatedByLimit";
+}
+
+public static class ReverseImpactTruncationReasons
+{
+    public const string Frontier = "frontier";
+    public const string Results = "results";
+    public const string TraversalStates = "traversal-states";
 }
 
 public sealed record ReverseImpactSnapshot(
@@ -121,6 +159,8 @@ public sealed record ReverseImpactGap(
     string? CommitSha,
     string? ProjectPath,
     IReadOnlyList<string> RelatedSymbolIds,
+    string? TruncationReason,
+    int? TruncationLimit,
     ReverseImpactEvidence Evidence);
 
 public sealed class ReverseImpactInputException : ArgumentException
@@ -151,6 +191,7 @@ public static class ReverseImpactTraversal
     private static readonly string[] SymbolRoles = ["source", "target", "argument", "parameter", "origin", "constructor"];
     private static readonly HashSet<string> ImpactRelationshipKinds = new(StringComparer.Ordinal)
     {
+        "ExtendsClass",
         "ExtendsInterface",
         "ImplementsInterface",
         "ImplementsInterfaceMember",
@@ -161,9 +202,13 @@ public static class ReverseImpactTraversal
     {
         "Event",
         "Field",
+        "Function",
+        "Initializer",
         "Method",
-        "Property"
+        "Property",
+        "Subscript"
     };
+    private static readonly HashSet<string> TypeSeedKinds = new(ReverseImpactContract.SupportedTypeSeedKinds, StringComparer.OrdinalIgnoreCase);
 
     public static ReverseImpactResult Analyze(IEnumerable<CodeFact> inputFacts, ReverseImpactOptions options)
     {
@@ -179,6 +224,10 @@ public static class ReverseImpactTraversal
             throw new ArgumentOutOfRangeException(nameof(options), "Reverse impact depth must be between 1 and 20.");
         }
 
+        ValidateLimit(options.MaxTraversalStates, nameof(options.MaxTraversalStates));
+        ValidateLimit(options.MaxFrontierSize, nameof(options.MaxFrontierSize));
+        ValidateLimit(options.MaxResults, nameof(options.MaxResults));
+
         var unvalidatedFacts = inputFacts.Cast<CodeFact?>().ToArray();
         ValidateFacts(unvalidatedFacts);
         var facts = unvalidatedFacts
@@ -186,6 +235,7 @@ public static class ReverseImpactTraversal
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
         var filters = NormalizeFilters(options.RelationshipFilters);
+        var limits = new ReverseImpactLimits(options.MaxTraversalStates, options.MaxFrontierSize, options.MaxResults);
         var selector = options.Selector.Trim();
         var snapshot = Snapshot(facts);
         var symbols = BuildSymbolInventory(facts);
@@ -208,6 +258,8 @@ public static class ReverseImpactTraversal
                 TraversalRuleId,
                 selector,
                 options.MaxDepth,
+                limits,
+                false,
                 filters,
                 snapshot,
                 null,
@@ -224,7 +276,7 @@ public static class ReverseImpactTraversal
 
         var seed = resolution.Seed;
         var traversalSeeds = new List<ReverseImpactSymbol> { seed };
-        if (options.IncludeContainedMembers && string.Equals(seed.SymbolKind, "NamedType", StringComparison.OrdinalIgnoreCase))
+        if (options.IncludeContainedMembers && TypeSeedKinds.Contains(seed.SymbolKind))
         {
             traversalSeeds.AddRange(symbols.Values
                 .Where(symbol => string.Equals(symbol.ContainingSymbolId, seed.SymbolId, StringComparison.Ordinal)
@@ -253,12 +305,46 @@ public static class ReverseImpactTraversal
             visitedStates.Add((traversalSeed.SymbolId, traversalSeed.SymbolId));
         }
 
-        var frontier = new Queue<TraversalState>(traversalSeeds.Select(symbol => new TraversalState(symbol.SymbolId, symbol.SymbolId, [])));
+        var initialStates = traversalSeeds
+            .Select(symbol => new TraversalState(symbol.SymbolId, symbol.SymbolId, []))
+            .ToArray();
+        var frontier = new Queue<TraversalState>(initialStates.Take(options.MaxFrontierSize));
         var impacts = new List<ReverseImpactItem>();
-
-        while (frontier.Count > 0)
+        var truncationGaps = new List<ReverseImpactGap>();
+        var truncatedReasons = new HashSet<string>(StringComparer.Ordinal);
+        if (initialStates.Length > options.MaxFrontierSize)
         {
+            var omitted = initialStates[options.MaxFrontierSize];
+            AddTruncationGap(
+                truncationGaps,
+                truncatedReasons,
+                ReverseImpactTruncationReasons.Frontier,
+                options.MaxFrontierSize,
+                $"The traversal seed frontier exceeded the configured limit of {options.MaxFrontierSize}; seed `{omitted.SymbolId}` and later seeds were not traversed.",
+                [omitted.SymbolId],
+                FirstFactForSymbol(facts, omitted.SymbolId));
+        }
+
+        var traversedStates = 0;
+        var stopTraversal = false;
+        while (frontier.Count > 0 && !stopTraversal)
+        {
+            if (traversedStates >= options.MaxTraversalStates)
+            {
+                var omitted = frontier.Peek();
+                AddTruncationGap(
+                    truncationGaps,
+                    truncatedReasons,
+                    ReverseImpactTruncationReasons.TraversalStates,
+                    options.MaxTraversalStates,
+                    $"Traversal stopped after {options.MaxTraversalStates} states; state `{omitted.SymbolId}` for seed `{omitted.TraversalSeedSymbolId}` was the first omitted state.",
+                    [omitted.TraversalSeedSymbolId, omitted.SymbolId],
+                    omitted.Path.LastOrDefault()?.Fact ?? FirstFactForSymbol(facts, omitted.SymbolId));
+                break;
+            }
+
             var state = frontier.Dequeue();
+            traversedStates++;
             if (state.Path.Count >= options.MaxDepth || !incoming.TryGetValue(state.SymbolId, out var candidates))
             {
                 continue;
@@ -271,6 +357,20 @@ public static class ReverseImpactTraversal
                     continue;
                 }
 
+                if (impacts.Count >= options.MaxResults)
+                {
+                    AddTruncationGap(
+                        truncationGaps,
+                        truncatedReasons,
+                        ReverseImpactTruncationReasons.Results,
+                        options.MaxResults,
+                        $"Traversal stopped after {options.MaxResults} impact results; fact `{edge.Fact.FactId}` was the first omitted result edge.",
+                        [state.TraversalSeedSymbolId, edge.SourceSymbolId, edge.TargetSymbolId],
+                        edge.Fact);
+                    stopTraversal = true;
+                    break;
+                }
+
                 visitedSymbols.Add(edge.SourceSymbolId);
                 var path = state.Path.Append(edge).ToArray();
                 var symbol = symbols.GetValueOrDefault(edge.SourceSymbolId) ?? UnknownSymbol(edge.SourceSymbolId);
@@ -281,7 +381,24 @@ public static class ReverseImpactTraversal
                     PathId(state.TraversalSeedSymbolId, path),
                     state.TraversalSeedSymbolId,
                     path.Select(ToHop).ToArray()));
-                frontier.Enqueue(new TraversalState(edge.SourceSymbolId, state.TraversalSeedSymbolId, path));
+                if (path.Length < options.MaxDepth && incoming.ContainsKey(edge.SourceSymbolId))
+                {
+                    if (frontier.Count >= options.MaxFrontierSize)
+                    {
+                        AddTruncationGap(
+                            truncationGaps,
+                            truncatedReasons,
+                            ReverseImpactTruncationReasons.Frontier,
+                            options.MaxFrontierSize,
+                            $"The traversal frontier reached the configured limit of {options.MaxFrontierSize}; deeper traversal through fact `{edge.Fact.FactId}` was omitted.",
+                            [state.TraversalSeedSymbolId, edge.SourceSymbolId, edge.TargetSymbolId],
+                            edge.Fact);
+                    }
+                    else
+                    {
+                        frontier.Enqueue(new TraversalState(edge.SourceSymbolId, state.TraversalSeedSymbolId, path));
+                    }
+                }
             }
         }
 
@@ -289,6 +406,7 @@ public static class ReverseImpactTraversal
             .Concat(relationshipGaps.Where(gap =>
                 gap.RelatedSymbolIds.Any(visitedSymbols.Contains)
                 || (gap.GapKind == ReverseImpactGapKinds.RelationshipMissingCanonicalIdentity && gap.RelatedSymbolIds.Count == 0)))
+            .Concat(truncationGaps)
             .ToArray();
 
         return new ReverseImpactResult(
@@ -297,6 +415,8 @@ public static class ReverseImpactTraversal
             TraversalRuleId,
             selector,
             options.MaxDepth,
+            limits,
+            truncationGaps.Count > 0,
             filters,
             snapshot,
             seed,
@@ -338,6 +458,16 @@ public static class ReverseImpactTraversal
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray());
+    }
+
+    private static void ValidateLimit(int value, string parameterName)
+    {
+        if (value is < 1 or > ReverseImpactContract.MaximumLimit)
+        {
+            throw new ArgumentOutOfRangeException(
+                parameterName,
+                $"Reverse-impact limits must be between 1 and {ReverseImpactContract.MaximumLimit}.");
+        }
     }
 
     private static void ValidateFacts(IReadOnlyList<CodeFact?> facts)
@@ -514,7 +644,7 @@ public static class ReverseImpactTraversal
 
                 if (!string.IsNullOrWhiteSpace(candidate.ContainingSymbolId))
                 {
-                    var containingKind = MemberKinds.Contains(candidate.SymbolKind) ? "NamedType" : "Unknown";
+                    var containingKind = MemberKinds.Contains(candidate.SymbolKind) ? "Type" : "Unknown";
                     if (!occurrences.TryGetValue(candidate.ContainingSymbolId, out var containingCandidates))
                     {
                         containingCandidates = [];
@@ -676,13 +806,17 @@ public static class ReverseImpactTraversal
         fact.CommitSha,
         fact.ProjectPath,
         relatedIds,
+        null,
+        null,
         ToEvidence(fact.Evidence, fact.RuleId));
 
     private static ReverseImpactGap CreateDerivedGap(
         string kind,
         string message,
         IEnumerable<string> relatedIds,
-        CodeFact? sourceFact = null)
+        CodeFact? sourceFact = null,
+        string? truncationReason = null,
+        int? truncationLimit = null)
     {
         var ids = relatedIds.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
         return new ReverseImpactGap(
@@ -696,8 +830,38 @@ public static class ReverseImpactTraversal
             sourceFact?.CommitSha,
             sourceFact?.ProjectPath,
             ids,
+            truncationReason,
+            truncationLimit,
             ToEvidence(sourceFact?.Evidence, GapRuleId));
     }
+
+    private static void AddTruncationGap(
+        List<ReverseImpactGap> gaps,
+        HashSet<string> reasons,
+        string reason,
+        int limit,
+        string message,
+        IEnumerable<string> relatedIds,
+        CodeFact? sourceFact)
+    {
+        if (!reasons.Add(reason))
+        {
+            return;
+        }
+
+        gaps.Add(CreateDerivedGap(
+            ReverseImpactGapKinds.TruncatedByLimit,
+            message,
+            relatedIds,
+            sourceFact,
+            reason,
+            limit));
+    }
+
+    private static CodeFact? FirstFactForSymbol(IReadOnlyList<CodeFact> facts, string symbolId) => facts
+        .Where(fact => SymbolRoles.Any(role => string.Equals(Property(fact, $"{role}SymbolId"), symbolId, StringComparison.Ordinal)))
+        .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
+        .FirstOrDefault();
 
     private static IReadOnlyList<string> RelatedSymbolIds(CodeFact fact) =>
         SymbolRoles
@@ -735,9 +899,10 @@ public static class ReverseImpactTraversal
     [
         "Results include only the explicit impact-relevant relationship families requested by the query; other fact types are not traversed.",
         "Canonical endpoints require existing semantic identity properties. Syntax-only relationships without canonical IDs are reported as gaps and are not name-matched.",
-        "Type queries expand only directly contained methods, properties, fields, and events proven by existing containing-symbol identity.",
+        "Recognized type queries expand only directly contained method/function, property, field, event, initializer, and subscript symbols proven by existing containing-symbol identity.",
         "A query accepts facts from exactly one scan, repository, and commit snapshot; mixed snapshots fail closed before selector resolution or graph construction.",
         "Resolved queries include only gaps tied by canonical identity to the seed or visited path. Unscoped analysis gaps are retained only when a selector is not found because reduced coverage may explain the missing seed.",
+        $"Traversal is bounded by depth and configurable state, frontier, and result limits (defaults: {ReverseImpactContract.DefaultMaxTraversalStates}, {ReverseImpactContract.DefaultMaxFrontierSize}, and {ReverseImpactContract.DefaultMaxResults}); truncation emits an evidence-backed TruncatedByLimit gap.",
         "Paths are bounded static evidence chains, not proof of runtime execution, reachability, severity, or completeness."
     ];
 

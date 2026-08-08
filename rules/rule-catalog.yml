@@ -3068,34 +3068,38 @@ rules:
     emits:
       - ReverseImpactResult
       - ReverseImpactContract
+      - ReverseImpactLimits
       - ReverseImpactSnapshot
       - ReverseImpactItem
       - ReverseImpactHop
       - ReverseImpactEvidence
     limitations:
       - Traversal is a derived query over existing facts and does not extract relationships, infer runtime dispatch, classify risk, or prove runtime reachability or execution.
-      - The default impact-relevant families are compiler-backed or canonical-ID-backed calls, property references, inheritance, interface implementation or extension, member overrides, and interface-member implementations; other graph edges do not opt in implicitly.
+      - The default impact-relevant families are compiler-backed or canonical-ID-backed calls, property references, class/interface inheritance or extension (including emitted `ExtendsClass` facts), interface implementation, member overrides, and interface-member implementations; other graph edges do not opt in implicitly.
       - Canonical endpoints must already be present in fact properties. Syntax-only or otherwise incomplete relationship facts without canonical endpoints are excluded with `impact.reverse.gap.v1` instead of being joined by name.
       - A query accepts facts from exactly one scan, repository, and commit snapshot. Mixed snapshots fail closed before selector resolution or graph construction.
       - Null facts, missing required fact fields or property collections, duplicate fact IDs, invalid canonical-ID values, evidence spans whose line numbers are not one-based and ordered, and null relationship-filter entries fail with deterministic typed input errors before traversal.
       - The machine-readable result contract is versioned as `tracemap.reverse-impact.v1`; supported resolution and gap-kind values are published by `ReverseImpactContract` and additions require an explicit contract update.
-      - Depth is limited to 1 through 20 relationship hops. Cycles and duplicates are collapsed deterministically to the first shortest path per traversal seed under stable ordinal edge ordering; the same affected symbol can appear once for each directly contained member seed that proves a distinct path.
-      - Type seeds expand only directly contained methods, properties, fields, and events when an existing containing-symbol ID proves membership; paths retain the proving member seed, while unobserved, generated, inherited, or dynamically supplied members are not inferred.
+      - Depth is limited to 1 through 20 relationship hops. Traversal states, queued frontier states, and emitted results have deterministic configurable limits with defaults of 100000, 10000, and 10000 and a hard maximum of 1000000; reaching a limit emits an evidence-backed `TruncatedByLimit` gap with a versioned reason and limit value, and partial output must not be read as complete.
+      - Cycles and duplicates are collapsed deterministically to the first shortest path per traversal seed under stable ordinal edge ordering; the same affected symbol can appear once for each directly contained member seed that proves a distinct path.
+      - `NamedType`, `Type`, `class`, and `interface` seeds expand only directly contained method/function, property, field, event, initializer, and subscript symbols when an existing containing-symbol ID proves membership; paths retain the proving member seed, while unobserved, generated, inherited, or dynamically supplied members are not inferred.
       - Exact display-name selectors are convenience selectors only. Multiple canonical IDs with the same display name fail closed, including overload, project, assembly, target-framework, and local/external collisions.
       - Resolved queries propagate analysis gaps tied by canonical identity to the selected seed or visited path. Unscoped analysis gaps are retained only for a not-found selector because reduced coverage may explain the missing seed; unscoped canonical-identity relationship gaps remain visible on resolved queries because no safe symbol scope can be derived from those syntax facts.
       - Result tiers remain the tiers of the underlying hops; the structural tier on this rule describes the deterministic traversal operation and does not upgrade underlying evidence.
 
   - id: impact.reverse.gap.v1
     name: Reverse impact query gap
-    description: Records selector ambiguity, selector absence, or impact-relevant relationships that cannot participate safely because canonical endpoint identity is incomplete.
+    description: Records selector ambiguity, selector absence, bounded traversal truncation, or impact-relevant relationships that cannot participate safely because canonical endpoint identity is incomplete.
     evidenceTier: Tier4Unknown
     emits:
       - ReverseImpactGap
       - ReverseImpactEvidence
+      - TruncatedByLimit gap
     limitations:
       - A reverse-impact gap is incomplete evidence, not proof that a symbol has no callers, references, implementations, overrides, or other dependents.
       - Relationship identity gaps retain the original relationship evidence location when available, but cannot identify an affected symbol without both canonical endpoints.
       - Missing relationship-site evidence suppresses the affected hop and emits a scoped Tier4Unknown gap; it is never represented as an ordinary successful impact edge.
+      - Truncation gaps identify the configured traversal-state, frontier, or result limit, preserve the first omitted boundary fact's evidence when available, and label retained results as partial rather than exhaustive.
       - Selector candidates are returned only for exact display-name collisions; the rule does not rank, fuzzy-match, or heuristically choose among candidates.
 
   - id: csharp.semantic.flowboundary.v1
