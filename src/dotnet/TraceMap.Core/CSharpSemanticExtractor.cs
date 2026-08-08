@@ -3352,6 +3352,14 @@ public static class CSharpSemanticExtractor
             AddDatabaseOperationCandidateFact(projectPath, filePath, invocation, model, method, facts);
             if (IsHttpClientCall(method))
             {
+                var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["containingType"] = containingType,
+                    ["methodFamily"] = "HttpClient",
+                    ["methodName"] = methodName
+                };
+                AddSymbolProperties(properties, "source", model.GetEnclosingSymbol(invocation.SpanStart));
+                AddSymbolProperties(properties, "target", method);
                 facts.Add(CreateSemanticFact(
                     FactTypes.HttpCallDetected,
                     RuleIds.HttpClientInvocation,
@@ -3361,15 +3369,18 @@ public static class CSharpSemanticExtractor
                     sourceSymbol: GetEnclosingSymbol(model, invocation),
                     targetSymbol: method.ToDisplayString(SymbolFormat),
                     contractElement: methodName,
-                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["containingType"] = containingType,
-                        ["methodFamily"] = "HttpClient",
-                        ["methodName"] = methodName
-                    }));
+                    properties: properties));
             }
             else if (IsJsonHttpCall(method))
             {
+                var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["containingType"] = containingType,
+                    ["methodFamily"] = "JsonHttpExtension",
+                    ["methodName"] = methodName
+                };
+                AddSymbolProperties(properties, "source", model.GetEnclosingSymbol(invocation.SpanStart));
+                AddSymbolProperties(properties, "target", method);
                 facts.Add(CreateSemanticFact(
                     FactTypes.HttpCallDetected,
                     RuleIds.HttpClientInvocation,
@@ -3379,12 +3390,7 @@ public static class CSharpSemanticExtractor
                     sourceSymbol: GetEnclosingSymbol(model, invocation),
                     targetSymbol: method.ToDisplayString(SymbolFormat),
                     contractElement: methodName,
-                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["containingType"] = containingType,
-                        ["methodFamily"] = "JsonHttpExtension",
-                        ["methodName"] = methodName
-                    }));
+                    properties: properties));
             }
 
             if (IsHttpClientFactoryCreateClient(method) && TryGetLiteralArgument(invocation, 0, out var clientName))
@@ -3539,6 +3545,7 @@ public static class CSharpSemanticExtractor
         {
             properties["sqlOperationName"] = sqlOperationName;
         }
+        AddSymbolProperties(properties, "source", model.GetEnclosingSymbol(invocation.SpanStart));
         AddSymbolProperties(properties, "target", method);
 
         facts.Add(CreateSemanticFact(

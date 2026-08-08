@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using TraceMap.Core;
 using TraceMap.Combine;
 using TraceMap.EndpointAlignment;
@@ -47,6 +49,7 @@ public static class TraceMapCommand
                 "diff" => DiffHelp(),
                 "snapshot-diff" => SnapshotDiffHelp(),
                 "impact" => ImpactHelp(),
+                "reverse-impact" => ReverseImpactHelp(),
                 "reverse" => ReverseHelp(),
                 "release-review" => ReleaseReviewHelp(),
                 "access-review" => AccessReviewHelp(),
@@ -60,7 +63,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "database-design-review" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "scan" or "report" or "database-design-review" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         try
@@ -82,6 +85,7 @@ public static class TraceMapCommand
                 "diff" => await RunDiffAsync(rest, output, error, cancellationToken),
                 "snapshot-diff" => await RunSnapshotDiffAsync(rest, output, error, cancellationToken),
                 "impact" => await RunImpactAsync(rest, output, error, cancellationToken),
+                "reverse-impact" => await RunReverseImpactAsync(rest, output, error, cancellationToken),
                 "reverse" => await RunReverseAsync(rest, output, error, cancellationToken),
                 "release-review" => await RunReleaseReviewAsync(rest, output, error, cancellationToken),
                 "access-review" => await RunAccessReviewAsync(rest, output, error, cancellationToken),
@@ -95,6 +99,10 @@ public static class TraceMapCommand
                 "explorer" => await RunExplorerAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -777,6 +785,110 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
         await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
         return values.HasFlag("--exit-code") && result.HasReverseEvidence ? 1 : 0;
+    }
+
+    private static async Task<int> RunReverseImpactAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args, "--exclude-contained-members");
+        var indexPath = LastRawOptionValue(args, "--index");
+        if (string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: reverse-impact requires --index <index.sqlite>.");
+            return 1;
+        }
+
+        var selector = LastRawOptionValue(args, "--selector");
+        if (string.IsNullOrWhiteSpace(selector))
+        {
+            await error.WriteLineAsync("error: reverse-impact requires --selector <canonical-id-or-exact-display-name>.");
+            return 1;
+        }
+
+        var depthText = LastRawOptionValue(args, "--depth");
+        if (depthText is null
+            || !int.TryParse(depthText, out var depth)
+            || depth is < 1 or > 20)
+        {
+            await error.WriteLineAsync("error: reverse-impact requires --depth <1-20>.");
+            return 1;
+        }
+
+        var outputPath = LastRawOptionValue(args, "--out");
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: reverse-impact requires --out <result.json>.");
+            return 1;
+        }
+
+        var fullIndexPath = Path.GetFullPath(indexPath);
+        var fullOutputPath = Path.GetFullPath(outputPath);
+        if (string.Equals(fullIndexPath, fullOutputPath, StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: reverse-impact output must not replace the input index.");
+            return 1;
+        }
+
+        if (FileSystemEntryExists(fullOutputPath))
+        {
+            await error.WriteLineAsync("error: reverse-impact output must be a new file and must not alias an existing artifact.");
+            return 1;
+        }
+
+        ReverseImpactResult result;
+        try
+        {
+            var relationshipFilters = ParseReverseImpactRelations(args);
+            var artifact = await ReverseImpactArtifactReader.ReadAsync(
+                fullIndexPath,
+                ParseBoundedPositiveInt(
+                    values,
+                    "--max-input-facts",
+                    ReverseImpactArtifactReader.DefaultMaxFacts,
+                    ReverseImpactArtifactReader.MaximumFacts,
+                    "InvalidInputFactLimit"),
+                cancellationToken);
+            result = ReverseImpactTraversal.Analyze(
+                artifact.Facts,
+                new ReverseImpactOptions(
+                    selector,
+                    depth,
+                    relationshipFilters,
+                    !values.HasFlag("--exclude-contained-members"),
+                    ParseBoundedPositiveInt(values, "--max-traversal-states", ReverseImpactContract.DefaultMaxTraversalStates, ReverseImpactContract.MaximumLimit, "InvalidTraversalLimit"),
+                    ParseBoundedPositiveInt(values, "--max-frontier", ReverseImpactContract.DefaultMaxFrontierSize, ReverseImpactContract.MaximumLimit, "InvalidTraversalLimit"),
+                    ParseBoundedPositiveInt(values, "--max-results", ReverseImpactContract.DefaultMaxResults, ReverseImpactContract.MaximumLimit, "InvalidTraversalLimit")));
+
+            var parent = Path.GetDirectoryName(fullOutputPath);
+            if (string.IsNullOrWhiteSpace(parent))
+            {
+                throw new ReverseImpactInputException(
+                    "ReverseImpactOutputPathInvalid",
+                    "The reverse-impact output path is invalid.",
+                    nameof(fullOutputPath));
+            }
+
+            await WriteNewFileAtomicallyAsync(
+                fullOutputPath,
+                JsonSerializer.Serialize(result, JsonOptions.Stable) + "\n",
+                cancellationToken);
+        }
+        catch (ReverseImpactArtifactException exception)
+        {
+            await error.WriteLineAsync($"error: {exception.ErrorCode}.");
+            return 1;
+        }
+        catch (ReverseImpactInputException exception)
+        {
+            await error.WriteLineAsync($"error: {exception.ErrorCode}.");
+            return 1;
+        }
+
+        await output.WriteLineAsync($"TraceMap reverse-impact completed: {fullOutputPath}");
+        await output.WriteLineAsync($"Resolution: {result.Resolution}");
+        await output.WriteLineAsync($"Impacts: {result.Impacts.Count}");
+        await output.WriteLineAsync($"Gaps: {result.Gaps.Count}");
+        await output.WriteLineAsync($"Truncated: {result.Truncated.ToString().ToLowerInvariant()}");
+        return 0;
     }
 
     private static async Task<int> RunReleaseReviewAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
@@ -1735,6 +1847,162 @@ public static class TraceMapCommand
         throw new ArgumentException($"{key} must be a positive integer.");
     }
 
+    private static int ParseBoundedPositiveInt(
+        ParsedOptions values,
+        string key,
+        int defaultValue,
+        int maximum,
+        string errorCode)
+    {
+        if (!values.TryGetValue(key, out var value))
+        {
+            return defaultValue;
+        }
+
+        if (int.TryParse(value, out var parsed) && parsed is >= 1 && parsed <= maximum)
+        {
+            return parsed;
+        }
+
+        throw new ReverseImpactInputException(
+            errorCode,
+            $"{key} must be an integer between 1 and {maximum}.",
+            key);
+    }
+
+    private static IReadOnlyList<string>? ParseReverseImpactRelations(string[] args)
+    {
+        var relations = new List<string>();
+        var supplied = false;
+        for (var index = 0; index < args.Length; index++)
+        {
+            if (!string.Equals(args[index], "--relation", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            supplied = true;
+            if (index + 1 >= args.Length || args[index + 1].StartsWith("--", StringComparison.Ordinal))
+            {
+                throw new ReverseImpactInputException(
+                    "InvalidRelationshipFilter",
+                    "--relation requires a supported non-empty value.",
+                    "--relation");
+            }
+
+            foreach (var token in args[++index].Split(',', StringSplitOptions.None))
+            {
+                var relation = token.Trim().ToLowerInvariant();
+                if (relation.Length == 0
+                    || !ReverseImpactContract.SupportedRelationshipFilters.Contains(relation, StringComparer.Ordinal))
+                {
+                    throw new ReverseImpactInputException(
+                        "InvalidRelationshipFilter",
+                        "--relation requires a supported non-empty value.",
+                        "--relation");
+                }
+
+                relations.Add(relation);
+            }
+        }
+
+        return supplied
+            ? Array.AsReadOnly(relations.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray())
+            : null;
+    }
+
+    internal static async Task WriteNewFileAtomicallyAsync(
+        string fullOutputPath,
+        string content,
+        CancellationToken cancellationToken)
+    {
+        var parent = Path.GetDirectoryName(fullOutputPath);
+        if (string.IsNullOrWhiteSpace(parent))
+        {
+            throw new ReverseImpactInputException(
+                "ReverseImpactOutputPathInvalid",
+                "The reverse-impact output path is invalid.",
+                nameof(fullOutputPath));
+        }
+
+        var stagedPath = Path.Combine(parent, $".tracemap-reverse-impact-{Guid.NewGuid():N}.tmp");
+        var published = false;
+        try
+        {
+            Directory.CreateDirectory(parent);
+            await using (var stream = new FileStream(
+                stagedPath,
+                new FileStreamOptions
+                {
+                    Mode = FileMode.CreateNew,
+                    Access = FileAccess.Write,
+                    Share = FileShare.None,
+                    Options = FileOptions.Asynchronous
+                }))
+            {
+                var bytes = new UTF8Encoding(false).GetBytes(content);
+                await stream.WriteAsync(bytes, cancellationToken);
+                await stream.FlushAsync(cancellationToken);
+            }
+
+            File.Move(stagedPath, fullOutputPath, overwrite: false);
+            published = true;
+        }
+        catch (IOException) when (FileSystemEntryExists(fullOutputPath))
+        {
+            throw new ReverseImpactInputException(
+                "ReverseImpactOutputAlreadyExists",
+                "The reverse-impact output must be a new file.",
+                nameof(fullOutputPath));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new ReverseImpactInputException(
+                "ReverseImpactOutputWriteFailed",
+                "The reverse-impact output could not be written.",
+                nameof(fullOutputPath));
+        }
+        finally
+        {
+            if (!published)
+            {
+                try
+                {
+                    File.Delete(stagedPath);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    // Preserve the primary write, promotion, or cancellation failure.
+                }
+            }
+        }
+    }
+
+    private static bool FileSystemEntryExists(string path)
+    {
+        if (File.Exists(path) || Directory.Exists(path))
+        {
+            return true;
+        }
+
+        var parent = Path.GetDirectoryName(path);
+        if (string.IsNullOrWhiteSpace(parent) || !Directory.Exists(parent))
+        {
+            return false;
+        }
+
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        try
+        {
+            return Directory.EnumerateFileSystemEntries(parent)
+                .Any(entry => string.Equals(Path.GetFullPath(entry), path, comparison));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return true;
+        }
+    }
+
     private static DateTimeOffset? ParseOptionalDate(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -1787,6 +2055,23 @@ public static class TraceMapCommand
         }
 
         return false;
+    }
+
+    private static string? LastRawOptionValue(string[] args, string option)
+    {
+        string? value = null;
+        for (var index = 0; index < args.Length; index++)
+        {
+            if (args[index] == option
+                && index + 1 < args.Length
+                && !args[index + 1].StartsWith("--", StringComparison.Ordinal))
+            {
+                value = args[index + 1];
+                index++;
+            }
+        }
+
+        return value;
     }
 
     private sealed class ParsedOptions(
@@ -1853,6 +2138,7 @@ public static class TraceMapCommand
               tracemap snapshot-diff --before <index.sqlite> --after <index.sqlite> --out <path>
               tracemap contract-diff --before <index.sqlite> --after <index.sqlite> --out <path>
               tracemap impact --before <combined.sqlite> --after <combined.sqlite> --out <path>
+              tracemap reverse-impact --index <index.sqlite> --selector <id-or-name> --depth <1-20> --out <result.json>
               tracemap reverse --index <combined.sqlite> --out <path> [selectors]
               tracemap release-review --before <index.sqlite> --after <index.sqlite> --out <path>
               tracemap access-review create --scan-output <access-scan-directory> --out <bundle-directory>
@@ -1880,6 +2166,7 @@ public static class TraceMapCommand
               snapshot-diff Compare two TraceMap snapshots by source, coverage, and extractor evidence.
               contract-diff Compare API/DTO static contract evidence between two indexes.
               impact    Explain static change evidence between two combined indexes.
+              reverse-impact Query bounded incoming impact relationships from one immutable scan index.
               reverse   Trace reverse static reachability from dependency surfaces.
               release-review Assemble a deterministic before/after release evidence packet.
               access-review Compose an existing Access scan into a private local review bundle.
@@ -2229,6 +2516,34 @@ public static class TraceMapCommand
 
             Outputs:
               impact-report.md and/or impact-report.json
+            """;
+    }
+
+    private static string ReverseImpactHelp()
+    {
+        return """
+            Usage:
+              tracemap reverse-impact --index <index.sqlite> --selector <id-or-name> --depth <1-20> --out <result.json> [options]
+
+            Required:
+              --index <path>             Standard single-scan TraceMap SQLite index.
+              --selector <value>         Exact canonical symbol ID or exact unambiguous display name.
+              --depth <1-20>             Explicit bounded reverse traversal depth.
+              --out <result.json>        New file for machine-readable tracemap.reverse-impact.v1 output.
+
+            Optional:
+              --relation <value>         calls, references, inheritance, http, or database. Repeat or comma-separate.
+              --exclude-contained-members Do not expand a type seed to proven directly contained members.
+              --max-input-facts <n>      Maximum facts loaded, from 1 through 1000000. Default: 1000000.
+              --max-traversal-states <n> Processed states, from 1 through 1000000. Default: 100000.
+              --max-frontier <n>         Retained frontier, from 1 through 1000000. Default: 10000.
+              --max-results <n>          Emitted results, from 1 through 1000000. Default: 10000.
+
+            Notes:
+              This command reads but does not mutate the supplied index. Combined or mixed-snapshot indexes fail closed.
+              Existing output paths are rejected so filesystem aliases cannot overwrite an input artifact.
+              Results are deterministic static evidence, not runtime reachability, risk, release approval, or proof of safety.
+              Ambiguous selectors return candidates and a gap without selecting a symbol heuristically.
             """;
     }
 

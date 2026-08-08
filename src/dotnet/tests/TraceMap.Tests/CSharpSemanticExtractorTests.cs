@@ -810,6 +810,8 @@ public sealed class CSharpSemanticExtractorTests
             && fact.Properties.GetValueOrDefault("classification") == "SyntaxFallbackOperationCandidate");
         Assert.All(operations, fact =>
         {
+            Assert.False(string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("sourceSymbolId")));
+            Assert.False(string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("targetSymbolId")));
             Assert.DoesNotContain(fact.Properties.Keys, key =>
                 key.Contains("sql", StringComparison.OrdinalIgnoreCase)
                 && key != "sqlOperationName");
@@ -818,6 +820,19 @@ public sealed class CSharpSemanticExtractorTests
                 || value.Contains("delete from", StringComparison.OrdinalIgnoreCase)
                 || value.Contains("insert into", StringComparison.OrdinalIgnoreCase));
         });
+        var adoNetOperation = Assert.Single(operations, fact =>
+            fact.Properties.GetValueOrDefault("frameworkFamily") == "ado-net"
+            && fact.Properties.GetValueOrDefault("operationKind") == "insert-candidate");
+        var databaseTargetId = adoNetOperation.Properties["targetSymbolId"];
+        var defaultImpact = ReverseImpactTraversal.Analyze(
+            [adoNetOperation],
+            new ReverseImpactOptions(databaseTargetId, 1));
+        var databaseImpact = ReverseImpactTraversal.Analyze(
+            [adoNetOperation],
+            new ReverseImpactOptions(databaseTargetId, 1, ["database"]));
+
+        Assert.Empty(defaultImpact.Impacts);
+        Assert.Equal(adoNetOperation.FactId, Assert.Single(Assert.Single(databaseImpact.Impacts).Path).FactId);
 
         var second = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
         Assert.Equal(
