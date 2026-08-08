@@ -140,6 +140,9 @@ public static class CSharpSemanticExtractor
         var projects = inventory.Where(item => item.Kind == "Project").OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
         var solutions = inventory.Where(item => item.Kind == "Solution").OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
         var csharpFiles = inventory.Where(item => FileInventory.IsCSharpKind(item.Kind)).ToArray();
+        var inventoriedCSharpPaths = csharpFiles
+            .Select(item => item.RelativePath)
+            .ToHashSet(StringComparer.Ordinal);
 
         if (projects.Length == 0 && csharpFiles.Length > 0)
         {
@@ -191,7 +194,7 @@ public static class CSharpSemanticExtractor
                 try
                 {
                     var solution = workspace.OpenSolutionAsync(solutionPath).GetAwaiter().GetResult();
-                    ExtractSolution(repoPath, solution, facts, gaps, loadedProjectPaths, analyzedFiles);
+                    ExtractSolution(repoPath, solution, inventoriedCSharpPaths, facts, gaps, loadedProjectPaths, analyzedFiles);
                 }
                 catch (Exception ex) when (IsWorkspaceException(ex))
                 {
@@ -211,7 +214,7 @@ public static class CSharpSemanticExtractor
             try
             {
                 var project = workspace.OpenProjectAsync(projectPath).GetAwaiter().GetResult();
-                ExtractProject(repoPath, project, facts, gaps, analyzedFiles);
+                ExtractProject(repoPath, project, inventoriedCSharpPaths, facts, gaps, analyzedFiles);
                 loadedProjectPaths.Add(projectItem.RelativePath);
             }
             catch (Exception ex) when (IsWorkspaceException(ex))
@@ -347,6 +350,7 @@ public static class CSharpSemanticExtractor
     private static void ExtractSolution(
         string repoPath,
         Solution solution,
+        IReadOnlySet<string> inventoriedCSharpPaths,
         List<SemanticFactCandidate> facts,
         List<SemanticFactCandidate> gaps,
         HashSet<string> loadedProjectPaths,
@@ -354,7 +358,7 @@ public static class CSharpSemanticExtractor
     {
         foreach (var project in solution.Projects.OrderBy(project => ToRelativePath(repoPath, project.FilePath), StringComparer.Ordinal))
         {
-            ExtractProject(repoPath, project, facts, gaps, analyzedFiles);
+            ExtractProject(repoPath, project, inventoriedCSharpPaths, facts, gaps, analyzedFiles);
             if (!string.IsNullOrWhiteSpace(project.FilePath))
             {
                 loadedProjectPaths.Add(ToRelativePath(repoPath, project.FilePath));
@@ -365,11 +369,13 @@ public static class CSharpSemanticExtractor
     private static void ExtractProject(
         string repoPath,
         Project project,
+        IReadOnlySet<string> inventoriedCSharpPaths,
         List<SemanticFactCandidate> facts,
         List<SemanticFactCandidate> gaps,
         HashSet<string> analyzedFiles)
     {
         var projectPath = ToRelativePath(repoPath, project.FilePath);
+        project = RemoveNonInventoriedSourceDocuments(repoPath, project, inventoriedCSharpPaths);
         Compilation? compilation;
         try
         {
@@ -397,6 +403,24 @@ public static class CSharpSemanticExtractor
         {
             ExtractDocument(repoPath, projectPath, document, compilation, facts, gaps, analyzedFiles);
         }
+    }
+
+    private static Project RemoveNonInventoriedSourceDocuments(
+        string repoPath,
+        Project project,
+        IReadOnlySet<string> inventoriedCSharpPaths)
+    {
+        var excludedDocumentIds = project.Documents
+            .Where(document => !string.IsNullOrWhiteSpace(document.FilePath))
+            .Where(document => !IsGeneratedSource(document.FilePath))
+            .Where(document => !ToRelativePathProjection(repoPath, document.FilePath).IsExternal)
+            .Where(document => !inventoriedCSharpPaths.Contains(ToRelativePath(repoPath, document.FilePath)))
+            .Select(document => document.Id)
+            .ToArray();
+
+        return excludedDocumentIds.Length == 0
+            ? project
+            : project.RemoveDocuments(System.Collections.Immutable.ImmutableArray.CreateRange(excludedDocumentIds));
     }
 
     private static void ExtractDocument(
@@ -4764,7 +4788,9 @@ public static class CSharpSemanticExtractor
         return fileName.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".g.i.cs", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".generated.cs", StringComparison.OrdinalIgnoreCase)
-            || fileName.EndsWith(".designer.cs", StringComparison.OrdinalIgnoreCase);
+            || fileName.EndsWith(".designer.cs", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".AssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".AssemblyAttributes.cs", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsWorkspaceException(Exception ex)
