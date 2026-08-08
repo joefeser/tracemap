@@ -1,4 +1,5 @@
 using TraceMap.Core;
+using TraceMap.Cli;
 
 namespace TraceMap.Tests;
 
@@ -43,5 +44,41 @@ public sealed class ScanEngineTests
         var resultB = ScanEngine.Scan(new ScanOptions(repoB, Path.Combine(temp.Path, "out-b")));
 
         Assert.Equal(resultA.Manifest.ScanId, resultB.Manifest.ScanId);
+    }
+
+    [Fact]
+    public async Task Scan_fails_truthfully_when_an_in_scope_source_directory_is_inaccessible()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        using var temp = new TempDirectory();
+        var sourceDirectory = Path.Combine(temp.Path, "restricted");
+        var sourcePath = Path.Combine(sourceDirectory, "Hidden.cs");
+        var outputPath = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(sourceDirectory);
+        File.WriteAllText(sourcePath, "public sealed class Hidden { }");
+
+        var originalMode = File.GetUnixFileMode(sourceDirectory);
+        try
+        {
+            File.SetUnixFileMode(sourceDirectory, UnixFileMode.None);
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = await TraceMapCommand.RunAsync(
+                ["scan", "--repo", temp.Path, "--out", outputPath],
+                stdout,
+                stderr);
+
+            Assert.Equal(1, exitCode);
+            Assert.Equal("error: SourceInventoryIncomplete" + Environment.NewLine, stderr.ToString());
+            Assert.DoesNotContain(temp.Path, stderr.ToString(), StringComparison.Ordinal);
+            Assert.False(File.Exists(Path.Combine(outputPath, "scan-manifest.json")));
+        }
+        finally
+        {
+            File.SetUnixFileMode(sourceDirectory, originalMode);
+        }
     }
 }
