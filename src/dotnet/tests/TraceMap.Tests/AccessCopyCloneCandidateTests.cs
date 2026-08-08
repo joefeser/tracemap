@@ -144,6 +144,29 @@ public sealed class AccessCopyCloneCandidateTests
     }
 
     [Fact]
+    public void Builder_preserves_ambiguous_query_output_owner_provenance_in_upstream_gaps()
+    {
+        const string query = "access-query-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string output = "access-query-field-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        var facts = new[]
+        {
+            Fact("fact-query", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural, null, query, ("coverageLabel", "partial")),
+            Fact("fact-output", FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural, query, output, ("coverageLabel", "partial")),
+            Fact("fact-output-gap", FactTypes.AnalysisGap, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier4Unknown, null, output,
+                ("classification", "AccessQueryOutputSourceUnavailable"),
+                ("scopeKind", "query-output-field"))
+        };
+
+        var report = AccessCopyCloneCandidateReporter.Build("synthetic", Commit, facts, 100, 100, 100);
+
+        var gap = Assert.Single(report.Gaps, item => item.Classification == "AccessCopyCloneUpstreamEvidenceGap");
+        Assert.Equal(["fact-output", "fact-output-gap", "fact-query"], gap.SupportingFactIds);
+    }
+
+    [Fact]
     public void Builder_preserves_dependency_kind_when_action_target_has_no_kind()
     {
         var facts = CandidateFacts().Append(Fact(
