@@ -824,20 +824,40 @@ public static class TraceMapCommand
             return 1;
         }
 
-        var artifact = await ReverseImpactArtifactReader.ReadAsync(
-            fullIndexPath,
-            ParsePositiveInt(values, "--max-input-facts", ReverseImpactArtifactReader.DefaultMaxFacts),
-            cancellationToken);
-        var result = ReverseImpactTraversal.Analyze(
-            artifact.Facts,
-            new ReverseImpactOptions(
-                selector,
-                depth,
-                values.GetMany("--relation"),
-                !values.HasFlag("--exclude-contained-members"),
-                ParsePositiveInt(values, "--max-traversal-states", ReverseImpactContract.DefaultMaxTraversalStates),
-                ParsePositiveInt(values, "--max-frontier", ReverseImpactContract.DefaultMaxFrontierSize),
-                ParsePositiveInt(values, "--max-results", ReverseImpactContract.DefaultMaxResults)));
+        if (File.Exists(fullOutputPath))
+        {
+            await error.WriteLineAsync("error: reverse-impact output must be a new file and must not alias an existing artifact.");
+            return 1;
+        }
+
+        ReverseImpactResult result;
+        try
+        {
+            var artifact = await ReverseImpactArtifactReader.ReadAsync(
+                fullIndexPath,
+                ParsePositiveInt(values, "--max-input-facts", ReverseImpactArtifactReader.DefaultMaxFacts),
+                cancellationToken);
+            result = ReverseImpactTraversal.Analyze(
+                artifact.Facts,
+                new ReverseImpactOptions(
+                    selector,
+                    depth,
+                    values.GetMany("--relation"),
+                    !values.HasFlag("--exclude-contained-members"),
+                    ParsePositiveInt(values, "--max-traversal-states", ReverseImpactContract.DefaultMaxTraversalStates),
+                    ParsePositiveInt(values, "--max-frontier", ReverseImpactContract.DefaultMaxFrontierSize),
+                    ParsePositiveInt(values, "--max-results", ReverseImpactContract.DefaultMaxResults)));
+        }
+        catch (ReverseImpactArtifactException exception)
+        {
+            await error.WriteLineAsync($"error: {exception.ErrorCode}.");
+            return 1;
+        }
+        catch (ReverseImpactInputException exception)
+        {
+            await error.WriteLineAsync($"error: {exception.ErrorCode}.");
+            return 1;
+        }
 
         var parent = Path.GetDirectoryName(fullOutputPath);
         if (string.IsNullOrWhiteSpace(parent))
@@ -2342,7 +2362,7 @@ public static class TraceMapCommand
               --index <path>             Standard single-scan TraceMap SQLite index.
               --selector <value>         Exact canonical symbol ID or exact unambiguous display name.
               --depth <1-20>             Explicit bounded reverse traversal depth.
-              --out <result.json>        Machine-readable tracemap.reverse-impact.v1 output.
+              --out <result.json>        New file for machine-readable tracemap.reverse-impact.v1 output.
 
             Optional:
               --relation <value>         calls, references, inheritance, http, or database. Repeat or comma-separate.
@@ -2354,6 +2374,7 @@ public static class TraceMapCommand
 
             Notes:
               This command reads but does not mutate the supplied index. Combined or mixed-snapshot indexes fail closed.
+              Existing output paths are rejected so filesystem aliases cannot overwrite an input artifact.
               Results are deterministic static evidence, not runtime reachability, risk, release approval, or proof of safety.
               Ambiguous selectors return candidates and a gap without selecting a symbol heuristically.
             """;

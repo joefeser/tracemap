@@ -81,6 +81,14 @@ public static class ReverseImpactContract
         "references"
     ]);
 
+    public static IReadOnlyList<string> SupportedEvidenceTiers { get; } = Array.AsReadOnly(
+    [
+        EvidenceTiers.Tier1Semantic,
+        EvidenceTiers.Tier2Structural,
+        EvidenceTiers.Tier3SyntaxOrTextual,
+        EvidenceTiers.Tier4Unknown
+    ]);
+
     public static bool IsSupportedSchema(string? schemaVersion) =>
         string.Equals(schemaVersion, SchemaVersion, StringComparison.Ordinal);
 }
@@ -497,6 +505,13 @@ public static class ReverseImpactTraversal
             ValidateRequired(fact.FactType, "FactType", fact.FactId, index);
             ValidateRequired(fact.RuleId, "RuleId", fact.FactId, index);
             ValidateRequired(fact.EvidenceTier, "EvidenceTier", fact.FactId, index);
+            if (!ReverseImpactContract.SupportedEvidenceTiers.Contains(fact.EvidenceTier, StringComparer.Ordinal))
+            {
+                throw new ReverseImpactInputException(
+                    "UnsupportedEvidenceTier",
+                    $"Reverse-impact input fact at index {index} has an unsupported evidence tier.",
+                    "inputFacts");
+            }
             if (fact.Properties is null)
             {
                 throw new ReverseImpactInputException(
@@ -749,6 +764,16 @@ public static class ReverseImpactTraversal
                 continue;
             }
 
+            if (relationship.Value.Filter is Http or Database && !IsCanonicalSemanticBoundaryFact(fact))
+            {
+                gaps.Add(CreateDerivedGap(
+                    ReverseImpactGapKinds.AnalysisGap,
+                    "An explicitly selected boundary fact was excluded because its canonical endpoints were not backed by the required semantic extractor provenance.",
+                    RelatedSymbolIds(fact),
+                    fact));
+                continue;
+            }
+
             if (fact.Evidence is null)
             {
                 gaps.Add(CreateDerivedGap(
@@ -798,6 +823,14 @@ public static class ReverseImpactTraversal
 
         return null;
     }
+
+    private static bool IsCanonicalSemanticBoundaryFact(CodeFact fact) =>
+        fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+        && fact.Evidence is not null
+        && string.Equals(fact.Evidence.ExtractorId, "CSharpSemanticExtractor", StringComparison.Ordinal)
+        && string.Equals(fact.Evidence.ExtractorVersion, ScannerVersions.CSharpSemanticExtractor, StringComparison.Ordinal)
+        && (fact.FactType != FactTypes.HttpCallDetected || fact.RuleId == RuleIds.HttpClientInvocation)
+        && (fact.FactType != FactTypes.DatabaseOperationCandidate || fact.RuleId == RuleIds.DatabaseOperationCallPattern);
 
     private static ReverseImpactHop ToHop(ImpactEdge edge) => new(
         edge.Fact.FactId,

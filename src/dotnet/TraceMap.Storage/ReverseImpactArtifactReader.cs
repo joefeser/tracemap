@@ -28,6 +28,40 @@ public static class ReverseImpactArtifactReader
     public const int DefaultMaxFacts = 1_000_000;
     public const int MaximumFacts = 1_000_000;
 
+    private static readonly IReadOnlyList<RequiredColumn> ManifestColumns =
+    [
+        new("scan_id", "TEXT", false, 1),
+        new("repo", "TEXT", true, 0),
+        new("commit_sha", "TEXT", true, 0),
+        new("scanner_version", "TEXT", true, 0),
+        new("scanned_at", "TEXT", true, 0),
+        new("analysis_level", "TEXT", true, 0),
+        new("build_status", "TEXT", true, 0),
+        new("manifest_json", "TEXT", true, 0)
+    ];
+
+    private static readonly IReadOnlyList<RequiredColumn> FactColumns =
+    [
+        new("fact_id", "TEXT", false, 1),
+        new("scan_id", "TEXT", true, 0),
+        new("repo", "TEXT", true, 0),
+        new("commit_sha", "TEXT", true, 0),
+        new("project_path", "TEXT", false, 0),
+        new("fact_type", "TEXT", true, 0),
+        new("rule_id", "TEXT", true, 0),
+        new("evidence_tier", "TEXT", true, 0),
+        new("source_symbol", "TEXT", false, 0),
+        new("target_symbol", "TEXT", false, 0),
+        new("contract_element", "TEXT", false, 0),
+        new("file_path", "TEXT", true, 0),
+        new("start_line", "INTEGER", true, 0),
+        new("end_line", "INTEGER", true, 0),
+        new("snippet_hash", "TEXT", false, 0),
+        new("extractor_id", "TEXT", true, 0),
+        new("extractor_version", "TEXT", true, 0),
+        new("properties_json", "TEXT", true, 0)
+    ];
+
     public static async Task<ReverseImpactArtifact> ReadAsync(
         string indexPath,
         int maxFacts = DefaultMaxFacts,
@@ -68,6 +102,9 @@ public static class ReverseImpactArtifactReader
                     "ReverseImpactArtifactSchemaUnsupported",
                     "Reverse impact requires one standard TraceMap scan index, not a combined or unrelated SQLite artifact.");
             }
+
+            await ValidateTableSchemaAsync(connection, transaction, "scan_manifest", ManifestColumns, cancellationToken);
+            await ValidateTableSchemaAsync(connection, transaction, "facts", FactColumns, cancellationToken);
 
             var manifest = await ReadManifestAsync(connection, transaction, cancellationToken);
             var factCount = await CountFactsAsync(connection, transaction, cancellationToken);
@@ -144,7 +181,7 @@ public static class ReverseImpactArtifactReader
 
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = "select scan_id, repo, commit_sha, manifest_json from scan_manifest limit 1;";
+        command.CommandText = "select scan_id, repo, commit_sha, scanner_version, scanned_at, analysis_level, build_status, manifest_json from scan_manifest limit 1;";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
         {
@@ -154,11 +191,20 @@ public static class ReverseImpactArtifactReader
         var storedScanId = reader.GetString(0);
         var storedRepo = reader.GetString(1);
         var storedCommitSha = reader.GetString(2);
-        var manifest = JsonSerializer.Deserialize<ScanManifest>(reader.GetString(3), JsonOptions.Stable)
+        var storedScannerVersion = reader.GetString(3);
+        var storedScannedAt = reader.GetString(4);
+        var storedAnalysisLevel = reader.GetString(5);
+        var storedBuildStatus = reader.GetString(6);
+        var manifest = JsonSerializer.Deserialize<ScanManifest>(reader.GetString(7), JsonOptions.Stable)
             ?? throw Error("ReverseImpactArtifactSnapshotInvalid", "The TraceMap scan manifest could not be parsed.");
+        ValidateManifest(manifest);
         if (!string.Equals(storedScanId, manifest.ScanId, StringComparison.Ordinal)
             || !string.Equals(storedRepo, manifest.RepoName, StringComparison.Ordinal)
-            || !string.Equals(storedCommitSha, manifest.CommitSha, StringComparison.Ordinal))
+            || !string.Equals(storedCommitSha, manifest.CommitSha, StringComparison.Ordinal)
+            || !string.Equals(storedScannerVersion, manifest.ScannerVersion, StringComparison.Ordinal)
+            || !string.Equals(storedScannedAt, manifest.ScannedAt.ToString("O"), StringComparison.Ordinal)
+            || !string.Equals(storedAnalysisLevel, manifest.AnalysisLevel, StringComparison.Ordinal)
+            || !string.Equals(storedBuildStatus, manifest.BuildStatus, StringComparison.Ordinal))
         {
             throw Error(
                 "ReverseImpactArtifactSnapshotInvalid",
@@ -166,6 +212,69 @@ public static class ReverseImpactArtifactReader
         }
 
         return manifest;
+    }
+
+    private static async Task ValidateTableSchemaAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string tableName,
+        IReadOnlyList<RequiredColumn> requiredColumns,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = tableName switch
+        {
+            "scan_manifest" => "pragma table_info(scan_manifest);",
+            "facts" => "pragma table_info(facts);",
+            _ => throw new ArgumentOutOfRangeException(nameof(tableName))
+        };
+        var actual = new Dictionary<string, RequiredColumn>(StringComparer.OrdinalIgnoreCase);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var column = new RequiredColumn(
+                reader.GetString(1),
+                reader.GetString(2).ToUpperInvariant(),
+                reader.GetInt32(3) != 0,
+                reader.GetInt32(5));
+            actual[column.Name] = column;
+        }
+
+        if (requiredColumns.Any(required =>
+                !actual.TryGetValue(required.Name, out var column)
+                || !string.Equals(column.Type, required.Type, StringComparison.Ordinal)
+                || column.NotNull != required.NotNull
+                || column.PrimaryKeyPosition != required.PrimaryKeyPosition))
+        {
+            throw Error(
+                "ReverseImpactArtifactSchemaUnsupported",
+                "The TraceMap index does not match the required standard scan schema.");
+        }
+    }
+
+    private static void ValidateManifest(ScanManifest manifest)
+    {
+        if (string.IsNullOrWhiteSpace(manifest.ScanId)
+            || string.IsNullOrWhiteSpace(manifest.RepoName)
+            || string.IsNullOrWhiteSpace(manifest.CommitSha)
+            || string.IsNullOrWhiteSpace(manifest.ScannerVersion)
+            || manifest.ScannedAt == default
+            || string.IsNullOrWhiteSpace(manifest.AnalysisLevel)
+            || string.IsNullOrWhiteSpace(manifest.BuildStatus)
+            || manifest.Solutions is null
+            || manifest.Projects is null
+            || manifest.TargetFrameworks is null
+            || manifest.KnownGaps is null
+            || manifest.Solutions.Any(string.IsNullOrWhiteSpace)
+            || manifest.Projects.Any(string.IsNullOrWhiteSpace)
+            || manifest.TargetFrameworks.Any(string.IsNullOrWhiteSpace)
+            || manifest.KnownGaps.Any(string.IsNullOrWhiteSpace))
+        {
+            throw Error(
+                "ReverseImpactArtifactSnapshotInvalid",
+                "The TraceMap scan manifest is incomplete or invalid.");
+        }
     }
 
     private static async Task<int> CountFactsAsync(
@@ -282,4 +391,10 @@ public static class ReverseImpactArtifactReader
         string code,
         string message,
         Exception? innerException = null) => new(code, message, innerException);
+
+    private sealed record RequiredColumn(
+        string Name,
+        string Type,
+        bool NotNull,
+        int PrimaryKeyPosition);
 }

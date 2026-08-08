@@ -211,7 +211,7 @@ dotnet run --project src/dotnet/TraceMap.Cli -- reverse-impact \
   --out .tracemap/reverse-impact.json
 ```
 
-`reverse-impact` is distinct from the combined `reverse` surface query. It reads one immutable scan index, resolves a canonical ID or exact unambiguous display name, and emits the versioned `tracemap.reverse-impact.v1` JSON contract. Compiler-backed call/reference/inheritance relationships are enabled by default; semantic HTTP and database operation relationships require explicit `--relation http` or `--relation database`. Ambiguous identities, missing canonical endpoints, mixed snapshots, and traversal limits remain explicit gaps. The result is bounded static evidence, not runtime reachability, severity, release approval, or proof that a change is safe.
+`reverse-impact` is distinct from the combined `reverse` surface query. It reads one immutable scan index, requires a new output file, resolves a canonical ID or exact unambiguous display name, and emits the versioned `tracemap.reverse-impact.v1` JSON contract. Compiler-backed call/reference/inheritance relationships are enabled by default; semantic HTTP and database operation relationships require explicit `--relation http` or `--relation database`. Ambiguous identities, missing canonical endpoints, mixed snapshots, and traversal limits remain explicit gaps. The result is bounded static evidence, not runtime reachability, severity, release approval, or proof that a change is safe.
 
 Compare two combined snapshots:
 

@@ -240,11 +240,12 @@ For every successful `tracemap reverse-impact --index <index.sqlite> --selector 
 
 - the input is one standard single-scan index; combined, unrelated, empty, oversized, and mixed-snapshot artifacts fail closed.
 - the database is opened read-only and repeated queries do not mutate it.
+- output must be a new file; existing files, symbolic links, hard links, and other existing aliases are rejected before reading or writing output.
 - `--depth` is explicit and limited to 1 through 20.
 - canonical IDs resolve exactly; exact display names resolve only when unambiguous, otherwise candidates and an `AmbiguousSelector` gap are emitted without traversal.
 - JSON uses `tracemap.reverse-impact.v1` and preserves repository/commit snapshot identity, direct/transitive depth, original and traversal directions, relationship-site rule ID, evidence tier, file span, extractor provenance, fact ID, and limitations.
 - compiler-backed calls, references, and inheritance are the default relationship families.
-- HTTP and database operation facts are traversed only when explicitly requested and only when semantic evidence supplies canonical source and target endpoints.
+- HTTP and database operation facts are traversed only when explicitly requested and only when Tier1 semantic evidence supplies canonical source and target endpoints with the documented semantic extractor provenance.
 - syntax-only HTTP observations and noncanonical route, SQL/table, message, and project labels are not promoted into guessed relationships.
 - type seeds expand only members with proven containing-symbol identity.
 - state, frontier, result, and input limits cap deterministically and emit `TruncatedByLimit` rather than a complete-looking result.
