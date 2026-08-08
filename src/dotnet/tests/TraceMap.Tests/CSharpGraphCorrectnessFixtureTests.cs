@@ -446,6 +446,165 @@ public sealed class CSharpGraphCorrectnessFixtureTests
             Assert.Equal(fact.Evidence.EndLine, callReader.GetInt32(9));
             Assert.False(callReader.Read());
         }
+
+        if (facts.Any(fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.CSharpSemanticWorkspace
+            && fact.Properties.GetValueOrDefault("diagnosticId") == "CS0246"
+            && fact.Properties.GetValueOrDefault("diagnosticTokens")?.Split(';').Contains("MissingReceiver") == true))
+        {
+            AssertUnresolvedReceiverSqliteRoundTrip(connection, manifest, facts);
+        }
+    }
+
+    private static void AssertUnresolvedReceiverSqliteRoundTrip(
+        SqliteConnection connection,
+        ScanManifest manifest,
+        IReadOnlyList<CodeFact> facts)
+    {
+        const string filePath = "src/ReceiverSample/Receivers.cs";
+        const int callLine = 40;
+
+        using (var absentSemanticFact = connection.CreateCommand())
+        {
+            absentSemanticFact.CommandText = """
+                select count(*)
+                from facts
+                where fact_type = $fact_type
+                  and rule_id = $rule_id
+                  and evidence_tier = $evidence_tier
+                  and file_path = $file_path
+                  and start_line = $line;
+                """;
+            absentSemanticFact.Parameters.AddWithValue("$fact_type", FactTypes.CallEdge);
+            absentSemanticFact.Parameters.AddWithValue("$rule_id", RuleIds.CSharpSemanticCallGraph);
+            absentSemanticFact.Parameters.AddWithValue("$evidence_tier", EvidenceTiers.Tier1Semantic);
+            absentSemanticFact.Parameters.AddWithValue("$file_path", filePath);
+            absentSemanticFact.Parameters.AddWithValue("$line", callLine);
+            Assert.Equal(0L, Assert.IsType<long>(absentSemanticFact.ExecuteScalar()));
+        }
+
+        using (var absentSemanticCall = connection.CreateCommand())
+        {
+            absentSemanticCall.CommandText = """
+                select count(*)
+                from call_edges
+                where rule_id = $rule_id
+                  and evidence_tier = $evidence_tier
+                  and file_path = $file_path
+                  and start_line = $line;
+                """;
+            absentSemanticCall.Parameters.AddWithValue("$rule_id", RuleIds.CSharpSemanticCallGraph);
+            absentSemanticCall.Parameters.AddWithValue("$evidence_tier", EvidenceTiers.Tier1Semantic);
+            absentSemanticCall.Parameters.AddWithValue("$file_path", filePath);
+            absentSemanticCall.Parameters.AddWithValue("$line", callLine);
+            Assert.Equal(0L, Assert.IsType<long>(absentSemanticCall.ExecuteScalar()));
+        }
+
+        var expectedGap = Assert.Single(facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.CSharpSemanticWorkspace
+            && fact.EvidenceTier == EvidenceTiers.Tier4Unknown
+            && fact.Evidence.FilePath == filePath
+            && fact.Evidence.StartLine == 38
+            && fact.Properties.GetValueOrDefault("diagnosticId") == "CS0246");
+        using (var gapCommand = connection.CreateCommand())
+        {
+            gapCommand.CommandText = """
+                select fact_id, commit_sha, end_line, extractor_id, extractor_version, properties_json
+                from facts
+                where fact_type = $fact_type
+                  and rule_id = $rule_id
+                  and evidence_tier = $evidence_tier
+                  and file_path = $file_path
+                  and start_line = $line;
+                """;
+            gapCommand.Parameters.AddWithValue("$fact_type", FactTypes.AnalysisGap);
+            gapCommand.Parameters.AddWithValue("$rule_id", RuleIds.CSharpSemanticWorkspace);
+            gapCommand.Parameters.AddWithValue("$evidence_tier", EvidenceTiers.Tier4Unknown);
+            gapCommand.Parameters.AddWithValue("$file_path", filePath);
+            gapCommand.Parameters.AddWithValue("$line", 38);
+            using var gapReader = gapCommand.ExecuteReader();
+            Assert.True(gapReader.Read());
+            Assert.Equal(expectedGap.FactId, gapReader.GetString(0));
+            Assert.Equal(manifest.CommitSha, gapReader.GetString(1));
+            Assert.Equal(38, gapReader.GetInt32(2));
+            Assert.Equal(SemanticExtractor, gapReader.GetString(3));
+            Assert.Equal(ScannerVersions.CSharpSemanticExtractor, gapReader.GetString(4));
+            var gapProperties = JsonSerializer.Deserialize<Dictionary<string, string>>(
+                gapReader.GetString(5),
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            Assert.NotNull(gapProperties);
+            Assert.Equal("CS0246", gapProperties["diagnosticId"]);
+            Assert.Contains("MissingReceiver", gapProperties["diagnosticTokens"].Split(';'));
+            Assert.False(gapReader.Read());
+        }
+
+        var expectedSyntaxCall = Assert.Single(facts, fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.RuleId == RuleIds.CSharpSyntaxCallGraph
+            && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && fact.Evidence.FilePath == filePath
+            && fact.Evidence.StartLine == callLine
+            && fact.TargetSymbol == "Touch");
+        using (var syntaxFactCommand = connection.CreateCommand())
+        {
+            syntaxFactCommand.CommandText = """
+                select fact_id, commit_sha, source_symbol, target_symbol, end_line,
+                       extractor_id, extractor_version, properties_json
+                from facts
+                where fact_type = $fact_type
+                  and rule_id = $rule_id
+                  and evidence_tier = $evidence_tier
+                  and file_path = $file_path
+                  and start_line = $line;
+                """;
+            syntaxFactCommand.Parameters.AddWithValue("$fact_type", FactTypes.CallEdge);
+            syntaxFactCommand.Parameters.AddWithValue("$rule_id", RuleIds.CSharpSyntaxCallGraph);
+            syntaxFactCommand.Parameters.AddWithValue("$evidence_tier", EvidenceTiers.Tier3SyntaxOrTextual);
+            syntaxFactCommand.Parameters.AddWithValue("$file_path", filePath);
+            syntaxFactCommand.Parameters.AddWithValue("$line", callLine);
+            using var syntaxFactReader = syntaxFactCommand.ExecuteReader();
+            Assert.True(syntaxFactReader.Read());
+            Assert.Equal(expectedSyntaxCall.FactId, syntaxFactReader.GetString(0));
+            Assert.Equal(manifest.CommitSha, syntaxFactReader.GetString(1));
+            Assert.Equal("Broken", syntaxFactReader.GetString(2));
+            Assert.Equal("Touch", syntaxFactReader.GetString(3));
+            Assert.Equal(callLine, syntaxFactReader.GetInt32(4));
+            Assert.Equal("CSharpSyntaxExtractor", syntaxFactReader.GetString(5));
+            Assert.Equal(ScannerVersions.CSharpSyntaxExtractor, syntaxFactReader.GetString(6));
+            var syntaxProperties = JsonSerializer.Deserialize<Dictionary<string, string>>(
+                syntaxFactReader.GetString(7),
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            Assert.NotNull(syntaxProperties);
+            Assert.Equal("Broken", syntaxProperties["callerName"]);
+            Assert.Equal("Touch", syntaxProperties["calleeName"]);
+            Assert.Equal("SyntaxInvocation", syntaxProperties["callKind"]);
+            Assert.False(syntaxFactReader.Read());
+        }
+
+        using var syntaxCallCommand = connection.CreateCommand();
+        syntaxCallCommand.CommandText = """
+            select fact_id, commit_sha, caller_symbol, callee_symbol, call_kind, end_line
+            from call_edges
+            where rule_id = $rule_id
+              and evidence_tier = $evidence_tier
+              and file_path = $file_path
+              and start_line = $line;
+            """;
+        syntaxCallCommand.Parameters.AddWithValue("$rule_id", RuleIds.CSharpSyntaxCallGraph);
+        syntaxCallCommand.Parameters.AddWithValue("$evidence_tier", EvidenceTiers.Tier3SyntaxOrTextual);
+        syntaxCallCommand.Parameters.AddWithValue("$file_path", filePath);
+        syntaxCallCommand.Parameters.AddWithValue("$line", callLine);
+        using var syntaxCallReader = syntaxCallCommand.ExecuteReader();
+        Assert.True(syntaxCallReader.Read());
+        Assert.Equal(expectedSyntaxCall.FactId, syntaxCallReader.GetString(0));
+        Assert.Equal(manifest.CommitSha, syntaxCallReader.GetString(1));
+        Assert.Equal("Broken", syntaxCallReader.GetString(2));
+        Assert.Equal("Touch", syntaxCallReader.GetString(3));
+        Assert.Equal("SyntaxInvocation", syntaxCallReader.GetString(4));
+        Assert.Equal(callLine, syntaxCallReader.GetInt32(5));
+        Assert.False(syntaxCallReader.Read());
     }
 
     private static string ReadFactSymbol(SqliteConnection connection, string factId, string role)
