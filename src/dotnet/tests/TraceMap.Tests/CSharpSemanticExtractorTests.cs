@@ -294,6 +294,10 @@ public sealed class CSharpSemanticExtractorTests
                 public void AddTransient(Type serviceType, Type implementationType)
                 {
                 }
+
+                public void AddScoped(Type serviceType, Func<IServiceProvider, object> factory)
+                {
+                }
             }
 
             public sealed class RequestDto
@@ -316,6 +320,7 @@ public sealed class CSharpSemanticExtractorTests
                     var registrations = new ServiceCollection();
                     registrations.AddSingleton<IWorker, Worker>();
                     registrations.AddTransient(typeof(FlowBoundaryDemo), typeof(FlowBoundaryDemo));
+                    registrations.AddScoped(typeof(IWorker), provider => new Worker());
                     var list = new List<RequestDto>();
                     if (true)
                     {
@@ -348,13 +353,16 @@ public sealed class CSharpSemanticExtractorTests
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.BranchCondition && fact.RuleId == RuleIds.CSharpSemanticFlowBoundary);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.DependencyRegistered && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence);
         var registrations = result.Facts.Where(fact => fact.FactType == FactTypes.DependencyRegistered).ToArray();
-        Assert.Equal(2, registrations.Length);
-        Assert.All(registrations, registration =>
+        Assert.Equal(3, registrations.Length);
+        Assert.All(registrations.Where(registration => registration.ContractElement != "AddScoped"), registration =>
         {
             Assert.Equal("closed-type-pair", registration.Properties["registrationShape"]);
             Assert.StartsWith("csharp type ", registration.Properties["serviceTypeSymbolId"], StringComparison.Ordinal);
             Assert.StartsWith("csharp type ", registration.Properties["implementationTypeSymbolId"], StringComparison.Ordinal);
         });
+        var factoryRegistration = Assert.Single(registrations, registration => registration.ContractElement == "AddScoped");
+        Assert.Equal("factory-or-dynamic", factoryRegistration.Properties["registrationShape"]);
+        Assert.Equal(factoryRegistration.Properties["serviceTypeSymbolId"], factoryRegistration.Properties["implementationTypeSymbolId"]);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.SerializerContractMember && fact.RuleId == RuleIds.CSharpSemanticRuntimeEvidence && fact.ContractElement == "customer_name");
         var serializerMember = Assert.Single(result.Facts, fact =>
             fact.FactType == FactTypes.SerializerContractMember

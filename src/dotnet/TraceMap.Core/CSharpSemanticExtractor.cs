@@ -2695,13 +2695,15 @@ public static class CSharpSemanticExtractor
         serviceType = serviceTypeSymbol.ToDisplayString(SymbolFormat);
         implementationType = implementationTypeSymbol.ToDisplayString(SymbolFormat);
         registrationKind = methodName;
+        var hasStaticTypePair = invocation.ArgumentList.Arguments.Count == 0
+            || invocation.ArgumentList.Arguments.Count == 2 && typeOfArguments.Length == 2;
         registrationShape = methodName.Contains("Keyed", StringComparison.Ordinal)
             ? "keyed-registration"
             : methodName == "RegisterInstance"
                 ? "instance-registration"
                 : IsOpenRegistrationType(serviceTypeSymbol) || IsOpenRegistrationType(implementationTypeSymbol)
                     ? "open-generic"
-                    : invocation.ArgumentList.Arguments.Count is 0 or 2
+                    : hasStaticTypePair
                         ? "closed-type-pair"
                         : "factory-or-dynamic";
         return true;
