@@ -454,22 +454,33 @@ public static class AccessScreenDataFlowReporter
         GapSupportIndex supportIndex)
     {
         var supporting = new SortedSet<string>(StringComparer.Ordinal) { gap.FactId };
-        if (gap.Properties.TryGetValue("supportingFactIds", out var persistedFactIds))
+        if (gap.Properties.TryGetValue("supportingFactIds", out var persistedFactIds)
+            && persistedFactIds is not null)
         {
             var parsed = persistedFactIds.Split(';', StringSplitOptions.TrimEntries);
             var encodingValid = parsed.Length > 0
                 && parsed.All(factId => !string.IsNullOrEmpty(factId) && SafeFactId(factId))
                 && parsed.Distinct(StringComparer.Ordinal).Count() == parsed.Length;
-            var persistedScope = gap.Properties.GetValueOrDefault("scopeKind");
-            var valid = encodingValid && IsQueryOutputScope(persistedScope)
-                ? CompleteQueryOutputSupport(gap, supportIndex) is { Count: > 0 } expected
-                    && parsed.ToHashSet(StringComparer.Ordinal).SetEquals(expected)
-                : encodingValid && parsed.All(factId => facts.Any(candidate => candidate.FactId == factId
-                    && IsValidPersistedGapSupport(gap, candidate, facts)));
-            if (valid)
+            if (encodingValid)
             {
-                supporting.UnionWith(parsed);
-                return supporting.ToArray();
+                var persistedScope = gap.Properties.GetValueOrDefault("scopeKind");
+                bool valid;
+                if (IsQueryOutputScope(persistedScope))
+                {
+                    var expected = CompleteQueryOutputSupport(gap, supportIndex);
+                    valid = expected.Count > 0
+                        && parsed.ToHashSet(StringComparer.Ordinal).SetEquals(expected);
+                }
+                else
+                {
+                    valid = parsed.All(factId => facts.Any(candidate => candidate.FactId == factId
+                        && IsValidPersistedGapSupport(gap, candidate, facts)));
+                }
+                if (valid)
+                {
+                    supporting.UnionWith(parsed);
+                    return supporting.ToArray();
+                }
             }
         }
         if (!SafeStableKey(gap.TargetSymbol))
@@ -485,10 +496,8 @@ public static class AccessScreenDataFlowReporter
                      "AccessQueryOutput",
                      StringComparison.Ordinal) == true)
         {
-            foreach (var query in facts.Where(candidate =>
-                         candidate.TargetSymbol == gap.TargetSymbol
-                         && candidate.FactType == FactTypes.AccessQueryDeclared))
-                supporting.Add(query.FactId);
+            if (supportIndex.Queries.TryGetValue((gap.ScanId, gap.TargetSymbol!), out var queries))
+                supporting.UnionWith(queries.Select(query => query.FactId));
         }
         return supporting.ToArray();
     }
