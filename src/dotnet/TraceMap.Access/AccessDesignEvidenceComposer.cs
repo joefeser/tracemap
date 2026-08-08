@@ -205,8 +205,10 @@ public static class AccessDesignEvidenceComposer
             fact => fact.FactId,
             fact => Recreate(manifest, fact).FactId,
             StringComparer.Ordinal);
-        var designFacts = generated.Facts
+        var designSourceFacts = generated.Facts
             .Where(fact => designTypes.Contains(fact.FactType))
+            .ToArray();
+        var preliminaryDesignFacts = designSourceFacts
             .Select(fact => AddProvenance(
                 AddSupportingFactIds(fact, projected.SupportingFactIdsByStableKey, composedBaseFactIds),
                 projected.Support,
@@ -214,6 +216,30 @@ public static class AccessDesignEvidenceComposer
                 designContractHash,
                 baseScan.DatabasePath))
             .ToList();
+        var composedFactIds = new Dictionary<string, string>(composedBaseFactIds, StringComparer.Ordinal);
+        for (var index = 0; index < designSourceFacts.Length; index++)
+            composedFactIds[designSourceFacts[index].FactId] = Recreate(manifest, preliminaryDesignFacts[index]).FactId;
+        var designFacts = designSourceFacts
+            .Select(fact => AddProvenance(
+                AddSupportingFactIds(fact, projected.SupportingFactIdsByStableKey, composedFactIds),
+                projected.Support,
+                bundle.Manifest,
+                designContractHash,
+                baseScan.DatabasePath))
+            .ToList();
+        for (var index = 0; index < designSourceFacts.Length; index++)
+            composedFactIds[designSourceFacts[index].FactId] = Recreate(manifest, designFacts[index]).FactId;
+        for (var index = 0; index < designSourceFacts.Length; index++)
+        {
+            if (designSourceFacts[index].FactType != FactTypes.AnalysisGap)
+                continue;
+            designFacts[index] = AddProvenance(
+                AddSupportingFactIds(designSourceFacts[index], projected.SupportingFactIdsByStableKey, composedFactIds),
+                projected.Support,
+                bundle.Manifest,
+                designContractHash,
+                baseScan.DatabasePath);
+        }
         designFacts.Add(BundleFact(manifest, bundle.Manifest, designContractHash, baseScan.DatabasePath));
 
         var facts = baseScan.Facts
@@ -972,13 +998,17 @@ public static class AccessDesignEvidenceComposer
         var supportKey = fact.FactType == FactTypes.AccessBindingDeclared
             ? fact.Properties.GetValueOrDefault("stableBindingKey") ?? fact.TargetSymbol
             : fact.TargetSymbol;
-        if (string.IsNullOrWhiteSpace(supportKey)
-            || !supportingFactIdsByStableKey.TryGetValue(supportKey, out var supportingFactIds)
-            || supportingFactIds.Count == 0)
+        var persistedFactIds = (fact.Properties.GetValueOrDefault("supportingFactIds") ?? string.Empty)
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var supportingFactIds = !string.IsNullOrWhiteSpace(supportKey)
+            && supportingFactIdsByStableKey.TryGetValue(supportKey, out var projectedFactIds)
+                ? projectedFactIds
+                : [];
+        if (persistedFactIds.Length == 0 && supportingFactIds.Count == 0)
             return fact;
-        var merged = (fact.Properties.GetValueOrDefault("supportingFactIds") ?? string.Empty)
-            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Concat(supportingFactIds.Select(factId => composedBaseFactIds.GetValueOrDefault(factId) ?? factId))
+        var merged = persistedFactIds
+            .Concat(supportingFactIds)
+            .Select(factId => composedBaseFactIds.GetValueOrDefault(factId) ?? factId)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal);
         var properties = new SortedDictionary<string, string>(
