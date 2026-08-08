@@ -145,7 +145,11 @@ public sealed record CombinedPathEdge(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     int? CandidateCount = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    int? OmittedCount = null);
+    int? OmittedCount = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? CandidateLimit = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? CandidateCapReason = null);
 
 public sealed record CombinedPathNote(string Code, string Message);
 
