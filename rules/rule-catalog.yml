@@ -3067,15 +3067,20 @@ rules:
     evidenceTier: Tier2Structural
     emits:
       - ReverseImpactResult
+      - ReverseImpactSnapshot
       - ReverseImpactItem
       - ReverseImpactHop
+      - ReverseImpactEvidence
     limitations:
       - Traversal is a derived query over existing facts and does not extract relationships, infer runtime dispatch, classify risk, or prove runtime reachability or execution.
       - The default impact-relevant families are compiler-backed or canonical-ID-backed calls, property references, inheritance, interface implementation or extension, member overrides, and interface-member implementations; other graph edges do not opt in implicitly.
       - Canonical endpoints must already be present in fact properties. Syntax-only or otherwise incomplete relationship facts without canonical endpoints are excluded with `impact.reverse.gap.v1` instead of being joined by name.
+      - A query accepts facts from exactly one scan, repository, and commit snapshot. Mixed snapshots fail closed before selector resolution or graph construction.
+      - Null facts, missing required fact fields or property collections, duplicate fact IDs, invalid canonical-ID values, malformed evidence spans, and null relationship-filter entries fail with deterministic typed input errors before traversal.
       - Depth is limited to 1 through 20 relationship hops. Cycles and duplicate affected symbols are collapsed deterministically to the first shortest path under stable ordinal edge ordering.
       - Type seeds expand only directly contained methods, properties, fields, and events when an existing containing-symbol ID proves membership; unobserved, generated, inherited, or dynamically supplied members are not inferred.
       - Exact display-name selectors are convenience selectors only. Multiple canonical IDs with the same display name fail closed, including overload, project, assembly, target-framework, and local/external collisions.
+      - Resolved queries propagate only gaps tied by canonical identity to the selected seed or visited path. Unscoped analysis gaps are retained only for a not-found selector because reduced coverage may explain the missing seed.
       - Result tiers remain the tiers of the underlying hops; the structural tier on this rule describes the deterministic traversal operation and does not upgrade underlying evidence.
 
   - id: impact.reverse.gap.v1
@@ -3084,9 +3089,11 @@ rules:
     evidenceTier: Tier4Unknown
     emits:
       - ReverseImpactGap
+      - ReverseImpactEvidence
     limitations:
       - A reverse-impact gap is incomplete evidence, not proof that a symbol has no callers, references, implementations, overrides, or other dependents.
       - Relationship identity gaps retain the original relationship evidence location when available, but cannot identify an affected symbol without both canonical endpoints.
+      - Missing relationship-site evidence suppresses the affected hop and emits a scoped Tier4Unknown gap; it is never represented as an ordinary successful impact edge.
       - Selector candidates are returned only for exact display-name collisions; the rule does not rank, fuzzy-match, or heuristically choose among candidates.
 
   - id: csharp.semantic.flowboundary.v1

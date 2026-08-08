@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using TraceMap.Core;
 
 namespace TraceMap.Tests;
@@ -23,6 +24,8 @@ public sealed class ReverseImpactTraversalTests
         var repeated = ReverseImpactTraversal.Analyze(facts.Reverse(), new ReverseImpactOptions(seed, 2));
 
         Assert.Equal("Resolved", result.Resolution);
+        Assert.Equal("scan", result.Snapshot!.ScanId);
+        Assert.Equal("0123456789012345678901234567890123456789", result.Snapshot.CommitSha);
         Assert.Equal([caller, root], result.Impacts.Select(impact => impact.Symbol.SymbolId));
         Assert.True(result.Impacts[0].IsDirect);
         Assert.False(result.Impacts[1].IsDirect);
@@ -60,6 +63,7 @@ public sealed class ReverseImpactTraversalTests
         Assert.Equal("csharp-semantic", impact.Path[0].Evidence.ExtractorId);
         Assert.Equal("1.2.3", impact.Path[0].Evidence.ExtractorVersion);
         Assert.Equal("0123456789012345678901234567890123456789", impact.Path[0].CommitSha);
+        Assert.Equal(RuleIds.CSharpSemanticPropertyAccess, impact.Path[0].Evidence.RuleId);
     }
 
     [Theory]
@@ -149,7 +153,7 @@ public sealed class ReverseImpactTraversalTests
     }
 
     [Fact]
-    public void Analysis_gaps_are_propagated_and_syntax_relationships_do_not_name_match()
+    public void Resolved_queries_scope_gaps_to_visited_symbols_and_syntax_relationships_do_not_name_match()
     {
         var seed = Id("method", "Service.Target()");
         var semantic = SymbolFact("seed", seed, "Service.Target()", "Method");
@@ -163,7 +167,7 @@ public sealed class ReverseImpactTraversalTests
             EvidenceTiers.Tier3SyntaxOrTextual,
             21);
         var gap = Fact(
-            "analysis-gap",
+            "unscoped-analysis-gap",
             FactTypes.AnalysisGap,
             RuleIds.AnalyzerCapabilitySemantic,
             null,
@@ -171,27 +175,224 @@ public sealed class ReverseImpactTraversalTests
             new Dictionary<string, string> { ["message"] = "Project load failed." },
             EvidenceTiers.Tier4Unknown,
             1);
+        var relatedGap = Fact(
+            "related-analysis-gap",
+            FactTypes.AnalysisGap,
+            RuleIds.AnalyzerCapabilitySemantic,
+            null,
+            null,
+            new Dictionary<string, string>
+            {
+                ["message"] = "Target body was only partially analyzed.",
+                ["targetSymbolId"] = seed,
+                ["targetSymbolDisplayName"] = "Service.Target()",
+                ["targetSymbolKind"] = "Method",
+                ["targetSymbolLanguage"] = "csharp"
+            },
+            EvidenceTiers.Tier4Unknown,
+            2);
 
-        var result = ReverseImpactTraversal.Analyze([syntaxCall, semantic, gap], new ReverseImpactOptions(seed, 1));
+        var result = ReverseImpactTraversal.Analyze([syntaxCall, semantic, gap, relatedGap], new ReverseImpactOptions(seed, 1));
 
         Assert.Empty(result.Impacts);
-        Assert.Contains(result.Gaps, candidate => candidate.GapKind == "RelationshipMissingCanonicalIdentity" && candidate.Message.Contains("syntax-call", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Gaps, candidate => candidate.GapKind == "RelationshipMissingCanonicalIdentity");
         var propagated = Assert.Single(result.Gaps, candidate => candidate.GapKind == "AnalysisGap");
-        Assert.Equal("analysis-gap", propagated.GapId);
+        Assert.Equal("related-analysis-gap", propagated.GapId);
         Assert.Equal(RuleIds.AnalyzerCapabilitySemantic, propagated.RuleId);
-        Assert.Equal("Project load failed.", propagated.Message);
+        Assert.Equal("Target body was only partially analyzed.", propagated.Message);
+        Assert.Equal(RuleIds.AnalyzerCapabilitySemantic, propagated.Evidence.RuleId);
+        Assert.DoesNotContain(result.Gaps, candidate => candidate.GapId == "unscoped-analysis-gap");
     }
 
     [Fact]
     public void Not_found_selector_and_unknown_filter_fail_closed()
     {
-        var result = ReverseImpactTraversal.Analyze([], new ReverseImpactOptions("Missing", 1));
+        var analysisGap = Fact(
+            "project-load-gap",
+            FactTypes.AnalysisGap,
+            RuleIds.AnalyzerCapabilitySemantic,
+            null,
+            null,
+            new Dictionary<string, string> { ["message"] = "Project load failed." },
+            EvidenceTiers.Tier4Unknown,
+            1);
+        var result = ReverseImpactTraversal.Analyze([analysisGap], new ReverseImpactOptions("Missing", 1));
         Assert.Equal("NotFound", result.Resolution);
         Assert.Empty(result.Impacts);
         Assert.Contains(result.Gaps, gap => gap.GapKind == "SelectorNotFound");
+        Assert.Contains(result.Gaps, gap => gap.GapId == "project-load-gap" && gap.RuleId == RuleIds.AnalyzerCapabilitySemantic);
 
         Assert.Throws<ArgumentException>(() => ReverseImpactTraversal.Analyze([], new ReverseImpactOptions("Missing", 1, ["everything"])));
         Assert.Throws<ArgumentOutOfRangeException>(() => ReverseImpactTraversal.Analyze([], new ReverseImpactOptions("Missing", 0)));
+    }
+
+    [Theory]
+    [InlineData("scan")]
+    [InlineData("repo")]
+    [InlineData("commit")]
+    public void Mixed_snapshots_fail_closed_before_graph_construction(string changedScope)
+    {
+        var seed = Id("method", "Service.Target()");
+        var caller = Id("method", "Controller.Get()");
+        var first = Relationship("first", FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, caller, "Controller.Get()", seed, "Service.Target()", "Calls", 10);
+        var second = changedScope switch
+        {
+            "scan" => first with { FactId = "second", ScanId = "scan-two" },
+            "repo" => first with { FactId = "second", Repo = "repo-two" },
+            _ => first with { FactId = "second", CommitSha = "abcdefabcdefabcdefabcdefabcdefabcdefabcd" }
+        };
+
+        var exception = Assert.Throws<ReverseImpactInputException>(() =>
+            ReverseImpactTraversal.Analyze([first, second], new ReverseImpactOptions(seed, 2)));
+
+        Assert.Equal("MixedSnapshot", exception.ErrorCode);
+        Assert.Contains("2 distinct", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Malformed_boundary_values_fail_with_stable_input_error_codes()
+    {
+        var nullFact = Assert.Throws<ReverseImpactInputException>(() =>
+            ReverseImpactTraversal.Analyze(new CodeFact[] { null! }, new ReverseImpactOptions("seed", 1)));
+        Assert.Equal("NullFact", nullFact.ErrorCode);
+
+        var valid = SymbolFact("seed", Id("method", "Service.Target()"), "Service.Target()", "Method");
+        var nullProperties = Assert.Throws<ReverseImpactInputException>(() =>
+            ReverseImpactTraversal.Analyze([valid with { Properties = null! }], new ReverseImpactOptions("seed", 1)));
+        Assert.Equal("NullFactProperties", nullProperties.ErrorCode);
+
+        var blankCanonicalId = Assert.Throws<ReverseImpactInputException>(() =>
+            ReverseImpactTraversal.Analyze(
+                [valid with { Properties = new Dictionary<string, string> { ["targetSymbolId"] = " " } }],
+                new ReverseImpactOptions("seed", 1)));
+        Assert.Equal("InvalidCanonicalEndpoint", blankCanonicalId.ErrorCode);
+
+        var nullFilter = Assert.Throws<ReverseImpactInputException>(() =>
+            ReverseImpactTraversal.Analyze([valid], new ReverseImpactOptions("seed", 1, new string[] { null! })));
+        Assert.Equal("InvalidRelationshipFilter", nullFilter.ErrorCode);
+    }
+
+    [Fact]
+    public void Missing_relationship_evidence_becomes_a_scoped_gap_instead_of_an_impact_hop()
+    {
+        var seed = Id("method", "Service.Target()");
+        var caller = Id("method", "Controller.Get()");
+        var declaration = SymbolFact("seed", seed, "Service.Target()", "Method");
+        var edge = Relationship("missing-evidence", FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, caller, "Controller.Get()", seed, "Service.Target()", "Calls", 10) with
+        {
+            Evidence = null!
+        };
+
+        var result = ReverseImpactTraversal.Analyze([declaration, edge], new ReverseImpactOptions(seed, 1));
+
+        Assert.Empty(result.Impacts);
+        var gap = Assert.Single(result.Gaps, candidate => candidate.GapKind == "RelationshipMissingEvidence");
+        Assert.Equal(RuleIds.ReverseImpactGap, gap.RuleId);
+        Assert.Equal(RuleIds.ReverseImpactGap, gap.Evidence.RuleId);
+        Assert.Contains(seed, gap.RelatedSymbolIds);
+    }
+
+    [Fact]
+    public void Missing_analysis_gap_evidence_remains_an_explicit_not_found_coverage_gap()
+    {
+        var analysisGap = Fact(
+            "missing-gap-evidence",
+            FactTypes.AnalysisGap,
+            RuleIds.AnalyzerCapabilitySemantic,
+            null,
+            null,
+            new Dictionary<string, string> { ["message"] = "Semantic analysis failed." },
+            EvidenceTiers.Tier4Unknown,
+            1) with
+        {
+            Evidence = null!
+        };
+
+        var result = ReverseImpactTraversal.Analyze([analysisGap], new ReverseImpactOptions("Missing.Target", 1));
+
+        Assert.Equal("NotFound", result.Resolution);
+        Assert.DoesNotContain(result.Gaps, gap => gap.GapId == "missing-gap-evidence");
+        var reduced = Assert.Single(result.Gaps, gap => gap.GapKind == "AnalysisGapMissingEvidence");
+        Assert.Equal(RuleIds.ReverseImpactGap, reduced.RuleId);
+        Assert.Equal(RuleIds.ReverseImpactGap, reduced.Evidence.RuleId);
+    }
+
+    [Fact]
+    public void Scan_engine_facts_cross_the_production_boundary_with_canonical_provenance()
+    {
+        using var temp = new TempDirectory();
+        var project = Path.Combine(temp.Path, "src", "Fixture");
+        Directory.CreateDirectory(project);
+        File.WriteAllText(Path.Combine(project, "Fixture.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <Nullable>enable</Nullable>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(project, "Fixture.cs"), """
+            namespace ReverseImpactFixture;
+
+            public sealed class Service
+            {
+                public void Target() { }
+            }
+
+            public sealed class Controller
+            {
+                public void Get(Service service) => service.Target();
+            }
+            """);
+
+        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+        var targetCall = Assert.Single(scan.Facts, fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.ContractElement == "Target"
+            && fact.Properties.ContainsKey("targetSymbolId"));
+        var seedId = targetCall.Properties["targetSymbolId"];
+
+        var result = ReverseImpactTraversal.Analyze(scan.Facts, new ReverseImpactOptions(seedId, 1));
+        var impact = Assert.Single(result.Impacts);
+        var hop = Assert.Single(impact.Path);
+
+        Assert.Contains("Controller.Get", impact.Symbol.DisplayName, StringComparison.Ordinal);
+        Assert.Equal("Method", impact.Symbol.SymbolKind);
+        Assert.Equal("Calls", hop.RelationshipKind);
+        Assert.Equal(RuleIds.CSharpSemanticCallGraph, hop.RuleId);
+        Assert.Equal(RuleIds.CSharpSemanticCallGraph, hop.Evidence.RuleId);
+        Assert.Equal(EvidenceTiers.Tier1Semantic, hop.EvidenceTier);
+        Assert.Equal(scan.Manifest.CommitSha, hop.CommitSha);
+        Assert.Equal(ScannerVersions.CSharpSemanticExtractor, hop.Evidence.ExtractorVersion);
+        Assert.False(string.IsNullOrWhiteSpace(impact.Symbol.ContainingSymbolId));
+
+        var json = JsonSerializer.Serialize(result);
+        var reloaded = JsonSerializer.Deserialize<ReverseImpactResult>(json);
+        Assert.NotNull(reloaded);
+        Assert.Equal(result.Snapshot, reloaded!.Snapshot);
+        Assert.Equal(result.Impacts[0].PathId, reloaded.Impacts[0].PathId);
+    }
+
+    [Fact]
+    public void Rule_catalog_guards_reverse_impact_contracts()
+    {
+        Assert.Equal("impact.reverse.traversal.v1", RuleIds.ReverseImpactTraversal);
+        Assert.Equal("impact.reverse.gap.v1", RuleIds.ReverseImpactGap);
+        var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
+        var traversal = RuleBlock(catalog, RuleIds.ReverseImpactTraversal);
+        var gap = RuleBlock(catalog, RuleIds.ReverseImpactGap);
+
+        Assert.Contains("evidenceTier: Tier2Structural", traversal, StringComparison.Ordinal);
+        Assert.Contains("ReverseImpactResult", traversal, StringComparison.Ordinal);
+        Assert.Contains("ReverseImpactSnapshot", traversal, StringComparison.Ordinal);
+        Assert.Contains("ReverseImpactItem", traversal, StringComparison.Ordinal);
+        Assert.Contains("ReverseImpactHop", traversal, StringComparison.Ordinal);
+        Assert.Contains("ReverseImpactEvidence", traversal, StringComparison.Ordinal);
+        Assert.Contains("exactly one scan, repository, and commit snapshot", traversal, StringComparison.Ordinal);
+        Assert.Contains("evidenceTier: Tier4Unknown", gap, StringComparison.Ordinal);
+        Assert.Contains("ReverseImpactGap", gap, StringComparison.Ordinal);
+        Assert.Contains("incomplete evidence, not proof", gap, StringComparison.Ordinal);
     }
 
     private static CodeFact Relationship(
@@ -272,6 +473,33 @@ public sealed class ReverseImpactTraversalTests
             null,
             new EvidenceSpan(file, line, line, "hash", "csharp-semantic", "1.2.3"),
             properties);
+
+    private static string RuleBlock(string catalog, string ruleId)
+    {
+        var start = Regex.Match(catalog, $@"(?m)^\s*-\s*id:\s*{Regex.Escape(ruleId)}\s*$");
+        Assert.True(start.Success, $"Missing rule catalog entry for {ruleId}.");
+        var afterStart = start.Index + start.Length;
+        var next = Regex.Match(catalog[afterStart..], @"(?m)^\s*-\s*id:\s*\S+\s*$");
+        return next.Success
+            ? catalog[start.Index..(afterStart + next.Index)]
+            : catalog[start.Index..];
+    }
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "rules", "rule-catalog.yml")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root.");
+    }
 
     private static string Id(string kind, string display) => $"csharp {kind} Tests@1.0.0.0 {Uri.EscapeDataString(display)}";
 }
