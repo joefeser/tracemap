@@ -101,7 +101,19 @@ public sealed record AccessQueryOutputFieldProjection(
     int Ordinal,
     string TypeFamily,
     IReadOnlyList<string> SourceFieldStableKeys,
-    string Coverage);
+    string Coverage,
+    string EvidenceOrigin = "unknown");
+
+internal static class AccessQueryOutputEvidenceOrigins
+{
+    internal const string Unknown = "unknown";
+    internal const string QueryDef = "querydef";
+    internal const string StaticSelect = "static-select";
+    internal const string StaticCrosstab = "static-crosstab";
+
+    internal static bool IsSupported(string value) =>
+        value is Unknown or QueryDef or StaticSelect or StaticCrosstab;
+}
 
 public sealed record AccessQueryFieldMappingProjection(
     int Ordinal,
@@ -141,7 +153,25 @@ public sealed record AccessQueryStaticProjection(
     string? OrderByHash,
     IReadOnlyList<string> FunctionNameHashes,
     IReadOnlyList<AccessQueryStaticOutputProjection> Outputs,
-    string Coverage);
+    string Coverage,
+    string DependencyCoverage = "partial",
+    string OutputCoverage = "partial",
+    string RuntimeValueCoverage = "partial")
+{
+    public AccessQueryStaticProjection(
+        string sqlHash,
+        int sqlLength,
+        IReadOnlyList<AccessQueryDependencyProjection> dependencies,
+        string? predicateHash,
+        string? orderByHash,
+        IReadOnlyList<string> functionNameHashes,
+        IReadOnlyList<AccessQueryStaticOutputProjection> outputs,
+        string coverage)
+        : this(sqlHash, sqlLength, dependencies, predicateHash, orderByHash, functionNameHashes, outputs,
+            coverage, coverage, coverage, "unknown")
+    {
+    }
+}
 
 public sealed record AccessRowSourceBindingProjection(
     int? BoundColumn,
@@ -187,7 +217,40 @@ public sealed record AccessBindingProjection(
     IReadOnlyList<string> TargetStableKeys,
     string TargetKind,
     string Coverage,
-    AccessExpressionProjection? Expression = null);
+    AccessExpressionProjection? Expression = null,
+    string RuntimeValueCoverage = "unknown")
+{
+    public AccessBindingProjection(
+        AccessSafeIdentity identity,
+        string ownerStableKey,
+        string bindingKind,
+        string sourceKind,
+        string? expressionHash,
+        int expressionLength,
+        IReadOnlyList<string> targetStableKeys,
+        string targetKind,
+        string coverage,
+        AccessExpressionProjection? expression)
+        : this(identity, ownerStableKey, bindingKind, sourceKind, expressionHash, expressionLength,
+            targetStableKeys, targetKind, coverage, expression, "unknown")
+    {
+    }
+
+    public AccessBindingProjection(
+        AccessSafeIdentity identity,
+        string ownerStableKey,
+        string bindingKind,
+        string sourceKind,
+        string? expressionHash,
+        int expressionLength,
+        IReadOnlyList<string> targetStableKeys,
+        string targetKind,
+        string coverage)
+        : this(identity, ownerStableKey, bindingKind, sourceKind, expressionHash, expressionLength,
+            targetStableKeys, targetKind, coverage, null, "unknown")
+    {
+    }
+}
 
 public sealed record AccessExpressionProjection(
     string Classification,
@@ -198,6 +261,7 @@ public sealed record AccessExpressionProjection(
     IReadOnlyList<string> ControlStableKeys,
     IReadOnlyList<string> ControlReferenceHashes,
     IReadOnlyList<string> ExternalReferenceHashes,
+    IReadOnlyList<string> VbaProcedureStableKeys,
     IReadOnlyList<string> QueryStableKeys,
     IReadOnlyList<string> SelectedFieldStableKeys,
     IReadOnlyList<string> SelectedFieldReferenceHashes,
@@ -205,6 +269,7 @@ public sealed record AccessExpressionProjection(
     IReadOnlyList<string> CriteriaFieldReferenceHashes,
     IReadOnlyList<string> LiteralKinds,
     string Coverage,
+    string RuntimeValueCoverage,
     string? GapClassification = null)
 {
     // Preserves source and binary construction compatibility for consumers built
@@ -233,6 +298,7 @@ public sealed record AccessExpressionProjection(
             [],
             controlReferenceHashes,
             [],
+            [],
             queryStableKeys,
             selectedFieldStableKeys,
             [],
@@ -240,6 +306,7 @@ public sealed record AccessExpressionProjection(
             [],
             literalKinds,
             coverage,
+            "unknown",
             gapClassification)
     {
     }

@@ -121,7 +121,7 @@ internal static class AccessDesignReviewComposer
                      .ThenBy(group => group.Key.ScopeKind, StringComparer.Ordinal)
                      .ThenBy(group => group.Key.ScopeStableKey, StringComparer.Ordinal))
         {
-            gaps.Add(FromAnalysisGap(group));
+            gaps.Add(FromAnalysisGap(group, rows));
         }
 
         var orderedFindings = findings
@@ -158,7 +158,7 @@ internal static class AccessDesignReviewComposer
             FactTypes.AccessFormDeclared => ("form", DesignMetadata(fact.Properties, "surfaceKind", "modulePresence", "boundState", "controlCount", "coverageLabel"), DesignClassification(fact.Properties)),
             FactTypes.AccessReportDeclared => ("report", DesignMetadata(fact.Properties, "surfaceKind", "modulePresence", "boundState", "controlCount", "coverageLabel"), DesignClassification(fact.Properties)),
             FactTypes.AccessControlDeclared => ("control", DesignMetadata(fact.Properties, "controlType", "ordinal", "valueBindingClassification", "populationSourceType", "populationTargetStableKeys", "populationCoverage", "boundColumn", "selectedProjectionOrdinals", "selectedValueStableKeys", "persistenceTargetStableKeys", "functionalRole", "coverageLabel"), DesignClassification(fact.Properties)),
-            FactTypes.AccessBindingDeclared => ("binding", DesignMetadata(fact.Properties, "bindingKind", "sourceKind", "targetKind", "expressionClassification", "expressionCoverage", "expressionFieldStableKeys", "expressionControlStableKeys", "expressionControlReferenceHashes", "expressionExternalReferenceHashes", "expressionQueryStableKeys", "expressionSelectedFieldStableKeys", "expressionSelectedFieldReferenceHashes", "expressionCriteriaFieldStableKeys", "expressionCriteriaFieldReferenceHashes", "coverageLabel"), DesignClassification(fact.Properties)),
+            FactTypes.AccessBindingDeclared => ("binding", DesignMetadata(fact.Properties, "bindingKind", "sourceKind", "targetKind", "expressionClassification", "expressionCoverage", "expressionGapClassification", "runtimeValueCoverage", "expressionFieldStableKeys", "expressionControlStableKeys", "expressionControlReferenceHashes", "expressionExternalReferenceHashes", "expressionVbaProcedureStableKeys", "expressionQueryStableKeys", "expressionSelectedFieldStableKeys", "expressionSelectedFieldReferenceHashes", "expressionCriteriaFieldStableKeys", "expressionCriteriaFieldReferenceHashes", "coverageLabel"), BindingDesignClassification(fact.Properties)),
             FactTypes.AccessVbaModuleDeclared => ("vba-module", DesignMetadata(fact.Properties, "moduleKind", "lineCount", "procedureCount", "coverageLabel"), DesignClassification(fact.Properties)),
             FactTypes.AccessVbaProcedureDeclared => ("vba-procedure", DesignMetadata(fact.Properties, "procedureKind", "callCount", "coverageLabel"), DesignClassification(fact.Properties)),
             FactTypes.AccessNavigationCandidate => ("navigation-candidate", DesignMetadata(fact.Properties, "callKind", "targetKind", "coverageLabel"), DesignClassification(fact.Properties)),
@@ -199,15 +199,25 @@ internal static class AccessDesignReviewComposer
             coverage);
     }
 
-    private static ReleaseReviewGap FromAnalysisGap(IEnumerable<AccessDesignFactRow> groupedRows)
+    private static ReleaseReviewGap FromAnalysisGap(
+        IEnumerable<AccessDesignFactRow> groupedRows,
+        IReadOnlyList<AccessDesignFactRow> allRows)
     {
         var rows = groupedRows.OrderBy(row => row.Fact.FactId, StringComparer.Ordinal).ToArray();
         var row = rows[0];
         var fact = row.Fact;
         var kind = SafeToken(fact.Properties.GetValueOrDefault("classification"), "AccessAnalysisGap");
+        var eligibleSupportRows = allRows
+            .Where(candidate => candidate.SourceLabel == row.SourceLabel
+                && candidate.Fact.ScanId == fact.ScanId)
+            .GroupBy(candidate => candidate.Fact.FactId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var eligibleFacts = eligibleSupportRows.Values.Select(value => value.Fact).ToArray();
         var supportingFactIds = rows
             .SelectMany(item => new[] { item.Fact.FactId }
-                .Concat(SplitSupportingFactIds(item.Fact.Properties.GetValueOrDefault("supportingFactIds"))))
+                .Concat(SplitSupportingFactIds(item.Fact.Properties.GetValueOrDefault("supportingFactIds"))
+                    .Where(factId => eligibleSupportRows.TryGetValue(factId, out var candidate)
+                        && IsValidGapSupport(item.Fact, candidate.Fact, eligibleFacts))))
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .Take(24)
@@ -248,6 +258,62 @@ internal static class AccessDesignReviewComposer
                 Pair("scopeDesignKey", SafeOpaqueKey(fact.Properties.GetValueOrDefault("scopeStableKey")) ?? string.Empty),
                 Pair("factCount", rows.Length.ToString(System.Globalization.CultureInfo.InvariantCulture))
             ]));
+    }
+
+    private static bool IsValidGapSupport(
+        CodeFact gap,
+        CodeFact candidate,
+        IReadOnlyList<CodeFact> facts)
+    {
+        var scopeKind = gap.Properties.GetValueOrDefault("scopeKind");
+        var scopeKey = gap.TargetSymbol ?? gap.Properties.GetValueOrDefault("scopeStableKey");
+        if (string.IsNullOrWhiteSpace(scopeKey))
+            return false;
+        return scopeKind switch
+        {
+            "binding" => IsValidBindingGapSupport(scopeKey, candidate, facts),
+            "query" => candidate.FactType == FactTypes.AccessQueryDeclared
+                && candidate.TargetSymbol == scopeKey,
+            "query-output-field" or "query-output-field-owner-unknown" =>
+                candidate.FactType == FactTypes.AccessQueryOutputDeclared
+                    && candidate.TargetSymbol == scopeKey
+                || candidate.FactType == FactTypes.AccessQueryDeclared
+                    && facts.Any(output => output.FactType == FactTypes.AccessQueryOutputDeclared
+                        && output.TargetSymbol == scopeKey
+                        && output.SourceSymbol == candidate.TargetSymbol),
+            "table" => candidate.FactType == FactTypes.LegacyDataEntityDeclared
+                && candidate.TargetSymbol == scopeKey,
+            "field" or "query-field" => candidate.FactType is FactTypes.LegacyDataColumnDeclared or FactTypes.AccessQueryOutputDeclared
+                && candidate.TargetSymbol == scopeKey,
+            "form" or "report" or "surface" => candidate.FactType is FactTypes.AccessFormDeclared or FactTypes.AccessReportDeclared
+                && candidate.TargetSymbol == scopeKey,
+            "control" => candidate.FactType == FactTypes.AccessControlDeclared
+                && candidate.TargetSymbol == scopeKey,
+            "vba-module" => candidate.FactType == FactTypes.AccessVbaModuleDeclared
+                && candidate.TargetSymbol == scopeKey,
+            "vba-procedure" => candidate.FactType == FactTypes.AccessVbaProcedureDeclared
+                && candidate.TargetSymbol == scopeKey,
+            "event-binding" => candidate.FactType == FactTypes.AccessEventBindingCandidate
+                && (candidate.TargetSymbol == scopeKey || candidate.SourceSymbol == scopeKey),
+            "macro" => candidate.FactType == FactTypes.AccessMacroDeclared
+                && candidate.TargetSymbol == scopeKey,
+            _ => false
+        };
+    }
+
+    private static bool IsValidBindingGapSupport(
+        string scopeKey,
+        CodeFact candidate,
+        IReadOnlyList<CodeFact> facts)
+    {
+        var binding = facts.FirstOrDefault(fact => fact.FactType == FactTypes.AccessBindingDeclared
+            && fact.Properties.GetValueOrDefault("stableBindingKey") == scopeKey);
+        if (binding is null)
+            return false;
+        if (candidate.FactId == binding.FactId)
+            return true;
+        return SplitSupportingFactIds(binding.Properties.GetValueOrDefault("supportingFactIds"))
+            .Contains(candidate.FactId, StringComparer.Ordinal);
     }
 
     private static ReleaseReviewGap Gap(
@@ -355,6 +421,13 @@ internal static class AccessDesignReviewComposer
         properties.GetValueOrDefault("coverageLabel") is "complete" or "structured-design-observed"
             ? ReleaseReviewClassifications.NoActionableEvidence
             : ReleaseReviewClassifications.ReviewRecommended;
+
+    private static string BindingDesignClassification(IReadOnlyDictionary<string, string> properties) =>
+        !string.Equals(properties.GetValueOrDefault("runtimeValueCoverage"), "complete", StringComparison.OrdinalIgnoreCase)
+        || !string.IsNullOrWhiteSpace(properties.GetValueOrDefault("expressionGapClassification"))
+        && !string.Equals(properties.GetValueOrDefault("expressionGapClassification"), "none", StringComparison.OrdinalIgnoreCase)
+            ? ReleaseReviewClassifications.ReviewRecommended
+            : DesignClassification(properties);
 
     private static string Coverage(CodeFact fact, IReadOnlyList<KeyValuePair<string, string>> metadata) =>
         metadata.FirstOrDefault(pair => pair.Key is "coverageLabel" or "referenceCoverage").Value

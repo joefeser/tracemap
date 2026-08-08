@@ -80,6 +80,8 @@ public sealed record AccessFlowGap(
 public static class AccessScreenDataFlowReporter
 {
     public const string SchemaVersion = "tracemap.access-screen-data-flow.v1";
+    private const int MaxPersistedSupportCharacters = 65_536;
+    private const int MaxPersistedSupportIds = 1_024;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -148,6 +150,7 @@ public static class AccessScreenDataFlowReporter
                 !string.Equals(fact.Repo, repository, StringComparison.Ordinal)
                 || !string.Equals(SafeCommit(fact.CommitSha), safeCommit, StringComparison.Ordinal)))
             throw new InvalidDataException("AccessFlowScanIdentityUnavailable");
+        var gapSupportIndex = BuildGapSupportIndex(accessFacts);
         var nodes = new Dictionary<string, MutableNode>(StringComparer.Ordinal);
         var edges = new List<AccessFlowEdge>();
         var gaps = new List<AccessFlowGap>();
@@ -168,7 +171,7 @@ public static class AccessScreenDataFlowReporter
                 var classification = SafeCategory(
                     fact.Properties.GetValueOrDefault("classification"),
                     "AccessAnalysisGap");
-                var supportingFactIds = SupportingGapFactIds(fact, accessFacts);
+                var supportingFactIds = SupportingGapFactIds(fact, accessFacts, gapSupportIndex);
                 AddGap(gaps, maxGaps, ref truncated, new(
                     Id("gap", classification, fact.FactId),
                     classification,
@@ -280,6 +283,14 @@ public static class AccessScreenDataFlowReporter
         };
         if (kind is not null)
         {
+            if (fact.FactType == FactTypes.AccessBindingDeclared
+                && fact.Properties.GetValueOrDefault("targetKind") == "context"
+                && string.IsNullOrWhiteSpace(fact.TargetSymbol))
+            {
+                // Host-provided values such as report Page/Pages are evidence about
+                // rendering context, not a traversable data target.
+                return null;
+            }
             if (string.IsNullOrWhiteSpace(fact.SourceSymbol) || string.IsNullOrWhiteSpace(fact.TargetSymbol))
             {
                 AddGap(gaps, maxGaps, ref truncated, Gap(
@@ -428,40 +439,130 @@ public static class AccessScreenDataFlowReporter
         fact.Evidence.EndLine,
         SafeToken(fact.Evidence.ExtractorId),
         SafeToken(fact.Evidence.ExtractorVersion),
-        SafeCategory(fact.Properties.GetValueOrDefault("coverageLabel"), "unknown"),
+        SafeCategory(
+            fact.FactType == FactTypes.AccessBindingDeclared
+                && !string.Equals(
+                    fact.Properties.GetValueOrDefault("runtimeValueCoverage"),
+                    "complete",
+                    StringComparison.OrdinalIgnoreCase)
+                ? "partial"
+                : fact.Properties.GetValueOrDefault("coverageLabel"),
+            "unknown"),
         SafeLimitations(fact.Properties.GetValueOrDefault("limitations")));
 
-    private static IReadOnlyList<string> SupportingGapFactIds(CodeFact gap, IReadOnlyList<CodeFact> facts)
+    private static IReadOnlyList<string> SupportingGapFactIds(
+        CodeFact gap,
+        IReadOnlyList<CodeFact> facts,
+        GapSupportIndex supportIndex)
     {
         var supporting = new SortedSet<string>(StringComparer.Ordinal) { gap.FactId };
+        if (gap.Properties.TryGetValue("supportingFactIds", out var persistedFactIds)
+            && persistedFactIds is not null
+            && persistedFactIds.Length <= MaxPersistedSupportCharacters
+            && persistedFactIds.Count(character => character == ';') < MaxPersistedSupportIds)
+        {
+            var parsed = persistedFactIds.Split(';', StringSplitOptions.TrimEntries);
+            var encodingValid = parsed.Length > 0
+                && parsed.All(factId => !string.IsNullOrEmpty(factId) && SafeFactId(factId))
+                && parsed.Distinct(StringComparer.Ordinal).Count() == parsed.Length;
+            if (encodingValid)
+            {
+                var persistedScope = gap.Properties.GetValueOrDefault("scopeKind");
+                bool valid;
+                if (IsQueryOutputScope(persistedScope))
+                {
+                    var expected = CompleteQueryOutputSupport(gap, supportIndex);
+                    valid = expected.Count > 0
+                        && parsed.ToHashSet(StringComparer.Ordinal).SetEquals(expected);
+                }
+                else
+                {
+                    valid = parsed.All(factId => facts.Any(candidate => candidate.FactId == factId
+                        && IsValidPersistedGapSupport(gap, candidate, facts)));
+                }
+                if (valid)
+                {
+                    supporting.UnionWith(parsed);
+                    return supporting.ToArray();
+                }
+            }
+        }
         if (!SafeStableKey(gap.TargetSymbol))
             return supporting.ToArray();
 
         var scope = gap.Properties.GetValueOrDefault("scopeKind");
-        if (scope == "query-output-field")
+        if (IsQueryOutputScope(scope))
         {
-            foreach (var output in facts.Where(candidate =>
-                         candidate.TargetSymbol == gap.TargetSymbol
-                         && candidate.FactType == FactTypes.AccessQueryOutputDeclared))
-            {
-                supporting.Add(output.FactId);
-                foreach (var query in facts.Where(candidate =>
-                             candidate.TargetSymbol == output.SourceSymbol
-                             && candidate.FactType == FactTypes.AccessQueryDeclared))
-                    supporting.Add(query.FactId);
-            }
+            supporting.UnionWith(CompleteQueryOutputSupport(gap, supportIndex));
         }
         else if (scope == "query"
                  && gap.Properties.GetValueOrDefault("classification")?.StartsWith(
                      "AccessQueryOutput",
                      StringComparison.Ordinal) == true)
         {
-            foreach (var query in facts.Where(candidate =>
-                         candidate.TargetSymbol == gap.TargetSymbol
-                         && candidate.FactType == FactTypes.AccessQueryDeclared))
-                supporting.Add(query.FactId);
+            if (supportIndex.Queries.TryGetValue((gap.ScanId, gap.TargetSymbol!), out var queries))
+                supporting.UnionWith(queries.Select(query => query.FactId));
         }
         return supporting.ToArray();
+    }
+
+    private static bool IsQueryOutputScope(string? scope) =>
+        scope is "query-output-field" or "query-output-field-owner-unknown";
+
+    private static IReadOnlyList<string> CompleteQueryOutputSupport(CodeFact gap, GapSupportIndex supportIndex)
+    {
+        if (string.IsNullOrWhiteSpace(gap.TargetSymbol)
+            || !supportIndex.Outputs.TryGetValue((gap.ScanId, gap.TargetSymbol), out var outputs))
+            return [];
+        var supporting = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var output in outputs)
+        {
+            supporting.Add(output.FactId);
+            var ownerKey = !string.IsNullOrWhiteSpace(output.SourceSymbol)
+                ? output.SourceSymbol
+                : output.Properties.GetValueOrDefault("queryStableKey");
+            if (SafeStableKey(ownerKey)
+                && supportIndex.Queries.TryGetValue((gap.ScanId, ownerKey!), out var queries))
+                supporting.UnionWith(queries.Select(query => query.FactId));
+        }
+        return supporting.ToArray();
+    }
+
+    private static GapSupportIndex BuildGapSupportIndex(IReadOnlyList<CodeFact> facts) => new(
+        facts.Where(fact => fact.FactType == FactTypes.AccessQueryOutputDeclared
+                && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+            .GroupBy(fact => (fact.ScanId, fact.TargetSymbol!))
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray()),
+        facts.Where(fact => fact.FactType == FactTypes.AccessQueryDeclared
+                && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+            .GroupBy(fact => (fact.ScanId, fact.TargetSymbol!))
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray()));
+
+    private static bool IsValidPersistedGapSupport(CodeFact gap, CodeFact candidate, IReadOnlyList<CodeFact> facts) =>
+        candidate.ScanId == gap.ScanId && gap.Properties.GetValueOrDefault("scopeKind") switch
+        {
+            "binding" => IsValidBindingGapSupport(gap, candidate, facts),
+            "query" => candidate.FactType == FactTypes.AccessQueryDeclared
+                && candidate.TargetSymbol == gap.TargetSymbol,
+            _ => false
+        };
+
+    private static bool IsValidBindingGapSupport(CodeFact gap, CodeFact candidate, IReadOnlyList<CodeFact> facts)
+    {
+        var binding = facts.FirstOrDefault(fact => fact.ScanId == gap.ScanId
+            && fact.FactType == FactTypes.AccessBindingDeclared
+            && fact.Properties.GetValueOrDefault("stableBindingKey") == gap.TargetSymbol);
+        if (binding is null)
+            return false;
+        if (candidate.FactId == binding.FactId)
+            return true;
+        return (binding.Properties.GetValueOrDefault("supportingFactIds") ?? string.Empty)
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Contains(candidate.FactId, StringComparer.Ordinal);
     }
 
     private static void EnsureReferencedNode(IDictionary<string, MutableNode> nodes, string key, CodeFact fact, bool source)
@@ -573,6 +674,10 @@ public static class AccessScreenDataFlowReporter
         && value.Length <= 192
         && value.StartsWith("access-", StringComparison.Ordinal)
         && value.All(character => char.IsAsciiLetterOrDigit(character) || character == '-');
+    private static bool SafeFactId(string? value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.Length <= 128
+        && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.');
     private static string SafeEvidencePath(string value)
     {
         var normalized = value.Replace('\\', '/');
@@ -772,4 +877,8 @@ public static class AccessScreenDataFlowReporter
         public HashSet<string> SupportingFactIds { get; } = supportingFactIds;
         public bool Declared { get; set; } = declared;
     }
+
+    private sealed record GapSupportIndex(
+        IReadOnlyDictionary<(string ScanId, string TargetSymbol), CodeFact[]> Outputs,
+        IReadOnlyDictionary<(string ScanId, string TargetSymbol), CodeFact[]> Queries);
 }

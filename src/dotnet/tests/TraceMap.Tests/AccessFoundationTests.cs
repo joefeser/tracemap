@@ -11,6 +11,645 @@ namespace TraceMap.Tests;
 public sealed class AccessFoundationTests
 {
     [Fact]
+    public void Design_composer_reconciles_only_unique_hash_only_query_outputs_named_by_direct_controls()
+    {
+        const string queryStableKey = "access-query-1";
+        const string outputStableKey = "access-query-output-1";
+        const string outputName = "Total Of NSAPoints";
+        var surface = new AccessRawUiSurface(
+            "ReportOne",
+            "report",
+            false,
+            "[Pivot Query]",
+            [
+                new AccessRawControl("direct", 0, 109, $"[{outputName}]", null, []),
+                new AccessRawControl("expression", 1, 109, $"=Sum([{outputName}])", null, [])
+            ],
+            []);
+        var knownObjects = new Dictionary<string, List<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Pivot Query"] = [(queryStableKey, "query")]
+        };
+        var outputHash = AccessSafeValues.RoleHash($"access-query-field-{queryStableKey}-name", outputName);
+        var fieldsByHash = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new(StringComparer.Ordinal) { [outputHash] = [outputStableKey] }
+        };
+        var fieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
+
+        AccessDesignEvidenceComposer.ReconcileSurfaceQueryOutputNames(
+            [surface], knownObjects, fieldsByHash, fieldsByName);
+
+        Assert.Equal(outputStableKey, Assert.Single(fieldsByName[queryStableKey][outputName]));
+
+        fieldsByName.Clear();
+        AccessDesignEvidenceComposer.ReconcileSurfaceQueryOutputNames(
+            [surface with { SurfaceKind = "form" }], knownObjects, fieldsByHash, fieldsByName);
+        Assert.Empty(fieldsByName);
+
+        var ordinals = new Dictionary<string, int>(StringComparer.Ordinal);
+        var coverage = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [outputStableKey] = "complete"
+        };
+        fieldsByHash[queryStableKey][outputHash] = [outputStableKey];
+        AccessDesignEvidenceComposer.ReconcileSurfaceQueryOutputNames(
+            [surface], knownObjects, fieldsByHash, fieldsByName, ordinals, coverage);
+        Assert.Empty(fieldsByName);
+
+        ordinals[outputStableKey] = 0;
+        coverage[outputStableKey] = "partial";
+        AccessDesignEvidenceComposer.ReconcileSurfaceQueryOutputNames(
+            [surface], knownObjects, fieldsByHash, fieldsByName, ordinals, coverage);
+        Assert.Empty(fieldsByName);
+
+        coverage[outputStableKey] = "complete";
+        AccessDesignEvidenceComposer.ReconcileSurfaceQueryOutputNames(
+            [surface], knownObjects, fieldsByHash, fieldsByName, ordinals, coverage);
+        Assert.Equal(outputStableKey, Assert.Single(fieldsByName[queryStableKey][outputName]));
+
+        fieldsByHash[queryStableKey][outputHash].Add("access-query-output-ambiguous");
+        fieldsByName.Clear();
+        AccessDesignEvidenceComposer.ReconcileSurfaceQueryOutputNames(
+            [surface], knownObjects, fieldsByHash, fieldsByName);
+        Assert.Empty(fieldsByName);
+    }
+
+    [Fact]
+    public void Design_composer_reconciles_only_unique_hash_only_domain_outputs_named_by_expressions()
+    {
+        const string queryStableKey = "access-query-domain";
+        const string selectedStableKey = "access-query-output-percent";
+        const string criteriaStableKey = "access-query-output-weekly-plan";
+        var surface = new AccessRawUiSurface(
+            "FormOne",
+            "form",
+            true,
+            null,
+            [
+                new AccessRawControl(
+                    "calculated",
+                    0,
+                    109,
+                    "=DLookUp(\"[Percent]\",\"qWeekly\",\"[WeeklyPlanID]=[txtWeeklyPlanID]\")",
+                    null,
+                    [])
+            ],
+            []);
+        var knownObjects = new Dictionary<string, List<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["qWeekly"] = [(queryStableKey, "query")]
+        };
+        var fieldsByHash = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new(StringComparer.Ordinal)
+            {
+                [AccessSafeValues.RoleHash($"access-query-field-{queryStableKey}-name", "Percent")] = [selectedStableKey],
+                [AccessSafeValues.RoleHash($"access-query-field-{queryStableKey}-name", "WeeklyPlanID")] = [criteriaStableKey]
+            }
+        };
+        var fieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
+        var criteriaFieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
+
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            "database-seed", [surface], knownObjects, fieldsByHash, fieldsByName, criteriaFieldsByName);
+
+        Assert.Equal(selectedStableKey, Assert.Single(fieldsByName[queryStableKey]["Percent"]));
+        Assert.False(fieldsByName[queryStableKey].ContainsKey("WeeklyPlanID"));
+        Assert.Equal(criteriaStableKey, Assert.Single(criteriaFieldsByName[queryStableKey]["WeeklyPlanID"]));
+        Assert.False(fieldsByName[queryStableKey].ContainsKey("txtWeeklyPlanID"));
+
+        fieldsByHash[queryStableKey][AccessSafeValues.RoleHash(
+            $"access-query-field-{queryStableKey}-name", "WeeklyPlanID")].Add("ambiguous-output");
+        fieldsByName.Clear();
+        criteriaFieldsByName.Clear();
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            "database-seed", [surface], knownObjects, fieldsByHash, fieldsByName, criteriaFieldsByName);
+        Assert.False(criteriaFieldsByName.ContainsKey(queryStableKey));
+    }
+
+    [Fact]
+    public void Design_composer_uses_unique_output_source_lineage_to_classify_alias_mismatches_and_criteria_fields()
+    {
+        const string queryStableKey = "access-query-domain";
+        const string outputStableKey = "access-query-output-plan-id";
+        const string sourceStableKey = "access-table-field-weekly-plan-id";
+        var surface = new AccessRawUiSurface(
+            "FormOne",
+            "form",
+            true,
+            null,
+            [new AccessRawControl(
+                "calculated",
+                0,
+                109,
+                "=DLookUp(\"[WeeklyPlanID]\",\"qWeekly\",\"[WeeklyPlanID]=[txtWeeklyPlanID]\")",
+                null,
+                [])],
+            []);
+        var knownObjects = new Dictionary<string, List<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["qWeekly"] = [(queryStableKey, "query")]
+        };
+        var fieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["PlanID"] = [outputStableKey]
+            }
+        };
+        var criteriaFieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
+        var fieldCoverage = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [outputStableKey] = "complete"
+        };
+        var supportingFacts = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            "database-seed",
+            [surface],
+            knownObjects,
+            new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
+            {
+                [queryStableKey] = new(StringComparer.Ordinal)
+            },
+            fieldsByName,
+            criteriaFieldsByName,
+            fieldCoverageByStableKey: fieldCoverage,
+            supportingFactIdsByStableKey: supportingFacts,
+            fieldNamesByStableKey: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [outputStableKey] = "PlanID",
+                [sourceStableKey] = "WeeklyPlanID"
+            },
+            queryOutputSourcesByOutput: new Dictionary<string, List<string>>(StringComparer.Ordinal)
+            {
+                [outputStableKey] = [sourceStableKey]
+            },
+            queryOutputSourceFactIdsByOutput: new Dictionary<string, List<string>>(StringComparer.Ordinal)
+            {
+                [outputStableKey] = ["fact-output-source"]
+            });
+
+        var aliasCandidate = Assert.Single(fieldsByName[queryStableKey]["WeeklyPlanID"]);
+        Assert.True(AccessSafeValues.IsQueryOutputAliasMismatchCandidate(aliasCandidate));
+        Assert.Equal("partial", fieldCoverage[aliasCandidate]);
+        Assert.Equal(["fact-output-source"], supportingFacts[aliasCandidate]);
+        Assert.Equal(sourceStableKey, Assert.Single(criteriaFieldsByName[queryStableKey]["WeeklyPlanID"]));
+
+        var binding = new AccessBindingProjection(
+            new(null, "binding-hash", "access-binding-test"),
+            "access-control-test",
+            "control-source",
+            "calculated-expression",
+            null,
+            0,
+            [aliasCandidate],
+            "query-field",
+            "partial");
+        AccessDesignEvidenceComposer.PropagateBindingSupportingFactIds(
+            new(
+                [new(
+                    new(null, "surface-hash", "access-form-test"),
+                    "form",
+                    "present",
+                    "bound",
+                    "design-hash",
+                    [binding],
+                    [],
+                    [])],
+                []),
+            supportingFacts);
+        Assert.Equal(["fact-output-source"], supportingFacts[binding.Identity.StableKey]);
+
+        fieldsByName[queryStableKey].Remove("WeeklyPlanID");
+        criteriaFieldsByName.Clear();
+        fieldCoverage[outputStableKey] = "partial";
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            "database-seed",
+            [surface],
+            knownObjects,
+            new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
+            {
+                [queryStableKey] = new(StringComparer.Ordinal)
+            },
+            fieldsByName,
+            criteriaFieldsByName,
+            fieldCoverageByStableKey: fieldCoverage,
+            fieldNamesByStableKey: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [outputStableKey] = "PlanID",
+                [sourceStableKey] = "WeeklyPlanID"
+            },
+            queryOutputSourcesByOutput: new Dictionary<string, List<string>>(StringComparer.Ordinal)
+            {
+                [outputStableKey] = [sourceStableKey]
+            });
+        Assert.False(fieldsByName[queryStableKey].ContainsKey("WeeklyPlanID"));
+        Assert.False(criteriaFieldsByName.ContainsKey(queryStableKey));
+
+        fieldsByName[queryStableKey]["PlanID"].Add("another-output");
+        fieldCoverage[outputStableKey] = "complete";
+        fieldCoverage["another-output"] = "complete";
+        var ambiguousSources = new Dictionary<string, List<string>>(StringComparer.Ordinal)
+        {
+            [outputStableKey] = [sourceStableKey],
+            ["another-output"] = [sourceStableKey]
+        };
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            "database-seed",
+            [surface],
+            knownObjects,
+            new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
+            {
+                [queryStableKey] = new(StringComparer.Ordinal)
+            },
+            fieldsByName,
+            criteriaFieldsByName,
+            fieldCoverageByStableKey: fieldCoverage,
+            fieldNamesByStableKey: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [sourceStableKey] = "WeeklyPlanID"
+            },
+            queryOutputSourcesByOutput: ambiguousSources);
+        Assert.False(fieldsByName[queryStableKey].ContainsKey("WeeklyPlanID"));
+        Assert.False(criteriaFieldsByName.ContainsKey(queryStableKey));
+    }
+
+    [Fact]
+    public void Design_composer_reconciles_only_exact_declared_crosstab_pivot_headings_as_candidates()
+    {
+        const string databaseSeed = "database-seed";
+        const string queryStableKey = "access-query-pivot";
+        var surface = new AccessRawUiSurface(
+            "ReportOne",
+            "report",
+            false,
+            null,
+            [new AccessRawControl("week", 0, 109, "=DLookUp(\"[4]\",\"qPivot\")", null, [])],
+            []);
+        var knownObjects = new Dictionary<string, List<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["qPivot"] = [(queryStableKey, "query")]
+        };
+        var fieldsByHash = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new(StringComparer.Ordinal)
+            {
+                [AccessSafeValues.RoleHash($"access-query-field-{queryStableKey}-name", "4")] = ["declared-four"]
+            }
+        };
+        var fieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["4"] = ["declared-four"]
+            }
+        };
+        var criteriaFieldsByName = new Dictionary<string, Dictionary<string, List<string>>>(StringComparer.Ordinal);
+        var pivotHashes = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new HashSet<string>(StringComparer.Ordinal)
+            {
+                AccessSafeValues.RoleHash("access-query-pivot-column", "4")
+            }
+        };
+        var pivotHash = AccessSafeValues.RoleHash("access-query-pivot-column", "4");
+        var pivotFactIds = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+            {
+                [pivotHash] = ["crosstab-lineage-fact"]
+            }
+        };
+        var fieldCoverage = new Dictionary<string, string>(StringComparer.Ordinal);
+        var supportingFactIds = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            databaseSeed,
+            [surface],
+            knownObjects,
+            fieldsByHash,
+            fieldsByName,
+            criteriaFieldsByName,
+            pivotHashes,
+            fieldCoverage,
+            pivotFactIds,
+            supportingFactIds);
+
+        var candidate = Assert.Single(fieldsByName[queryStableKey]["4"]);
+        Assert.True(AccessSafeValues.IsCrosstabPivotColumnCandidate(candidate));
+        Assert.Equal("partial", fieldCoverage[candidate]);
+        Assert.Equal(["crosstab-lineage-fact"], supportingFactIds[candidate]);
+
+        fieldsByName.Clear();
+        fieldsByName[queryStableKey] = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["W5"] = ["declared-week-five"]
+        };
+        pivotHashes[queryStableKey] = new HashSet<string>(StringComparer.Ordinal)
+        {
+            AccessSafeValues.RoleHash("access-query-pivot-column", "W5")
+        };
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            databaseSeed,
+            [surface with
+            {
+                Controls = [new AccessRawControl("week", 0, 109, "=DLookUp(\"[5]\",\"qPivot\")", null, [])]
+            }],
+            knownObjects,
+            fieldsByHash,
+            fieldsByName,
+            criteriaFieldsByName,
+            pivotHashes);
+        Assert.False(fieldsByName[queryStableKey].ContainsKey("5"));
+
+        fieldsByHash[queryStableKey][AccessSafeValues.RoleHash(
+            $"access-query-field-{queryStableKey}-name", "W5")] = ["declared-week-five"];
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            databaseSeed,
+            [surface with
+            {
+                Controls = [new AccessRawControl("week", 0, 109, "=DLookUp(\"[5]\",\"qPivot\")", null, [])]
+            }],
+            knownObjects,
+            fieldsByHash,
+            fieldsByName,
+            criteriaFieldsByName,
+            pivotHashes);
+        Assert.True(AccessSafeValues.IsCrosstabPivotPrefixMismatchCandidate(
+            Assert.Single(fieldsByName[queryStableKey]["5"])));
+
+        fieldsByName.Clear();
+        AccessDesignEvidenceComposer.ReconcileDomainExpressionQueryOutputNames(
+            databaseSeed,
+            [surface with
+            {
+                Controls = [new AccessRawControl("week", 0, 109, "=DLookUp(\"[6]\",\"qPivot\")", null, [])]
+            }],
+            knownObjects,
+            fieldsByHash,
+            fieldsByName,
+            criteriaFieldsByName,
+            pivotHashes);
+        Assert.Empty(fieldsByName);
+    }
+
+    [Fact]
+    public void Design_composer_criteria_scope_flows_to_ui_without_promoting_criteria_to_return_output()
+    {
+        const string queryStableKey = "query-domain";
+        const string selectedStableKey = "output-percent";
+        const string criteriaStableKey = "table-weekly-plan";
+        var fields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            [queryStableKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Percent"] = [selectedStableKey]
+            },
+            ["table-source"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlanID"] = [criteriaStableKey]
+            }
+        };
+        var facts = new[]
+        {
+            QueryDeclarationFact(queryStableKey, "complete"),
+            DependencyFact("dependency-table", queryStableKey, "table-source", "table")
+        };
+        var criteriaScopes = AccessDesignEvidenceComposer.BuildDomainCriteriaFieldSets(facts, fields);
+        var surface = new AccessRawUiSurface(
+            "frmWeekly",
+            "form",
+            true,
+            null,
+            [
+                new AccessRawControl("txtPlan", 0, 109, null, null, []),
+                new AccessRawControl(
+                    "txtPercent",
+                    1,
+                    109,
+                    "=DLookUp(\"[Percent]\",\"qWeekly\",\"[WeeklyPlanID]=[txtPlan]\")",
+                    null,
+                    [])
+            ],
+            []);
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["qWeekly"] = [(queryStableKey, "query")]
+        };
+
+        var projected = AccessUiProjector.Project(
+            "synthetic-database",
+            [surface],
+            known,
+            fields,
+            domainCriteriaFieldSetsByObject: criteriaScopes);
+        var binding = Assert.Single(
+            Assert.Single(projected.Surfaces).Controls.Single(control => control.Identity.DisplayName == "txtPercent").Bindings);
+
+        Assert.Equal("complete", binding.Coverage);
+        Assert.Equal("partial", binding.RuntimeValueCoverage);
+        Assert.Equal([selectedStableKey], binding.Expression!.SelectedFieldStableKeys);
+        Assert.Equal([criteriaStableKey], binding.Expression.CriteriaFieldStableKeys);
+        Assert.DoesNotContain(criteriaStableKey, binding.Expression.SelectedFieldStableKeys);
+
+        var returnFromCriteriaOnly = AccessUiProjector.Project(
+            "synthetic-database",
+            [surface with
+            {
+                Controls =
+                [
+                    new AccessRawControl(
+                        "txtCriteriaAsReturn",
+                        0,
+                        109,
+                        "=DLookUp(\"[WeeklyPlanID]\",\"qWeekly\")",
+                        null,
+                        [])
+                ]
+            }],
+            known,
+            fields,
+            domainCriteriaFieldSetsByObject: criteriaScopes);
+        var returnBinding = Assert.Single(Assert.Single(returnFromCriteriaOnly.Surfaces).Controls).Bindings.Single();
+        Assert.Equal("partial", returnBinding.Coverage);
+        Assert.Equal("AccessBindingDomainSelectedFieldDependencyOnly", returnBinding.Expression!.GapClassification);
+        Assert.Empty(returnBinding.Expression.SelectedFieldStableKeys);
+    }
+
+    [Fact]
+    public void Design_composer_builds_bounded_domain_criteria_scopes_from_direct_dependencies()
+    {
+        var fields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            ["query-domain"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Percent"] = ["output-percent"]
+            },
+            ["query-source"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlanID"] = ["query-weekly-plan"]
+            },
+            ["table-source"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["StartDate"] = ["table-start-date"],
+                ["WeeklyPlanID"] = ["table-weekly-plan"]
+            },
+            ["unrelated"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Secret"] = ["unrelated-secret"]
+            }
+        };
+        var dependencies = new[]
+        {
+            QueryDeclarationFact("query-domain", "complete"),
+            DependencyFact("dependency-query", "query-domain", "query-source", "query"),
+            DependencyFact("dependency-table", "query-domain", "table-source", "table")
+        };
+
+        var scopes = AccessDesignEvidenceComposer.BuildDomainCriteriaFieldSets(dependencies, fields);
+
+        Assert.Equal(["output-percent"], scopes["query-domain"]["Percent"]);
+        Assert.Equal(["table-start-date"], scopes["query-domain"]["StartDate"]);
+        Assert.Equal(2, scopes["query-domain"]["WeeklyPlanID"].Count);
+        Assert.False(scopes["query-domain"].ContainsKey("Secret"));
+
+        var partialScopes = AccessDesignEvidenceComposer.BuildDomainCriteriaFieldSets(
+            dependencies.Skip(1).Append(QueryDeclarationFact("query-domain", "partial")).ToArray(),
+            fields);
+        Assert.Equal(["output-percent"], partialScopes["query-domain"]["Percent"]);
+        Assert.False(partialScopes["query-domain"].ContainsKey("StartDate"));
+
+    }
+
+    [Fact]
+    public void Design_composer_marks_table_field_catalog_complete_only_without_acquisition_gaps()
+    {
+        var tables = new[]
+        {
+            EntityFact("table-complete"),
+            EntityFact("table-field-gap"),
+            EntityFact("table-no-fields")
+        };
+        var withScopedGap = tables.Append(GapFact(
+            "AccessObjectMetadataUnavailable",
+            "field",
+            "table-field-gap")).ToArray();
+
+        var complete = AccessDesignEvidenceComposer.BuildCompleteTableFieldCatalogStableKeys(
+            withScopedGap,
+            new HashSet<string>(["table-complete", "table-field-gap"], StringComparer.Ordinal));
+        var disabledByGlobalGap = AccessDesignEvidenceComposer.BuildCompleteTableFieldCatalogStableKeys(
+            withScopedGap.Append(GapFact("AccessFieldCollectionLimit", "table", null)).ToArray(),
+            new HashSet<string>(["table-complete", "table-field-gap"], StringComparer.Ordinal));
+        var disabledByGapTruncation = AccessDesignEvidenceComposer.BuildCompleteTableFieldCatalogStableKeys(
+            withScopedGap.Append(GapFact("AccessGapLimitReached", "database", null)).ToArray(),
+            new HashSet<string>(["table-complete", "table-field-gap"], StringComparer.Ordinal));
+        var malformedGap = AccessDesignEvidenceComposer.BuildCompleteTableFieldCatalogStableKeys(
+            tables.Append(GapFact("AccessFieldCollectionLimit", "unknown", "table-complete")).ToArray(),
+            new HashSet<string>(["table-complete", "table-field-gap"], StringComparer.Ordinal));
+        var malformedColumn = EntityFact("column-malformed") with
+        {
+            FactType = FactTypes.LegacyDataColumnDeclared,
+            SourceSymbol = "table-complete",
+            Properties = new Dictionary<string, string>()
+        };
+        var malformedCatalog = AccessDesignEvidenceComposer.BuildCompleteTableFieldCatalogStableKeys(
+            tables.Append(malformedColumn).ToArray(),
+            new HashSet<string>(["table-complete", "table-field-gap"], StringComparer.Ordinal));
+
+        Assert.Equal(["table-complete"], complete);
+        Assert.Empty(disabledByGlobalGap);
+        Assert.Empty(disabledByGapTruncation);
+        Assert.DoesNotContain("table-complete", malformedGap);
+        Assert.DoesNotContain("table-complete", malformedCatalog);
+    }
+
+    private static CodeFact QueryDeclarationFact(string target, string referenceCoverage) => new(
+        "declaration-" + referenceCoverage,
+        "scan-access",
+        "synthetic",
+        new string('a', 40),
+        null,
+        FactTypes.AccessQueryDeclared,
+        RuleIds.LegacyAccessQuery,
+        EvidenceTiers.Tier2Structural,
+        null,
+        target,
+        null,
+        new EvidenceSpan("database.accdb", 1, 1, null, "access-query", "1.0.0"),
+            new Dictionary<string, string> { ["referenceCoverage"] = referenceCoverage });
+
+    private static CodeFact EntityFact(string target) => new(
+        "entity-" + target,
+        "scan-access",
+        "synthetic",
+        new string('a', 40),
+        null,
+        FactTypes.LegacyDataEntityDeclared,
+        RuleIds.LegacyAccessSchema,
+        EvidenceTiers.Tier2Structural,
+        null,
+        target,
+        null,
+        new EvidenceSpan("database.accdb", 1, 1, null, "access-schema", "1.0.0"),
+        new Dictionary<string, string>());
+
+    private static CodeFact GapFact(string classification, string scopeKind, string? target) => new(
+        "gap-" + classification + "-" + (target ?? "global"),
+        "scan-access",
+        "synthetic",
+        new string('a', 40),
+        null,
+        FactTypes.AnalysisGap,
+        RuleIds.LegacyAccessCoverageGap,
+        EvidenceTiers.Tier4Unknown,
+        null,
+        target,
+        null,
+        new EvidenceSpan("database.accdb", 1, 1, null, "access-gap", "1.0.0"),
+        new Dictionary<string, string>
+        {
+            ["classification"] = classification,
+            ["scopeKind"] = scopeKind
+        });
+
+    private static CodeFact DependencyFact(
+        string factId,
+        string source,
+        string target,
+        string targetKind) => new(
+            factId,
+            "scan-access",
+            "synthetic",
+            new string('a', 40),
+            null,
+            FactTypes.AccessQueryDependencyCandidate,
+            RuleIds.LegacyAccessQuery,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            source,
+            target,
+            null,
+            new EvidenceSpan("database.accdb", 1, 1, null, "access-query", "1.0.0"),
+            new Dictionary<string, string> { ["targetKind"] = targetKind });
+
+    private static CodeFact CrosstabLineageFact(string source, string staticColumnHashes) => new(
+        "crosstab-" + source,
+        "scan-access",
+        "synthetic",
+        new string('a', 40),
+        null,
+        FactTypes.AccessQueryCrosstabLineageCandidate,
+        RuleIds.LegacyAccessQuery,
+        EvidenceTiers.Tier3SyntaxOrTextual,
+        source,
+        null,
+        null,
+        new EvidenceSpan("database.accdb", 1, 1, null, "access-query", "1.0.0"),
+        new Dictionary<string, string> { ["staticColumnHashes"] = staticColumnHashes });
+
+    [Fact]
     public void Conflicting_query_kinds_are_omitted_independently_of_input_order()
     {
         var first = AccessDesignEvidenceComposer.BuildConsistentQueryKinds(
@@ -21,6 +660,32 @@ public sealed class AccessFoundationTests
         Assert.Equal(first, second);
         Assert.False(first.ContainsKey("query-a"));
         Assert.Equal("select", first["query-b"]);
+    }
+
+    [Fact]
+    public void Static_crosstab_pivot_hashes_require_a_consistent_crosstab_declaration()
+    {
+        var pivotHash = AccessSafeValues.RoleHash("access-query-pivot-column", "W4");
+        var projected = AccessDesignEvidenceComposer.BuildStaticCrosstabPivotHashes(
+            [
+                CrosstabLineageFact("query-pivot", pivotHash + ";invalid"),
+                CrosstabLineageFact("query-select", pivotHash)
+            ],
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["query-pivot"] = "crosstab",
+                ["query-select"] = "select"
+            });
+
+        Assert.Equal([pivotHash], projected["query-pivot"]);
+        Assert.False(projected.ContainsKey("query-select"));
+
+        var supportingFacts = AccessDesignEvidenceComposer.BuildStaticCrosstabPivotFactIds(
+            [CrosstabLineageFact("query-pivot", pivotHash + ";invalid")],
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["query-pivot"] = "crosstab" });
+        Assert.Equal(
+            ["crosstab-query-pivot"],
+            supportingFacts["query-pivot"][pivotHash]);
     }
 
     [Fact]
@@ -168,7 +833,7 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
-    public void Query_output_shape_accepts_only_direct_select_fields()
+    public void Query_output_shape_accepts_direct_select_fields_and_static_aliases()
     {
         Assert.True(AccessQueryProjector.IsDirectOutputField(
             "SELECT Orders.OrderId, [Orders].[Order Status] FROM Orders;",
@@ -176,7 +841,7 @@ public sealed class AccessFoundationTests
         Assert.True(AccessQueryProjector.IsDirectOutputField(
             "SELECT Orders.OrderId, [Orders].[Order Status] FROM Orders;",
             "Order Status"));
-        Assert.False(AccessQueryProjector.IsDirectOutputField(
+        Assert.True(AccessQueryProjector.IsDirectOutputField(
             "SELECT Orders.OrderId AS Identifier FROM Orders;",
             "Identifier"));
         Assert.False(AccessQueryProjector.IsDirectOutputField(
@@ -348,7 +1013,8 @@ public sealed class AccessFoundationTests
             {
                 ["Category"] = [new(field, 0, "text", 64, false)],
                 ["Amount"] = [new(new(null, "amount", "field-amount"), 1, "decimal", 16, false)],
-                ["Month"] = [new(new(null, "month", "field-month"), 2, "text", 16, false)]
+                ["Month"] = [new(new(null, "month", "field-month"), 2, "text", 16, false)],
+                ["EventDate"] = [new(new(null, "event-date", "field-event-date"), 3, "date", 8, false)]
             }
         };
 
@@ -377,36 +1043,127 @@ public sealed class AccessFoundationTests
         Assert.Equal("partial", unsupportedFunction.Coverage);
         Assert.Empty(dynamicShape.StaticColumnHashes);
         Assert.Equal("partial", dynamicShape.Coverage);
+
+        var outputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan','Feb');",
+            known,
+            fields);
+        Assert.Equal(["Category", "Jan", "Feb"], outputs.Select(output => output.Name));
+        Assert.Equal(["row-heading", "static-pivot", "static-pivot"], outputs.Select(output => output.OutputKind));
+        Assert.All(outputs, output => Assert.Equal("complete", output.Coverage));
+        Assert.Equal(["field-row"], outputs[0].SourceFieldStableKeys);
+        Assert.Equal(["field-amount"], outputs[1].SourceFieldStableKeys);
+        Assert.Equal(["field-amount"], outputs[2].SourceFieldStableKeys);
+
+        var aliasedOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Format(Events.EventDate, 'yyyy'), Events.Category AS CategoryLabel FROM Events GROUP BY Format(Events.EventDate, 'yyyy'), Events.Category PIVOT Events.Month IN ('Jan');",
+            known,
+            fields);
+        Assert.Equal([1, 2], aliasedOutputs.Select(output => output.Ordinal));
+        Assert.Equal(["CategoryLabel", "Jan"], aliasedOutputs.Select(output => output.Name));
+        Assert.All(aliasedOutputs, output => Assert.Equal("complete", output.Coverage));
+        Assert.Equal(["field-row"], aliasedOutputs[0].SourceFieldStableKeys);
+
+        var accessAliasedOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT CategoryLabel: Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
+            known,
+            fields);
+        Assert.Equal("complete", accessAliasedOutputs[0].Coverage);
+        Assert.Equal(["field-row"], accessAliasedOutputs[0].SourceFieldStableKeys);
+
+        var malformedOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Events.[Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
+            known,
+            fields);
+        Assert.NotEmpty(malformedOutputs);
+        Assert.All(malformedOutputs, output => Assert.Equal("partial", output.Coverage));
+
+        var unsupportedPivotOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT CustomNormalize(Events.Month) IN ('Jan');",
+            known,
+            fields);
+        Assert.Equal("partial", unsupportedPivotOutputs.Single(output => output.Name == "Jan").Coverage);
+
+        var dynamicOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month;",
+            known,
+            fields);
+        Assert.Single(dynamicOutputs);
+        Assert.Equal("row-heading", dynamicOutputs[0].OutputKind);
+
+        var mixedPivotOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan', DynamicDomain());",
+            known,
+            fields);
+        Assert.Single(mixedPivotOutputs);
+        Assert.Equal("row-heading", mixedPivotOutputs[0].OutputKind);
+        Assert.DoesNotContain(mixedPivotOutputs, output => output.Name == "Jan");
+        Assert.Equal("partial", AccessQueryProjector.ProjectCrosstabLineage(
+            "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan', DynamicDomain());",
+            known,
+            fields).Coverage);
+
+        var duplicateOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            "TRANSFORM Sum(Events.Amount) AS Category SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
+            known,
+            fields);
+        Assert.Equal([0, 1], duplicateOutputs.Select(output => output.Ordinal));
+        var duplicateCategories = duplicateOutputs.Where(output => output.Name == "Category").ToArray();
+        Assert.Single(duplicateCategories);
+        Assert.Equal("complete", duplicateCategories[0].Coverage);
+        Assert.Equal("Jan", duplicateOutputs[1].Name);
     }
 
     [Fact]
-    public void Com_reader_labels_crosstab_lineage_as_not_yet_composed_downstream()
+    public void Com_reader_emits_static_crosstab_outputs_for_downstream_composition()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
         var queryIdentity = AccessSafeValues.Identity(seed, "query", "MonthlyTotals");
+        var tableIdentity = AccessSafeValues.Identity(seed, "table", "Events");
+        var category = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{tableIdentity.StableKey}", "Category"), 0, "text", 64, false);
+        var amount = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{tableIdentity.StableKey}", "Amount"), 1, "decimal", 16, false);
+        var month = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{tableIdentity.StableKey}", "Month"), 2, "text", 16, false);
         var database = new FakeDaoDatabase(new FakeDaoQuery(
             "MonthlyTotals",
-            "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
+            "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
             16));
         var gaps = new List<AccessGapProjection>();
 
-        _ = new AccessComReader().ReadQueries(
+        var queries = new AccessComReader().ReadQueries(
             database,
             seed,
             new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
             {
-                ["MonthlyTotals"] = queryIdentity
+                ["MonthlyTotals"] = queryIdentity,
+                ["Events"] = tableIdentity
             },
-            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase),
-            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase),
-            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal),
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Events"] = [(tableIdentity.StableKey, "table")]
+            },
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Events"] = [new(tableIdentity, [category, amount, month], [])]
+            },
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+            {
+                [tableIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Category"] = [category],
+                    ["Amount"] = [amount],
+                    ["Month"] = [month]
+                }
+            },
             gaps,
             []);
 
-        Assert.Contains(gaps, gap =>
-            gap.Classification == "AccessQueryCrosstabDownstreamCompositionUnavailable"
-            && gap.StableScopeKey == queryIdentity.StableKey
-            && gap.RuleId == RuleIds.LegacyAccessQuery);
+        var query = Assert.Single(queries);
+        Assert.Equal(["Category", "Jan"], query.OutputFields!.Select(output => output.Identity.DisplayName));
+        Assert.All(query.OutputFields!, output => Assert.Equal("complete", output.Coverage));
+        Assert.DoesNotContain(gaps, gap => gap.Classification == "AccessQueryCrosstabDownstreamCompositionUnavailable");
     }
 
     [Fact]
@@ -595,9 +1352,9 @@ public sealed class AccessFoundationTests
 
         var action = queries.Single(query => query.Identity == appendQuery).ActionLineage;
         Assert.NotNull(action);
-        Assert.Equal("partial", action!.Coverage);
-        Assert.Empty(Assert.Single(action.FieldMappings).SourceFieldStableKeys);
-        Assert.Contains(gaps, gap =>
+        Assert.Equal("complete", action!.Coverage);
+        Assert.NotEmpty(Assert.Single(action.FieldMappings).SourceFieldStableKeys);
+        Assert.DoesNotContain(gaps, gap =>
             gap.Classification == "AccessQueryActionLineagePartial"
             && gap.StableScopeKey == appendQuery.StableKey);
         Assert.Equal(1, sourceDefinition.FieldsReadCount);
@@ -615,7 +1372,8 @@ public sealed class AccessFoundationTests
         {
             ["table-target"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
             {
-                ["Id"] = ["field-id"]
+                ["Id"] = ["field-id"],
+                ["Identifier"] = ["field-identifier"]
             }
         };
 
@@ -623,9 +1381,119 @@ public sealed class AccessFoundationTests
             "SELECT TargetTable.Id AS Identifier, Abs(TargetTable.Id) FROM TargetTable;", known, fields);
 
         Assert.Equal(AccessSafeValues.RoleHash("access-query-output-name", "Identifier"), projection.Outputs[0].NameHash);
+        Assert.Equal(["field-id"], projection.Outputs[0].SourceFieldStableKeys);
         Assert.Null(projection.Outputs[1].NameHash);
         Assert.True(AccessQueryProjector.HasStaticOutputName(
             "SELECT TargetTable.Id AS Identifier FROM TargetTable;", "Identifier"));
+
+        var malformed = AccessQueryProjector.ProjectStaticSelect(
+            "SELECT TargetTable.Id AS Identifier FROM TargetTable WHERE (", known, fields);
+        Assert.Equal("partial", malformed.Coverage);
+        Assert.Equal("partial", malformed.OutputCoverage);
+        Assert.Equal("partial", malformed.RuntimeValueCoverage);
+
+        var danglingWhere = AccessQueryProjector.ProjectStaticSelect(
+            "SELECT TargetTable.Id AS Identifier FROM TargetTable WHERE", known, fields);
+        Assert.Equal("partial", danglingWhere.Coverage);
+        Assert.Equal("partial", danglingWhere.OutputCoverage);
+        Assert.Equal("partial", danglingWhere.RuntimeValueCoverage);
+    }
+
+    [Fact]
+    public void Query_projector_separates_static_output_lineage_from_runtime_value_coverage()
+    {
+        var known = new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Food"] = [("table-food", "table")]
+        };
+        var fields = new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+        {
+            ["table-food"] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["FoodId"] = ["field-food-id"],
+                ["UserId"] = ["field-user-id"]
+            }
+        };
+
+        var projection = AccessQueryProjector.ProjectStaticSelect(
+            "SELECT Food.FoodId FROM Food WHERE Food.UserId = glngUserID();",
+            known,
+            fields);
+
+        Assert.Equal("complete", projection.DependencyCoverage);
+        Assert.Equal("complete", projection.OutputCoverage);
+        Assert.Equal("partial", projection.RuntimeValueCoverage);
+        Assert.Equal("partial", projection.Coverage);
+
+        var selectFunction = AccessQueryProjector.ProjectStaticSelect(
+            "SELECT glngUserID() AS UserId FROM Food;",
+            known,
+            fields);
+        Assert.Equal("partial", selectFunction.RuntimeValueCoverage);
+
+        var builtInPredicate = AccessQueryProjector.ProjectStaticSelect(
+            "SELECT Food.FoodId FROM Food WHERE Food.FoodId < Date();",
+            known,
+            fields);
+        Assert.Equal("partial", builtInPredicate.RuntimeValueCoverage);
+    }
+
+    [Fact]
+    public void Com_reader_falls_back_to_unique_static_output_names_when_dao_catalog_is_empty()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "qWeeklyPlans");
+        var database = new FakeDaoDatabase(new FakeDaoQuery(
+            "qWeeklyPlans",
+            "SELECT WeeklyPlanID, StartDate, PercentComplete AS PlanPercent FROM WeeklyPlans;"));
+        var gaps = new List<AccessGapProjection>();
+
+        var query = Assert.Single(new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qWeeklyPlans"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlans"] = [("table-weekly-plans", "table")]
+            },
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal),
+            gaps,
+            []));
+
+        Assert.Equal(3, query.OutputFields!.Count);
+        Assert.Equal([0, 1, 2], query.OutputFields.Select(output => output.Ordinal));
+        Assert.All(query.OutputFields, output => Assert.Equal("partial", output.Coverage));
+        Assert.Equal(3, gaps.Count(gap => gap.Classification == "AccessQueryOutputSourceUnavailable"));
+    }
+
+    [Fact]
+    public void Com_reader_records_a_gap_when_zero_field_query_output_catalog_cannot_be_derived()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "UnsupportedQuery");
+        var database = new FakeDaoDatabase(new FakeDaoQuery("UnsupportedQuery", "PARAMETERS p Long;"));
+        var gaps = new List<AccessGapProjection>();
+
+        var query = Assert.Single(new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["UnsupportedQuery"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal),
+            gaps,
+            []));
+
+        Assert.Empty(query.OutputFields!);
+        Assert.Contains(gaps, gap => gap.Classification == "AccessQueryOutputCatalogUnavailable"
+            && gap.StableScopeKey == queryIdentity.StableKey);
     }
 
     [Fact]
@@ -681,6 +1549,274 @@ public sealed class AccessFoundationTests
             && gap.ScopeKind == "query-output-field"
             && gap.StableScopeKey == output.Identity.StableKey);
         Assert.DoesNotContain(gaps, gap => gap.Classification == "AccessQueryOutputMetadataUnavailable");
+    }
+
+    [Fact]
+    public void Com_reader_recovers_unique_direct_alias_source_from_static_select_lineage()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "WeeklyPlanQuery");
+        var tableIdentity = AccessSafeValues.Identity(seed, "table", "WeeklyPlans");
+        var field = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{tableIdentity.StableKey}", "WeeklyPlanID"),
+            0,
+            "long",
+            4,
+            true);
+        var table = new AccessTableProjection(tableIdentity, [field], []);
+        var database = new FakeDaoDatabase(new FakeDaoQuery(
+            "WeeklyPlanQuery",
+            "SELECT WeeklyPlans.WeeklyPlanID AS PlanID FROM WeeklyPlans;",
+            new FakeDaoField("PlanID", throwOnSource: true)));
+        var gaps = new List<AccessGapProjection>();
+
+        var queries = new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlanQuery"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlans"] = [(tableIdentity.StableKey, "table")]
+            },
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlans"] = [table]
+            },
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+            {
+                [tableIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["WeeklyPlanID"] = [field]
+                }
+            },
+            gaps,
+            []);
+
+        var output = Assert.Single(Assert.Single(queries).OutputFields!);
+        Assert.Equal("complete", output.Coverage);
+        Assert.Equal([field.Identity.StableKey], output.SourceFieldStableKeys);
+        Assert.DoesNotContain(gaps, gap =>
+            gap.Classification == "AccessQueryOutputSourceUnavailable"
+            && gap.StableScopeKey == output.Identity.StableKey);
+    }
+
+    [Fact]
+    public void Com_reader_does_not_reconcile_static_alias_ordinals_after_expanding_wildcards()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "MixedWildcardQuery");
+        var ordersIdentity = AccessSafeValues.Identity(seed, "table", "Orders");
+        var customersIdentity = AccessSafeValues.Identity(seed, "table", "Customers");
+        var orderId = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{ordersIdentity.StableKey}", "OrderId"),
+            0,
+            "long",
+            4,
+            true);
+        var amount = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{ordersIdentity.StableKey}", "Amount"),
+            1,
+            "decimal",
+            7,
+            false);
+        var customerId = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{customersIdentity.StableKey}", "Id"),
+            0,
+            "long",
+            4,
+            true);
+        var database = new FakeDaoDatabase(new FakeDaoQuery(
+            "MixedWildcardQuery",
+            "SELECT Orders.*, Customers.Id AS CustomerAlias FROM Orders, Customers;",
+            new FakeDaoField("OrderId", throwOnSource: true),
+            new FakeDaoField("Amount", throwOnSource: true),
+            new FakeDaoField("CustomerAlias", throwOnSource: true)));
+        var gaps = new List<AccessGapProjection>();
+
+        var query = Assert.Single(new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["MixedWildcardQuery"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Orders"] = [(ordersIdentity.StableKey, "table")],
+                ["Customers"] = [(customersIdentity.StableKey, "table")]
+            },
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Orders"] = [new AccessTableProjection(ordersIdentity, [orderId, amount], [])],
+                ["Customers"] = [new AccessTableProjection(customersIdentity, [customerId], [])]
+            },
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+            {
+                [ordersIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["OrderId"] = [orderId],
+                    ["Amount"] = [amount]
+                },
+                [customersIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Id"] = [customerId]
+                }
+            },
+            gaps,
+            []));
+
+        Assert.Equal(3, query.OutputFields!.Count);
+        Assert.All(query.OutputFields, output =>
+        {
+            Assert.Equal("partial", output.Coverage);
+            Assert.DoesNotContain(customerId.Identity.StableKey, output.SourceFieldStableKeys);
+        });
+        Assert.Contains(gaps, gap =>
+            gap.Classification == "AccessQueryOutputSourceUnavailable"
+            && gap.StableScopeKey == query.OutputFields[2].Identity.StableKey);
+    }
+
+    [Theory]
+    [InlineData("Orders.*")]
+    [InlineData("Orders . *")]
+    [InlineData("[Orders].*")]
+    public void Static_output_ordinal_reconciliation_rejects_expanding_wildcard_spellings(string wildcard)
+    {
+        var sql = $"SELECT {wildcard}, Customers.Id AS CustomerAlias FROM Orders, Customers;";
+
+        Assert.False(AccessQueryProjector.CanReconcileStaticOutputByOrdinal(sql, 1, "CustomerAlias"));
+    }
+
+    [Fact]
+    public void Static_output_ordinal_reconciliation_requires_complete_shape_and_matching_output_name()
+    {
+        const string complete = "SELECT Orders.Id AS OrderAlias FROM Orders;";
+        const string incomplete = "SELECT Orders.Id AS OrderAlias FROM Orders WHERE";
+
+        Assert.True(AccessQueryProjector.CanReconcileStaticOutputByOrdinal(complete, 0, "OrderAlias"));
+        Assert.False(AccessQueryProjector.CanReconcileStaticOutputByOrdinal(complete, 0, "DifferentAlias"));
+        Assert.False(AccessQueryProjector.CanReconcileStaticOutputByOrdinal(incomplete, 0, "OrderAlias"));
+    }
+
+    [Fact]
+    public void Com_reader_rejects_malformed_direct_alias_lineage_as_unavailable()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "WeeklyPlanQuery");
+        var tableIdentity = AccessSafeValues.Identity(seed, "table", "WeeklyPlans");
+        var field = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{tableIdentity.StableKey}", "WeeklyPlanID"),
+            0,
+            "long",
+            4,
+            true);
+        var table = new AccessTableProjection(tableIdentity, [field], []);
+        var database = new FakeDaoDatabase(new FakeDaoQuery(
+            "WeeklyPlanQuery",
+            "SELECT WeeklyPlans.WeeklyPlanID AS PlanID FROM WeeklyPlans WHERE (",
+            new FakeDaoField("PlanID", throwOnSource: true)));
+        var gaps = new List<AccessGapProjection>();
+
+        var query = Assert.Single(new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlanQuery"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlans"] = [(tableIdentity.StableKey, "table")]
+            },
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlans"] = [table]
+            },
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+            {
+                [tableIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["WeeklyPlanID"] = [field]
+                }
+            },
+            gaps,
+            []));
+
+        var output = Assert.Single(query.OutputFields!);
+        Assert.Equal("partial", output.Coverage);
+        Assert.Empty(output.SourceFieldStableKeys);
+        Assert.Contains(gaps, gap =>
+            gap.Classification == "AccessQueryOutputExpressionPartial"
+            && gap.StableScopeKey == output.Identity.StableKey);
+    }
+
+    [Fact]
+    public void Com_reader_keeps_dao_and_static_alias_source_disagreement_ambiguous()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "WeeklyPlanQuery");
+        var weeklyTableIdentity = AccessSafeValues.Identity(seed, "table", "WeeklyPlans");
+        var otherTableIdentity = AccessSafeValues.Identity(seed, "table", "OtherPlans");
+        var weeklyField = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{weeklyTableIdentity.StableKey}", "WeeklyPlanID"),
+            0,
+            "long",
+            4,
+            true);
+        var otherField = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{otherTableIdentity.StableKey}", "OtherPlanID"),
+            0,
+            "long",
+            4,
+            true);
+        var database = new FakeDaoDatabase(new FakeDaoQuery(
+            "WeeklyPlanQuery",
+            "SELECT WeeklyPlans.WeeklyPlanID AS PlanID FROM WeeklyPlans;",
+            new FakeDaoField("PlanID", "OtherPlans", "OtherPlanID")));
+        var gaps = new List<AccessGapProjection>();
+
+        var queries = new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlanQuery"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlans"] = [(weeklyTableIdentity.StableKey, "table")]
+            },
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["WeeklyPlans"] = [new AccessTableProjection(weeklyTableIdentity, [weeklyField], [])],
+                ["OtherPlans"] = [new AccessTableProjection(otherTableIdentity, [otherField], [])]
+            },
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+            {
+                [weeklyTableIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["WeeklyPlanID"] = [weeklyField]
+                },
+                [otherTableIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["OtherPlanID"] = [otherField]
+                }
+            },
+            gaps,
+            []);
+
+        var output = Assert.Single(Assert.Single(queries).OutputFields!);
+        Assert.Equal("partial", output.Coverage);
+        Assert.Equal(
+            new[] { otherField.Identity.StableKey, weeklyField.Identity.StableKey }
+                .OrderBy(value => value, StringComparer.Ordinal),
+            output.SourceFieldStableKeys.OrderBy(value => value, StringComparer.Ordinal));
+        Assert.Contains(gaps, gap =>
+            gap.Classification == "AccessQueryOutputSourceAmbiguous"
+            && gap.StableScopeKey == output.Identity.StableKey);
     }
 
     [Fact]
@@ -1443,6 +2579,31 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Duplicate_gaps_do_not_consume_the_gap_limit_before_distinct_gaps_are_selected()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        File.WriteAllBytes(databasePath, [1, 2, 3, 4]);
+        var input = Input(databasePath, Path.Combine(temp.Path, "out"));
+        var limits = AccessLimits.Default with { MaxGaps = 2 };
+        var projection = Projection(input) with
+        {
+            Gaps =
+            [
+                new("GapA", "database", null),
+                new("GapA", "database", null),
+                new("GapB", "database", null)
+            ]
+        };
+
+        var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath), limits);
+
+        Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("classification") == "GapA");
+        Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("classification") == "GapB");
+        Assert.DoesNotContain(result.Facts, fact => fact.Properties.GetValueOrDefault("classification") == "AccessGapLimitReached");
+    }
+
+    [Fact]
     public void Relationship_masks_are_normalized_without_losing_raw_or_unknown_bits()
     {
         using var temp = new TempDirectory();
@@ -1504,7 +2665,7 @@ public sealed class AccessFoundationTests
             $"query-field-{query.Identity.StableKey}",
             "OutputField",
             0);
-        var output = new AccessQueryOutputFieldProjection(outputIdentity, 0, "long", [], "partial");
+        var output = new AccessQueryOutputFieldProjection(outputIdentity, 0, "unknown", [], "partial");
         projection = projection with
         {
             Queries = [query with { OutputFields = [output] }],
@@ -1513,11 +2674,41 @@ public sealed class AccessFoundationTests
 
         var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath));
         var declaration = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessQueryDeclared);
+        var outputDeclaration = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessQueryOutputDeclared);
         var gap = Assert.Single(result.Facts, fact =>
             fact.Properties.GetValueOrDefault("classification") == "AccessQueryOutputSourceUnavailable");
 
         Assert.Equal(outputIdentity.StableKey, gap.TargetSymbol);
+        Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, outputDeclaration.EvidenceTier);
         Assert.Equal(declaration.FactId, gap.Properties["supportingFactIds"]);
+    }
+
+    [Fact]
+    public void Query_output_evidence_origin_rejects_unknown_wire_values()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        File.WriteAllBytes(databasePath, [1, 2, 3, 4]);
+        var input = Input(databasePath, Path.Combine(temp.Path, "out"));
+        var projection = Projection(input);
+        var query = Assert.Single(projection.Queries);
+        var outputIdentity = AccessSafeValues.Identity(
+            AccessSafeValues.DatabaseIdentitySeed(input.RepositoryIdentityHash, input.CommitSha, input.DatabaseRelativePath, input.DatabaseHash),
+            $"query-field-{query.Identity.StableKey}",
+            "OutputField",
+            0);
+        projection = projection with
+        {
+            Queries = [query with
+            {
+                OutputFields = [new(outputIdentity, 0, "unknown", [], "partial", "unsupported-origin")]
+            }]
+        };
+
+        var error = Assert.Throws<InvalidDataException>(() =>
+            AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath)));
+
+        Assert.Equal("AccessQueryOutputEvidenceOriginUnsupported", error.Message);
     }
 
     [Fact]
@@ -1554,6 +2745,76 @@ public sealed class AccessFoundationTests
         Assert.Equal(sharedOutputIdentity.StableKey, gap.TargetSymbol);
         Assert.False(gap.Properties.ContainsKey("supportingFactIds"));
         Assert.Equal("query-output-field-owner-unknown", gap.Properties["scopeKind"]);
+    }
+
+    [Fact]
+    public void Binding_owned_gaps_reference_the_supporting_binding_declaration_fact()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        File.WriteAllBytes(databasePath, [1, 2, 3, 4]);
+        var input = Input(databasePath, Path.Combine(temp.Path, "out"));
+        var seed = AccessSafeValues.DatabaseIdentitySeed(
+            input.RepositoryIdentityHash,
+            input.CommitSha,
+            input.DatabaseRelativePath,
+            input.DatabaseHash);
+        var surfaceIdentity = AccessSafeValues.Identity(seed, "form", "frmUsers");
+        var bindingIdentity = AccessSafeValues.Identity(seed, $"binding-{surfaceIdentity.StableKey}-record-source", "record-source", 0);
+        var binding = new AccessBindingProjection(
+            bindingIdentity,
+            surfaceIdentity.StableKey,
+            "record-source",
+            "inline-sql",
+            AccessSafeValues.RoleHash("access-query-sql", "SELECT Users.* FROM Users"),
+            "SELECT Users.* FROM Users".Length,
+            [],
+            "table",
+            "partial");
+        var surface = new AccessUiSurfaceProjection(
+            surfaceIdentity,
+            "form",
+            "absent",
+            "bound",
+            AccessSafeValues.RoleHash("access-ui-design", "frmUsers"),
+            [binding],
+            [],
+            [],
+            "partial");
+        var projection = Projection(input) with
+        {
+            UiSurfaces = [surface],
+            Gaps = [new("AccessBindingInlineSqlProjectionPartial", "binding", bindingIdentity.StableKey, RuleIds.LegacyAccessBinding)]
+        };
+
+        var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath));
+        var declaration = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessBindingDeclared);
+        var gap = Assert.Single(result.Facts, fact =>
+            fact.Properties.GetValueOrDefault("classification") == "AccessBindingInlineSqlProjectionPartial");
+
+        Assert.Equal(bindingIdentity.StableKey, gap.TargetSymbol);
+        Assert.Equal(declaration.FactId, gap.Properties["supportingFactIds"]);
+    }
+
+    [Fact]
+    public void Non_binding_gap_stable_key_collisions_do_not_attach_unrelated_declarations()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        File.WriteAllBytes(databasePath, [1, 2, 3, 4]);
+        var input = Input(databasePath, Path.Combine(temp.Path, "out"));
+        var projection = Projection(input);
+        var table = projection.Tables[0];
+        projection = projection with
+        {
+            Gaps = [new("AccessSyntheticFieldGap", "field", table.Identity.StableKey, RuleIds.LegacyAccessCoverageGap)]
+        };
+
+        var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath));
+        var gap = Assert.Single(result.Facts, fact =>
+            fact.Properties.GetValueOrDefault("classification") == "AccessSyntheticFieldGap");
+
+        Assert.False(gap.Properties.ContainsKey("supportingFactIds"));
     }
 
     [Fact]
