@@ -74,6 +74,18 @@ public sealed class ReverseImpactArtifactQueryTests
         Assert.Contains(result.Gaps, gap =>
             gap.GapKind == ReverseImpactGapKinds.AnalysisGap
             && gap.RelatedSymbolIds.Contains(Seed, StringComparer.Ordinal));
+
+        var firstOutputHash = Hash(firstOutput);
+        using var retryStdout = new StringWriter();
+        using var retryStderr = new StringWriter();
+        var retryExit = await TraceMapCommand.RunAsync(
+            ["reverse-impact", "--index", index, "--selector", Seed, "--depth", "1", "--out", firstOutput],
+            retryStdout,
+            retryStderr);
+
+        Assert.Equal(1, retryExit);
+        Assert.Contains("output must be a new file", retryStderr.ToString(), StringComparison.Ordinal);
+        Assert.Equal(firstOutputHash, Hash(firstOutput));
     }
 
     [Fact]
@@ -124,6 +136,32 @@ public sealed class ReverseImpactArtifactQueryTests
         Assert.Equal(1, exitCode);
         Assert.Contains("output must be a new file", stderr.ToString(), StringComparison.Ordinal);
         Assert.Equal(originalHash, Hash(index));
+    }
+
+    [Fact]
+    public async Task Cli_rejects_existing_directory_and_dangling_link_outputs_before_reading_the_index()
+    {
+        using var temp = new TempDirectory();
+        var missingIndex = Path.Combine(temp.Path, "missing.sqlite");
+        var directoryOutput = Path.Combine(temp.Path, "existing-directory");
+        var danglingOutput = Path.Combine(temp.Path, "dangling-output.json");
+        Directory.CreateDirectory(directoryOutput);
+        File.CreateSymbolicLink(danglingOutput, Path.Combine(temp.Path, "missing-target.json"));
+
+        foreach (var outputPath in new[] { directoryOutput, danglingOutput })
+        {
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+            var exitCode = await TraceMapCommand.RunAsync(
+                ["reverse-impact", "--index", missingIndex, "--selector", Seed, "--depth", "1", "--out", outputPath],
+                stdout,
+                stderr);
+
+            Assert.Equal(1, exitCode);
+            Assert.Equal(
+                "error: reverse-impact output must be a new file and must not alias an existing artifact.\n",
+                stderr.ToString().ReplaceLineEndings("\n"));
+        }
     }
 
     [Fact]
@@ -204,6 +242,75 @@ public sealed class ReverseImpactArtifactQueryTests
         var manifestError = await Assert.ThrowsAsync<ReverseImpactArtifactException>(
             () => ReverseImpactArtifactReader.ReadAsync(invalidManifest));
         Assert.Equal("ReverseImpactArtifactSnapshotInvalid", manifestError.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Reader_normalizes_optional_v1_manifest_collections_when_absent()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "older-v1.sqlite");
+        SqliteIndexWriter.Write(
+            index,
+            Manifest(),
+            [Relationship("fact-call", Caller, "Caller", Seed, "Target", 1)]);
+        await using (var connection = new SqliteConnection($"Data Source={index}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "update scan_manifest set manifest_json = $manifest;";
+            command.Parameters.AddWithValue(
+                "$manifest",
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        scanId = "scan-reverse-impact",
+                        repoName = "synthetic",
+                        remoteUrl = (string?)null,
+                        branch = "dev",
+                        commitSha = Commit,
+                        scannerVersion = "tracemap/0.1.0",
+                        scannedAt = DateTimeOffset.Parse("2026-08-08T00:00:00Z"),
+                        analysisLevel = "Level1SemanticAnalysis",
+                        buildStatus = "Succeeded",
+                        knownGaps = Array.Empty<string>()
+                    },
+                    JsonOptions.Stable));
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var artifact = await ReverseImpactArtifactReader.ReadAsync(index);
+
+        Assert.Empty(artifact.Manifest.Solutions);
+        Assert.Empty(artifact.Manifest.Projects);
+        Assert.Empty(artifact.Manifest.TargetFrameworks);
+        Assert.Empty(artifact.Manifest.KnownGaps);
+    }
+
+    [Theory]
+    [InlineData("--max-input-facts", "InvalidInputFactLimit")]
+    [InlineData("--max-traversal-states", "InvalidTraversalLimit")]
+    [InlineData("--max-frontier", "InvalidTraversalLimit")]
+    [InlineData("--max-results", "InvalidTraversalLimit")]
+    public async Task Cli_rejects_oversized_limits_with_stable_error_codes(string option, string errorCode)
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var output = Path.Combine(temp.Path, "result.json");
+        SqliteIndexWriter.Write(
+            index,
+            Manifest(),
+            [Relationship("fact-call", Caller, "Caller", Seed, "Target", 1)]);
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync(
+            ["reverse-impact", "--index", index, "--selector", Seed, "--depth", "1", "--out", output, option, "1000001"],
+            stdout,
+            stderr);
+
+        Assert.Equal(1, exitCode);
+        Assert.Equal($"error: {errorCode}.\n", stderr.ToString().ReplaceLineEndings("\n"));
+        Assert.False(File.Exists(output));
     }
 
     [Fact]
