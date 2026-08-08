@@ -1,9 +1,11 @@
 using System.Diagnostics;
 using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Logging;
 using TraceMap.Cli;
 using TraceMap.Core;
+using TraceMap.Storage;
 
 namespace TraceMap.Tests;
 
@@ -22,7 +24,8 @@ public sealed class MsBuildBinlogExtractorTests
         var binlog = Path.Combine(temp.Path, "success.binlog");
         PrepareBinlog(binlog, repo, succeeded: true, includeOutsideRoot: false, extraMessages: 0);
 
-        var facts = MsBuildBinlogExtractor.Extract(repo, Manifest(), [binlog]);
+        var manifest = Manifest();
+        var facts = MsBuildBinlogExtractor.Extract(repo, manifest, [binlog]);
 
         var artifact = Assert.Single(facts, fact => fact.FactType == FactTypes.MsBuildBinlogObserved);
         Assert.Equal("succeeded", artifact.Properties["recordedBuildResult"]);
@@ -32,6 +35,34 @@ public sealed class MsBuildBinlogExtractorTests
         var edge = Assert.Single(facts, fact => fact.FactType == FactTypes.MsBuildProjectReferenceObserved);
         Assert.Equal("src/Root/Root.csproj", edge.SourceSymbol);
         Assert.Equal("src/Child/Child.csproj", edge.TargetSymbol);
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(indexPath, manifest, facts);
+        using (var connection = new SqliteConnection($"Data Source={indexPath}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                select source_symbol, target_symbol, rule_id, evidence_tier, properties_json
+                from facts
+                where fact_id = $fact_id;
+                """;
+            command.Parameters.AddWithValue("$fact_id", edge.FactId);
+            using var reader = command.ExecuteReader();
+            Assert.True(reader.Read());
+            Assert.Equal(edge.SourceSymbol, reader.GetString(0));
+            Assert.Equal(edge.TargetSymbol, reader.GetString(1));
+            Assert.Equal(RuleIds.BuildMsBuildBinlogObservation, reader.GetString(2));
+            Assert.Equal(EvidenceTiers.Tier2Structural, reader.GetString(3));
+            var properties = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(4));
+            Assert.NotNull(properties);
+            Assert.Equal("recorded-project-build-edge", properties["relationshipKind"]);
+            Assert.False(reader.Read());
+        }
+        var impact = ReverseImpactTraversal.Analyze(
+            facts,
+            new ReverseImpactOptions("src/Child/Child.csproj", 1));
+        Assert.Equal("NotFound", impact.Resolution);
+        Assert.Empty(impact.Impacts);
         var diagnostic = Assert.Single(facts, fact => fact.FactType == FactTypes.MsBuildDiagnosticObserved);
         Assert.Equal("warning", diagnostic.Properties["severity"]);
         Assert.Equal("CS0618", diagnostic.Properties["code"]);
@@ -435,8 +466,8 @@ public sealed class MsBuildBinlogExtractorTests
             {
                 BuildEventContext = childContext,
                 ProjectFile = Path.Combine(repo, "src", "Child", "Child.csproj")
-        });
-    }
+            });
+        }
 
         for (var index = 0; index < extraMessages; index++)
             dispatcher.Dispatch(new BuildMessageEventArgs($"{Secret} {Command} {Source} {index}", string.Empty, "test", MessageImportance.High));
