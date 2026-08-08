@@ -185,6 +185,28 @@ public sealed class ScanEngineTests
     }
 
     [Fact]
+    public void Scoped_scan_identity_includes_out_of_scope_msbuild_metadata_that_can_affect_semantics()
+    {
+        using var temp = new TempDirectory();
+        var sourcePath = Path.Combine(temp.Path, "Sample.cs");
+        var propsPath = Path.Combine(temp.Path, "Directory.Build.props");
+        File.WriteAllText(sourcePath, "public sealed class Sample { }");
+        File.WriteAllText(propsPath, "<Project><PropertyGroup><DefineConstants>ALPHA</DefineConstants></PropertyGroup></Project>");
+        var options = new ScanOptions(
+            temp.Path,
+            Path.Combine(temp.Path, "out"),
+            IncludeGlobs: ["**/*.cs"]);
+
+        var before = ScanEngine.Scan(options);
+        File.WriteAllText(propsPath, "<Project><PropertyGroup><DefineConstants>BRAVO</DefineConstants></PropertyGroup></Project>");
+        var after = ScanEngine.Scan(options with { OutputPath = Path.Combine(temp.Path, "out-after") });
+
+        Assert.DoesNotContain(before.Inventory, item => item.RelativePath == "Directory.Build.props");
+        Assert.NotEqual(before.Manifest.SourceSnapshotDigest, after.Manifest.SourceSnapshotDigest);
+        Assert.NotEqual(before.Manifest.ScanId, after.Manifest.ScanId);
+    }
+
+    [Fact]
     public void Recursive_include_glob_matches_zero_or_multiple_directory_levels()
     {
         using var temp = new TempDirectory();
