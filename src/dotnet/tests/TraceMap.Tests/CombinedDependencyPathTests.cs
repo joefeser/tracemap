@@ -464,6 +464,39 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
+    public void Static_dispatch_matches_closed_registration_to_open_generic_relationship_definition()
+    {
+        var nodes = new Dictionary<string, StaticDispatchCandidateNode>(StringComparer.Ordinal)
+        {
+            ["service"] = new("service", "Method", "Server.IRepository<T>.Get(System.Int32)", "server", "server", "commit", "Services/IRepository.cs", 10, 10),
+            ["implementation"] = new("implementation", "Method", "Server.Repository<T>.Get(System.Int32)", "server", "server", "commit", "Services/Repository.cs", 20, 20)
+        };
+        var serviceDefinitionId = TestTypeSymbolId("Server.IRepository<T>");
+        var implementationDefinitionId = TestTypeSymbolId("Server.Repository<T>");
+        var relationships = new[]
+        {
+            new StaticDispatchRelationshipEdge(
+                "relationship", "implements", "ImplementsInterfaceMember", "implementation", "service",
+                EvidenceTiers.Tier1Semantic, ["relationship-fact"], ["relationship-edge"], "Services/Repository.cs", 20, 20,
+                implementationDefinitionId, serviceDefinitionId)
+        };
+        var registrations = new[]
+        {
+            new StaticDispatchRegistrationFact(
+                "registration", "server", "server", "Server.IRepository<Server.Order>", "Server.Repository<Server.Order>",
+                serviceDefinitionId, implementationDefinitionId, "AddScoped", StaticDispatchRegistrationShapes.ClosedTypePair,
+                EvidenceTiers.Tier1Semantic, RuleIds.CSharpSemanticRuntimeEvidence, "Startup/CompositionRoot.cs", 30, 30, "commit", "test/1.0")
+        };
+
+        var result = StaticDispatchCandidateBuilder.Build(nodes, relationships, registrations: registrations);
+
+        var candidate = Assert.Single(result.Edges);
+        Assert.Equal(StaticDispatchRegistrationContexts.Candidate, candidate.RegistrationContext);
+        Assert.Equal(["registration"], candidate.SupportingRegistrationFactIds);
+        Assert.DoesNotContain(result.Gaps, gap => gap.GapKind == "RegistrationCompatibilityUnproven");
+    }
+
+    [Fact]
     public void Static_dispatch_ranks_registered_candidate_before_fanout_cap()
     {
         var nodes = new Dictionary<string, StaticDispatchCandidateNode>(StringComparer.Ordinal)

@@ -659,7 +659,54 @@ internal static class StaticDispatchCandidateBuilder
     {
         var member = NormalizeDisplayName(memberDisplayName);
         var type = NormalizeDisplayName(typeDisplayName);
-        return member.StartsWith($"{type}.", StringComparison.Ordinal);
+        if (member.StartsWith($"{type}.", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var memberContainingType = ContainingTypeDisplay(member);
+        // The registration index has already required exact compiler-backed type-definition IDs.
+        // Displays may still differ because relationship members retain <T> while registrations
+        // retain their closed type arguments, so compare their display definitions only here.
+        return memberContainingType is not null
+            && ContainsGenericArguments(memberContainingType)
+            && ContainsGenericArguments(type)
+            && string.Equals(
+                RemoveGenericArguments(memberContainingType),
+                RemoveGenericArguments(type),
+                StringComparison.Ordinal);
+    }
+
+    private static bool ContainsGenericArguments(string value)
+    {
+        return value.IndexOf('<', StringComparison.Ordinal) >= 0;
+    }
+
+    private static string RemoveGenericArguments(string value)
+    {
+        var result = new StringBuilder(value.Length);
+        var depth = 0;
+        foreach (var character in value)
+        {
+            if (character == '<')
+            {
+                depth++;
+                continue;
+            }
+
+            if (character == '>' && depth > 0)
+            {
+                depth--;
+                continue;
+            }
+
+            if (depth == 0)
+            {
+                result.Append(character);
+            }
+        }
+
+        return result.ToString();
     }
 
     private static string NormalizeDisplayName(string value)
