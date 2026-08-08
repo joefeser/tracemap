@@ -436,7 +436,15 @@ public static class AccessScreenDataFlowReporter
         fact.Evidence.EndLine,
         SafeToken(fact.Evidence.ExtractorId),
         SafeToken(fact.Evidence.ExtractorVersion),
-        SafeCategory(fact.Properties.GetValueOrDefault("coverageLabel"), "unknown"),
+        SafeCategory(
+            fact.FactType == FactTypes.AccessBindingDeclared
+                && !string.Equals(
+                    fact.Properties.GetValueOrDefault("runtimeValueCoverage"),
+                    "complete",
+                    StringComparison.OrdinalIgnoreCase)
+                ? "partial"
+                : fact.Properties.GetValueOrDefault("coverageLabel"),
+            "unknown"),
         SafeLimitations(fact.Properties.GetValueOrDefault("limitations")));
 
     private static IReadOnlyList<string> SupportingGapFactIds(CodeFact gap, IReadOnlyList<CodeFact> facts)
@@ -485,14 +493,15 @@ public static class AccessScreenDataFlowReporter
     }
 
     private static bool IsValidPersistedGapSupport(CodeFact gap, CodeFact candidate, IReadOnlyList<CodeFact> facts) =>
-        gap.Properties.GetValueOrDefault("scopeKind") switch
+        candidate.ScanId == gap.ScanId && gap.Properties.GetValueOrDefault("scopeKind") switch
         {
             "binding" => candidate.FactType == FactTypes.AccessBindingDeclared
                 && candidate.Properties.GetValueOrDefault("stableBindingKey") == gap.TargetSymbol,
             "query" => candidate.FactType == FactTypes.AccessQueryDeclared
                 && candidate.TargetSymbol == gap.TargetSymbol,
             "query-output-field" => candidate.FactType == FactTypes.AccessQueryDeclared
-                && facts.Any(output => output.FactType == FactTypes.AccessQueryOutputDeclared
+                && facts.Any(output => output.ScanId == gap.ScanId
+                    && output.FactType == FactTypes.AccessQueryOutputDeclared
                     && output.TargetSymbol == gap.TargetSymbol
                     && output.SourceSymbol == candidate.TargetSymbol),
             _ => false

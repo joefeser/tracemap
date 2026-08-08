@@ -698,7 +698,8 @@ public sealed class AccessComReader
                                 metadata.Ordinal,
                                 metadata.TypeFamily,
                                 distinctSources,
-                                coverage));
+                                coverage,
+                                metadata.EvidenceOrigin));
                         }
                     }
                     string? connectHash = null;
@@ -753,7 +754,8 @@ public sealed class AccessComReader
                                 output.Ordinal,
                                 "unknown",
                                 output.SourceFieldStableKeys,
-                                output.Coverage));
+                                output.Coverage,
+                                "static-crosstab"));
                             if (output.Coverage != "complete")
                                 gaps.Add(new(
                                     "AccessQueryOutputExpressionPartial",
@@ -796,7 +798,8 @@ public sealed class AccessComReader
         int Ordinal,
         string Name,
         string TypeFamily,
-        IReadOnlyList<string> SourceFieldStableKeys);
+        IReadOnlyList<string> SourceFieldStableKeys,
+        string EvidenceOrigin = "querydef");
 
     private Dictionary<string, IReadOnlyList<QueryOutputMetadata>> ReadQueryOutputMetadata(
         dynamic database,
@@ -898,7 +901,8 @@ public sealed class AccessComReader
                                 output.Ordinal,
                                 output.Name,
                                 "unknown",
-                                []));
+                                [],
+                                "static-select"));
                         }
                     }
                     result[identity.StableKey] = metadata;
