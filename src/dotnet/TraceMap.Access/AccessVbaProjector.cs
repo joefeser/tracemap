@@ -21,6 +21,10 @@ internal sealed record AccessVbaProjectionResult(
     IReadOnlyList<AccessEventBindingProjection> EventBindings,
     IReadOnlyList<AccessGapProjection> Gaps);
 
+internal sealed record AccessVbaProcedureCatalogResult(
+    IReadOnlyDictionary<string, IReadOnlyList<string>> Procedures,
+    bool Complete);
+
 internal static partial class AccessVbaProjector
 {
     private sealed record ProcedureWork(
@@ -33,6 +37,77 @@ internal static partial class AccessVbaProjector
         string RawName,
         AccessVbaModuleProjection Projection,
         IReadOnlyList<ProcedureWork> Procedures);
+
+    internal static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildProcedureCatalog(
+        string databaseIdentitySeed,
+        IReadOnlyList<AccessRawVbaModule> rawModules,
+        AccessLimits? limits = null,
+        AccessIdentityDisclosurePolicy disclosurePolicy = AccessIdentityDisclosurePolicy.SafeIdentifier)
+        => BuildProcedureCatalogWithCoverage(
+            databaseIdentitySeed,
+            rawModules,
+            limits,
+            disclosurePolicy).Procedures;
+
+    internal static AccessVbaProcedureCatalogResult BuildProcedureCatalogWithCoverage(
+        string databaseIdentitySeed,
+        IReadOnlyList<AccessRawVbaModule> rawModules,
+        AccessLimits? limits = null,
+        AccessIdentityDisclosurePolicy disclosurePolicy = AccessIdentityDisclosurePolicy.SafeIdentifier)
+    {
+        limits ??= AccessLimits.Default;
+        var complete = rawModules.Count <= limits.MaxObjectsPerCollection;
+        var result = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var raw in rawModules
+                     .OrderBy(item => item.ModuleKind, StringComparer.Ordinal)
+                     .ThenBy(item => AccessSafeValues.RoleHash("access-vba-module-sort", item.Name), StringComparer.Ordinal)
+                     .Take(limits.MaxObjectsPerCollection))
+        {
+            if (NormalizeModuleKind(raw.ModuleKind) != "standard") continue;
+            if (raw.Source is null || raw.Source.Length > limits.MaxVbaModuleTextLength)
+            {
+                complete = false;
+                continue;
+            }
+            var lines = NormalizeLines(raw.Source);
+            if (lines.Length > limits.MaxVbaModuleLines)
+            {
+                complete = false;
+                continue;
+            }
+            var moduleIdentity = AccessSafeValues.Identity(databaseIdentitySeed, "vba-module", raw.Name, disclosurePolicy: disclosurePolicy);
+            var ordinal = 0;
+            foreach (var line in lines)
+            {
+                var match = ProcedureDeclarationPattern().Match(MaskCommentsAndStrings(line));
+                if (!match.Success) continue;
+                if (ordinal >= limits.MaxVbaProceduresPerModule)
+                {
+                    complete = false;
+                    break;
+                }
+                var name = match.Groups["name"].Value;
+                var identity = AccessSafeValues.Identity(
+                    databaseIdentitySeed,
+                    $"vba-procedure-{moduleIdentity.StableKey}",
+                    name,
+                    ordinal,
+                    disclosurePolicy);
+                ordinal++;
+                if (string.Equals(match.Groups["access"].Value, "Private", StringComparison.OrdinalIgnoreCase)) continue;
+                var kind = ProcedureKind(match.Groups["kind"].Value);
+                if (kind is "function" or "property-get")
+                {
+                    if (!result.TryGetValue(name, out var candidates)) result[name] = candidates = [];
+                    candidates.Add(identity.StableKey);
+                }
+            }
+        }
+        return new(result.ToDictionary(
+            item => item.Key,
+            item => (IReadOnlyList<string>)item.Value.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            StringComparer.OrdinalIgnoreCase), complete);
+    }
 
     public static AccessVbaProjectionResult Project(
         string databaseIdentitySeed,
@@ -714,7 +789,7 @@ internal static partial class AccessVbaProjector
         "after-update", "on-activate", "before-update", "on-click", "on-close", "on-current", "on-deactivate", "on-dbl-click", "on-error", "on-load", "on-no-data", "on-open", "on-resize", "on-timer", "on-unload"
     };
 
-    [GeneratedRegex(@"^\s*(?:(?:Public|Private|Friend|Static)\s+)?(?<kind>Sub|Function|Property\s+(?:Get|Let|Set))\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^\s*(?:(?<access>Public|Private|Friend)\s+)?(?:Static\s+)?(?<kind>Sub|Function|Property\s+(?:Get|Let|Set))\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ProcedureDeclarationPattern();
 
     [GeneratedRegex(@"^\s*End\s+(?<kind>Sub|Function|Property)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

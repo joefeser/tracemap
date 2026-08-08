@@ -95,8 +95,11 @@ as a supporting fact. Both findings are patched with focused regressions.
 If duplicate query-output stable keys claim different owning queries, supporting
 fact attribution now fails closed instead of silently selecting either query.
 The emitted gap is explicitly scoped as `query-output-field-owner-unknown`, so
-downstream screen-flow composition does not reconstruct either possible owner
-from the shared child identity.
+downstream screen-flow composition preserves every same-scan output declaration
+and matching declared query owner as gap support without choosing one owner or
+claiming a proven binding. Persisted support is accepted only when it is a
+well-formed complete set; otherwise the report deterministically reconstructs
+the complete support chain from bounded indexes.
 
 ## Why This Runway Exists
 

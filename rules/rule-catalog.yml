@@ -1443,7 +1443,7 @@ rules:
 
   - id: legacy.access.query.v1
     name: Microsoft Access saved-query shape
-    description: Records saved-query kind, parameter metadata, full text hash/length, bounded local-object dependencies, and bounded QueryDef output-field/source candidates without executing or materializing queries.
+    description: Records saved-query kind, parameter metadata, full text hash/length, bounded local-object dependencies, and bounded QueryDef or static SELECT output-name/source candidates without executing or materializing queries.
     evidenceTier: Tier2Structural
     possibleEvidenceTiers: [Tier2Structural, Tier3SyntaxOrTextual, Tier4Unknown]
     emits:
@@ -1454,12 +1454,14 @@ rules:
       - AnalysisGap
     limitations:
       - Query evidence does not prove execution, result shape, parameter values, branch selection, provider behavior, linked-source availability, permissions, runtime reachability, or production use.
+      - A statically recovered output name proves only a unique declared projection name; source-field lineage and runtime result shape remain partial unless independently resolved.
+      - Static crosstab output catalogs cover only named row headings, named aggregates, and literal pivot values. Unnamed projections preserve ordinal holes; malformed projections, unsupported pivot expressions, and duplicate output names remain partial and emit gaps.
       - Raw query SQL never persists; only a full SHA-256, length, safe kind, parameters, and deterministically parsed local-object candidates may be emitted.
       - Dynamic, malformed, ambiguous, unsupported, action, DDL, union, crosstab, and pass-through shapes remain partial or gaps where dependency projection is not credible.
       - Query-specific gaps retain the owning stable query key and declaration fact only when identity was established before the failure; no owner is invented otherwise.
       - Query result fields and recordsets are never enumerated for pass-through, action, DDL, or unsafe query kinds.
       - QueryDef output-field metadata is enumerated only for supported select queries; no recordset is opened and pass-through, action, DDL, or unsafe query kinds retain no output-field conclusion.
-      - Blank, calculated, aliased, ambiguous, or unavailable SourceTable/SourceField metadata remains partial and does not prove result values or runtime lineage.
+      - Blank, calculated, ambiguous, or unavailable SourceTable/SourceField metadata remains partial unless a bounded direct SELECT projection independently resolves exactly one source field. Static aliases can recover a source-lineage candidate but do not prove result values or runtime execution.
 
   - id: legacy.access.external-link.v1
     name: Microsoft Access external boundary
@@ -1502,16 +1504,29 @@ rules:
       - Direct bindings prove only a declared design reference; expression candidates are bounded textual evidence and do not prove evaluation, runtime target selection, data access, event execution, filter outcomes, navigation, or production use.
       - Raw record sources, control sources, row sources, filters, ordering expressions, validation expressions, calculated expressions, SQL, VBA, and macro bodies never persist; complex values retain only role-separated hashes, lengths, safe target keys, and coverage labels.
       - Ambiguous, dynamic, unsupported, or unresolved targets are explicit gaps; the extractor does not choose an arbitrary object or field.
+      - Static lineage coverage is separate from runtime-value coverage; a declared VBA-backed input or predicate can have complete static references while its runtime value and branch outcome remain unknown.
       - Binding extraction never opens a recordset, executes a query, renders a surface, invokes an event, or reads a submitted/control value.
       - Calculated bindings expose only a bounded function/operator summary, role-separated structure hash, resolved field/query/control candidates, safe literal classes, and coverage; expressions are never evaluated or persisted.
       - Same-surface control stable keys are static name-match candidates only. A name matching both a scoped field and a control, or multiple controls, remains an explicit ambiguity gap.
       - Recognized Access session/surface namespaces such as TempVars, Forms, and Reports persist only role-separated hashes; they do not prove the referenced value, object identity, availability, or runtime resolution.
+      - Recognized report context identifiers such as Page and Pages are static host-context references, not database fields or rendered-value proof; they persist only role-separated hashes and retain partial runtime-value coverage.
       - A design-catalog query-field candidate is accepted only beneath a query already matched to the immutable base scan; TraceMap derives its stable key and the candidate does not prove query execution, returned values, or runtime availability.
+      - Query-field reconciliation requires both the role-separated output-name hash and the declared ordinal to agree. A partial query-output declaration keeps a matched direct binding partial; name agreement cannot upgrade incomplete output evidence.
+      - Missing, negative, non-integer, or out-of-limit query-output ordinals remain explicit design-input gaps and are excluded from ordinal projection; malformed ordinal evidence cannot abort enrichment or allocate an unbounded output array.
       - Unresolved domain selected/criteria identifiers retain role-separated hashes only. They are never resolved against the owning surface when the named domain's field catalog is unavailable.
       - List and combo controls keep value/persistence binding separate from population binding. A query-backed unbound selector has no persistence target unless a ControlSource provides one; BoundColumn is only a static projection-ordinal candidate.
       - A surface-declared crosstab output candidate proves only that a control names an expected output beneath a known crosstab source. It does not prove that row-derived pivot values generated the output or that the query ran.
-      - Inline SQL sources are projected only through a bounded static subset. Dependency-scoped fields and statically named outputs remain candidates; unmatched, computed, wildcard, ambiguous, or dynamic outputs retain precise partial classifications.
+      - Crosstab output catalogs are limited to statically declared row-heading names, aggregate aliases, and literal IN-list pivot columns. Dynamic pivot values, runtime column availability, aggregate results, and rendered report values remain unproved.
+      - Inline SQL sources are projected only through a bounded static subset. A single-table wildcard may have complete static set lineage only when that table's field catalog is present and has no field-level acquisition gaps; projection order and runtime values are not claimed. Other unmatched, computed, wildcard, ambiguous, or dynamic outputs retain precise partial classifications.
+      - Access predicate operators such as IN and EXISTS are not VBA/custom functions. Their operands still require independent static resolution; empty or unbalanced operands remain partial, and predicate truth or returned rows are never claimed.
+      - SaveAsText quoted scalars normalize only the contiguous declared `\015\012` line-break pair before static parsing. Standalone tokens, other numeric escapes, and ordinary backslashes remain literal; normalization does not apply to semantic structured UI records and does not prove SQL execution or runtime output availability.
       - A resolved domain object with an incomplete field catalog remains partial even when selected and criteria identifier hashes are available; those hashes are not field identities.
+      - A static domain return field resolves only against the domain object's declared output catalog. A criteria field may additionally resolve against fields exposed by the domain query's direct declared dependencies, but only when the name has one candidate; duplicate dependency names remain an explicit domain-criteria ambiguity gap.
+      - A domain return identifier found only in the criteria/dependency scope remains partial and is classified as dependency-only or dependency-ambiguous; dependency presence never promotes it to a declared return field.
+      - A domain criteria identifier may resolve through exactly one declared query-output source candidate. A return identifier that names that source instead of the query's declared output alias remains partial with an explicit alias-mismatch gap; TraceMap does not equate the names.
+      - A domain return identifier that exactly matches a statically declared crosstab pivot-heading hash is retained as a hash-only pivot candidate. It does not prove that Access materialized an output column, that the query ran, or that a lookup returned a value.
+      - A numeric domain return identifier paired with exactly one declared `W`-prefixed crosstab heading and output is reported as a prefix-mismatch candidate, not resolved as an equivalent field. The declaration does not prove that Access accepts the unprefixed identifier.
+      - Domain criteria reconciliation proves a bounded static name relationship. It does not prove predicate evaluation, parameter values, selected rows, query success, or that dependency-scoped fields are available at runtime.
 
   - id: legacy.access.vba.v1
     name: Microsoft Access bounded VBA declaration and call candidate

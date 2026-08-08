@@ -4,7 +4,7 @@ namespace TraceMap.Access;
 
 public static class AccessFactBuilder
 {
-    public const string ScannerVersion = "tracemap-access/0.2.0";
+    public const string ScannerVersion = "tracemap-access/0.3.1";
     private const string ExtractorId = "AccessCatalogExtractor";
 
     public static ScanResult Build(AccessValidatedInput input, AccessDatabaseProjection projection, AccessScanOptions options, AccessLimits? limits = null)
@@ -14,10 +14,16 @@ public static class AccessFactBuilder
             throw new AccessScanException("AccessProjectionHashMismatch");
 
         if (limits.MaxFacts < 1 || limits.MaxGaps < 1) throw new AccessScanException("AccessInvalidLimitConfiguration");
-        var gapsTruncated = projection.Gaps.Count > limits.MaxGaps;
-        var projectedGaps = projection.Gaps
+        var distinctProjectedGaps = projection.Gaps
+            .GroupBy(gap => (gap.Classification, gap.ScopeKind, gap.StableScopeKey, gap.RuleId))
+            .Select(group => group.First())
             .OrderBy(gap => gap.Classification, StringComparer.Ordinal)
+            .ThenBy(gap => gap.ScopeKind, StringComparer.Ordinal)
             .ThenBy(gap => gap.StableScopeKey, StringComparer.Ordinal)
+            .ThenBy(gap => gap.RuleId, StringComparer.Ordinal)
+            .ToArray();
+        var gapsTruncated = distinctProjectedGaps.Length > limits.MaxGaps;
+        var projectedGaps = distinctProjectedGaps
             .Take(gapsTruncated ? Math.Max(0, limits.MaxGaps - 1) : limits.MaxGaps)
             .ToList();
         if (gapsTruncated)
@@ -176,6 +182,8 @@ public static class AccessFactBuilder
             }
             foreach (var output in query.OutputFields ?? [])
             {
+                if (!AccessQueryOutputEvidenceOrigins.IsSupported(output.EvidenceOrigin))
+                    throw new InvalidDataException("AccessQueryOutputEvidenceOriginUnsupported");
                 if (queryOutputOwnerStableKeys.TryGetValue(output.Identity.StableKey, out var existingOwner)
                     && !string.Equals(existingOwner, query.Identity.StableKey, StringComparison.Ordinal))
                 {
@@ -185,7 +193,10 @@ public static class AccessFactBuilder
                 {
                     queryOutputOwnerStableKeys.Add(output.Identity.StableKey, query.Identity.StableKey);
                 }
-                facts.Add(Create(manifest, FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, span,
+                var outputTier = output.EvidenceOrigin == AccessQueryOutputEvidenceOrigins.QueryDef
+                    ? EvidenceTiers.Tier2Structural
+                    : EvidenceTiers.Tier3SyntaxOrTextual;
+                facts.Add(Create(manifest, FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery, outputTier, span,
                     sourceSymbol: query.Identity.StableKey,
                     targetSymbol: output.Identity.StableKey,
                     properties: IdentityProps(output.Identity,
@@ -193,8 +204,9 @@ public static class AccessFactBuilder
                         ("queryOutputStableKey", output.Identity.StableKey),
                         ("ordinal", output.Ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                         ("typeFamily", output.TypeFamily),
+                        ("evidenceOrigin", output.EvidenceOrigin),
                         ("coverageLabel", output.Coverage),
-                        ("limitations", "querydef-field-metadata-only;no-query-execution;no-row-read"))));
+                        ("limitations", "querydef-or-static-select-output-name;source-lineage-may-be-partial;no-query-execution;no-row-read"))));
                 foreach (var sourceField in output.SourceFieldStableKeys)
                 {
                     facts.Add(Create(manifest, FactTypes.AccessQueryOutputSourceCandidate, RuleIds.LegacyAccessQuery,
@@ -437,6 +449,17 @@ public static class AccessFactBuilder
                     ("limitations", "inventory-only;body-protected-omitted;no-open-export-execution-or-command-semantics"))));
         }
 
+        var bindingDeclarationFactIdsByStableKey = facts
+            .Where(fact => fact.FactType == FactTypes.AccessBindingDeclared
+                && fact.Properties.TryGetValue("stableBindingKey", out _))
+            .GroupBy(fact => fact.Properties["stableBindingKey"], StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<string>)group.Select(fact => fact.FactId)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(factId => factId, StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
         foreach (var gap in projectedGaps)
         {
             var supportingQueryStableKey = gap.ScopeKind switch
@@ -446,10 +469,13 @@ public static class AccessFactBuilder
                     && queryOutputOwnerStableKeys.TryGetValue(gap.StableScopeKey, out var ownerStableKey) => ownerStableKey,
                 _ => null
             };
-            var supportingFactId = supportingQueryStableKey is not null
-                && queryDeclarationFactIds.TryGetValue(supportingQueryStableKey, out var queryFactId)
-                    ? queryFactId
-                    : null;
+            IReadOnlyList<string> supportingFactIds = [];
+            if (supportingQueryStableKey is not null
+                && queryDeclarationFactIds.TryGetValue(supportingQueryStableKey, out var queryFactId))
+                supportingFactIds = [queryFactId];
+            else if (gap.ScopeKind == "binding" && gap.StableScopeKey is not null
+                && bindingDeclarationFactIdsByStableKey.TryGetValue(gap.StableScopeKey, out var bindingFactIds))
+                supportingFactIds = bindingFactIds;
             var emittedScopeKind = gap.ScopeKind == "query-output-field"
                 && supportingQueryStableKey is null
                     ? "query-output-field-owner-unknown"
@@ -457,7 +483,8 @@ public static class AccessFactBuilder
             facts.Add(Create(manifest, FactTypes.AnalysisGap, gap.RuleId ?? RuleIds.LegacyAccessCoverageGap, EvidenceTiers.Tier4Unknown, span,
                 targetSymbol: gap.StableScopeKey,
                 properties: Props(("classification", gap.Classification), ("gapKind", "access-design"), ("scopeKind", emittedScopeKind),
-                    ("scopeStableKey", gap.StableScopeKey), ("supportingFactIds", supportingFactId),
+                    ("scopeStableKey", gap.StableScopeKey),
+                    ("supportingFactIds", supportingFactIds.Count == 0 ? null : string.Join(';', supportingFactIds)),
                     ("limitations", "unable-to-prove;not-clean-absence"))));
         }
 
@@ -524,6 +551,7 @@ public static class AccessFactBuilder
                         ("expressionControlStableKeys", binding.Expression is null ? null : string.Join(';', binding.Expression.ControlStableKeys)),
                         ("expressionControlReferenceHashes", binding.Expression is null ? null : string.Join(';', binding.Expression.ControlReferenceHashes)),
                         ("expressionExternalReferenceHashes", binding.Expression is null ? null : string.Join(';', binding.Expression.ExternalReferenceHashes)),
+                        ("expressionVbaProcedureStableKeys", binding.Expression is null ? null : string.Join(';', binding.Expression.VbaProcedureStableKeys)),
                         ("expressionQueryStableKeys", binding.Expression is null ? null : string.Join(';', binding.Expression.QueryStableKeys)),
                         ("expressionSelectedFieldStableKeys", binding.Expression is null ? null : string.Join(';', binding.Expression.SelectedFieldStableKeys)),
                         ("expressionSelectedFieldReferenceHashes", binding.Expression is null ? null : string.Join(';', binding.Expression.SelectedFieldReferenceHashes)),
@@ -531,6 +559,7 @@ public static class AccessFactBuilder
                         ("expressionCriteriaFieldReferenceHashes", binding.Expression is null ? null : string.Join(';', binding.Expression.CriteriaFieldReferenceHashes)),
                         ("expressionLiteralKinds", binding.Expression is null ? null : string.Join(';', binding.Expression.LiteralKinds)),
                         ("expressionCoverage", binding.Expression?.Coverage),
+                        ("runtimeValueCoverage", binding.RuntimeValueCoverage),
                         ("expressionGapClassification", binding.Expression?.GapClassification),
                         ("limitations", "declared-static-binding-only;no-evaluation;no-runtime-target-proof"))));
             }

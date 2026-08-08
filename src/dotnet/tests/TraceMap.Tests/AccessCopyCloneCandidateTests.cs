@@ -144,6 +144,51 @@ public sealed class AccessCopyCloneCandidateTests
     }
 
     [Fact]
+    public void Builder_preserves_ambiguous_query_output_owner_provenance_in_upstream_gaps()
+    {
+        const string firstQuery = "access-query-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        const string secondQuery = "access-query-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        const string output = "access-query-field-cccccccccccccccccccccccccccccccc";
+        var facts = new[]
+        {
+            Fact("fact-query-one", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural, null, firstQuery, ("coverageLabel", "partial")),
+            Fact("fact-query-two", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural, null, secondQuery, ("coverageLabel", "partial")),
+            Fact("fact-output-one", FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural, firstQuery, output, ("coverageLabel", "partial")),
+            Fact("fact-output-two", FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier2Structural, null, output,
+                ("coverageLabel", "partial"),
+                ("queryStableKey", secondQuery)),
+            Fact("fact-output-gap", FactTypes.AnalysisGap, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier4Unknown, null, output,
+                ("classification", "AccessQueryOutputSourceUnavailable/ambiguous"),
+                ("scopeKind", "query-output-field-owner-unknown"))
+        };
+
+        var report = AccessCopyCloneCandidateReporter.Build("synthetic", Commit, facts, 100, 100, 100);
+
+        var gap = Assert.Single(report.Gaps, item => item.Classification == "AccessCopyCloneUpstreamEvidenceGap");
+        Assert.Equal(
+            ["fact-output-gap", "fact-output-one", "fact-output-two", "fact-query-one", "fact-query-two"],
+            gap.SupportingFactIds);
+        Assert.Equal(RuleIds.LegacyAccessCopyCloneCandidate, gap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal(Commit, gap.CommitSha);
+        Assert.Equal("fixture.accdb", gap.FilePath);
+        Assert.Equal(1, gap.StartLine);
+        Assert.Equal(1, gap.EndLine);
+        Assert.Equal("AccessSourceNeutralDesignEvidence", gap.ExtractorId);
+        Assert.Equal("access-design-evidence/0.1.0", gap.ExtractorVersion);
+        Assert.Equal("upstream", gap.ScopeKind);
+        Assert.Equal(
+            ["static-candidate-gap", "not-clean-absence", "no-copy-or-clone-conclusion"],
+            gap.Limitations);
+        Assert.Equal("partial", report.Coverage);
+    }
+
+    [Fact]
     public void Builder_preserves_dependency_kind_when_action_target_has_no_kind()
     {
         var facts = CandidateFacts().Append(Fact(

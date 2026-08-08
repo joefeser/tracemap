@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using TraceMap.Access;
 using TraceMap.Access.Cli;
 using TraceMap.Combine;
@@ -170,6 +171,13 @@ public sealed class AccessDesignEvidenceCompositionTests
         Assert.Contains(firstResult.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyAccessDesignInput
             && fact.EvidenceTier == EvidenceTiers.Tier4Unknown);
+        var finalFactIds = firstResult.Facts.Select(fact => fact.FactId).ToHashSet(StringComparer.Ordinal);
+        Assert.All(firstResult.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap), gap =>
+        {
+            var supportingFactIds = (gap.Properties.GetValueOrDefault("supportingFactIds") ?? string.Empty)
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            Assert.All(supportingFactIds, factId => Assert.Contains(factId, finalFactIds));
+        });
         Assert.All(firstResult.Facts.Where(IsDesignFact), fact =>
         {
             Assert.True(fact.Properties.ContainsKey("designInputHash")
@@ -200,6 +208,35 @@ public sealed class AccessDesignEvidenceCompositionTests
             finding => finding.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "form"));
         Assert.Contains(release.AccessEvidence.Findings,
             finding => finding.Metadata.Any(pair => pair.Key == "designInputHash"));
+        var queryGap = firstResult.Facts.First(fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("scopeKind") == "binding"
+            && fact.TargetSymbol is not null);
+        var unrelatedForm = firstResult.Facts.First(fact => fact.FactType == FactTypes.AccessFormDeclared);
+        var tamperedProperties = new SortedDictionary<string, string>(
+            queryGap.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+            StringComparer.Ordinal)
+        {
+            ["supportingFactIds"] = string.Join(';',
+                queryGap.Properties.GetValueOrDefault("supportingFactIds"),
+                unrelatedForm.FactId)
+        };
+        var tamperedOutput = Path.Combine(temp.Path, "tampered-support");
+        await AccessArtifactWriter.WriteAsync(
+            tamperedOutput,
+            firstResult with
+            {
+                Facts = firstResult.Facts.Select(fact => fact.FactId == queryGap.FactId
+                    ? fact with { Properties = tamperedProperties }
+                    : fact).ToArray()
+            },
+            AccessLimits.Default);
+        var tamperedRelease = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            Path.Combine(tamperedOutput, "index.sqlite"),
+            Path.Combine(tamperedOutput, "index.sqlite"),
+            Path.Combine(temp.Path, "tampered-release-review.md")));
+        var releasedGap = Assert.Single(tamperedRelease.AccessEvidence.Gaps,
+            gap => gap.GapKind == queryGap.Properties.GetValueOrDefault("classification"));
+        Assert.DoesNotContain(unrelatedForm.FactId, releasedGap.SupportingFactIds);
         var localReviewOutput = Path.Combine(temp.Path, "local-review");
         var localReview = await AccessLocalReviewBundle.CreateAsync(new(first, localReviewOutput));
         Assert.Equal(ReleaseReviewStatuses.Available, localReview.Manifest.AccessEvidenceStatus);
@@ -285,6 +322,40 @@ public sealed class AccessDesignEvidenceCompositionTests
                 CancellationToken.None));
 
         Assert.Equal("AccessBaseScanArtifactLimitReached", error.Classification);
+    }
+
+    [Fact]
+    public async Task Base_scan_reader_rejects_null_fact_properties_at_the_artifact_boundary()
+    {
+        using var temp = new TempDirectory();
+        var baseScan = await WriteBaseScanAsync(temp.Path);
+        var factsPath = Path.Combine(baseScan, "facts.ndjson");
+        var lines = await File.ReadAllLinesAsync(factsPath);
+        var first = JsonNode.Parse(lines[0])!.AsObject();
+        var originalProperties = first["properties"]!.DeepClone();
+        first["properties"] = null;
+        lines[0] = first.ToJsonString();
+        await File.WriteAllLinesAsync(factsPath, lines, new UTF8Encoding(false));
+
+        var error = await Assert.ThrowsAsync<AccessScanException>(() =>
+            AccessDesignEvidenceComposer.ReadBaseScanAsync(
+                baseScan,
+                AccessLimits.Default,
+                CancellationToken.None));
+
+        Assert.Equal("AccessBaseScanFactsInvalid", error.Classification);
+
+        first["properties"] = originalProperties;
+        first["scanId"] = "different-scan";
+        lines[0] = first.ToJsonString();
+        await File.WriteAllLinesAsync(factsPath, lines, new UTF8Encoding(false));
+        var mismatch = await Assert.ThrowsAsync<AccessScanException>(() =>
+            AccessDesignEvidenceComposer.ReadBaseScanAsync(
+                baseScan,
+                AccessLimits.Default,
+                CancellationToken.None));
+
+        Assert.Equal("AccessBaseScanFactsMismatch", mismatch.Classification);
     }
 
     [Fact]
@@ -410,6 +481,41 @@ public sealed class AccessDesignEvidenceCompositionTests
     }
 
     [Fact]
+    public async Task Enrichment_does_not_reconcile_a_query_field_to_a_same_name_output_at_another_ordinal()
+    {
+        using var temp = new TempDirectory();
+        var baseScan = await WriteBaseScanAsync(temp.Path, queryOutputOrdinal: 0);
+        var design = WriteDesignBundle(temp.Path, baseScan, includeQueryFieldLineage: true, queryFieldOrdinal: 3);
+
+        var result = await AccessDesignEvidenceComposer.ComposeAsync(baseScan, design);
+        var query = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessQueryDeclared);
+        var expected = AccessSafeValues.Identity(
+            AccessSafeValues.DatabaseIdentitySeed(RepositoryHash, CommitSha, "fixtures/synthetic.accdb", DatabaseHash),
+            $"query-field-{query.TargetSymbol}",
+            ProtectedQueryField,
+            3,
+            disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly).StableKey;
+        var wrongOrdinal = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessQueryOutputDeclared).TargetSymbol;
+        var bindings = result.Facts.Where(fact => fact.FactType == FactTypes.AccessBindingDeclared
+            && fact.Properties.GetValueOrDefault("expressionSelectedFieldStableKeys") is not null).ToArray();
+
+        Assert.Contains(bindings, binding => binding.TargetSymbol == expected);
+        Assert.DoesNotContain(bindings, binding => binding.TargetSymbol == wrongOrdinal);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("-1")]
+    [InlineData("10000")]
+    [InlineData("2147483647")]
+    [InlineData("not-an-ordinal")]
+    public void Query_output_ordinal_validation_rejects_values_that_cannot_be_projected_boundedly(string? value)
+    {
+        Assert.False(AccessDesignEvidenceComposer.TryValidOrdinal(value, 10_000, out _));
+    }
+
+    [Fact]
     public async Task Enrichment_rejects_query_fields_beneath_an_unmatched_query()
     {
         using var temp = new TempDirectory();
@@ -447,7 +553,7 @@ public sealed class AccessDesignEvidenceCompositionTests
             && fact.Properties.GetValueOrDefault("scopeKind") == "query-field");
     }
 
-    private static async Task<string> WriteBaseScanAsync(string root)
+    private static async Task<string> WriteBaseScanAsync(string root, int? queryOutputOrdinal = null)
     {
         var database = Path.Combine(root, "fixture.accdb");
         await File.WriteAllBytesAsync(database, [1, 2, 3, 4]);
@@ -471,6 +577,22 @@ public sealed class AccessDesignEvidenceCompositionTests
         var sharedQuery = AccessSafeValues.Identity(databaseSeed, "query", "SharedQuery");
         var table = AccessSafeValues.Identity(databaseSeed, "table", "BaseTable");
         var field = AccessSafeValues.Identity(databaseSeed, $"field-{table.StableKey}", ProtectedField);
+        var queryOutputs = queryOutputOrdinal is null
+            ? Array.Empty<AccessQueryOutputFieldProjection>()
+            :
+            [
+                new(
+                    AccessSafeValues.Identity(
+                        databaseSeed,
+                        $"query-field-{sharedQuery.StableKey}",
+                        ProtectedQueryField,
+                        queryOutputOrdinal.Value,
+                        disclosurePolicy: AccessIdentityDisclosurePolicy.HashOnly),
+                    queryOutputOrdinal.Value,
+                    "unknown",
+                    [],
+                    "partial")
+            ];
         var projection = new AccessDatabaseProjection(
             "tracemap.access-projection.v1",
             DatabaseHash,
@@ -492,7 +614,8 @@ public sealed class AccessDesignEvidenceCompositionTests
                 [],
                 false,
                 null,
-                null)],
+                null,
+                queryOutputs)],
             [],
             [new("AccessUiCatalogUnavailable", "ui-catalog", null, RuleIds.LegacyAccessCoverageGap)],
             []);

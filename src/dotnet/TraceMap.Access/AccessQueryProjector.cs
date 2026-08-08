@@ -5,6 +5,13 @@ namespace TraceMap.Access;
 
 public static partial class AccessQueryProjector
 {
+    internal sealed record StaticOutputCatalogEntry(int Ordinal, string Name);
+    internal sealed record CrosstabOutputCatalogEntry(
+        int Ordinal,
+        string Name,
+        IReadOnlyList<string> SourceFieldStableKeys,
+        string Coverage,
+        string OutputKind);
     private static readonly string[] SqlFunctionNames = [
         "abs", "avg", "count", "date", "dateadd", "datediff", "dlookup", "dsum", "first", "format",
         "iif", "instr", "isnull", "len", "max", "min", "nz", "sum", "val"];
@@ -117,7 +124,11 @@ public static partial class AccessQueryProjector
         var aggregate = MatchValue(masked, TransformPattern());
         var pivot = MatchValue(masked, PivotPattern());
         var value = aggregate is null ? null : ExtractAggregateValue(aggregate);
-        var staticColumns = ParsePivotColumns(sql);
+        var pivotColumnsComplete = TryParsePivotColumnNames(sql, out var pivotColumnNames);
+        var staticColumns = pivotColumnNames
+            .Select(value => AccessSafeValues.RoleHash("access-query-pivot-column", value))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
         var rowsResolve = rowExpressions.Count > 0
             && rowExpressions.All(expression => ResolvesExpressionCompletely(expression, knownObjects, fieldLookups));
         var valueResolves = value is not null
@@ -127,7 +138,9 @@ public static partial class AccessQueryProjector
         var expressionsUseOnlySupportedFunctions = rowExpressions.All(expression => !HasUnsupportedNamedFunction(expression))
             && (aggregate is null || !HasUnsupportedNamedFunction(aggregate))
             && (pivot is null || !HasUnsupportedNamedFunction(pivot));
-        var coverage = rowsResolve && valueResolves && pivotResolves && staticColumns.Count > 0
+        var coverage = HasCompleteStaticSelectShape(masked)
+            && rowsResolve && valueResolves && pivotResolves && staticColumns.Length > 0
+            && pivotColumnsComplete
             && expressionsUseOnlySupportedFunctions
             ? "complete"
             : "partial";
@@ -138,13 +151,86 @@ public static partial class AccessQueryProjector
             staticColumns, coverage);
     }
 
+    internal static IReadOnlyList<CrosstabOutputCatalogEntry> ProjectCrosstabOutputCatalog(
+        string sql,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> knownObjects,
+        IReadOnlyDictionary<string, Dictionary<string, List<AccessFieldProjection>>> fieldLookups)
+    {
+        if (string.IsNullOrWhiteSpace(sql)) return [];
+        var masked = MaskLiteralsAndComments(sql);
+        var outputs = new List<CrosstabOutputCatalogEntry>();
+        var select = SelectListAfterKeyword(masked, "select");
+        IReadOnlyList<string> selectItems = select is null ? [] : SplitSelectItems(select);
+        var selectComplete = select is not null
+            && HasCompleteStaticSelectShape(masked)
+            && ProjectionStructureComplete(select)
+            && selectItems.All(item => !string.IsNullOrWhiteSpace(item) && !IsWildcardProjectionItem(item));
+        for (var ordinal = 0; ordinal < selectItems.Count; ordinal++)
+        {
+            var expression = selectItems[ordinal];
+            var name = StaticOutputName(expression);
+            if (name is null) continue;
+            var analysisExpression = RemoveOutputAlias(expression);
+            var sources = ResolveExpressionFields(analysisExpression, knownObjects, fieldLookups);
+            var coverage = selectComplete
+                && sources.Count > 0
+                && ResolvesExpressionCompletely(analysisExpression, knownObjects, fieldLookups)
+                && !HasUnsupportedNamedFunction(analysisExpression)
+                ? "complete"
+                : "partial";
+            outputs.Add(new(ordinal, name, sources, coverage, "row-heading"));
+        }
+
+        var nextOrdinal = selectItems.Count;
+        var aggregate = MatchValue(masked, TransformPattern());
+        var aggregateValue = aggregate is null ? null : ExtractAggregateValue(RemoveOutputAlias(aggregate));
+        var aggregateSources = aggregateValue is null
+            ? []
+            : ResolveExpressionFields(aggregateValue, knownObjects, fieldLookups);
+        var pivot = MatchValue(masked, PivotPattern());
+        var pivotColumnsComplete = TryParsePivotColumnNames(sql, out var pivotColumnNames);
+        var aggregateSourceCoverage = selectComplete
+            && pivotColumnsComplete
+            && aggregateValue is not null
+            && aggregateSources.Count > 0
+            && ResolvesExpressionCompletely(aggregateValue, knownObjects, fieldLookups)
+            && !HasUnsupportedNamedFunction(aggregateValue)
+            && pivot is not null
+            && ResolvesExpressionCompletely(pivot, knownObjects, fieldLookups)
+            && !HasUnsupportedNamedFunction(pivot)
+            ? "complete"
+            : "partial";
+        foreach (var name in pivotColumnNames)
+            outputs.Add(new(nextOrdinal++, name, aggregateSources, aggregateSourceCoverage, "static-pivot"));
+
+        var duplicateNames = outputs
+            .GroupBy(output => output.Name, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return outputs
+            .Select(output => duplicateNames.Contains(output.Name)
+                ? output with { Coverage = "partial", OutputKind = $"{output.OutputKind}-duplicate-name" }
+                : output)
+            .ToArray();
+    }
+
     public static AccessQueryStaticProjection ProjectStaticSelect(
         string sql,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> knownObjects,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fieldsByTable)
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fieldsByTable) =>
+        ProjectStaticSelect(sql, knownObjects, fieldsByTable, null);
+
+    internal static AccessQueryStaticProjection ProjectStaticSelect(
+        string sql,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>> knownObjects,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>> fieldsByTable,
+        (IReadOnlyList<AccessQueryDependencyProjection> Dependencies, string Coverage, bool UnsupportedShape)? precomputedDependencies)
     {
         var masked = MaskLiteralsAndComments(sql);
-        var dependencyProjection = ProjectDependencies(sql, knownObjects);
+        var balanced = HasBalancedSqlDelimiters(masked);
+        var completeShape = HasCompleteStaticSelectShape(masked);
+        var dependencyProjection = precomputedDependencies ?? ProjectDependencies(sql, knownObjects);
         var dependencyKeys = dependencyProjection.Dependencies.Select(item => item.TargetStableKey).ToHashSet(StringComparer.Ordinal);
         var scopedKnownObjects = knownObjects.ToDictionary(
             item => item.Key,
@@ -155,7 +241,8 @@ public static partial class AccessQueryProjector
         var outputs = expressions.Select((expression, ordinal) =>
         {
             var trimmed = expression.Trim();
-            var sourceFields = ResolveExpressionFieldKeys(trimmed, scopedKnownObjects, fieldsByTable);
+            var analysisExpression = RemoveOutputAlias(trimmed);
+            var sourceFields = ResolveExpressionFieldKeys(analysisExpression, scopedKnownObjects, fieldsByTable);
             var outputName = StaticOutputName(trimmed);
             var nameHash = outputName is null
                 ? null
@@ -168,9 +255,16 @@ public static partial class AccessQueryProjector
         }).ToArray();
         var predicate = Clause(masked, "where", ["group", "order", ";", "$"]);
         var order = Clause(masked, "order\\s+by", [";", "$"]);
-        var functions = new[] { predicate, order }
+        var runtimeExpressions = expressions
+            .Concat(new[] { predicate, order }.Where(expression => expression is not null).Cast<string>())
+            .ToArray();
+        var runtimeFunctionsPresent = runtimeExpressions
+            .SelectMany(expression => NamedFunctionPattern().Matches(expression))
+            .Select(match => match.Groups["name"].Value)
+            .Any(name => !SqlKeywordCallNames.Contains(name, StringComparer.OrdinalIgnoreCase));
+        var functions = runtimeExpressions
             .Where(expression => expression is not null)
-            .SelectMany(expression => NamedFunctionPattern().Matches(expression!))
+            .SelectMany(expression => NamedFunctionPattern().Matches(expression))
                 .Select(match => match.Groups["name"].Value)
                 .Where(name => !SqlFunctionNames.Contains(name, StringComparer.OrdinalIgnoreCase)
                     && !SqlKeywordCallNames.Contains(name, StringComparer.OrdinalIgnoreCase))
@@ -182,11 +276,26 @@ public static partial class AccessQueryProjector
         var orderComplete = order is null || ResolvesExpressionFieldKeys(order, scopedKnownObjects, fieldsByTable);
         orderComplete = orderComplete && (order is null || !HasUnsupportedNamedFunction(order));
         var coverage = expressions.Count > 0
+            && balanced
+            && completeShape
             && outputs.All(output => output.Coverage == "complete")
             && dependencyProjection.Coverage == "complete"
             && predicateComplete
             && orderComplete
             && functions.Length == 0
+            ? "complete"
+            : "partial";
+        var outputCoverage = expressions.Count > 0
+            && balanced
+            && completeShape
+            && outputs.All(output => output.NameHash is not null && output.Coverage == "complete")
+            ? "complete"
+            : "partial";
+        var runtimeValueCoverage = predicateComplete
+            && balanced
+            && completeShape
+            && orderComplete
+            && !runtimeFunctionsPresent
             ? "complete"
             : "partial";
         return new(
@@ -197,27 +306,63 @@ public static partial class AccessQueryProjector
             order is null ? null : AccessSafeValues.RoleHash("access-query-order-by", order),
             functions,
             outputs,
-            coverage);
+            coverage,
+            dependencyProjection.Coverage,
+            outputCoverage,
+            runtimeValueCoverage);
+    }
+
+    internal static IReadOnlyList<StaticOutputCatalogEntry> ProjectStaticOutputCatalog(string sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql)) return [];
+        var select = SelectListAfterKeyword(MaskLiteralsAndComments(sql), "select");
+        if (select is null) return [];
+        var parsed = SplitSelectItems(select)
+            .Select((expression, ordinal) => (Name: StaticOutputName(expression), Ordinal: ordinal))
+            .Where(item => !string.IsNullOrWhiteSpace(item.Name))
+            .ToArray();
+        var duplicateNames = parsed.GroupBy(item => item.Name!, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return parsed
+            .Where(item => !duplicateNames.Contains(item.Name!))
+            .Select(item => new StaticOutputCatalogEntry(item.Ordinal, item.Name!))
+            .ToArray();
     }
 
     public static bool IsDirectOutputField(string sql, string outputName)
     {
         if (string.IsNullOrWhiteSpace(sql) || string.IsNullOrWhiteSpace(outputName))
             return false;
+        var select = SelectListAfterKeyword(MaskLiteralsAndComments(sql), "select");
+        if (select is null) return false;
+        return SplitSelectItems(select).Count(item =>
+            IsStaticDirectProjection(item)
+            && string.Equals(
+                StaticOutputName(item),
+                outputName.Trim(),
+                StringComparison.OrdinalIgnoreCase)) == 1;
+    }
+
+    internal static bool CanReconcileStaticOutputByOrdinal(string sql, int ordinal, string outputName)
+    {
+        if (string.IsNullOrWhiteSpace(sql) || ordinal < 0 || string.IsNullOrWhiteSpace(outputName))
+            return false;
         var masked = MaskLiteralsAndComments(sql);
-        var match = SelectListPattern().Match(masked);
-        if (!match.Success) return false;
-        var fields = new List<string>();
-        foreach (var item in SplitSelectItems(match.Groups["list"].Value))
-        {
-            if (item.Contains('*')) return false;
-            var direct = DirectSelectFieldPattern().Match(item.Trim());
-            if (!direct.Success) continue;
-            fields.Add((direct.Groups["bracketed"].Success
-                ? direct.Groups["bracketed"].Value
-                : direct.Groups["plain"].Value).Trim());
-        }
-        return fields.Count(field => string.Equals(field, outputName.Trim(), StringComparison.OrdinalIgnoreCase)) == 1;
+        if (!HasCompleteStaticSelectShape(masked)) return false;
+        var select = SelectListAfterKeyword(masked, "select");
+        if (select is null) return false;
+        var expressions = SplitSelectItems(select);
+        return ordinal < expressions.Count
+            && ProjectionStructureComplete(select)
+            && expressions.All(expression => !string.IsNullOrWhiteSpace(expression))
+            && !expressions.Take(ordinal + 1).Any(IsWildcardProjectionItem)
+            && IsStaticDirectProjection(expressions[ordinal])
+            && string.Equals(
+                StaticOutputName(expressions[ordinal]),
+                outputName.Trim(),
+                StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool HasStaticOutputName(string sql, string outputName)
@@ -236,13 +381,144 @@ public static partial class AccessQueryProjector
 
     internal static bool HasWildcardProjection(string sql)
     {
+        return TryGetSelectItems(sql, out var items) && items.Any(IsWildcardProjectionItem);
+    }
+
+    internal static bool HasOnlyWildcardProjection(string sql)
+    {
+        if (!TryGetSelectItems(sql, out var items) || items.Count != 1 || !items.All(IsWildcardProjectionItem))
+            return false;
+        var masked = MaskLiteralsAndComments(sql);
+        return HasCompleteSingleSourceSelectShape(masked);
+    }
+
+    internal static bool HasBalancedStaticSelectSyntax(string sql) =>
+        !string.IsNullOrWhiteSpace(sql)
+        && HasBalancedSqlDelimiters(MaskLiteralsAndComments(sql));
+
+    private static bool TryGetSelectItems(string sql, out IReadOnlyList<string> items)
+    {
+        items = [];
         if (string.IsNullOrWhiteSpace(sql)) return false;
         var select = SelectListAfterKeyword(MaskLiteralsAndComments(sql), "select");
-        return select is not null && SplitSelectItems(select).Any(item =>
+        if (select is null) return false;
+        items = SplitSelectItems(select);
+        return items.Count > 0;
+    }
+
+    private static bool IsWildcardProjectionItem(string item)
+    {
+        var normalized = item.Trim();
+        const string identifier = @"(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*)";
+        return Regex.IsMatch(
+            normalized,
+            $@"(?is)^(?:{identifier}\s*\.\s*)*\*$",
+            RegexOptions.CultureInvariant);
+    }
+
+    private static bool HasBalancedSqlDelimiters(string value)
+    {
+        var squareBrackets = 0;
+        var parentheses = 0;
+        foreach (var current in value)
         {
-            var normalized = item.Trim();
-            return normalized == "*" || normalized.EndsWith(".*", StringComparison.Ordinal);
-        });
+            if (current == '[') squareBrackets++;
+            else if (current == ']')
+            {
+                if (squareBrackets == 0) return false;
+                squareBrackets--;
+            }
+            else if (squareBrackets == 0 && current == '(') parentheses++;
+            else if (squareBrackets == 0 && current == ')')
+            {
+                if (parentheses == 0) return false;
+                parentheses--;
+            }
+        }
+        return squareBrackets == 0 && parentheses == 0;
+    }
+
+    private static bool HasCompleteSingleSourceSelectShape(string masked)
+    {
+        if (!HasBalancedSqlDelimiters(masked)) return false;
+        var topLevelFromIndexes = TopLevelKeywordIndexes(masked, "from", 0);
+        if (topLevelFromIndexes.Count != 1) return false;
+
+        var tail = masked[(topLevelFromIndexes[0] + "from".Length)..].Trim();
+        if (tail.EndsWith(';')) tail = tail[..^1].TrimEnd();
+        if (tail.Length == 0
+            || Regex.IsMatch(
+                tail,
+                @"(?is)(?:,|=|<>|<=|>=|<|>|\+|-|\*|/|\b(?:where|having|group\s+by|order\s+by|join|on|and|or)\b)\s*$"))
+            return false;
+
+        var squareBrackets = 0;
+        var parentheses = 0;
+        var clauseStart = tail.Length;
+        for (var index = 0; index < tail.Length; index++)
+        {
+            var current = tail[index];
+            if (current == '[') squareBrackets++;
+            else if (current == ']') squareBrackets--;
+            else if (squareBrackets == 0 && current == '(') parentheses++;
+            else if (squareBrackets == 0 && current == ')') parentheses--;
+            else if (squareBrackets == 0 && parentheses == 0)
+            {
+                if (current == ',') return false;
+                if (IsKeywordAt(tail, index, "where")
+                    || IsKeywordAt(tail, index, "group")
+                    || IsKeywordAt(tail, index, "having")
+                    || IsKeywordAt(tail, index, "order")
+                    || IsKeywordAt(tail, index, "join")
+                    || IsKeywordAt(tail, index, "inner")
+                    || IsKeywordAt(tail, index, "left")
+                    || IsKeywordAt(tail, index, "right")
+                    || IsKeywordAt(tail, index, "full")
+                    || IsKeywordAt(tail, index, "cross")
+                    || IsKeywordAt(tail, index, "union"))
+                {
+                    clauseStart = index;
+                    break;
+                }
+            }
+        }
+        var identifier = @"(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*)";
+        var source = tail[..clauseStart].Trim();
+        return Regex.IsMatch(
+            source,
+            $@"(?is)^{identifier}(?:\s*\.\s*{identifier})*(?:\s+as\s+{identifier})?$",
+            RegexOptions.CultureInvariant);
+    }
+
+    private static bool HasCompleteStaticSelectShape(string masked)
+    {
+        if (!HasBalancedSqlDelimiters(masked)) return false;
+        var topLevelFromIndexes = TopLevelKeywordIndexes(masked, "from", 0);
+        if (topLevelFromIndexes.Count != 1) return false;
+        var tail = masked[(topLevelFromIndexes[0] + "from".Length)..].Trim();
+        if (tail.EndsWith(';')) tail = tail[..^1].TrimEnd();
+        return tail.Length > 0
+            && !Regex.IsMatch(
+                tail,
+                @"(?is)(?:,|=|<>|<=|>=|<|>|\+|-|\*|/|\b(?:where|having|group\s+by|order\s+by|join|on|and|or)\b)\s*$",
+                RegexOptions.CultureInvariant);
+    }
+
+    private static IReadOnlyList<int> TopLevelKeywordIndexes(string value, string keyword, int start)
+    {
+        var result = new List<int>();
+        var depth = 0;
+        var bracket = false;
+        for (var index = start; index < value.Length; index++)
+        {
+            var current = value[index];
+            if (current == '[') bracket = true;
+            else if (current == ']') bracket = false;
+            else if (!bracket && current == '(') depth++;
+            else if (!bracket && current == ')' && depth > 0) depth--;
+            else if (!bracket && depth == 0 && IsKeywordAt(value, index, keyword)) result.Add(index);
+        }
+        return result;
     }
 
     private static string MatchedOutputName(Match match) =>
@@ -259,6 +535,43 @@ public static partial class AccessQueryProjector
         return direct.Success
             ? (direct.Groups["bracketed"].Success ? direct.Groups["bracketed"].Value : direct.Groups["plain"].Value).Trim()
             : null;
+    }
+
+    private static string RemoveOutputAlias(string expression)
+    {
+        var alias = OutputAliasPattern().Match(expression);
+        if (alias.Success) return expression[..alias.Index].Trim();
+        var accessAlias = AccessOutputAliasPattern().Match(expression);
+        return accessAlias.Success ? expression[(accessAlias.Index + accessAlias.Length)..].Trim() : expression.Trim();
+    }
+
+    private static bool ProjectionStructureComplete(string value)
+    {
+        var parentheses = 0;
+        var bracket = false;
+        foreach (var current in value)
+        {
+            if (current == '[')
+            {
+                if (bracket) return false;
+                bracket = true;
+            }
+            else if (current == ']')
+            {
+                if (!bracket) return false;
+                bracket = false;
+            }
+            else if (!bracket && current == '(')
+            {
+                parentheses++;
+            }
+            else if (!bracket && current == ')')
+            {
+                if (parentheses == 0) return false;
+                parentheses--;
+            }
+        }
+        return !bracket && parentheses == 0;
     }
 
     private static IReadOnlyList<string> SplitSelectItems(string value)
@@ -291,19 +604,8 @@ public static partial class AccessQueryProjector
         var prefix = Regex.Match(masked, $@"(?is)\b{keyword}\b\s+(?:(?:distinct|distinctrow|top\s+\d+(?:\s+percent)?)\s+)*");
         if (!prefix.Success) return null;
         var start = prefix.Index + prefix.Length;
-        var depth = 0;
-        var bracket = false;
-        for (var index = start; index < masked.Length; index++)
-        {
-            var current = masked[index];
-            if (current == '[') bracket = true;
-            else if (current == ']') bracket = false;
-            else if (!bracket && current == '(') depth++;
-            else if (!bracket && current == ')' && depth > 0) depth--;
-            else if (!bracket && depth == 0 && IsKeywordAt(masked, index, "from"))
-                return masked[start..index].Trim();
-        }
-        return null;
+        var fromIndexes = TopLevelKeywordIndexes(masked, "from", start);
+        return fromIndexes.Count == 0 ? null : masked[start..fromIndexes[0]].Trim();
     }
 
     private static bool IsKeywordAt(string value, int index, string keyword) =>
@@ -443,7 +745,7 @@ public static partial class AccessQueryProjector
     }
 
     private static bool IsStaticDirectProjection(string expression) =>
-        DirectSelectFieldPattern().IsMatch(expression.Trim());
+        DirectSelectFieldPattern().IsMatch(RemoveOutputAlias(expression));
 
     private static bool ResolvesExpressionCompletely(
         string expression,
@@ -485,21 +787,32 @@ public static partial class AccessQueryProjector
     }
 
     private static IReadOnlyList<string> ParsePivotColumns(string sql)
+        => (TryParsePivotColumnNames(sql, out var values) ? values : [])
+            .Select(value => AccessSafeValues.RoleHash("access-query-pivot-column", value))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<string> ParsePivotColumnNames(string sql)
+        => TryParsePivotColumnNames(sql, out var values) ? values : [];
+
+    private static bool TryParsePivotColumnNames(string sql, out IReadOnlyList<string> values)
     {
+        values = [];
         var match = PivotPattern().Match(MaskLiteralsAndComments(sql));
-        if (!match.Success) return [];
+        if (!match.Success) return false;
         var masked = MaskLiteralsAndComments(sql);
         var inMatch = Regex.Match(masked[match.Index..], @"(?is)\bin\s*\((?<values>[^)]*)\)");
-        if (!inMatch.Success) return [];
+        if (!inMatch.Success) return false;
         var original = sql[(match.Index + inMatch.Index)..];
         var originalValues = Regex.Match(original, @"(?is)\bin\s*\((?<values>[^)]*)\)");
-        if (!originalValues.Success) return [];
-        var values = SplitSelectItems(originalValues.Groups["values"].Value)
+        if (!originalValues.Success) return false;
+        var items = SplitSelectItems(originalValues.Groups["values"].Value);
+        var parsed = items
             .Select(value => UnquotePivotLiteral(value.Trim()))
-            .Where(value => value is not null)
-            .Select(value => AccessSafeValues.RoleHash("access-query-pivot-column", value!))
             .ToArray();
-        return values.Length == 0 ? [] : values.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        if (items.Count == 0 || parsed.Any(value => value is null)) return false;
+        values = parsed.Select(value => value!).ToArray();
+        return values.Count > 0;
     }
 
     private static string? UnquotePivotLiteral(string value)
