@@ -478,7 +478,7 @@ public static class CSharpSemanticExtractor
         List<SemanticFactCandidate> gaps,
         HashSet<string> analyzedFiles)
     {
-        if (!document.SupportsSyntaxTree || IsGeneratedSource(document.FilePath))
+        if (!document.SupportsSyntaxTree || IsGeneratedBuildOutput(repoPath, document.FilePath))
         {
             return;
         }
