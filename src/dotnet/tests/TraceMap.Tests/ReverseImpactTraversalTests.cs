@@ -24,6 +24,7 @@ public sealed class ReverseImpactTraversalTests
         var repeated = ReverseImpactTraversal.Analyze(facts.Reverse(), new ReverseImpactOptions(seed, 2));
 
         Assert.Equal("Resolved", result.Resolution);
+        Assert.Equal(ReverseImpactContract.SchemaVersion, result.SchemaVersion);
         Assert.Equal("scan", result.Snapshot!.ScanId);
         Assert.Equal("0123456789012345678901234567890123456789", result.Snapshot.CommitSha);
         Assert.Equal([caller, root], result.Impacts.Select(impact => impact.Symbol.SymbolId));
@@ -195,7 +196,9 @@ public sealed class ReverseImpactTraversalTests
         var result = ReverseImpactTraversal.Analyze([syntaxCall, semantic, gap, relatedGap], new ReverseImpactOptions(seed, 1));
 
         Assert.Empty(result.Impacts);
-        Assert.DoesNotContain(result.Gaps, candidate => candidate.GapKind == "RelationshipMissingCanonicalIdentity");
+        Assert.Contains(result.Gaps, candidate =>
+            candidate.GapKind == ReverseImpactGapKinds.RelationshipMissingCanonicalIdentity
+            && candidate.RelatedSymbolIds.Count == 0);
         var propagated = Assert.Single(result.Gaps, candidate => candidate.GapKind == "AnalysisGap");
         Assert.Equal("related-analysis-gap", propagated.GapId);
         Assert.Equal(RuleIds.AnalyzerCapabilitySemantic, propagated.RuleId);
@@ -270,6 +273,12 @@ public sealed class ReverseImpactTraversalTests
         var nullFilter = Assert.Throws<ReverseImpactInputException>(() =>
             ReverseImpactTraversal.Analyze([valid], new ReverseImpactOptions("seed", 1, new string[] { null! })));
         Assert.Equal("InvalidRelationshipFilter", nullFilter.ErrorCode);
+
+        var zeroLine = Assert.Throws<ReverseImpactInputException>(() =>
+            ReverseImpactTraversal.Analyze(
+                [valid with { Evidence = new EvidenceSpan("Source.cs", 0, 0, null, "extractor", "1.0.0") }],
+                new ReverseImpactOptions("seed", 1)));
+        Assert.Equal("InvalidEvidenceSpan", zeroLine.ErrorCode);
     }
 
     [Fact]
@@ -371,7 +380,47 @@ public sealed class ReverseImpactTraversalTests
         var reloaded = JsonSerializer.Deserialize<ReverseImpactResult>(json);
         Assert.NotNull(reloaded);
         Assert.Equal(result.Snapshot, reloaded!.Snapshot);
+        Assert.Equal(ReverseImpactContract.SchemaVersion, reloaded.SchemaVersion);
         Assert.Equal(result.Impacts[0].PathId, reloaded.Impacts[0].PathId);
+    }
+
+    [Fact]
+    public void Type_seed_retains_one_shortest_path_per_contained_member_seed()
+    {
+        var type = Id("type", "Service");
+        var firstMember = Id("method", "Service.First()");
+        var secondMember = Id("method", "Service.Second()");
+        var sharedCaller = Id("method", "Controller.Get()");
+        var facts = new[]
+        {
+            SymbolFact("first-member", firstMember, "Service.First()", "Method", type),
+            SymbolFact("second-member", secondMember, "Service.Second()", "Method", type),
+            Relationship("first-call", FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, sharedCaller, "Controller.Get()", firstMember, "Service.First()", "Calls", 10),
+            Relationship("second-call", FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, sharedCaller, "Controller.Get()", secondMember, "Service.Second()", "Calls", 11)
+        };
+
+        var result = ReverseImpactTraversal.Analyze(facts, new ReverseImpactOptions(type, 1));
+
+        Assert.Equal(2, result.Impacts.Count);
+        Assert.All(result.Impacts, impact => Assert.Equal(sharedCaller, impact.Symbol.SymbolId));
+        Assert.Equal([firstMember, secondMember], result.Impacts.Select(impact => impact.TraversalSeedSymbolId).Order(StringComparer.Ordinal));
+        Assert.Equal(2, result.Impacts.Select(impact => impact.PathId).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void Machine_contract_versions_and_allowlists_are_stable()
+    {
+        Assert.Equal("tracemap.reverse-impact.v1", ReverseImpactContract.SchemaVersion);
+        Assert.True(ReverseImpactContract.IsSupportedSchema("tracemap.reverse-impact.v1"));
+        Assert.False(ReverseImpactContract.IsSupportedSchema("tracemap.reverse-impact.v2"));
+        Assert.Equal(["Resolved", "NotFound", "Ambiguous"], ReverseImpactContract.SupportedResolutions);
+        Assert.Contains(ReverseImpactGapKinds.AnalysisGap, ReverseImpactContract.SupportedGapKinds);
+        Assert.Contains(ReverseImpactGapKinds.RelationshipMissingCanonicalIdentity, ReverseImpactContract.SupportedGapKinds);
+
+        var json = JsonSerializer.Serialize(ReverseImpactTraversal.Analyze([], new ReverseImpactOptions("missing", 1)));
+        Assert.Contains("\"SchemaVersion\":\"tracemap.reverse-impact.v1\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"Resolution\":\"NotFound\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"GapKind\":\"SelectorNotFound\"", json, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -385,6 +434,7 @@ public sealed class ReverseImpactTraversalTests
 
         Assert.Contains("evidenceTier: Tier2Structural", traversal, StringComparison.Ordinal);
         Assert.Contains("ReverseImpactResult", traversal, StringComparison.Ordinal);
+        Assert.Contains("ReverseImpactContract", traversal, StringComparison.Ordinal);
         Assert.Contains("ReverseImpactSnapshot", traversal, StringComparison.Ordinal);
         Assert.Contains("ReverseImpactItem", traversal, StringComparison.Ordinal);
         Assert.Contains("ReverseImpactHop", traversal, StringComparison.Ordinal);

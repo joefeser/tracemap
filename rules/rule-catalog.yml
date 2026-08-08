@@ -3067,6 +3067,7 @@ rules:
     evidenceTier: Tier2Structural
     emits:
       - ReverseImpactResult
+      - ReverseImpactContract
       - ReverseImpactSnapshot
       - ReverseImpactItem
       - ReverseImpactHop
@@ -3076,11 +3077,12 @@ rules:
       - The default impact-relevant families are compiler-backed or canonical-ID-backed calls, property references, inheritance, interface implementation or extension, member overrides, and interface-member implementations; other graph edges do not opt in implicitly.
       - Canonical endpoints must already be present in fact properties. Syntax-only or otherwise incomplete relationship facts without canonical endpoints are excluded with `impact.reverse.gap.v1` instead of being joined by name.
       - A query accepts facts from exactly one scan, repository, and commit snapshot. Mixed snapshots fail closed before selector resolution or graph construction.
-      - Null facts, missing required fact fields or property collections, duplicate fact IDs, invalid canonical-ID values, malformed evidence spans, and null relationship-filter entries fail with deterministic typed input errors before traversal.
-      - Depth is limited to 1 through 20 relationship hops. Cycles and duplicate affected symbols are collapsed deterministically to the first shortest path under stable ordinal edge ordering.
-      - Type seeds expand only directly contained methods, properties, fields, and events when an existing containing-symbol ID proves membership; unobserved, generated, inherited, or dynamically supplied members are not inferred.
+      - Null facts, missing required fact fields or property collections, duplicate fact IDs, invalid canonical-ID values, evidence spans whose line numbers are not one-based and ordered, and null relationship-filter entries fail with deterministic typed input errors before traversal.
+      - The machine-readable result contract is versioned as `tracemap.reverse-impact.v1`; supported resolution and gap-kind values are published by `ReverseImpactContract` and additions require an explicit contract update.
+      - Depth is limited to 1 through 20 relationship hops. Cycles and duplicates are collapsed deterministically to the first shortest path per traversal seed under stable ordinal edge ordering; the same affected symbol can appear once for each directly contained member seed that proves a distinct path.
+      - Type seeds expand only directly contained methods, properties, fields, and events when an existing containing-symbol ID proves membership; paths retain the proving member seed, while unobserved, generated, inherited, or dynamically supplied members are not inferred.
       - Exact display-name selectors are convenience selectors only. Multiple canonical IDs with the same display name fail closed, including overload, project, assembly, target-framework, and local/external collisions.
-      - Resolved queries propagate only gaps tied by canonical identity to the selected seed or visited path. Unscoped analysis gaps are retained only for a not-found selector because reduced coverage may explain the missing seed.
+      - Resolved queries propagate analysis gaps tied by canonical identity to the selected seed or visited path. Unscoped analysis gaps are retained only for a not-found selector because reduced coverage may explain the missing seed; unscoped canonical-identity relationship gaps remain visible on resolved queries because no safe symbol scope can be derived from those syntax facts.
       - Result tiers remain the tiers of the underlying hops; the structural tier on this rule describes the deterministic traversal operation and does not upgrade underlying evidence.
 
   - id: impact.reverse.gap.v1
