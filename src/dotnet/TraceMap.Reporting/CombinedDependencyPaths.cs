@@ -171,7 +171,9 @@ public sealed record CombinedPathGap(
     string? ExtractorVersion = null,
     string? EvidenceScope = null,
     int? EndLine = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     int? CandidateCount = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     int? CandidateLimit = null);
 
 public sealed record CombinedPathInventory(
