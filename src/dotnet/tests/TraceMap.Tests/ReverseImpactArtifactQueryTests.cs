@@ -388,6 +388,32 @@ public sealed class ReverseImpactArtifactQueryTests
     }
 
     [Fact]
+    public async Task Cli_maps_parent_directory_setup_failure_to_a_stable_output_error()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var parentBlocker = Path.Combine(temp.Path, "not-a-directory");
+        var output = Path.Combine(parentBlocker, "result.json");
+        SqliteIndexWriter.Write(
+            index,
+            Manifest(),
+            [Relationship("fact-call", Caller, "Caller", Seed, "Target", 1)]);
+        await File.WriteAllTextAsync(parentBlocker, "blocking file");
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync(
+            ["reverse-impact", "--index", index, "--selector", Seed, "--depth", "1", "--out", output],
+            stdout,
+            stderr);
+
+        Assert.Equal(1, exitCode);
+        Assert.Equal("error: ReverseImpactOutputWriteFailed.\n", stderr.ToString().ReplaceLineEndings("\n"));
+        Assert.Equal("blocking file", await File.ReadAllTextAsync(parentBlocker));
+        Assert.Empty(Directory.EnumerateFiles(temp.Path, ".tracemap-reverse-impact-*.tmp", SearchOption.AllDirectories));
+    }
+
+    [Fact]
     public async Task Cli_reports_only_a_stable_error_code_for_malformed_persisted_facts()
     {
         using var temp = new TempDirectory();

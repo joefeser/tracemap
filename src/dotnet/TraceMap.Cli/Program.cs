@@ -857,6 +857,20 @@ public static class TraceMapCommand
                     ParseBoundedPositiveInt(values, "--max-traversal-states", ReverseImpactContract.DefaultMaxTraversalStates, ReverseImpactContract.MaximumLimit, "InvalidTraversalLimit"),
                     ParseBoundedPositiveInt(values, "--max-frontier", ReverseImpactContract.DefaultMaxFrontierSize, ReverseImpactContract.MaximumLimit, "InvalidTraversalLimit"),
                     ParseBoundedPositiveInt(values, "--max-results", ReverseImpactContract.DefaultMaxResults, ReverseImpactContract.MaximumLimit, "InvalidTraversalLimit")));
+
+            var parent = Path.GetDirectoryName(fullOutputPath);
+            if (string.IsNullOrWhiteSpace(parent))
+            {
+                throw new ReverseImpactInputException(
+                    "ReverseImpactOutputPathInvalid",
+                    "The reverse-impact output path is invalid.",
+                    nameof(fullOutputPath));
+            }
+
+            await WriteNewFileAtomicallyAsync(
+                fullOutputPath,
+                JsonSerializer.Serialize(result, JsonOptions.Stable) + "\n",
+                cancellationToken);
         }
         catch (ReverseImpactArtifactException exception)
         {
@@ -869,17 +883,6 @@ public static class TraceMapCommand
             return 1;
         }
 
-        var parent = Path.GetDirectoryName(fullOutputPath);
-        if (string.IsNullOrWhiteSpace(parent))
-        {
-            await error.WriteLineAsync("error: reverse-impact output path is invalid.");
-            return 1;
-        }
-
-        await WriteNewFileAtomicallyAsync(
-            fullOutputPath,
-            JsonSerializer.Serialize(result, JsonOptions.Stable) + "\n",
-            cancellationToken);
         await output.WriteLineAsync($"TraceMap reverse-impact completed: {fullOutputPath}");
         await output.WriteLineAsync($"Resolution: {result.Resolution}");
         await output.WriteLineAsync($"Impacts: {result.Impacts.Count}");
@@ -1922,10 +1925,11 @@ public static class TraceMapCommand
                 nameof(fullOutputPath));
         }
 
-        Directory.CreateDirectory(parent);
         var stagedPath = Path.Combine(parent, $".tracemap-reverse-impact-{Guid.NewGuid():N}.tmp");
+        var published = false;
         try
         {
+            Directory.CreateDirectory(parent);
             await using (var stream = new FileStream(
                 stagedPath,
                 new FileStreamOptions
@@ -1942,10 +1946,7 @@ public static class TraceMapCommand
             }
 
             File.Move(stagedPath, fullOutputPath, overwrite: false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
+            published = true;
         }
         catch (IOException) when (FileSystemEntryExists(fullOutputPath))
         {
@@ -1963,13 +1964,16 @@ public static class TraceMapCommand
         }
         finally
         {
-            try
+            if (!published)
             {
-                File.Delete(stagedPath);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                // The final output is never published from a partial staging file.
+                try
+                {
+                    File.Delete(stagedPath);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    // Preserve the primary write, promotion, or cancellation failure.
+                }
             }
         }
     }
