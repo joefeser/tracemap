@@ -510,7 +510,8 @@ internal static class StaticDispatchCandidateBuilder
             extractorVersionFor(abstractionNode.SourceIndexId),
             "combined-symbol-relationships",
             abstractionNode.EndLine,
-            []));
+            [],
+            CandidateLimit: maxOverrideDepth));
     }
 
     private static bool IsMemberCandidateRelationship(string? originalRelationshipKind)

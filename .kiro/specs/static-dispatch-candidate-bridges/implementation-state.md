@@ -122,6 +122,11 @@ Task 8 route-flow slice:
   call; shared dispatch gaps reduce report coverage and fan-out/truncation marks
   the summary partial; and Markdown now renders the same candidate identity,
   provenance, registration, count, limit, and cap metadata exposed in JSON.
+- The exact-head Codex follow-up fixed three additional P2 findings: nullable
+  candidate gap metadata is omitted from unrelated path JSON; override-depth
+  truncation carries its limit/reason while leaving unknowable total and
+  omitted counts unset; and shared dispatch gaps affect route-flow only when
+  their abstraction participates in a selected route path.
 
 - Audited the shipped `DependencyRegistered` shape and added deterministic
   service/implementation type symbol IDs plus a closed-set registration shape
@@ -264,6 +269,9 @@ Results:
 - Full `.NET` solution validation after Task 8: passed, 1,306 tests.
 - ACK-authorized PR #611 review-patch validation: focused route-flow/path tests
   passed, 112 tests; full `.NET` solution passed, 1,307 tests.
+- Exact-head Codex follow-up validation: focused route-flow/path tests passed,
+  114 tests; full `.NET` solution passed, 1,309 tests; targeted format,
+  private-path guard, and diff check passed.
 - `dotnet format --verify-no-changes` over changed C# files: passed.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.

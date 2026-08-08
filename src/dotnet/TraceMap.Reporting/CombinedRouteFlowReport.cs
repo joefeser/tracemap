@@ -389,7 +389,13 @@ public static class CombinedRouteFlowReporter
         var endpointMissingRouteRoot = endpointComposition.Gaps.Any(gap => gap.GapKind == "MissingRouteRoot");
         var endpointCompositionHasPaths = endpointComposition.Paths.Count > 0;
         var endpointCompositionHasBlockingGaps = endpointComposition.Gaps.Any(IsNoEvidenceBlockingCompositionGap);
+        var selectedRouteNodeIds = routePaths
+            .SelectMany(path => path.Nodes)
+            .Select(node => node.NodeId)
+            .ToHashSet(StringComparer.Ordinal);
         var pathGaps = pathReport.Gaps
+            .Where(gap => !IsSharedDispatchGap(gap)
+                || (!string.IsNullOrWhiteSpace(gap.NodeId) && selectedRouteNodeIds.Contains(gap.NodeId)))
             .Select(gap => FromPathGap(gap, pathReport.ReportCoverage))
             .Where(gap => !endpointMissingRouteRoot || gap.GapKind != "SelectorNoMatch")
             .Where(gap => !(endpointCompositionHasPaths || endpointCompositionHasBlockingGaps) || gap.GapKind != "NoRouteFlowEvidence");
@@ -1453,14 +1459,16 @@ public static class CombinedRouteFlowReporter
                 group => group.Key,
                 group => group.Select(edge => edge.EdgeId).Distinct(StringComparer.Ordinal).Count(),
                 StringComparer.Ordinal);
-        var fanOutGaps = inventory.Gaps
+        var candidateMetadataGaps = inventory.Gaps
             .Where(gap => gap.RuleId == StaticDispatchCandidateBuilder.GapRuleId
-                && gap.GapKind == "DispatchCandidateFanOut"
+                && gap.GapKind is "DispatchCandidateFanOut" or "DispatchCandidateTruncatedByLimit"
                 && !string.IsNullOrWhiteSpace(gap.NodeId))
             .GroupBy(gap => gap.NodeId!, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
-                group => group.OrderBy(gap => gap.GapId, StringComparer.Ordinal).First(),
+                group => group.OrderBy(gap => gap.GapKind, StringComparer.Ordinal)
+                    .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
+                    .ToArray(),
                 StringComparer.Ordinal);
 
         return paths.Select(path => path with
@@ -1473,14 +1481,22 @@ public static class CombinedRouteFlowReporter
                 }
 
                 var emittedCount = emittedCounts.GetValueOrDefault(edge.FromNodeId, 1);
-                var fanOutGap = fanOutGaps.GetValueOrDefault(edge.FromNodeId);
+                var metadataGaps = candidateMetadataGaps.GetValueOrDefault(edge.FromNodeId, []);
+                var fanOutGap = metadataGaps.FirstOrDefault(gap => gap.GapKind == "DispatchCandidateFanOut");
+                var depthGap = metadataGaps.FirstOrDefault(gap => gap.GapKind == "DispatchCandidateTruncatedByLimit");
                 var candidateCount = fanOutGap?.CandidateCount ?? emittedCount;
+                var capReason = string.Join(",", metadataGaps
+                    .Select(gap => gap.Reason)
+                    .Where(reason => !string.IsNullOrWhiteSpace(reason))
+                    .Select(reason => reason!)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(reason => reason, StringComparer.Ordinal));
                 return edge with
                 {
-                    CandidateCount = candidateCount,
-                    OmittedCount = Math.Max(0, candidateCount - emittedCount),
-                    CandidateLimit = fanOutGap?.CandidateLimit,
-                    CandidateCapReason = fanOutGap?.Reason
+                    CandidateCount = depthGap is null ? candidateCount : null,
+                    OmittedCount = depthGap is null ? Math.Max(0, candidateCount - emittedCount) : null,
+                    CandidateLimit = depthGap?.CandidateLimit ?? fanOutGap?.CandidateLimit,
+                    CandidateCapReason = capReason.Length > 0 ? capReason : null
                 };
             }).ToArray()
         }).ToArray();
@@ -4308,6 +4324,11 @@ public static class CombinedRouteFlowReporter
             SafeCommitSha(gap.CommitSha),
             ExtractorName(gap.RuleId),
             SafeSelector(gap.ExtractorVersion) ?? "unknown");
+    }
+
+    private static bool IsSharedDispatchGap(CombinedPathGap gap)
+    {
+        return gap.RuleId == StaticDispatchCandidateBuilder.GapRuleId;
     }
 
     private static IReadOnlyList<string> PathGapLimitations(string gapKind, string pathReportCoverage)
