@@ -238,12 +238,25 @@ public sealed class AccessScreenDataFlowTests
             gap.SupportingFactIds);
     }
 
-    [Fact]
-    public void Builder_does_not_reconstruct_query_owners_for_ambiguous_output_gaps()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Builder_preserves_ambiguous_output_and_all_valid_query_owners(bool persistedSupport)
     {
         const string firstQuery = "access-query-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         const string secondQuery = "access-query-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
         const string output = "access-query-field-cccccccccccccccccccccccccccccccc";
+        var gapProperties = new List<(string Key, string Value)>
+        {
+            ("classification", "AccessQueryOutputSourceUnavailable"),
+            ("scopeKind", "query-output-field-owner-unknown")
+        };
+        if (persistedSupport)
+        {
+            gapProperties.Add((
+                "supportingFactIds",
+                "fact-output-one;fact-output-two;fact-query-one;fact-query-two"));
+        }
         var facts = new[]
         {
             Fact("fact-query-one", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery,
@@ -256,15 +269,16 @@ public sealed class AccessScreenDataFlowTests
                 EvidenceTiers.Tier2Structural, secondQuery, output, ("coverageLabel", "partial")),
             Fact("fact-output-gap", FactTypes.AnalysisGap, RuleIds.LegacyAccessQuery,
                 EvidenceTiers.Tier4Unknown, null, output,
-                ("classification", "AccessQueryOutputSourceUnavailable"),
-                ("scopeKind", "query-output-field-owner-unknown"))
+                gapProperties.ToArray())
         };
 
         var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
 
         var gap = Assert.Single(report.Gaps, item =>
             item.Classification == "AccessQueryOutputSourceUnavailable");
-        Assert.Equal(["fact-output-gap"], gap.SupportingFactIds);
+        Assert.Equal(
+            ["fact-output-gap", "fact-output-one", "fact-output-two", "fact-query-one", "fact-query-two"],
+            gap.SupportingFactIds);
     }
 
     [Fact]
