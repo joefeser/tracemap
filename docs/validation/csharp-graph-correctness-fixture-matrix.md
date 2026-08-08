@@ -7,11 +7,18 @@ The dangerous failure is a plausible graph that silently joins, drops, guesses,
 or reverses evidence.
 
 Issue [#591](https://github.com/joefeser/tracemap/issues/591) tracks the full
-matrix. The implemented slices cover canonical identity, partial types,
-receiver resolution, and the first direction-persistence seam. Later slices
-must add incremental rebuild behavior and incomplete legacy project inputs.
-The direction fixture uses #590's shipped internal kernel only as a query
-readback; user-facing reverse-impact composition remains tracked by #590.
+matrix. Implemented slices cover canonical identity, partial types, receiver
+resolution, direction persistence, and immutable full-snapshot stability.
+Incomplete legacy project inputs remain. The direction fixture uses #590's
+shipped internal kernel only as a query readback; persisted-artifact loading and
+the user-facing reverse-impact query surface remain tracked by #590.
+
+TraceMap currently rebuilds immutable full snapshots. It does not expose an
+in-place incremental replacement API. `EvidenceSpan.FilePath` identifies where
+evidence was observed; it is not entity ownership or replacement/deletion
+authority. A referenced target location likewise grants no mutation authority.
+If incremental replacement is introduced later, only an explicit
+changed/deleted/excluded extraction-unit record may authorize pruning.
 
 | ID | Category | Minimal source/project shape | Dangerous naive result | Required TraceMap contract | Status |
 |---|---|---|---|---|---|
@@ -36,7 +43,8 @@ readback; user-facing reverse-impact composition remains tracked by #590.
 | DIR-02 | Directionality | A controller-like caller invokes a downstream service through an interface-typed receiver | UI labels or endpoint posture reverse the compiler call edge | The controller method remains the call source, the selected interface member remains the target, and reverse query returns the controller as a dependent | Implemented in the DIR-01 test |
 | DIR-03 | Directionality | Bounded MSBuild binlog records a repository-relative project build edge | Build order is silently reinterpreted as a source project declaration or canonical impact edge | Preserve the extractor's documented source/target observation through generic fact persistence; do not opt it into impact traversal without canonical project identity and a declared impact contract | Implemented in `MsBuildBinlogExtractorTests.Extract_projects_success_graph_and_safe_diagnostic_without_messages` |
 | DIR-04 | Directionality | HTTP/database surfaces exist without a canonical impact relationship contract | Surface labels are promoted into guessed graph edges | Keep surface facts out of reverse-impact traversal until a separate rule documents endpoints, direction, provenance, and limitations | Explicitly deferred; no current relationship contract to round-trip |
-| INC-01 | Incremental rebuild | Changed, unchanged, renamed, moved, deleted, and excluded sources share targets | Replacement drops unrelated edges or retains stale ones | Graph shrink is attributable to explicit changed/deleted/excluded evidence; unrelated tiers/providers survive | Planned later slice |
+| SNAP-01 | Full-snapshot stability | Full scan, caller-only edit, file move, target deletion, explicit source exclusion, project scope with linked compile items, and non-scope inventory omission followed by complete snapshot rebuilds | A rebuilt snapshot drops unchanged evidence, retains old paths/semantic edges, fabricates Tier 1 error-symbol identities, strips reference or linked-source compilation support, or mislabels an inventory omission as a user exclusion | Canonical endpoints survive caller edits/moves; old paths disappear; target deletion and explicit exclusion degrade to syntax plus a Tier 4 gap without Tier 1 `ErrorType` facts or durable error-symbol rows; referenced projects may support compilation without emitting out-of-scope facts, while linked compile items belonging to the selected project remain inventoried and evidenced; only explicit exclusion globs create `scan-scope` gaps; unrelated SQL evidence remains stable across in-memory, NDJSON, and SQLite projections | Implemented in `CSharpFullSnapshotStabilityTests`; in-place incremental replacement remains unsupported and unclaimed |
+| INC-01 | Incremental replacement | Changed, unchanged, renamed, moved, deleted, and excluded extraction units share targets in a future mutable graph API | Replacement drops unrelated edges or retains stale ones | Only explicit changed/deleted/excluded extraction-unit records authorize pruning; unrelated tiers/providers survive | Deferred until TraceMap exposes an in-place incremental replacement contract; file spans alone are not mutation authority |
 | LEG-01 | Legacy/incomplete .NET | Old-format .NET Framework project has an unavailable assembly reference | Failed compilation becomes a clean empty graph or a falsely complete semantic graph | Preserve Tier 2 build diagnostics and Tier 3 declarations/invocations, emit Tier 4 workspace gaps, and label the scan reduced/partial | Implemented in `Legacy_project_with_unavailable_reference_preserves_syntax_and_reports_reduced_coverage` |
 | LEG-02 | Source/path portability | SDK project references a sibling project outside the scan root | Host paths leak, the external symbol is collapsed by display name, or the reference is ignored | Keep the external assembly in the compiler-resolved canonical target identity while artifacts contain only repository-relative or bounded synthetic paths | Implemented in `Out_of_root_project_reference_uses_compiler_identity_without_disclosing_host_paths` |
 | LEG-03 | Conditional compilation | Different build configurations expose different valid source graphs | One configuration is presented as universal or mutually exclusive edges are combined | Bind configuration evidence explicitly and label unobserved configurations as gaps | Planned follow-up; no multi-configuration scan contract exists |
