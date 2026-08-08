@@ -117,6 +117,68 @@ public sealed class CSharpFullSnapshotStabilityTests
     }
 
     [Fact]
+    public void Project_scope_includes_linked_compile_items_outside_the_project_directory()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        WriteLinkedCompileItemFixture(repo);
+
+        var scoped = Scan(
+            repo,
+            Path.Combine(temp.Path, "project-scoped"),
+            projectPaths: ["src/App/App.csproj"]);
+
+        Assert.Equal("Succeeded", scoped.Manifest.BuildStatus);
+        Assert.Contains(scoped.Inventory, item => item.RelativePath == "src/Shared/Helper.cs");
+        Assert.Contains(scoped.Facts, fact =>
+            fact.FactType == FactTypes.TypeDeclared
+            && fact.RuleId == RuleIds.CSharpSemanticDeclarations
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.Evidence.FilePath == "src/Shared/Helper.cs"
+            && fact.TargetSymbol == "global::App.Helper");
+        Assert.Contains(scoped.Facts, fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.RuleId == RuleIds.CSharpSemanticCallGraph
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.Evidence.FilePath == "src/App/Caller.cs"
+            && fact.TargetSymbol == "global::App.Helper.Assist()");
+        Assert.DoesNotContain(scoped.Facts, fact =>
+            fact.Properties.GetValueOrDefault("gapKind") == "ScanScopeExcludedSources");
+    }
+
+    [Fact]
+    public void Excluded_base_and_await_target_cannot_persist_error_type_semantic_evidence()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        WriteErrorTypeFixture(repo);
+
+        var scoped = Scan(
+            repo,
+            Path.Combine(temp.Path, "scoped"),
+            ["src/App/Target.cs"]);
+
+        Assert.Equal("FailedOrPartial", scoped.Manifest.BuildStatus);
+        AssertNoErrorTypeSemanticFacts(scoped, "src/App/Caller.cs", 7);
+        Assert.DoesNotContain(scoped.Facts, fact =>
+            fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.FactType == FactTypes.SymbolRelationship
+            && fact.Evidence.FilePath == "src/App/Caller.cs"
+            && fact.Evidence.StartLine == 3);
+        Assert.DoesNotContain(scoped.Facts, fact =>
+            fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.FactType == FactTypes.AsyncBoundary
+            && fact.Evidence.FilePath == "src/App/Caller.cs"
+            && fact.Evidence.StartLine == 7);
+
+        using var connection = new SqliteConnection($"Data Source={Path.Combine(temp.Path, "scoped", "index.sqlite")}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM symbols WHERE symbol_kind = 'ErrorType' OR symbol_id LIKE '% '";
+        Assert.Equal(0L, (long)(command.ExecuteScalar() ?? -1L));
+    }
+
+    [Fact]
     public void Inventoried_path_matching_uses_actual_filesystem_case_semantics()
     {
         using var temp = new TempDirectory();
@@ -480,6 +542,90 @@ public sealed class CSharpFullSnapshotStabilityTests
                 public void Run()
                 {
                     new Target().Execute();
+                }
+            }
+            """);
+        RunGit(repo, "init");
+        RunGit(repo, "config", "user.email", "fixture@example.invalid");
+        RunGit(repo, "config", "user.name", "TraceMap Fixture");
+        Commit(repo, "baseline");
+    }
+
+    private static void WriteLinkedCompileItemFixture(string repo)
+    {
+        Directory.CreateDirectory(Path.Combine(repo, "src", "App"));
+        Directory.CreateDirectory(Path.Combine(repo, "src", "Shared"));
+        File.WriteAllText(
+            Path.Combine(repo, "src", "App", "App.csproj"),
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <AssemblyName>App</AssemblyName>
+              </PropertyGroup>
+              <ItemGroup>
+                <Compile Include="../Shared/Helper.cs" Link="Helper.cs" />
+              </ItemGroup>
+            </Project>
+            """);
+        File.WriteAllText(
+            Path.Combine(repo, "src", "Shared", "Helper.cs"),
+            """
+            namespace App;
+
+            public sealed class Helper
+            {
+                public void Assist() { }
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(repo, "src", "App", "Caller.cs"),
+            """
+            namespace App;
+
+            public sealed class Caller
+            {
+                public void Run() => new Helper().Assist();
+            }
+            """);
+        RunGit(repo, "init");
+        RunGit(repo, "config", "user.email", "fixture@example.invalid");
+        RunGit(repo, "config", "user.name", "TraceMap Fixture");
+        Commit(repo, "baseline");
+    }
+
+    private static void WriteErrorTypeFixture(string repo)
+    {
+        Directory.CreateDirectory(Path.Combine(repo, "src", "App"));
+        File.WriteAllText(
+            Path.Combine(repo, "src", "App", "App.csproj"),
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(
+            Path.Combine(repo, "src", "App", "Target.cs"),
+            """
+            namespace App;
+
+            public interface ITargetContract { }
+
+            public static class Target
+            {
+                public static Task ExecuteAsync() => Task.CompletedTask;
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(repo, "src", "App", "Caller.cs"),
+            """
+            namespace App;
+
+            public sealed class Caller : ITargetContract
+            {
+                public async Task Run()
+                {
+                    await Target.ExecuteAsync();
                 }
             }
             """);
