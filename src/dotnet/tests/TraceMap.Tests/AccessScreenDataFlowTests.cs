@@ -239,9 +239,11 @@ public sealed class AccessScreenDataFlowTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Builder_preserves_ambiguous_output_and_all_valid_query_owners(bool persistedSupport)
+    [InlineData(null)]
+    [InlineData("fact-output-one;fact-output-two;fact-query-one;fact-query-two")]
+    [InlineData("fact-output-one;fact-query-one")]
+    [InlineData("fact-output-one;;fact-output-two;fact-query-one;fact-query-two")]
+    public void Builder_preserves_ambiguous_output_and_all_valid_query_owners(string? persistedSupport)
     {
         const string firstQuery = "access-query-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         const string secondQuery = "access-query-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -251,11 +253,9 @@ public sealed class AccessScreenDataFlowTests
             ("classification", "AccessQueryOutputSourceUnavailable"),
             ("scopeKind", "query-output-field-owner-unknown")
         };
-        if (persistedSupport)
+        if (persistedSupport is not null)
         {
-            gapProperties.Add((
-                "supportingFactIds",
-                "fact-output-one;fact-output-two;fact-query-one;fact-query-two"));
+            gapProperties.Add(("supportingFactIds", persistedSupport));
         }
         var facts = new[]
         {
