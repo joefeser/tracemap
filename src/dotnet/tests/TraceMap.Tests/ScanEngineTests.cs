@@ -28,12 +28,27 @@ public sealed class ScanEngineTests
     [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
     public void Scan_manifest_rejects_malformed_source_snapshot_digests(string digest)
     {
-        var manifest = new ScanManifest(
-            "scan-id", "repo", null, null, "commit", "scanner", DateTimeOffset.UtcNow,
-            "Level1SemanticAnalysis", "Succeeded", [], [], [], [], SourceSnapshotDigest: digest);
-        var json = JsonSerializer.Serialize(manifest, JsonOptions.Stable);
+        var json = $$"""
+            {
+              "scanId": "scan-id",
+              "repoName": "repo",
+              "commitSha": "commit",
+              "scannerVersion": "scanner",
+              "scannedAt": "2026-08-08T00:00:00Z",
+              "analysisLevel": "Level1SemanticAnalysis",
+              "buildStatus": "Succeeded",
+              "solutions": [],
+              "projects": [],
+              "targetFrameworks": [],
+              "knownGaps": [],
+              "sourceSnapshotDigest": "{{digest}}"
+            }
+            """;
 
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ScanManifest>(json, JsonOptions.Stable));
+        Assert.Throws<JsonException>(() => new ScanManifest(
+            "scan-id", "repo", null, null, "commit", "scanner", DateTimeOffset.UtcNow,
+            "Level1SemanticAnalysis", "Succeeded", [], [], [], [], SourceSnapshotDigest: digest));
     }
 
     [Fact]
