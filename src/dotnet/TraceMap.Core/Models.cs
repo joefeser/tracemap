@@ -16,7 +16,8 @@ public sealed record ScanManifest(
     IReadOnlyList<string> KnownGaps,
     string? ScanRootRelativePath = null,
     string? ScanRootPathHash = null,
-    string? GitRootHash = null);
+    string? GitRootHash = null,
+    string? SourceSnapshotDigest = null);
 
 public sealed record EvidenceSpan(
     string FilePath,

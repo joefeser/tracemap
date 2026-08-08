@@ -10,6 +10,16 @@ public sealed class SourceInventoryException : Exception
     }
 }
 
+public sealed class SourceSnapshotException : Exception
+{
+    public const string ErrorCode = "SourceSnapshotChangedDuringScan";
+
+    public SourceSnapshotException()
+        : base(ErrorCode)
+    {
+    }
+}
+
 public static class FileInventory
 {
     private static readonly HashSet<string> IncludedExtensions = new(StringComparer.OrdinalIgnoreCase)

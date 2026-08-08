@@ -1,3 +1,7 @@
+using System.Buffers.Binary;
+using System.Security.Cryptography;
+using System.Text;
+
 namespace TraceMap.Core;
 
 public static class ScanEngine
@@ -17,6 +21,7 @@ public static class ScanEngine
         var inventory = ApplyScope(fullInventory, repoPath, options);
         var semanticResult = CSharpSemanticExtractor.Extract(repoPath, inventory, options, fullInventory);
         inventory = IncludeSemanticallyAnalyzedFiles(inventory, fullInventory, semanticResult);
+        var sourceSnapshotDigest = CreateSourceSnapshotDigest(repoPath, inventory);
         var solutions = inventory
             .Where(item => item.Kind == "Solution")
             .Select(item => item.RelativePath)
@@ -46,7 +51,7 @@ public static class ScanEngine
             : "Level3SyntaxAnalysis";
 
         var provisionalManifest = new ScanManifest(
-            CreateScanId(git, inventory, options),
+            CreateScanId(git, inventory, sourceSnapshotDigest, options),
             git.RepoName,
             git.RemoteUrl,
             git.Branch,
@@ -61,7 +66,8 @@ public static class ScanEngine
             semanticKnownGaps,
             GetScanRootRelativePath(repoPath, git),
             FactFactory.Hash(repoPath, 32),
-            string.IsNullOrWhiteSpace(git.GitRootPath) ? null : FactFactory.Hash(Path.GetFullPath(git.GitRootPath), 32));
+            string.IsNullOrWhiteSpace(git.GitRootPath) ? null : FactFactory.Hash(Path.GetFullPath(git.GitRootPath), 32),
+            sourceSnapshotDigest);
 
         var binlogFacts = MsBuildBinlogExtractor.Extract(repoPath, provisionalManifest, options.BinlogPaths);
         var binlogGaps = binlogFacts
@@ -88,15 +94,62 @@ public static class ScanEngine
         };
 
         var facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult, options, binlogFacts);
+        if (!string.Equals(sourceSnapshotDigest, CreateSourceSnapshotDigest(repoPath, inventory), StringComparison.Ordinal))
+        {
+            throw new SourceSnapshotException();
+        }
+
         return new ScanResult(manifest, facts, inventory);
     }
 
-    private static string CreateScanId(GitMetadata git, IReadOnlyList<FileInventoryItem> inventory, ScanOptions options)
+    private static string CreateScanId(
+        GitMetadata git,
+        IReadOnlyList<FileInventoryItem> inventory,
+        string sourceSnapshotDigest,
+        ScanOptions options)
     {
         var signature = string.Join('\n', inventory.Select(item => $"{item.RelativePath}|{item.Kind}|{item.SizeBytes}"));
         var binlogSignature = MsBuildBinlogExtractor.CreateInputSignature(options.BinlogPaths, repoPath: options.RepoPath);
         var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
-        return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{signature}|{binlogSignature}", 20);
+        return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{sourceSnapshotDigest}|{signature}|{binlogSignature}", 20);
+    }
+
+    private static string CreateSourceSnapshotDigest(string repoPath, IReadOnlyList<FileInventoryItem> inventory)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        Span<byte> lengthBuffer = stackalloc byte[sizeof(long)];
+        var buffer = new byte[64 * 1024];
+
+        try
+        {
+            foreach (var item in inventory.OrderBy(candidate => candidate.RelativePath, StringComparer.Ordinal))
+            {
+                AppendString(hash, item.RelativePath, lengthBuffer);
+                AppendString(hash, item.Kind, lengthBuffer);
+                BinaryPrimitives.WriteInt64BigEndian(lengthBuffer, item.SizeBytes);
+                hash.AppendData(lengthBuffer);
+
+                var path = Path.Combine(repoPath, item.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                int read;
+                while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+                    hash.AppendData(buffer.AsSpan(0, read));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new SourceInventoryException(ex);
+        }
+
+        return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+    }
+
+    private static void AppendString(IncrementalHash hash, string value, Span<byte> lengthBuffer)
+    {
+        var bytes = Encoding.UTF8.GetBytes(value);
+        BinaryPrimitives.WriteInt64BigEndian(lengthBuffer, bytes.Length);
+        hash.AppendData(lengthBuffer);
+        hash.AppendData(bytes);
     }
 
     private static string GetScanRootRelativePath(string repoPath, GitMetadata git)
