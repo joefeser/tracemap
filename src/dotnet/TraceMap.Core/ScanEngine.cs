@@ -6,9 +6,12 @@ namespace TraceMap.Core;
 
 public static class ScanEngine
 {
-    public static ScanResult Scan(ScanOptions options)
+    public static ScanResult Scan(ScanOptions options) => Scan(options, CancellationToken.None);
+
+    public static ScanResult Scan(ScanOptions options, CancellationToken cancellationToken)
     {
-        using var scanOperation = TraceMapDiagnostics.StartScan();
+        using var scanOperation = TraceMapDiagnostics.StartScan(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         var repoPath = Path.GetFullPath(options.RepoPath);
         var outputPath = Path.GetFullPath(options.OutputPath);
         if (!Directory.Exists(repoPath))
@@ -19,22 +22,34 @@ public static class ScanEngine
         GitMetadata git;
         IReadOnlyList<FileInventoryItem> fullInventory;
         IReadOnlyList<FileInventoryItem> inventory;
-        using (var discoveryOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.Discovery))
+        using (var discoveryOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.Discovery, cancellationToken))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             git = GitMetadataProvider.Detect(repoPath);
             MsBuildBinlogExtractor.ValidateCommitBinding(git.CommitSha, options.BinlogPaths, options.BinlogCommitSha);
             var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
             fullInventory = FileInventory.Collect(repoPath, outputPath, options.ExcludeGlobs, sourcePathComparer);
             inventory = ApplyScope(fullInventory, repoPath, options);
+            cancellationToken.ThrowIfCancellationRequested();
             discoveryOperation.RecordItems(inventory.Count);
             discoveryOperation.Complete(TraceMapDiagnosticOutcome.Succeeded);
         }
 
-        var semanticInputSnapshot = CaptureSemanticInputSnapshot(repoPath, fullInventory);
-        SemanticExtractionResult semanticResult;
-        using (var semanticOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.SemanticAnalysis))
+        IReadOnlyDictionary<string, string> semanticInputSnapshot;
+        try
         {
+            semanticInputSnapshot = CaptureSemanticInputSnapshot(repoPath, fullInventory);
+        }
+        catch (SourceInventoryException ex)
+        {
+            throw new SourceSnapshotException(ex);
+        }
+        SemanticExtractionResult semanticResult;
+        using (var semanticOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.SemanticAnalysis, cancellationToken))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             semanticResult = CSharpSemanticExtractor.Extract(repoPath, inventory, options, fullInventory);
+            cancellationToken.ThrowIfCancellationRequested();
             VerifySemanticInputSnapshot(repoPath, fullInventory, semanticResult, semanticInputSnapshot);
             semanticOperation.Complete(semanticResult.ReducedCoverage
                 ? TraceMapDiagnosticOutcome.Partial
@@ -115,9 +130,11 @@ public static class ScanEngine
         };
 
         IReadOnlyList<CodeFact> facts;
-        using (var extractionOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.StaticExtraction))
+        using (var extractionOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.StaticExtraction, cancellationToken))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult, options, binlogFacts);
+            cancellationToken.ThrowIfCancellationRequested();
             extractionOperation.RecordItems(facts.Count);
             extractionOperation.Complete(manifest.BuildStatus == "FailedOrPartial"
                 ? TraceMapDiagnosticOutcome.Partial
@@ -137,6 +154,8 @@ public static class ScanEngine
         {
             throw new SourceSnapshotException();
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         scanOperation.RecordItems(facts.Count);
         scanOperation.Complete(

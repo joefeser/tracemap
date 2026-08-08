@@ -13,6 +13,44 @@ namespace TraceMap.Tests;
 public sealed class ScanEngineTests
 {
     [Fact]
+    public void File_inventory_retains_the_legacy_two_parameter_binary_contract()
+    {
+        var method = typeof(FileInventory).GetMethod(
+            nameof(FileInventory.Collect),
+            [typeof(string), typeof(string)]);
+
+        Assert.NotNull(method);
+    }
+
+    [Theory]
+    [InlineData("not-a-sha")]
+    [InlineData("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    public void Scan_manifest_rejects_malformed_source_snapshot_digests(string digest)
+    {
+        var manifest = new ScanManifest(
+            "scan-id", "repo", null, null, "commit", "scanner", DateTimeOffset.UtcNow,
+            "Level1SemanticAnalysis", "Succeeded", [], [], [], [], SourceSnapshotDigest: digest);
+        var json = JsonSerializer.Serialize(manifest, JsonOptions.Stable);
+
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ScanManifest>(json, JsonOptions.Stable));
+    }
+
+    [Fact]
+    public void Scan_manifest_accepts_null_and_valid_source_snapshot_digests()
+    {
+        foreach (var digest in new string?[] { null, new('a', 64) })
+        {
+            var manifest = new ScanManifest(
+                "scan-id", "repo", null, null, "commit", "scanner", DateTimeOffset.UtcNow,
+                "Level1SemanticAnalysis", "Succeeded", [], [], [], [], SourceSnapshotDigest: digest);
+            var json = JsonSerializer.Serialize(manifest, JsonOptions.Stable);
+
+            Assert.Equal(digest, JsonSerializer.Deserialize<ScanManifest>(json, JsonOptions.Stable)!.SourceSnapshotDigest);
+        }
+    }
+
+    [Fact]
     public void Scan_creates_manifest_with_unknown_commit_outside_git_repo()
     {
         using var temp = new TempDirectory();

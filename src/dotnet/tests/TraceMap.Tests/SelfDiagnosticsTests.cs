@@ -115,6 +115,25 @@ public sealed class SelfDiagnosticsTests
         Assert.Equal("unknown", failedActivity.Tags["tracemap.build_status"]);
     }
 
+    [Fact]
+    public void Cancelled_scan_stops_before_discovery_and_records_cancelled_operations()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Sample.cs"), "public sealed class Sample { }");
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var activities = new ConcurrentBag<ActivitySnapshot>();
+        using var listener = ListenForActivities(activities);
+
+        Assert.Throws<OperationCanceledException>(() => ScanEngine.Scan(
+            new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")),
+            cancellation.Token));
+
+        var scan = Assert.Single(activities, activity => activity.Name == "tracemap.scan");
+        Assert.Equal("cancelled", scan.Tags["tracemap.outcome"]);
+        Assert.DoesNotContain(activities, activity => activity.Name == "tracemap.scan.discovery");
+    }
+
     private static ActivityListener ListenForActivities(ConcurrentBag<ActivitySnapshot> activities)
     {
         var listener = new ActivityListener

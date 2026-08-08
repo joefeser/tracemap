@@ -80,11 +80,14 @@ public static class FileInventory
         "obj"
     };
 
+    public static IReadOnlyList<FileInventoryItem> Collect(string repoPath, string? outputPath = null) =>
+        Collect(repoPath, outputPath, excludeGlobs: null, pathComparer: null);
+
     public static IReadOnlyList<FileInventoryItem> Collect(
         string repoPath,
-        string? outputPath = null,
-        IReadOnlyList<string>? excludeGlobs = null,
-        StringComparer? pathComparer = null)
+        string? outputPath,
+        IReadOnlyList<string>? excludeGlobs,
+        StringComparer? pathComparer)
     {
         var root = Path.GetFullPath(repoPath);
         var outputFullPath = string.IsNullOrWhiteSpace(outputPath)

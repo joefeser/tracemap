@@ -228,7 +228,7 @@ public static class TraceMapCommand
             TargetFramework: values.GetValueOrDefault("--target-framework"),
             Restore: values.HasFlag("--restore"),
             BinlogPaths: values.GetMany("--binlog"),
-            BinlogCommitSha: values.GetValueOrDefault("--binlog-commit-sha")));
+            BinlogCommitSha: values.GetValueOrDefault("--binlog-commit-sha")), cancellationToken);
         var fullOutputPath = Path.GetFullPath(outputPath);
         var logsPath = Path.Combine(fullOutputPath, "logs");
         Directory.CreateDirectory(logsPath);
