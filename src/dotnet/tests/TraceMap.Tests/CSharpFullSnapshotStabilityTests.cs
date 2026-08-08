@@ -87,17 +87,98 @@ public sealed class CSharpFullSnapshotStabilityTests
             fact.RuleId == RuleIds.CSharpSyntaxCallGraph
             && fact.TargetSymbol == "Execute"
             && fact.Evidence.FilePath == "src/Caller/Caller.cs");
+        AssertNoErrorTypeSemanticFacts(scoped, "src/Caller/Caller.cs", 7);
         AssertCompilationDiagnosticGap(scoped, "src/Caller/Caller.cs", 7, "CS0246");
     }
 
     [Fact]
-    public void Inventoried_path_matching_uses_platform_filesystem_case_semantics()
+    public void Project_scope_retains_reference_sources_for_compilation_support_without_emitting_their_facts()
     {
-        var comparer = CSharpSemanticExtractor.SourcePathComparer;
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        WriteCrossProjectFixture(repo);
+
+        var scoped = Scan(
+            repo,
+            Path.Combine(temp.Path, "project-scoped"),
+            projectPaths: ["src/Caller/Caller.csproj"]);
+
+        Assert.Equal("Succeeded", scoped.Manifest.BuildStatus);
+        Assert.DoesNotContain(scoped.Inventory, item => item.RelativePath.StartsWith("src/Target/", StringComparison.Ordinal));
+        Assert.DoesNotContain(scoped.Facts, fact => fact.Evidence.FilePath.StartsWith("src/Target/", StringComparison.Ordinal));
+        Assert.DoesNotContain(scoped.Facts, fact =>
+            fact.Properties.GetValueOrDefault("gapKind") == "ScanScopeExcludedSources");
+        Assert.Contains(scoped.Facts, fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.RuleId == RuleIds.CSharpSemanticCallGraph
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.Evidence.FilePath == "src/Caller/Caller.cs"
+            && fact.TargetSymbol == "global::CrossProject.Target.Execute()");
+    }
+
+    [Fact]
+    public void Inventoried_path_matching_uses_actual_filesystem_case_semantics()
+    {
+        using var temp = new TempDirectory();
+        var caseProbe = Path.Combine(temp.Path, "CaseProbe");
+        Directory.CreateDirectory(caseProbe);
+        var alternateCase = Path.Combine(temp.Path, "caseProbe");
+        var comparer = CSharpSemanticExtractor.CreateSourcePathComparer(caseProbe);
 
         Assert.Equal(
-            OperatingSystem.IsWindows(),
+            Directory.Exists(alternateCase),
             comparer.Equals("src/CaseSample/Caller.cs", "src/casesample/caller.cs"));
+    }
+
+    [Fact]
+    public void Case_insensitive_compile_item_drift_retains_canonical_inventory_paths_and_semantic_evidence()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "CaseDriftRepo");
+        Directory.CreateDirectory(repo);
+        var alternateCase = Path.Combine(temp.Path, "caseDriftRepo");
+        if (!Directory.Exists(alternateCase))
+        {
+            return;
+        }
+
+        WriteCaseDriftFixture(repo);
+        var result = Scan(repo, Path.Combine(temp.Path, "output"));
+
+        Assert.Equal("Succeeded", result.Manifest.BuildStatus);
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.Properties.GetValueOrDefault("gapKind") == "ScanScopeExcludedSources");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.TypeDeclared
+            && fact.RuleId == RuleIds.CSharpSemanticDeclarations
+            && fact.TargetSymbol == "global::CaseDrift.Target"
+            && fact.Evidence.FilePath == "src/CaseDrift/Sub/Target.cs");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.RuleId == RuleIds.CSharpSemanticCallGraph
+            && fact.TargetSymbol == "global::CaseDrift.Target.Execute()");
+    }
+
+    [Fact]
+    public void Non_scope_inventory_omissions_do_not_strip_compilation_support_or_claim_scope_reduction()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        WriteCustomIntermediateOutputFixture(repo);
+
+        var result = Scan(repo, Path.Combine(temp.Path, "output"));
+
+        Assert.Equal("Level1SemanticAnalysis", result.Manifest.AnalysisLevel);
+        Assert.Equal("Succeeded", result.Manifest.BuildStatus);
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.Properties.GetValueOrDefault("gapKind") == "ScanScopeExcludedSources");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.TypeDeclared
+            && fact.RuleId == RuleIds.CSharpSemanticDeclarations
+            && fact.TargetSymbol == "global::IntermediateOutput.Widget");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.RuleId == RuleIds.CSharpSemanticDeclarations
+            && fact.Evidence.FilePath.Contains("build-int/", StringComparison.Ordinal));
     }
 
     private static void AssertCompilationDiagnosticGap(
@@ -120,6 +201,20 @@ public sealed class CSharpFullSnapshotStabilityTests
             && fact.Properties.GetValueOrDefault("diagnosticId") == diagnosticId);
         Assert.Equal("workspace", gap.Properties["diagnosticKind"]);
         Assert.Equal("reduces-semantic-coverage", gap.Properties["coverageEffect"]);
+    }
+
+    private static void AssertNoErrorTypeSemanticFacts(ScanResult result, string filePath, int line)
+    {
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.Evidence.FilePath == filePath
+            && fact.Evidence.StartLine == line
+            && (fact.RuleId == RuleIds.CSharpSemanticCallGraph
+                || fact.RuleId == RuleIds.CSharpSemanticObjectCreation));
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && (fact.Properties.GetValueOrDefault("targetSymbolKind") == "ErrorType"
+                || fact.Properties.GetValueOrDefault("constructorSymbolKind") == "ErrorType"));
     }
 
     [Fact]
@@ -149,11 +244,25 @@ public sealed class CSharpFullSnapshotStabilityTests
         Assert.Equal(baselinePersistedSql.Ndjson, scopedPersistedSql.Ndjson);
         Assert.Equal(baselinePersistedSql.Sqlite, scopedPersistedSql.Sqlite);
         Assert.Equal(scopedPersistedSql.Ndjson, scopedPersistedSql.Sqlite);
-        Assert.Contains(scoped.Facts, fact =>
+        var scopeGap = Assert.Single(scoped.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.CSharpSemanticWorkspace
             && fact.Properties.GetValueOrDefault("gapKind") == "ScanScopeExcludedSources"
             && fact.Evidence.FilePath == ".");
+        Assert.Equal("scan-scope", scopeGap.Properties["diagnosticKind"]);
+        Assert.Equal("ScanScopeExcludedSources", scopeGap.Properties["diagnosticCode"]);
+        Assert.Equal("1", scopeGap.Properties["excludedDocumentCount"]);
+        Assert.Equal("ReviewScanScope", scopeGap.Properties["guidanceCode"]);
+        Assert.DoesNotContain("workspace", scopeGap.Properties["message"], StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(scoped.Facts, fact =>
+            fact.FactType == FactTypes.BuildEnvironmentDiagnostic
+            && fact.Properties.GetValueOrDefault("diagnosticCode") == "ScanScopeExcludedSources");
+        var projectLoad = Assert.Single(scoped.Facts, fact =>
+            fact.FactType == FactTypes.AnalyzerCapabilityDiagnostic
+            && fact.Properties.GetValueOrDefault("capabilityCode") == "MSBuildProjectLoad");
+        Assert.Equal("available", projectLoad.Properties["capabilityState"]);
+        var buildStatus = Assert.Single(scoped.Facts, fact => fact.FactType == FactTypes.BuildStatus);
+        Assert.Contains("without claiming an MSBuildWorkspace load failure", buildStatus.Properties["reason"], StringComparison.Ordinal);
         var scanFact = Assert.Single(scoped.Facts, fact => fact.FactType == FactTypes.RepoScanned);
         Assert.Equal("src/TransitionSample/Caller.cs", scanFact.Properties["scanScopeExcludes"]);
         Assert.Equal(RuleIds.RepoManifest, scanFact.RuleId);
@@ -185,6 +294,7 @@ public sealed class CSharpFullSnapshotStabilityTests
             fact.RuleId == RuleIds.CSharpSyntaxCallGraph
             && fact.TargetSymbol == "Execute"
             && fact.Evidence.FilePath == "src/TransitionSample/Caller.cs");
+        AssertNoErrorTypeSemanticFacts(scoped, "src/TransitionSample/Caller.cs", 7);
         AssertCompilationDiagnosticGap(scoped, "src/TransitionSample/Caller.cs", 7, "CS0246");
     }
 
@@ -213,6 +323,7 @@ public sealed class CSharpFullSnapshotStabilityTests
         Assert.DoesNotContain(scoped.Facts, fact =>
             fact.RuleId == RuleIds.CSharpSemanticCallGraph
             && fact.Properties.GetValueOrDefault("targetSymbolId") == targetSymbolId);
+        AssertNoErrorTypeSemanticFacts(scoped, "src/TransitionSample/Caller.cs", 7);
         Assert.Contains(scoped.Facts, fact =>
             fact.RuleId == RuleIds.CSharpSyntaxCallGraph
             && fact.TargetSymbol == "Execute"
@@ -308,9 +419,87 @@ public sealed class CSharpFullSnapshotStabilityTests
         Commit(repo, "baseline");
     }
 
-    private static ScanResult Scan(string repo, string output, IReadOnlyList<string>? excludes = null)
+    private static void WriteCustomIntermediateOutputFixture(string repo)
     {
-        var result = ScanEngine.Scan(new ScanOptions(repo, output, ExcludeGlobs: excludes));
+        var projectDirectory = Path.Combine(repo, "src", "IntermediateOutput");
+        Directory.CreateDirectory(projectDirectory);
+        File.WriteAllText(Path.Combine(projectDirectory, "IntermediateOutput.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <AssemblyName>IntermediateOutput</AssemblyName>
+                <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)build-int/</BaseIntermediateOutputPath>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(projectDirectory, "Widget.cs"), """
+            namespace IntermediateOutput;
+
+            public sealed class Widget
+            {
+                public void Execute() { }
+            }
+            """);
+        RunDotnet(repo, "build", "src/IntermediateOutput/IntermediateOutput.csproj", "--nologo", "--verbosity", "quiet");
+        RunGit(repo, "init");
+        RunGit(repo, "config", "user.email", "fixture@example.invalid");
+        RunGit(repo, "config", "user.name", "TraceMap Fixture");
+        Commit(repo, "baseline");
+    }
+
+    private static void WriteCaseDriftFixture(string repo)
+    {
+        var projectDirectory = Path.Combine(repo, "src", "CaseDrift");
+        Directory.CreateDirectory(Path.Combine(projectDirectory, "Sub"));
+        File.WriteAllText(Path.Combine(projectDirectory, "CaseDrift.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <AssemblyName>CaseDrift</AssemblyName>
+                <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+              </PropertyGroup>
+              <ItemGroup>
+                <Compile Include="sub/target.cs" />
+                <Compile Include="Caller.cs" />
+              </ItemGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(projectDirectory, "Sub", "Target.cs"), """
+            namespace CaseDrift;
+
+            public sealed class Target
+            {
+                public void Execute() { }
+            }
+            """);
+        File.WriteAllText(Path.Combine(projectDirectory, "Caller.cs"), """
+            namespace CaseDrift;
+
+            public sealed class Caller
+            {
+                public void Run()
+                {
+                    new Target().Execute();
+                }
+            }
+            """);
+        RunGit(repo, "init");
+        RunGit(repo, "config", "user.email", "fixture@example.invalid");
+        RunGit(repo, "config", "user.name", "TraceMap Fixture");
+        Commit(repo, "baseline");
+    }
+
+    private static ScanResult Scan(
+        string repo,
+        string output,
+        IReadOnlyList<string>? excludes = null,
+        IReadOnlyList<string>? projectPaths = null)
+    {
+        var result = ScanEngine.Scan(new ScanOptions(
+            repo,
+            output,
+            ProjectPaths: projectPaths,
+            ExcludeGlobs: excludes));
         Assert.Matches("^[0-9a-f]{40}$", result.Manifest.CommitSha);
         Assert.All(result.Facts, fact => Assert.Equal(result.Manifest.CommitSha, fact.CommitSha));
         Directory.CreateDirectory(output);
@@ -452,10 +641,20 @@ public sealed class CSharpFullSnapshotStabilityTests
 
     private static void RunGit(string repo, params string[] arguments)
     {
+        RunProcess(repo, "git", arguments);
+    }
+
+    private static void RunDotnet(string repo, params string[] arguments)
+    {
+        RunProcess(repo, "dotnet", arguments);
+    }
+
+    private static void RunProcess(string workingDirectory, string fileName, params string[] arguments)
+    {
         var startInfo = new ProcessStartInfo
         {
-            FileName = "git",
-            WorkingDirectory = repo,
+            FileName = fileName,
+            WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false

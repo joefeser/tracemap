@@ -158,12 +158,7 @@ public static class ScanEngine
                 properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["status"] = manifest.BuildStatus,
-                    ["reason"] = manifest.BuildStatus switch
-                    {
-                        "Succeeded" => "MSBuildWorkspace loaded projects and Roslyn compilation reported no errors.",
-                        "FailedOrPartial" => "MSBuildWorkspace project load or Roslyn compilation reported gaps; syntax fallback still ran.",
-                        _ => "No C# project was available for MSBuildWorkspace semantic analysis."
-                    }
+                    ["reason"] = GetBuildStatusReason(manifest, semanticResult, binlogFacts)
                 })
         };
 
@@ -346,6 +341,36 @@ public static class ScanEngine
             : "Roslyn semantic analysis reported a gap.";
     }
 
+    private static string GetBuildStatusReason(
+        ScanManifest manifest,
+        SemanticExtractionResult semanticResult,
+        IReadOnlyList<CodeFact> binlogFacts)
+    {
+        if (manifest.BuildStatus == "Succeeded")
+        {
+            return "MSBuildWorkspace loaded projects and Roslyn compilation reported no errors.";
+        }
+
+        if (manifest.BuildStatus != "FailedOrPartial")
+        {
+            return "No C# project was available for MSBuildWorkspace semantic analysis.";
+        }
+
+        var hasBinlogGap = binlogFacts.Any(fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            || fact.FactType == FactTypes.MsBuildBinlogObserved
+                && fact.Properties.GetValueOrDefault("recordedBuildResult") == "failed");
+        var scopeOnlyReduction = semanticResult.ScopeReduced
+            && semanticResult.GapFacts.All(gap => gap.Properties?.GetValueOrDefault("diagnosticKind")
+                == BuildEnvironmentDiagnosticExtractor.DiagnosticKindScanScope);
+        if (scopeOnlyReduction && !hasBinlogGap)
+        {
+            return "Configured scan scope omitted C# source evidence; semantic coverage is partial without claiming an MSBuildWorkspace load failure.";
+        }
+
+        return "MSBuildWorkspace project load or Roslyn compilation reported gaps; syntax fallback still ran.";
+    }
+
     private static void AddSafeVersionProperties(SortedDictionary<string, string> properties, string? version)
     {
         if (string.IsNullOrWhiteSpace(version))
@@ -435,7 +460,7 @@ public static class ScanEngine
         return relativePath.StartsWith(normalizedDirectory, StringComparison.Ordinal);
     }
 
-    private static bool GlobMatches(string relativePath, string glob)
+    internal static bool GlobMatches(string relativePath, string glob)
     {
         var normalizedGlob = FileInventory.NormalizeRelativePath(glob.Trim());
         if (string.IsNullOrWhiteSpace(normalizedGlob))
