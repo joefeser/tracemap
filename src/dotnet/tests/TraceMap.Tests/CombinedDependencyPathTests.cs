@@ -368,6 +368,229 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
+    public async Task Paths_annotate_relationship_backed_candidate_with_matching_registration_context()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.IOrderService.Get(System.Int32)";
+        var implementation = "Server.OrderService.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14),
+            SymbolRelationshipFact(server, implementation, service, "Services/OrderService.cs", 18),
+            DependencyRegistrationFact(server, "Server.IOrderService", "Server.OrderService", "AddScoped", 0, "Startup/CompositionRoot.cs", 20),
+            CallFact(server, implementation, repository, "Services/OrderService.cs", 21),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions(
+                combinedPath,
+                Path.Combine(temp.Path, "paths"),
+                FromEndpoint: "GET /api/orders/{}",
+                FromSource: "server",
+                ToSurface: "sql-query"));
+
+        var path = Assert.Single(result.Report.Paths);
+        var candidate = Assert.Single(path.Edges, edge => edge.EdgeKind == "interface-candidate");
+        Assert.Equal("registration-context-candidate", candidate.RegistrationContext);
+        var registrationFactId = Assert.Single(candidate.SupportingRegistrationFactIds!);
+        Assert.Contains(registrationFactId, candidate.SupportingFactIds);
+        Assert.Contains(path.Notes, note => note.Code == "DependencyRegistrationContext");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "RegistrationCompatibilityUnproven");
+    }
+
+    [Fact]
+    public async Task Paths_preserve_unproven_registration_as_gap_without_creating_candidate()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var service = "Server.IOrderService.Get(System.Int32)";
+        var implementation = "Server.OrderService.Get(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            SymbolRelationshipFact(server, implementation, service, "Services/OrderService.cs", 18),
+            DependencyRegistrationFact(server, "Server.IOrderService", "Server.OtherOrderService", "AddScoped", 0, "Startup/CompositionRoot.cs", 20)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var inventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedPath);
+
+        var candidate = Assert.Single(inventory.Edges, edge => edge.EdgeKind == "interface-candidate");
+        Assert.Null(candidate.RegistrationContext);
+        Assert.Null(candidate.SupportingRegistrationFactIds);
+        var gap = Assert.Single(inventory.Gaps, gap => gap.GapKind == "RegistrationCompatibilityUnproven");
+        Assert.NotNull(gap.CombinedFactId);
+        Assert.Equal("dependency-registration-context", gap.EvidenceScope);
+        Assert.DoesNotContain(inventory.Nodes, node => node.DisplayName.Contains("OtherOrderService", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Paths_preserve_closed_constructed_generic_registration_context()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var service = "Server.IRepository<Server.Order>.Get(System.Int32)";
+        var implementation = "Server.Repository<Server.Order>.Get(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            SymbolRelationshipFact(server, implementation, service, "Services/Repository.cs", 18),
+            DependencyRegistrationFact(
+                server,
+                "Server.IRepository<Server.Order>",
+                "Server.Repository<Server.Order>",
+                "AddScoped",
+                0,
+                "Startup/CompositionRoot.cs",
+                20)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var inventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedPath);
+
+        var candidate = Assert.Single(inventory.Edges, edge => edge.EdgeKind == "interface-candidate");
+        Assert.Equal("registration-context-candidate", candidate.RegistrationContext);
+        Assert.DoesNotContain(inventory.Gaps, gap => gap.GapKind == "GenericCandidateNeedsReview");
+    }
+
+    [Fact]
+    public void Static_dispatch_matches_closed_registration_to_open_generic_relationship_definition()
+    {
+        var nodes = new Dictionary<string, StaticDispatchCandidateNode>(StringComparer.Ordinal)
+        {
+            ["service"] = new("service", "Method", "Server.IRepository<T>.Get(System.Int32)", "server", "server", "commit", "Services/IRepository.cs", 10, 10),
+            ["implementation"] = new("implementation", "Method", "Server.Repository<T>.Get(System.Int32)", "server", "server", "commit", "Services/Repository.cs", 20, 20)
+        };
+        var serviceDefinitionId = TestTypeSymbolId("Server.IRepository<T>");
+        var implementationDefinitionId = TestTypeSymbolId("Server.Repository<T>");
+        var relationships = new[]
+        {
+            new StaticDispatchRelationshipEdge(
+                "relationship", "implements", "ImplementsInterfaceMember", "implementation", "service",
+                EvidenceTiers.Tier1Semantic, ["relationship-fact"], ["relationship-edge"], "Services/Repository.cs", 20, 20,
+                implementationDefinitionId, serviceDefinitionId)
+        };
+        var registrations = new[]
+        {
+            new StaticDispatchRegistrationFact(
+                "registration", "server", "server", "Server.IRepository<Server.Order>", "Server.Repository<Server.Order>",
+                serviceDefinitionId, implementationDefinitionId, "AddScoped", StaticDispatchRegistrationShapes.ClosedTypePair,
+                EvidenceTiers.Tier1Semantic, RuleIds.CSharpSemanticRuntimeEvidence, "Startup/CompositionRoot.cs", 30, 30, "commit", "test/1.0")
+        };
+
+        var result = StaticDispatchCandidateBuilder.Build(nodes, relationships, registrations: registrations);
+
+        var candidate = Assert.Single(result.Edges);
+        Assert.Equal(StaticDispatchRegistrationContexts.Candidate, candidate.RegistrationContext);
+        Assert.Equal(["registration"], candidate.SupportingRegistrationFactIds);
+        Assert.DoesNotContain(result.Gaps, gap => gap.GapKind == "RegistrationCompatibilityUnproven");
+    }
+
+    [Fact]
+    public void Static_dispatch_ranks_registered_candidate_before_fanout_cap()
+    {
+        var nodes = new Dictionary<string, StaticDispatchCandidateNode>(StringComparer.Ordinal)
+        {
+            ["service"] = new("service", "Method", "Server.IStatusService.Get()", "server", "server", "commit", "Services/IStatusService.cs", 10, 10)
+        };
+        var relationships = new List<StaticDispatchRelationshipEdge>();
+        for (var index = 0; index < 11; index++)
+        {
+            var nodeId = $"implementation-{index}";
+            var type = $"Server.StatusService{index}";
+            nodes[nodeId] = new(nodeId, "Method", $"{type}.Get()", "server", "server", "commit", $"Services/StatusService{index}.cs", 20 + index, 20 + index);
+            relationships.Add(new StaticDispatchRelationshipEdge(
+                $"relationship-{index}", "implements", "ImplementsInterfaceMember", nodeId, "service",
+                EvidenceTiers.Tier1Semantic, [$"fact-{index}"], [$"edge-{index}"], $"Services/StatusService{index}.cs", 20 + index, 20 + index,
+                TestTypeSymbolId(type), TestTypeSymbolId("Server.IStatusService")));
+        }
+
+        var registration = new StaticDispatchRegistrationFact(
+            "registration-9", "server", "server", "Server.IStatusService", "Server.StatusService9",
+            TestTypeSymbolId("Server.IStatusService"), TestTypeSymbolId("Server.StatusService9"), "AddScoped",
+            StaticDispatchRegistrationShapes.ClosedTypePair, EvidenceTiers.Tier1Semantic,
+            RuleIds.CSharpSemanticRuntimeEvidence, "Startup/CompositionRoot.cs", 40, 40, "commit", "test/1.0");
+
+        var result = StaticDispatchCandidateBuilder.Build(nodes, relationships, registrations: [registration]);
+
+        Assert.Equal(10, result.Edges.Count);
+        Assert.Contains(result.Edges, edge => edge.CandidateSymbolId == "implementation-9"
+            && edge.RegistrationContext == "registration-context-candidate");
+        Assert.DoesNotContain(result.Gaps, gap => gap.GapKind == "RegistrationCompatibilityUnproven");
+        Assert.Contains(result.Gaps, gap => gap.GapKind == "DispatchCandidateFanOut");
+    }
+
+    [Fact]
+    public void Static_dispatch_registration_context_is_deterministic_and_preserves_unsupported_shapes_as_gaps()
+    {
+        var nodes = new Dictionary<string, StaticDispatchCandidateNode>(StringComparer.Ordinal)
+        {
+            ["service"] = new("service", "Method", "Server.IOrderService.Get(System.Int32)", "server", "server", "commit", "Services/IOrderService.cs", 10, 10),
+            ["implementation"] = new("implementation", "Method", "Server.OrderService.Get(System.Int32)", "server", "server", "commit", "Services/OrderService.cs", 20, 20)
+        };
+        var relationships = new[]
+        {
+            new StaticDispatchRelationshipEdge(
+                "relationship", "implements", "ImplementsInterfaceMember", "implementation", "service",
+                EvidenceTiers.Tier1Semantic, ["relationship-fact"], ["relationship-edge"], "Services/OrderService.cs", 20, 20,
+                TestTypeSymbolId("Server.OrderService"), TestTypeSymbolId("Server.IOrderService"))
+        };
+        var registrations = new[]
+        {
+            Registration("registration-b", "Server.IOrderService", "Server.OrderService", StaticDispatchRegistrationShapes.ClosedTypePair),
+            Registration("registration-a", "Server.IOrderService", "Server.OrderService", StaticDispatchRegistrationShapes.ClosedTypePair),
+            Registration("registration-keyed", "Server.IOrderService", "Server.OrderService", StaticDispatchRegistrationShapes.Unsupported),
+            Registration("registration-open", "Server.IOrderService", "Server.OrderService<>", StaticDispatchRegistrationShapes.OpenGeneric),
+            Registration("registration-syntax", "Server.IOrderService", "Server.OrderService", StaticDispatchRegistrationShapes.ObservationOnly, EvidenceTiers.Tier3SyntaxOrTextual),
+            new StaticDispatchRegistrationFact(
+                "registration-other-assembly", "server", "server", "Server.IOrderService", "Server.OrderService",
+                TestTypeSymbolId("Server.IOrderService"), "csharp type other-assembly Server.OrderService", "AddScoped",
+                StaticDispatchRegistrationShapes.ClosedTypePair, EvidenceTiers.Tier1Semantic,
+                RuleIds.CSharpSemanticRuntimeEvidence, "Startup/CompositionRoot.cs", 31, 31, "commit", "test/1.0")
+        };
+
+        var first = StaticDispatchCandidateBuilder.Build(nodes, relationships, registrations: registrations.Reverse());
+        var second = StaticDispatchCandidateBuilder.Build(nodes, relationships, registrations: registrations);
+
+        var firstCandidate = Assert.Single(first.Edges);
+        var secondCandidate = Assert.Single(second.Edges);
+        Assert.Equal(StaticDispatchCandidateStates.WeakerCandidate, firstCandidate.State);
+        Assert.Equal("registration-context-candidate", firstCandidate.RegistrationContext);
+        Assert.Equal(["registration-a", "registration-b"], firstCandidate.SupportingRegistrationFactIds);
+        Assert.Equal(firstCandidate.CandidateId, secondCandidate.CandidateId);
+        Assert.Contains(first.Gaps, gap => gap.GapKind == "UnsupportedRegistrationShape" && gap.SupportingFactIds.Contains("registration-keyed"));
+        Assert.Contains(first.Gaps, gap => gap.GapKind == "GenericCandidateNeedsReview" && gap.SupportingFactIds.Contains("registration-open"));
+        Assert.Contains(first.Gaps, gap => gap.GapKind == "RegistrationCompatibilityUnproven" && gap.SupportingFactIds.Contains("registration-syntax"));
+        Assert.Contains(first.Gaps, gap => gap.GapKind == "RegistrationCompatibilityUnproven" && gap.SupportingFactIds.Contains("registration-other-assembly"));
+        Assert.Equal(
+            first.Gaps.Select(gap => gap.GapId).ToArray(),
+            second.Gaps.Select(gap => gap.GapId).ToArray());
+
+        static StaticDispatchRegistrationFact Registration(
+            string factId,
+            string serviceType,
+            string implementationType,
+            string shape,
+            string evidenceTier = EvidenceTiers.Tier1Semantic)
+        {
+            return new StaticDispatchRegistrationFact(
+                factId, "server", "server", serviceType, implementationType,
+                TestTypeSymbolId(serviceType), TestTypeSymbolId(implementationType), "AddScoped", shape,
+                evidenceTier, RuleIds.CSharpSemanticRuntimeEvidence, "Startup/CompositionRoot.cs", 30, 30, "commit", "test/1.0");
+        }
+    }
+
+    [Fact]
     public async Task Paths_cap_static_interface_dispatch_candidate_fanout_with_gap()
     {
         using var temp = new TempDirectory();
@@ -410,9 +633,9 @@ public sealed class CombinedDependencyPathTests
         var gap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "DispatchCandidateFanOut");
         Assert.Equal("combined.dispatch-gap.v1", gap.RuleId);
         Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
-        Assert.Equal("Services/StatusService10.cs", gap.FilePath);
-        Assert.Equal(28, gap.StartLine);
-        Assert.Equal(28, gap.EndLine);
+        Assert.Equal("Services/StatusService9.cs", gap.FilePath);
+        Assert.Equal(27, gap.StartLine);
+        Assert.Equal(27, gap.EndLine);
         Assert.Equal(server.CommitSha, gap.CommitSha);
         Assert.Equal(server.ScannerVersion, gap.ExtractorVersion);
         Assert.Equal("combined-symbol-relationships", gap.EvidenceScope);
@@ -1261,11 +1484,60 @@ public sealed class CombinedDependencyPathTests
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
                 ["relationshipKind"] = relationshipKind,
+                ["sourceContainingSymbolId"] = TestTypeSymbolId(ContainingType(implementationMethodSymbol)),
                 ["sourceSymbolDisplayName"] = implementationMethodSymbol,
                 ["sourceSymbolId"] = implementationMethodSymbol,
+                ["targetContainingSymbolId"] = TestTypeSymbolId(ContainingType(interfaceMethodSymbol)),
                 ["targetSymbolDisplayName"] = interfaceMethodSymbol,
                 ["targetSymbolId"] = interfaceMethodSymbol
             });
+    }
+
+    private static CodeFact DependencyRegistrationFact(
+        ScanManifest manifest,
+        string serviceType,
+        string implementationType,
+        string registrationKind,
+        int argumentCount,
+        string file,
+        int line,
+        string evidenceTier = EvidenceTiers.Tier1Semantic)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.DependencyRegistered,
+            RuleIds.CSharpSemanticRuntimeEvidence,
+            evidenceTier,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: "Server.CompositionRoot.Configure()",
+            targetSymbol: serviceType,
+            contractElement: registrationKind,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["argumentCount"] = argumentCount.ToString(),
+                ["evidenceKind"] = "DependencyRegistered",
+                ["implementationType"] = implementationType,
+                ["implementationTypeSymbolId"] = TestTypeSymbolId(implementationType),
+                ["registrationKind"] = registrationKind,
+                ["registrationShape"] = registrationKind.Contains("Keyed", StringComparison.Ordinal)
+                    ? "keyed-registration"
+                    : argumentCount is 0 or 2 ? "closed-type-pair" : "factory-or-dynamic",
+                ["serviceType"] = serviceType,
+                ["serviceTypeSymbolId"] = TestTypeSymbolId(serviceType)
+            });
+    }
+
+    private static string ContainingType(string memberSymbol)
+    {
+        var memberEnd = memberSymbol.IndexOf('(', StringComparison.Ordinal);
+        var prefix = memberEnd < 0 ? memberSymbol : memberSymbol[..memberEnd];
+        var separator = prefix.LastIndexOf('.');
+        return separator < 0 ? prefix : prefix[..separator];
+    }
+
+    private static string TestTypeSymbolId(string typeDisplayName)
+    {
+        return $"csharp type test {typeDisplayName}";
     }
 
     private static CodeFact ArgumentPassedFact(
