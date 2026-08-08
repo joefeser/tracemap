@@ -28,6 +28,9 @@ public sealed record SemanticExtractionResult(
 public static class CSharpSemanticExtractor
 {
     private const string SyntheticExternalSourcePrefix = "__external__/csharp-";
+    internal static StringComparer SourcePathComparer { get; } = OperatingSystem.IsWindows()
+        ? StringComparer.OrdinalIgnoreCase
+        : StringComparer.Ordinal;
 
     private static readonly Regex SafeCompilerTokenRegex = new(
         "'([A-Za-z_][A-Za-z0-9_]{0,127})'",
@@ -142,7 +145,7 @@ public static class CSharpSemanticExtractor
         var csharpFiles = inventory.Where(item => FileInventory.IsCSharpKind(item.Kind)).ToArray();
         var inventoriedCSharpPaths = csharpFiles
             .Select(item => item.RelativePath)
-            .ToHashSet(StringComparer.Ordinal);
+            .ToHashSet(SourcePathComparer);
 
         if (projects.Length == 0 && csharpFiles.Length > 0)
         {
@@ -214,7 +217,15 @@ public static class CSharpSemanticExtractor
             try
             {
                 var project = workspace.OpenProjectAsync(projectPath).GetAwaiter().GetResult();
-                ExtractProject(repoPath, project, inventoriedCSharpPaths, facts, gaps, analyzedFiles);
+                var filteredSolution = RemoveNonInventoriedSourceDocuments(
+                    repoPath,
+                    project.Solution,
+                    inventoriedCSharpPaths,
+                    out var excludedDocumentCount);
+                RecordScopeExclusionGap(gaps, excludedDocumentCount);
+                project = filteredSolution.GetProject(project.Id)
+                    ?? throw new InvalidOperationException($"Filtered solution no longer contains project '{projectItem.RelativePath}'.");
+                ExtractProject(repoPath, project, facts, gaps, analyzedFiles);
                 loadedProjectPaths.Add(projectItem.RelativePath);
             }
             catch (Exception ex) when (IsWorkspaceException(ex))
@@ -356,9 +367,15 @@ public static class CSharpSemanticExtractor
         HashSet<string> loadedProjectPaths,
         HashSet<string> analyzedFiles)
     {
+        solution = RemoveNonInventoriedSourceDocuments(
+            repoPath,
+            solution,
+            inventoriedCSharpPaths,
+            out var excludedDocumentCount);
+        RecordScopeExclusionGap(gaps, excludedDocumentCount);
         foreach (var project in solution.Projects.OrderBy(project => ToRelativePath(repoPath, project.FilePath), StringComparer.Ordinal))
         {
-            ExtractProject(repoPath, project, inventoriedCSharpPaths, facts, gaps, analyzedFiles);
+            ExtractProject(repoPath, project, facts, gaps, analyzedFiles);
             if (!string.IsNullOrWhiteSpace(project.FilePath))
             {
                 loadedProjectPaths.Add(ToRelativePath(repoPath, project.FilePath));
@@ -369,13 +386,11 @@ public static class CSharpSemanticExtractor
     private static void ExtractProject(
         string repoPath,
         Project project,
-        IReadOnlySet<string> inventoriedCSharpPaths,
         List<SemanticFactCandidate> facts,
         List<SemanticFactCandidate> gaps,
         HashSet<string> analyzedFiles)
     {
         var projectPath = ToRelativePath(repoPath, project.FilePath);
-        project = RemoveNonInventoriedSourceDocuments(repoPath, project, inventoriedCSharpPaths);
         Compilation? compilation;
         try
         {
@@ -405,22 +420,53 @@ public static class CSharpSemanticExtractor
         }
     }
 
-    private static Project RemoveNonInventoriedSourceDocuments(
+    private static Solution RemoveNonInventoriedSourceDocuments(
         string repoPath,
-        Project project,
-        IReadOnlySet<string> inventoriedCSharpPaths)
+        Solution solution,
+        IReadOnlySet<string> inventoriedCSharpPaths,
+        out int excludedDocumentCount)
     {
-        var excludedDocumentIds = project.Documents
+        var excludedDocumentIds = solution.Projects
+            .SelectMany(project => project.Documents)
             .Where(document => !string.IsNullOrWhiteSpace(document.FilePath))
-            .Where(document => !IsGeneratedSource(document.FilePath))
+            .Where(document => !IsGeneratedBuildOutput(repoPath, document.FilePath))
             .Where(document => !ToRelativePathProjection(repoPath, document.FilePath).IsExternal)
             .Where(document => !inventoriedCSharpPaths.Contains(ToRelativePath(repoPath, document.FilePath)))
             .Select(document => document.Id)
             .ToArray();
+        excludedDocumentCount = excludedDocumentIds.Length;
 
         return excludedDocumentIds.Length == 0
-            ? project
-            : project.RemoveDocuments(System.Collections.Immutable.ImmutableArray.CreateRange(excludedDocumentIds));
+            ? solution
+            : solution.RemoveDocuments(System.Collections.Immutable.ImmutableArray.CreateRange(excludedDocumentIds));
+    }
+
+    private static void RecordScopeExclusionGap(
+        List<SemanticFactCandidate> gaps,
+        int excludedDocumentCount)
+    {
+        if (excludedDocumentCount == 0
+            || gaps.Any(gap => gap.Properties?.GetValueOrDefault("gapKind") == "ScanScopeExcludedSources"))
+        {
+            return;
+        }
+
+        gaps.Add(CreateGap(
+            ".",
+            $"The configured scan scope omitted {excludedDocumentCount} repository-local C# source document(s) from semantic compilation.",
+            "ScanScopeExcludedSources"));
+    }
+
+    private static bool IsGeneratedBuildOutput(string repoPath, string? filePath)
+    {
+        if (!IsGeneratedSource(filePath))
+        {
+            return false;
+        }
+
+        var projection = ToRelativePathProjection(repoPath, filePath);
+        return !projection.IsExternal
+            && projection.Path.Split('/').Contains("obj", StringComparer.OrdinalIgnoreCase);
     }
 
     private static void ExtractDocument(
