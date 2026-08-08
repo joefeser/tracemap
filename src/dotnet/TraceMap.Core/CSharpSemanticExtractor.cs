@@ -492,6 +492,7 @@ public static class CSharpSemanticExtractor
             return solution;
         }
 
+        var sourcePathComparer = CreateSourcePathComparer(repoPath);
         var excludedDocuments = solution.Projects
             .SelectMany(project => project.Documents)
             .Where(document => !string.IsNullOrWhiteSpace(document.FilePath))
@@ -501,11 +502,14 @@ public static class CSharpSemanticExtractor
                 document.Id,
                 RelativePath = ToRelativePath(repoPath, document.FilePath)
             })
-            .Where(document => excludeGlobs.Any(glob => ScanEngine.GlobMatches(document.RelativePath, glob)))
+            .Where(document => excludeGlobs.Any(glob => ScanEngine.GlobMatches(
+                document.RelativePath,
+                glob,
+                sourcePathComparer)))
             .ToArray();
         excludedPaths = excludedDocuments
             .Select(document => document.RelativePath)
-            .Distinct(CreateSourcePathComparer(repoPath))
+            .Distinct(sourcePathComparer)
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
 
