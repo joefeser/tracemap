@@ -2162,15 +2162,19 @@ public static class CombinedDependencyPathReporter
         }
 
         if (string.Equals(declaredShape, "open-generic", StringComparison.Ordinal)
-            || serviceType.Contains('<', StringComparison.Ordinal)
-            || implementationType.Contains('<', StringComparison.Ordinal))
+            || string.IsNullOrWhiteSpace(declaredShape)
+                && (serviceType.Contains("<>", StringComparison.Ordinal)
+                    || implementationType.Contains("<>", StringComparison.Ordinal)))
         {
             return StaticDispatchRegistrationShapes.OpenGeneric;
         }
 
         if (string.IsNullOrWhiteSpace(serviceTypeSymbolId)
             || string.IsNullOrWhiteSpace(implementationTypeSymbolId)
-            || !hasArgumentCount)
+            || !hasArgumentCount
+            || string.IsNullOrWhiteSpace(declaredShape)
+                && (serviceType.Contains('<', StringComparison.Ordinal)
+                    || implementationType.Contains('<', StringComparison.Ordinal)))
         {
             return StaticDispatchRegistrationShapes.ObservationOnly;
         }
