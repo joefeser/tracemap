@@ -191,11 +191,9 @@ public static class AccessFactBuilder
                 {
                     queryOutputOwnerStableKeys.Add(output.Identity.StableKey, query.Identity.StableKey);
                 }
-                var outputTier = output.Coverage == "partial"
-                    && output.TypeFamily == "unknown"
-                    && output.SourceFieldStableKeys.Count == 0
-                    ? EvidenceTiers.Tier3SyntaxOrTextual
-                    : EvidenceTiers.Tier2Structural;
+                var outputTier = output.EvidenceOrigin == "querydef"
+                    ? EvidenceTiers.Tier2Structural
+                    : EvidenceTiers.Tier3SyntaxOrTextual;
                 facts.Add(Create(manifest, FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery, outputTier, span,
                     sourceSymbol: query.Identity.StableKey,
                     targetSymbol: output.Identity.StableKey,
@@ -204,6 +202,7 @@ public static class AccessFactBuilder
                         ("queryOutputStableKey", output.Identity.StableKey),
                         ("ordinal", output.Ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                         ("typeFamily", output.TypeFamily),
+                        ("evidenceOrigin", output.EvidenceOrigin),
                         ("coverageLabel", output.Coverage),
                         ("limitations", "querydef-or-static-select-output-name;source-lineage-may-be-partial;no-query-execution;no-row-read"))));
                 foreach (var sourceField in output.SourceFieldStableKeys)

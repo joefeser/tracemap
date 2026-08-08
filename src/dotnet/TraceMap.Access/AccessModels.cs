@@ -101,7 +101,8 @@ public sealed record AccessQueryOutputFieldProjection(
     int Ordinal,
     string TypeFamily,
     IReadOnlyList<string> SourceFieldStableKeys,
-    string Coverage);
+    string Coverage,
+    string EvidenceOrigin = "unknown");
 
 public sealed record AccessQueryFieldMappingProjection(
     int Ordinal,
@@ -208,6 +209,22 @@ public sealed record AccessBindingProjection(
     AccessExpressionProjection? Expression = null,
     string RuntimeValueCoverage = "unknown")
 {
+    public AccessBindingProjection(
+        AccessSafeIdentity identity,
+        string ownerStableKey,
+        string bindingKind,
+        string sourceKind,
+        string? expressionHash,
+        int expressionLength,
+        IReadOnlyList<string> targetStableKeys,
+        string targetKind,
+        string coverage,
+        AccessExpressionProjection? expression)
+        : this(identity, ownerStableKey, bindingKind, sourceKind, expressionHash, expressionLength,
+            targetStableKeys, targetKind, coverage, expression, "unknown")
+    {
+    }
+
     public AccessBindingProjection(
         AccessSafeIdentity identity,
         string ownerStableKey,
