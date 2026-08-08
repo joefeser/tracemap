@@ -80,6 +80,8 @@ public sealed record AccessFlowGap(
 public static class AccessScreenDataFlowReporter
 {
     public const string SchemaVersion = "tracemap.access-screen-data-flow.v1";
+    private const int MaxPersistedSupportCharacters = 65_536;
+    private const int MaxPersistedSupportIds = 1_024;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -455,7 +457,9 @@ public static class AccessScreenDataFlowReporter
     {
         var supporting = new SortedSet<string>(StringComparer.Ordinal) { gap.FactId };
         if (gap.Properties.TryGetValue("supportingFactIds", out var persistedFactIds)
-            && persistedFactIds is not null)
+            && persistedFactIds is not null
+            && persistedFactIds.Length <= MaxPersistedSupportCharacters
+            && persistedFactIds.Count(character => character == ';') < MaxPersistedSupportIds)
         {
             var parsed = persistedFactIds.Split(';', StringSplitOptions.TrimEntries);
             var encodingValid = parsed.Length > 0
@@ -514,8 +518,11 @@ public static class AccessScreenDataFlowReporter
         foreach (var output in outputs)
         {
             supporting.Add(output.FactId);
-            if (!string.IsNullOrWhiteSpace(output.SourceSymbol)
-                && supportIndex.Queries.TryGetValue((gap.ScanId, output.SourceSymbol), out var queries))
+            var ownerKey = !string.IsNullOrWhiteSpace(output.SourceSymbol)
+                ? output.SourceSymbol
+                : output.Properties.GetValueOrDefault("queryStableKey");
+            if (SafeStableKey(ownerKey)
+                && supportIndex.Queries.TryGetValue((gap.ScanId, ownerKey!), out var queries))
                 supporting.UnionWith(queries.Select(query => query.FactId));
         }
         return supporting.ToArray();
