@@ -293,6 +293,7 @@ public sealed class CSharpGraphCorrectnessFixtureTests
             && fact.TargetSymbol == "Touch"
             && fact.Evidence.FilePath == "src/ReceiverSample/Receivers.cs"
             && fact.Evidence.StartLine == 40);
+        Assert.Equal(40, syntaxFallback.Evidence.EndLine);
         Assert.Equal("CSharpSyntaxExtractor", syntaxFallback.Evidence.ExtractorId);
         Assert.Equal(ScannerVersions.CSharpSyntaxExtractor, syntaxFallback.Evidence.ExtractorVersion);
     }
