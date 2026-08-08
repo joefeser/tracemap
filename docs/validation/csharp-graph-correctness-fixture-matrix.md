@@ -20,7 +20,7 @@ impact traversal belongs to #590 and is explicitly outside this matrix.
 | ID-04 | Canonical identity | Same method name with overloads | Overloads collapse into one endpoint | Method IDs retain parameter types and return type | Existing semantic coverage; dedicated adversarial fixture planned |
 | ID-05 | Canonical identity | Nested types, aliases, and `using` aliases | Alias or nested label is treated as canonical identity | Roslyn-resolved original symbol supplies the endpoint ID | Planned follow-up |
 | ID-06 | Canonical identity | Generic definition and multiple constructed types | Incompatible constructions collapse | Definition identity and type arguments remain explicit according to the canonical ID contract | Planned follow-up |
-| ID-07 | Canonical identity | Source symbol and unresolved/external symbol share a label | Unresolved label binds to a source declaration | No Tier 1 edge is guessed; retain Tier 3 syntax evidence and a Tier 4 gap where compilation proves missing identity | Partly implemented by RX-04; dedicated collision fixture planned |
+| ID-07 | Canonical identity | Source symbol and unresolved/external symbol share a label in one compilation | Unresolved label binds to a source declaration | No Tier 1 edge is guessed; retain Tier 3 syntax evidence and a Tier 4 gap where compilation proves missing identity | Planned follow-up; RX-04 covers unresolved fallback only, not this same-label collision |
 | PT-01 | Partial types | `Worker` halves are in two source files; `Run` calls `Execute` from the other half | Files create two type nodes or the cross-file call disappears | Both declarations carry one canonical type ID; caller and callee endpoint IDs are Tier 1 and span the real call site | Implemented in `Partial_type_declarations_merge_and_cross_file_call_uses_canonical_member_endpoints` |
 | PT-02 | Partial types | Both partial halves access one helper member | Member receiver differs by declaration file | Both call sites resolve to the same helper member ID with distinct evidence spans | Implemented in the PT-01 test |
 | PT-03 | Partial types | Same partial type name exists in separate assemblies | Partial merging crosses an assembly boundary | Assembly-qualified type IDs remain distinct | Covered by ID-01 assembly boundary; dedicated partial-project fixture planned |
@@ -37,8 +37,15 @@ impact traversal belongs to #590 and is explicitly outside this matrix.
 
 ## Assertion contract
 
-Implemented fixtures assert rule ID, evidence tier, canonical `sourceSymbolId`
-and `targetSymbolId`, assembly provenance, normalized file path, exact line span,
-extractor ID, and extractor version. Negative cases assert both the missing Tier
-1 relationship and the retained Tier 3/Tier 4 evidence. Aggregate counts alone
-are not considered graph-correctness proof.
+Implemented call-edge fixtures assert exact canonical `sourceSymbolId` and
+`targetSymbolId` values from semantic call facts, caller/callee assembly name
+and version, rule ID, evidence tier, normalized file path, exact line span,
+extractor ID, and extractor version. Each synthetic repository is committed
+before scanning, and its manifest and facts must retain that 40-character SHA.
+Assertions run against `facts.ndjson` readback; focused SQLite checks also prove
+that semantic call endpoints, provenance, spans, tiers, and gap properties
+survive `index.sqlite` persistence. TraceMap does not currently emit independent
+Tier 1 `MethodDeclared` facts, so these tests claim canonical call-fact identity,
+not independent method-declaration evidence. Negative cases assert both the
+missing Tier 1 relationship and the retained Tier 3/Tier 4 evidence. Aggregate
+counts alone are not considered graph-correctness proof.

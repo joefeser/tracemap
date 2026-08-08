@@ -1,10 +1,15 @@
+using System.Diagnostics;
+using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using TraceMap.Core;
+using TraceMap.Storage;
 
 namespace TraceMap.Tests;
 
 public sealed class CSharpGraphCorrectnessFixtureTests
 {
     private const string SemanticExtractor = "CSharpSemanticExtractor";
+    private const string AssemblyVersion = "1.0.0.0";
 
     [Fact]
     public void Same_name_types_keep_assembly_aware_ids_and_local_framework_collisions_separate()
@@ -78,20 +83,38 @@ public sealed class CSharpGraphCorrectnessFixtureTests
         Assert.Equal("Alpha", alphaCall.Properties["calleeAssemblyName"]);
         Assert.Equal("Beta", betaCall.Properties["callerAssemblyName"]);
         Assert.Equal("Beta", betaCall.Properties["calleeAssemblyName"]);
-        Assert.Contains("Alpha%25401.0.0.0", alphaCall.Properties["sourceSymbolId"], StringComparison.Ordinal);
-        Assert.Contains("Alpha%25401.0.0.0", alphaCall.Properties["targetSymbolId"], StringComparison.Ordinal);
-        Assert.Contains("Beta%25401.0.0.0", betaCall.Properties["sourceSymbolId"], StringComparison.Ordinal);
-        Assert.Contains("Beta%25401.0.0.0", betaCall.Properties["targetSymbolId"], StringComparison.Ordinal);
+        AssertCallIdentity(
+            alphaCall,
+            "csharp method csharp%20type%20Alpha%25401.0.0.0%20Shared.Collision Invoke()->void",
+            "csharp method csharp%20type%20Alpha%25401.0.0.0%20Shared.Collision Ping()->void",
+            "Alpha",
+            "Alpha");
+        AssertCallIdentity(
+            betaCall,
+            "csharp method csharp%20type%20Beta%25401.0.0.0%20Shared.Collision Invoke()->void",
+            "csharp method csharp%20type%20Beta%25401.0.0.0%20Shared.Collision Ping()->void",
+            "Beta",
+            "Beta");
         Assert.NotEqual(alphaCall.Properties["targetSymbolId"], betaCall.Properties["targetSymbolId"]);
 
         var localTask = AssertSemanticFact(result, FactTypes.TypeDeclared, "src/CollisionApp/TaskCollision.cs", 3, 6, "global::CollisionApp.Task");
         Assert.Equal("csharp type CollisionApp%401.0.0.0 CollisionApp.Task", localTask.Properties["targetSymbolId"]);
         var localRun = AssertSemanticCall(result, "src/CollisionApp/TaskCollision.cs", 14, "Run");
         var externalAwaiter = AssertSemanticCall(result, "src/CollisionApp/TaskCollision.cs", 15, "GetAwaiter");
-        Assert.Equal("CollisionApp", localRun.Properties["calleeAssemblyName"]);
-        Assert.Equal("System.Runtime", externalAwaiter.Properties["calleeAssemblyName"]);
-        Assert.Contains("CollisionApp.Task", localRun.Properties["targetSymbolDisplayName"], StringComparison.Ordinal);
-        Assert.Contains("System.Threading.Tasks.Task", externalAwaiter.Properties["targetSymbolDisplayName"], StringComparison.Ordinal);
+        const string executeId = "csharp method csharp%20type%20CollisionApp%25401.0.0.0%20CollisionApp.Caller Execute()->void";
+        AssertCallIdentity(
+            localRun,
+            executeId,
+            "csharp method csharp%20type%20CollisionApp%25401.0.0.0%20CollisionApp.Task Run()->void",
+            "CollisionApp",
+            "CollisionApp");
+        AssertCallIdentity(
+            externalAwaiter,
+            executeId,
+            "csharp method csharp%20type%20System.Runtime%254010.0.0.0%20System.Threading.Tasks.Task GetAwaiter()->System.Runtime%4010.0.0.0%3ASystem.Runtime.CompilerServices.TaskAwaiter",
+            "CollisionApp",
+            "System.Runtime",
+            calleeAssemblyVersion: "10.0.0.0");
         Assert.NotEqual(localRun.Properties["targetSymbolId"], externalAwaiter.Properties["targetSymbolId"]);
     }
 
@@ -143,10 +166,10 @@ public sealed class CSharpGraphCorrectnessFixtureTests
         Assert.Equal(stateDeclaration.Properties["targetSymbolId"], behaviorDeclaration.Properties["targetSymbolId"]);
 
         var crossFileCall = AssertSemanticCall(result, "src/PartialSample/Worker.State.cs", 9, "Execute");
-        Assert.Contains("PartialSample.Worker.Run", crossFileCall.Properties["sourceSymbolDisplayName"], StringComparison.Ordinal);
-        Assert.Contains("PartialSample.Worker.Execute", crossFileCall.Properties["targetSymbolDisplayName"], StringComparison.Ordinal);
-        Assert.Contains("PartialSample%25401.0.0.0", crossFileCall.Properties["sourceSymbolId"], StringComparison.Ordinal);
-        Assert.Contains("PartialSample%25401.0.0.0", crossFileCall.Properties["targetSymbolId"], StringComparison.Ordinal);
+        const string workerRunId = "csharp method csharp%20type%20PartialSample%25401.0.0.0%20PartialSample.Worker Run()->void";
+        const string workerExecuteId = "csharp method csharp%20type%20PartialSample%25401.0.0.0%20PartialSample.Worker Execute()->void";
+        const string helperTouchId = "csharp method csharp%20type%20PartialSample%25401.0.0.0%20PartialSample.Helper Touch()->void";
+        AssertCallIdentity(crossFileCall, workerRunId, workerExecuteId, "PartialSample", "PartialSample");
 
         var helperCalls = result.Facts
             .Where(fact => IsSemanticCall(fact, "Touch"))
@@ -158,14 +181,12 @@ public sealed class CSharpGraphCorrectnessFixtureTests
             call =>
             {
                 AssertSpanAndProvenance(call, "src/PartialSample/Worker.Behavior.cs", 7, 7);
-                Assert.Contains("PartialSample.Worker.Execute", call.Properties["sourceSymbolDisplayName"], StringComparison.Ordinal);
-                Assert.Contains("PartialSample.Helper.Touch", call.Properties["targetSymbolDisplayName"], StringComparison.Ordinal);
+                AssertCallIdentity(call, workerExecuteId, helperTouchId, "PartialSample", "PartialSample");
             },
             call =>
             {
                 AssertSpanAndProvenance(call, "src/PartialSample/Worker.State.cs", 10, 10);
-                Assert.Contains("PartialSample.Worker.Run", call.Properties["sourceSymbolDisplayName"], StringComparison.Ordinal);
-                Assert.Contains("PartialSample.Helper.Touch", call.Properties["targetSymbolDisplayName"], StringComparison.Ordinal);
+                AssertCallIdentity(call, workerRunId, helperTouchId, "PartialSample", "PartialSample");
             });
         Assert.Equal(helperCalls[0].Properties["targetSymbolId"], helperCalls[1].Properties["targetSymbolId"]);
     }
@@ -225,24 +246,23 @@ public sealed class CSharpGraphCorrectnessFixtureTests
 
         Assert.Equal("FailedOrPartial", result.Manifest.BuildStatus);
         Assert.Equal("Level1SemanticAnalysisReduced", result.Manifest.AnalysisLevel);
+        const string exerciseId = "csharp method csharp%20type%20ReceiverSample%25401.0.0.0%20ReceiverSample.Consumer Exercise(ReceiverSample%401.0.0.0%3ABeta.Receiver%2CSystem.Runtime%4010.0.0.0%3Aobject)->void";
+        const string alphaTouchId = "csharp method csharp%20type%20ReceiverSample%25401.0.0.0%20Alpha.Receiver Touch()->void";
+        const string betaTouchId = "csharp method csharp%20type%20ReceiverSample%25401.0.0.0%20Beta.Receiver Touch()->void";
         var expectedCalls = new[]
         {
-            (Line: 20, Receiver: "Alpha.Receiver"),
-            (Line: 21, Receiver: "Beta.Receiver"),
-            (Line: 22, Receiver: "Beta.Receiver"),
-            (Line: 23, Receiver: "Alpha.Receiver"),
-            (Line: 24, Receiver: "Alpha.Receiver"),
-            (Line: 27, Receiver: "Beta.Receiver"),
-            (Line: 28, Receiver: "Alpha.Receiver")
+            (Line: 20, TargetId: alphaTouchId),
+            (Line: 21, TargetId: betaTouchId),
+            (Line: 22, TargetId: betaTouchId),
+            (Line: 23, TargetId: alphaTouchId),
+            (Line: 24, TargetId: alphaTouchId),
+            (Line: 27, TargetId: betaTouchId),
+            (Line: 28, TargetId: alphaTouchId)
         };
         foreach (var expected in expectedCalls)
         {
             var call = AssertSemanticCall(result, "src/ReceiverSample/Receivers.cs", expected.Line, "Touch");
-            Assert.Contains(expected.Receiver + ".Touch", call.Properties["targetSymbolDisplayName"], StringComparison.Ordinal);
-            Assert.Contains(expected.Receiver, call.Properties["targetSymbolId"], StringComparison.Ordinal);
-            Assert.Contains("ReceiverSample.Consumer.Exercise", call.Properties["sourceSymbolDisplayName"], StringComparison.Ordinal);
-            Assert.False(string.IsNullOrWhiteSpace(call.Properties["sourceSymbolId"]));
-            Assert.False(string.IsNullOrWhiteSpace(call.Properties["targetSymbolId"]));
+            AssertCallIdentity(call, exerciseId, expected.TargetId, "ReceiverSample", "ReceiverSample");
         }
 
         var gap = Assert.Single(result.Facts, fact =>
@@ -268,8 +288,31 @@ public sealed class CSharpGraphCorrectnessFixtureTests
         Assert.Equal(ScannerVersions.CSharpSyntaxExtractor, syntaxFallback.Evidence.ExtractorVersion);
     }
 
-    private static ScanResult Scan(string repoPath) =>
-        ScanEngine.Scan(new ScanOptions(repoPath, Path.Combine(repoPath, ".tracemap")));
+    private static ScanResult Scan(string repoPath)
+    {
+        var expectedCommitSha = CommitFixture(repoPath);
+        var outputPath = Path.Combine(repoPath, ".tracemap");
+        var result = ScanEngine.Scan(new ScanOptions(repoPath, outputPath));
+
+        Assert.Matches("^[0-9a-f]{40}$", result.Manifest.CommitSha);
+        Assert.Equal(expectedCommitSha, result.Manifest.CommitSha);
+        Assert.All(result.Facts, fact => Assert.Equal(expectedCommitSha, fact.CommitSha));
+
+        var jsonlPath = Path.Combine(outputPath, "facts.ndjson");
+        var sqlitePath = Path.Combine(outputPath, "index.sqlite");
+        JsonlFactWriter.WriteAsync(jsonlPath, result.Facts).GetAwaiter().GetResult();
+        SqliteIndexWriter.Write(sqlitePath, result.Manifest, result.Facts);
+
+        var persistedFacts = File.ReadLines(jsonlPath)
+            .Select(line => JsonSerializer.Deserialize<CodeFact>(line, new JsonSerializerOptions(JsonSerializerDefaults.Web)))
+            .Select(fact => Assert.IsType<CodeFact>(fact))
+            .ToArray();
+        Assert.Equal(result.Facts.Count, persistedFacts.Length);
+        Assert.All(persistedFacts, fact => Assert.Equal(expectedCommitSha, fact.CommitSha));
+        AssertSqliteRoundTrip(sqlitePath, result.Manifest, persistedFacts);
+
+        return result with { Facts = persistedFacts };
+    }
 
     private static CodeFact AssertSemanticCall(ScanResult result, string filePath, int line, string contractElement)
     {
@@ -288,6 +331,23 @@ public sealed class CSharpGraphCorrectnessFixtureTests
         && fact.RuleId == RuleIds.CSharpSemanticCallGraph
         && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
         && fact.ContractElement == contractElement;
+
+    private static void AssertCallIdentity(
+        CodeFact fact,
+        string sourceSymbolId,
+        string targetSymbolId,
+        string callerAssemblyName,
+        string calleeAssemblyName,
+        string callerAssemblyVersion = AssemblyVersion,
+        string calleeAssemblyVersion = AssemblyVersion)
+    {
+        Assert.Equal(sourceSymbolId, fact.Properties["sourceSymbolId"]);
+        Assert.Equal(targetSymbolId, fact.Properties["targetSymbolId"]);
+        Assert.Equal(callerAssemblyName, fact.Properties["callerAssemblyName"]);
+        Assert.Equal(callerAssemblyVersion, fact.Properties["callerAssemblyVersion"]);
+        Assert.Equal(calleeAssemblyName, fact.Properties["calleeAssemblyName"]);
+        Assert.Equal(calleeAssemblyVersion, fact.Properties["calleeAssemblyVersion"]);
+    }
 
     private static CodeFact AssertSemanticFact(
         ScanResult result,
@@ -314,6 +374,130 @@ public sealed class CSharpGraphCorrectnessFixtureTests
         Assert.Equal(endLine, fact.Evidence.EndLine);
         Assert.Equal(SemanticExtractor, fact.Evidence.ExtractorId);
         Assert.Equal(ScannerVersions.CSharpSemanticExtractor, fact.Evidence.ExtractorVersion);
+    }
+
+    private static void AssertSqliteRoundTrip(string sqlitePath, ScanManifest manifest, IReadOnlyList<CodeFact> facts)
+    {
+        using var connection = new SqliteConnection($"Data Source={sqlitePath}");
+        connection.Open();
+        Assert.Equal(manifest.CommitSha, ExecuteScalar(connection, "select commit_sha from scan_manifest;"));
+        Assert.Equal(facts.Count, long.Parse(ExecuteScalar(connection, "select count(*) from facts;")));
+
+        foreach (var fact in facts.Where(fact =>
+            IsSemanticCall(fact, fact.ContractElement ?? string.Empty)
+            || (fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.CSharpSemanticWorkspace)))
+        {
+            using var factCommand = connection.CreateCommand();
+            factCommand.CommandText = """
+                select commit_sha, rule_id, evidence_tier, file_path, start_line, end_line,
+                       extractor_id, extractor_version, properties_json
+                from facts
+                where fact_id = $fact_id;
+                """;
+            factCommand.Parameters.AddWithValue("$fact_id", fact.FactId);
+            using var reader = factCommand.ExecuteReader();
+            Assert.True(reader.Read());
+            Assert.Equal(fact.CommitSha, reader.GetString(0));
+            Assert.Equal(fact.RuleId, reader.GetString(1));
+            Assert.Equal(fact.EvidenceTier, reader.GetString(2));
+            Assert.Equal(fact.Evidence.FilePath, reader.GetString(3));
+            Assert.Equal(fact.Evidence.StartLine, reader.GetInt32(4));
+            Assert.Equal(fact.Evidence.EndLine, reader.GetInt32(5));
+            Assert.Equal(fact.Evidence.ExtractorId, reader.GetString(6));
+            Assert.Equal(fact.Evidence.ExtractorVersion, reader.GetString(7));
+            var properties = JsonSerializer.Deserialize<Dictionary<string, string>>(
+                reader.GetString(8),
+                new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            Assert.NotNull(properties);
+            Assert.Equal(
+                fact.Properties.OrderBy(item => item.Key, StringComparer.Ordinal),
+                properties.OrderBy(item => item.Key, StringComparer.Ordinal));
+            Assert.False(reader.Read());
+            reader.Close();
+
+            if (fact.FactType != FactTypes.CallEdge || fact.RuleId != RuleIds.CSharpSemanticCallGraph)
+            {
+                continue;
+            }
+
+            Assert.Equal(fact.Properties["sourceSymbolId"], ReadFactSymbol(connection, fact.FactId, "source"));
+            Assert.Equal(fact.Properties["targetSymbolId"], ReadFactSymbol(connection, fact.FactId, "target"));
+
+            using var callCommand = connection.CreateCommand();
+            callCommand.CommandText = """
+                select commit_sha, rule_id, evidence_tier, caller_assembly_name,
+                       caller_assembly_version, callee_assembly_name, callee_assembly_version,
+                       file_path, start_line, end_line
+                from call_edges
+                where fact_id = $fact_id;
+                """;
+            callCommand.Parameters.AddWithValue("$fact_id", fact.FactId);
+            using var callReader = callCommand.ExecuteReader();
+            Assert.True(callReader.Read());
+            Assert.Equal(fact.CommitSha, callReader.GetString(0));
+            Assert.Equal(fact.RuleId, callReader.GetString(1));
+            Assert.Equal(fact.EvidenceTier, callReader.GetString(2));
+            Assert.Equal(fact.Properties["callerAssemblyName"], callReader.GetString(3));
+            Assert.Equal(fact.Properties["callerAssemblyVersion"], callReader.GetString(4));
+            Assert.Equal(fact.Properties["calleeAssemblyName"], callReader.GetString(5));
+            Assert.Equal(fact.Properties["calleeAssemblyVersion"], callReader.GetString(6));
+            Assert.Equal(fact.Evidence.FilePath, callReader.GetString(7));
+            Assert.Equal(fact.Evidence.StartLine, callReader.GetInt32(8));
+            Assert.Equal(fact.Evidence.EndLine, callReader.GetInt32(9));
+            Assert.False(callReader.Read());
+        }
+    }
+
+    private static string ReadFactSymbol(SqliteConnection connection, string factId, string role)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "select symbol_id from fact_symbols where fact_id = $fact_id and role = $role;";
+        command.Parameters.AddWithValue("$fact_id", factId);
+        command.Parameters.AddWithValue("$role", role);
+        return Assert.IsType<string>(command.ExecuteScalar());
+    }
+
+    private static string ExecuteScalar(SqliteConnection connection, string sql)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        return Convert.ToString(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+    }
+
+    private static string CommitFixture(string repoPath)
+    {
+        RunGit(repoPath, "init", "-b", "fixture");
+        RunGit(repoPath, "config", "user.email", "tests@example.invalid");
+        RunGit(repoPath, "config", "user.name", "TraceMap Tests");
+        RunGit(repoPath, "config", "commit.gpgsign", "false");
+        RunGit(repoPath, "add", ".");
+        RunGit(repoPath, "commit", "-m", "fixture");
+        return RunGit(repoPath, "rev-parse", "HEAD").Trim();
+    }
+
+    private static string RunGit(string workingDirectory, params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo("git")
+        {
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        startInfo.Environment["GIT_AUTHOR_DATE"] = "2000-01-01T00:00:00Z";
+        startInfo.Environment["GIT_COMMITTER_DATE"] = "2000-01-01T00:00:00Z";
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using var process = Process.Start(startInfo);
+        Assert.NotNull(process);
+        var standardOutput = process.StandardOutput.ReadToEnd();
+        var standardError = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        Assert.True(process.ExitCode == 0, $"git {string.Join(' ', arguments)} failed: {standardError}");
+        return standardOutput;
     }
 
     private static void WriteProject(string repoPath, string projectName)
