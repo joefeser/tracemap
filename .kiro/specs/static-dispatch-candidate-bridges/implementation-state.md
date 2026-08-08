@@ -215,10 +215,11 @@ dotnet test src/dotnet/TraceMap.sln
 Results:
 
 - Focused `CombinedDependencyPathTests` plus
-  `CSharpSemanticExtractorTests`: passed, 42 tests.
+  `CSharpSemanticExtractorTests`: passed, 44 tests after review patches.
 - `git diff --check`: passed.
 - `./scripts/check-private-paths.sh`: passed.
-- `dotnet test src/dotnet/TraceMap.sln`: passed, 1,301 tests.
+- `dotnet test src/dotnet/TraceMap.sln`: passed, 1,303 tests after review
+  patches.
 - `./scripts/smoke-combined-paths.sh`: initially stopped because `tsc` was
   unavailable. Homebrew did not have `typescript` installed/listed, and
   `src/typescript/node_modules` was missing. Restored pinned dependencies with
@@ -250,6 +251,20 @@ appropriate.
   follow-ups.
 
 ## PR Review Loop Notes
+
+- PR #610 initial ACK at `a50e93fbe8fd515e517051433a045d5f739956b2`
+  returned `actionable_findings / UNRESOLVED_REVIEW_THREADS` with five
+  unresolved threads and one actionable finding.
+- Patched the two Codex P2 findings by ranking registration-compatible
+  candidates before the fan-out cap and preserving semantically declared
+  closed constructed generic registrations. Exact constructed type display
+  and canonical type identity must both agree.
+- Also removed the guarded Roslyn null-forgiving operator and indexed strong
+  closed registration facts once, addressing Qodo's narrow reliability and
+  performance findings. Qodo's generic finding was a duplicate of the Codex
+  P2.
+- Added regressions for a registered candidate at position 11 under a cap of
+  10 and a closed constructed generic registration.
 
 - Initial ACK returned `decision=actionable_findings`,
   `stopReason=UNRESOLVED_REVIEW_THREADS`, `patchAuthorized=true`, and

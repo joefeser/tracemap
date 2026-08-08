@@ -2674,8 +2674,7 @@ public static class CSharpSemanticExtractor
             .Select(argument => argument.Expression is TypeOfExpressionSyntax typeOfExpression
                 ? model.GetTypeInfo(typeOfExpression.Type).Type
                 : null)
-            .Where(type => type is not null)
-            .Select(type => type!)
+            .OfType<ITypeSymbol>()
             .ToArray();
 
         if (typeArguments.Length > 0)

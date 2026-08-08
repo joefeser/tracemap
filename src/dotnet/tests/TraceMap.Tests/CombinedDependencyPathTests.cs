@@ -434,6 +434,70 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
+    public async Task Paths_preserve_closed_constructed_generic_registration_context()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var service = "Server.IRepository<Server.Order>.Get(System.Int32)";
+        var implementation = "Server.Repository<Server.Order>.Get(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            SymbolRelationshipFact(server, implementation, service, "Services/Repository.cs", 18),
+            DependencyRegistrationFact(
+                server,
+                "Server.IRepository<Server.Order>",
+                "Server.Repository<Server.Order>",
+                "AddScoped",
+                0,
+                "Startup/CompositionRoot.cs",
+                20)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var inventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedPath);
+
+        var candidate = Assert.Single(inventory.Edges, edge => edge.EdgeKind == "interface-candidate");
+        Assert.Equal("registration-context-candidate", candidate.RegistrationContext);
+        Assert.DoesNotContain(inventory.Gaps, gap => gap.GapKind == "GenericCandidateNeedsReview");
+    }
+
+    [Fact]
+    public void Static_dispatch_ranks_registered_candidate_before_fanout_cap()
+    {
+        var nodes = new Dictionary<string, StaticDispatchCandidateNode>(StringComparer.Ordinal)
+        {
+            ["service"] = new("service", "Method", "Server.IStatusService.Get()", "server", "server", "commit", "Services/IStatusService.cs", 10, 10)
+        };
+        var relationships = new List<StaticDispatchRelationshipEdge>();
+        for (var index = 0; index < 11; index++)
+        {
+            var nodeId = $"implementation-{index}";
+            var type = $"Server.StatusService{index}";
+            nodes[nodeId] = new(nodeId, "Method", $"{type}.Get()", "server", "server", "commit", $"Services/StatusService{index}.cs", 20 + index, 20 + index);
+            relationships.Add(new StaticDispatchRelationshipEdge(
+                $"relationship-{index}", "implements", "ImplementsInterfaceMember", nodeId, "service",
+                EvidenceTiers.Tier1Semantic, [$"fact-{index}"], [$"edge-{index}"], $"Services/StatusService{index}.cs", 20 + index, 20 + index,
+                TestTypeSymbolId(type), TestTypeSymbolId("Server.IStatusService")));
+        }
+
+        var registration = new StaticDispatchRegistrationFact(
+            "registration-9", "server", "server", "Server.IStatusService", "Server.StatusService9",
+            TestTypeSymbolId("Server.IStatusService"), TestTypeSymbolId("Server.StatusService9"), "AddScoped",
+            StaticDispatchRegistrationShapes.ClosedTypePair, EvidenceTiers.Tier1Semantic,
+            RuleIds.CSharpSemanticRuntimeEvidence, "Startup/CompositionRoot.cs", 40, 40, "commit", "test/1.0");
+
+        var result = StaticDispatchCandidateBuilder.Build(nodes, relationships, registrations: [registration]);
+
+        Assert.Equal(10, result.Edges.Count);
+        Assert.Contains(result.Edges, edge => edge.CandidateSymbolId == "implementation-9"
+            && edge.RegistrationContext == "registration-context-candidate");
+        Assert.DoesNotContain(result.Gaps, gap => gap.GapKind == "RegistrationCompatibilityUnproven");
+        Assert.Contains(result.Gaps, gap => gap.GapKind == "DispatchCandidateFanOut");
+    }
+
+    [Fact]
     public void Static_dispatch_registration_context_is_deterministic_and_preserves_unsupported_shapes_as_gaps()
     {
         var nodes = new Dictionary<string, StaticDispatchCandidateNode>(StringComparer.Ordinal)
