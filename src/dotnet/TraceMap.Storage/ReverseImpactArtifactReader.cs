@@ -197,6 +197,12 @@ public static class ReverseImpactArtifactReader
         var storedBuildStatus = reader.GetString(6);
         var manifest = JsonSerializer.Deserialize<ScanManifest>(reader.GetString(7), JsonOptions.Stable)
             ?? throw Error("ReverseImpactArtifactSnapshotInvalid", "The TraceMap scan manifest could not be parsed.");
+        manifest = manifest with
+        {
+            Solutions = manifest.Solutions ?? [],
+            Projects = manifest.Projects ?? [],
+            TargetFrameworks = manifest.TargetFrameworks ?? []
+        };
         ValidateManifest(manifest);
         if (!string.Equals(storedScanId, manifest.ScanId, StringComparison.Ordinal)
             || !string.Equals(storedRepo, manifest.RepoName, StringComparison.Ordinal)
@@ -262,9 +268,6 @@ public static class ReverseImpactArtifactReader
             || manifest.ScannedAt == default
             || string.IsNullOrWhiteSpace(manifest.AnalysisLevel)
             || string.IsNullOrWhiteSpace(manifest.BuildStatus)
-            || manifest.Solutions is null
-            || manifest.Projects is null
-            || manifest.TargetFrameworks is null
             || manifest.KnownGaps is null
             || manifest.Solutions.Any(string.IsNullOrWhiteSpace)
             || manifest.Projects.Any(string.IsNullOrWhiteSpace)

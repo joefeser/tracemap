@@ -824,7 +824,7 @@ public static class TraceMapCommand
             return 1;
         }
 
-        if (File.Exists(fullOutputPath))
+        if (FileSystemEntryExists(fullOutputPath))
         {
             await error.WriteLineAsync("error: reverse-impact output must be a new file and must not alias an existing artifact.");
             return 1;
@@ -835,7 +835,12 @@ public static class TraceMapCommand
         {
             var artifact = await ReverseImpactArtifactReader.ReadAsync(
                 fullIndexPath,
-                ParsePositiveInt(values, "--max-input-facts", ReverseImpactArtifactReader.DefaultMaxFacts),
+                ParseBoundedPositiveInt(
+                    values,
+                    "--max-input-facts",
+                    ReverseImpactArtifactReader.DefaultMaxFacts,
+                    ReverseImpactArtifactReader.MaximumFacts,
+                    "InvalidInputFactLimit"),
                 cancellationToken);
             result = ReverseImpactTraversal.Analyze(
                 artifact.Facts,
@@ -844,9 +849,9 @@ public static class TraceMapCommand
                     depth,
                     values.GetMany("--relation"),
                     !values.HasFlag("--exclude-contained-members"),
-                    ParsePositiveInt(values, "--max-traversal-states", ReverseImpactContract.DefaultMaxTraversalStates),
-                    ParsePositiveInt(values, "--max-frontier", ReverseImpactContract.DefaultMaxFrontierSize),
-                    ParsePositiveInt(values, "--max-results", ReverseImpactContract.DefaultMaxResults)));
+                    ParseBoundedPositiveInt(values, "--max-traversal-states", ReverseImpactContract.DefaultMaxTraversalStates, ReverseImpactContract.MaximumLimit, "InvalidTraversalLimit"),
+                    ParseBoundedPositiveInt(values, "--max-frontier", ReverseImpactContract.DefaultMaxFrontierSize, ReverseImpactContract.MaximumLimit, "InvalidTraversalLimit"),
+                    ParseBoundedPositiveInt(values, "--max-results", ReverseImpactContract.DefaultMaxResults, ReverseImpactContract.MaximumLimit, "InvalidTraversalLimit")));
         }
         catch (ReverseImpactArtifactException exception)
         {
@@ -1836,6 +1841,54 @@ public static class TraceMapCommand
         throw new ArgumentException($"{key} must be a positive integer.");
     }
 
+    private static int ParseBoundedPositiveInt(
+        ParsedOptions values,
+        string key,
+        int defaultValue,
+        int maximum,
+        string errorCode)
+    {
+        if (!values.TryGetValue(key, out var value))
+        {
+            return defaultValue;
+        }
+
+        if (int.TryParse(value, out var parsed) && parsed is >= 1 && parsed <= maximum)
+        {
+            return parsed;
+        }
+
+        throw new ReverseImpactInputException(
+            errorCode,
+            $"{key} must be an integer between 1 and {maximum}.",
+            key);
+    }
+
+    private static bool FileSystemEntryExists(string path)
+    {
+        if (File.Exists(path) || Directory.Exists(path))
+        {
+            return true;
+        }
+
+        var parent = Path.GetDirectoryName(path);
+        if (string.IsNullOrWhiteSpace(parent) || !Directory.Exists(parent))
+        {
+            return false;
+        }
+
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        try
+        {
+            return Directory.EnumerateFileSystemEntries(parent)
+                .Any(entry => string.Equals(Path.GetFullPath(entry), path, comparison));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return true;
+        }
+    }
+
     private static DateTimeOffset? ParseOptionalDate(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -2367,10 +2420,10 @@ public static class TraceMapCommand
             Optional:
               --relation <value>         calls, references, inheritance, http, or database. Repeat or comma-separate.
               --exclude-contained-members Do not expand a type seed to proven directly contained members.
-              --max-input-facts <n>      Maximum facts loaded from the immutable snapshot. Default: 1000000.
-              --max-traversal-states <n> Processed traversal-state limit. Default: 100000.
-              --max-frontier <n>         Retained traversal frontier limit. Default: 10000.
-              --max-results <n>          Emitted impact-result limit. Default: 10000.
+              --max-input-facts <n>      Maximum facts loaded, from 1 through 1000000. Default: 1000000.
+              --max-traversal-states <n> Processed states, from 1 through 1000000. Default: 100000.
+              --max-frontier <n>         Retained frontier, from 1 through 1000000. Default: 10000.
+              --max-results <n>          Emitted results, from 1 through 1000000. Default: 10000.
 
             Notes:
               This command reads but does not mutate the supplied index. Combined or mixed-snapshot indexes fail closed.

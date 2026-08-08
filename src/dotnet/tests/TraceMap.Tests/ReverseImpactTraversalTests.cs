@@ -165,6 +165,41 @@ public sealed class ReverseImpactTraversalTests
     }
 
     [Theory]
+    [InlineData(FactTypes.HttpCallDetected, RuleIds.HttpClientInvocation, "http")]
+    [InlineData(FactTypes.DatabaseOperationCandidate, RuleIds.DatabaseOperationCallPattern, "database")]
+    public void Unsupported_semantic_boundary_producer_is_excluded_with_a_loud_gap(
+        string factType,
+        string ruleId,
+        string filter)
+    {
+        var source = Id("method", "Application.Caller()");
+        var target = Id("method", "Framework.Target()");
+        var fact = Relationship(
+            $"unsupported-producer-{filter}",
+            factType,
+            ruleId,
+            source,
+            "Application.Caller()",
+            target,
+            "Framework.Target()",
+            "Boundary",
+            41) with
+        {
+            Evidence = new EvidenceSpan("Source.cs", 41, 41, "hash", "CSharpSemanticExtractor", "unsupported-version")
+        };
+
+        var result = ReverseImpactTraversal.Analyze(
+            [fact],
+            new ReverseImpactOptions(target, 1, [filter]));
+
+        Assert.Equal(ReverseImpactResolutions.Resolved, result.Resolution);
+        Assert.Empty(result.Impacts);
+        var gap = Assert.Single(result.Gaps, item => item.GapKind == ReverseImpactGapKinds.AnalysisGap);
+        Assert.Equal("unsupported-version", gap.Evidence.ExtractorVersion);
+        Assert.Contains("required semantic extractor provenance", gap.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("ExtendsInterface")]
     [InlineData("ExtendsClass")]
     [InlineData("ImplementsInterface")]
