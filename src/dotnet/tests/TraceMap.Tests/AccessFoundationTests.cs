@@ -47,6 +47,27 @@ public sealed class AccessFoundationTests
             [surface with { SurfaceKind = "form" }], knownObjects, fieldsByHash, fieldsByName);
         Assert.Empty(fieldsByName);
 
+        var ordinals = new Dictionary<string, int>(StringComparer.Ordinal);
+        var coverage = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [outputStableKey] = "complete"
+        };
+        fieldsByHash[queryStableKey][outputHash] = [outputStableKey];
+        AccessDesignEvidenceComposer.ReconcileSurfaceQueryOutputNames(
+            [surface], knownObjects, fieldsByHash, fieldsByName, ordinals, coverage);
+        Assert.Empty(fieldsByName);
+
+        ordinals[outputStableKey] = 0;
+        coverage[outputStableKey] = "partial";
+        AccessDesignEvidenceComposer.ReconcileSurfaceQueryOutputNames(
+            [surface], knownObjects, fieldsByHash, fieldsByName, ordinals, coverage);
+        Assert.Empty(fieldsByName);
+
+        coverage[outputStableKey] = "complete";
+        AccessDesignEvidenceComposer.ReconcileSurfaceQueryOutputNames(
+            [surface], knownObjects, fieldsByHash, fieldsByName, ordinals, coverage);
+        Assert.Equal(outputStableKey, Assert.Single(fieldsByName[queryStableKey][outputName]));
+
         fieldsByHash[queryStableKey][outputHash].Add("access-query-output-ambiguous");
         fieldsByName.Clear();
         AccessDesignEvidenceComposer.ReconcileSurfaceQueryOutputNames(
@@ -2660,6 +2681,34 @@ public sealed class AccessFoundationTests
         Assert.Equal(outputIdentity.StableKey, gap.TargetSymbol);
         Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, outputDeclaration.EvidenceTier);
         Assert.Equal(declaration.FactId, gap.Properties["supportingFactIds"]);
+    }
+
+    [Fact]
+    public void Query_output_evidence_origin_rejects_unknown_wire_values()
+    {
+        using var temp = new TempDirectory();
+        var databasePath = Path.Combine(temp.Path, "fixture.accdb");
+        File.WriteAllBytes(databasePath, [1, 2, 3, 4]);
+        var input = Input(databasePath, Path.Combine(temp.Path, "out"));
+        var projection = Projection(input);
+        var query = Assert.Single(projection.Queries);
+        var outputIdentity = AccessSafeValues.Identity(
+            AccessSafeValues.DatabaseIdentitySeed(input.RepositoryIdentityHash, input.CommitSha, input.DatabaseRelativePath, input.DatabaseHash),
+            $"query-field-{query.Identity.StableKey}",
+            "OutputField",
+            0);
+        projection = projection with
+        {
+            Queries = [query with
+            {
+                OutputFields = [new(outputIdentity, 0, "unknown", [], "partial", "unsupported-origin")]
+            }]
+        };
+
+        var error = Assert.Throws<InvalidDataException>(() =>
+            AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath)));
+
+        Assert.Equal("AccessQueryOutputEvidenceOriginUnsupported", error.Message);
     }
 
     [Fact]

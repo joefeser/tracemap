@@ -207,15 +207,17 @@ internal static class AccessDesignReviewComposer
         var row = rows[0];
         var fact = row.Fact;
         var kind = SafeToken(fact.Properties.GetValueOrDefault("classification"), "AccessAnalysisGap");
-        var eligibleSupportIds = allRows
+        var eligibleSupportRows = allRows
             .Where(candidate => candidate.SourceLabel == row.SourceLabel
                 && candidate.Fact.ScanId == fact.ScanId)
-            .Select(candidate => candidate.Fact.FactId)
-            .ToHashSet(StringComparer.Ordinal);
+            .GroupBy(candidate => candidate.Fact.FactId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var eligibleFacts = eligibleSupportRows.Values.Select(value => value.Fact).ToArray();
         var supportingFactIds = rows
             .SelectMany(item => new[] { item.Fact.FactId }
                 .Concat(SplitSupportingFactIds(item.Fact.Properties.GetValueOrDefault("supportingFactIds"))
-                    .Where(eligibleSupportIds.Contains)))
+                    .Where(factId => eligibleSupportRows.TryGetValue(factId, out var candidate)
+                        && IsValidGapSupport(item.Fact, candidate.Fact, eligibleFacts))))
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .Take(24)
@@ -256,6 +258,62 @@ internal static class AccessDesignReviewComposer
                 Pair("scopeDesignKey", SafeOpaqueKey(fact.Properties.GetValueOrDefault("scopeStableKey")) ?? string.Empty),
                 Pair("factCount", rows.Length.ToString(System.Globalization.CultureInfo.InvariantCulture))
             ]));
+    }
+
+    private static bool IsValidGapSupport(
+        CodeFact gap,
+        CodeFact candidate,
+        IReadOnlyList<CodeFact> facts)
+    {
+        var scopeKind = gap.Properties.GetValueOrDefault("scopeKind");
+        var scopeKey = gap.TargetSymbol ?? gap.Properties.GetValueOrDefault("scopeStableKey");
+        if (string.IsNullOrWhiteSpace(scopeKey))
+            return false;
+        return scopeKind switch
+        {
+            "binding" => IsValidBindingGapSupport(scopeKey, candidate, facts),
+            "query" => candidate.FactType == FactTypes.AccessQueryDeclared
+                && candidate.TargetSymbol == scopeKey,
+            "query-output-field" or "query-output-field-owner-unknown" =>
+                candidate.FactType == FactTypes.AccessQueryOutputDeclared
+                    && candidate.TargetSymbol == scopeKey
+                || candidate.FactType == FactTypes.AccessQueryDeclared
+                    && facts.Any(output => output.FactType == FactTypes.AccessQueryOutputDeclared
+                        && output.TargetSymbol == scopeKey
+                        && output.SourceSymbol == candidate.TargetSymbol),
+            "table" => candidate.FactType == FactTypes.LegacyDataEntityDeclared
+                && candidate.TargetSymbol == scopeKey,
+            "field" or "query-field" => candidate.FactType is FactTypes.LegacyDataColumnDeclared or FactTypes.AccessQueryOutputDeclared
+                && candidate.TargetSymbol == scopeKey,
+            "form" or "report" or "surface" => candidate.FactType is FactTypes.AccessFormDeclared or FactTypes.AccessReportDeclared
+                && candidate.TargetSymbol == scopeKey,
+            "control" => candidate.FactType == FactTypes.AccessControlDeclared
+                && candidate.TargetSymbol == scopeKey,
+            "vba-module" => candidate.FactType == FactTypes.AccessVbaModuleDeclared
+                && candidate.TargetSymbol == scopeKey,
+            "vba-procedure" => candidate.FactType == FactTypes.AccessVbaProcedureDeclared
+                && candidate.TargetSymbol == scopeKey,
+            "event-binding" => candidate.FactType == FactTypes.AccessEventBindingCandidate
+                && (candidate.TargetSymbol == scopeKey || candidate.SourceSymbol == scopeKey),
+            "macro" => candidate.FactType == FactTypes.AccessMacroDeclared
+                && candidate.TargetSymbol == scopeKey,
+            _ => false
+        };
+    }
+
+    private static bool IsValidBindingGapSupport(
+        string scopeKey,
+        CodeFact candidate,
+        IReadOnlyList<CodeFact> facts)
+    {
+        var binding = facts.FirstOrDefault(fact => fact.FactType == FactTypes.AccessBindingDeclared
+            && fact.Properties.GetValueOrDefault("stableBindingKey") == scopeKey);
+        if (binding is null)
+            return false;
+        if (candidate.FactId == binding.FactId)
+            return true;
+        return SplitSupportingFactIds(binding.Properties.GetValueOrDefault("supportingFactIds"))
+            .Contains(candidate.FactId, StringComparer.Ordinal);
     }
 
     private static ReleaseReviewGap Gap(

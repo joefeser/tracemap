@@ -182,6 +182,8 @@ public static class AccessFactBuilder
             }
             foreach (var output in query.OutputFields ?? [])
             {
+                if (!AccessQueryOutputEvidenceOrigins.IsSupported(output.EvidenceOrigin))
+                    throw new InvalidDataException("AccessQueryOutputEvidenceOriginUnsupported");
                 if (queryOutputOwnerStableKeys.TryGetValue(output.Identity.StableKey, out var existingOwner)
                     && !string.Equals(existingOwner, query.Identity.StableKey, StringComparison.Ordinal))
                 {
@@ -191,7 +193,7 @@ public static class AccessFactBuilder
                 {
                     queryOutputOwnerStableKeys.Add(output.Identity.StableKey, query.Identity.StableKey);
                 }
-                var outputTier = output.EvidenceOrigin == "querydef"
+                var outputTier = output.EvidenceOrigin == AccessQueryOutputEvidenceOrigins.QueryDef
                     ? EvidenceTiers.Tier2Structural
                     : EvidenceTiers.Tier3SyntaxOrTextual;
                 facts.Add(Create(manifest, FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery, outputTier, span,
