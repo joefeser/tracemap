@@ -291,7 +291,7 @@ public sealed class CSharpGraphCorrectnessFixtureTests
     }
 
     [Fact]
-    public void Unrelated_missing_receiver_diagnostic_does_not_activate_RX04_persistence_contract()
+    public void Unrelated_missing_receiver_fallback_persists_without_activating_RX04_contract()
     {
         using var temp = new TempDirectory();
         WriteProject(temp.Path, "OtherSample");
@@ -423,28 +423,37 @@ public sealed class CSharpGraphCorrectnessFixtureTests
 
         foreach (var fact in facts.Where(fact =>
             IsSemanticCall(fact, fact.ContractElement ?? string.Empty)
+            || (fact.FactType == FactTypes.CallEdge
+                && fact.RuleId == RuleIds.CSharpSyntaxCallGraph
+                && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
             || (fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.CSharpSemanticWorkspace)))
         {
             using var factCommand = connection.CreateCommand();
             factCommand.CommandText = """
-                select commit_sha, rule_id, evidence_tier, file_path, start_line, end_line,
-                       extractor_id, extractor_version, properties_json
+                select fact_id, commit_sha, fact_type, rule_id, evidence_tier,
+                       source_symbol, target_symbol, contract_element,
+                       file_path, start_line, end_line, extractor_id, extractor_version, properties_json
                 from facts
                 where fact_id = $fact_id;
                 """;
             factCommand.Parameters.AddWithValue("$fact_id", fact.FactId);
             using var reader = factCommand.ExecuteReader();
             Assert.True(reader.Read());
-            Assert.Equal(fact.CommitSha, reader.GetString(0));
-            Assert.Equal(fact.RuleId, reader.GetString(1));
-            Assert.Equal(fact.EvidenceTier, reader.GetString(2));
-            Assert.Equal(fact.Evidence.FilePath, reader.GetString(3));
-            Assert.Equal(fact.Evidence.StartLine, reader.GetInt32(4));
-            Assert.Equal(fact.Evidence.EndLine, reader.GetInt32(5));
-            Assert.Equal(fact.Evidence.ExtractorId, reader.GetString(6));
-            Assert.Equal(fact.Evidence.ExtractorVersion, reader.GetString(7));
+            Assert.Equal(fact.FactId, reader.GetString(0));
+            Assert.Equal(fact.CommitSha, reader.GetString(1));
+            Assert.Equal(fact.FactType, reader.GetString(2));
+            Assert.Equal(fact.RuleId, reader.GetString(3));
+            Assert.Equal(fact.EvidenceTier, reader.GetString(4));
+            Assert.Equal(fact.SourceSymbol, ReadNullableString(reader, 5));
+            Assert.Equal(fact.TargetSymbol, ReadNullableString(reader, 6));
+            Assert.Equal(fact.ContractElement, ReadNullableString(reader, 7));
+            Assert.Equal(fact.Evidence.FilePath, reader.GetString(8));
+            Assert.Equal(fact.Evidence.StartLine, reader.GetInt32(9));
+            Assert.Equal(fact.Evidence.EndLine, reader.GetInt32(10));
+            Assert.Equal(fact.Evidence.ExtractorId, reader.GetString(11));
+            Assert.Equal(fact.Evidence.ExtractorVersion, reader.GetString(12));
             var properties = JsonSerializer.Deserialize<Dictionary<string, string>>(
-                reader.GetString(8),
+                reader.GetString(13),
                 new JsonSerializerOptions(JsonSerializerDefaults.Web));
             Assert.NotNull(properties);
             Assert.Equal(
@@ -453,35 +462,44 @@ public sealed class CSharpGraphCorrectnessFixtureTests
             Assert.False(reader.Read());
             reader.Close();
 
-            if (fact.FactType != FactTypes.CallEdge || fact.RuleId != RuleIds.CSharpSemanticCallGraph)
+            if (fact.FactType != FactTypes.CallEdge)
             {
                 continue;
             }
 
-            Assert.Equal(fact.Properties["sourceSymbolId"], ReadFactSymbol(connection, fact.FactId, "source"));
-            Assert.Equal(fact.Properties["targetSymbolId"], ReadFactSymbol(connection, fact.FactId, "target"));
+            if (fact.RuleId == RuleIds.CSharpSemanticCallGraph)
+            {
+                Assert.Equal(fact.Properties["sourceSymbolId"], ReadFactSymbol(connection, fact.FactId, "source"));
+                Assert.Equal(fact.Properties["targetSymbolId"], ReadFactSymbol(connection, fact.FactId, "target"));
+            }
 
             using var callCommand = connection.CreateCommand();
             callCommand.CommandText = """
-                select commit_sha, rule_id, evidence_tier, caller_assembly_name,
-                       caller_assembly_version, callee_assembly_name, callee_assembly_version,
-                       file_path, start_line, end_line
+                select fact_id, commit_sha, rule_id, evidence_tier, caller_symbol,
+                       caller_assembly_name, caller_assembly_version, callee_symbol,
+                       callee_assembly_name, callee_assembly_version, callee_containing_type,
+                       call_kind, file_path, start_line, end_line
                 from call_edges
                 where fact_id = $fact_id;
                 """;
             callCommand.Parameters.AddWithValue("$fact_id", fact.FactId);
             using var callReader = callCommand.ExecuteReader();
             Assert.True(callReader.Read());
-            Assert.Equal(fact.CommitSha, callReader.GetString(0));
-            Assert.Equal(fact.RuleId, callReader.GetString(1));
-            Assert.Equal(fact.EvidenceTier, callReader.GetString(2));
-            Assert.Equal(fact.Properties["callerAssemblyName"], callReader.GetString(3));
-            Assert.Equal(fact.Properties["callerAssemblyVersion"], callReader.GetString(4));
-            Assert.Equal(fact.Properties["calleeAssemblyName"], callReader.GetString(5));
-            Assert.Equal(fact.Properties["calleeAssemblyVersion"], callReader.GetString(6));
-            Assert.Equal(fact.Evidence.FilePath, callReader.GetString(7));
-            Assert.Equal(fact.Evidence.StartLine, callReader.GetInt32(8));
-            Assert.Equal(fact.Evidence.EndLine, callReader.GetInt32(9));
+            Assert.Equal(fact.FactId, callReader.GetString(0));
+            Assert.Equal(fact.CommitSha, callReader.GetString(1));
+            Assert.Equal(fact.RuleId, callReader.GetString(2));
+            Assert.Equal(fact.EvidenceTier, callReader.GetString(3));
+            Assert.Equal(fact.SourceSymbol, ReadNullableString(callReader, 4));
+            Assert.Equal(fact.Properties.GetValueOrDefault("callerAssemblyName"), ReadNullableString(callReader, 5));
+            Assert.Equal(fact.Properties.GetValueOrDefault("callerAssemblyVersion"), ReadNullableString(callReader, 6));
+            Assert.Equal(fact.TargetSymbol, callReader.GetString(7));
+            Assert.Equal(fact.Properties.GetValueOrDefault("calleeAssemblyName"), ReadNullableString(callReader, 8));
+            Assert.Equal(fact.Properties.GetValueOrDefault("calleeAssemblyVersion"), ReadNullableString(callReader, 9));
+            Assert.Equal(fact.Properties.GetValueOrDefault("calleeContainingType"), ReadNullableString(callReader, 10));
+            Assert.Equal(fact.Properties.GetValueOrDefault("callKind"), ReadNullableString(callReader, 11));
+            Assert.Equal(fact.Evidence.FilePath, callReader.GetString(12));
+            Assert.Equal(fact.Evidence.StartLine, callReader.GetInt32(13));
+            Assert.Equal(fact.Evidence.EndLine, callReader.GetInt32(14));
             Assert.False(callReader.Read());
         }
 
@@ -502,13 +520,12 @@ public sealed class CSharpGraphCorrectnessFixtureTests
                 && fact.Evidence.FilePath == receiverGap.Evidence.FilePath
                 && fact.Evidence.StartLine == receiverGap.Evidence.StartLine + 2
                 && fact.TargetSymbol == "Touch");
-            AssertUnresolvedReceiverSqliteRoundTrip(connection, manifest, receiverGap, syntaxCall);
+            AssertUnresolvedReceiverSqliteRoundTrip(connection, receiverGap, syntaxCall);
         }
     }
 
     private static void AssertUnresolvedReceiverSqliteRoundTrip(
         SqliteConnection connection,
-        ScanManifest manifest,
         CodeFact expectedGap,
         CodeFact expectedSyntaxCall)
     {
@@ -571,7 +588,7 @@ public sealed class CSharpGraphCorrectnessFixtureTests
             using var gapReader = gapCommand.ExecuteReader();
             Assert.True(gapReader.Read());
             Assert.Equal(expectedGap.FactId, gapReader.GetString(0));
-            Assert.Equal(manifest.CommitSha, gapReader.GetString(1));
+            Assert.Equal(expectedGap.CommitSha, gapReader.GetString(1));
             Assert.Equal(expectedGap.Evidence.EndLine, gapReader.GetInt32(2));
             Assert.Equal(SemanticExtractor, gapReader.GetString(3));
             Assert.Equal(ScannerVersions.CSharpSemanticExtractor, gapReader.GetString(4));
@@ -584,65 +601,10 @@ public sealed class CSharpGraphCorrectnessFixtureTests
             Assert.False(gapReader.Read());
         }
 
-        using (var syntaxFactCommand = connection.CreateCommand())
-        {
-            syntaxFactCommand.CommandText = """
-                select fact_id, commit_sha, source_symbol, target_symbol, end_line,
-                       extractor_id, extractor_version, properties_json
-                from facts
-                where fact_type = $fact_type
-                  and rule_id = $rule_id
-                  and evidence_tier = $evidence_tier
-                  and file_path = $file_path
-                  and start_line = $line;
-                """;
-            syntaxFactCommand.Parameters.AddWithValue("$fact_type", FactTypes.CallEdge);
-            syntaxFactCommand.Parameters.AddWithValue("$rule_id", RuleIds.CSharpSyntaxCallGraph);
-            syntaxFactCommand.Parameters.AddWithValue("$evidence_tier", EvidenceTiers.Tier3SyntaxOrTextual);
-            syntaxFactCommand.Parameters.AddWithValue("$file_path", filePath);
-            syntaxFactCommand.Parameters.AddWithValue("$line", callLine);
-            using var syntaxFactReader = syntaxFactCommand.ExecuteReader();
-            Assert.True(syntaxFactReader.Read());
-            Assert.Equal(expectedSyntaxCall.FactId, syntaxFactReader.GetString(0));
-            Assert.Equal(manifest.CommitSha, syntaxFactReader.GetString(1));
-            Assert.Equal(expectedSyntaxCall.SourceSymbol, syntaxFactReader.GetString(2));
-            Assert.Equal(expectedSyntaxCall.TargetSymbol, syntaxFactReader.GetString(3));
-            Assert.Equal(expectedSyntaxCall.Evidence.EndLine, syntaxFactReader.GetInt32(4));
-            Assert.Equal("CSharpSyntaxExtractor", syntaxFactReader.GetString(5));
-            Assert.Equal(ScannerVersions.CSharpSyntaxExtractor, syntaxFactReader.GetString(6));
-            var syntaxProperties = JsonSerializer.Deserialize<Dictionary<string, string>>(
-                syntaxFactReader.GetString(7),
-                new JsonSerializerOptions(JsonSerializerDefaults.Web));
-            Assert.NotNull(syntaxProperties);
-            Assert.Equal(expectedSyntaxCall.Properties["callerName"], syntaxProperties["callerName"]);
-            Assert.Equal(expectedSyntaxCall.Properties["calleeName"], syntaxProperties["calleeName"]);
-            Assert.Equal(expectedSyntaxCall.Properties["callKind"], syntaxProperties["callKind"]);
-            Assert.False(syntaxFactReader.Read());
-        }
-
-        using var syntaxCallCommand = connection.CreateCommand();
-        syntaxCallCommand.CommandText = """
-            select fact_id, commit_sha, caller_symbol, callee_symbol, call_kind, end_line
-            from call_edges
-            where rule_id = $rule_id
-              and evidence_tier = $evidence_tier
-              and file_path = $file_path
-              and start_line = $line;
-            """;
-        syntaxCallCommand.Parameters.AddWithValue("$rule_id", RuleIds.CSharpSyntaxCallGraph);
-        syntaxCallCommand.Parameters.AddWithValue("$evidence_tier", EvidenceTiers.Tier3SyntaxOrTextual);
-        syntaxCallCommand.Parameters.AddWithValue("$file_path", filePath);
-        syntaxCallCommand.Parameters.AddWithValue("$line", callLine);
-        using var syntaxCallReader = syntaxCallCommand.ExecuteReader();
-        Assert.True(syntaxCallReader.Read());
-        Assert.Equal(expectedSyntaxCall.FactId, syntaxCallReader.GetString(0));
-        Assert.Equal(manifest.CommitSha, syntaxCallReader.GetString(1));
-        Assert.Equal(expectedSyntaxCall.SourceSymbol, syntaxCallReader.GetString(2));
-        Assert.Equal(expectedSyntaxCall.TargetSymbol, syntaxCallReader.GetString(3));
-        Assert.Equal(expectedSyntaxCall.Properties["callKind"], syntaxCallReader.GetString(4));
-        Assert.Equal(expectedSyntaxCall.Evidence.EndLine, syntaxCallReader.GetInt32(5));
-        Assert.False(syntaxCallReader.Read());
     }
+
+    private static string? ReadNullableString(SqliteDataReader reader, int ordinal) =>
+        reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
 
     private static string ReadFactSymbol(SqliteConnection connection, string factId, string role)
     {
