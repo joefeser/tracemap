@@ -137,7 +137,11 @@ public sealed record CombinedPathEdge(
     IReadOnlyList<string> SupportingCombinedEdgeIds,
     string? FilePath,
     int? StartLine,
-    int? EndLine);
+    int? EndLine,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? RegistrationContext = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<string>? SupportingRegistrationFactIds = null);
 
 public sealed record CombinedPathNote(string Code, string Message);
 
@@ -622,15 +626,20 @@ public static class CombinedDependencyPathReporter
 
             var from = graph.GetOrAddSymbolNode(edge.SourceIndexId, edge.SourceLabel, edge.SourceSymbol, edge.FilePath, edge.StartLine, edge.EndLine, edge.RuleId, edge.EvidenceTier);
             var to = graph.GetOrAddSymbolNode(edge.SourceIndexId, edge.SourceLabel, edge.TargetSymbol, edge.FilePath, edge.StartLine, edge.EndLine, edge.RuleId, edge.EvidenceTier);
+            var normalizedEdgeKind = NormalizeEdgeKind(edge.EdgeKind);
+            var supportingFactIds = normalizedEdgeKind is "implements" or "overrides"
+                && factsById.ContainsKey(edge.EdgeId)
+                    ? new[] { edge.EdgeId }
+                    : [];
             graph.AddEdge(new GraphEdge(
-                $"edge:{edge.EdgeId}:{NormalizeEdgeKind(edge.EdgeKind)}",
-                NormalizeEdgeKind(edge.EdgeKind),
+                $"edge:{edge.EdgeId}:{normalizedEdgeKind}",
+                normalizedEdgeKind,
                 from.NodeId,
                 to.NodeId,
                 "EvidenceEdge",
                 edge.RuleId,
                 edge.EvidenceTier,
-                [],
+                supportingFactIds,
                 [edge.EdgeId],
                 SafePath(edge.FilePath),
                 edge.StartLine,
@@ -756,7 +765,7 @@ public static class CombinedDependencyPathReporter
         }
 
         AddSymbolReconciliationEdges(graph);
-        AddDispatchCandidateEdges(graph);
+        AddDispatchCandidateEdges(graph, read.Facts);
         graph.Sort();
         return graph;
     }
@@ -1989,19 +1998,14 @@ public static class CombinedDependencyPathReporter
             from.EndLine ?? to.EndLine));
     }
 
-    private static void AddDispatchCandidateEdges(EvidenceGraph graph)
+    private static void AddDispatchCandidateEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
     {
+        var factsById = facts.ToDictionary(fact => fact.CombinedFactId, StringComparer.Ordinal);
         var relationshipEdges = graph.Edges
             .Where(edge => edge.EdgeKind is "implements" or "overrides")
             .ToArray();
-        var relationshipNodeIds = relationshipEdges
-            .Select(edge => edge.FromNodeId)
-            .Concat(relationshipEdges.Select(edge => edge.ToNodeId))
-            .Distinct(StringComparer.Ordinal)
+        var candidateNodes = graph.Nodes.Keys
             .OrderBy(value => value, StringComparer.Ordinal)
-            .ToArray();
-        var relationshipNodes = relationshipNodeIds
-            .Where(graph.Nodes.ContainsKey)
             .ToDictionary(
                 id => id,
                 id =>
@@ -2019,9 +2023,22 @@ public static class CombinedDependencyPathReporter
                         node.EndLine);
                 },
                 StringComparer.Ordinal);
+        var registrations = facts
+            .Where(fact => fact.FactType == FactTypes.DependencyRegistered)
+            .Select(ToStaticDispatchRegistrationFact)
+            .Where(registration => registration is not null)
+            .Select(registration => registration!)
+            .OrderBy(registration => registration.FactId, StringComparer.Ordinal)
+            .ToArray();
         var candidates = StaticDispatchCandidateBuilder.Build(
-            relationshipNodes,
-            relationshipEdges.Select(edge => new StaticDispatchRelationshipEdge(
+            candidateNodes,
+            relationshipEdges.Select(edge =>
+            {
+                var relationshipFact = edge.SupportingFactIds
+                    .Where(factsById.ContainsKey)
+                    .Select(id => factsById[id])
+                    .FirstOrDefault();
+                return new StaticDispatchRelationshipEdge(
                     edge.EdgeId,
                     edge.EdgeKind,
                     edge.OriginalRelationshipKind,
@@ -2032,8 +2049,12 @@ public static class CombinedDependencyPathReporter
                     edge.SupportingCombinedEdgeIds,
                     edge.FilePath,
                     edge.StartLine,
-                    edge.EndLine)),
-            graph.ScannerVersionFor);
+                    edge.EndLine,
+                    relationshipFact?.Properties.GetValueOrDefault("sourceContainingSymbolId"),
+                    relationshipFact?.Properties.GetValueOrDefault("targetContainingSymbolId"));
+            }),
+            graph.ScannerVersionFor,
+            registrations: registrations);
 
         foreach (var candidate in candidates.Edges)
         {
@@ -2050,7 +2071,9 @@ public static class CombinedDependencyPathReporter
                 candidate.FilePath,
                 candidate.StartLine,
                 candidate.EndLine,
-                candidate.RelationshipKind));
+                candidate.RelationshipKind,
+                candidate.RegistrationContext == StaticDispatchRegistrationContexts.None ? null : candidate.RegistrationContext,
+                candidate.SupportingRegistrationFactIds.Count == 0 ? null : candidate.SupportingRegistrationFactIds));
         }
 
         foreach (var gap in candidates.Gaps)
@@ -2063,7 +2086,7 @@ public static class CombinedDependencyPathReporter
                 gap.SourceIndexId,
                 gap.SourceLabel,
                 gap.NodeId,
-                null,
+                gap.SupportingFactIds.FirstOrDefault(),
                 gap.RuleId,
                 gap.EvidenceTier,
                 gap.FilePath,
@@ -2074,6 +2097,94 @@ public static class CombinedDependencyPathReporter
                 gap.EvidenceScope,
                 gap.EndLine));
         }
+    }
+
+    private static StaticDispatchRegistrationFact? ToStaticDispatchRegistrationFact(CombinedFactRow fact)
+    {
+        var serviceType = fact.Properties.GetValueOrDefault("serviceType")?.Trim();
+        var implementationType = fact.Properties.GetValueOrDefault("implementationType")?.Trim();
+        var registrationKind = fact.Properties.GetValueOrDefault("registrationKind")?.Trim()
+            ?? fact.ContractElement?.Trim();
+        var serviceTypeSymbolId = fact.Properties.GetValueOrDefault("serviceTypeSymbolId")?.Trim();
+        var implementationTypeSymbolId = fact.Properties.GetValueOrDefault("implementationTypeSymbolId")?.Trim();
+        if (string.IsNullOrWhiteSpace(serviceType)
+            || string.IsNullOrWhiteSpace(implementationType)
+            || string.IsNullOrWhiteSpace(registrationKind))
+        {
+            return null;
+        }
+
+        var hasArgumentCount = int.TryParse(fact.Properties.GetValueOrDefault("argumentCount"), out var argumentCount);
+        var declaredShape = fact.Properties.GetValueOrDefault("registrationShape")?.Trim();
+        var shape = ClassifyStaticDispatchRegistrationShape(
+            registrationKind,
+            serviceType,
+            implementationType,
+            serviceTypeSymbolId,
+            implementationTypeSymbolId,
+            argumentCount,
+            hasArgumentCount,
+            declaredShape,
+            fact.EvidenceTier);
+        return new StaticDispatchRegistrationFact(
+            fact.CombinedFactId,
+            fact.SourceIndexId,
+            fact.SourceLabel,
+            serviceType,
+            implementationType,
+            serviceTypeSymbolId,
+            implementationTypeSymbolId,
+            registrationKind,
+            shape,
+            fact.EvidenceTier,
+            fact.RuleId,
+            SafePath(fact.FilePath),
+            fact.StartLine,
+            fact.EndLine,
+            fact.CommitSha,
+            null);
+    }
+
+    private static string ClassifyStaticDispatchRegistrationShape(
+        string registrationKind,
+        string serviceType,
+        string implementationType,
+        string? serviceTypeSymbolId,
+        string? implementationTypeSymbolId,
+        int argumentCount,
+        bool hasArgumentCount,
+        string? declaredShape,
+        string evidenceTier)
+    {
+        if (evidenceTier is not (EvidenceTiers.Tier1Semantic or EvidenceTiers.Tier2Structural))
+        {
+            return StaticDispatchRegistrationShapes.ObservationOnly;
+        }
+
+        if (string.Equals(declaredShape, "open-generic", StringComparison.Ordinal)
+            || serviceType.Contains('<', StringComparison.Ordinal)
+            || implementationType.Contains('<', StringComparison.Ordinal))
+        {
+            return StaticDispatchRegistrationShapes.OpenGeneric;
+        }
+
+        if (string.IsNullOrWhiteSpace(serviceTypeSymbolId)
+            || string.IsNullOrWhiteSpace(implementationTypeSymbolId)
+            || !hasArgumentCount)
+        {
+            return StaticDispatchRegistrationShapes.ObservationOnly;
+        }
+
+        if ((!string.IsNullOrWhiteSpace(declaredShape)
+                && !string.Equals(declaredShape, "closed-type-pair", StringComparison.Ordinal))
+            || registrationKind.Contains("Keyed", StringComparison.Ordinal)
+            || string.Equals(registrationKind, "RegisterInstance", StringComparison.Ordinal)
+            || argumentCount is not (0 or 2))
+        {
+            return StaticDispatchRegistrationShapes.Unsupported;
+        }
+
+        return StaticDispatchRegistrationShapes.ClosedTypePair;
     }
 
     private static SymbolAlias? TryCreateSymbolAlias(string displayName)
@@ -2482,6 +2593,11 @@ public static class CombinedDependencyPathReporter
         if (edges.Any(edge => edge.EdgeKind is "interface-candidate" or "override-candidate"))
         {
             notes.Add(new CombinedPathNote("StaticDispatchCandidate", "Interface or override candidate hops are static review evidence and do not prove runtime dispatch, dependency-injection target selection, or object lifetime."));
+        }
+
+        if (edges.Any(edge => edge.RegistrationContext == StaticDispatchRegistrationContexts.Candidate))
+        {
+            notes.Add(new CombinedPathNote("DependencyRegistrationContext", "A statically visible DI registration agrees with an existing relationship-backed candidate; this is review context only and does not prove runtime binding, registration order, lifetime, or execution."));
         }
 
         if (edges.Any(edge => edge.EdgeKind == "symbol-reconciliation"))
@@ -4162,7 +4278,9 @@ public static class CombinedDependencyPathReporter
         string? FilePath,
         int? StartLine,
         int? EndLine,
-        string? OriginalRelationshipKind = null)
+        string? OriginalRelationshipKind = null,
+        string? RegistrationContext = null,
+        IReadOnlyList<string>? SupportingRegistrationFactIds = null)
     {
         public CombinedPathEdge ToReportEdge()
         {
@@ -4178,7 +4296,9 @@ public static class CombinedDependencyPathReporter
                 SupportingCombinedEdgeIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                 FilePath,
                 StartLine,
-                EndLine);
+                EndLine,
+                RegistrationContext,
+                SupportingRegistrationFactIds?.OrderBy(value => value, StringComparer.Ordinal).ToArray());
         }
     }
 }

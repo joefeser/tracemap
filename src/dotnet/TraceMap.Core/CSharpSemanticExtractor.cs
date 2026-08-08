@@ -2328,11 +2328,32 @@ public static class CSharpSemanticExtractor
         foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
             if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method
-                || !TryGetDependencyRegistration(method, invocation, model, out var registrationKind, out var serviceType, out var implementationType))
+                || !TryGetDependencyRegistration(
+                    method,
+                    invocation,
+                    model,
+                    out var registrationKind,
+                    out var registrationShape,
+                    out var serviceType,
+                    out var implementationType,
+                    out var serviceTypeSymbol,
+                    out var implementationTypeSymbol))
             {
                 continue;
             }
 
+            var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["evidenceKind"] = "DependencyRegistered",
+                ["registrationKind"] = registrationKind,
+                ["registrationShape"] = registrationShape,
+                ["serviceType"] = serviceType,
+                ["implementationType"] = implementationType,
+                ["methodSymbol"] = method.ToDisplayString(SymbolFormat),
+                ["argumentCount"] = invocation.ArgumentList.Arguments.Count.ToString()
+            };
+            AddSymbolProperties(properties, "serviceType", serviceTypeSymbol);
+            AddSymbolProperties(properties, "implementationType", implementationTypeSymbol);
             facts.Add(CreateSemanticFact(
                 FactTypes.DependencyRegistered,
                 RuleIds.CSharpSemanticRuntimeEvidence,
@@ -2343,15 +2364,7 @@ public static class CSharpSemanticExtractor
                 targetSymbol: serviceType,
                 contractElement: method.Name,
                 properties: AddAssemblyProperties(
-                    new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["evidenceKind"] = "DependencyRegistered",
-                        ["registrationKind"] = registrationKind,
-                        ["serviceType"] = serviceType,
-                        ["implementationType"] = implementationType,
-                        ["methodSymbol"] = method.ToDisplayString(SymbolFormat),
-                        ["argumentCount"] = invocation.ArgumentList.Arguments.Count.ToString()
-                    },
+                    properties,
                     model.GetEnclosingSymbol(invocation.SpanStart)?.ContainingAssembly,
                     method.ContainingAssembly)));
         }
@@ -2632,12 +2645,18 @@ public static class CSharpSemanticExtractor
         InvocationExpressionSyntax invocation,
         SemanticModel model,
         out string registrationKind,
+        out string registrationShape,
         out string serviceType,
-        out string implementationType)
+        out string implementationType,
+        out ITypeSymbol? serviceTypeSymbol,
+        out ITypeSymbol? implementationTypeSymbol)
     {
         registrationKind = string.Empty;
+        registrationShape = string.Empty;
         serviceType = string.Empty;
         implementationType = string.Empty;
+        serviceTypeSymbol = null;
+        implementationTypeSymbol = null;
 
         var methodName = method.Name;
         var isKnownRegistrationName = methodName is "AddSingleton" or "AddScoped" or "AddTransient"
@@ -2649,31 +2668,51 @@ public static class CSharpSemanticExtractor
         }
 
         var typeArguments = method.TypeArguments
-            .Select(argument => argument.ToDisplayString(SymbolFormat))
-            .Where(argument => !string.IsNullOrWhiteSpace(argument))
+            .Where(argument => !string.IsNullOrWhiteSpace(argument.ToDisplayString(SymbolFormat)))
             .ToArray();
         var typeOfArguments = invocation.ArgumentList.Arguments
-            .Select(argument => GetTypeOfExpressionDisplay(argument.Expression, model))
-            .Where(type => !string.IsNullOrWhiteSpace(type))
+            .Select(argument => argument.Expression is TypeOfExpressionSyntax typeOfExpression
+                ? model.GetTypeInfo(typeOfExpression.Type).Type
+                : null)
+            .Where(type => type is not null)
+            .Select(type => type!)
             .ToArray();
 
         if (typeArguments.Length > 0)
         {
-            serviceType = typeArguments[0];
-            implementationType = typeArguments.Length > 1 ? typeArguments[1] : serviceType;
+            serviceTypeSymbol = typeArguments[0];
+            implementationTypeSymbol = typeArguments.Length > 1 ? typeArguments[1] : serviceTypeSymbol;
         }
         else if (typeOfArguments.Length > 0)
         {
-            serviceType = typeOfArguments[0]!;
-            implementationType = typeOfArguments.Length > 1 ? typeOfArguments[1]! : serviceType;
+            serviceTypeSymbol = typeOfArguments[0];
+            implementationTypeSymbol = typeOfArguments.Length > 1 ? typeOfArguments[1] : serviceTypeSymbol;
         }
         else
         {
             return false;
         }
 
+        serviceType = serviceTypeSymbol.ToDisplayString(SymbolFormat);
+        implementationType = implementationTypeSymbol.ToDisplayString(SymbolFormat);
         registrationKind = methodName;
+        registrationShape = methodName.Contains("Keyed", StringComparison.Ordinal)
+            ? "keyed-registration"
+            : methodName == "RegisterInstance"
+                ? "instance-registration"
+                : IsOpenRegistrationType(serviceTypeSymbol) || IsOpenRegistrationType(implementationTypeSymbol)
+                    ? "open-generic"
+                    : invocation.ArgumentList.Arguments.Count is 0 or 2
+                        ? "closed-type-pair"
+                        : "factory-or-dynamic";
         return true;
+    }
+
+    private static bool IsOpenRegistrationType(ITypeSymbol type)
+    {
+        return type is ITypeParameterSymbol
+            || type is INamedTypeSymbol namedType
+                && (namedType.IsUnboundGenericType || namedType.TypeArguments.Any(IsOpenRegistrationType));
     }
 
     private static bool TryGetSerializerContractAttribute(
