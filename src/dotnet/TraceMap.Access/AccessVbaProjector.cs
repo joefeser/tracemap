@@ -48,6 +48,7 @@ internal static partial class AccessVbaProjector
                      .Take(limits.MaxObjectsPerCollection))
         {
             if (raw.Source is null || raw.Source.Length > limits.MaxVbaModuleTextLength) continue;
+            if (NormalizeModuleKind(raw.ModuleKind) != "standard") continue;
             var lines = NormalizeLines(raw.Source);
             if (lines.Length > limits.MaxVbaModuleLines) continue;
             var moduleIdentity = AccessSafeValues.Identity(databaseIdentitySeed, "vba-module", raw.Name, disclosurePolicy: disclosurePolicy);
@@ -56,6 +57,7 @@ internal static partial class AccessVbaProjector
             {
                 var match = ProcedureDeclarationPattern().Match(MaskCommentsAndStrings(line));
                 if (!match.Success) continue;
+                if (string.Equals(match.Groups["access"].Value, "Private", StringComparison.OrdinalIgnoreCase)) continue;
                 if (ordinal >= limits.MaxVbaProceduresPerModule) break;
                 var name = match.Groups["name"].Value;
                 var identity = AccessSafeValues.Identity(
@@ -759,7 +761,7 @@ internal static partial class AccessVbaProjector
         "after-update", "on-activate", "before-update", "on-click", "on-close", "on-current", "on-deactivate", "on-dbl-click", "on-error", "on-load", "on-no-data", "on-open", "on-resize", "on-timer", "on-unload"
     };
 
-    [GeneratedRegex(@"^\s*(?:(?:Public|Private|Friend|Static)\s+)?(?<kind>Sub|Function|Property\s+(?:Get|Let|Set))\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^\s*(?:(?<access>Public|Private|Friend)\s+)?(?:Static\s+)?(?<kind>Sub|Function|Property\s+(?:Get|Let|Set))\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ProcedureDeclarationPattern();
 
     [GeneratedRegex(@"^\s*End\s+(?<kind>Sub|Function|Property)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

@@ -495,8 +495,7 @@ public static class AccessScreenDataFlowReporter
     private static bool IsValidPersistedGapSupport(CodeFact gap, CodeFact candidate, IReadOnlyList<CodeFact> facts) =>
         candidate.ScanId == gap.ScanId && gap.Properties.GetValueOrDefault("scopeKind") switch
         {
-            "binding" => candidate.FactType == FactTypes.AccessBindingDeclared
-                && candidate.Properties.GetValueOrDefault("stableBindingKey") == gap.TargetSymbol,
+            "binding" => IsValidBindingGapSupport(gap, candidate, facts),
             "query" => candidate.FactType == FactTypes.AccessQueryDeclared
                 && candidate.TargetSymbol == gap.TargetSymbol,
             "query-output-field" => candidate.FactType == FactTypes.AccessQueryDeclared
@@ -506,6 +505,20 @@ public static class AccessScreenDataFlowReporter
                     && output.SourceSymbol == candidate.TargetSymbol),
             _ => false
         };
+
+    private static bool IsValidBindingGapSupport(CodeFact gap, CodeFact candidate, IReadOnlyList<CodeFact> facts)
+    {
+        var binding = facts.FirstOrDefault(fact => fact.ScanId == gap.ScanId
+            && fact.FactType == FactTypes.AccessBindingDeclared
+            && fact.Properties.GetValueOrDefault("stableBindingKey") == gap.TargetSymbol);
+        if (binding is null)
+            return false;
+        if (candidate.FactId == binding.FactId)
+            return true;
+        return (binding.Properties.GetValueOrDefault("supportingFactIds") ?? string.Empty)
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Contains(candidate.FactId, StringComparer.Ordinal);
+    }
 
     private static void EnsureReferencedNode(IDictionary<string, MutableNode> nodes, string key, CodeFact fact, bool source)
     {

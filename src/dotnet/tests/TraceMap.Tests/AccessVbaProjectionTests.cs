@@ -39,6 +39,22 @@ public sealed class AccessVbaProjectionTests
     }
 
     [Fact]
+    public void Procedure_catalog_excludes_private_and_instance_module_procedures()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var catalog = AccessVbaProjector.BuildProcedureCatalog(
+            seed,
+            [
+                new AccessRawVbaModule("ModuleA", "standard", "Private Function HiddenValue() As Long\nEnd Function\nPublic Function SharedValue() As Long\nEnd Function"),
+                new AccessRawVbaModule("FormA", "form", "Public Function InstanceValue() As Long\nEnd Function")
+            ]);
+
+        Assert.DoesNotContain("HiddenValue", catalog.Keys, StringComparer.OrdinalIgnoreCase);
+        Assert.DoesNotContain("InstanceValue", catalog.Keys, StringComparer.OrdinalIgnoreCase);
+        Assert.Single(catalog["SharedValue"]);
+    }
+
+    [Fact]
     public void Product_vba_inventory_reads_only_counts_and_never_accesses_vbe_or_catalog_items()
     {
         var catalog = new FakeCountCollection(4);

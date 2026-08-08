@@ -292,6 +292,35 @@ public sealed class AccessScreenDataFlowTests
     }
 
     [Fact]
+    public void Builder_preserves_supplemental_binding_provenance_declared_by_the_binding()
+    {
+        const string binding = "access-binding-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        var facts = new[]
+        {
+            Fact("fact-binding-support", FactTypes.AccessQueryCrosstabLineageCandidate, RuleIds.LegacyAccessQuery,
+                EvidenceTiers.Tier3SyntaxOrTextual, null, null, ("coverageLabel", "partial")),
+            Fact("fact-binding-declaration", FactTypes.AccessBindingDeclared, RuleIds.LegacyAccessBinding,
+                EvidenceTiers.Tier3SyntaxOrTextual, null, null,
+                ("stableBindingKey", binding),
+                ("coverageLabel", "partial"),
+                ("supportingFactIds", "fact-binding-support")),
+            Fact("fact-binding-gap", FactTypes.AnalysisGap, RuleIds.LegacyAccessBinding,
+                EvidenceTiers.Tier4Unknown, null, binding,
+                ("classification", "AccessBindingInlineSqlProjectionPartial"),
+                ("scopeKind", "binding"),
+                ("supportingFactIds", "fact-binding-declaration;fact-binding-support"))
+        };
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
+
+        var gap = Assert.Single(report.Gaps, item =>
+            item.Classification == "AccessBindingInlineSqlProjectionPartial");
+        Assert.Equal(
+            ["fact-binding-declaration", "fact-binding-gap", "fact-binding-support"],
+            gap.SupportingFactIds);
+    }
+
+    [Fact]
     public void Builder_rejects_existing_but_unrelated_persisted_gap_support()
     {
         const string binding = "access-binding-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
