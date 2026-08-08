@@ -1298,11 +1298,17 @@ public sealed class CombinedRouteFlowTests
         Assert.NotEmpty(candidate.SupportingRelationshipIds!);
         Assert.Equal(1, candidate.CandidateCount);
         Assert.Equal(0, candidate.OmittedCount);
+        Assert.Null(candidate.CandidateLimit);
+        Assert.Null(candidate.CandidateCapReason);
         Assert.Equal(RouteFlowClassifications.NeedsReviewStaticRouteFlow, candidate.Classification);
         Assert.Equal("combined.route-flow.interface-bridge.v1", candidate.Evidence.RuleId);
         Assert.Contains(StaticDispatchCandidateBuilder.CandidateRuleId, candidate.Evidence.SupportingRuleIds);
 
         var json = await File.ReadAllTextAsync(Path.Combine(temp.Path, "route-flow", "route-flow-report.json"));
+        var markdown = await File.ReadAllTextAsync(Path.Combine(temp.Path, "route-flow", "route-flow-report.md"));
+        Assert.Contains($"candidate={candidate.SupportingDispatchCandidateId}", markdown, StringComparison.Ordinal);
+        Assert.Contains($"registration={StaticDispatchRegistrationContexts.Candidate}", markdown, StringComparison.Ordinal);
+        Assert.Contains("count=1; omitted=0; limit=none; cap-reason=none", markdown, StringComparison.Ordinal);
         AssertForbiddenRuntimeWording(json);
     }
 
@@ -1482,9 +1488,17 @@ public sealed class CombinedRouteFlowTests
         {
             Assert.Equal(11, row.CandidateCount);
             Assert.Equal(1, row.OmittedCount);
+            Assert.Equal(10, row.CandidateLimit);
+            Assert.Equal("dispatch-candidate-fanout", row.CandidateCapReason);
         });
         Assert.All(candidates, row => Assert.Equal(RouteFlowClassifications.NeedsReviewStaticRouteFlow, row.Classification));
+        Assert.Equal("ReducedCoverage", result.Report.ReportCoverage);
+        Assert.True(result.Report.Summary.Truncated);
+        Assert.True(result.Report.Summary.HasBlockingGaps);
         Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(temp.Path, "route-flow", "route-flow-report.md"));
+        Assert.Contains("count=11; omitted=1; limit=10; cap-reason=dispatch-candidate-fanout", markdown, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1703,6 +1717,101 @@ public sealed class CombinedRouteFlowTests
         Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
         Assert.Equal("ReducedCoverage", gap.Coverage);
         Assert.Contains("other:relationship-fact", gap.SupportingFactIds);
+    }
+
+    [Fact]
+    public void Route_flow_candidate_provenance_finds_nearest_call_across_intermediate_edges()
+    {
+        var baseNode = new CombinedPathNode(
+            NodeId: "node:caller",
+            NodeKind: "Method",
+            DisplayName: "Server.Controller.Get()",
+            SourceIndexId: "server",
+            SourceLabel: "server",
+            ScanId: "scan-server",
+            CommitSha: "abc123",
+            SymbolId: "Server.Controller.Get()",
+            CombinedFactId: "server:caller",
+            RuleId: RuleIds.CSharpSemanticCallGraph,
+            EvidenceTier: EvidenceTiers.Tier1Semantic,
+            FilePath: "Controllers/Controller.cs",
+            StartLine: 10,
+            EndLine: 10,
+            SurfaceKind: null,
+            SurfaceName: null,
+            HttpMethod: null,
+            NormalizedPathKey: null,
+            OperationName: null,
+            TableName: null,
+            ColumnNames: null,
+            SourceKind: null,
+            ShapeHash: null,
+            TextHash: null,
+            TextLength: null,
+            PackageName: null,
+            ConfigKey: null);
+        var unresolvedNode = baseNode with { NodeId = "node:unresolved", DisplayName = "IService.Get()", SymbolId = "IService.Get()" };
+        var abstractionNode = baseNode with { NodeId = "node:abstraction", DisplayName = "Server.IService.Get()", SymbolId = "Server.IService.Get()" };
+        var candidateNode = baseNode with { NodeId = "node:candidate", DisplayName = "Server.Service.Get()", SymbolId = "Server.Service.Get()" };
+        var callEdge = new CombinedPathEdge(
+            "edge:call",
+            "calls",
+            baseNode.NodeId,
+            unresolvedNode.NodeId,
+            CombinedDependencyPathClassifications.StrongStaticPath,
+            RuleIds.CSharpSemanticCallGraph,
+            EvidenceTiers.Tier1Semantic,
+            ["fact:call"],
+            ["combined-edge:call"],
+            "Controllers/Controller.cs",
+            12,
+            12);
+        var reconciliationEdge = new CombinedPathEdge(
+            "edge:reconciliation",
+            "symbol-reconciliation",
+            unresolvedNode.NodeId,
+            abstractionNode.NodeId,
+            CombinedDependencyPathClassifications.NeedsReviewPath,
+            "combined.symbol-reconciliation.v1",
+            EvidenceTiers.Tier2Structural,
+            ["fact:reconciliation"],
+            ["combined-edge:reconciliation"],
+            null,
+            null,
+            null);
+        var candidateEdge = new CombinedPathEdge(
+            "dispatch-candidate:service",
+            "interface-candidate",
+            abstractionNode.NodeId,
+            candidateNode.NodeId,
+            CombinedDependencyPathClassifications.NeedsReviewPath,
+            StaticDispatchCandidateBuilder.CandidateRuleId,
+            EvidenceTiers.Tier1Semantic,
+            ["fact:relationship"],
+            ["combined-edge:relationship"],
+            "Services/Service.cs",
+            20,
+            20);
+        var path = new CombinedPath(
+            "path:test",
+            CombinedDependencyPathClassifications.NeedsReviewPath,
+            "Medium",
+            3,
+            baseNode.NodeId,
+            candidateNode.NodeId,
+            [baseNode, unresolvedNode, abstractionNode, candidateNode],
+            [callEdge, reconciliationEdge, candidateEdge],
+            ["fact:call", "fact:reconciliation", "fact:relationship"],
+            ["combined-edge:call", "combined-edge:reconciliation", "combined-edge:relationship"],
+            []);
+
+        var method = typeof(CombinedRouteFlowReporter).GetMethod(
+            "SupportingCallEdgeIds",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(method);
+
+        var supportingCallEdgeIds = Assert.IsAssignableFrom<IReadOnlyList<string>>(method!.Invoke(null, [path, 3]));
+        Assert.Equal(["combined-edge:call", "edge:call"], supportingCallEdgeIds);
     }
 
     [Fact]

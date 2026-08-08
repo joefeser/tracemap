@@ -85,9 +85,11 @@ tables. It does not add extraction rules or infer runtime DI selection.
 
 - `src/dotnet/TraceMap.Core/CSharpSemanticExtractor.cs`
 - `src/dotnet/TraceMap.Reporting/CombinedDependencyPaths.cs`
+- `src/dotnet/TraceMap.Reporting/CombinedRouteFlowReport.cs`
 - `src/dotnet/TraceMap.Reporting/StaticDispatchCandidateBuilder.cs`
 - `src/dotnet/tests/TraceMap.Tests/CSharpSemanticExtractorTests.cs`
 - `src/dotnet/tests/TraceMap.Tests/CombinedDependencyPathTests.cs`
+- `src/dotnet/tests/TraceMap.Tests/CombinedRouteFlowTests.cs`
 - `rules/rule-catalog.yml`
 - `.kiro/specs/static-dispatch-candidate-bridges/tasks.md`
 - `.kiro/specs/static-dispatch-candidate-bridges/implementation-state.md`
@@ -104,8 +106,8 @@ Task 8 route-flow slice:
   while carrying `combined.dispatch-candidate.v1` in supporting rule IDs.
 - Added optional route-flow row fields for shared candidate ID, supporting call
   and relationship edge IDs, registration context, registration fact IDs,
-  candidate count, and omitted count. Non-candidate row JSON remains unchanged
-  because optional fields are omitted when absent.
+  candidate count, omitted count, candidate limit, and cap reason. Non-candidate
+  row JSON remains unchanged because optional fields are omitted when absent.
 - Propagated shared registration, generic, compatibility, fan-out, and
   truncation gap kinds instead of collapsing them into an unknown route-flow
   gap.
@@ -115,6 +117,11 @@ Task 8 route-flow slice:
   candidates. Existing focused tests continue to cover single/multiple/no
   candidates, high fan-out, reduced Tier3 evidence, deterministic output, and
   forbidden runtime wording.
+- The PR #611 review pass fixed three current-head findings: call provenance now
+  scans backward across intermediate traversable edges to the nearest bounded
+  call; shared dispatch gaps reduce report coverage and fan-out/truncation marks
+  the summary partial; and Markdown now renders the same candidate identity,
+  provenance, registration, count, limit, and cap metadata exposed in JSON.
 
 - Audited the shipped `DependencyRegistered` shape and added deterministic
   service/implementation type symbol IDs plus a closed-set registration shape
@@ -255,6 +262,8 @@ Results:
 
 - Task 8 focused route-flow/path/catalog validation: passed, 115 tests.
 - Full `.NET` solution validation after Task 8: passed, 1,306 tests.
+- ACK-authorized PR #611 review-patch validation: focused route-flow/path tests
+  passed, 112 tests; full `.NET` solution passed, 1,307 tests.
 - `dotnet format --verify-no-changes` over changed C# files: passed.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
@@ -301,8 +310,8 @@ appropriate.
 - Type-level fallback candidates remain deferred within task 6.
 - Missing-candidate, ambiguous-identity, reduced-coverage, schema, and generic
   gaps remain deferred within task 6.
-- Route-flow, reverse, impact, report/portfolio, vault, and docs-export
-  consumption remain deferred to later slices.
+- Reverse, impact, report/portfolio, vault, and docs-export consumption remain
+  deferred to later slices. Route-flow consumption is complete in PR #611.
 - The selected Task 6 slice merged through PR #333; later tasks remain explicit
   follow-ups.
 
