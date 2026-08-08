@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using TraceMap.Core;
 using TraceMap.Combine;
 using TraceMap.EndpointAlignment;
@@ -47,6 +49,7 @@ public static class TraceMapCommand
                 "diff" => DiffHelp(),
                 "snapshot-diff" => SnapshotDiffHelp(),
                 "impact" => ImpactHelp(),
+                "reverse-impact" => ReverseImpactHelp(),
                 "reverse" => ReverseHelp(),
                 "release-review" => ReleaseReviewHelp(),
                 "access-review" => AccessReviewHelp(),
@@ -60,7 +63,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "database-design-review" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "scan" or "report" or "database-design-review" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         try
@@ -82,6 +85,7 @@ public static class TraceMapCommand
                 "diff" => await RunDiffAsync(rest, output, error, cancellationToken),
                 "snapshot-diff" => await RunSnapshotDiffAsync(rest, output, error, cancellationToken),
                 "impact" => await RunImpactAsync(rest, output, error, cancellationToken),
+                "reverse-impact" => await RunReverseImpactAsync(rest, output, error, cancellationToken),
                 "reverse" => await RunReverseAsync(rest, output, error, cancellationToken),
                 "release-review" => await RunReleaseReviewAsync(rest, output, error, cancellationToken),
                 "access-review" => await RunAccessReviewAsync(rest, output, error, cancellationToken),
@@ -777,6 +781,83 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
         await output.WriteLineAsync($"Report coverage: {result.Report.ReportCoverage}");
         return values.HasFlag("--exit-code") && result.HasReverseEvidence ? 1 : 0;
+    }
+
+    private static async Task<int> RunReverseImpactAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args, "--exclude-contained-members");
+        var indexPath = LastRawOptionValue(args, "--index");
+        if (string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: reverse-impact requires --index <index.sqlite>.");
+            return 1;
+        }
+
+        var selector = LastRawOptionValue(args, "--selector");
+        if (string.IsNullOrWhiteSpace(selector))
+        {
+            await error.WriteLineAsync("error: reverse-impact requires --selector <canonical-id-or-exact-display-name>.");
+            return 1;
+        }
+
+        var depthText = LastRawOptionValue(args, "--depth");
+        if (depthText is null
+            || !int.TryParse(depthText, out var depth)
+            || depth is < 1 or > 20)
+        {
+            await error.WriteLineAsync("error: reverse-impact requires --depth <1-20>.");
+            return 1;
+        }
+
+        var outputPath = LastRawOptionValue(args, "--out");
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: reverse-impact requires --out <result.json>.");
+            return 1;
+        }
+
+        var fullIndexPath = Path.GetFullPath(indexPath);
+        var fullOutputPath = Path.GetFullPath(outputPath);
+        if (string.Equals(fullIndexPath, fullOutputPath, StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: reverse-impact output must not replace the input index.");
+            return 1;
+        }
+
+        var artifact = await ReverseImpactArtifactReader.ReadAsync(
+            fullIndexPath,
+            ParsePositiveInt(values, "--max-input-facts", ReverseImpactArtifactReader.DefaultMaxFacts),
+            cancellationToken);
+        var result = ReverseImpactTraversal.Analyze(
+            artifact.Facts,
+            new ReverseImpactOptions(
+                selector,
+                depth,
+                values.GetMany("--relation"),
+                !values.HasFlag("--exclude-contained-members"),
+                ParsePositiveInt(values, "--max-traversal-states", ReverseImpactContract.DefaultMaxTraversalStates),
+                ParsePositiveInt(values, "--max-frontier", ReverseImpactContract.DefaultMaxFrontierSize),
+                ParsePositiveInt(values, "--max-results", ReverseImpactContract.DefaultMaxResults)));
+
+        var parent = Path.GetDirectoryName(fullOutputPath);
+        if (string.IsNullOrWhiteSpace(parent))
+        {
+            await error.WriteLineAsync("error: reverse-impact output path is invalid.");
+            return 1;
+        }
+
+        Directory.CreateDirectory(parent);
+        await File.WriteAllTextAsync(
+            fullOutputPath,
+            JsonSerializer.Serialize(result, JsonOptions.Stable) + "\n",
+            new UTF8Encoding(false),
+            cancellationToken);
+        await output.WriteLineAsync($"TraceMap reverse-impact completed: {fullOutputPath}");
+        await output.WriteLineAsync($"Resolution: {result.Resolution}");
+        await output.WriteLineAsync($"Impacts: {result.Impacts.Count}");
+        await output.WriteLineAsync($"Gaps: {result.Gaps.Count}");
+        await output.WriteLineAsync($"Truncated: {result.Truncated.ToString().ToLowerInvariant()}");
+        return 0;
     }
 
     private static async Task<int> RunReleaseReviewAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
@@ -1789,6 +1870,23 @@ public static class TraceMapCommand
         return false;
     }
 
+    private static string? LastRawOptionValue(string[] args, string option)
+    {
+        string? value = null;
+        for (var index = 0; index < args.Length; index++)
+        {
+            if (args[index] == option
+                && index + 1 < args.Length
+                && !args[index + 1].StartsWith("--", StringComparison.Ordinal))
+            {
+                value = args[index + 1];
+                index++;
+            }
+        }
+
+        return value;
+    }
+
     private sealed class ParsedOptions(
         Dictionary<string, List<string>> values,
         HashSet<string> flags)
@@ -1853,6 +1951,7 @@ public static class TraceMapCommand
               tracemap snapshot-diff --before <index.sqlite> --after <index.sqlite> --out <path>
               tracemap contract-diff --before <index.sqlite> --after <index.sqlite> --out <path>
               tracemap impact --before <combined.sqlite> --after <combined.sqlite> --out <path>
+              tracemap reverse-impact --index <index.sqlite> --selector <id-or-name> --depth <1-20> --out <result.json>
               tracemap reverse --index <combined.sqlite> --out <path> [selectors]
               tracemap release-review --before <index.sqlite> --after <index.sqlite> --out <path>
               tracemap access-review create --scan-output <access-scan-directory> --out <bundle-directory>
@@ -1880,6 +1979,7 @@ public static class TraceMapCommand
               snapshot-diff Compare two TraceMap snapshots by source, coverage, and extractor evidence.
               contract-diff Compare API/DTO static contract evidence between two indexes.
               impact    Explain static change evidence between two combined indexes.
+              reverse-impact Query bounded incoming impact relationships from one immutable scan index.
               reverse   Trace reverse static reachability from dependency surfaces.
               release-review Assemble a deterministic before/after release evidence packet.
               access-review Compose an existing Access scan into a private local review bundle.
@@ -2229,6 +2329,33 @@ public static class TraceMapCommand
 
             Outputs:
               impact-report.md and/or impact-report.json
+            """;
+    }
+
+    private static string ReverseImpactHelp()
+    {
+        return """
+            Usage:
+              tracemap reverse-impact --index <index.sqlite> --selector <id-or-name> --depth <1-20> --out <result.json> [options]
+
+            Required:
+              --index <path>             Standard single-scan TraceMap SQLite index.
+              --selector <value>         Exact canonical symbol ID or exact unambiguous display name.
+              --depth <1-20>             Explicit bounded reverse traversal depth.
+              --out <result.json>        Machine-readable tracemap.reverse-impact.v1 output.
+
+            Optional:
+              --relation <value>         calls, references, inheritance, http, or database. Repeat or comma-separate.
+              --exclude-contained-members Do not expand a type seed to proven directly contained members.
+              --max-input-facts <n>      Maximum facts loaded from the immutable snapshot. Default: 1000000.
+              --max-traversal-states <n> Processed traversal-state limit. Default: 100000.
+              --max-frontier <n>         Retained traversal frontier limit. Default: 10000.
+              --max-results <n>          Emitted impact-result limit. Default: 10000.
+
+            Notes:
+              This command reads but does not mutate the supplied index. Combined or mixed-snapshot indexes fail closed.
+              Results are deterministic static evidence, not runtime reachability, risk, release approval, or proof of safety.
+              Ambiguous selectors return candidates and a gap without selecting a symbol heuristically.
             """;
     }
 

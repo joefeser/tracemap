@@ -71,6 +71,15 @@ Current default behavior:
 - marks Python as `not_requested` unless `--include-python` is passed; requested Python scanning is currently `deferred` to a follow-up slice
 - marks JVM as `unavailable` when Java 21 is absent
 
+For single-scan symbol change-impact work, run the focused artifact/query contract tests in addition to the full .NET suite:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter 'FullyQualifiedName~ReverseImpact'
+```
+
+The focused suite must cover a real scan persisted through `SqliteIndexWriter`, read-only artifact loading, exact snapshot identity, direction preservation, deterministic JSON, ambiguous selectors, bounded truncation, contained-member expansion, and explicit semantic HTTP/database opt-ins. This command is separate from the combined-index `tracemap reverse` smoke path.
+
 The release-review section is available as a deterministic static evidence packet over the public-demo before/after snapshots. Contract-delta, SQL/schema, package compatibility, path context, and reverse context sections remain not requested, unavailable, or deferred inside the release-review report unless compatible inputs are explicitly supplied.
 
 Troubleshooting:

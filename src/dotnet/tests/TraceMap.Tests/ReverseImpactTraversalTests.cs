@@ -70,6 +70,66 @@ public sealed class ReverseImpactTraversalTests
     }
 
     [Theory]
+    [InlineData(FactTypes.HttpCallDetected, RuleIds.HttpClientInvocation, "http", "HttpClientCall")]
+    [InlineData(FactTypes.DatabaseOperationCandidate, RuleIds.DatabaseOperationCallPattern, "database", "DatabaseOperation")]
+    public void Boundary_relationships_require_explicit_filters_and_canonical_endpoints(
+        string factType,
+        string ruleId,
+        string filter,
+        string relationshipKind)
+    {
+        var boundary = Id("method", $"Framework.{relationshipKind}()");
+        var caller = Id("method", $"Application.{relationshipKind}()");
+        var fact = Relationship(
+            $"boundary-{filter}",
+            factType,
+            ruleId,
+            caller,
+            $"Application.{relationshipKind}()",
+            boundary,
+            $"Framework.{relationshipKind}()",
+            relationshipKind,
+            27);
+
+        var defaults = ReverseImpactTraversal.Analyze([fact], new ReverseImpactOptions(boundary, 1));
+        var selected = ReverseImpactTraversal.Analyze([fact], new ReverseImpactOptions(boundary, 1, [filter]));
+
+        Assert.Empty(defaults.Impacts);
+        Assert.Empty(defaults.Gaps);
+        var impact = Assert.Single(selected.Impacts);
+        Assert.Equal(caller, impact.Symbol.SymbolId);
+        Assert.Equal(filter, impact.Path[0].RelationshipFilter);
+        Assert.Equal(relationshipKind, impact.Path[0].RelationshipKind);
+        Assert.Equal(ruleId, impact.Path[0].RuleId);
+        Assert.Equal(27, impact.Path[0].Evidence.StartLine);
+    }
+
+    [Fact]
+    public void Syntax_only_http_boundary_is_a_loud_identity_gap_when_explicitly_selected()
+    {
+        var seed = Id("method", "Application.Entry()");
+        var syntax = Fact(
+            "syntax-http",
+            FactTypes.HttpCallDetected,
+            RuleIds.HttpClientInvocation,
+            "client",
+            "GetAsync",
+            new Dictionary<string, string> { ["methodName"] = "GetAsync" },
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            31);
+
+        var result = ReverseImpactTraversal.Analyze(
+            [SymbolFact("seed", seed, "Application.Entry()", "Method"), syntax],
+            new ReverseImpactOptions(seed, 1, ["http"]));
+
+        Assert.Empty(result.Impacts);
+        Assert.Contains(result.Gaps, gap =>
+            gap.GapKind == ReverseImpactGapKinds.RelationshipMissingCanonicalIdentity
+            && gap.Evidence.FilePath == "Source.cs"
+            && gap.Evidence.StartLine == 31);
+    }
+
+    [Theory]
     [InlineData("ExtendsInterface")]
     [InlineData("ExtendsClass")]
     [InlineData("ImplementsInterface")]
