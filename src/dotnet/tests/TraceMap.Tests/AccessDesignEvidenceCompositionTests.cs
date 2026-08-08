@@ -208,6 +208,35 @@ public sealed class AccessDesignEvidenceCompositionTests
             finding => finding.Metadata.Any(pair => pair.Key == "evidenceKind" && pair.Value == "form"));
         Assert.Contains(release.AccessEvidence.Findings,
             finding => finding.Metadata.Any(pair => pair.Key == "designInputHash"));
+        var queryGap = firstResult.Facts.First(fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("scopeKind") == "binding"
+            && fact.TargetSymbol is not null);
+        var unrelatedForm = firstResult.Facts.First(fact => fact.FactType == FactTypes.AccessFormDeclared);
+        var tamperedProperties = new SortedDictionary<string, string>(
+            queryGap.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+            StringComparer.Ordinal)
+        {
+            ["supportingFactIds"] = string.Join(';',
+                queryGap.Properties.GetValueOrDefault("supportingFactIds"),
+                unrelatedForm.FactId)
+        };
+        var tamperedOutput = Path.Combine(temp.Path, "tampered-support");
+        await AccessArtifactWriter.WriteAsync(
+            tamperedOutput,
+            firstResult with
+            {
+                Facts = firstResult.Facts.Select(fact => fact.FactId == queryGap.FactId
+                    ? fact with { Properties = tamperedProperties }
+                    : fact).ToArray()
+            },
+            AccessLimits.Default);
+        var tamperedRelease = await ReleaseReviewReporter.BuildReportAsync(new ReleaseReviewOptions(
+            Path.Combine(tamperedOutput, "index.sqlite"),
+            Path.Combine(tamperedOutput, "index.sqlite"),
+            Path.Combine(temp.Path, "tampered-release-review.md")));
+        var releasedGap = Assert.Single(tamperedRelease.AccessEvidence.Gaps,
+            gap => gap.GapKind == queryGap.Properties.GetValueOrDefault("classification"));
+        Assert.DoesNotContain(unrelatedForm.FactId, releasedGap.SupportingFactIds);
         var localReviewOutput = Path.Combine(temp.Path, "local-review");
         var localReview = await AccessLocalReviewBundle.CreateAsync(new(first, localReviewOutput));
         Assert.Equal(ReleaseReviewStatuses.Available, localReview.Manifest.AccessEvidenceStatus);

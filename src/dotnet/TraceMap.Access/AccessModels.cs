@@ -104,6 +104,17 @@ public sealed record AccessQueryOutputFieldProjection(
     string Coverage,
     string EvidenceOrigin = "unknown");
 
+internal static class AccessQueryOutputEvidenceOrigins
+{
+    internal const string Unknown = "unknown";
+    internal const string QueryDef = "querydef";
+    internal const string StaticSelect = "static-select";
+    internal const string StaticCrosstab = "static-crosstab";
+
+    internal static bool IsSupported(string value) =>
+        value is Unknown or QueryDef or StaticSelect or StaticCrosstab;
+}
+
 public sealed record AccessQueryFieldMappingProjection(
     int Ordinal,
     string? SourceExpressionHash,
