@@ -117,7 +117,7 @@ public sealed class CSharpIdentityReceiverFixtureTests
 
         Assert.All(calls, fact =>
         {
-            Assert.Equal("csharp-semantic/0.15.0", fact.Evidence.ExtractorVersion);
+            Assert.Equal(ScannerVersions.CSharpSemanticExtractor, fact.Evidence.ExtractorVersion);
             Assert.Equal(result.Manifest.CommitSha, fact.CommitSha);
             Assert.True(fact.Evidence.StartLine > 0);
             Assert.Equal(fact.Evidence.StartLine, fact.Evidence.EndLine);
