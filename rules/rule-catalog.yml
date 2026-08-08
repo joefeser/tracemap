@@ -3061,6 +3061,34 @@ rules:
       - These relationships prove compiler binding, not runtime reachability, branch execution, object allocation, or dependency injection dispatch.
       - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
 
+  - id: impact.reverse.traversal.v1
+    name: Deterministic reverse impact traversal
+    description: Resolves an exact canonical symbol identity or unambiguous exact display selector, then performs bounded reverse traversal over explicitly opted-in existing relationship facts while preserving each relationship's rule, tier, evidence site, and extractor provenance.
+    evidenceTier: Tier2Structural
+    emits:
+      - ReverseImpactResult
+      - ReverseImpactItem
+      - ReverseImpactHop
+    limitations:
+      - Traversal is a derived query over existing facts and does not extract relationships, infer runtime dispatch, classify risk, or prove runtime reachability or execution.
+      - The default impact-relevant families are compiler-backed or canonical-ID-backed calls, property references, inheritance, interface implementation or extension, member overrides, and interface-member implementations; other graph edges do not opt in implicitly.
+      - Canonical endpoints must already be present in fact properties. Syntax-only or otherwise incomplete relationship facts without canonical endpoints are excluded with `impact.reverse.gap.v1` instead of being joined by name.
+      - Depth is limited to 1 through 20 relationship hops. Cycles and duplicate affected symbols are collapsed deterministically to the first shortest path under stable ordinal edge ordering.
+      - Type seeds expand only directly contained methods, properties, fields, and events when an existing containing-symbol ID proves membership; unobserved, generated, inherited, or dynamically supplied members are not inferred.
+      - Exact display-name selectors are convenience selectors only. Multiple canonical IDs with the same display name fail closed, including overload, project, assembly, target-framework, and local/external collisions.
+      - Result tiers remain the tiers of the underlying hops; the structural tier on this rule describes the deterministic traversal operation and does not upgrade underlying evidence.
+
+  - id: impact.reverse.gap.v1
+    name: Reverse impact query gap
+    description: Records selector ambiguity, selector absence, or impact-relevant relationships that cannot participate safely because canonical endpoint identity is incomplete.
+    evidenceTier: Tier4Unknown
+    emits:
+      - ReverseImpactGap
+    limitations:
+      - A reverse-impact gap is incomplete evidence, not proof that a symbol has no callers, references, implementations, overrides, or other dependents.
+      - Relationship identity gaps retain the original relationship evidence location when available, but cannot identify an affected symbol without both canonical endpoints.
+      - Selector candidates are returned only for exact display-name collisions; the rule does not rank, fuzzy-match, or heuristically choose among candidates.
+
   - id: csharp.semantic.flowboundary.v1
     name: C# semantic flow boundary
     description: Records deterministic evidence for runtime-sensitive flow boundaries such as DI resolution, deserialization, reflection, dynamic invocation, collection mutation, object mutation, branch conditions, callbacks, and async scheduling points.
