@@ -171,6 +171,13 @@ public sealed class AccessDesignEvidenceCompositionTests
         Assert.Contains(firstResult.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyAccessDesignInput
             && fact.EvidenceTier == EvidenceTiers.Tier4Unknown);
+        var finalFactIds = firstResult.Facts.Select(fact => fact.FactId).ToHashSet(StringComparer.Ordinal);
+        Assert.All(firstResult.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap), gap =>
+        {
+            var supportingFactIds = (gap.Properties.GetValueOrDefault("supportingFactIds") ?? string.Empty)
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            Assert.All(supportingFactIds, factId => Assert.Contains(factId, finalFactIds));
+        });
         Assert.All(firstResult.Facts.Where(IsDesignFact), fact =>
         {
             Assert.True(fact.Properties.ContainsKey("designInputHash")
