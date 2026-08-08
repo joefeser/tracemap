@@ -1,5 +1,15 @@
 namespace TraceMap.Core;
 
+public sealed class SourceInventoryException : Exception
+{
+    public const string ErrorCode = "SourceInventoryIncomplete";
+
+    public SourceInventoryException(Exception innerException)
+        : base(ErrorCode, innerException)
+    {
+    }
+}
+
 public static class FileInventory
 {
     private static readonly HashSet<string> IncludedExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -70,10 +80,18 @@ public static class FileInventory
         var options = new EnumerationOptions
         {
             RecurseSubdirectories = true,
-            IgnoreInaccessible = true
+            IgnoreInaccessible = false
         };
 
-        var candidateFiles = EnumerateCandidateFiles(root, options, outputFullPath).ToArray();
+        string[] candidateFiles;
+        try
+        {
+            candidateFiles = EnumerateCandidateFiles(root, options, outputFullPath).ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new SourceInventoryException(ex);
+        }
 
         var serviceReferenceFolders = candidateFiles
             .Where(path => Path.GetExtension(path).Equals(".svcmap", StringComparison.OrdinalIgnoreCase))
@@ -87,9 +105,7 @@ public static class FileInventory
 
         var items = candidateFiles
             .Where(path => ShouldInclude(root, path, serviceReferenceFolders, webReferenceFolders))
-            .Select(path => TryCreateItem(root, path, serviceReferenceFolders, webReferenceFolders))
-            .Where(item => item is not null)
-            .Select(item => item!)
+            .Select(path => CreateItem(root, path, serviceReferenceFolders, webReferenceFolders))
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .ToArray();
 
@@ -102,7 +118,7 @@ public static class FileInventory
             .Where(path => !ShouldExclude(root, path, outputFullPath));
     }
 
-    private static FileInventoryItem? TryCreateItem(string root, string path, ISet<string> serviceReferenceFolders, ISet<string> webReferenceFolders)
+    private static FileInventoryItem CreateItem(string root, string path, ISet<string> serviceReferenceFolders, ISet<string> webReferenceFolders)
     {
         try
         {
@@ -114,7 +130,7 @@ public static class FileInventory
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return null;
+            throw new SourceInventoryException(ex);
         }
     }
 
