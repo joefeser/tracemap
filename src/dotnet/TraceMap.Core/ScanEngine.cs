@@ -8,6 +8,7 @@ public static class ScanEngine
 {
     public static ScanResult Scan(ScanOptions options)
     {
+        using var scanOperation = TraceMapDiagnostics.StartScan();
         var repoPath = Path.GetFullPath(options.RepoPath);
         var outputPath = Path.GetFullPath(options.OutputPath);
         if (!Directory.Exists(repoPath))
@@ -15,11 +16,28 @@ public static class ScanEngine
             throw new DirectoryNotFoundException($"Repository path does not exist: {repoPath}");
         }
 
-        var git = GitMetadataProvider.Detect(repoPath);
-        MsBuildBinlogExtractor.ValidateCommitBinding(git.CommitSha, options.BinlogPaths, options.BinlogCommitSha);
-        var fullInventory = FileInventory.Collect(repoPath, outputPath);
-        var inventory = ApplyScope(fullInventory, repoPath, options);
-        var semanticResult = CSharpSemanticExtractor.Extract(repoPath, inventory, options, fullInventory);
+        GitMetadata git;
+        IReadOnlyList<FileInventoryItem> fullInventory;
+        IReadOnlyList<FileInventoryItem> inventory;
+        using (var discoveryOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.Discovery))
+        {
+            git = GitMetadataProvider.Detect(repoPath);
+            MsBuildBinlogExtractor.ValidateCommitBinding(git.CommitSha, options.BinlogPaths, options.BinlogCommitSha);
+            fullInventory = FileInventory.Collect(repoPath, outputPath);
+            inventory = ApplyScope(fullInventory, repoPath, options);
+            discoveryOperation.RecordItems(inventory.Count);
+            discoveryOperation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+        }
+
+        SemanticExtractionResult semanticResult;
+        using (var semanticOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.SemanticAnalysis))
+        {
+            semanticResult = CSharpSemanticExtractor.Extract(repoPath, inventory, options, fullInventory);
+            semanticOperation.Complete(semanticResult.ReducedCoverage
+                ? TraceMapDiagnosticOutcome.Partial
+                : TraceMapDiagnosticOutcome.Succeeded);
+        }
+
         inventory = IncludeSemanticallyAnalyzedFiles(inventory, fullInventory, semanticResult);
         var sourceSnapshotDigest = CreateSourceSnapshotDigest(repoPath, inventory);
         var solutions = inventory
@@ -93,12 +111,28 @@ public static class ScanEngine
             KnownGaps = knownGaps
         };
 
-        var facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult, options, binlogFacts);
+        IReadOnlyList<CodeFact> facts;
+        using (var extractionOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.StaticExtraction))
+        {
+            facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult, options, binlogFacts);
+            extractionOperation.RecordItems(facts.Count);
+            extractionOperation.Complete(manifest.BuildStatus == "FailedOrPartial"
+                ? TraceMapDiagnosticOutcome.Partial
+                : TraceMapDiagnosticOutcome.Succeeded);
+        }
+
         if (!string.Equals(sourceSnapshotDigest, CreateSourceSnapshotDigest(repoPath, inventory), StringComparison.Ordinal))
         {
             throw new SourceSnapshotException();
         }
 
+        scanOperation.RecordItems(facts.Count);
+        scanOperation.Complete(
+            manifest.BuildStatus == "FailedOrPartial"
+                ? TraceMapDiagnosticOutcome.Partial
+                : TraceMapDiagnosticOutcome.Succeeded,
+            manifest.AnalysisLevel,
+            manifest.BuildStatus);
         return new ScanResult(manifest, facts, inventory);
     }
 
