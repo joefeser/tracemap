@@ -466,15 +466,17 @@ public static class AccessScreenDataFlowReporter
             return supporting.ToArray();
 
         var scope = gap.Properties.GetValueOrDefault("scopeKind");
-        if (scope == "query-output-field")
+        if (scope is "query-output-field" or "query-output-field-owner-unknown")
         {
             foreach (var output in facts.Where(candidate =>
-                         candidate.TargetSymbol == gap.TargetSymbol
+                         candidate.ScanId == gap.ScanId
+                         && candidate.TargetSymbol == gap.TargetSymbol
                          && candidate.FactType == FactTypes.AccessQueryOutputDeclared))
             {
                 supporting.Add(output.FactId);
                 foreach (var query in facts.Where(candidate =>
-                             candidate.TargetSymbol == output.SourceSymbol
+                             candidate.ScanId == gap.ScanId
+                             && candidate.TargetSymbol == output.SourceSymbol
                              && candidate.FactType == FactTypes.AccessQueryDeclared))
                     supporting.Add(query.FactId);
             }
@@ -498,11 +500,14 @@ public static class AccessScreenDataFlowReporter
             "binding" => IsValidBindingGapSupport(gap, candidate, facts),
             "query" => candidate.FactType == FactTypes.AccessQueryDeclared
                 && candidate.TargetSymbol == gap.TargetSymbol,
-            "query-output-field" => candidate.FactType == FactTypes.AccessQueryDeclared
-                && facts.Any(output => output.ScanId == gap.ScanId
-                    && output.FactType == FactTypes.AccessQueryOutputDeclared
-                    && output.TargetSymbol == gap.TargetSymbol
-                    && output.SourceSymbol == candidate.TargetSymbol),
+            "query-output-field" or "query-output-field-owner-unknown" =>
+                candidate.FactType == FactTypes.AccessQueryOutputDeclared
+                    && candidate.TargetSymbol == gap.TargetSymbol
+                || candidate.FactType == FactTypes.AccessQueryDeclared
+                    && facts.Any(output => output.ScanId == gap.ScanId
+                        && output.FactType == FactTypes.AccessQueryOutputDeclared
+                        && output.TargetSymbol == gap.TargetSymbol
+                        && output.SourceSymbol == candidate.TargetSymbol),
             _ => false
         };
 
