@@ -392,6 +392,46 @@ public sealed class CSharpFullSnapshotStabilityTests
             && fact.Evidence.FilePath == "src/TransitionSample/Caller.cs");
     }
 
+    [Fact]
+    public void Unicode_equivalent_exclusion_governs_inventory_semantic_compilation_and_persistence()
+    {
+        if (!OperatingSystem.IsMacOS())
+            return;
+
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var decomposedFileName = "Targe\u0301t.g.cs";
+        var composedExclusion = "src/TransitionSample/Targ\u00e9t.g.cs";
+        WriteFixture(repo, targetFileName: decomposedFileName);
+
+        var output = Path.Combine(temp.Path, "scoped");
+        var scoped = Scan(repo, output, [composedExclusion]);
+        var persistedPath = "src/TransitionSample/" + decomposedFileName;
+
+        Assert.Equal("FailedOrPartial", scoped.Manifest.BuildStatus);
+        Assert.DoesNotContain(scoped.Inventory, item => item.RelativePath == persistedPath);
+        Assert.DoesNotContain(scoped.Facts, fact => fact.Evidence.FilePath == persistedPath);
+        Assert.DoesNotContain(scoped.Facts, fact =>
+            fact.RuleId == RuleIds.CSharpSemanticCallGraph
+            && fact.TargetSymbol == "global::TransitionSample.Target.Execute()");
+        Assert.Contains(scoped.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.CSharpSemanticWorkspace
+            && fact.Properties.GetValueOrDefault("gapKind") == "ScanScopeExcludedSources");
+
+        var persistedFacts = File.ReadLines(Path.Combine(output, "facts.ndjson"))
+            .Select(line => JsonSerializer.Deserialize<CodeFact>(line, JsonOptions.StableLine)!)
+            .ToArray();
+        Assert.DoesNotContain(persistedFacts, fact => fact.Evidence.FilePath == persistedPath);
+
+        using var connection = new SqliteConnection($"Data Source={Path.Combine(output, "index.sqlite")}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "select count(*) from facts where file_path = $path;";
+        command.Parameters.AddWithValue("$path", persistedPath);
+        Assert.Equal(0L, (long)command.ExecuteScalar()!);
+    }
+
     private static void WriteFixture(string repo, string targetFileName = "Target.cs")
     {
         Directory.CreateDirectory(Path.Combine(repo, "src", "TransitionSample"));

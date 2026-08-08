@@ -467,13 +467,14 @@ public static class ScanEngine
         var projectPaths = NormalizeOptionPaths(repoPath, options.ProjectPaths);
         var includeGlobs = (options.IncludeGlobs ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).ToArray();
         var excludeGlobs = (options.ExcludeGlobs ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).ToArray();
+        var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
         var projectDirectories = projectPaths
             .Select(path => FileInventory.NormalizeRelativePath(Path.GetDirectoryName(path) ?? "."))
             .ToArray();
 
         return inventory
-            .Where(item => includeGlobs.Length == 0 || includeGlobs.Any(glob => GlobMatches(item.RelativePath, glob)))
-            .Where(item => excludeGlobs.Length == 0 || !excludeGlobs.Any(glob => GlobMatches(item.RelativePath, glob)))
+            .Where(item => includeGlobs.Length == 0 || includeGlobs.Any(glob => GlobMatches(item.RelativePath, glob, sourcePathComparer)))
+            .Where(item => excludeGlobs.Length == 0 || !excludeGlobs.Any(glob => GlobMatches(item.RelativePath, glob, sourcePathComparer)))
             .Where(item => solutionPaths.Count == 0 || item.Kind != "Solution" || solutionPaths.Contains(item.RelativePath))
             .Where(item => projectPaths.Count == 0 || item.Kind is not ("Project" or "SqlProject") || projectPaths.Contains(item.RelativePath))
             .Where(item => projectDirectories.Length == 0
@@ -535,9 +536,11 @@ public static class ScanEngine
         return relativePath.StartsWith(normalizedDirectory, StringComparison.Ordinal);
     }
 
-    internal static bool GlobMatches(string relativePath, string glob)
+    internal static bool GlobMatches(string relativePath, string glob, StringComparer? pathComparer = null)
     {
-        var normalizedGlob = FileInventory.NormalizeRelativePath(glob.Trim());
+        pathComparer ??= StringComparer.Ordinal;
+        var normalizedPath = NormalizePathForFileSystemComparison(relativePath);
+        var normalizedGlob = NormalizePathForFileSystemComparison(glob.Trim());
         if (string.IsNullOrWhiteSpace(normalizedGlob))
         {
             return false;
@@ -545,13 +548,28 @@ public static class ScanEngine
 
         if (!normalizedGlob.Contains('*', StringComparison.Ordinal))
         {
-            return relativePath.Equals(normalizedGlob, StringComparison.Ordinal)
-                || relativePath.StartsWith(normalizedGlob.TrimEnd('/') + "/", StringComparison.Ordinal);
+            var directoryPrefix = normalizedGlob.TrimEnd('/') + "/";
+            var comparison = pathComparer.Equals("a", "A")
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            return normalizedPath.Equals(normalizedGlob, comparison)
+                || normalizedPath.StartsWith(directoryPrefix, comparison);
         }
 
         var regex = "^" + System.Text.RegularExpressions.Regex.Escape(normalizedGlob)
             .Replace("\\*\\*", ".*", StringComparison.Ordinal)
             .Replace("\\*", "[^/]*", StringComparison.Ordinal) + "$";
-        return System.Text.RegularExpressions.Regex.IsMatch(relativePath, regex);
+        var regexOptions = System.Text.RegularExpressions.RegexOptions.CultureInvariant;
+        if (pathComparer.Equals("a", "A"))
+            regexOptions |= System.Text.RegularExpressions.RegexOptions.IgnoreCase;
+        return System.Text.RegularExpressions.Regex.IsMatch(normalizedPath, regex, regexOptions);
+    }
+
+    private static string NormalizePathForFileSystemComparison(string path)
+    {
+        var normalized = FileInventory.NormalizeRelativePath(path);
+        return OperatingSystem.IsMacOS()
+            ? normalized.Normalize(NormalizationForm.FormC)
+            : normalized;
     }
 }
