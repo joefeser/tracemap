@@ -359,16 +359,19 @@ public static class AccessCopyCloneCandidateReporter
                 || classification.Contains("Vba", StringComparison.Ordinal)
                 || classification.Contains("Query", StringComparison.Ordinal))
             {
-                var flowGap = flow.Gaps.FirstOrDefault(gap =>
-                    gap.Classification == classification
-                    && gap.SupportingFactIds.Contains(fact.FactId, StringComparer.Ordinal));
+                var flowSupportingFactIds = flow.Gaps
+                    .Where(gap => gap.SupportingFactIds.Contains(fact.FactId, StringComparer.Ordinal))
+                    .SelectMany(gap => gap.SupportingFactIds)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(factId => factId, StringComparer.Ordinal)
+                    .ToArray();
                 AddGap(gaps, maxGaps, ref truncated, Gap(
                     "AccessCopyCloneUpstreamEvidenceGap",
                     "upstream",
                     null,
                     flow.CommitSha,
                     fact,
-                    supportingFactIds: flowGap?.SupportingFactIds ?? [fact.FactId]));
+                    supportingFactIds: flowSupportingFactIds.Length > 0 ? flowSupportingFactIds : [fact.FactId]));
             }
         }
 
