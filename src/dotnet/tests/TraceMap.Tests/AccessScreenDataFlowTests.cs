@@ -238,12 +238,41 @@ public sealed class AccessScreenDataFlowTests
             gap.SupportingFactIds);
     }
 
-    [Fact]
-    public void Builder_does_not_reconstruct_query_owners_for_ambiguous_output_gaps()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("fact-output-one;fact-output-two;fact-query-one;fact-query-two")]
+    [InlineData("fact-output-one;fact-query-one")]
+    [InlineData("fact-output-one;;fact-output-two;fact-query-one;fact-query-two")]
+    [InlineData("__NULL__")]
+    [InlineData("__OVERSIZED__")]
+    public async Task Builder_preserves_ambiguous_output_and_all_valid_query_owners(string? persistedSupport)
     {
         const string firstQuery = "access-query-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         const string secondQuery = "access-query-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
         const string output = "access-query-field-cccccccccccccccccccccccccccccccc";
+        var gapProperties = new List<(string Key, string Value)>
+        {
+            ("classification", "AccessQueryOutputSourceUnavailable"),
+            ("scopeKind", "query-output-field-owner-unknown")
+        };
+        if (persistedSupport is not null and not "__NULL__" and not "__OVERSIZED__")
+        {
+            gapProperties.Add(("supportingFactIds", persistedSupport));
+        }
+        var gapFact = Fact("fact-output-gap", FactTypes.AnalysisGap, RuleIds.LegacyAccessQuery,
+            EvidenceTiers.Tier4Unknown, null, output, gapProperties.ToArray());
+        if (persistedSupport == "__NULL__")
+        {
+            var properties = gapFact.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            properties["supportingFactIds"] = null!;
+            gapFact = gapFact with { Properties = properties };
+        }
+        else if (persistedSupport == "__OVERSIZED__")
+        {
+            var properties = gapFact.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            properties["supportingFactIds"] = new string('x', 65_537);
+            gapFact = gapFact with { Properties = properties };
+        }
         var facts = new[]
         {
             Fact("fact-query-one", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery,
@@ -253,18 +282,60 @@ public sealed class AccessScreenDataFlowTests
             Fact("fact-output-one", FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery,
                 EvidenceTiers.Tier2Structural, firstQuery, output, ("coverageLabel", "partial")),
             Fact("fact-output-two", FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery,
-                EvidenceTiers.Tier2Structural, secondQuery, output, ("coverageLabel", "partial")),
-            Fact("fact-output-gap", FactTypes.AnalysisGap, RuleIds.LegacyAccessQuery,
-                EvidenceTiers.Tier4Unknown, null, output,
-                ("classification", "AccessQueryOutputSourceUnavailable"),
-                ("scopeKind", "query-output-field-owner-unknown"))
+                EvidenceTiers.Tier2Structural, null, output,
+                ("coverageLabel", "partial"),
+                ("queryStableKey", secondQuery)),
+            gapFact
         };
 
         var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
 
         var gap = Assert.Single(report.Gaps, item =>
             item.Classification == "AccessQueryOutputSourceUnavailable");
-        Assert.Equal(["fact-output-gap"], gap.SupportingFactIds);
+        Assert.Equal(
+            ["fact-output-gap", "fact-output-one", "fact-output-two", "fact-query-one", "fact-query-two"],
+            gap.SupportingFactIds);
+        Assert.Equal(RuleIds.LegacyAccessQuery, gap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal(Commit, gap.CommitSha);
+        Assert.Equal("fixture.accdb", gap.FilePath);
+        Assert.Equal(1, gap.StartLine);
+        Assert.Equal(1, gap.EndLine);
+        Assert.Equal("AccessSourceNeutralDesignEvidence", gap.ExtractorId);
+        Assert.Equal("access-design-evidence/0.1.0", gap.ExtractorVersion);
+        Assert.Equal("query-output-field-owner-unknown", gap.ScopeKind);
+        Assert.Equal(["no-execution", "static-evidence-only"], gap.Limitations);
+        Assert.Equal("partial", report.Coverage);
+
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, Manifest(), facts);
+        var persistedReport = await AccessScreenDataFlowReporter.BuildReportAsync(
+            new(index, Path.Combine(temp.Path, "unused-output")));
+        var persistedGap = Assert.Single(persistedReport.Gaps, item =>
+            item.Classification == "AccessQueryOutputSourceUnavailable");
+        Assert.Equal(JsonSerializer.Serialize(gap), JsonSerializer.Serialize(persistedGap));
+        Assert.Equal(report.Coverage, persistedReport.Coverage);
+    }
+
+    [Fact]
+    public void Builder_query_scope_fallback_excludes_same_key_from_another_scan()
+    {
+        const string query = "access-query-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        var current = Fact("fact-query-current", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery,
+            EvidenceTiers.Tier2Structural, null, query, ("coverageLabel", "partial"));
+        var other = Fact("fact-query-other", FactTypes.AccessQueryDeclared, RuleIds.LegacyAccessQuery,
+            EvidenceTiers.Tier2Structural, null, query, ("coverageLabel", "partial")) with
+        { ScanId = "scan-other" };
+        var gap = Fact("fact-query-gap", FactTypes.AnalysisGap, RuleIds.LegacyAccessQuery,
+            EvidenceTiers.Tier4Unknown, null, query,
+            ("classification", "AccessQueryOutputUnavailable"),
+            ("scopeKind", "query"));
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, [other, gap, current], 12, 100, 100);
+
+        var queryGap = Assert.Single(report.Gaps, item => item.Classification == "AccessQueryOutputUnavailable");
+        Assert.Equal(["fact-query-current", "fact-query-gap"], queryGap.SupportingFactIds);
     }
 
     [Fact]
@@ -500,6 +571,21 @@ public sealed class AccessScreenDataFlowTests
                 ("boundaryKind", "odbc"), ("coverageLabel", "hash-only-boundary"))
         ];
     }
+
+    private static ScanManifest Manifest() => new(
+        "scan-access-flow",
+        "synthetic",
+        null,
+        "dev",
+        Commit,
+        "tracemap-access/0.1.0",
+        DateTimeOffset.UnixEpoch,
+        "Level1SemanticAnalysisReduced",
+        "FailedOrPartial",
+        [],
+        [],
+        [],
+        []);
 
     private static CodeFact Fact(
         string id,
