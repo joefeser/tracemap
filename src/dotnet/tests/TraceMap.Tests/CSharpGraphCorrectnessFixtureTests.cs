@@ -10,6 +10,8 @@ public sealed class CSharpGraphCorrectnessFixtureTests
 {
     private const string SemanticExtractor = "CSharpSemanticExtractor";
     private const string AssemblyVersion = "1.0.0.0";
+    private const string ReceiverFixtureFilePath = "src/ReceiverSample/Receivers.cs";
+    private const int ReceiverFixtureGapLine = 38;
 
     [Fact]
     public void Same_name_types_keep_assembly_aware_ids_and_local_framework_collisions_separate()
@@ -288,6 +290,42 @@ public sealed class CSharpGraphCorrectnessFixtureTests
         Assert.Equal(ScannerVersions.CSharpSyntaxExtractor, syntaxFallback.Evidence.ExtractorVersion);
     }
 
+    [Fact]
+    public void Unrelated_missing_receiver_diagnostic_does_not_activate_RX04_persistence_contract()
+    {
+        using var temp = new TempDirectory();
+        WriteProject(temp.Path, "OtherSample");
+        WriteSource(temp.Path, "OtherSample", "Consumer.cs", """
+            namespace OtherSample;
+
+            public sealed class Consumer
+            {
+                public void Broken(MissingReceiver missing)
+                {
+                    missing.Touch();
+                }
+            }
+            """);
+
+        var result = Scan(temp.Path);
+
+        var gap = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.CSharpSemanticWorkspace
+            && fact.Evidence.FilePath == "src/OtherSample/Consumer.cs"
+            && fact.Evidence.StartLine == 5
+            && fact.Properties.GetValueOrDefault("diagnosticId") == "CS0246"
+            && fact.Properties.GetValueOrDefault("diagnosticTokens")?.Split(';').Contains("MissingReceiver") == true);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.RuleId == RuleIds.CSharpSyntaxCallGraph
+            && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && fact.Evidence.FilePath == "src/OtherSample/Consumer.cs"
+            && fact.Evidence.StartLine == 7
+            && fact.TargetSymbol == "Touch");
+    }
+
     private static ScanResult Scan(string repoPath)
     {
         var expectedCommitSha = CommitFixture(repoPath);
@@ -447,23 +485,36 @@ public sealed class CSharpGraphCorrectnessFixtureTests
             Assert.False(callReader.Read());
         }
 
-        if (facts.Any(fact =>
+        var receiverGap = facts.SingleOrDefault(fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.CSharpSemanticWorkspace
+            && fact.EvidenceTier == EvidenceTiers.Tier4Unknown
+            && fact.Evidence.FilePath == ReceiverFixtureFilePath
+            && fact.Evidence.StartLine == ReceiverFixtureGapLine
             && fact.Properties.GetValueOrDefault("diagnosticId") == "CS0246"
-            && fact.Properties.GetValueOrDefault("diagnosticTokens")?.Split(';').Contains("MissingReceiver") == true))
+            && fact.Properties.GetValueOrDefault("diagnosticTokens")?.Split(';').Contains("MissingReceiver") == true);
+        if (receiverGap is not null)
         {
-            AssertUnresolvedReceiverSqliteRoundTrip(connection, manifest, facts);
+            var syntaxCall = Assert.Single(facts, fact =>
+                fact.FactType == FactTypes.CallEdge
+                && fact.RuleId == RuleIds.CSharpSyntaxCallGraph
+                && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+                && fact.Evidence.FilePath == receiverGap.Evidence.FilePath
+                && fact.Evidence.StartLine == receiverGap.Evidence.StartLine + 2
+                && fact.TargetSymbol == "Touch");
+            AssertUnresolvedReceiverSqliteRoundTrip(connection, manifest, receiverGap, syntaxCall);
         }
     }
 
     private static void AssertUnresolvedReceiverSqliteRoundTrip(
         SqliteConnection connection,
         ScanManifest manifest,
-        IReadOnlyList<CodeFact> facts)
+        CodeFact expectedGap,
+        CodeFact expectedSyntaxCall)
     {
-        const string filePath = "src/ReceiverSample/Receivers.cs";
-        const int callLine = 40;
+        var filePath = expectedGap.Evidence.FilePath;
+        var gapLine = expectedGap.Evidence.StartLine;
+        var callLine = expectedSyntaxCall.Evidence.StartLine;
 
         using (var absentSemanticFact = connection.CreateCommand())
         {
@@ -501,13 +552,6 @@ public sealed class CSharpGraphCorrectnessFixtureTests
             Assert.Equal(0L, Assert.IsType<long>(absentSemanticCall.ExecuteScalar()));
         }
 
-        var expectedGap = Assert.Single(facts, fact =>
-            fact.FactType == FactTypes.AnalysisGap
-            && fact.RuleId == RuleIds.CSharpSemanticWorkspace
-            && fact.EvidenceTier == EvidenceTiers.Tier4Unknown
-            && fact.Evidence.FilePath == filePath
-            && fact.Evidence.StartLine == 38
-            && fact.Properties.GetValueOrDefault("diagnosticId") == "CS0246");
         using (var gapCommand = connection.CreateCommand())
         {
             gapCommand.CommandText = """
@@ -523,12 +567,12 @@ public sealed class CSharpGraphCorrectnessFixtureTests
             gapCommand.Parameters.AddWithValue("$rule_id", RuleIds.CSharpSemanticWorkspace);
             gapCommand.Parameters.AddWithValue("$evidence_tier", EvidenceTiers.Tier4Unknown);
             gapCommand.Parameters.AddWithValue("$file_path", filePath);
-            gapCommand.Parameters.AddWithValue("$line", 38);
+            gapCommand.Parameters.AddWithValue("$line", gapLine);
             using var gapReader = gapCommand.ExecuteReader();
             Assert.True(gapReader.Read());
             Assert.Equal(expectedGap.FactId, gapReader.GetString(0));
             Assert.Equal(manifest.CommitSha, gapReader.GetString(1));
-            Assert.Equal(38, gapReader.GetInt32(2));
+            Assert.Equal(expectedGap.Evidence.EndLine, gapReader.GetInt32(2));
             Assert.Equal(SemanticExtractor, gapReader.GetString(3));
             Assert.Equal(ScannerVersions.CSharpSemanticExtractor, gapReader.GetString(4));
             var gapProperties = JsonSerializer.Deserialize<Dictionary<string, string>>(
@@ -540,13 +584,6 @@ public sealed class CSharpGraphCorrectnessFixtureTests
             Assert.False(gapReader.Read());
         }
 
-        var expectedSyntaxCall = Assert.Single(facts, fact =>
-            fact.FactType == FactTypes.CallEdge
-            && fact.RuleId == RuleIds.CSharpSyntaxCallGraph
-            && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
-            && fact.Evidence.FilePath == filePath
-            && fact.Evidence.StartLine == callLine
-            && fact.TargetSymbol == "Touch");
         using (var syntaxFactCommand = connection.CreateCommand())
         {
             syntaxFactCommand.CommandText = """
@@ -568,18 +605,18 @@ public sealed class CSharpGraphCorrectnessFixtureTests
             Assert.True(syntaxFactReader.Read());
             Assert.Equal(expectedSyntaxCall.FactId, syntaxFactReader.GetString(0));
             Assert.Equal(manifest.CommitSha, syntaxFactReader.GetString(1));
-            Assert.Equal("Broken", syntaxFactReader.GetString(2));
-            Assert.Equal("Touch", syntaxFactReader.GetString(3));
-            Assert.Equal(callLine, syntaxFactReader.GetInt32(4));
+            Assert.Equal(expectedSyntaxCall.SourceSymbol, syntaxFactReader.GetString(2));
+            Assert.Equal(expectedSyntaxCall.TargetSymbol, syntaxFactReader.GetString(3));
+            Assert.Equal(expectedSyntaxCall.Evidence.EndLine, syntaxFactReader.GetInt32(4));
             Assert.Equal("CSharpSyntaxExtractor", syntaxFactReader.GetString(5));
             Assert.Equal(ScannerVersions.CSharpSyntaxExtractor, syntaxFactReader.GetString(6));
             var syntaxProperties = JsonSerializer.Deserialize<Dictionary<string, string>>(
                 syntaxFactReader.GetString(7),
                 new JsonSerializerOptions(JsonSerializerDefaults.Web));
             Assert.NotNull(syntaxProperties);
-            Assert.Equal("Broken", syntaxProperties["callerName"]);
-            Assert.Equal("Touch", syntaxProperties["calleeName"]);
-            Assert.Equal("SyntaxInvocation", syntaxProperties["callKind"]);
+            Assert.Equal(expectedSyntaxCall.Properties["callerName"], syntaxProperties["callerName"]);
+            Assert.Equal(expectedSyntaxCall.Properties["calleeName"], syntaxProperties["calleeName"]);
+            Assert.Equal(expectedSyntaxCall.Properties["callKind"], syntaxProperties["callKind"]);
             Assert.False(syntaxFactReader.Read());
         }
 
@@ -600,10 +637,10 @@ public sealed class CSharpGraphCorrectnessFixtureTests
         Assert.True(syntaxCallReader.Read());
         Assert.Equal(expectedSyntaxCall.FactId, syntaxCallReader.GetString(0));
         Assert.Equal(manifest.CommitSha, syntaxCallReader.GetString(1));
-        Assert.Equal("Broken", syntaxCallReader.GetString(2));
-        Assert.Equal("Touch", syntaxCallReader.GetString(3));
-        Assert.Equal("SyntaxInvocation", syntaxCallReader.GetString(4));
-        Assert.Equal(callLine, syntaxCallReader.GetInt32(5));
+        Assert.Equal(expectedSyntaxCall.SourceSymbol, syntaxCallReader.GetString(2));
+        Assert.Equal(expectedSyntaxCall.TargetSymbol, syntaxCallReader.GetString(3));
+        Assert.Equal(expectedSyntaxCall.Properties["callKind"], syntaxCallReader.GetString(4));
+        Assert.Equal(expectedSyntaxCall.Evidence.EndLine, syntaxCallReader.GetInt32(5));
         Assert.False(syntaxCallReader.Read());
     }
 
