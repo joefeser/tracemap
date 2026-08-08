@@ -92,6 +92,14 @@ public sealed class SelfDiagnosticsTests
             failed.Complete(TraceMapDiagnosticOutcome.Failed, "secret-analysis", "secret-build");
         using (var cancelled = TraceMapDiagnostics.StartCommand("reduce"))
             cancelled.Complete(TraceMapDiagnosticOutcome.Cancelled);
+        using (var cancellation = new CancellationTokenSource())
+        {
+            cancellation.Cancel();
+            using var cancelledPhase = TraceMapDiagnostics.StartPhase(
+                "reduce",
+                TraceMapDiagnosticPhases.Reduction,
+                cancellation.Token);
+        }
         using (var partial = TraceMapDiagnostics.StartScan())
             partial.Complete(
                 TraceMapDiagnosticOutcome.Partial,
@@ -99,7 +107,7 @@ public sealed class SelfDiagnosticsTests
                 "FailedOrPartial");
 
         Assert.Contains(activities, activity => activity.Tags.GetValueOrDefault("tracemap.outcome") == "failed");
-        Assert.Contains(activities, activity => activity.Tags.GetValueOrDefault("tracemap.outcome") == "cancelled");
+        Assert.Equal(2, activities.Count(activity => activity.Tags.GetValueOrDefault("tracemap.outcome") == "cancelled"));
         Assert.Contains(activities, activity => activity.Tags.GetValueOrDefault("tracemap.outcome") == "partial");
         var failedActivity = Assert.Single(activities, activity =>
             activity.Tags.GetValueOrDefault("tracemap.outcome") == "failed");

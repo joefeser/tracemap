@@ -1,4 +1,7 @@
+using System.Buffers.Binary;
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using TraceMap.Core;
@@ -87,6 +90,82 @@ public sealed class ScanEngineTests
     }
 
     [Fact]
+    public async Task Scan_does_not_enter_an_explicitly_excluded_inaccessible_directory()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        using var temp = new TempDirectory();
+        var sourceDirectory = Path.Combine(temp.Path, "restricted");
+        var outputPath = Path.Combine(temp.Path, "out");
+        Directory.CreateDirectory(sourceDirectory);
+        File.WriteAllText(Path.Combine(sourceDirectory, "Hidden.cs"), "public sealed class Hidden { }");
+        File.WriteAllText(Path.Combine(temp.Path, "Visible.cs"), "public sealed class Visible { }");
+
+        var originalMode = File.GetUnixFileMode(sourceDirectory);
+        try
+        {
+            File.SetUnixFileMode(sourceDirectory, UnixFileMode.None);
+            using var stdout = new StringWriter();
+            using var stderr = new StringWriter();
+
+            var exitCode = await TraceMapCommand.RunAsync(
+                ["scan", "--repo", temp.Path, "--out", outputPath, "--exclude", "restricted/**"],
+                stdout,
+                stderr);
+
+            Assert.Equal(0, exitCode);
+            Assert.Equal(string.Empty, stderr.ToString());
+            Assert.True(File.Exists(Path.Combine(outputPath, "scan-manifest.json")));
+            var facts = File.ReadLines(Path.Combine(outputPath, "facts.ndjson"))
+                .Select(line => JsonSerializer.Deserialize<CodeFact>(line, JsonOptions.StableLine)!)
+                .ToArray();
+            Assert.DoesNotContain(facts, fact => fact.Evidence.FilePath.StartsWith("restricted/", StringComparison.Ordinal));
+        }
+        finally
+        {
+            File.SetUnixFileMode(sourceDirectory, originalMode);
+        }
+    }
+
+    [Fact]
+    public void Semantic_input_guard_detects_same_size_source_changes_across_project_loading()
+    {
+        using var temp = new TempDirectory();
+        const string relativePath = "Sample.cs";
+        var sourcePath = Path.Combine(temp.Path, relativePath);
+        File.WriteAllText(sourcePath, "public sealed class Alpha { }");
+        var inventory = new[] { new FileInventoryItem(relativePath, "CSharp", new FileInfo(sourcePath).Length) };
+        var baseline = ScanEngine.CaptureSemanticInputSnapshot(temp.Path, inventory);
+        var semanticResult = new SemanticExtractionResult([], [], true, false, new HashSet<string>(StringComparer.Ordinal) { relativePath });
+
+        File.WriteAllText(sourcePath, "public sealed class Bravo { }");
+
+        var exception = Assert.Throws<SourceSnapshotException>(() =>
+            ScanEngine.VerifySemanticInputSnapshot(temp.Path, inventory, semanticResult, baseline));
+        Assert.Equal(SourceSnapshotException.ErrorCode, exception.Message);
+    }
+
+    [Fact]
+    public void Recursive_include_glob_matches_zero_or_multiple_directory_levels()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "src", "nested"));
+        File.WriteAllText(Path.Combine(temp.Path, "src", "Root.cs"), "public sealed class Root { }");
+        File.WriteAllText(Path.Combine(temp.Path, "src", "nested", "Nested.cs"), "public sealed class Nested { }");
+        File.WriteAllText(Path.Combine(temp.Path, "Other.cs"), "public sealed class Other { }");
+
+        var result = ScanEngine.Scan(new ScanOptions(
+            temp.Path,
+            Path.Combine(temp.Path, "out"),
+            IncludeGlobs: ["src/**/*.cs"]));
+
+        Assert.Contains(result.Inventory, item => item.RelativePath == "src/Root.cs");
+        Assert.Contains(result.Inventory, item => item.RelativePath == "src/nested/Nested.cs");
+        Assert.DoesNotContain(result.Inventory, item => item.RelativePath == "Other.cs");
+    }
+
+    [Fact]
     public async Task Scan_identity_changes_when_committed_source_bytes_change_without_changing_size_or_head()
     {
         using var temp = new TempDirectory();
@@ -101,6 +180,12 @@ public sealed class ScanEngineTests
         RunGit(repo, "commit", "-m", "baseline");
 
         var before = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "before")));
+        var repeat = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "repeat")));
+        Assert.Equal(before.Manifest.ScanId, repeat.Manifest.ScanId);
+        Assert.Equal(before.Manifest.SourceSnapshotDigest, repeat.Manifest.SourceSnapshotDigest);
+        Assert.Equal(
+            ExpectedSourceSnapshotDigest(("Sample.cs", "CSharp", Encoding.UTF8.GetBytes("public sealed class Alpha { }"))),
+            before.Manifest.SourceSnapshotDigest);
         File.WriteAllText(sourcePath, "public sealed class Bravo { }");
         var after = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "after")));
 
@@ -112,8 +197,10 @@ public sealed class ScanEngineTests
         Assert.Matches("^[0-9a-f]{64}$", after.Manifest.SourceSnapshotDigest!);
 
         var manifestPath = Path.Combine(temp.Path, "after", "scan-manifest.json");
+        var factsPath = Path.Combine(temp.Path, "after", "facts.ndjson");
         var indexPath = Path.Combine(temp.Path, "after", "index.sqlite");
         await ManifestWriter.WriteAsync(manifestPath, after.Manifest);
+        await JsonlFactWriter.WriteAsync(factsPath, after.Facts);
         SqliteIndexWriter.Write(indexPath, after.Manifest, after.Facts);
 
         var fileManifest = JsonSerializer.Deserialize<ScanManifest>(
@@ -131,6 +218,40 @@ public sealed class ScanEngineTests
         Assert.Equal(after.Manifest.SourceSnapshotDigest, fileManifest.SourceSnapshotDigest);
         Assert.Equal(after.Manifest.ScanId, indexManifest.ScanId);
         Assert.Equal(after.Manifest.SourceSnapshotDigest, indexManifest.SourceSnapshotDigest);
+        var persistedFacts = File.ReadLines(factsPath)
+            .Select(line => JsonSerializer.Deserialize<CodeFact>(line, JsonOptions.StableLine)!)
+            .ToArray();
+        Assert.NotEmpty(persistedFacts);
+        Assert.All(persistedFacts, fact => Assert.Equal(after.Manifest.ScanId, fact.ScanId));
+        command.CommandText = "select count(distinct scan_id), min(scan_id) from facts;";
+        using var reader = command.ExecuteReader();
+        Assert.True(reader.Read());
+        Assert.Equal(1L, reader.GetInt64(0));
+        Assert.Equal(after.Manifest.ScanId, reader.GetString(1));
+    }
+
+    private static string ExpectedSourceSnapshotDigest(params (string Path, string Kind, byte[] Content)[] items)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var length = new byte[sizeof(long)];
+        foreach (var item in items.OrderBy(item => item.Path, StringComparer.Ordinal))
+        {
+            Append(item.Path);
+            Append(item.Kind);
+            BinaryPrimitives.WriteInt64BigEndian(length, item.Content.LongLength);
+            hash.AppendData(length);
+            hash.AppendData(item.Content);
+        }
+
+        return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+
+        void Append(string value)
+        {
+            var bytes = Encoding.UTF8.GetBytes(value);
+            BinaryPrimitives.WriteInt64BigEndian(length, bytes.LongLength);
+            hash.AppendData(length);
+            hash.AppendData(bytes);
+        }
     }
 
     private static void RunGit(string workingDirectory, params string[] arguments)

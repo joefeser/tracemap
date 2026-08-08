@@ -1,5 +1,8 @@
+using System.Text.Json.Serialization;
+
 namespace TraceMap.Core;
 
+[method: JsonConstructor]
 public sealed record ScanManifest(
     string ScanId,
     string RepoName,
@@ -17,7 +20,46 @@ public sealed record ScanManifest(
     string? ScanRootRelativePath = null,
     string? ScanRootPathHash = null,
     string? GitRootHash = null,
-    string? SourceSnapshotDigest = null);
+    string? SourceSnapshotDigest = null)
+{
+    public ScanManifest(
+        string ScanId,
+        string RepoName,
+        string? RemoteUrl,
+        string? Branch,
+        string CommitSha,
+        string ScannerVersion,
+        DateTimeOffset ScannedAt,
+        string AnalysisLevel,
+        string BuildStatus,
+        IReadOnlyList<string> Solutions,
+        IReadOnlyList<string> Projects,
+        IReadOnlyList<string> TargetFrameworks,
+        IReadOnlyList<string> KnownGaps,
+        string? ScanRootRelativePath,
+        string? ScanRootPathHash,
+        string? GitRootHash)
+        : this(
+            ScanId,
+            RepoName,
+            RemoteUrl,
+            Branch,
+            CommitSha,
+            ScannerVersion,
+            ScannedAt,
+            AnalysisLevel,
+            BuildStatus,
+            Solutions,
+            Projects,
+            TargetFrameworks,
+            KnownGaps,
+            ScanRootRelativePath,
+            ScanRootPathHash,
+            GitRootHash,
+            SourceSnapshotDigest: null)
+    {
+    }
+}
 
 public sealed record EvidenceSpan(
     string FilePath,

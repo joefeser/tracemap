@@ -414,15 +414,28 @@ public sealed class CSharpFullSnapshotStabilityTests
         Assert.DoesNotContain(scoped.Facts, fact =>
             fact.RuleId == RuleIds.CSharpSemanticCallGraph
             && fact.TargetSymbol == "global::TransitionSample.Target.Execute()");
-        Assert.Contains(scoped.Facts, fact =>
+        var scopeGap = Assert.Single(scoped.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.CSharpSemanticWorkspace
             && fact.Properties.GetValueOrDefault("gapKind") == "ScanScopeExcludedSources");
+        Assert.Equal(EvidenceTiers.Tier4Unknown, scopeGap.EvidenceTier);
+        Assert.Equal(".", scopeGap.Evidence.FilePath);
+        Assert.Equal(1, scopeGap.Evidence.StartLine);
+        Assert.Equal(1, scopeGap.Evidence.EndLine);
+        Assert.Equal("ScanScopeExcludedSources", scopeGap.Properties["diagnosticCode"]);
+        Assert.Equal("scan-scope", scopeGap.Properties["diagnosticKind"]);
+        Assert.Equal("reduces-semantic-coverage", scopeGap.Properties["coverageEffect"]);
+        Assert.Equal("1", scopeGap.Properties["excludedDocumentCount"]);
+        Assert.Equal("ReviewScanScope", scopeGap.Properties["guidanceCode"]);
 
         var persistedFacts = File.ReadLines(Path.Combine(output, "facts.ndjson"))
             .Select(line => JsonSerializer.Deserialize<CodeFact>(line, JsonOptions.StableLine)!)
             .ToArray();
         Assert.DoesNotContain(persistedFacts, fact => fact.Evidence.FilePath == persistedPath);
+        var persistedGap = Assert.Single(persistedFacts, fact => fact.FactId == scopeGap.FactId);
+        Assert.Equal(scopeGap.EvidenceTier, persistedGap.EvidenceTier);
+        Assert.Equal(scopeGap.Evidence, persistedGap.Evidence);
+        Assert.Equal(scopeGap.Properties, persistedGap.Properties);
 
         using var connection = new SqliteConnection($"Data Source={Path.Combine(output, "index.sqlite")}");
         connection.Open();
@@ -430,6 +443,23 @@ public sealed class CSharpFullSnapshotStabilityTests
         command.CommandText = "select count(*) from facts where file_path = $path;";
         command.Parameters.AddWithValue("$path", persistedPath);
         Assert.Equal(0L, (long)command.ExecuteScalar()!);
+        command.Parameters.Clear();
+        command.CommandText = """
+            select evidence_tier, file_path, start_line, end_line, properties_json
+            from facts
+            where fact_id = $fact_id;
+            """;
+        command.Parameters.AddWithValue("$fact_id", scopeGap.FactId);
+        using var reader = command.ExecuteReader();
+        Assert.True(reader.Read());
+        Assert.Equal(scopeGap.EvidenceTier, reader.GetString(0));
+        Assert.Equal(scopeGap.Evidence.FilePath, reader.GetString(1));
+        Assert.Equal(scopeGap.Evidence.StartLine, reader.GetInt32(2));
+        Assert.Equal(scopeGap.Evidence.EndLine, reader.GetInt32(3));
+        var sqliteProperties = JsonSerializer.Deserialize<SortedDictionary<string, string>>(
+            reader.GetString(4),
+            JsonOptions.StableLine)!;
+        Assert.Equal(scopeGap.Properties, sqliteProperties);
     }
 
     private static void WriteFixture(string repo, string targetFileName = "Target.cs")
