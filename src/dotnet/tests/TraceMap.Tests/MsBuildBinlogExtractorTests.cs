@@ -58,6 +58,11 @@ public sealed class MsBuildBinlogExtractorTests
             Assert.Equal("recorded-project-build-edge", properties["relationshipKind"]);
             Assert.False(reader.Read());
         }
+        var impact = ReverseImpactTraversal.Analyze(
+            facts,
+            new ReverseImpactOptions("src/Child/Child.csproj", 1));
+        Assert.Equal("NotFound", impact.Resolution);
+        Assert.Empty(impact.Impacts);
         var diagnostic = Assert.Single(facts, fact => fact.FactType == FactTypes.MsBuildDiagnosticObserved);
         Assert.Equal("warning", diagnostic.Properties["severity"]);
         Assert.Equal("CS0618", diagnostic.Properties["code"]);
