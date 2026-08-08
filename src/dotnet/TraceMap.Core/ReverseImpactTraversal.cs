@@ -250,10 +250,7 @@ public static class ReverseImpactTraversal
         var visitedStates = new HashSet<(string TraversalSeedSymbolId, string SymbolId)>();
         foreach (var traversalSeed in traversalSeeds)
         {
-            foreach (var startId in startIds)
-            {
-                visitedStates.Add((traversalSeed.SymbolId, startId));
-            }
+            visitedStates.Add((traversalSeed.SymbolId, traversalSeed.SymbolId));
         }
 
         var frontier = new Queue<TraversalState>(traversalSeeds.Select(symbol => new TraversalState(symbol.SymbolId, symbol.SymbolId, [])));
@@ -337,7 +334,10 @@ public static class ReverseImpactTraversal
             throw new ArgumentException($"Unsupported reverse-impact relationship filter(s): {string.Join(", ", unknown)}.");
         }
 
-        return filters.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        return Array.AsReadOnly(filters
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray());
     }
 
     private static void ValidateFacts(IReadOnlyList<CodeFact?> facts)
