@@ -451,6 +451,8 @@ public static class RuleIds
     public const string MessageSurfaceGap = "message.surface.gap.v1";
     public const string MessageFlowContext = "message.flow.context.v1";
     public const string MessageFlowGap = "message.flow.gap.v1";
+    public const string ReverseImpactTraversal = "impact.reverse.traversal.v1";
+    public const string ReverseImpactGap = "impact.reverse.gap.v1";
 }
 
 public static class ScannerVersions
