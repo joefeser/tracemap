@@ -130,6 +130,41 @@ public sealed class ReverseImpactTraversalTests
     }
 
     [Theory]
+    [InlineData(FactTypes.HttpCallDetected, RuleIds.HttpClientInvocation, "http")]
+    [InlineData(FactTypes.DatabaseOperationCandidate, RuleIds.DatabaseOperationCallPattern, "database")]
+    public void Non_semantic_boundary_facts_cannot_forge_edges_with_canonical_looking_properties(
+        string factType,
+        string ruleId,
+        string filter)
+    {
+        var source = Id("method", "Application.Caller()");
+        var target = Id("method", "Framework.Target()");
+        var fact = Relationship(
+            $"forged-{filter}",
+            factType,
+            ruleId,
+            source,
+            "Application.Caller()",
+            target,
+            "Framework.Target()",
+            "Boundary",
+            37) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual,
+            Evidence = new EvidenceSpan("Source.cs", 37, 37, "hash", "csharp-syntax", ScannerVersions.CSharpSyntaxExtractor)
+        };
+
+        var result = ReverseImpactTraversal.Analyze(
+            [fact],
+            new ReverseImpactOptions(target, 1, [filter]));
+
+        Assert.Empty(result.Impacts);
+        Assert.Contains(result.Gaps, gap =>
+            gap.GapKind == ReverseImpactGapKinds.AnalysisGap
+            && gap.Evidence.StartLine == 37);
+    }
+
+    [Theory]
     [InlineData("ExtendsInterface")]
     [InlineData("ExtendsClass")]
     [InlineData("ImplementsInterface")]
@@ -750,7 +785,19 @@ public sealed class ReverseImpactTraversalTests
             properties["relationshipKind"] = relationshipKind;
         }
 
-        return Fact(factId, factType, ruleId, sourceDisplay, targetDisplay, properties, EvidenceTiers.Tier1Semantic, line);
+        var fact = Fact(factId, factType, ruleId, sourceDisplay, targetDisplay, properties, EvidenceTiers.Tier1Semantic, line);
+        return factType is FactTypes.HttpCallDetected or FactTypes.DatabaseOperationCandidate
+            ? fact with
+            {
+                Evidence = new EvidenceSpan(
+                    fact.Evidence.FilePath,
+                    fact.Evidence.StartLine,
+                    fact.Evidence.EndLine,
+                    fact.Evidence.SnippetHash,
+                    "CSharpSemanticExtractor",
+                    ScannerVersions.CSharpSemanticExtractor)
+            }
+            : fact;
     }
 
     private static CodeFact SymbolFact(

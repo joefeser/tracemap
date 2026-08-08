@@ -105,6 +105,28 @@ public sealed class ReverseImpactArtifactQueryTests
     }
 
     [Fact]
+    public async Task Cli_rejects_an_existing_symbolic_link_alias_of_the_input_index()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var alias = Path.Combine(temp.Path, "output.json");
+        SqliteIndexWriter.Write(index, Manifest(), [Relationship("fact-call", Caller, "Caller", Seed, "Target", 1)]);
+        File.CreateSymbolicLink(alias, index);
+        var originalHash = Hash(index);
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync(
+            ["reverse-impact", "--index", index, "--selector", Seed, "--depth", "1", "--out", alias],
+            stdout,
+            stderr);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("output must be a new file", stderr.ToString(), StringComparison.Ordinal);
+        Assert.Equal(originalHash, Hash(index));
+    }
+
+    [Fact]
     public async Task Reader_fails_closed_for_combined_or_mixed_snapshot_artifacts()
     {
         using var temp = new TempDirectory();
@@ -131,6 +153,89 @@ public sealed class ReverseImpactArtifactQueryTests
         var mixedError = await Assert.ThrowsAsync<ReverseImpactArtifactException>(
             () => ReverseImpactArtifactReader.ReadAsync(mixed));
         Assert.Equal("ReverseImpactArtifactMixedSnapshot", mixedError.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Reader_rejects_partial_standard_schema_and_incomplete_manifest()
+    {
+        using var temp = new TempDirectory();
+        var partial = Path.Combine(temp.Path, "partial.sqlite");
+        await using (var connection = new SqliteConnection($"Data Source={partial}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                create table scan_manifest (
+                  scan_id text primary key,
+                  repo text not null,
+                  commit_sha text not null,
+                  manifest_json text not null
+                );
+                create table facts (fact_id text primary key);
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var schemaError = await Assert.ThrowsAsync<ReverseImpactArtifactException>(
+            () => ReverseImpactArtifactReader.ReadAsync(partial));
+        Assert.Equal("ReverseImpactArtifactSchemaUnsupported", schemaError.ErrorCode);
+
+        var invalidManifest = Path.Combine(temp.Path, "invalid-manifest.sqlite");
+        SqliteIndexWriter.Write(
+            invalidManifest,
+            Manifest(),
+            [Relationship("fact-call", Caller, "Caller", Seed, "Target", 1)]);
+        await using (var connection = new SqliteConnection($"Data Source={invalidManifest}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "update scan_manifest set manifest_json = $manifest;";
+            command.Parameters.AddWithValue(
+                "$manifest",
+                JsonSerializer.Serialize(new
+                {
+                    ScanId = "scan-reverse-impact",
+                    RepoName = "synthetic",
+                    CommitSha = Commit
+                }));
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var manifestError = await Assert.ThrowsAsync<ReverseImpactArtifactException>(
+            () => ReverseImpactArtifactReader.ReadAsync(invalidManifest));
+        Assert.Equal("ReverseImpactArtifactSnapshotInvalid", manifestError.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Cli_reports_only_a_stable_error_code_for_malformed_persisted_facts()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var output = Path.Combine(temp.Path, "result.json");
+        const string sensitiveFactId = "private-fact-identifier";
+        SqliteIndexWriter.Write(
+            index,
+            Manifest(),
+            [Relationship(sensitiveFactId, Caller, "Caller", Seed, "Target", 1)]);
+        await using (var connection = new SqliteConnection($"Data Source={index}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "update facts set fact_type = '';";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+        var exitCode = await TraceMapCommand.RunAsync(
+            ["reverse-impact", "--index", index, "--selector", Seed, "--depth", "1", "--out", output],
+            stdout,
+            stderr);
+
+        Assert.Equal(1, exitCode);
+        Assert.Equal("error: MissingRequiredFactField.\n", stderr.ToString().ReplaceLineEndings("\n"));
+        Assert.DoesNotContain(sensitiveFactId, stderr.ToString(), StringComparison.Ordinal);
+        Assert.False(File.Exists(output));
     }
 
     [Fact]
