@@ -157,7 +157,7 @@ public static class TraceMapCommand
         }
 
         ReduceResult result;
-        using (var reductionOperation = TraceMapDiagnostics.StartPhase("reduce", TraceMapDiagnosticPhases.Reduction))
+        using (var reductionOperation = TraceMapDiagnostics.StartPhase("reduce", TraceMapDiagnosticPhases.Reduction, cancellationToken))
         {
             result = await ContractDeltaReducer.ReduceAsync(
                 new ReduceOptions(
@@ -233,37 +233,39 @@ public static class TraceMapCommand
         var logsPath = Path.Combine(fullOutputPath, "logs");
         Directory.CreateDirectory(logsPath);
 
-        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ManifestWrite))
+        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ManifestWrite, cancellationToken))
         {
             await ManifestWriter.WriteAsync(Path.Combine(fullOutputPath, "scan-manifest.json"), result.Manifest, cancellationToken);
             operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
         }
-        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.FactsWrite))
+        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.FactsWrite, cancellationToken))
         {
             await JsonlFactWriter.WriteAsync(Path.Combine(fullOutputPath, "facts.ndjson"), result.Facts, cancellationToken);
             operation.RecordItems(result.Facts.Count);
             operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
         }
-        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.IndexWrite))
+        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.IndexWrite, cancellationToken))
         {
             SqliteIndexWriter.Write(Path.Combine(fullOutputPath, "index.sqlite"), result.Manifest, result.Facts);
             operation.RecordItems(result.Facts.Count);
             operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
         }
-        var staticPacket = SqlRunbookPacketBuilder.Build(result);
-        var validationComposition = await SqlValidationSummaryReader.ReadAsync(
-            sqlValidationSummaryPaths,
-            [SqlRunbookPacketBuilder.ValidationExpectedSource(result, staticPacket, evaluatedAt: sqlValidationAsOf)],
-            cancellationToken);
-        var packetCandidate = SqlRunbookPacketBuilder.Build(result, validationComposition);
-        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ReportWrite))
+        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ReportWrite, cancellationToken))
         {
+            var staticPacket = SqlRunbookPacketBuilder.Build(result);
+            var validationComposition = await SqlValidationSummaryReader.ReadAsync(
+                sqlValidationSummaryPaths,
+                [SqlRunbookPacketBuilder.ValidationExpectedSource(result, staticPacket, evaluatedAt: sqlValidationAsOf)],
+                cancellationToken);
+            var packetCandidate = SqlRunbookPacketBuilder.Build(result, validationComposition);
             await MarkdownReportWriter.WriteAsync(Path.Combine(fullOutputPath, "report.md"), result, packetCandidate, cancellationToken);
             if (SqlRunbookPacketBuilder.HasMeaningfulContent(packetCandidate))
                 await SqlRunbookPacketWriter.WriteAsync(fullOutputPath, packetCandidate, cancellationToken);
-            operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+            operation.Complete(validationComposition.Gaps.Count > 0
+                ? TraceMapDiagnosticOutcome.Partial
+                : TraceMapDiagnosticOutcome.Succeeded);
         }
-        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.AnalyzerLogWrite))
+        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.AnalyzerLogWrite, cancellationToken))
         {
             await WriteAnalyzerLogAsync(Path.Combine(logsPath, "analyzer.log"), result, cancellationToken);
             operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
@@ -300,7 +302,7 @@ public static class TraceMapCommand
         }
 
         CombinedDependencyReportResult result;
-        using (var reportOperation = TraceMapDiagnostics.StartPhase("report", TraceMapDiagnosticPhases.CombinedReport))
+        using (var reportOperation = TraceMapDiagnostics.StartPhase("report", TraceMapDiagnosticPhases.CombinedReport, cancellationToken))
         {
             result = await CombinedDependencyReporter.WriteAsync(
                 new CombinedDependencyReportOptions(indexPath, outputPath, format),
@@ -2254,6 +2256,10 @@ public static class TraceMapCommand
               index.sqlite
               report.md
               logs/analyzer.log
+
+            Truthfulness failures (exit code 1; no scan artifacts are written):
+              SourceInventoryIncomplete          An in-scope inventory entry could not be read.
+              SourceSnapshotChangedDuringScan    Protected input bytes changed or disappeared during analysis.
             """;
     }
 

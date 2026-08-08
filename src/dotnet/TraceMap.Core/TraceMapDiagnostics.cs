@@ -87,10 +87,17 @@ public static class TraceMapDiagnostics
     public static TraceMapDiagnosticOperation StartScan() =>
         Start("tracemap.scan", "scan", TraceMapDiagnosticPhases.Command);
 
-    public static TraceMapDiagnosticOperation StartPhase(string command, string phase) =>
-        Start("tracemap." + NormalizeCommand(command) + "." + NormalizePhase(phase), command, phase);
+    public static TraceMapDiagnosticOperation StartPhase(
+        string command,
+        string phase,
+        CancellationToken cancellationToken = default) =>
+        Start("tracemap." + NormalizeCommand(command) + "." + NormalizePhase(phase), command, phase, cancellationToken);
 
-    private static TraceMapDiagnosticOperation Start(string operationName, string command, string phase)
+    private static TraceMapDiagnosticOperation Start(
+        string operationName,
+        string command,
+        string phase,
+        CancellationToken cancellationToken = default)
     {
         var normalizedCommand = NormalizeCommand(command);
         var normalizedPhase = NormalizePhase(phase);
@@ -109,7 +116,7 @@ public static class TraceMapDiagnostics
             ["tracemap.tool_version"] = ToolVersion
         };
         var activity = ActivitySource.StartActivity(operationName, ActivityKind.Internal, default(ActivityContext), tags);
-        return new TraceMapDiagnosticOperation(activity, normalizedCommand, normalizedPhase);
+        return new TraceMapDiagnosticOperation(activity, normalizedCommand, normalizedPhase, cancellationToken);
     }
 
     internal static string NormalizeAnalysisLevel(string? value) =>
@@ -132,17 +139,23 @@ public sealed class TraceMapDiagnosticOperation : IDisposable
     private readonly string phase = "other";
     private readonly long startedAt;
     private readonly bool enabled;
+    private readonly CancellationToken cancellationToken;
     private int completed;
 
     private TraceMapDiagnosticOperation()
     {
     }
 
-    internal TraceMapDiagnosticOperation(Activity? activity, string command, string phase)
+    internal TraceMapDiagnosticOperation(
+        Activity? activity,
+        string command,
+        string phase,
+        CancellationToken cancellationToken)
     {
         this.activity = activity;
         this.command = command;
         this.phase = phase;
+        this.cancellationToken = cancellationToken;
         startedAt = Stopwatch.GetTimestamp();
         enabled = true;
     }
@@ -179,7 +192,9 @@ public sealed class TraceMapDiagnosticOperation : IDisposable
         activity?.Dispose();
     }
 
-    public void Dispose() => Complete(TraceMapDiagnosticOutcome.Failed);
+    public void Dispose() => Complete(cancellationToken.IsCancellationRequested
+        ? TraceMapDiagnosticOutcome.Cancelled
+        : TraceMapDiagnosticOutcome.Failed);
 
     private TagList Tags(string? outcome, string? analysisLevel = null, string? buildStatus = null)
     {

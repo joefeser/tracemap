@@ -23,16 +23,19 @@ public static class ScanEngine
         {
             git = GitMetadataProvider.Detect(repoPath);
             MsBuildBinlogExtractor.ValidateCommitBinding(git.CommitSha, options.BinlogPaths, options.BinlogCommitSha);
-            fullInventory = FileInventory.Collect(repoPath, outputPath);
+            var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
+            fullInventory = FileInventory.Collect(repoPath, outputPath, options.ExcludeGlobs, sourcePathComparer);
             inventory = ApplyScope(fullInventory, repoPath, options);
             discoveryOperation.RecordItems(inventory.Count);
             discoveryOperation.Complete(TraceMapDiagnosticOutcome.Succeeded);
         }
 
+        var semanticInputSnapshot = CaptureSemanticInputSnapshot(repoPath, fullInventory);
         SemanticExtractionResult semanticResult;
         using (var semanticOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.SemanticAnalysis))
         {
             semanticResult = CSharpSemanticExtractor.Extract(repoPath, inventory, options, fullInventory);
+            VerifySemanticInputSnapshot(repoPath, fullInventory, semanticResult, semanticInputSnapshot);
             semanticOperation.Complete(semanticResult.ReducedCoverage
                 ? TraceMapDiagnosticOutcome.Partial
                 : TraceMapDiagnosticOutcome.Succeeded);
@@ -121,7 +124,16 @@ public static class ScanEngine
                 : TraceMapDiagnosticOutcome.Succeeded);
         }
 
-        if (!string.Equals(sourceSnapshotDigest, CreateSourceSnapshotDigest(repoPath, inventory), StringComparison.Ordinal))
+        string verificationDigest;
+        try
+        {
+            verificationDigest = CreateSourceSnapshotDigest(repoPath, inventory);
+        }
+        catch (SourceInventoryException ex)
+        {
+            throw new SourceSnapshotException(ex);
+        }
+        if (!string.Equals(sourceSnapshotDigest, verificationDigest, StringComparison.Ordinal))
         {
             throw new SourceSnapshotException();
         }
@@ -177,6 +189,53 @@ public static class ScanEngine
 
         return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
     }
+
+    internal static IReadOnlyDictionary<string, string> CaptureSemanticInputSnapshot(
+        string repoPath,
+        IReadOnlyList<FileInventoryItem> inventory)
+    {
+        return inventory
+            .Where(item => FileInventory.IsCSharpKind(item.Kind) || IsSemanticMetadataKind(item.Kind))
+            .ToDictionary(
+                item => item.RelativePath,
+                item => CreateSourceSnapshotDigest(repoPath, [item]),
+                StringComparer.Ordinal);
+    }
+
+    internal static void VerifySemanticInputSnapshot(
+        string repoPath,
+        IReadOnlyList<FileInventoryItem> inventory,
+        SemanticExtractionResult semanticResult,
+        IReadOnlyDictionary<string, string> baseline)
+    {
+        var protectedPaths = GetSemanticallyAnalyzedFiles(semanticResult)
+            .Concat(inventory.Where(item => IsSemanticMetadataKind(item.Kind)).Select(item => item.RelativePath))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var itemsByPath = inventory.ToDictionary(item => item.RelativePath, StringComparer.Ordinal);
+        try
+        {
+            foreach (var path in protectedPaths)
+            {
+                if (path.StartsWith("__external__/", StringComparison.Ordinal))
+                    continue;
+
+                if (!baseline.TryGetValue(path, out var expected)
+                    || !itemsByPath.TryGetValue(path, out var item)
+                    || !string.Equals(expected, CreateSourceSnapshotDigest(repoPath, [item]), StringComparison.Ordinal))
+                {
+                    throw new SourceSnapshotException();
+                }
+            }
+        }
+        catch (SourceInventoryException ex)
+        {
+            throw new SourceSnapshotException(ex);
+        }
+    }
+
+    private static bool IsSemanticMetadataKind(string kind) =>
+        kind is "Solution" or "Project" or "MSBuildProps" or "MSBuildTargets";
 
     private static void AppendString(IncrementalHash hash, string value, Span<byte> lengthBuffer)
     {
@@ -591,6 +650,7 @@ public static class ScanEngine
         }
 
         var regex = "^" + System.Text.RegularExpressions.Regex.Escape(normalizedGlob)
+            .Replace("\\*\\*/", "(?:.*/)?", StringComparison.Ordinal)
             .Replace("\\*\\*", ".*", StringComparison.Ordinal)
             .Replace("\\*", "[^/]*", StringComparison.Ordinal) + "$";
         var regexOptions = System.Text.RegularExpressions.RegexOptions.CultureInvariant;
