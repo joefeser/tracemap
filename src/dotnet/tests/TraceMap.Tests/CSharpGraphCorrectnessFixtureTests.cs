@@ -334,6 +334,105 @@ public sealed class CSharpGraphCorrectnessFixtureTests
             && fact.TargetSymbol == "Touch");
     }
 
+    [Fact]
+    public void Declared_relationship_direction_survives_extraction_persistence_and_in_memory_reverse_query()
+    {
+        using var temp = new TempDirectory();
+        WriteProject(temp.Path, "DirectionSample");
+        WriteSource(temp.Path, "DirectionSample", "Direction.cs", """
+            namespace DirectionSample;
+
+            public interface IWorker
+            {
+                void Execute();
+            }
+
+            public abstract class BaseWorker
+            {
+                public abstract void Run();
+            }
+
+            public sealed class Worker : BaseWorker, IWorker
+            {
+                public void Execute() { }
+                public override void Run() { }
+            }
+
+            public sealed class Controller
+            {
+                private readonly IWorker worker = new Worker();
+
+                public void Handle()
+                {
+                    worker.Execute();
+                }
+            }
+            """);
+
+        var result = Scan(temp.Path);
+
+        Assert.Equal("Succeeded", result.Manifest.BuildStatus);
+        const string interfaceTypeId = "csharp type DirectionSample%401.0.0.0 DirectionSample.IWorker";
+        const string workerTypeId = "csharp type DirectionSample%401.0.0.0 DirectionSample.Worker";
+        const string interfaceExecuteId = "csharp method csharp%20type%20DirectionSample%25401.0.0.0%20DirectionSample.IWorker Execute()->void";
+        const string workerExecuteId = "csharp method csharp%20type%20DirectionSample%25401.0.0.0%20DirectionSample.Worker Execute()->void";
+        const string baseRunId = "csharp method csharp%20type%20DirectionSample%25401.0.0.0%20DirectionSample.BaseWorker Run()->void";
+        const string workerRunId = "csharp method csharp%20type%20DirectionSample%25401.0.0.0%20DirectionSample.Worker Run()->void";
+        const string handleId = "csharp method csharp%20type%20DirectionSample%25401.0.0.0%20DirectionSample.Controller Handle()->void";
+
+        AssertRelationship(
+            result,
+            "ImplementsInterface",
+            workerTypeId,
+            interfaceTypeId,
+            "global::DirectionSample.Worker",
+            "global::DirectionSample.IWorker",
+            13);
+        AssertRelationship(
+            result,
+            "ImplementsInterfaceMember",
+            workerExecuteId,
+            interfaceExecuteId,
+            "global::DirectionSample.Worker.Execute()",
+            "global::DirectionSample.IWorker.Execute()",
+            15);
+        AssertRelationship(
+            result,
+            "Overrides",
+            workerRunId,
+            baseRunId,
+            "global::DirectionSample.Worker.Run()",
+            "global::DirectionSample.BaseWorker.Run()",
+            16);
+        var call = AssertSemanticCall(result, "src/DirectionSample/Direction.cs", 25, "Execute");
+        AssertCallIdentity(call, handleId, interfaceExecuteId, "DirectionSample", "DirectionSample");
+
+        var interfaceImpact = ReverseImpactTraversal.Analyze(
+            result.Facts,
+            new ReverseImpactOptions(interfaceExecuteId, 1));
+        Assert.Equal("Resolved", interfaceImpact.Resolution);
+        Assert.Contains(interfaceImpact.Impacts, impact =>
+            impact.Symbol.SymbolId == workerExecuteId
+            && impact.Path.Single().RelationshipKind == "ImplementsInterfaceMember"
+            && impact.Path.Single().TraversalDirection == "TargetToSource");
+        Assert.Contains(interfaceImpact.Impacts, impact =>
+            impact.Symbol.SymbolId == handleId
+            && impact.Path.Single().RelationshipKind == "Calls"
+            && impact.Path.Single().TraversalDirection == "TargetToSource");
+
+        var baseImpact = ReverseImpactTraversal.Analyze(
+            result.Facts,
+            new ReverseImpactOptions(baseRunId, 1, ["inheritance"]));
+        var overrideImpact = Assert.Single(baseImpact.Impacts);
+        Assert.Equal(workerRunId, overrideImpact.Symbol.SymbolId);
+        Assert.Equal("Overrides", overrideImpact.Path.Single().RelationshipKind);
+
+        var wrongDirection = ReverseImpactTraversal.Analyze(
+            result.Facts,
+            new ReverseImpactOptions(handleId, 1));
+        Assert.Empty(wrongDirection.Impacts);
+    }
+
     private static ScanResult Scan(string repoPath)
     {
         var expectedCommitSha = CommitFixture(repoPath);
@@ -377,6 +476,30 @@ public sealed class CSharpGraphCorrectnessFixtureTests
         && fact.RuleId == RuleIds.CSharpSemanticCallGraph
         && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
         && fact.ContractElement == contractElement;
+
+    private static CodeFact AssertRelationship(
+        ScanResult result,
+        string relationshipKind,
+        string sourceSymbolId,
+        string targetSymbolId,
+        string sourceSymbol,
+        string targetSymbol,
+        int line)
+    {
+        var fact = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.SymbolRelationship
+            && fact.RuleId == RuleIds.CSharpSemanticSymbolRelationship
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.Properties.GetValueOrDefault("relationshipKind") == relationshipKind
+            && fact.Properties.GetValueOrDefault("sourceSymbolId") == sourceSymbolId
+            && fact.Properties.GetValueOrDefault("targetSymbolId") == targetSymbolId);
+        Assert.Equal(sourceSymbol, fact.SourceSymbol);
+        Assert.Equal(targetSymbol, fact.TargetSymbol);
+        Assert.Equal(sourceSymbol, fact.Properties.GetValueOrDefault("sourceSymbol"));
+        Assert.Equal(targetSymbol, fact.Properties.GetValueOrDefault("targetSymbol"));
+        AssertSpanAndProvenance(fact, "src/DirectionSample/Direction.cs", line, line);
+        return fact;
+    }
 
     private static void AssertCallIdentity(
         CodeFact fact,
@@ -431,6 +554,9 @@ public sealed class CSharpGraphCorrectnessFixtureTests
 
         foreach (var fact in facts.Where(fact =>
             IsSemanticCall(fact, fact.ContractElement ?? string.Empty)
+            || (fact.FactType == FactTypes.SymbolRelationship
+                && fact.RuleId == RuleIds.CSharpSemanticSymbolRelationship
+                && fact.EvidenceTier == EvidenceTiers.Tier1Semantic)
             || (fact.FactType == FactTypes.CallEdge
                 && fact.RuleId == RuleIds.CSharpSyntaxCallGraph
                 && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
@@ -469,6 +595,22 @@ public sealed class CSharpGraphCorrectnessFixtureTests
                 properties.OrderBy(item => item.Key, StringComparer.Ordinal));
             Assert.False(reader.Read());
             reader.Close();
+
+            if (fact.FactType == FactTypes.SymbolRelationship)
+            {
+                Assert.True(
+                    fact.Properties.TryGetValue("sourceSymbolId", out var sourceSymbolId)
+                    && !string.IsNullOrWhiteSpace(sourceSymbolId),
+                    $"Relationship `{fact.FactId}` must declare a sourceSymbolId.");
+                Assert.True(
+                    fact.Properties.TryGetValue("targetSymbolId", out var targetSymbolId)
+                    && !string.IsNullOrWhiteSpace(targetSymbolId),
+                    $"Relationship `{fact.FactId}` must declare a targetSymbolId.");
+                Assert.Equal(sourceSymbolId, ReadFactSymbol(connection, fact.FactId, "source"));
+                Assert.Equal(targetSymbolId, ReadFactSymbol(connection, fact.FactId, "target"));
+                AssertSymbolRelationshipSqliteRoundTrip(connection, fact);
+                continue;
+            }
 
             if (fact.FactType != FactTypes.CallEdge)
             {
@@ -530,6 +672,33 @@ public sealed class CSharpGraphCorrectnessFixtureTests
                 && fact.TargetSymbol == "Touch");
             AssertUnresolvedReceiverSqliteRoundTrip(connection, receiverGap, syntaxCall);
         }
+    }
+
+    private static void AssertSymbolRelationshipSqliteRoundTrip(SqliteConnection connection, CodeFact fact)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            select r.source_symbol_id, r.target_symbol_id, r.relationship_kind, r.rule_id,
+                   r.evidence_tier, r.file_path, r.start_line, r.end_line,
+                   f.source_symbol, f.target_symbol
+            from symbol_relationships r
+            join facts f on f.fact_id = r.relationship_id
+            where r.relationship_id = $relationship_id;
+            """;
+        command.Parameters.AddWithValue("$relationship_id", fact.FactId);
+        using var reader = command.ExecuteReader();
+        Assert.True(reader.Read());
+        Assert.Equal(fact.Properties["sourceSymbolId"], reader.GetString(0));
+        Assert.Equal(fact.Properties["targetSymbolId"], reader.GetString(1));
+        Assert.Equal(fact.Properties["relationshipKind"], reader.GetString(2));
+        Assert.Equal(fact.RuleId, reader.GetString(3));
+        Assert.Equal(fact.EvidenceTier, reader.GetString(4));
+        Assert.Equal(fact.Evidence.FilePath, reader.GetString(5));
+        Assert.Equal(fact.Evidence.StartLine, reader.GetInt32(6));
+        Assert.Equal(fact.Evidence.EndLine, reader.GetInt32(7));
+        Assert.Equal(fact.SourceSymbol, reader.GetString(8));
+        Assert.Equal(fact.TargetSymbol, reader.GetString(9));
+        Assert.False(reader.Read());
     }
 
     private static void AssertUnresolvedReceiverSqliteRoundTrip(
