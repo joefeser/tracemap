@@ -70,6 +70,136 @@ public sealed class ReverseImpactTraversalTests
     }
 
     [Theory]
+    [InlineData(FactTypes.HttpCallDetected, RuleIds.HttpClientInvocation, "http", "HttpClientCall")]
+    [InlineData(FactTypes.DatabaseOperationCandidate, RuleIds.DatabaseOperationCallPattern, "database", "DatabaseOperation")]
+    public void Boundary_relationships_require_explicit_filters_and_canonical_endpoints(
+        string factType,
+        string ruleId,
+        string filter,
+        string relationshipKind)
+    {
+        var boundary = Id("method", $"Framework.{relationshipKind}()");
+        var caller = Id("method", $"Application.{relationshipKind}()");
+        var fact = Relationship(
+            $"boundary-{filter}",
+            factType,
+            ruleId,
+            caller,
+            $"Application.{relationshipKind}()",
+            boundary,
+            $"Framework.{relationshipKind}()",
+            relationshipKind,
+            27);
+
+        var defaults = ReverseImpactTraversal.Analyze([fact], new ReverseImpactOptions(boundary, 1));
+        var selected = ReverseImpactTraversal.Analyze([fact], new ReverseImpactOptions(boundary, 1, [filter]));
+
+        Assert.Empty(defaults.Impacts);
+        Assert.Empty(defaults.Gaps);
+        var impact = Assert.Single(selected.Impacts);
+        Assert.Equal(caller, impact.Symbol.SymbolId);
+        Assert.Equal(filter, impact.Path[0].RelationshipFilter);
+        Assert.Equal(relationshipKind, impact.Path[0].RelationshipKind);
+        Assert.Equal(ruleId, impact.Path[0].RuleId);
+        Assert.Equal(27, impact.Path[0].Evidence.StartLine);
+    }
+
+    [Fact]
+    public void Syntax_only_http_boundary_is_a_loud_identity_gap_when_explicitly_selected()
+    {
+        var seed = Id("method", "Application.Entry()");
+        var syntax = Fact(
+            "syntax-http",
+            FactTypes.HttpCallDetected,
+            RuleIds.HttpClientInvocation,
+            "client",
+            "GetAsync",
+            new Dictionary<string, string> { ["methodName"] = "GetAsync" },
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            31);
+
+        var result = ReverseImpactTraversal.Analyze(
+            [SymbolFact("seed", seed, "Application.Entry()", "Method"), syntax],
+            new ReverseImpactOptions(seed, 1, ["http"]));
+
+        Assert.Empty(result.Impacts);
+        Assert.Contains(result.Gaps, gap =>
+            gap.GapKind == ReverseImpactGapKinds.RelationshipMissingCanonicalIdentity
+            && gap.Evidence.FilePath == "Source.cs"
+            && gap.Evidence.StartLine == 31);
+    }
+
+    [Theory]
+    [InlineData(FactTypes.HttpCallDetected, RuleIds.HttpClientInvocation, "http")]
+    [InlineData(FactTypes.DatabaseOperationCandidate, RuleIds.DatabaseOperationCallPattern, "database")]
+    public void Non_semantic_boundary_facts_cannot_forge_edges_with_canonical_looking_properties(
+        string factType,
+        string ruleId,
+        string filter)
+    {
+        var source = Id("method", "Application.Caller()");
+        var target = Id("method", "Framework.Target()");
+        var fact = Relationship(
+            $"forged-{filter}",
+            factType,
+            ruleId,
+            source,
+            "Application.Caller()",
+            target,
+            "Framework.Target()",
+            "Boundary",
+            37) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual,
+            Evidence = new EvidenceSpan("Source.cs", 37, 37, "hash", "csharp-syntax", ScannerVersions.CSharpSyntaxExtractor)
+        };
+
+        var result = ReverseImpactTraversal.Analyze(
+            [fact],
+            new ReverseImpactOptions(target, 1, [filter]));
+
+        Assert.Empty(result.Impacts);
+        Assert.Contains(result.Gaps, gap =>
+            gap.GapKind == ReverseImpactGapKinds.AnalysisGap
+            && gap.Evidence.StartLine == 37);
+    }
+
+    [Theory]
+    [InlineData(FactTypes.HttpCallDetected, RuleIds.HttpClientInvocation, "http")]
+    [InlineData(FactTypes.DatabaseOperationCandidate, RuleIds.DatabaseOperationCallPattern, "database")]
+    public void Unsupported_semantic_boundary_producer_is_excluded_with_a_loud_gap(
+        string factType,
+        string ruleId,
+        string filter)
+    {
+        var source = Id("method", "Application.Caller()");
+        var target = Id("method", "Framework.Target()");
+        var fact = Relationship(
+            $"unsupported-producer-{filter}",
+            factType,
+            ruleId,
+            source,
+            "Application.Caller()",
+            target,
+            "Framework.Target()",
+            "Boundary",
+            41) with
+        {
+            Evidence = new EvidenceSpan("Source.cs", 41, 41, "hash", "CSharpSemanticExtractor", "unsupported-version")
+        };
+
+        var result = ReverseImpactTraversal.Analyze(
+            [fact],
+            new ReverseImpactOptions(target, 1, [filter]));
+
+        Assert.Equal(ReverseImpactResolutions.Resolved, result.Resolution);
+        Assert.Empty(result.Impacts);
+        var gap = Assert.Single(result.Gaps, item => item.GapKind == ReverseImpactGapKinds.AnalysisGap);
+        Assert.Equal("unsupported-version", gap.Evidence.ExtractorVersion);
+        Assert.Contains("required semantic extractor provenance", gap.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("ExtendsInterface")]
     [InlineData("ExtendsClass")]
     [InlineData("ImplementsInterface")]
@@ -279,7 +409,9 @@ public sealed class ReverseImpactTraversalTests
         Assert.Contains(result.Gaps, gap => gap.GapKind == "SelectorNotFound");
         Assert.Contains(result.Gaps, gap => gap.GapId == "project-load-gap" && gap.RuleId == RuleIds.AnalyzerCapabilitySemantic);
 
-        Assert.Throws<ArgumentException>(() => ReverseImpactTraversal.Analyze([], new ReverseImpactOptions("Missing", 1, ["everything"])));
+        var invalidFilter = Assert.Throws<ReverseImpactInputException>(() =>
+            ReverseImpactTraversal.Analyze([], new ReverseImpactOptions("Missing", 1, ["everything"])));
+        Assert.Equal("InvalidRelationshipFilter", invalidFilter.ErrorCode);
         Assert.Throws<ArgumentOutOfRangeException>(() => ReverseImpactTraversal.Analyze([], new ReverseImpactOptions("Missing", 0)));
         Assert.Throws<ArgumentOutOfRangeException>(() => ReverseImpactTraversal.Analyze([], new ReverseImpactOptions("Missing", 1, MaxTraversalStates: 0)));
         Assert.Throws<ArgumentOutOfRangeException>(() => ReverseImpactTraversal.Analyze([], new ReverseImpactOptions("Missing", 1, MaxFrontierSize: ReverseImpactContract.MaximumLimit + 1)));
@@ -330,6 +462,14 @@ public sealed class ReverseImpactTraversalTests
         var nullFilter = Assert.Throws<ReverseImpactInputException>(() =>
             ReverseImpactTraversal.Analyze([valid], new ReverseImpactOptions("seed", 1, new string[] { null! })));
         Assert.Equal("InvalidRelationshipFilter", nullFilter.ErrorCode);
+
+        var blankFilter = Assert.Throws<ReverseImpactInputException>(() =>
+            ReverseImpactTraversal.Analyze([valid], new ReverseImpactOptions("seed", 1, [" "])));
+        Assert.Equal("InvalidRelationshipFilter", blankFilter.ErrorCode);
+
+        var unknownFilter = Assert.Throws<ReverseImpactInputException>(() =>
+            ReverseImpactTraversal.Analyze([valid], new ReverseImpactOptions("seed", 1, ["unsupported"])));
+        Assert.Equal("InvalidRelationshipFilter", unknownFilter.ErrorCode);
 
         var zeroLine = Assert.Throws<ReverseImpactInputException>(() =>
             ReverseImpactTraversal.Analyze(
@@ -690,7 +830,19 @@ public sealed class ReverseImpactTraversalTests
             properties["relationshipKind"] = relationshipKind;
         }
 
-        return Fact(factId, factType, ruleId, sourceDisplay, targetDisplay, properties, EvidenceTiers.Tier1Semantic, line);
+        var fact = Fact(factId, factType, ruleId, sourceDisplay, targetDisplay, properties, EvidenceTiers.Tier1Semantic, line);
+        return factType is FactTypes.HttpCallDetected or FactTypes.DatabaseOperationCandidate
+            ? fact with
+            {
+                Evidence = new EvidenceSpan(
+                    fact.Evidence.FilePath,
+                    fact.Evidence.StartLine,
+                    fact.Evidence.EndLine,
+                    fact.Evidence.SnippetHash,
+                    "CSharpSemanticExtractor",
+                    ScannerVersions.CSharpSemanticExtractor)
+            }
+            : fact;
     }
 
     private static CodeFact SymbolFact(

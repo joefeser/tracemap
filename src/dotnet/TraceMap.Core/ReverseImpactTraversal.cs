@@ -72,6 +72,23 @@ public static class ReverseImpactContract
         "interface"
     ]);
 
+    public static IReadOnlyList<string> SupportedRelationshipFilters { get; } = Array.AsReadOnly(
+    [
+        "calls",
+        "database",
+        "http",
+        "inheritance",
+        "references"
+    ]);
+
+    public static IReadOnlyList<string> SupportedEvidenceTiers { get; } = Array.AsReadOnly(
+    [
+        EvidenceTiers.Tier1Semantic,
+        EvidenceTiers.Tier2Structural,
+        EvidenceTiers.Tier3SyntaxOrTextual,
+        EvidenceTiers.Tier4Unknown
+    ]);
+
     public static bool IsSupportedSchema(string? schemaVersion) =>
         string.Equals(schemaVersion, SchemaVersion, StringComparison.Ordinal);
 }
@@ -184,6 +201,8 @@ public static class ReverseImpactTraversal
     public const string GapRuleId = RuleIds.ReverseImpactGap;
 
     private const string Calls = "calls";
+    private const string Database = "database";
+    private const string Http = "http";
     private const string References = "references";
     private const string Inheritance = "inheritance";
 
@@ -433,21 +452,24 @@ public static class ReverseImpactTraversal
 
     private static IReadOnlyList<string> NormalizeFilters(IReadOnlyList<string>? requested)
     {
-        if (requested?.Any(value => value is null) == true)
+        if (requested?.Any(string.IsNullOrWhiteSpace) == true)
         {
             throw new ReverseImpactInputException(
                 "InvalidRelationshipFilter",
-                "Reverse-impact relationship filters cannot contain null values.",
+                "Reverse-impact relationship filters cannot contain null or blank values.",
                 nameof(ReverseImpactOptions.RelationshipFilters));
         }
 
         var filters = requested is null || requested.Count == 0
             ? DefaultFilters
             : requested.Select(value => value.Trim().ToLowerInvariant()).ToArray();
-        var unknown = filters.Where(value => !DefaultFilters.Contains(value, StringComparer.Ordinal)).Distinct(StringComparer.Ordinal).ToArray();
+        var unknown = filters.Where(value => !ReverseImpactContract.SupportedRelationshipFilters.Contains(value, StringComparer.Ordinal)).Distinct(StringComparer.Ordinal).ToArray();
         if (unknown.Length > 0)
         {
-            throw new ArgumentException($"Unsupported reverse-impact relationship filter(s): {string.Join(", ", unknown)}.");
+            throw new ReverseImpactInputException(
+                "InvalidRelationshipFilter",
+                "Reverse-impact contains an unsupported relationship filter.",
+                nameof(ReverseImpactOptions.RelationshipFilters));
         }
 
         return Array.AsReadOnly(filters
@@ -486,6 +508,13 @@ public static class ReverseImpactTraversal
             ValidateRequired(fact.FactType, "FactType", fact.FactId, index);
             ValidateRequired(fact.RuleId, "RuleId", fact.FactId, index);
             ValidateRequired(fact.EvidenceTier, "EvidenceTier", fact.FactId, index);
+            if (!ReverseImpactContract.SupportedEvidenceTiers.Contains(fact.EvidenceTier, StringComparer.Ordinal))
+            {
+                throw new ReverseImpactInputException(
+                    "UnsupportedEvidenceTier",
+                    $"Reverse-impact input fact at index {index} has an unsupported evidence tier.",
+                    "inputFacts");
+            }
             if (fact.Properties is null)
             {
                 throw new ReverseImpactInputException(
@@ -738,6 +767,16 @@ public static class ReverseImpactTraversal
                 continue;
             }
 
+            if (relationship.Value.Filter is Http or Database && !IsCanonicalSemanticBoundaryFact(fact))
+            {
+                gaps.Add(CreateDerivedGap(
+                    ReverseImpactGapKinds.AnalysisGap,
+                    "An explicitly selected boundary fact was excluded because its canonical endpoints were not backed by the required semantic extractor provenance.",
+                    RelatedSymbolIds(fact),
+                    fact));
+                continue;
+            }
+
             if (fact.Evidence is null)
             {
                 gaps.Add(CreateDerivedGap(
@@ -769,6 +808,16 @@ public static class ReverseImpactTraversal
             return ("References", References);
         }
 
+        if (fact.FactType == FactTypes.HttpCallDetected)
+        {
+            return ("HttpClientCall", Http);
+        }
+
+        if (fact.FactType == FactTypes.DatabaseOperationCandidate)
+        {
+            return ("DatabaseOperation", Database);
+        }
+
         if (fact.FactType == FactTypes.SymbolRelationship)
         {
             var kind = Property(fact, "relationshipKind");
@@ -777,6 +826,14 @@ public static class ReverseImpactTraversal
 
         return null;
     }
+
+    private static bool IsCanonicalSemanticBoundaryFact(CodeFact fact) =>
+        fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+        && fact.Evidence is not null
+        && string.Equals(fact.Evidence.ExtractorId, "CSharpSemanticExtractor", StringComparison.Ordinal)
+        && string.Equals(fact.Evidence.ExtractorVersion, ScannerVersions.CSharpSemanticExtractor, StringComparison.Ordinal)
+        && (fact.FactType != FactTypes.HttpCallDetected || fact.RuleId == RuleIds.HttpClientInvocation)
+        && (fact.FactType != FactTypes.DatabaseOperationCandidate || fact.RuleId == RuleIds.DatabaseOperationCallPattern);
 
     private static ReverseImpactHop ToHop(ImpactEdge edge) => new(
         edge.Fact.FactId,

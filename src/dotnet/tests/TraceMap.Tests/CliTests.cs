@@ -44,6 +44,21 @@ public sealed class CliTests
     }
 
     [Fact]
+    public async Task Help_for_reverse_impact_documents_the_single_snapshot_machine_contract()
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync(["reverse-impact", "--help"], output, error);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("tracemap reverse-impact --index <index.sqlite>", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("tracemap.reverse-impact.v1", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Combined or mixed-snapshot indexes fail closed", output.ToString(), StringComparison.Ordinal);
+        Assert.Equal(string.Empty, error.ToString());
+    }
+
+    [Fact]
     public async Task Scan_against_temporary_directory_writes_required_outputs()
     {
         using var temp = new TempDirectory();
