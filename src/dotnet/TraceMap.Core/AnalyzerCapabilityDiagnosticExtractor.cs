@@ -211,13 +211,20 @@ public static class AnalyzerCapabilityDiagnosticExtractor
         IReadOnlyList<CodeFact> buildEnvironmentFacts,
         IReadOnlyList<CodeFact> analysisGaps)
     {
+        var nonScopeAnalysisGaps = analysisGaps
+            .Where(fact => fact.Properties.GetValueOrDefault("diagnosticKind")
+                != BuildEnvironmentDiagnosticExtractor.DiagnosticKindScanScope)
+            .ToArray();
+        var scopeOnlyReduction = semanticResult.ScopeReduced
+            && semanticResult.GapFacts.All(gap => gap.Properties?.GetValueOrDefault("diagnosticKind")
+                == BuildEnvironmentDiagnosticExtractor.DiagnosticKindScanScope);
         var workspaceSupport = buildEnvironmentFacts
             .Where(fact => fact.Properties.GetValueOrDefault("diagnosticKind") == BuildEnvironmentDiagnosticExtractor.DiagnosticKindWorkspace)
-            .Concat(analysisGaps)
-            .Concat(buildStatusFacts)
+            .Concat(nonScopeAnalysisGaps)
+            .Concat(scopeOnlyReduction ? [] : buildStatusFacts)
             .ToArray();
         var state = semanticResult.Attempted
-            ? semanticResult.ReducedCoverage ? States.Reduced : States.Available
+            ? semanticResult.ReducedCoverage && !scopeOnlyReduction ? States.Reduced : States.Available
             : projectScopes.Count > 0 || csharpFiles.Count > 0 ? States.Unknown : States.NotApplicable;
         var effect = state switch
         {

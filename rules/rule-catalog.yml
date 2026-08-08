@@ -3182,7 +3182,7 @@ rules:
 
   - id: csharp.semantic.workspace.v1
     name: C# semantic workspace gaps
-    description: Records MSBuildWorkspace load, MSBuild registration, syntax tree, and compilation gaps during semantic extraction.
+    description: Records MSBuildWorkspace load, MSBuild registration, syntax tree, compilation, and explicit scan-scope gaps during semantic extraction.
     evidenceTier: Tier4Unknown
     emits:
       - AnalysisGap
@@ -3191,6 +3191,7 @@ rules:
       - Compilation gaps do not prevent syntax fallback facts from being emitted.
       - Native workspace messages are sanitized to stable categories before shareable artifacts are written; raw local paths, remotes, package sources, config values, credentials, and source-like snippets are omitted.
       - Source documents outside the repository use deterministic synthetic evidence paths derived from bounded non-host descriptors. The original path is not retained, and same-named unrecognized external sources can share an identity.
+      - Explicit scan-scope gaps report only a categorical omitted-document count at repository evidence path `.`; they do not identify excluded source files, prove build failure, or describe runtime behavior.
 
   - id: build.environment.target-framework.v1
     name: Build environment target framework diagnostics
