@@ -1,5 +1,9 @@
+using System.Diagnostics;
+using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using TraceMap.Core;
 using TraceMap.Cli;
+using TraceMap.Storage;
 
 namespace TraceMap.Tests;
 
@@ -80,5 +84,69 @@ public sealed class ScanEngineTests
         {
             File.SetUnixFileMode(sourceDirectory, originalMode);
         }
+    }
+
+    [Fact]
+    public async Task Scan_identity_changes_when_committed_source_bytes_change_without_changing_size_or_head()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        var sourcePath = Path.Combine(repo, "Sample.cs");
+        File.WriteAllText(sourcePath, "public sealed class Alpha { }");
+        RunGit(repo, "init");
+        RunGit(repo, "config", "user.email", "fixture@example.invalid");
+        RunGit(repo, "config", "user.name", "TraceMap Fixture");
+        RunGit(repo, "add", "Sample.cs");
+        RunGit(repo, "commit", "-m", "baseline");
+
+        var before = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "before")));
+        File.WriteAllText(sourcePath, "public sealed class Bravo { }");
+        var after = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "after")));
+
+        Assert.Equal(before.Manifest.CommitSha, after.Manifest.CommitSha);
+        Assert.Equal(before.Inventory.Single().SizeBytes, after.Inventory.Single().SizeBytes);
+        Assert.NotEqual(before.Manifest.ScanId, after.Manifest.ScanId);
+        Assert.NotEqual(before.Manifest.SourceSnapshotDigest, after.Manifest.SourceSnapshotDigest);
+        Assert.Matches("^[0-9a-f]{64}$", before.Manifest.SourceSnapshotDigest!);
+        Assert.Matches("^[0-9a-f]{64}$", after.Manifest.SourceSnapshotDigest!);
+
+        var manifestPath = Path.Combine(temp.Path, "after", "scan-manifest.json");
+        var indexPath = Path.Combine(temp.Path, "after", "index.sqlite");
+        await ManifestWriter.WriteAsync(manifestPath, after.Manifest);
+        SqliteIndexWriter.Write(indexPath, after.Manifest, after.Facts);
+
+        var fileManifest = JsonSerializer.Deserialize<ScanManifest>(
+            await File.ReadAllTextAsync(manifestPath),
+            JsonOptions.Stable)!;
+        using var connection = new SqliteConnection($"Data Source={indexPath}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "select manifest_json from scan_manifest limit 1;";
+        var indexManifest = JsonSerializer.Deserialize<ScanManifest>(
+            (string)command.ExecuteScalar()!,
+            JsonOptions.Stable)!;
+
+        Assert.Equal(after.Manifest.ScanId, fileManifest.ScanId);
+        Assert.Equal(after.Manifest.SourceSnapshotDigest, fileManifest.SourceSnapshotDigest);
+        Assert.Equal(after.Manifest.ScanId, indexManifest.ScanId);
+        Assert.Equal(after.Manifest.SourceSnapshotDigest, indexManifest.SourceSnapshotDigest);
+    }
+
+    private static void RunGit(string workingDirectory, params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo("git")
+        {
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        foreach (var argument in arguments)
+            startInfo.ArgumentList.Add(argument);
+
+        using var process = Process.Start(startInfo)!;
+        process.WaitForExit();
+        Assert.True(process.ExitCode == 0, process.StandardError.ReadToEnd());
     }
 }
