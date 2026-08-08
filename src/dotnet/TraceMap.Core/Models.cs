@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace TraceMap.Core;
@@ -20,8 +21,18 @@ public sealed record ScanManifest(
     string? ScanRootRelativePath = null,
     string? ScanRootPathHash = null,
     string? GitRootHash = null,
-    string? SourceSnapshotDigest = null)
+    string? SourceSnapshotDigest = null) : IJsonOnDeserialized
 {
+    void IJsonOnDeserialized.OnDeserialized()
+    {
+        if (SourceSnapshotDigest is not null
+            && (SourceSnapshotDigest.Length != 64
+                || SourceSnapshotDigest.Any(character => character is not (>= '0' and <= '9') and not (>= 'a' and <= 'f'))))
+        {
+            throw new JsonException("sourceSnapshotDigest must be null or a 64-character lowercase hexadecimal SHA-256 digest.");
+        }
+    }
+
     public ScanManifest(
         string ScanId,
         string RepoName,

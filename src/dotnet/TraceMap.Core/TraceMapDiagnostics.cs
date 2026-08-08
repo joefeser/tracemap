@@ -84,8 +84,10 @@ public static class TraceMapDiagnostics
     public static TraceMapDiagnosticOperation StartCommand(string command) =>
         Start("tracemap.command", command, TraceMapDiagnosticPhases.Command);
 
-    public static TraceMapDiagnosticOperation StartScan() =>
-        Start("tracemap.scan", "scan", TraceMapDiagnosticPhases.Command);
+    public static TraceMapDiagnosticOperation StartScan() => StartScan(CancellationToken.None);
+
+    public static TraceMapDiagnosticOperation StartScan(CancellationToken cancellationToken) =>
+        Start("tracemap.scan", "scan", TraceMapDiagnosticPhases.Command, cancellationToken);
 
     public static TraceMapDiagnosticOperation StartPhase(
         string command,
