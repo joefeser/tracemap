@@ -7,10 +7,11 @@ The dangerous failure is a plausible graph that silently joins, drops, guesses,
 or reverses evidence.
 
 Issue [#591](https://github.com/joefeser/tracemap/issues/591) tracks the full
-matrix. This first bounded slice covers canonical identity, partial types, and
-receiver resolution only. Later slices must add direction persistence,
-incremental rebuild behavior, and incomplete legacy project inputs. Reverse
-impact traversal belongs to #590 and is explicitly outside this matrix.
+matrix. The implemented slices cover canonical identity, partial types,
+receiver resolution, and the first direction-persistence seam. Later slices
+must add incremental rebuild behavior and incomplete legacy project inputs.
+The direction fixture uses #590's shipped internal kernel only as a query
+readback; user-facing reverse-impact composition remains tracked by #590.
 
 | ID | Category | Minimal source/project shape | Dangerous naive result | Required TraceMap contract | Status |
 |---|---|---|---|---|---|
@@ -31,7 +32,10 @@ impact traversal belongs to #590 and is explicitly outside this matrix.
 | RX-03 | Receiver resolution | A local shadows a field; `receiver` and `this.receiver` target different same-named types | Lexical rebinding is ignored | Local and explicitly qualified field calls have different canonical target IDs | Implemented in the RX-01 test |
 | RX-04 | Receiver resolution | A missing receiver type is invoked in an otherwise extractable file | Analyzer invents a Tier 1 target or reports a clean graph | No Tier 1 call exists at the unresolved site; Tier 3 syntax call remains; CS0246 is a Tier 4 `AnalysisGap` with line and extractor provenance | Implemented in the RX-01 test |
 | RX-05 | Receiver resolution | Static, extension, and interface-typed calls | Dispatch shape or reduced extension identity is mislabeled | Preserve compiler-selected method identity and declared evidence limitations | Planned follow-up |
-| DIR-01 | Directionality | Caller/callee, project-reference, inheritance, route/service, and supported boundary edges survive persistence | A reversed edge produces plausible but incorrect paths | Serialized and loaded source/target IDs exactly preserve each rule's declared direction | Planned later slice; no reverse traversal in this work |
+| DIR-01 | Directionality | Caller/callee and implementation/interface/base relationships survive extraction, NDJSON, SQLite role/relationship persistence, and in-memory reverse query | A reversed edge produces plausible but incorrect paths | Semantic call and symbol-relationship source/target IDs retain each rule's declared direction; the current internal reverse kernel consumes the same NDJSON facts and walks target to source without rewriting the stored edge | Implemented in `Declared_relationship_direction_survives_extraction_persistence_and_in_memory_reverse_query`; loading persisted artifacts into the reverse kernel remains #590 work |
+| DIR-02 | Directionality | A controller-like caller invokes a downstream service through an interface-typed receiver | UI labels or endpoint posture reverse the compiler call edge | The controller method remains the call source, the selected interface member remains the target, and reverse query returns the controller as a dependent | Implemented in the DIR-01 test |
+| DIR-03 | Directionality | Bounded MSBuild binlog records a repository-relative project build edge | Build order is silently reinterpreted as a source project declaration or canonical impact edge | Preserve the extractor's documented source/target observation through generic fact persistence; do not opt it into impact traversal without canonical project identity and a declared impact contract | Implemented in `MsBuildBinlogExtractorTests.Extract_projects_success_graph_and_safe_diagnostic_without_messages` |
+| DIR-04 | Directionality | HTTP/database surfaces exist without a canonical impact relationship contract | Surface labels are promoted into guessed graph edges | Keep surface facts out of reverse-impact traversal until a separate rule documents endpoints, direction, provenance, and limitations | Explicitly deferred; no current relationship contract to round-trip |
 | INC-01 | Incremental rebuild | Changed, unchanged, renamed, moved, deleted, and excluded sources share targets | Replacement drops unrelated edges or retains stale ones | Graph shrink is attributable to explicit changed/deleted/excluded evidence; unrelated tiers/providers survive | Planned later slice |
 | LEG-01 | Legacy/incomplete .NET | Legacy project, unavailable reference, outside-root project, or conditional compilation fails full load | Failed compilation becomes a clean empty graph | Preserve extractable syntax/structural evidence, emit explicit gaps, and label coverage reduced | Planned later slice |
 
