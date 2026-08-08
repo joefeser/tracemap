@@ -15,7 +15,7 @@ Complete the bounded static classification of the remaining Microsoft Access dom
 7. Raw expressions, SQL, field names that fail disclosure policy, values, and row data shall not be added to standard artifacts.
 8. Outputs shall remain deterministic and use `legacy.access.binding.v1` with its documented limitations.
 9. A single-table wildcard record source shall be statically complete only when the dependency is unique and the immutable base scan proves a field catalog with no field-level acquisition gap.
-10. Access predicate keyword calls such as `IN (...)` shall not be classified as unresolved custom functions; referenced fields must still resolve independently.
+10. Access predicate operators such as `IN (...)` and `EXISTS` shall not be classified as unresolved custom functions; referenced fields must still resolve independently.
 11. Owner rebuild dispositions shall remain separate from deterministic scanner facts and shall not modify the source database.
 12. A unique direct SELECT projection alias may recover source-field lineage from the bounded SQL text already read for the saved query when DAO output-source metadata is unavailable.
 13. Domain criteria may use that unique source-field lineage, while a domain return that names the source instead of the declared output alias shall remain partial with a precise alias-mismatch classification.

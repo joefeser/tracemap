@@ -7,11 +7,19 @@ public sealed class AccessExpressionProjectorTests
     [Fact]
     public void Public_project_contract_retains_nine_parameter_binary_signature()
     {
-        var overload = Assert.Single(
-            typeof(AccessExpressionProjector).GetMethods(),
-            method => method.Name == nameof(AccessExpressionProjector.Project));
+        var parameterCounts = typeof(AccessExpressionProjector).GetMethods()
+            .Where(method => method.Name == nameof(AccessExpressionProjector.Project))
+            .Select(method => method.GetParameters().Length)
+            .OrderBy(value => value)
+            .ToArray();
 
-        Assert.Equal(9, overload.GetParameters().Length);
+        Assert.Equal([7, 9], parameterCounts);
+
+        var constructorCounts = typeof(AccessBindingProjection).GetConstructors()
+            .Select(constructor => constructor.GetParameters().Length)
+            .OrderBy(value => value)
+            .ToArray();
+        Assert.Equal([9, 10, 11], constructorCounts);
     }
 
     [Fact]
@@ -753,6 +761,32 @@ public sealed class AccessExpressionProjectorTests
         Assert.Equal("AccessBindingExpressionTargetAmbiguous", result.GapClassification);
         Assert.Contains("field-status", result.CriteriaFieldStableKeys);
         Assert.Contains("control-status", result.ControlStableKeys);
+    }
+
+    [Fact]
+    public void Malformed_domain_criteria_preserves_fields_but_remains_partial()
+    {
+        const string queryKey = "query-status";
+        var result = AccessExpressionProjector.Project(
+            "=DLookUp([Value], \"qStatus\", \"[Status]=\")",
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["qStatus"] = [(queryKey, "query")]
+            },
+            null,
+            null,
+            new Dictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>(StringComparer.Ordinal)
+            {
+                [queryKey] = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Value"] = ["field-value"],
+                    ["Status"] = ["field-status"]
+                }
+            });
+
+        Assert.Equal("partial", result.Coverage);
+        Assert.Equal("AccessBindingExpressionPartial", result.GapClassification);
+        Assert.Contains("field-status", result.CriteriaFieldStableKeys);
     }
 
     [Fact]

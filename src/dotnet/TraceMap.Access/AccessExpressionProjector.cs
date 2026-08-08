@@ -21,6 +21,16 @@ public static partial class AccessExpressionProjector
         string expression,
         IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? objects,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? fields,
+        IReadOnlySet<string>? controlNames,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? fieldSetsByObject,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? controlStableKeys,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? domainObjects) =>
+        Project(expression, objects, fields, controlNames, fieldSetsByObject, controlStableKeys, domainObjects, null, null);
+
+    public static AccessExpressionProjection Project(
+        string expression,
+        IReadOnlyDictionary<string, IReadOnlyList<(string StableKey, string Kind)>>? objects,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? fields,
         IReadOnlySet<string>? controlNames = null,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, IReadOnlyList<string>>>? fieldSetsByObject = null,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? controlStableKeys = null,
@@ -102,6 +112,7 @@ public static partial class AccessExpressionProjector
         var domainCrosstabPivotPrefixMismatch = false;
         var domainSelectedFieldAliasMismatch = false;
         var domainFieldCatalogIncomplete = false;
+        var malformedDomainCriteria = false;
         var malformedBracketedIdentifier = HasUnbalancedBracketedIdentifier(normalized);
         var domainSyntaxMatches = DomainNamePattern().Matches(MaskLiteralsAndBracketedIdentifiers(normalized));
         var domainMatches = delimitersBalanced
@@ -214,6 +225,11 @@ public static partial class AccessExpressionProjector
                 if (args.Count >= 3)
                 {
                     var criteriaExpression = args[2].Trim().Trim('"');
+                    malformedDomainCriteria |= !HasBalancedExpressionDelimiters(criteriaExpression)
+                        || Regex.IsMatch(
+                            criteriaExpression,
+                            @"(?is)(?:=|<>|<=|>=|<|>|\+|-|\*|/|\b(?:and|or|not|like|in|is)\b)\s*$",
+                            RegexOptions.CultureInvariant);
                     var externalMatches = ExternalReferencePattern().Matches(criteriaExpression);
                     AddExternalReferences(externalMatches, externalRefs);
                     foreach (var candidate in ExtractIdentifiers(MaskMatches(criteriaExpression, externalMatches)))
@@ -269,13 +285,13 @@ public static partial class AccessExpressionProjector
         var classification = domainMatches.Count > 0 ? "domain-lookup"
             : functions.Length > 0 || normalized.StartsWith('=') || operators.Length > 0 ? "calculated-expression"
             : "expression";
-        var coverage = dynamic || ambiguous || unresolved || unresolvedFunction || malformedPredicateOperator || domainFieldCatalogIncomplete
+        var coverage = dynamic || ambiguous || unresolved || unresolvedFunction || malformedPredicateOperator || malformedDomainCriteria || domainFieldCatalogIncomplete
             || domainCrosstabPivotCandidate || domainCrosstabPivotPrefixMismatch || domainSelectedFieldAliasMismatch
             ? "partial"
             : "complete";
         var gap = dynamic ? "AccessBindingExpressionDynamic"
             : unresolvedFunction ? "AccessBindingExpressionFunctionUnresolved"
-            : malformedPredicateOperator ? "AccessBindingExpressionPartial"
+            : malformedPredicateOperator || malformedDomainCriteria ? "AccessBindingExpressionPartial"
             : domainFieldCatalogIncomplete ? "AccessBindingDomainFieldCatalogIncomplete"
             : domainSelectedFieldUnmatched ? "AccessBindingDomainSelectedFieldUnmatched"
             : domainSelectedFieldDependencyAmbiguous ? "AccessBindingDomainSelectedFieldDependencyAmbiguous"
