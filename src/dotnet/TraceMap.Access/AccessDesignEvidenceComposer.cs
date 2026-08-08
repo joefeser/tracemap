@@ -607,7 +607,9 @@ public static class AccessDesignEvidenceComposer
             rawSurfaces,
             knownObjects,
             fieldsByTableAndHash,
-            fieldsByTable);
+            fieldsByTable,
+            queryOutputOrdinalByStableKey,
+            fieldCoverageByStableKey);
         ReconcileDomainExpressionQueryOutputNames(
             databaseSeed,
             rawSurfaces,
@@ -662,7 +664,7 @@ public static class AccessDesignEvidenceComposer
                     ? lineCount.GetInt32()
                     : null))
             .ToArray();
-        var vbaProcedureCatalog = AccessVbaProjector.BuildProcedureCatalog(
+        var vbaProcedureCatalog = AccessVbaProjector.BuildProcedureCatalogWithCoverage(
             databaseSeed,
             rawModules,
             limits,
@@ -675,7 +677,9 @@ public static class AccessDesignEvidenceComposer
             AccessIdentityDisclosurePolicy.HashOnly,
             queryOutputs,
             queryKinds,
-            vbaProcedureCatalog,
+            vbaProcedureCatalog.Complete
+                ? vbaProcedureCatalog.Procedures
+                : new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase),
             fieldCoverageByStableKey,
             domainCriteriaFields,
             completeTableFieldCatalogStableKeys);
@@ -853,6 +857,13 @@ public static class AccessDesignEvidenceComposer
                     RuleIds.LegacyAccessDesignInput)))
             .Concat(uiParserGaps)
             .Concat(ui.Gaps)
+            .Concat(vbaProcedureCatalog.Complete
+                ? []
+                : new[] { new AccessGapProjection(
+                    "AccessVbaProcedureCatalogIncomplete",
+                    "vba-catalog",
+                    null,
+                    RuleIds.LegacyAccessVba) })
             .Concat(vba.Gaps)
             .Concat(macros.Gaps)
             .OrderBy(gap => gap.Classification, StringComparer.Ordinal)
@@ -1008,7 +1019,8 @@ public static class AccessDesignEvidenceComposer
             return fact;
         var merged = persistedFactIds
             .Concat(supportingFactIds)
-            .Select(factId => composedBaseFactIds.GetValueOrDefault(factId) ?? factId)
+            .Where(composedBaseFactIds.ContainsKey)
+            .Select(factId => composedBaseFactIds[factId])
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal);
         var properties = new SortedDictionary<string, string>(
@@ -1231,7 +1243,9 @@ public static class AccessDesignEvidenceComposer
         IReadOnlyList<AccessRawUiSurface> surfaces,
         IReadOnlyDictionary<string, List<(string StableKey, string Kind)>> knownObjects,
         IReadOnlyDictionary<string, Dictionary<string, List<string>>> fieldsByTableAndHash,
-        Dictionary<string, Dictionary<string, List<string>>> fieldsByTable)
+        Dictionary<string, Dictionary<string, List<string>>> fieldsByTable,
+        IReadOnlyDictionary<string, int>? queryOutputOrdinalByStableKey = null,
+        IReadOnlyDictionary<string, string>? fieldCoverageByStableKey = null)
     {
         foreach (var surface in surfaces)
         {
@@ -1261,6 +1275,12 @@ public static class AccessDesignEvidenceComposer
                 {
                     continue;
                 }
+                if (queryOutputOrdinalByStableKey is not null
+                    && !queryOutputOrdinalByStableKey.ContainsKey(distinct[0]))
+                    continue;
+                if (fieldCoverageByStableKey is not null
+                    && fieldCoverageByStableKey.GetValueOrDefault(distinct[0]) != "complete")
+                    continue;
                 AddField(fieldsByTable, queryStableKey, outputName, distinct[0]);
             }
         }
