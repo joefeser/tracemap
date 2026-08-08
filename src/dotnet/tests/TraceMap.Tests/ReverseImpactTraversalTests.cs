@@ -25,6 +25,8 @@ public sealed class ReverseImpactTraversalTests
 
         Assert.Equal("Resolved", result.Resolution);
         Assert.Equal(ReverseImpactContract.SchemaVersion, result.SchemaVersion);
+        var filters = Assert.IsAssignableFrom<IList<string>>(result.RelationshipFilters);
+        Assert.Throws<NotSupportedException>(() => filters[0] = "mutated");
         Assert.Equal("scan", result.Snapshot!.ScanId);
         Assert.Equal("0123456789012345678901234567890123456789", result.Snapshot.CommitSha);
         Assert.Equal([caller, root], result.Impacts.Select(impact => impact.Symbol.SymbolId));
@@ -405,6 +407,28 @@ public sealed class ReverseImpactTraversalTests
         Assert.All(result.Impacts, impact => Assert.Equal(sharedCaller, impact.Symbol.SymbolId));
         Assert.Equal([firstMember, secondMember], result.Impacts.Select(impact => impact.TraversalSeedSymbolId).Order(StringComparer.Ordinal));
         Assert.Equal(2, result.Impacts.Select(impact => impact.PathId).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void Type_seed_discovers_other_expanded_symbols_as_impacts()
+    {
+        var type = Id("type", "Service");
+        var firstMember = Id("method", "Service.First()");
+        var secondMember = Id("method", "Service.Second()");
+        var facts = new[]
+        {
+            SymbolFact("first-member", firstMember, "Service.First()", "Method", type),
+            SymbolFact("second-member", secondMember, "Service.Second()", "Method", type),
+            Relationship("member-call", FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, secondMember, "Service.Second()", firstMember, "Service.First()", "Calls", 10)
+        };
+
+        var result = ReverseImpactTraversal.Analyze(facts, new ReverseImpactOptions(type, 1));
+
+        var fromFirstMember = result.Impacts
+            .Where(impact => impact.TraversalSeedSymbolId == firstMember)
+            .Select(impact => impact.Symbol.SymbolId)
+            .Order(StringComparer.Ordinal);
+        Assert.Equal([secondMember], fromFirstMember);
     }
 
     [Fact]
