@@ -409,7 +409,9 @@ public sealed class ReverseImpactTraversalTests
         Assert.Contains(result.Gaps, gap => gap.GapKind == "SelectorNotFound");
         Assert.Contains(result.Gaps, gap => gap.GapId == "project-load-gap" && gap.RuleId == RuleIds.AnalyzerCapabilitySemantic);
 
-        Assert.Throws<ArgumentException>(() => ReverseImpactTraversal.Analyze([], new ReverseImpactOptions("Missing", 1, ["everything"])));
+        var invalidFilter = Assert.Throws<ReverseImpactInputException>(() =>
+            ReverseImpactTraversal.Analyze([], new ReverseImpactOptions("Missing", 1, ["everything"])));
+        Assert.Equal("InvalidRelationshipFilter", invalidFilter.ErrorCode);
         Assert.Throws<ArgumentOutOfRangeException>(() => ReverseImpactTraversal.Analyze([], new ReverseImpactOptions("Missing", 0)));
         Assert.Throws<ArgumentOutOfRangeException>(() => ReverseImpactTraversal.Analyze([], new ReverseImpactOptions("Missing", 1, MaxTraversalStates: 0)));
         Assert.Throws<ArgumentOutOfRangeException>(() => ReverseImpactTraversal.Analyze([], new ReverseImpactOptions("Missing", 1, MaxFrontierSize: ReverseImpactContract.MaximumLimit + 1)));
@@ -460,6 +462,14 @@ public sealed class ReverseImpactTraversalTests
         var nullFilter = Assert.Throws<ReverseImpactInputException>(() =>
             ReverseImpactTraversal.Analyze([valid], new ReverseImpactOptions("seed", 1, new string[] { null! })));
         Assert.Equal("InvalidRelationshipFilter", nullFilter.ErrorCode);
+
+        var blankFilter = Assert.Throws<ReverseImpactInputException>(() =>
+            ReverseImpactTraversal.Analyze([valid], new ReverseImpactOptions("seed", 1, [" "])));
+        Assert.Equal("InvalidRelationshipFilter", blankFilter.ErrorCode);
+
+        var unknownFilter = Assert.Throws<ReverseImpactInputException>(() =>
+            ReverseImpactTraversal.Analyze([valid], new ReverseImpactOptions("seed", 1, ["unsupported"])));
+        Assert.Equal("InvalidRelationshipFilter", unknownFilter.ErrorCode);
 
         var zeroLine = Assert.Throws<ReverseImpactInputException>(() =>
             ReverseImpactTraversal.Analyze(

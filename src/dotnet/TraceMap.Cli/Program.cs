@@ -100,6 +100,10 @@ public static class TraceMapCommand
                 _ => await UnknownCommandAsync(command, error)
             };
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             await error.WriteLineAsync($"error: {ex.Message}");
@@ -833,6 +837,7 @@ public static class TraceMapCommand
         ReverseImpactResult result;
         try
         {
+            var relationshipFilters = ParseReverseImpactRelations(args);
             var artifact = await ReverseImpactArtifactReader.ReadAsync(
                 fullIndexPath,
                 ParseBoundedPositiveInt(
@@ -847,7 +852,7 @@ public static class TraceMapCommand
                 new ReverseImpactOptions(
                     selector,
                     depth,
-                    values.GetMany("--relation"),
+                    relationshipFilters,
                     !values.HasFlag("--exclude-contained-members"),
                     ParseBoundedPositiveInt(values, "--max-traversal-states", ReverseImpactContract.DefaultMaxTraversalStates, ReverseImpactContract.MaximumLimit, "InvalidTraversalLimit"),
                     ParseBoundedPositiveInt(values, "--max-frontier", ReverseImpactContract.DefaultMaxFrontierSize, ReverseImpactContract.MaximumLimit, "InvalidTraversalLimit"),
@@ -871,11 +876,9 @@ public static class TraceMapCommand
             return 1;
         }
 
-        Directory.CreateDirectory(parent);
-        await File.WriteAllTextAsync(
+        await WriteNewFileAtomicallyAsync(
             fullOutputPath,
             JsonSerializer.Serialize(result, JsonOptions.Stable) + "\n",
-            new UTF8Encoding(false),
             cancellationToken);
         await output.WriteLineAsync($"TraceMap reverse-impact completed: {fullOutputPath}");
         await output.WriteLineAsync($"Resolution: {result.Resolution}");
@@ -1862,6 +1865,113 @@ public static class TraceMapCommand
             errorCode,
             $"{key} must be an integer between 1 and {maximum}.",
             key);
+    }
+
+    private static IReadOnlyList<string>? ParseReverseImpactRelations(string[] args)
+    {
+        var relations = new List<string>();
+        var supplied = false;
+        for (var index = 0; index < args.Length; index++)
+        {
+            if (!string.Equals(args[index], "--relation", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            supplied = true;
+            if (index + 1 >= args.Length || args[index + 1].StartsWith("--", StringComparison.Ordinal))
+            {
+                throw new ReverseImpactInputException(
+                    "InvalidRelationshipFilter",
+                    "--relation requires a supported non-empty value.",
+                    "--relation");
+            }
+
+            foreach (var token in args[++index].Split(',', StringSplitOptions.None))
+            {
+                var relation = token.Trim().ToLowerInvariant();
+                if (relation.Length == 0
+                    || !ReverseImpactContract.SupportedRelationshipFilters.Contains(relation, StringComparer.Ordinal))
+                {
+                    throw new ReverseImpactInputException(
+                        "InvalidRelationshipFilter",
+                        "--relation requires a supported non-empty value.",
+                        "--relation");
+                }
+
+                relations.Add(relation);
+            }
+        }
+
+        return supplied
+            ? Array.AsReadOnly(relations.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray())
+            : null;
+    }
+
+    internal static async Task WriteNewFileAtomicallyAsync(
+        string fullOutputPath,
+        string content,
+        CancellationToken cancellationToken)
+    {
+        var parent = Path.GetDirectoryName(fullOutputPath);
+        if (string.IsNullOrWhiteSpace(parent))
+        {
+            throw new ReverseImpactInputException(
+                "ReverseImpactOutputPathInvalid",
+                "The reverse-impact output path is invalid.",
+                nameof(fullOutputPath));
+        }
+
+        Directory.CreateDirectory(parent);
+        var stagedPath = Path.Combine(parent, $".tracemap-reverse-impact-{Guid.NewGuid():N}.tmp");
+        try
+        {
+            await using (var stream = new FileStream(
+                stagedPath,
+                new FileStreamOptions
+                {
+                    Mode = FileMode.CreateNew,
+                    Access = FileAccess.Write,
+                    Share = FileShare.None,
+                    Options = FileOptions.Asynchronous
+                }))
+            {
+                var bytes = new UTF8Encoding(false).GetBytes(content);
+                await stream.WriteAsync(bytes, cancellationToken);
+                await stream.FlushAsync(cancellationToken);
+            }
+
+            File.Move(stagedPath, fullOutputPath, overwrite: false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (IOException) when (FileSystemEntryExists(fullOutputPath))
+        {
+            throw new ReverseImpactInputException(
+                "ReverseImpactOutputAlreadyExists",
+                "The reverse-impact output must be a new file.",
+                nameof(fullOutputPath));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new ReverseImpactInputException(
+                "ReverseImpactOutputWriteFailed",
+                "The reverse-impact output could not be written.",
+                nameof(fullOutputPath));
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(stagedPath);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // The final output is never published from a partial staging file.
+            }
+        }
     }
 
     private static bool FileSystemEntryExists(string path)

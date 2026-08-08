@@ -452,11 +452,11 @@ public static class ReverseImpactTraversal
 
     private static IReadOnlyList<string> NormalizeFilters(IReadOnlyList<string>? requested)
     {
-        if (requested?.Any(value => value is null) == true)
+        if (requested?.Any(string.IsNullOrWhiteSpace) == true)
         {
             throw new ReverseImpactInputException(
                 "InvalidRelationshipFilter",
-                "Reverse-impact relationship filters cannot contain null values.",
+                "Reverse-impact relationship filters cannot contain null or blank values.",
                 nameof(ReverseImpactOptions.RelationshipFilters));
         }
 
@@ -466,7 +466,10 @@ public static class ReverseImpactTraversal
         var unknown = filters.Where(value => !ReverseImpactContract.SupportedRelationshipFilters.Contains(value, StringComparer.Ordinal)).Distinct(StringComparer.Ordinal).ToArray();
         if (unknown.Length > 0)
         {
-            throw new ArgumentException($"Unsupported reverse-impact relationship filter(s): {string.Join(", ", unknown)}.");
+            throw new ReverseImpactInputException(
+                "InvalidRelationshipFilter",
+                "Reverse-impact contains an unsupported relationship filter.",
+                nameof(ReverseImpactOptions.RelationshipFilters));
         }
 
         return Array.AsReadOnly(filters

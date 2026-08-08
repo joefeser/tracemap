@@ -313,6 +313,80 @@ public sealed class ReverseImpactArtifactQueryTests
         Assert.False(File.Exists(output));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("calls,")]
+    [InlineData("unsupported")]
+    public async Task Cli_rejects_blank_or_unknown_relationship_filters_with_a_stable_error(string relation)
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var output = Path.Combine(temp.Path, "result.json");
+        SqliteIndexWriter.Write(
+            index,
+            Manifest(),
+            [Relationship("fact-call", Caller, "Caller", Seed, "Target", 1)]);
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync(
+            ["reverse-impact", "--index", index, "--selector", Seed, "--depth", "1", "--out", output, "--relation", relation],
+            stdout,
+            stderr);
+
+        Assert.Equal(1, exitCode);
+        Assert.Equal("error: InvalidRelationshipFilter.\n", stderr.ToString().ReplaceLineEndings("\n"));
+        Assert.False(File.Exists(output));
+    }
+
+    [Fact]
+    public async Task Atomic_output_publish_preserves_concurrent_destination_and_cleans_cancelled_staging()
+    {
+        using var temp = new TempDirectory();
+        var destination = Path.Combine(temp.Path, "result.json");
+        await File.WriteAllTextAsync(destination, "existing");
+        var existingHash = Hash(destination);
+
+        var collision = await Assert.ThrowsAsync<ReverseImpactInputException>(() =>
+            TraceMapCommand.WriteNewFileAtomicallyAsync(destination, "replacement", CancellationToken.None));
+
+        Assert.Equal("ReverseImpactOutputAlreadyExists", collision.ErrorCode);
+        Assert.Equal(existingHash, Hash(destination));
+        Assert.Empty(Directory.EnumerateFiles(temp.Path, ".tracemap-reverse-impact-*.tmp"));
+
+        File.Delete(destination);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            TraceMapCommand.WriteNewFileAtomicallyAsync(destination, new string('x', 4096), cancellation.Token));
+
+        Assert.False(File.Exists(destination));
+        Assert.Empty(Directory.EnumerateFiles(temp.Path, ".tracemap-reverse-impact-*.tmp"));
+    }
+
+    [Fact]
+    public async Task Cli_propagates_cancellation_without_publishing_output()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var output = Path.Combine(temp.Path, "result.json");
+        SqliteIndexWriter.Write(
+            index,
+            Manifest(),
+            [Relationship("fact-call", Caller, "Caller", Seed, "Target", 1)]);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => TraceMapCommand.RunAsync(
+            ["reverse-impact", "--index", index, "--selector", Seed, "--depth", "1", "--out", output],
+            TextWriter.Null,
+            TextWriter.Null,
+            cancellation.Token));
+
+        Assert.False(File.Exists(output));
+        Assert.Empty(Directory.EnumerateFiles(temp.Path, ".tracemap-reverse-impact-*.tmp"));
+    }
+
     [Fact]
     public async Task Cli_reports_only_a_stable_error_code_for_malformed_persisted_facts()
     {
