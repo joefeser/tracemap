@@ -141,7 +141,11 @@ public sealed record CombinedPathEdge(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? RegistrationContext = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<string>? SupportingRegistrationFactIds = null);
+    IReadOnlyList<string>? SupportingRegistrationFactIds = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? CandidateCount = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? OmittedCount = null);
 
 public sealed record CombinedPathNote(string Code, string Message);
 
@@ -162,7 +166,9 @@ public sealed record CombinedPathGap(
     string? CommitSha = null,
     string? ExtractorVersion = null,
     string? EvidenceScope = null,
-    int? EndLine = null);
+    int? EndLine = null,
+    int? CandidateCount = null,
+    int? CandidateLimit = null);
 
 public sealed record CombinedPathInventory(
     IReadOnlyDictionary<string, int> NodesByKind,
@@ -2095,7 +2101,9 @@ public static class CombinedDependencyPathReporter
                 gap.CommitSha,
                 gap.ExtractorVersion,
                 gap.EvidenceScope,
-                gap.EndLine));
+                gap.EndLine,
+                gap.CandidateCount,
+                gap.CandidateLimit));
         }
     }
 
