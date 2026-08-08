@@ -80,6 +80,8 @@ public sealed record AccessFlowGap(
 public static class AccessScreenDataFlowReporter
 {
     public const string SchemaVersion = "tracemap.access-screen-data-flow.v1";
+    private const int MaxPersistedSupportCharacters = 65_536;
+    private const int MaxPersistedSupportIds = 1_024;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -148,6 +150,7 @@ public static class AccessScreenDataFlowReporter
                 !string.Equals(fact.Repo, repository, StringComparison.Ordinal)
                 || !string.Equals(SafeCommit(fact.CommitSha), safeCommit, StringComparison.Ordinal)))
             throw new InvalidDataException("AccessFlowScanIdentityUnavailable");
+        var gapSupportIndex = BuildGapSupportIndex(accessFacts);
         var nodes = new Dictionary<string, MutableNode>(StringComparer.Ordinal);
         var edges = new List<AccessFlowEdge>();
         var gaps = new List<AccessFlowGap>();
@@ -168,7 +171,7 @@ public static class AccessScreenDataFlowReporter
                 var classification = SafeCategory(
                     fact.Properties.GetValueOrDefault("classification"),
                     "AccessAnalysisGap");
-                var supportingFactIds = SupportingGapFactIds(fact, accessFacts);
+                var supportingFactIds = SupportingGapFactIds(fact, accessFacts, gapSupportIndex);
                 AddGap(gaps, maxGaps, ref truncated, new(
                     Id("gap", classification, fact.FactId),
                     classification,
@@ -447,50 +450,97 @@ public static class AccessScreenDataFlowReporter
             "unknown"),
         SafeLimitations(fact.Properties.GetValueOrDefault("limitations")));
 
-    private static IReadOnlyList<string> SupportingGapFactIds(CodeFact gap, IReadOnlyList<CodeFact> facts)
+    private static IReadOnlyList<string> SupportingGapFactIds(
+        CodeFact gap,
+        IReadOnlyList<CodeFact> facts,
+        GapSupportIndex supportIndex)
     {
         var supporting = new SortedSet<string>(StringComparer.Ordinal) { gap.FactId };
-        if (gap.Properties.TryGetValue("supportingFactIds", out var persistedFactIds))
+        if (gap.Properties.TryGetValue("supportingFactIds", out var persistedFactIds)
+            && persistedFactIds is not null
+            && persistedFactIds.Length <= MaxPersistedSupportCharacters
+            && persistedFactIds.Count(character => character == ';') < MaxPersistedSupportIds)
         {
-            var parsed = persistedFactIds.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (parsed.Length > 0
-                && parsed.All(factId => SafeFactId(factId)
-                    && facts.Any(candidate => candidate.FactId == factId
-                        && IsValidPersistedGapSupport(gap, candidate, facts))))
+            var parsed = persistedFactIds.Split(';', StringSplitOptions.TrimEntries);
+            var encodingValid = parsed.Length > 0
+                && parsed.All(factId => !string.IsNullOrEmpty(factId) && SafeFactId(factId))
+                && parsed.Distinct(StringComparer.Ordinal).Count() == parsed.Length;
+            if (encodingValid)
             {
-                supporting.UnionWith(parsed);
-                return supporting.ToArray();
+                var persistedScope = gap.Properties.GetValueOrDefault("scopeKind");
+                bool valid;
+                if (IsQueryOutputScope(persistedScope))
+                {
+                    var expected = CompleteQueryOutputSupport(gap, supportIndex);
+                    valid = expected.Count > 0
+                        && parsed.ToHashSet(StringComparer.Ordinal).SetEquals(expected);
+                }
+                else
+                {
+                    valid = parsed.All(factId => facts.Any(candidate => candidate.FactId == factId
+                        && IsValidPersistedGapSupport(gap, candidate, facts)));
+                }
+                if (valid)
+                {
+                    supporting.UnionWith(parsed);
+                    return supporting.ToArray();
+                }
             }
         }
         if (!SafeStableKey(gap.TargetSymbol))
             return supporting.ToArray();
 
         var scope = gap.Properties.GetValueOrDefault("scopeKind");
-        if (scope == "query-output-field")
+        if (IsQueryOutputScope(scope))
         {
-            foreach (var output in facts.Where(candidate =>
-                         candidate.TargetSymbol == gap.TargetSymbol
-                         && candidate.FactType == FactTypes.AccessQueryOutputDeclared))
-            {
-                supporting.Add(output.FactId);
-                foreach (var query in facts.Where(candidate =>
-                             candidate.TargetSymbol == output.SourceSymbol
-                             && candidate.FactType == FactTypes.AccessQueryDeclared))
-                    supporting.Add(query.FactId);
-            }
+            supporting.UnionWith(CompleteQueryOutputSupport(gap, supportIndex));
         }
         else if (scope == "query"
                  && gap.Properties.GetValueOrDefault("classification")?.StartsWith(
                      "AccessQueryOutput",
                      StringComparison.Ordinal) == true)
         {
-            foreach (var query in facts.Where(candidate =>
-                         candidate.TargetSymbol == gap.TargetSymbol
-                         && candidate.FactType == FactTypes.AccessQueryDeclared))
-                supporting.Add(query.FactId);
+            if (supportIndex.Queries.TryGetValue((gap.ScanId, gap.TargetSymbol!), out var queries))
+                supporting.UnionWith(queries.Select(query => query.FactId));
         }
         return supporting.ToArray();
     }
+
+    private static bool IsQueryOutputScope(string? scope) =>
+        scope is "query-output-field" or "query-output-field-owner-unknown";
+
+    private static IReadOnlyList<string> CompleteQueryOutputSupport(CodeFact gap, GapSupportIndex supportIndex)
+    {
+        if (string.IsNullOrWhiteSpace(gap.TargetSymbol)
+            || !supportIndex.Outputs.TryGetValue((gap.ScanId, gap.TargetSymbol), out var outputs))
+            return [];
+        var supporting = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var output in outputs)
+        {
+            supporting.Add(output.FactId);
+            var ownerKey = !string.IsNullOrWhiteSpace(output.SourceSymbol)
+                ? output.SourceSymbol
+                : output.Properties.GetValueOrDefault("queryStableKey");
+            if (SafeStableKey(ownerKey)
+                && supportIndex.Queries.TryGetValue((gap.ScanId, ownerKey!), out var queries))
+                supporting.UnionWith(queries.Select(query => query.FactId));
+        }
+        return supporting.ToArray();
+    }
+
+    private static GapSupportIndex BuildGapSupportIndex(IReadOnlyList<CodeFact> facts) => new(
+        facts.Where(fact => fact.FactType == FactTypes.AccessQueryOutputDeclared
+                && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+            .GroupBy(fact => (fact.ScanId, fact.TargetSymbol!))
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray()),
+        facts.Where(fact => fact.FactType == FactTypes.AccessQueryDeclared
+                && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+            .GroupBy(fact => (fact.ScanId, fact.TargetSymbol!))
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray()));
 
     private static bool IsValidPersistedGapSupport(CodeFact gap, CodeFact candidate, IReadOnlyList<CodeFact> facts) =>
         candidate.ScanId == gap.ScanId && gap.Properties.GetValueOrDefault("scopeKind") switch
@@ -498,11 +548,6 @@ public static class AccessScreenDataFlowReporter
             "binding" => IsValidBindingGapSupport(gap, candidate, facts),
             "query" => candidate.FactType == FactTypes.AccessQueryDeclared
                 && candidate.TargetSymbol == gap.TargetSymbol,
-            "query-output-field" => candidate.FactType == FactTypes.AccessQueryDeclared
-                && facts.Any(output => output.ScanId == gap.ScanId
-                    && output.FactType == FactTypes.AccessQueryOutputDeclared
-                    && output.TargetSymbol == gap.TargetSymbol
-                    && output.SourceSymbol == candidate.TargetSymbol),
             _ => false
         };
 
@@ -832,4 +877,8 @@ public static class AccessScreenDataFlowReporter
         public HashSet<string> SupportingFactIds { get; } = supportingFactIds;
         public bool Declared { get; set; } = declared;
     }
+
+    private sealed record GapSupportIndex(
+        IReadOnlyDictionary<(string ScanId, string TargetSymbol), CodeFact[]> Outputs,
+        IReadOnlyDictionary<(string ScanId, string TargetSymbol), CodeFact[]> Queries);
 }
