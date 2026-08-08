@@ -1,5 +1,8 @@
 using System.Diagnostics;
+using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using TraceMap.Core;
+using TraceMap.Storage;
 
 namespace TraceMap.Tests;
 
@@ -125,13 +128,16 @@ public sealed class CSharpFullSnapshotStabilityTests
         using var temp = new TempDirectory();
         var repo = Path.Combine(temp.Path, "repo");
         WriteFixture(repo);
-        var baseline = Scan(repo, Path.Combine(temp.Path, "baseline"));
+        var baselineOutput = Path.Combine(temp.Path, "baseline");
+        var baseline = Scan(repo, baselineOutput);
         var baselineSql = SqlEvidenceSignature(baseline);
+        var baselinePersistedSql = PersistedSqlEvidenceSignatures(baselineOutput);
 
         Commit(repo, "scope checkpoint", allowEmpty: true);
+        var scopedOutput = Path.Combine(temp.Path, "scoped");
         var scoped = Scan(
             repo,
-            Path.Combine(temp.Path, "scoped"),
+            scopedOutput,
             ["src/TransitionSample/Caller.cs"]);
 
         Assert.Equal("Level1SemanticAnalysisReduced", scoped.Manifest.AnalysisLevel);
@@ -139,6 +145,10 @@ public sealed class CSharpFullSnapshotStabilityTests
         Assert.DoesNotContain(scoped.Inventory, item => item.RelativePath == "src/TransitionSample/Caller.cs");
         Assert.DoesNotContain(scoped.Facts, fact => fact.Evidence.FilePath == "src/TransitionSample/Caller.cs");
         Assert.Equal(baselineSql, SqlEvidenceSignature(scoped));
+        var scopedPersistedSql = PersistedSqlEvidenceSignatures(scopedOutput);
+        Assert.Equal(baselinePersistedSql.Ndjson, scopedPersistedSql.Ndjson);
+        Assert.Equal(baselinePersistedSql.Sqlite, scopedPersistedSql.Sqlite);
+        Assert.Equal(scopedPersistedSql.Ndjson, scopedPersistedSql.Sqlite);
         Assert.Contains(scoped.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.CSharpSemanticWorkspace
@@ -297,6 +307,9 @@ public sealed class CSharpFullSnapshotStabilityTests
         var result = ScanEngine.Scan(new ScanOptions(repo, output, ExcludeGlobs: excludes));
         Assert.Matches("^[0-9a-f]{40}$", result.Manifest.CommitSha);
         Assert.All(result.Facts, fact => Assert.Equal(result.Manifest.CommitSha, fact.CommitSha));
+        Directory.CreateDirectory(output);
+        JsonlFactWriter.WriteAsync(Path.Combine(output, "facts.ndjson"), result.Facts).GetAwaiter().GetResult();
+        SqliteIndexWriter.Write(Path.Combine(output, "index.sqlite"), result.Manifest, result.Facts);
         return result;
     }
 
@@ -339,17 +352,85 @@ public sealed class CSharpFullSnapshotStabilityTests
 
     private static string[] SqlEvidenceSignature(ScanResult result) => result.Facts
         .Where(fact => fact.Evidence.FilePath == "schema.sql")
-        .Select(fact => string.Join('|',
-            fact.FactType,
-            fact.RuleId,
-            fact.EvidenceTier,
-            fact.ContractElement,
-            fact.Evidence.StartLine,
-            fact.Evidence.EndLine,
-            fact.Evidence.ExtractorId,
-            fact.Evidence.ExtractorVersion))
+        .Select(NormalizedFactSignature)
         .Order(StringComparer.Ordinal)
         .ToArray();
+
+    private static (string[] Ndjson, string[] Sqlite) PersistedSqlEvidenceSignatures(string output)
+    {
+        var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var ndjson = File.ReadLines(Path.Combine(output, "facts.ndjson"))
+            .Select(line => JsonSerializer.Deserialize<CodeFact>(line, jsonOptions))
+            .Select(fact => Assert.IsType<CodeFact>(fact))
+            .Where(fact => fact.Evidence.FilePath == "schema.sql")
+            .Select(NormalizedFactSignature)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        using var connection = new SqliteConnection($"Data Source={Path.Combine(output, "index.sqlite")}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            select repo, project_path, fact_type, rule_id, evidence_tier,
+                   source_symbol, target_symbol, contract_element,
+                   file_path, start_line, end_line, snippet_hash,
+                   extractor_id, extractor_version, properties_json
+            from facts
+            where file_path = 'schema.sql'
+            order by fact_id
+            """;
+        using var reader = command.ExecuteReader();
+        var sqliteFacts = new List<CodeFact>();
+        while (reader.Read())
+        {
+            var properties = JsonSerializer.Deserialize<SortedDictionary<string, string>>(
+                reader.GetString(14),
+                jsonOptions) ?? [];
+            sqliteFacts.Add(new CodeFact(
+                "ignored",
+                "ignored",
+                reader.GetString(0),
+                "ignored",
+                reader.IsDBNull(1) ? null : reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.IsDBNull(6) ? null : reader.GetString(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7),
+                new EvidenceSpan(
+                    reader.GetString(8),
+                    reader.GetInt32(9),
+                    reader.GetInt32(10),
+                    reader.IsDBNull(11) ? null : reader.GetString(11),
+                    reader.GetString(12),
+                    reader.GetString(13)),
+                properties));
+        }
+
+        return (
+            ndjson,
+            sqliteFacts.Select(NormalizedFactSignature).Order(StringComparer.Ordinal).ToArray());
+    }
+
+    private static string NormalizedFactSignature(CodeFact fact) => JsonSerializer.Serialize(new
+    {
+        fact.Repo,
+        fact.ProjectPath,
+        fact.FactType,
+        fact.RuleId,
+        fact.EvidenceTier,
+        fact.SourceSymbol,
+        fact.TargetSymbol,
+        fact.ContractElement,
+        fact.Evidence.FilePath,
+        fact.Evidence.StartLine,
+        fact.Evidence.EndLine,
+        fact.Evidence.SnippetHash,
+        fact.Evidence.ExtractorId,
+        fact.Evidence.ExtractorVersion,
+        Properties = fact.Properties.OrderBy(pair => pair.Key, StringComparer.Ordinal)
+    });
 
     private static void Commit(string repo, string message, bool allowEmpty = false)
     {
