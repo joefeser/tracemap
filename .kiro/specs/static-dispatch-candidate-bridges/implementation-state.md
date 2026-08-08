@@ -127,6 +127,10 @@ Task 8 route-flow slice:
   truncation carries its limit/reason while leaving unknowable total and
   omitted counts unset; and shared dispatch gaps affect route-flow only when
   their abstraction participates in a selected route path.
+- A later exact-head Codex P2 tightened that scope boundary: dispatch gaps now
+  follow bounded nodes reached from selected traversal roots, including
+  incomplete branches omitted from successful terminal paths. Disconnected
+  graph-wide gaps remain excluded.
 
 - Audited the shipped `DependencyRegistered` shape and added deterministic
   service/implementation type symbol IDs plus a closed-set registration shape
@@ -272,6 +276,9 @@ Results:
 - Exact-head Codex follow-up validation: focused route-flow/path tests passed,
   114 tests; full `.NET` solution passed, 1,309 tests; targeted format,
   private-path guard, and diff check passed.
+- Reachable-incomplete-branch follow-up validation: focused route-flow/path
+  tests passed, 115 tests; full `.NET` solution passed, 1,310 tests; targeted
+  format, private-path guard, and diff check passed.
 - `dotnet format --verify-no-changes` over changed C# files: passed.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.

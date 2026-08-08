@@ -1463,6 +1463,49 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Client_call_preserves_dispatch_gap_reached_on_an_incomplete_selected_branch()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var caller = "Server.DownstreamClient.Load()";
+        var repository = "Server.CacheRepository.Query()";
+        var service = "Server.IStatusService.Get()";
+        var facts = new List<CodeFact>
+        {
+            HttpClientFact(server, "GET", "/api/downstream", "/api/downstream", "Services/DownstreamClient.cs", 10, caller),
+            CallFact(server, caller, repository, "Services/DownstreamClient.cs", 14),
+            QueryPatternFact(server, repository, "Infrastructure/CacheRepository.cs", 31, attachSymbol: true),
+            CallFact(server, caller, service, "Services/DownstreamClient.cs", 15, targetSymbolKind: "InterfaceMember")
+        };
+        for (var index = 0; index < 11; index++)
+        {
+            facts.Add(SymbolRelationshipFact(
+                server,
+                $"Server.StatusService{index}.Get()",
+                service,
+                $"Services/StatusService{index}.cs",
+                40 + index));
+        }
+
+        SqliteIndexWriter.Write(serverIndex, server, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            ClientCall: "GET /api/downstream",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query");
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "DispatchCandidateFanOut");
+        Assert.Equal("ReducedCoverage", result.Report.ReportCoverage);
+        Assert.True(result.Report.Summary.Truncated);
+        Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+    }
+
+    [Fact]
     public async Task Route_flow_marks_multiple_interface_candidates_ambiguous_but_keeps_direct_concrete_edge_stronger()
     {
         using var temp = new TempDirectory();
