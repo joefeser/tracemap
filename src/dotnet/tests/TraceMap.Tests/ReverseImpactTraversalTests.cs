@@ -539,6 +539,51 @@ public sealed class ReverseImpactTraversalTests
     }
 
     [Fact]
+    public void Type_seed_frontier_is_capped_before_materialization_with_member_provenance()
+    {
+        var type = Id("type", "Bounded.Service");
+        var firstMember = Id("method", "Bounded.Service.First()");
+        var secondMember = Id("method", "Bounded.Service.Second()");
+        var facts = new[]
+        {
+            SymbolFact("first-member", firstMember, "Bounded.Service.First()", "Method", type, file: "First.cs"),
+            SymbolFact("second-member", secondMember, "Bounded.Service.Second()", "Method", type, file: "Second.cs")
+        };
+
+        var result = ReverseImpactTraversal.Analyze(facts, new ReverseImpactOptions(type, 1, MaxFrontierSize: 1));
+
+        Assert.True(result.Truncated);
+        Assert.Equal([type], result.TraversalSeeds.Select(candidate => candidate.SymbolId));
+        var gap = Assert.Single(result.Gaps, candidate => candidate.TruncationReason == ReverseImpactTruncationReasons.Frontier);
+        Assert.Equal(firstMember, Assert.Single(gap.RelatedSymbolIds));
+        Assert.Equal("First.cs", gap.Evidence.FilePath);
+        Assert.Equal("csharp-semantic", gap.Evidence.ExtractorId);
+        Assert.Equal("1.2.3", gap.Evidence.ExtractorVersion);
+    }
+
+    [Fact]
+    public void Pre_dequeue_state_truncation_retains_synthetic_type_seed_provenance()
+    {
+        var type = Id("type", "Bounded.Service");
+        var member = Id("method", "Bounded.Service.Run()");
+        var facts = new[]
+        {
+            SymbolFact("member", member, "Bounded.Service.Run()", "Method", type, file: "Run.cs")
+        };
+
+        var result = ReverseImpactTraversal.Analyze(
+            facts,
+            new ReverseImpactOptions(type, 1, MaxTraversalStates: 1, MaxFrontierSize: 2));
+
+        Assert.True(result.Truncated);
+        var gap = Assert.Single(result.Gaps, candidate => candidate.TruncationReason == ReverseImpactTruncationReasons.TraversalStates);
+        Assert.Contains(member, gap.RelatedSymbolIds);
+        Assert.Equal("Run.cs", gap.Evidence.FilePath);
+        Assert.Equal(1, gap.Evidence.StartLine);
+        Assert.Equal(RuleIds.ReverseImpactGap, gap.Evidence.RuleId);
+    }
+
+    [Fact]
     public void Result_limit_is_deterministic_and_stops_at_the_first_omitted_edge()
     {
         var seed = Id("method", "Service.Target()");
@@ -612,6 +657,7 @@ public sealed class ReverseImpactTraversalTests
         Assert.Contains("exactly one scan, repository, and commit snapshot", traversal, StringComparison.Ordinal);
         Assert.Contains("TruncatedByLimit", traversal, StringComparison.Ordinal);
         Assert.Contains("defaults of 100000, 10000, and 10000", traversal, StringComparison.Ordinal);
+        Assert.Contains("do not cap caller-owned input enumeration", traversal, StringComparison.Ordinal);
         Assert.Contains("evidenceTier: Tier4Unknown", gap, StringComparison.Ordinal);
         Assert.Contains("ReverseImpactGap", gap, StringComparison.Ordinal);
         Assert.Contains("incomplete evidence, not proof", gap, StringComparison.Ordinal);

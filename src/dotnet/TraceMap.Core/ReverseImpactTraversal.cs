@@ -276,18 +276,18 @@ public static class ReverseImpactTraversal
 
         var seed = resolution.Seed;
         var traversalSeeds = new List<ReverseImpactSymbol> { seed };
+        ReverseImpactSymbol? omittedTraversalSeed = null;
         if (options.IncludeContainedMembers && TypeSeedKinds.Contains(seed.SymbolKind))
         {
-            traversalSeeds.AddRange(symbols.Values
+            var memberCapacity = options.MaxFrontierSize - 1;
+            var boundedMembers = symbols.Values
                 .Where(symbol => string.Equals(symbol.ContainingSymbolId, seed.SymbolId, StringComparison.Ordinal)
                     && MemberKinds.Contains(symbol.SymbolKind))
-                .OrderBy(symbol => symbol.SymbolId, StringComparer.Ordinal));
+                .Take(memberCapacity + 1)
+                .ToArray();
+            traversalSeeds.AddRange(boundedMembers.Take(memberCapacity));
+            omittedTraversalSeed = boundedMembers.ElementAtOrDefault(memberCapacity);
         }
-
-        traversalSeeds = traversalSeeds
-            .DistinctBy(symbol => symbol.SymbolId, StringComparer.Ordinal)
-            .OrderBy(symbol => symbol.SymbolId, StringComparer.Ordinal)
-            .ToList();
 
         var relationshipGaps = new List<ReverseImpactGap>();
         var edges = BuildEdges(facts, filters, relationshipGaps);
@@ -305,24 +305,20 @@ public static class ReverseImpactTraversal
             visitedStates.Add((traversalSeed.SymbolId, traversalSeed.SymbolId));
         }
 
-        var initialStates = traversalSeeds
-            .Select(symbol => new TraversalState(symbol.SymbolId, symbol.SymbolId, []))
-            .ToArray();
-        var frontier = new Queue<TraversalState>(initialStates.Take(options.MaxFrontierSize));
+        var frontier = new Queue<TraversalState>(traversalSeeds.Select(symbol => new TraversalState(symbol.SymbolId, symbol.SymbolId, [])));
         var impacts = new List<ReverseImpactItem>();
         var truncationGaps = new List<ReverseImpactGap>();
         var truncatedReasons = new HashSet<string>(StringComparer.Ordinal);
-        if (initialStates.Length > options.MaxFrontierSize)
+        if (omittedTraversalSeed is not null)
         {
-            var omitted = initialStates[options.MaxFrontierSize];
             AddTruncationGap(
                 truncationGaps,
                 truncatedReasons,
                 ReverseImpactTruncationReasons.Frontier,
                 options.MaxFrontierSize,
-                $"The traversal seed frontier exceeded the configured limit of {options.MaxFrontierSize}; seed `{omitted.SymbolId}` and later seeds were not traversed.",
-                [omitted.SymbolId],
-                FirstFactForSymbol(facts, omitted.SymbolId));
+                $"The traversal seed frontier exceeded the configured limit of {options.MaxFrontierSize}; seed `{omittedTraversalSeed.SymbolId}` and later seeds were not traversed.",
+                [omittedTraversalSeed.SymbolId],
+                FirstFactForSymbol(facts, omittedTraversalSeed.SymbolId));
         }
 
         var traversedStates = 0;
@@ -613,7 +609,7 @@ public static class ReverseImpactTraversal
             .ToArray();
     }
 
-    private static Dictionary<string, ReverseImpactSymbol> BuildSymbolInventory(IReadOnlyList<CodeFact> facts)
+    private static IReadOnlyDictionary<string, ReverseImpactSymbol> BuildSymbolInventory(IReadOnlyList<CodeFact> facts)
     {
         var occurrences = new Dictionary<string, List<ReverseImpactSymbol>>(StringComparer.Ordinal);
         foreach (var fact in facts)
@@ -663,10 +659,13 @@ public static class ReverseImpactTraversal
             }
         }
 
-        return occurrences.ToDictionary(
-            pair => pair.Key,
-            pair => MergeSymbolOccurrences(pair.Key, pair.Value),
-            StringComparer.Ordinal);
+        var symbols = new SortedDictionary<string, ReverseImpactSymbol>(StringComparer.Ordinal);
+        foreach (var (symbolId, candidates) in occurrences)
+        {
+            symbols[symbolId] = MergeSymbolOccurrences(symbolId, candidates);
+        }
+
+        return symbols;
     }
 
     private static ReverseImpactSymbol MergeSymbolOccurrences(string symbolId, IReadOnlyList<ReverseImpactSymbol> occurrences)
@@ -858,10 +857,9 @@ public static class ReverseImpactTraversal
             limit));
     }
 
-    private static CodeFact? FirstFactForSymbol(IReadOnlyList<CodeFact> facts, string symbolId) => facts
-        .Where(fact => SymbolRoles.Any(role => string.Equals(Property(fact, $"{role}SymbolId"), symbolId, StringComparison.Ordinal)))
-        .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
-        .FirstOrDefault();
+    private static CodeFact? FirstFactForSymbol(IReadOnlyList<CodeFact> facts, string symbolId) =>
+        facts.FirstOrDefault(fact => SymbolRoles.Any(role => string.Equals(Property(fact, $"{role}SymbolId"), symbolId, StringComparison.Ordinal)))
+        ?? facts.FirstOrDefault(fact => SymbolRoles.Any(role => string.Equals(Property(fact, $"{role}ContainingSymbolId"), symbolId, StringComparison.Ordinal)));
 
     private static IReadOnlyList<string> RelatedSymbolIds(CodeFact fact) =>
         SymbolRoles
@@ -903,6 +901,7 @@ public static class ReverseImpactTraversal
         "A query accepts facts from exactly one scan, repository, and commit snapshot; mixed snapshots fail closed before selector resolution or graph construction.",
         "Resolved queries include only gaps tied by canonical identity to the seed or visited path. Unscoped analysis gaps are retained only when a selector is not found because reduced coverage may explain the missing seed.",
         $"Traversal is bounded by depth and configurable state, frontier, and result limits (defaults: {ReverseImpactContract.DefaultMaxTraversalStates}, {ReverseImpactContract.DefaultMaxFrontierSize}, and {ReverseImpactContract.DefaultMaxResults}); truncation emits an evidence-backed TruncatedByLimit gap.",
+        "Traversal limits bound retained seeds, queued states, processed states, and emitted impacts after the supplied snapshot has been validated and indexed; they do not bound caller-owned input fact materialization or full-snapshot symbol/relationship preprocessing.",
         "Paths are bounded static evidence chains, not proof of runtime execution, reachability, severity, or completeness."
     ];
 
