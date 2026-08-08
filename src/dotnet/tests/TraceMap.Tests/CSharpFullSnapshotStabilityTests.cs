@@ -196,6 +196,12 @@ public sealed class CSharpFullSnapshotStabilityTests
         WriteFixture(repo, targetFileName: "Target.g.cs");
         var baseline = Scan(repo, Path.Combine(temp.Path, "baseline"));
         var targetSymbolId = SemanticCall(baseline, "src/TransitionSample/Caller.cs").Properties["targetSymbolId"];
+        Assert.Contains(baseline.Facts, fact =>
+            fact.FactType == FactTypes.TypeDeclared
+            && fact.RuleId == RuleIds.CSharpSemanticDeclarations
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.Evidence.FilePath == "src/TransitionSample/Target.g.cs"
+            && fact.TargetSymbol == "global::TransitionSample.Target");
 
         var scoped = Scan(
             repo,
