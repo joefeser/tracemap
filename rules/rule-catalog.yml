@@ -2650,9 +2650,12 @@ rules:
     emits:
       - interface-candidate path edge
       - override-candidate path edge
+      - registration-context-candidate annotation
     limitations:
       - Candidate edges are static review evidence only and do not prove runtime dispatch, dependency-injection target selection, object lifetime, branch feasibility, or production execution.
       - Candidates are derived only from source-local method-level relationship evidence; type-level inheritance or interface relationships do not substitute for member-level evidence in v1.
+      - DependencyRegistered facts may annotate and deterministically order an already relationship-backed candidate only when closed service and implementation type displays agree; registration evidence never creates a candidate edge by itself.
+      - Registration context does not resolve registration order, factories, keyed or named services, decorators, service locators, custom containers, branches, object lifetime, or runtime selection.
       - Override candidate chain traversal follows only `Overrides` relationship evidence and is bounded to a maximum depth of 5 with cycle protection.
       - Syntax-only, fallback, reduced-coverage, ambiguous, generated-code uncertain, or high fan-out candidates remain review-tier and must not strengthen downstream classifications.
 
@@ -2663,9 +2666,14 @@ rules:
     emits:
       - DispatchCandidateFanOut gap
       - DispatchCandidateTruncatedByLimit gap
+      - RegistrationCompatibilityUnproven gap
+      - UnsupportedRegistrationShape gap
+      - GenericCandidateNeedsReview gap
     limitations:
       - Gap rows describe limits of the current static evidence graph and must not be read as proof that no runtime target exists.
       - Candidate caps are deterministic traversal limits; omitted candidates may still be possible static review evidence outside the configured bound.
+      - Registration gaps preserve static context only and do not prove that a registration is invalid, unused, or absent at runtime.
+      - Open generic, factory, keyed, instance, scanning, custom-container, syntax-only, and compatibility-unproven registration shapes remain review gaps in v1.
       - Missing relationship evidence under reduced coverage must remain an unknown analysis gap rather than a clean absence conclusion.
 
   - id: combined.route-flow.logic-surface.v1
