@@ -131,6 +131,10 @@ Task 8 route-flow slice:
   follow bounded nodes reached from selected traversal roots, including
   incomplete branches omitted from successful terminal paths. Disconnected
   graph-wide gaps remain excluded.
+- The next exact-head follow-up aligned the auxiliary reachability walk with
+  traversal queue-frontier semantics rather than treating the frontier as a
+  cumulative node cap, and generalized duplicate removal to every shared
+  dispatch gap kind using gap kind plus affected abstraction identity.
 
 - Audited the shipped `DependencyRegistered` shape and added deterministic
   service/implementation type symbol IDs plus a closed-set registration shape
@@ -279,6 +283,9 @@ Results:
 - Reachable-incomplete-branch follow-up validation: focused route-flow/path
   tests passed, 115 tests; full `.NET` solution passed, 1,310 tests; targeted
   format, private-path guard, and diff check passed.
+- Frontier/deduplication follow-up validation: focused route-flow/path tests
+  passed, 121 tests; full `.NET` solution passed, 1,316 tests; targeted format,
+  private-path guard, and diff check passed.
 - `dotnet format --verify-no-changes` over changed C# files: passed.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.

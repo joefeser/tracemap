@@ -409,7 +409,7 @@ public static class CombinedRouteFlowReporter
             .Concat(sourceIdentityGaps)
             .Concat(endpointComposition.Gaps)
             .ToList();
-        RemoveDuplicateDispatchCandidateFanOutGaps(gaps);
+        RemoveDuplicateSharedDispatchGaps(gaps);
         RemoveCleanNoEvidenceGapsWhenBlocked(gaps);
         if (entryEvidence.Length == 0 && !endpointMissingRouteRoot)
         {
@@ -4254,24 +4254,32 @@ public static class CombinedRouteFlowReporter
         gaps.RemoveAll(gap => gap.GapKind == "NoRouteFlowEvidence");
     }
 
-    private static void RemoveDuplicateDispatchCandidateFanOutGaps(List<RouteFlowGap> gaps)
+    private static void RemoveDuplicateSharedDispatchGaps(List<RouteFlowGap> gaps)
     {
-        var inheritedPathFanOutNodeIds = gaps
-            .Where(gap => gap.GapKind == "DispatchCandidateFanOut")
+        var inheritedPathGapKeys = gaps
+            .Where(gap => IsSharedDispatchGapKind(gap.GapKind))
             .Where(gap => gap.GapId.StartsWith("gap:path:", StringComparison.Ordinal))
-            .Select(gap => gap.AffectedRowId)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(value => value!)
+            .Where(gap => !string.IsNullOrWhiteSpace(gap.AffectedRowId))
+            .Select(gap => $"{gap.GapKind}\0{gap.AffectedRowId}")
             .ToHashSet(StringComparer.Ordinal);
-        if (inheritedPathFanOutNodeIds.Count == 0)
+        if (inheritedPathGapKeys.Count == 0)
         {
             return;
         }
 
-        gaps.RemoveAll(gap => gap.GapKind == "DispatchCandidateFanOut"
+        gaps.RemoveAll(gap => IsSharedDispatchGapKind(gap.GapKind)
             && gap.GapId.StartsWith("gap:endpoint-composition:", StringComparison.Ordinal)
             && gap.AffectedRowId is not null
-            && inheritedPathFanOutNodeIds.Contains(gap.AffectedRowId));
+            && inheritedPathGapKeys.Contains($"{gap.GapKind}\0{gap.AffectedRowId}"));
+    }
+
+    private static bool IsSharedDispatchGapKind(string gapKind)
+    {
+        return gapKind is "DispatchCandidateFanOut"
+            or "DispatchCandidateTruncatedByLimit"
+            or "RegistrationCompatibilityUnproven"
+            or "UnsupportedRegistrationShape"
+            or "GenericCandidateNeedsReview";
     }
 
     private static void ApplyClassificationFilter(
@@ -4360,11 +4368,17 @@ public static class CombinedRouteFlowReporter
                 group => group.Key,
                 group => group.OrderBy(edge => edge.EdgeId, StringComparer.Ordinal).ToArray(),
                 StringComparer.Ordinal);
-        var queue = new Queue<(string NodeId, int Depth)>(starts.Select(nodeId => (nodeId, 0)));
-        var nodeLimit = Math.Max(maxFrontier, starts.Length);
-        while (queue.Count > 0 && reached.Count < nodeLimit)
+        var queue = new Queue<(IReadOnlyList<string> NodeIds, int Depth)>(starts.Select(nodeId => ((IReadOnlyList<string>)[nodeId], 0)));
+        while (queue.Count > 0)
         {
-            var (nodeId, depth) = queue.Dequeue();
+            if (queue.Count > maxFrontier)
+            {
+                break;
+            }
+
+            var (nodeIds, depth) = queue.Dequeue();
+            var nodeId = nodeIds[^1];
+            reached.Add(nodeId);
             if (depth >= maxDepth)
             {
                 continue;
@@ -4372,15 +4386,12 @@ public static class CombinedRouteFlowReporter
 
             foreach (var edge in outgoing.GetValueOrDefault(nodeId, []))
             {
-                if (reached.Count >= nodeLimit)
+                if (nodeIds.Contains(edge.ToNodeId, StringComparer.Ordinal))
                 {
-                    break;
+                    continue;
                 }
 
-                if (reached.Add(edge.ToNodeId))
-                {
-                    queue.Enqueue((edge.ToNodeId, depth + 1));
-                }
+                queue.Enqueue(([.. nodeIds, edge.ToNodeId], depth + 1));
             }
         }
 
