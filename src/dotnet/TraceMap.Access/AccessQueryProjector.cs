@@ -11,7 +11,10 @@ public static partial class AccessQueryProjector
         string Name,
         IReadOnlyList<string> SourceFieldStableKeys,
         string Coverage,
-        string OutputKind);
+        string OutputKind,
+        string AliasKind = "unknown",
+        string? SourceExpressionHash = null,
+        IReadOnlyList<string>? PivotSourceFieldStableKeys = null);
     private static readonly string[] SqlFunctionNames = [
         "abs", "avg", "count", "date", "dateadd", "datediff", "dlookup", "dsum", "first", "format",
         "iif", "instr", "isnull", "len", "max", "min", "nz", "sum", "val"];
@@ -124,6 +127,12 @@ public static partial class AccessQueryProjector
         var aggregate = MatchValue(masked, TransformPattern());
         var pivot = MatchValue(masked, PivotPattern());
         var value = aggregate is null ? null : ExtractAggregateValue(aggregate);
+        var aggregateSources = value is null
+            ? []
+            : ResolveExpressionFields(value, knownObjects, fieldLookups);
+        var pivotSources = pivot is null
+            ? []
+            : ResolveExpressionFields(pivot, knownObjects, fieldLookups);
         var pivotColumnsComplete = TryParsePivotColumnNames(sql, out var pivotColumnNames);
         var staticColumns = pivotColumnNames
             .Select(value => AccessSafeValues.RoleHash("access-query-pivot-column", value))
@@ -148,7 +157,7 @@ public static partial class AccessQueryProjector
             aggregate is null ? null : AccessSafeValues.RoleHash("access-query-aggregate", aggregate),
             value is null ? null : AccessSafeValues.RoleHash("access-query-value", value),
             pivot is null ? null : AccessSafeValues.RoleHash("access-query-pivot", pivot),
-            staticColumns, coverage);
+            staticColumns, coverage, aggregateSources, pivotSources);
     }
 
     internal static IReadOnlyList<CrosstabOutputCatalogEntry> ProjectCrosstabOutputCatalog(
@@ -178,7 +187,14 @@ public static partial class AccessQueryProjector
                 && !HasUnsupportedNamedFunction(analysisExpression)
                 ? "complete"
                 : "partial";
-            outputs.Add(new(ordinal, name, sources, coverage, "row-heading"));
+            outputs.Add(new(
+                ordinal,
+                name,
+                sources,
+                coverage,
+                "row-heading",
+                OutputAliasKind(expression),
+                AccessSafeValues.RoleHash("access-query-output-expression", analysisExpression)));
         }
 
         var nextOrdinal = selectItems.Count;
@@ -188,6 +204,9 @@ public static partial class AccessQueryProjector
             ? []
             : ResolveExpressionFields(aggregateValue, knownObjects, fieldLookups);
         var pivot = MatchValue(masked, PivotPattern());
+        var pivotSources = pivot is null
+            ? []
+            : ResolveExpressionFields(pivot, knownObjects, fieldLookups);
         var pivotColumnsComplete = TryParsePivotColumnNames(sql, out var pivotColumnNames);
         var aggregateSourceCoverage = selectComplete
             && pivotColumnsComplete
@@ -196,12 +215,21 @@ public static partial class AccessQueryProjector
             && ResolvesExpressionCompletely(aggregateValue, knownObjects, fieldLookups)
             && !HasUnsupportedNamedFunction(aggregateValue)
             && pivot is not null
+            && pivotSources.Count > 0
             && ResolvesExpressionCompletely(pivot, knownObjects, fieldLookups)
             && !HasUnsupportedNamedFunction(pivot)
             ? "complete"
             : "partial";
         foreach (var name in pivotColumnNames)
-            outputs.Add(new(nextOrdinal++, name, aggregateSources, aggregateSourceCoverage, "static-pivot"));
+            outputs.Add(new(
+                nextOrdinal++,
+                name,
+                aggregateSources,
+                aggregateSourceCoverage,
+                "static-pivot",
+                AccessQueryOutputAliasKinds.PivotLiteral,
+                pivot is null ? null : AccessSafeValues.RoleHash("access-query-pivot", pivot),
+                pivotSources));
 
         var duplicateNames = outputs
             .GroupBy(output => output.Name, StringComparer.OrdinalIgnoreCase)
@@ -251,7 +279,9 @@ public static partial class AccessQueryProjector
                 ordinal,
                 nameHash,
                 sourceFields,
-                sourceFields.Count == 1 && IsStaticDirectProjection(trimmed) ? "complete" : "partial");
+                sourceFields.Count == 1 && IsStaticDirectProjection(trimmed) ? "complete" : "partial",
+                OutputAliasKind(trimmed),
+                outputName is null ? null : AccessSafeValues.RoleHash("access-query-output-expression", analysisExpression));
         }).ToArray();
         var predicate = Clause(masked, "where", ["group", "order", ";", "$"]);
         var order = Clause(masked, "order\\s+by", [";", "$"]);
@@ -535,6 +565,15 @@ public static partial class AccessQueryProjector
         return direct.Success
             ? (direct.Groups["bracketed"].Success ? direct.Groups["bracketed"].Value : direct.Groups["plain"].Value).Trim()
             : null;
+    }
+
+    private static string OutputAliasKind(string expression)
+    {
+        var trimmed = expression.Trim();
+        if (OutputAliasPattern().IsMatch(trimmed)) return AccessQueryOutputAliasKinds.ExplicitAs;
+        if (AccessOutputAliasPattern().IsMatch(trimmed)) return AccessQueryOutputAliasKinds.AccessColon;
+        if (DirectSelectFieldPattern().IsMatch(trimmed)) return AccessQueryOutputAliasKinds.DirectField;
+        return AccessQueryOutputAliasKinds.Unknown;
     }
 
     private static string RemoveOutputAlias(string expression)
