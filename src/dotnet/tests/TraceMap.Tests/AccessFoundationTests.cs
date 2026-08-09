@@ -1069,11 +1069,14 @@ public sealed class AccessFoundationTests
             "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Format(Events.EventDate, 'yyyy'), Events.Category AS CategoryLabel FROM Events GROUP BY Format(Events.EventDate, 'yyyy'), Events.Category PIVOT Events.Month IN ('Jan');",
             known,
             fields);
-        Assert.Equal([1, 2], aliasedOutputs.Select(output => output.Ordinal));
-        Assert.Equal(["CategoryLabel", "Jan"], aliasedOutputs.Select(output => output.Name));
-        Assert.All(aliasedOutputs, output => Assert.Equal("complete", output.Coverage));
-        Assert.Equal(["field-row"], aliasedOutputs[0].SourceFieldStableKeys);
-        Assert.Equal("explicit-as", aliasedOutputs[0].AliasKind);
+        Assert.Equal([0, 1, 2], aliasedOutputs.Select(output => output.Ordinal));
+        Assert.Equal(["unresolved-output-0", "CategoryLabel", "Jan"], aliasedOutputs.Select(output => output.Name));
+        Assert.Equal("partial", aliasedOutputs[0].Coverage);
+        Assert.Equal("row-heading-unresolved-name", aliasedOutputs[0].OutputKind);
+        Assert.Equal("unknown", aliasedOutputs[0].AliasKind);
+        Assert.All(aliasedOutputs.Skip(1), output => Assert.Equal("complete", output.Coverage));
+        Assert.Equal(["field-row"], aliasedOutputs[1].SourceFieldStableKeys);
+        Assert.Equal("explicit-as", aliasedOutputs[1].AliasKind);
 
         var accessAliasedOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
             "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT CategoryLabel: Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
@@ -2780,31 +2783,35 @@ public sealed class AccessFoundationTests
             outputIdentity,
             0,
             "unknown",
-            [],
+            ["source-field"],
             "partial",
             "static-crosstab",
-            "pivot-literal",
-            "pivot-expression-hash",
+            "unknown",
+            "output-expression-hash",
             ["pivot-field"],
-            "static-pivot");
+            "row-heading-unresolved-name");
         projection = projection with
         {
             Queries = [query with { OutputFields = [output] }],
-            Gaps = [new("AccessQueryOutputSourceUnavailable", "query-output-field", outputIdentity.StableKey, RuleIds.LegacyAccessQuery)]
+            Gaps = [new("AccessQueryOutputExpressionPartial", "query-output-field", outputIdentity.StableKey, RuleIds.LegacyAccessQuery)]
         };
 
         var result = AccessFactBuilder.Build(input, projection, new(temp.Path, "fixture.accdb", input.OutputFullPath));
         var declaration = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessQueryDeclared);
         var outputDeclaration = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AccessQueryOutputDeclared);
         var gap = Assert.Single(result.Facts, fact =>
-            fact.Properties.GetValueOrDefault("classification") == "AccessQueryOutputSourceUnavailable");
+            fact.Properties.GetValueOrDefault("classification") == "AccessQueryOutputExpressionPartial");
 
         Assert.Equal(outputIdentity.StableKey, gap.TargetSymbol);
         Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, outputDeclaration.EvidenceTier);
-        Assert.Equal("pivot-literal", outputDeclaration.Properties["aliasKind"]);
-        Assert.Equal("static-pivot", outputDeclaration.Properties["outputKind"]);
-        Assert.Equal("pivot-expression-hash", outputDeclaration.Properties["sourceExpressionHash"]);
+        Assert.Equal("unknown", outputDeclaration.Properties["aliasKind"]);
+        Assert.Equal("row-heading-unresolved-name", outputDeclaration.Properties["outputKind"]);
+        Assert.Equal("output-expression-hash", outputDeclaration.Properties["sourceExpressionHash"]);
         Assert.Equal("pivot-field", outputDeclaration.Properties["pivotSourceFieldStableKeys"]);
+        var outputSource = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.AccessQueryOutputSourceCandidate
+            && fact.Properties.GetValueOrDefault("sourceRole") == "output-expression");
+        Assert.Equal("source-field", outputSource.TargetSymbol);
         var pivotSource = Assert.Single(result.Facts, fact =>
             fact.FactType == FactTypes.AccessQueryOutputSourceCandidate
             && fact.Properties.GetValueOrDefault("sourceRole") == "pivot-expression");
@@ -2818,9 +2825,9 @@ public sealed class AccessFoundationTests
                 PropertyNameCaseInsensitive = true
             })!)
             .Single(fact => fact.FactId == outputDeclaration.FactId);
-        Assert.Equal("pivot-literal", persistedOutput.Properties["aliasKind"]);
-        Assert.Equal("static-pivot", persistedOutput.Properties["outputKind"]);
-        Assert.Equal("pivot-expression-hash", persistedOutput.Properties["sourceExpressionHash"]);
+        Assert.Equal("unknown", persistedOutput.Properties["aliasKind"]);
+        Assert.Equal("row-heading-unresolved-name", persistedOutput.Properties["outputKind"]);
+        Assert.Equal("output-expression-hash", persistedOutput.Properties["sourceExpressionHash"]);
         Assert.Equal("pivot-field", persistedOutput.Properties["pivotSourceFieldStableKeys"]);
 
         await using var connection = new SqliteConnection($"Data Source={Path.Combine(input.OutputFullPath, "index.sqlite")}");
@@ -2830,9 +2837,9 @@ public sealed class AccessFoundationTests
         command.Parameters.AddWithValue("$fact_id", outputDeclaration.FactId);
         var persistedProperties = Assert.IsType<string>(await command.ExecuteScalarAsync());
         using var properties = JsonDocument.Parse(persistedProperties);
-        Assert.Equal("pivot-literal", properties.RootElement.GetProperty("aliasKind").GetString());
-        Assert.Equal("static-pivot", properties.RootElement.GetProperty("outputKind").GetString());
-        Assert.Equal("pivot-expression-hash", properties.RootElement.GetProperty("sourceExpressionHash").GetString());
+        Assert.Equal("unknown", properties.RootElement.GetProperty("aliasKind").GetString());
+        Assert.Equal("row-heading-unresolved-name", properties.RootElement.GetProperty("outputKind").GetString());
+        Assert.Equal("output-expression-hash", properties.RootElement.GetProperty("sourceExpressionHash").GetString());
         Assert.Equal("pivot-field", properties.RootElement.GetProperty("pivotSourceFieldStableKeys").GetString());
     }
 

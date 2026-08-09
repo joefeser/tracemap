@@ -177,11 +177,12 @@ public static partial class AccessQueryProjector
         for (var ordinal = 0; ordinal < selectItems.Count; ordinal++)
         {
             var expression = selectItems[ordinal];
-            var name = StaticOutputName(expression);
-            if (name is null) continue;
+            var staticName = StaticOutputName(expression);
+            var name = staticName ?? $"unresolved-output-{ordinal}";
             var analysisExpression = RemoveOutputAlias(expression);
             var sources = ResolveExpressionFields(analysisExpression, knownObjects, fieldLookups);
-            var coverage = selectComplete
+            var coverage = staticName is not null
+                && selectComplete
                 && sources.Count > 0
                 && ResolvesExpressionCompletely(analysisExpression, knownObjects, fieldLookups)
                 && !HasUnsupportedNamedFunction(analysisExpression)
@@ -192,7 +193,7 @@ public static partial class AccessQueryProjector
                 name,
                 sources,
                 coverage,
-                "row-heading",
+                staticName is null ? "row-heading-unresolved-name" : "row-heading",
                 OutputAliasKind(expression),
                 AccessSafeValues.RoleHash("access-query-output-expression", analysisExpression)));
         }
