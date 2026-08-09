@@ -2819,16 +2819,24 @@ public sealed class AccessFoundationTests
         Assert.Equal(declaration.FactId, gap.Properties["supportingFactIds"]);
 
         await AccessArtifactWriter.WriteAsync(input.OutputFullPath, result, AccessLimits.Default);
-        var persistedOutput = File.ReadLines(Path.Combine(input.OutputFullPath, "facts.ndjson"))
+        var persistedFacts = File.ReadLines(Path.Combine(input.OutputFullPath, "facts.ndjson"))
             .Select(line => JsonSerializer.Deserialize<CodeFact>(line, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             })!)
+            .ToArray();
+        var persistedOutput = persistedFacts
             .Single(fact => fact.FactId == outputDeclaration.FactId);
         Assert.Equal("unknown", persistedOutput.Properties["aliasKind"]);
         Assert.Equal("row-heading-unresolved-name", persistedOutput.Properties["outputKind"]);
         Assert.Equal("output-expression-hash", persistedOutput.Properties["sourceExpressionHash"]);
         Assert.Equal("pivot-field", persistedOutput.Properties["pivotSourceFieldStableKeys"]);
+        Assert.Contains(persistedFacts, fact =>
+            fact.FactId == outputSource.FactId
+            && fact.Properties.GetValueOrDefault("sourceRole") == "output-expression");
+        Assert.Contains(persistedFacts, fact =>
+            fact.FactId == pivotSource.FactId
+            && fact.Properties.GetValueOrDefault("sourceRole") == "pivot-expression");
 
         await using var connection = new SqliteConnection($"Data Source={Path.Combine(input.OutputFullPath, "index.sqlite")}");
         await connection.OpenAsync();
