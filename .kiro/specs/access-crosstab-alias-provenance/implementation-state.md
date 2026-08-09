@@ -29,6 +29,10 @@
   statement termination is also located outside bracketed identifiers and
   parenthesized expressions, so punctuation in a field such as
   `[Month;Code]` cannot truncate recoverable pivot lineage;
+  the complete output-field and crosstab projection constructors are explicitly
+  designated for source-generated JSON deserialization, and the worker protocol
+  now round-trips populated provenance fields so compatibility overloads cannot
+  make a successful Access worker result unreadable;
   aggregate aliases are stripped
   before value/source resolution so a supported aliased `TRANSFORM` expression
   retains complete lineage.
