@@ -1471,13 +1471,19 @@ public sealed class CombinedRouteFlowTests
         var server = Manifest("server", "tracemap-milestone15");
         var caller = "Server.DownstreamClient.Load()";
         var repository = "Server.CacheRepository.Query()";
+        var firstStep = "Server.StatusPipeline.First()";
+        var secondStep = "Server.StatusPipeline.Second()";
+        var thirdStep = "Server.StatusPipeline.Third()";
         var service = "Server.IStatusService.Get()";
         var facts = new List<CodeFact>
         {
             HttpClientFact(server, "GET", "/api/downstream", "/api/downstream", "Services/DownstreamClient.cs", 10, caller),
             CallFact(server, caller, repository, "Services/DownstreamClient.cs", 14),
             QueryPatternFact(server, repository, "Infrastructure/CacheRepository.cs", 31, attachSymbol: true),
-            CallFact(server, caller, service, "Services/DownstreamClient.cs", 15, targetSymbolKind: "InterfaceMember")
+            CallFact(server, caller, firstStep, "Services/DownstreamClient.cs", 15),
+            CallFact(server, firstStep, secondStep, "Services/StatusPipeline.cs", 20),
+            CallFact(server, secondStep, thirdStep, "Services/StatusPipeline.cs", 21),
+            CallFact(server, thirdStep, service, "Services/StatusPipeline.cs", 22, targetSymbolKind: "InterfaceMember")
         };
         for (var index = 0; index < 11; index++)
         {
@@ -1496,7 +1502,8 @@ public sealed class CombinedRouteFlowTests
             combinedPath,
             Path.Combine(temp.Path, "route-flow"),
             ClientCall: "GET /api/downstream",
-            ToSurface: "sql-query"));
+            ToSurface: "sql-query",
+            MaxDepth: 10));
 
         Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query");
         Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "DispatchCandidateFanOut");
@@ -1973,6 +1980,85 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public void Route_flow_reachability_scope_uses_queue_frontier_not_cumulative_node_count()
+    {
+        var root = new CombinedPathNode(
+            NodeId: "node:root",
+            NodeKind: "Method",
+            DisplayName: "Server.Root()",
+            SourceIndexId: "server",
+            SourceLabel: "server",
+            ScanId: "scan-server",
+            CommitSha: "abc123",
+            SymbolId: "Server.Root()",
+            CombinedFactId: "server:root",
+            RuleId: RuleIds.CSharpSemanticCallGraph,
+            EvidenceTier: EvidenceTiers.Tier1Semantic,
+            FilePath: "Root.cs",
+            StartLine: 1,
+            EndLine: 1,
+            SurfaceKind: null,
+            SurfaceName: null,
+            HttpMethod: null,
+            NormalizedPathKey: null,
+            OperationName: null,
+            TableName: null,
+            ColumnNames: null,
+            SourceKind: null,
+            ShapeHash: null,
+            TextHash: null,
+            TextLength: null,
+            PackageName: null,
+            ConfigKey: null);
+        static CombinedPathEdge Edge(string id, string from, string to)
+        {
+            return new CombinedPathEdge(
+                id,
+                "calls",
+                from,
+                to,
+                CombinedDependencyPathClassifications.StrongStaticPath,
+                RuleIds.CSharpSemanticCallGraph,
+                EvidenceTiers.Tier1Semantic,
+                [$"fact:{id}"],
+                [$"combined:{id}"],
+                "Root.cs",
+                1,
+                1);
+        }
+
+        var selectedPath = new CombinedPath(
+            "path:selected",
+            CombinedDependencyPathClassifications.StrongStaticPath,
+            "High",
+            0,
+            root.NodeId,
+            root.NodeId,
+            [root],
+            [],
+            [],
+            [],
+            []);
+        var edges = new[]
+        {
+            Edge("edge:terminal", root.NodeId, "node:terminal"),
+            Edge("edge:branch-1", root.NodeId, "node:branch-1"),
+            Edge("edge:branch-2", "node:branch-1", "node:branch-2"),
+            Edge("edge:branch-3", "node:branch-2", "node:branch-3"),
+            Edge("edge:abstraction", "node:branch-3", "node:abstraction")
+        };
+        var method = typeof(CombinedRouteFlowReporter).GetMethod(
+            "ReachableSelectedTraversalNodeIds",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(method);
+
+        var reached = Assert.IsAssignableFrom<IReadOnlySet<string>>(method!.Invoke(null, [new[] { selectedPath }, edges, 10, 2]));
+
+        Assert.Contains("node:abstraction", reached);
+        Assert.True(reached.Count > 2);
+    }
+
+    [Fact]
     public void Route_flow_path_gap_preserves_available_provenance_metadata()
     {
         var pathGap = new CombinedPathGap(
@@ -2016,6 +2102,51 @@ public sealed class CombinedRouteFlowTests
         var json = JsonSerializer.Serialize(pathGap, CombinedDependencyReporter.JsonOptions);
         Assert.DoesNotContain("candidateCount", json, StringComparison.Ordinal);
         Assert.DoesNotContain("candidateLimit", json, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("DispatchCandidateFanOut")]
+    [InlineData("DispatchCandidateTruncatedByLimit")]
+    [InlineData("RegistrationCompatibilityUnproven")]
+    [InlineData("UnsupportedRegistrationShape")]
+    [InlineData("GenericCandidateNeedsReview")]
+    public void Route_flow_deduplicates_shared_dispatch_gaps_by_kind_and_node(string gapKind)
+    {
+        const string nodeId = "node:server:abstraction";
+        var gaps = new List<RouteFlowGap>
+        {
+            new(
+                $"gap:path:{gapKind}",
+                gapKind,
+                "Inherited path gap.",
+                "combined.route-flow.gap.v1",
+                EvidenceTiers.Tier4Unknown,
+                "ReducedCoverage",
+                "server",
+                nodeId,
+                [],
+                ["Path gap limitation."]),
+            new(
+                $"gap:endpoint-composition:{gapKind}:duplicate",
+                gapKind,
+                "Endpoint composition gap.",
+                "combined.route-flow.gap.v1",
+                EvidenceTiers.Tier4Unknown,
+                "ReducedCoverage",
+                "server",
+                nodeId,
+                [],
+                ["Endpoint gap limitation."])
+        };
+        var method = typeof(CombinedRouteFlowReporter).GetMethod(
+            "RemoveDuplicateSharedDispatchGaps",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(method);
+
+        method!.Invoke(null, [gaps]);
+
+        var gap = Assert.Single(gaps);
+        Assert.StartsWith("gap:path:", gap.GapId, StringComparison.Ordinal);
     }
 
     [Fact]
