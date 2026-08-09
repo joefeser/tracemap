@@ -26,6 +26,9 @@
   crosstab pivot parsing now binds the static column list to the top-level `IN`
   clause that terminates the pivot statement so nested or preceding expression
   `IN` operators cannot truncate provenance or manufacture complete coverage;
+  statement termination is also located outside bracketed identifiers and
+  parenthesized expressions, so punctuation in a field such as
+  `[Month;Code]` cannot truncate recoverable pivot lineage;
   aggregate aliases are stripped
   before value/source resolution so a supported aliased `TRANSFORM` expression
   retains complete lineage.

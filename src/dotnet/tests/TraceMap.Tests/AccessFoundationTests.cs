@@ -1015,7 +1015,8 @@ public sealed class AccessFoundationTests
                 ["Category"] = [new(field, 0, "text", 64, false)],
                 ["Amount"] = [new(new(null, "amount", "field-amount"), 1, "decimal", 16, false)],
                 ["Month"] = [new(new(null, "month", "field-month"), 2, "text", 16, false)],
-                ["EventDate"] = [new(new(null, "event-date", "field-event-date"), 3, "date", 8, false)]
+                ["Month;Code"] = [new(new(null, "month-code", "field-month-code"), 3, "text", 16, false)],
+                ["EventDate"] = [new(new(null, "event-date", "field-event-date"), 4, "date", 8, false)]
             }
         };
 
@@ -1096,6 +1097,22 @@ public sealed class AccessFoundationTests
         Assert.All(topLevelInOutputs, output => Assert.Equal("complete", output.Coverage));
         Assert.Equal(["field-month"], topLevelInOutputs[1].PivotSourceFieldStableKeys);
         Assert.Equal("complete", topLevelInLineage.Coverage);
+
+        const string bracketedSemicolonSql =
+            "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.[Month;Code] IN ('Jan');";
+        var bracketedSemicolonOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            bracketedSemicolonSql,
+            known,
+            fields);
+        var bracketedSemicolonLineage = AccessQueryProjector.ProjectCrosstabLineage(
+            bracketedSemicolonSql,
+            known,
+            fields);
+        Assert.Equal(["Category", "Jan"], bracketedSemicolonOutputs.Select(output => output.Name));
+        Assert.All(bracketedSemicolonOutputs, output => Assert.Equal("complete", output.Coverage));
+        Assert.Equal(["field-month-code"], bracketedSemicolonOutputs[1].PivotSourceFieldStableKeys);
+        Assert.Equal("complete", bracketedSemicolonLineage.Coverage);
+        Assert.Equal(["field-month-code"], bracketedSemicolonLineage.PivotSourceFieldStableKeys);
 
         var aliasedOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
             "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Format(Events.EventDate, 'yyyy'), Events.Category AS CategoryLabel FROM Events GROUP BY Format(Events.EventDate, 'yyyy'), Events.Category PIVOT Events.Month IN ('Jan');",
