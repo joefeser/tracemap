@@ -132,6 +132,17 @@ public sealed class CombinedReverseQueryTests
     }
 
     [Fact]
+    public void Reverse_mixed_path_root_is_capped_when_any_supporting_path_is_a_dispatch_candidate()
+    {
+        var strong = ReversePath("strong", CombinedReverseClassifications.StrongStaticReversePath, ["combined.reverse.path.v1"]);
+        var candidate = ReversePath("candidate", CombinedReverseClassifications.NeedsReviewReversePath, ["combined.dispatch-candidate.v1", "combined.reverse.path.v1"]);
+
+        Assert.Equal(
+            CombinedReverseClassifications.NeedsReviewReversePath,
+            CombinedReverseReporter.AggregateRootClassification([strong, candidate]));
+    }
+
+    [Fact]
     public async Task Reverse_selectors_caps_and_source_matching_are_deterministic()
     {
         using var temp = new TempDirectory();
@@ -627,6 +638,22 @@ public sealed class CombinedReverseQueryTests
             new CombinedReverseOptions(indexPath, Path.Combine(temp.Path, "reverse"))));
         Assert.Contains("combined index", ex.Message);
     }
+
+    private static CombinedReversePath ReversePath(string id, string classification, IReadOnlyList<string> ruleIds) =>
+        new(
+            id,
+            "root",
+            "surface",
+            classification,
+            "Low",
+            0,
+            [],
+            [],
+            ruleIds,
+            [],
+            [],
+            [],
+            []);
 
     private static ScanManifest Manifest(
         string repo,
