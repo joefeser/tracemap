@@ -96,6 +96,7 @@ public sealed record AccessQueryDependencyProjection(
     string TargetKind,
     string Coverage);
 
+[method: JsonConstructor]
 public sealed record AccessQueryOutputFieldProjection(
     AccessSafeIdentity Identity,
     int Ordinal,
@@ -157,6 +158,7 @@ public sealed record AccessQueryActionProjection(
     IReadOnlyList<int> ParameterOrdinals,
     string Coverage);
 
+[method: JsonConstructor]
 public sealed record AccessQueryCrosstabProjection(
     IReadOnlyList<string> RowHeadingFieldStableKeys,
     string? AggregateExpressionHash,

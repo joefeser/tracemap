@@ -3145,6 +3145,41 @@ public sealed class AccessFoundationTests
         await File.WriteAllBytesAsync(databasePath, [1, 2, 3, 4]);
         var input = Input(databasePath, Path.Combine(temp.Path, "out"));
         var projection = Projection(input) with { AccessProcessId = 42 };
+        var query = Assert.Single(projection.Queries);
+        var databaseSeed = AccessSafeValues.DatabaseIdentitySeed(
+            input.RepositoryIdentityHash,
+            input.CommitSha,
+            input.DatabaseRelativePath,
+            input.DatabaseHash);
+        var outputIdentity = AccessSafeValues.Identity(
+            databaseSeed,
+            $"query-field-{query.Identity.StableKey}",
+            "Category",
+            0);
+        var output = new AccessQueryOutputFieldProjection(
+            outputIdentity,
+            0,
+            "text",
+            ["source-field"],
+            "complete",
+            AccessQueryOutputEvidenceOrigins.StaticCrosstab,
+            AccessQueryOutputAliasKinds.DirectField,
+            "source-expression-hash",
+            ["pivot-field"],
+            "row-heading");
+        var crosstab = new AccessQueryCrosstabProjection(
+            ["row-heading-field"],
+            "aggregate-expression-hash",
+            "value-expression-hash",
+            "pivot-expression-hash",
+            ["static-column-hash"],
+            "complete",
+            ["aggregate-source-field"],
+            ["pivot-source-field"]);
+        projection = projection with
+        {
+            Queries = [query with { OutputFields = [output], CrosstabLineage = crosstab }]
+        };
         var token = "protocol-token";
         var owned = new OwnedAccessProcess(42, "MSACCESS", 1, DateTimeOffset.UtcNow);
         var frames = string.Join('\n',
