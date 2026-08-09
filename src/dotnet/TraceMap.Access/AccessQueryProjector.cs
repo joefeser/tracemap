@@ -906,13 +906,45 @@ public static partial class AccessQueryProjector
         if (pivotIndex < 0) return false;
 
         expressionStart = pivotIndex + "pivot".Length;
-        var semicolon = masked.IndexOf(';', expressionStart);
+        var semicolon = FirstTopLevelSemicolon(masked, expressionStart);
         var clauseEnd = semicolon < 0 ? masked.Length : semicolon;
         inIndex = TopLevelKeywordIndexes(masked, "in", expressionStart)
             .Cast<int?>()
             .LastOrDefault(index => index < clauseEnd);
         expressionEnd = inIndex ?? clauseEnd;
         return expressionStart < expressionEnd;
+    }
+
+    private static int FirstTopLevelSemicolon(string value, int start)
+    {
+        var parentheses = 0;
+        var squareBrackets = 0;
+        for (var index = start; index < value.Length; index++)
+        {
+            var current = value[index];
+            if (current == '[')
+            {
+                squareBrackets++;
+            }
+            else if (current == ']' && squareBrackets > 0)
+            {
+                squareBrackets--;
+            }
+            else if (squareBrackets == 0 && current == '(')
+            {
+                parentheses++;
+            }
+            else if (squareBrackets == 0 && current == ')' && parentheses > 0)
+            {
+                parentheses--;
+            }
+            else if (squareBrackets == 0 && parentheses == 0 && current == ';')
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
     private static string? UnquotePivotLiteral(string value)
