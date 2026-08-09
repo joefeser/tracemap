@@ -22,7 +22,10 @@
   retained; empty crosstab output catalogs emit an explicit rule-backed gap;
   calculated row-heading expressions whose output name cannot be recovered are
   retained with a deterministic ordinal identity, partial coverage, source
-  candidates where provable, and an output-scoped gap rather than disappearing.
+  candidates where provable, and an output-scoped gap rather than disappearing;
+  crosstab pivot parsing now binds the static column list to the top-level `IN`
+  clause so an `IN` operator nested inside the pivot expression cannot truncate
+  provenance or manufacture complete coverage.
 - Validation procedure: followed the Mac-only Microsoft Access adapter smoke in
   `docs/VALIDATION.md`. The private Windows corpus rerun remains explicitly
   deferred because this correction does not widen COM or require a real

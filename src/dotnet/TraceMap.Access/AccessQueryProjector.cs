@@ -125,7 +125,7 @@ public static partial class AccessQueryProjector
         var rowExpressions = select is null ? [] : SplitSelectItems(select);
         var row = rowExpressions.SelectMany(item => ResolveExpressionFields(item, knownObjects, fieldLookups)).Distinct(StringComparer.Ordinal).ToArray();
         var aggregate = MatchValue(masked, TransformPattern());
-        var pivot = MatchValue(masked, PivotPattern());
+        var pivot = PivotExpression(masked);
         var value = aggregate is null ? null : ExtractAggregateValue(aggregate);
         var aggregateSources = value is null
             ? []
@@ -204,7 +204,7 @@ public static partial class AccessQueryProjector
         var aggregateSources = aggregateValue is null
             ? []
             : ResolveExpressionFields(aggregateValue, knownObjects, fieldLookups);
-        var pivot = MatchValue(masked, PivotPattern());
+        var pivot = PivotExpression(masked);
         var pivotSources = pivot is null
             ? []
             : ResolveExpressionFields(pivot, knownObjects, fieldLookups);
@@ -845,21 +845,74 @@ public static partial class AccessQueryProjector
     private static bool TryParsePivotColumnNames(string sql, out IReadOnlyList<string> values)
     {
         values = [];
-        var match = PivotPattern().Match(MaskLiteralsAndComments(sql));
-        if (!match.Success) return false;
         var masked = MaskLiteralsAndComments(sql);
-        var inMatch = Regex.Match(masked[match.Index..], @"(?is)\bin\s*\((?<values>[^)]*)\)");
-        if (!inMatch.Success) return false;
-        var original = sql[(match.Index + inMatch.Index)..];
-        var originalValues = Regex.Match(original, @"(?is)\bin\s*\((?<values>[^)]*)\)");
-        if (!originalValues.Success) return false;
-        var items = SplitSelectItems(originalValues.Groups["values"].Value);
+        if (!TryLocatePivotClause(masked, out _, out _, out var inIndex) || inIndex is null) return false;
+        var open = inIndex.Value + "in".Length;
+        while (open < masked.Length && char.IsWhiteSpace(masked[open])) open++;
+        if (open >= masked.Length || masked[open] != '(') return false;
+
+        var depth = 0;
+        var bracket = false;
+        var close = -1;
+        for (var index = open; index < masked.Length; index++)
+        {
+            var current = masked[index];
+            if (current == '[') bracket = true;
+            else if (current == ']') bracket = false;
+            else if (!bracket && current == '(') depth++;
+            else if (!bracket && current == ')' && --depth == 0)
+            {
+                close = index;
+                break;
+            }
+        }
+        if (close < 0 || masked[(close + 1)..].Trim().TrimEnd(';').Trim().Length > 0) return false;
+
+        var items = SplitSelectItems(sql[(open + 1)..close]);
         var parsed = items
             .Select(value => UnquotePivotLiteral(value.Trim()))
             .ToArray();
         if (items.Count == 0 || parsed.Any(value => value is null)) return false;
         values = parsed.Select(value => value!).ToArray();
         return values.Count > 0;
+    }
+
+    private static string? PivotExpression(string masked)
+    {
+        if (!TryLocatePivotClause(masked, out var start, out var end, out _)) return null;
+        var expression = masked[start..end].Trim();
+        return expression.Length == 0 ? null : expression;
+    }
+
+    private static bool TryLocatePivotClause(
+        string masked,
+        out int expressionStart,
+        out int expressionEnd,
+        out int? inIndex)
+    {
+        expressionStart = 0;
+        expressionEnd = 0;
+        inIndex = null;
+        var pivotIndexes = TopLevelKeywordIndexes(masked, "pivot", 0);
+        var pivotIndex = pivotIndexes.Count == 1 ? pivotIndexes[0] : -1;
+        if (pivotIndex < 0 && !HasBalancedSqlDelimiters(masked))
+        {
+            var fallbackIndexes = Regex.Matches(masked, @"(?i)\bpivot\b", RegexOptions.CultureInvariant)
+                .Cast<Match>()
+                .Select(match => match.Index)
+                .ToArray();
+            if (fallbackIndexes.Length == 1) pivotIndex = fallbackIndexes[0];
+        }
+        if (pivotIndex < 0) return false;
+
+        expressionStart = pivotIndex + "pivot".Length;
+        var semicolon = masked.IndexOf(';', expressionStart);
+        var clauseEnd = semicolon < 0 ? masked.Length : semicolon;
+        inIndex = TopLevelKeywordIndexes(masked, "in", expressionStart)
+            .Cast<int?>()
+            .FirstOrDefault(index => index < clauseEnd);
+        expressionEnd = inIndex ?? clauseEnd;
+        return expressionStart < expressionEnd;
     }
 
     private static string? UnquotePivotLiteral(string value)
@@ -1050,9 +1103,6 @@ public static partial class AccessQueryProjector
 
     [GeneratedRegex(@"(?is)\btransform\b(?<value>.*?)\bselect\b", RegexOptions.CultureInvariant)]
     private static partial Regex TransformPattern();
-
-    [GeneratedRegex(@"(?is)\bpivot\b(?<value>.*?)(?:\bin\b|;|$)", RegexOptions.CultureInvariant)]
-    private static partial Regex PivotPattern();
 
     [GeneratedRegex(@"(?ix)(?:(?:\[(?<table>[^\]]+)\]|(?<table>[A-Za-z_][A-Za-z0-9_]*))\s*\.\s*)?(?:\[(?<field>[^\]]+)\]|(?<field>[A-Za-z_][A-Za-z0-9_]*))", RegexOptions.CultureInvariant)]
     private static partial Regex FieldReferencePattern();
