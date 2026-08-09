@@ -989,6 +989,13 @@ public static class CombinedReverseReporter
             notes.Add(new CombinedPathNote("SymbolReconciliationBoundary", "Symbol reconciliation hops are review-tier evidence, not compiler-resolved call evidence."));
         }
 
+        if (edges.Any(IsStaticDispatchCandidate))
+        {
+            notes.Add(new CombinedPathNote(
+                "StaticDispatchCandidate",
+                "Static dispatch candidate hops preserve compiler-backed relationship evidence for review, but do not prove runtime dispatch or a selected dependency-injection implementation."));
+        }
+
         return notes
             .OrderBy(note => note.Code, StringComparer.Ordinal)
             .ThenBy(note => note.Message, StringComparer.Ordinal)
@@ -1127,6 +1134,11 @@ public static class CombinedReverseReporter
             return CombinedReverseClassifications.NeedsReviewReversePath;
         }
 
+        if (edges.Any(IsStaticDispatchCandidate))
+        {
+            return CombinedReverseClassifications.NeedsReviewReversePath;
+        }
+
         if (edges.Any(edge => edge.EdgeKind == "endpoint-match" && (edge.Classification != CombinedEndpointClassifications.MatchedEndpoint || edge.EvidenceTier != "Tier2Structural"))
             || edges.Any(edge => edge.EvidenceTier == "Tier3SyntaxOrTextual" || edge.EdgeKind == "symbol-reconciliation"))
         {
@@ -1137,6 +1149,10 @@ public static class CombinedReverseReporter
             ? CombinedReverseClassifications.ProbableStaticReversePath
             : CombinedReverseClassifications.StrongStaticReversePath;
     }
+
+    private static bool IsStaticDispatchCandidate(CombinedPathEdge edge) =>
+        edge.EdgeKind is "interface-candidate" or "override-candidate"
+        || string.Equals(edge.RuleId, "combined.dispatch-candidate.v1", StringComparison.Ordinal);
 
     private static CombinedReverseGap FromPathGap(CombinedPathGap gap)
     {

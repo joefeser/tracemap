@@ -108,7 +108,8 @@ public sealed record CombinedImpactPathSummary(
     IReadOnlyList<string> SourceTransitions,
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> SupportingEdgeIds,
-    IReadOnlyList<KeyValuePair<string, string>> TerminalSurfaceMetadata);
+    IReadOnlyList<KeyValuePair<string, string>> TerminalSurfaceMetadata,
+    IReadOnlyList<string>? RuleIds = null);
 
 public sealed record CombinedImpactGap(
     string GapId,
@@ -504,7 +505,7 @@ public static class CombinedChangeImpactReporter
             var after = await afterTask;
             var pathContext = ClassifyPathContext(item, before, after);
             globalGaps.AddRange(pathContext.Gaps);
-            contextual.Add(item with { PathContext = pathContext });
+            contextual.Add(ApplyPathContext(item, pathContext));
         }
 
         return contextual;
@@ -659,6 +660,18 @@ public static class CombinedChangeImpactReporter
             return CombinedImpactClassifications.NoPathEvidence;
         }
 
+        if (before.ReportCoverage == "UnknownAnalysisGap"
+            || after.ReportCoverage == "UnknownAnalysisGap"
+            || gaps.Any(gap => gap.Classification == CombinedImpactClassifications.UnknownAnalysisGap))
+        {
+            return CombinedImpactClassifications.UnknownAnalysisGap;
+        }
+
+        if (before.Paths.Any(HasStaticDispatchCandidate) || after.Paths.Any(HasStaticDispatchCandidate))
+        {
+            return CombinedImpactClassifications.NeedsReviewImpact;
+        }
+
         var beforeIdentity = before.Paths.Select(PathIdentity).ToHashSet(StringComparer.Ordinal);
         var afterIdentity = after.Paths.Select(PathIdentity).ToHashSet(StringComparer.Ordinal);
         if (!beforeIdentity.SetEquals(afterIdentity))
@@ -681,7 +694,56 @@ public static class CombinedChangeImpactReporter
             SourceTransitions(path),
             path.SupportingFactIds,
             path.SupportingEdgeIds,
-            TerminalMetadata(path));
+            TerminalMetadata(path),
+            path.Edges.Select(edge => edge.RuleId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
+    }
+
+    private static CombinedImpactItem ApplyPathContext(CombinedImpactItem item, CombinedImpactPathContext pathContext)
+    {
+        if (pathContext.Classification != CombinedImpactClassifications.NeedsReviewImpact)
+        {
+            return item with { PathContext = pathContext };
+        }
+
+        var notes = CandidateNotes(item.Notes, hasStaticDispatchCandidate: true);
+        if (ClassificationRank(item.Classification) >= ClassificationRank(CombinedImpactClassifications.NeedsReviewImpact))
+        {
+            return item with { PathContext = pathContext, Notes = notes };
+        }
+
+        var classification = CombinedImpactClassifications.NeedsReviewImpact;
+        return item with
+        {
+            ImpactId = ImpactId(item.ChangeType, classification, item.EvidenceKind, item.StableKey, item.DiffRuleId, item.ImpactRuleId),
+            Classification = classification,
+            Confidence = Confidence(classification),
+            PathContext = pathContext,
+            Notes = notes
+        };
+    }
+
+    private static bool HasStaticDispatchCandidate(CombinedPath path) =>
+        path.Edges.Any(edge => edge.EdgeKind is "interface-candidate" or "override-candidate")
+        || path.Edges.Any(edge => string.Equals(edge.RuleId, "combined.dispatch-candidate.v1", StringComparison.Ordinal));
+
+    private static bool HasStaticDispatchCandidate(CombinedPathEvidence? path) =>
+        path?.RuleIds?.Contains("combined.dispatch-candidate.v1", StringComparer.Ordinal) == true;
+
+    private static IReadOnlyList<CombinedImpactNote> CandidateNotes(
+        IEnumerable<CombinedImpactNote> notes,
+        bool hasStaticDispatchCandidate)
+    {
+        var candidates = hasStaticDispatchCandidate
+            ? notes.Append(new CombinedImpactNote(
+                "StaticDispatchCandidate",
+                "Candidate-dependent path context is static review evidence and does not prove runtime dispatch, a selected dependency-injection implementation, or impact."))
+            : notes;
+        return candidates
+            .GroupBy(note => new { note.Code, note.Message })
+            .Select(group => group.First())
+            .OrderBy(note => note.Code, StringComparer.Ordinal)
+            .ThenBy(note => note.Message, StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static IReadOnlyList<string> SourceTransitions(CombinedPath path)
@@ -813,12 +875,16 @@ public static class CombinedChangeImpactReporter
 
     private static CombinedImpactItem FromPathDiffRow(CombinedPathDiffRow row, bool includePaths)
     {
-        var classification = row.Classification switch
-        {
-            CombinedDependencyDiffClassifications.UnknownAnalysisGap => CombinedImpactClassifications.UnknownAnalysisGap,
-            CombinedDependencyDiffClassifications.NeedsReviewDiff or CombinedDependencyDiffClassifications.AddedWithBeforeGap or CombinedDependencyDiffClassifications.RemovedWithAfterGap => CombinedImpactClassifications.NeedsReviewImpact,
-            _ => includePaths ? CombinedImpactClassifications.ProbableStaticImpact : CombinedImpactClassifications.NeedsReviewImpact
-        };
+        var hasStaticDispatchCandidate = HasStaticDispatchCandidate(row.Before) || HasStaticDispatchCandidate(row.After);
+        var classification = row.Classification == CombinedDependencyDiffClassifications.UnknownAnalysisGap
+            ? CombinedImpactClassifications.UnknownAnalysisGap
+            : hasStaticDispatchCandidate
+                ? CombinedImpactClassifications.NeedsReviewImpact
+                : row.Classification switch
+                {
+                    CombinedDependencyDiffClassifications.NeedsReviewDiff or CombinedDependencyDiffClassifications.AddedWithBeforeGap or CombinedDependencyDiffClassifications.RemovedWithAfterGap => CombinedImpactClassifications.NeedsReviewImpact,
+                    _ => includePaths ? CombinedImpactClassifications.ProbableStaticImpact : CombinedImpactClassifications.NeedsReviewImpact
+                };
         var supportingFactIds = SortedIds((row.Before?.SupportingFactIds ?? []).Concat(row.After?.SupportingFactIds ?? []));
         var supportingEdgeIds = SortedIds((row.Before?.SupportingEdgeIds ?? []).Concat(row.After?.SupportingEdgeIds ?? []));
         return new CombinedImpactItem(
@@ -841,7 +907,11 @@ public static class CombinedChangeImpactReporter
             null,
             new CombinedImpactPathContext(
                 includePaths
-                    ? row.Before is null || row.After is null
+                    ? row.Classification == CombinedDependencyDiffClassifications.UnknownAnalysisGap
+                        ? CombinedImpactClassifications.UnknownAnalysisGap
+                        : hasStaticDispatchCandidate
+                        ? CombinedImpactClassifications.NeedsReviewImpact
+                        : row.Before is null || row.After is null
                         ? CombinedImpactClassifications.ReachabilityChanged
                         : CombinedImpactClassifications.ReachabilityEvidenceChanged
                     : CombinedImpactClassifications.NotRequested,
@@ -849,7 +919,7 @@ public static class CombinedChangeImpactReporter
                 row.After is null ? [] : [PathSummary(row.After)],
                 []),
             row.CoverageCaveats,
-            row.Notes.Select(note => new CombinedImpactNote(note.Code, note.Message)).ToArray());
+            CandidateNotes(row.Notes.Select(note => new CombinedImpactNote(note.Code, note.Message)), hasStaticDispatchCandidate));
     }
 
     private static CombinedImpactPathSummary PathSummary(CombinedPathEvidence evidence)
@@ -860,7 +930,8 @@ public static class CombinedChangeImpactReporter
             evidence.SourceTransitions,
             evidence.SupportingFactIds,
             evidence.SupportingEdgeIds,
-            evidence.TerminalSurfaceMetadata);
+            evidence.TerminalSurfaceMetadata,
+            evidence.RuleIds);
     }
 
     private static string ImpactClassification(CombinedDiffRow row, CombinedDiffEvidence? evidence)
@@ -904,13 +975,13 @@ public static class CombinedChangeImpactReporter
         var classification = gap.GapKind == "TruncatedByLimit"
             ? CombinedImpactClassifications.TruncatedByLimit
             : gap.Classification switch
-        {
-            CombinedDependencyDiffClassifications.SelectorNoMatch => CombinedImpactClassifications.SelectorNoMatch,
-            CombinedDependencyDiffClassifications.NoDiffEvidence => CombinedImpactClassifications.NoImpactEvidence,
-            CombinedDependencyDiffClassifications.UnknownAnalysisGap => CombinedImpactClassifications.UnknownAnalysisGap,
-            CombinedDependencyDiffClassifications.NeedsReviewDiff => CombinedImpactClassifications.NeedsReviewImpact,
-            _ => gap.Classification
-        };
+            {
+                CombinedDependencyDiffClassifications.SelectorNoMatch => CombinedImpactClassifications.SelectorNoMatch,
+                CombinedDependencyDiffClassifications.NoDiffEvidence => CombinedImpactClassifications.NoImpactEvidence,
+                CombinedDependencyDiffClassifications.UnknownAnalysisGap => CombinedImpactClassifications.UnknownAnalysisGap,
+                CombinedDependencyDiffClassifications.NeedsReviewDiff => CombinedImpactClassifications.NeedsReviewImpact,
+                _ => gap.Classification
+            };
         var ruleId = gap.GapKind == "TruncatedByLimit"
             ? TruncationRuleId
             : gap.Classification switch

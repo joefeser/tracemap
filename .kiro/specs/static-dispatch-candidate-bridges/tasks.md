@@ -122,16 +122,16 @@ not part of this spec-only branch.
   - [x] Add forbidden-wording tests for runtime binding and selected
         implementation language.
 
-- [ ] 9. Thread candidates into reverse and impact context.
-  - [ ] Let reverse traversal cross candidate edges while preserving root to
+- [x] 9. Thread candidates into reverse and impact context.
+  - [x] Let reverse traversal cross candidate edges while preserving root to
         surface path order.
-  - [ ] Cap candidate-dependent reverse roots/paths at
+  - [x] Cap candidate-dependent reverse roots/paths at
         `NeedsReviewReversePath` or weaker.
-  - [ ] Ensure `tracemap impact --include-paths` and future reverse context
+  - [x] Ensure `tracemap impact --include-paths` and future reverse context
         preserve candidate paths as review context only.
-  - [ ] Prevent candidate context from producing `StaticImpactEvidence`,
+  - [x] Prevent candidate context from producing `StaticImpactEvidence`,
         `DefiniteImpact`, or runtime impact wording.
-  - [ ] Add focused reverse and impact tests for candidate paths, no-candidate
+  - [x] Add focused reverse and impact tests for candidate paths, no-candidate
         gaps, reduced coverage, and truncation.
 
 - [ ] 10. Add report, portfolio, vault, and docs-export consumption.
