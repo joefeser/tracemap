@@ -1313,6 +1313,44 @@ public sealed class CombinedRouteFlowTests
     }
 
     [Fact]
+    public async Task Route_flow_preserves_registration_shape_gap_for_selected_sibling_interface_member()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Save()";
+        var getService = "Server.IOrderService.Get()";
+        var saveService = "Server.IOrderService.Save()";
+        var getImplementation = "Server.OrderService.Get()";
+        var saveImplementation = "Server.OrderService.Save()";
+        var repository = "Server.OrderRepository.Save()";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "POST", "/api/orders", "/api/orders", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, saveService, "Controllers/OrdersController.cs", 14, targetSymbolKind: "InterfaceMember"),
+            SymbolRelationshipFact(server, getImplementation, getService, "Services/OrderService.cs", 18),
+            SymbolRelationshipFact(server, saveImplementation, saveService, "Services/OrderService.cs", 19),
+            DependencyRegistrationFact(server, "Server.IOrderService", "Server.OrderService", "Startup/CompositionRoot.cs", 20, StaticDispatchRegistrationShapes.Unsupported),
+            CallFact(server, saveImplementation, repository, "Services/OrderService.cs", 21),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "POST /api/orders",
+            ToSurface: "sql-query"));
+
+        var gap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "UnsupportedRegistrationShape");
+        Assert.Equal("ReducedCoverage", gap.Coverage);
+        Assert.Contains(gap.Limitations, limitation => limitation.Contains("evidence limits", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(gap.Limitations, limitation => limitation.Contains("fan-out", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("ReducedCoverage", result.Report.ReportCoverage);
+    }
+
+    [Fact]
     public async Task Route_flow_consumes_shared_override_candidate_without_strengthening_classification()
     {
         using var temp = new TempDirectory();
@@ -4238,7 +4276,8 @@ public sealed class CombinedRouteFlowTests
         string serviceType,
         string implementationType,
         string file,
-        int line)
+        int line,
+        string registrationShape = StaticDispatchRegistrationShapes.ClosedTypePair)
     {
         return FactFactory.Create(
             manifest,
@@ -4256,7 +4295,7 @@ public sealed class CombinedRouteFlowTests
                 ["implementationType"] = implementationType,
                 ["implementationTypeSymbolId"] = TestTypeSymbolId(implementationType),
                 ["registrationKind"] = "AddScoped",
-                ["registrationShape"] = StaticDispatchRegistrationShapes.ClosedTypePair,
+                ["registrationShape"] = registrationShape,
                 ["serviceType"] = serviceType,
                 ["serviceTypeSymbolId"] = TestTypeSymbolId(serviceType)
             });
