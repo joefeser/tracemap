@@ -2421,6 +2421,7 @@ rules:
     limitations:
       - Path context is opt-in, bounded, and must not be treated as complete dependency coverage when truncated.
       - Path evidence is a static trail, not runtime execution, full taint analysis, or proof of business impact.
+      - Paths containing `combined.dispatch-candidate.v1` evidence are capped at NeedsReviewImpact or a weaker unknown classification and preserve the dispatch rule as supporting review evidence.
 
   - id: combined.impact.path-context.v1
     name: Combined change impact path context
@@ -2436,6 +2437,7 @@ rules:
       - Path context is static graph evidence and does not prove runtime reachability, branch feasibility, dynamic dispatch, dependency injection binding, or data flow.
       - Unsupported selector mappings must emit review or unknown gaps rather than guessed paths.
       - Reduced coverage and traversal truncation make no-path conclusions coverage-relative.
+      - Candidate-dependent context is capped at NeedsReviewImpact; when candidate evidence and unknown coverage coexist, the weaker UnknownAnalysisGap classification wins while the candidate limitation remains explicit.
 
   - id: combined.impact.selector.v1
     name: Combined change impact selector handling
@@ -2497,6 +2499,7 @@ rules:
       - Reverse paths are static evidence trails, not runtime execution, full taint analysis, mutation semantics, or proof of business impact.
       - Traversal is bounded by surface, depth, frontier, root, and per-root path limits.
       - Fallback, name-only, syntax-only, dynamic, duplicate-identity, or ambiguous path evidence must be downgraded to review-tier or unknown classifications.
+      - Paths and roots containing `combined.dispatch-candidate.v1` evidence are capped at NeedsReviewReversePath or weaker and do not prove runtime dispatch or a selected dependency-injection implementation.
 
   - id: combined.reverse.selector.v1
     name: Combined reverse selector handling
@@ -2649,7 +2652,7 @@ rules:
   - id: combined.dispatch-candidate.v1
     name: Combined dispatch candidate edge
     description: Derives bounded in-memory path edges from interface or override method symbols to statically known implementation or override method candidates using combined symbol-relationship evidence.
-    evidenceTier: Inherits relationship evidence and caps path classification at NeedsReviewPath
+    evidenceTier: Inherits relationship evidence and caps paths, reverse paths, route-flow rows, and impact context at their consumer-specific review tiers
     emits:
       - interface-candidate path edge
       - override-candidate path edge
@@ -2661,6 +2664,7 @@ rules:
       - Registration context does not resolve registration order, factories, keyed or named services, decorators, service locators, custom containers, branches, object lifetime, or runtime selection.
       - Override candidate chain traversal follows only `Overrides` relationship evidence and is bounded to a maximum depth of 5 with cycle protection.
       - Syntax-only, fallback, reduced-coverage, ambiguous, generated-code uncertain, or high fan-out candidates remain review-tier and must not strengthen downstream classifications.
+      - Consumer projections must preserve this rule ID and cap paths at NeedsReviewPath, reverse paths and roots at NeedsReviewReversePath, route-flow rows at NeedsReviewStaticRouteFlow, and impact context at NeedsReviewImpact or weaker.
 
   - id: combined.dispatch-gap.v1
     name: Combined dispatch candidate gap

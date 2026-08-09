@@ -59,13 +59,26 @@ extraction rules or infer runtime DI selection.
   cap both path context and any otherwise stronger impact item at
   `NeedsReviewImpact`; unknown coverage remains weaker and is never upgraded.
 - Candidate-dependent impact IDs are rebuilt from the downgraded
-  classification so deterministic identity and classification agree.
+  classification so deterministic identity and classification agree. Path
+  gaps are then rebuilt from that final identity, preventing stale gap IDs.
+- Mixed candidate and unknown path coverage remains `UnknownAnalysisGap`; the
+  weaker coverage result wins while the candidate limitation stays explicit.
+- The rule catalog now documents the consumer-specific reverse and impact caps
+  and the mixed unknown-coverage behavior.
 - Focused reverse and impact fixtures prove interface candidates remain review
   evidence and cannot produce runtime-target, selected-implementation, or
   impact-proof wording. Existing reverse/impact suites retain no-candidate,
   reduced-coverage, truncation, and byte-stability coverage.
 - No candidate rows are persisted and no scanner, reducer, extraction, DI
   execution, or runtime reachability behavior is added.
+
+Validation for Task 9 and its review corrections:
+
+- Focused reverse/impact/path tests: 64/64 passed.
+- Full .NET solution tests: 1,328/1,328 passed.
+- Targeted `dotnet format --verify-no-changes`: passed.
+- Private-path guard: passed.
+- `git diff --check`: passed.
 
 ## Task 8 Pre-Implementation Decision
 

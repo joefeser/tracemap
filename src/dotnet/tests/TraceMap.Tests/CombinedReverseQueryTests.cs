@@ -122,6 +122,16 @@ public sealed class CombinedReverseQueryTests
     }
 
     [Fact]
+    public void Reverse_and_impact_candidate_caps_are_documented_in_the_rule_catalog()
+    {
+        var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
+
+        Assert.Contains("Paths and roots containing `combined.dispatch-candidate.v1` evidence are capped at NeedsReviewReversePath or weaker", catalog, StringComparison.Ordinal);
+        Assert.Contains("Paths containing `combined.dispatch-candidate.v1` evidence are capped at NeedsReviewImpact or a weaker unknown classification", catalog, StringComparison.Ordinal);
+        Assert.Contains("impact context at NeedsReviewImpact or weaker", catalog, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Reverse_selectors_caps_and_source_matching_are_deterministic()
     {
         using var temp = new TempDirectory();
@@ -882,5 +892,21 @@ public sealed class CombinedReverseQueryTests
                 Assert.Equal(root.RootId, path!.RootId);
             }
         }
+    }
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "rules", "rule-catalog.yml")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root.");
     }
 }
