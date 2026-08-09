@@ -362,8 +362,14 @@ public static class CombinedRouteFlowReporter
             MaxDepth: options.MaxDepth,
             MaxPaths: options.MaxPaths,
             MaxFrontier: options.MaxFrontier);
-        var pathReport = await CombinedDependencyPathReporter.BuildReportAsync(pathOptions, cancellationToken);
-        var selectedTraversalNodeIds = await CombinedDependencyPathReporter.BuildTraversalScopeAsync(pathOptions, cancellationToken);
+        var startNodeKind = clientSelector is not null
+            ? "EndpointClient"
+            : routeSelector is not null
+                ? "EndpointRoute"
+                : null;
+        var pathBuild = await CombinedDependencyPathReporter.BuildReportWithTraversalScopeAsync(pathOptions, startNodeKind, cancellationToken);
+        var pathReport = pathBuild.Report;
+        var selectedTraversalNodeIds = pathBuild.ReachedNodeIds;
         var inventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(options.IndexPath, cancellationToken: cancellationToken);
         var selectedPaths = FilterPathsForSelectorSide(pathReport.Paths, routeSelector, clientSelector).ToArray();
         var symbolKinds = await ReadCombinedSymbolKindsAsync(options.IndexPath, cancellationToken);
@@ -1496,9 +1502,9 @@ public static class CombinedRouteFlowReporter
                     .OrderBy(reason => reason, StringComparer.Ordinal));
                 return edge with
                 {
-                    CandidateCount = depthGap is null ? candidateCount : null,
-                    OmittedCount = depthGap is null ? Math.Max(0, candidateCount - emittedCount) : null,
-                    CandidateLimit = depthGap?.CandidateLimit ?? fanOutGap?.CandidateLimit,
+                    CandidateCount = fanOutGap is not null ? candidateCount : depthGap is null ? emittedCount : null,
+                    OmittedCount = fanOutGap is not null ? Math.Max(0, candidateCount - emittedCount) : depthGap is null ? 0 : null,
+                    CandidateLimit = fanOutGap?.CandidateLimit ?? depthGap?.CandidateLimit,
                     CandidateCapReason = capReason.Length > 0 ? capReason : null
                 };
             }).ToArray()
@@ -4344,7 +4350,7 @@ public static class CombinedRouteFlowReporter
 
     private static IReadOnlyList<string> PathGapLimitations(string gapKind, string pathReportCoverage)
     {
-        if (gapKind == "DispatchCandidateFanOut")
+        if (IsSharedDispatchGapKind(gapKind))
         {
             return [
                 "Static dispatch candidate fan-out is deterministically capped and remains review-tier.",
@@ -4367,7 +4373,7 @@ public static class CombinedRouteFlowReporter
             return pathReportCoverage == "FullEvidenceAvailable" ? "FullEvidenceAvailable" : "ReducedCoverage";
         }
 
-        if (gapKind == "DispatchCandidateFanOut")
+        if (IsSharedDispatchGapKind(gapKind))
         {
             return "ReducedCoverage";
         }

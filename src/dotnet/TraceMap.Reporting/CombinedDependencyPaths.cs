@@ -291,27 +291,31 @@ public static class CombinedDependencyPathReporter
         return BuildReport(options, read, graph, sourcePair);
     }
 
-    internal static async Task<IReadOnlySet<string>> BuildTraversalScopeAsync(
+    internal static async Task<(CombinedDependencyPathReport Report, IReadOnlySet<string> ReachedNodeIds)> BuildReportWithTraversalScopeAsync(
         CombinedDependencyPathOptions options,
+        string? startNodeKind,
         CancellationToken cancellationToken = default)
     {
         ValidateOptions(options);
         var sourcePair = ParseSourcePair(options.SourcePair);
-        var (_, graph) = await BuildGraphAsync(
+        var (read, graph) = await BuildGraphAsync(
             options.IndexPath,
             sourcePair,
             options.IncludeLegacyRoots || IsLegacyView(options.View),
             allowSingleIndex: true,
             cancellationToken);
         var sourceFilter = string.IsNullOrWhiteSpace(options.FromSource) ? null : options.FromSource.Trim();
-        var starts = ResolveStartNodes(options, graph, sourceFilter).Nodes;
+        var report = BuildReport(options, read, graph, sourcePair);
+        var starts = ResolveStartNodes(options, graph, sourceFilter).Nodes
+            .Where(node => startNodeKind is null || string.Equals(node.NodeKind, startNodeKind, StringComparison.Ordinal))
+            .ToArray();
         var terminalNodes = ResolveTerminalNodes(options, graph, starts);
-        if (starts.Count == 0 || terminalNodes.Count == 0)
+        if (starts.Length == 0 || terminalNodes.Count == 0)
         {
-            return starts.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal);
+            return (report, starts.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal));
         }
 
-        return Search(graph, starts, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier).ReachedNodeIds;
+        return (report, Search(graph, starts, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier).ReachedNodeIds);
     }
 
     internal static async Task<CombinedPathGraphInventory> BuildGraphInventoryAsync(
