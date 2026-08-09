@@ -12,14 +12,17 @@
   reconciliation while keeping the mismatch a gap.
 - Safety: no query execution, recordset/row access, report rendering, or new
   Access COM surface.
-- Validation: Access projector/composition focus passed (131 tests); the full
-  solution built with zero warnings/errors; all 1,304 solution tests passed;
+- Validation: the complete focused Access suite passed (329 tests); the full
+  solution built with zero warnings/errors; all 1,310 solution tests passed;
   the private-path guard and `git diff --check` passed.
 - Review correction: calculated aliases now preserve name-aligned provenance
   without weakening direct-field lineage trust; non-output source roles fail
   closed in composition/flow while missing pre-0.3.2 roles retain their legacy
   output-expression meaning; pre-provenance public constructor signatures are
-  retained; empty crosstab output catalogs emit an explicit rule-backed gap.
+  retained; empty crosstab output catalogs emit an explicit rule-backed gap;
+  calculated row-heading expressions whose output name cannot be recovered are
+  retained with a deterministic ordinal identity, partial coverage, source
+  candidates where provable, and an output-scoped gap rather than disappearing.
 - Validation procedure: followed the Mac-only Microsoft Access adapter smoke in
   `docs/VALIDATION.md`. The private Windows corpus rerun remains explicitly
   deferred because this correction does not widen COM or require a real

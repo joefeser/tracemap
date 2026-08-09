@@ -213,36 +213,39 @@ public static class AccessFactBuilder
                             : string.Join(';', output.PivotSourceFieldStableKeys)),
                         ("coverageLabel", output.Coverage),
                         ("limitations", "querydef-or-static-select-output-name;static-alias-or-pivot-literal-provenance-only;source-lineage-may-be-partial;no-query-execution;no-row-read"))));
-                foreach (var sourceField in output.SourceFieldStableKeys)
+                void AddSourceCandidateFacts(
+                    IReadOnlyList<string> sourceFields,
+                    string sourceRole,
+                    string coverage,
+                    string limitations)
                 {
-                    facts.Add(Create(manifest, FactTypes.AccessQueryOutputSourceCandidate, RuleIds.LegacyAccessQuery,
-                        EvidenceTiers.Tier3SyntaxOrTextual, span,
-                        sourceSymbol: output.Identity.StableKey,
-                        targetSymbol: sourceField,
-                        properties: Props(
-                            ("queryStableKey", query.Identity.StableKey),
-                            ("queryOutputStableKey", output.Identity.StableKey),
-                            ("sourceFieldStableKey", sourceField),
-                            ("sourceRole", "output-expression"),
-                            ("targetKind", "field"),
-                            ("coverageLabel", output.Coverage),
-                            ("limitations", "static-query-output-source-candidate;no-query-execution;no-row-read"))));
+                    foreach (var sourceField in sourceFields)
+                    {
+                        facts.Add(Create(manifest, FactTypes.AccessQueryOutputSourceCandidate, RuleIds.LegacyAccessQuery,
+                            EvidenceTiers.Tier3SyntaxOrTextual, span,
+                            sourceSymbol: output.Identity.StableKey,
+                            targetSymbol: sourceField,
+                            properties: Props(
+                                ("queryStableKey", query.Identity.StableKey),
+                                ("queryOutputStableKey", output.Identity.StableKey),
+                                ("sourceFieldStableKey", sourceField),
+                                ("sourceRole", sourceRole),
+                                ("targetKind", "field"),
+                                ("coverageLabel", coverage),
+                                ("limitations", limitations))));
+                    }
                 }
-                foreach (var sourceField in output.PivotSourceFieldStableKeys ?? [])
-                {
-                    facts.Add(Create(manifest, FactTypes.AccessQueryOutputSourceCandidate, RuleIds.LegacyAccessQuery,
-                        EvidenceTiers.Tier3SyntaxOrTextual, span,
-                        sourceSymbol: output.Identity.StableKey,
-                        targetSymbol: sourceField,
-                        properties: Props(
-                            ("queryStableKey", query.Identity.StableKey),
-                            ("queryOutputStableKey", output.Identity.StableKey),
-                            ("sourceFieldStableKey", sourceField),
-                            ("sourceRole", "pivot-expression"),
-                            ("targetKind", "field"),
-                            ("coverageLabel", output.Coverage),
-                            ("limitations", "static-pivot-expression-source-candidate;literal-column-not-an-alias-equivalence;no-query-execution;no-row-read"))));
-                }
+
+                AddSourceCandidateFacts(
+                    output.SourceFieldStableKeys,
+                    "output-expression",
+                    output.Coverage,
+                    "static-query-output-source-candidate;no-query-execution;no-row-read");
+                AddSourceCandidateFacts(
+                    output.PivotSourceFieldStableKeys ?? [],
+                    "pivot-expression",
+                    output.Coverage,
+                    "static-pivot-expression-source-candidate;literal-column-not-an-alias-equivalence;no-query-execution;no-row-read");
             }
 
             if (query.ActionLineage is { } action)
