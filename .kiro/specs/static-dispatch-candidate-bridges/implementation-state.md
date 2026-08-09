@@ -1,16 +1,18 @@
 # Static Dispatch Candidate Bridges Implementation State
 
-Status: implementation-task-8-complete-awaiting-pr
+Status: implementation-task-9-complete-awaiting-pr
 Readiness: ready-for-pr-review
 Merged PR 1: #331 (`086ad376e387ea8d87e430175ef2673cbc74c0f1`)
 Merged PR 2: #333 (`84f72e0faa9dd6c106c625de175a194d9c1515ff`)
+Merged PR 3: #610 (`6a8b5bd14187e5258a9805ee73cad6ff66cb9079`)
+Merged PR 4: #611 (`b3fde3aa1c6c53a3fbae55df58313d2609fcdcfb`)
 
 ## Branch
 
-- Branch: `codex/static-dispatch-route-flow`
+- Branch: `codex/static-dispatch-reverse-impact`
 - Base: `origin/dev`
-- Base SHA: `6a8b5bd14187e5258a9805ee73cad6ff66cb9079`
-- Scope: Task 8 route-flow consumption of the existing shared dispatch
+- Base SHA: `703bda880681526dc9948413abb94c42d38ba854`
+- Scope: Task 9 reverse and impact consumption of the existing shared dispatch
   candidate edges and gaps
 - Suggested PR target: `dev`
 
@@ -42,9 +44,28 @@ supporting relationship IDs, registration context, registration fact IDs, and
 fan-out counts while keeping route-flow presentation under
 `combined.route-flow.interface-bridge.v1`.
 
-The slice intentionally does not add type-level fallback candidates,
+Task 8 intentionally did not add type-level fallback candidates,
 reverse/impact/report/vault/docs-export consumption, or new persisted candidate
-tables. It does not add extraction rules or infer runtime DI selection.
+tables. Task 9 adds only reverse/impact consumer semantics; it does not add
+extraction rules or infer runtime DI selection.
+
+## Task 9 Implementation
+
+- Combined reverse already traversed shared candidate edges in root-to-surface
+  order. It now explicitly caps candidate-dependent paths and roots at
+  `NeedsReviewReversePath`, preserves `combined.dispatch-candidate.v1`, and
+  emits a bounded static-candidate limitation note.
+- Combined impact path summaries now preserve path rule IDs. Candidate paths
+  cap both path context and any otherwise stronger impact item at
+  `NeedsReviewImpact`; unknown coverage remains weaker and is never upgraded.
+- Candidate-dependent impact IDs are rebuilt from the downgraded
+  classification so deterministic identity and classification agree.
+- Focused reverse and impact fixtures prove interface candidates remain review
+  evidence and cannot produce runtime-target, selected-implementation, or
+  impact-proof wording. Existing reverse/impact suites retain no-candidate,
+  reduced-coverage, truncation, and byte-stability coverage.
+- No candidate rows are persisted and no scanner, reducer, extraction, DI
+  execution, or runtime reachability behavior is added.
 
 ## Task 8 Pre-Implementation Decision
 
@@ -294,6 +315,19 @@ dotnet test src/dotnet/TraceMap.sln
 
 Results:
 
+- Task 9 focused reverse/impact/path validation: passed, 62 tests.
+- Full `.NET` solution validation after Task 9: passed, 1,326 tests.
+- `dotnet format --verify-no-changes` over changed C# files: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- `./scripts/smoke-combined-paths.sh
+  /private/tmp/tracemap-static-dispatch-reverse-impact-smoke`: passed over
+  checked-in public samples, including repeated deterministic paths output and
+  combined reverse output. The sample correctly remains reduced coverage.
+- The fresh worktree initially lacked `tsc`; Homebrew did not provide the
+  formula. Restored the pinned toolchain using `npm ci --prefix
+  src/typescript`, then reran unchanged. npm repeated two existing
+  high-severity dependency advisories; no dependency files changed.
 - Task 8 focused route-flow/path/catalog validation: passed, 115 tests.
 - Full `.NET` solution validation after Task 8: passed, 1,306 tests.
 - ACK-authorized PR #611 review-patch validation: focused route-flow/path tests
@@ -356,8 +390,9 @@ appropriate.
 - Type-level fallback candidates remain deferred within task 6.
 - Missing-candidate, ambiguous-identity, reduced-coverage, schema, and generic
   gaps remain deferred within task 6.
-- Reverse, impact, report/portfolio, vault, and docs-export consumption remain
-  deferred to later slices. Route-flow consumption is complete in PR #611.
+- Report/portfolio, vault, and docs-export consumption remain deferred to later
+  slices. Route-flow consumption is complete in PR #611; reverse and impact
+  consumption are complete in Task 9 on this branch.
 - The selected Task 6 slice merged through PR #333; later tasks remain explicit
   follow-ups.
 

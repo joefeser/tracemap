@@ -80,6 +80,48 @@ public sealed class CombinedReverseQueryTests
     }
 
     [Fact]
+    public async Task Reverse_caps_static_dispatch_candidate_paths_and_roots_at_needs_review()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "reverse");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.IOrderService.Get(System.Int32)";
+        var implementation = "Server.OrderService.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14),
+            SymbolRelationshipFact(server, implementation, service, "Services/OrderService.cs", 18),
+            CallFact(server, implementation, repository, "Services/OrderService.cs", 21),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedReverseReporter.WriteAsync(new CombinedReverseOptions(
+            combinedPath,
+            outDir,
+            Surface: "sql-query",
+            SurfaceName: "orders",
+            To: "endpoints"));
+
+        var path = Assert.Single(result.Report.Paths, candidate => candidate.Edges.Any(edge => edge.EdgeKind == "interface-candidate"));
+        Assert.Equal(CombinedReverseClassifications.NeedsReviewReversePath, path.Classification);
+        Assert.Contains("combined.dispatch-candidate.v1", path.RuleIds);
+        Assert.Contains(path.Notes, note => note.Code == "StaticDispatchCandidate");
+        var root = Assert.Single(result.Report.ReverseRoots, candidate => candidate.PathIds.Contains(path.PathId, StringComparer.Ordinal));
+        Assert.Equal(CombinedReverseClassifications.NeedsReviewReversePath, root.Classification);
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "reverse-report.md"));
+        Assert.Contains("StaticDispatchCandidate", markdown);
+        Assert.DoesNotContain("runtime target", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("selected implementation", markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Reverse_selectors_caps_and_source_matching_are_deterministic()
     {
         using var temp = new TempDirectory();
@@ -664,6 +706,34 @@ public sealed class CombinedReverseQueryTests
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
                 ["callKind"] = "method"
+            });
+    }
+
+    private static CodeFact SymbolRelationshipFact(
+        ScanManifest manifest,
+        string implementationMethodSymbol,
+        string interfaceMethodSymbol,
+        string file,
+        int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.SymbolRelationship,
+            RuleIds.CSharpSemanticSymbolRelationship,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: implementationMethodSymbol,
+            targetSymbol: interfaceMethodSymbol,
+            contractElement: "ImplementsInterfaceMember",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["relationshipKind"] = "ImplementsInterfaceMember",
+                ["sourceContainingSymbolId"] = "Server.OrderService",
+                ["sourceSymbolDisplayName"] = implementationMethodSymbol,
+                ["sourceSymbolId"] = implementationMethodSymbol,
+                ["targetContainingSymbolId"] = "Server.IOrderService",
+                ["targetSymbolDisplayName"] = interfaceMethodSymbol,
+                ["targetSymbolId"] = interfaceMethodSymbol
             });
     }
 
