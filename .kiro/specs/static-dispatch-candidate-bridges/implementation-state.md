@@ -1,17 +1,17 @@
 # Static Dispatch Candidate Bridges Implementation State
 
-Status: implementation-task-7-complete-awaiting-pr
+Status: implementation-task-8-complete-awaiting-pr
 Readiness: ready-for-pr-review
 Merged PR 1: #331 (`086ad376e387ea8d87e430175ef2673cbc74c0f1`)
 Merged PR 2: #333 (`84f72e0faa9dd6c106c625de175a194d9c1515ff`)
 
 ## Branch
 
-- Branch: `codex/static-dispatch-di-context`
+- Branch: `codex/static-dispatch-route-flow`
 - Base: `origin/dev`
-- Base SHA: `5a7da1058f0978b57c3eaf322182ae349959f13b`
-- Scope: Task 7 DI registration-context annotations over the existing shared
-  candidate builder and relationship-backed interface/override candidates
+- Base SHA: `6a8b5bd14187e5258a9805ee73cad6ff66cb9079`
+- Scope: Task 8 route-flow consumption of the existing shared dispatch
+  candidate edges and gaps
 - Suggested PR target: `dev`
 
 ## Task 7 Pre-Implementation Decision
@@ -34,16 +34,33 @@ Merged PR 2: #333 (`84f72e0faa9dd6c106c625de175a194d9c1515ff`)
 
 ## Current Implementation State
 
-This branch completes Task 7 over the Task 6 builder shipped by PRs #331 and
-#333. It adds optional registration-context fields to `tracemap paths` JSON and
-a bounded Markdown note while keeping every candidate review-tier.
+This branch completes Task 8 over the Task 6/7 shared builder. Route-flow now
+consumes the candidate edges and gaps already present in the combined path
+inventory instead of reconstructing them from normalized `implements` and
+`overrides` labels. This preserves candidate IDs, underlying dispatch rule IDs,
+supporting relationship IDs, registration context, registration fact IDs, and
+fan-out counts while keeping route-flow presentation under
+`combined.route-flow.interface-bridge.v1`.
 
 The slice intentionally does not add type-level fallback candidates,
-route-flow threading, reverse/impact/report/vault/docs-export consumption, or
-new persisted candidate tables. Unsupported registration families that the
-current scanner cannot identify remain documented extraction limitations; if
-present as `DependencyRegistered` observations, non-closed shapes fail closed
-to `UnsupportedRegistrationShape`.
+reverse/impact/report/vault/docs-export consumption, or new persisted candidate
+tables. It does not add extraction rules or infer runtime DI selection.
+
+## Task 8 Pre-Implementation Decision
+
+- The route-flow consumer already invoked `StaticDispatchCandidateBuilder`,
+  but did so through a second adapter over normalized relationship edges.
+  That adapter discarded the original relationship kind, canonical containing
+  type identities, shared candidate ID, and Task 7 registration annotations.
+- `CombinedDependencyPathReporter.BuildGraphInventoryAsync` already returns
+  the shared builder's `combined.dispatch-candidate.v1` edges and
+  `combined.dispatch-gap.v1` gaps. Task 8 therefore needs no new extraction or
+  persisted schema; route-flow can consume those existing in-memory records.
+- Route-flow candidate rows remain additive presentation rows. Existing entry,
+  call, HTTP, SQL, data-surface, and logic row behavior remains unchanged.
+- Fan-out gap records now retain structured candidate count and limit values so
+  route-flow can report exact candidate and omitted counts without parsing
+  human-readable gap messages.
 
 ## Scope Decisions
 
@@ -68,14 +85,77 @@ to `UnsupportedRegistrationShape`.
 
 - `src/dotnet/TraceMap.Core/CSharpSemanticExtractor.cs`
 - `src/dotnet/TraceMap.Reporting/CombinedDependencyPaths.cs`
+- `src/dotnet/TraceMap.Reporting/CombinedRouteFlowReport.cs`
 - `src/dotnet/TraceMap.Reporting/StaticDispatchCandidateBuilder.cs`
 - `src/dotnet/tests/TraceMap.Tests/CSharpSemanticExtractorTests.cs`
 - `src/dotnet/tests/TraceMap.Tests/CombinedDependencyPathTests.cs`
+- `src/dotnet/tests/TraceMap.Tests/CombinedRouteFlowTests.cs`
 - `rules/rule-catalog.yml`
 - `.kiro/specs/static-dispatch-candidate-bridges/tasks.md`
 - `.kiro/specs/static-dispatch-candidate-bridges/implementation-state.md`
 
 ## Implementation Slice Notes
+
+Task 8 route-flow slice:
+
+- Removed route-flow's duplicate candidate reconstruction over normalized
+  `implements`/`overrides` edges. Route-flow now consumes the shared
+  `interface-candidate` and `override-candidate` edges by underlying dispatch
+  rule ID.
+- Preserved `combined.route-flow.interface-bridge.v1` as the presentation rule
+  while carrying `combined.dispatch-candidate.v1` in supporting rule IDs.
+- Added optional route-flow row fields for shared candidate ID, supporting call
+  and relationship edge IDs, registration context, registration fact IDs,
+  candidate count, omitted count, candidate limit, and cap reason. Non-candidate
+  row JSON remains unchanged because optional fields are omitted when absent.
+- Propagated shared registration, generic, compatibility, fan-out, and
+  truncation gap kinds instead of collapsing them into an unknown route-flow
+  gap.
+- Added structured candidate count and limit fields to dispatch fan-out gaps;
+  route-flow derives exact omitted counts without parsing gap prose.
+- Added end-to-end route-flow tests for DI-context provenance and override
+  candidates. Existing focused tests continue to cover single/multiple/no
+  candidates, high fan-out, reduced Tier3 evidence, deterministic output, and
+  forbidden runtime wording.
+- The PR #611 review pass fixed three current-head findings: call provenance now
+  scans backward across intermediate traversable edges to the nearest bounded
+  call; shared dispatch gaps reduce report coverage and fan-out/truncation marks
+  the summary partial; and Markdown now renders the same candidate identity,
+  provenance, registration, count, limit, and cap metadata exposed in JSON.
+- The exact-head Codex follow-up fixed three additional P2 findings: nullable
+  candidate gap metadata is omitted from unrelated path JSON; override-depth
+  truncation carries its limit/reason while leaving unknowable total and
+  omitted counts unset; and shared dispatch gaps affect route-flow only when
+  their abstraction participates in a selected route path.
+- A later exact-head Codex P2 tightened that scope boundary: dispatch gaps now
+  follow bounded nodes reached from selected traversal roots, including
+  incomplete branches omitted from successful terminal paths. Disconnected
+  graph-wide gaps remain excluded.
+- The next exact-head follow-up aligned the auxiliary reachability walk with
+  traversal queue-frontier semantics rather than treating the frontier as a
+  cumulative node cap, and generalized duplicate removal to every shared
+  dispatch gap kind using gap kind plus affected abstraction identity.
+- The final hosted follow-up removed that auxiliary walker entirely. Route-flow
+  now consumes the path engine's internal reached-node scope, so all selected
+  roots, queue/frontier limits, path-local cycles, and dispatch cross-hop rules
+  are shared by construction instead of reimplemented.
+- An exact-head read-only Kiro review using `claude-opus-5` then identified
+  mixed fan-out/depth metadata precedence, inconsistent shared-gap coverage,
+  missing route-flow catalog emissions, and a redundant graph build. Those
+  valid findings were corrected together: route-flow now reuses one graph for
+  the path report and bounded reached-node scope, preserves known fan-out
+  counts and the applied candidate cap when depth truncation also exists, and
+  labels every shared dispatch gap as reduced coverage with the static/runtime
+  limitation. The suggested same-endpoint client/server "leak" was not a
+  defect: the combined graph intentionally connects matching client and route
+  endpoints, so downstream server dispatch evidence belongs to that client
+  flow. Start roots are nevertheless filtered to the requested selector side
+  before computing the auxiliary scope.
+- The exact-head follow-up also corrected registration-gap anchoring and
+  wording: unsupported/generic/compatibility gaps are emitted for every
+  deterministic matching service member, allowing node-scoped consumers to
+  retain the gap for the member they actually traverse, and non-fan-out gaps no
+  longer claim candidate fan-out was capped.
 
 - Audited the shipped `DependencyRegistered` shape and added deterministic
   service/implementation type symbol IDs plus a closed-set registration shape
@@ -214,6 +294,37 @@ dotnet test src/dotnet/TraceMap.sln
 
 Results:
 
+- Task 8 focused route-flow/path/catalog validation: passed, 115 tests.
+- Full `.NET` solution validation after Task 8: passed, 1,306 tests.
+- ACK-authorized PR #611 review-patch validation: focused route-flow/path tests
+  passed, 112 tests; full `.NET` solution passed, 1,307 tests.
+- Exact-head Codex follow-up validation: focused route-flow/path tests passed,
+  114 tests; full `.NET` solution passed, 1,309 tests; targeted format,
+  private-path guard, and diff check passed.
+- Reachable-incomplete-branch follow-up validation: focused route-flow/path
+  tests passed, 115 tests; full `.NET` solution passed, 1,310 tests; targeted
+  format, private-path guard, and diff check passed.
+- Frontier/deduplication follow-up validation: focused route-flow/path tests
+  passed, 121 tests; full `.NET` solution passed, 1,316 tests; targeted format,
+  private-path guard, and diff check passed.
+- Shared traversal-scope follow-up validation: focused route-flow/path tests
+  passed, 121 tests; full `.NET` solution passed, 1,316 tests; targeted format,
+  private-path guard, and diff check passed.
+- `dotnet format --verify-no-changes` over changed C# files: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Restored the pinned TypeScript toolchain with `npm ci` and built it for the
+  required combined smoke. npm repeated two existing high-severity dependency
+  advisories; no dependency files changed.
+- `./scripts/smoke-combined-paths.sh
+  /tmp/tracemap-static-dispatch-route-flow-smoke`: passed over checked-in
+  public samples.
+- Ran `tracemap route-flow` twice against that generated combined index with
+  the same output path and verified Markdown/JSON byte identity. The sample
+  correctly reported reduced coverage and `UnknownAnalysisGap`; it contains no
+  member relationship facts, so shared candidate projection is covered by the
+  focused end-to-end fixtures rather than claimed from this smoke.
+
 - Focused `CombinedDependencyPathTests` plus
   `CSharpSemanticExtractorTests`: passed, 44 tests after review patches.
 - `git diff --check`: passed.
@@ -245,8 +356,8 @@ appropriate.
 - Type-level fallback candidates remain deferred within task 6.
 - Missing-candidate, ambiguous-identity, reduced-coverage, schema, and generic
   gaps remain deferred within task 6.
-- Route-flow, reverse, impact, report/portfolio, vault, and docs-export
-  consumption remain deferred to later slices.
+- Reverse, impact, report/portfolio, vault, and docs-export consumption remain
+  deferred to later slices. Route-flow consumption is complete in PR #611.
 - The selected Task 6 slice merged through PR #333; later tasks remain explicit
   follow-ups.
 

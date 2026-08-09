@@ -141,7 +141,15 @@ public sealed record CombinedPathEdge(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? RegistrationContext = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<string>? SupportingRegistrationFactIds = null);
+    IReadOnlyList<string>? SupportingRegistrationFactIds = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? CandidateCount = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? OmittedCount = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? CandidateLimit = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? CandidateCapReason = null);
 
 public sealed record CombinedPathNote(string Code, string Message);
 
@@ -162,7 +170,11 @@ public sealed record CombinedPathGap(
     string? CommitSha = null,
     string? ExtractorVersion = null,
     string? EvidenceScope = null,
-    int? EndLine = null);
+    int? EndLine = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? CandidateCount = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? CandidateLimit = null);
 
 public sealed record CombinedPathInventory(
     IReadOnlyDictionary<string, int> NodesByKind,
@@ -277,6 +289,33 @@ public static class CombinedDependencyPathReporter
         var sourcePair = ParseSourcePair(options.SourcePair);
         var (read, graph) = await BuildGraphAsync(options.IndexPath, sourcePair, options.IncludeLegacyRoots || IsLegacyView(options.View), allowSingleIndex: true, cancellationToken);
         return BuildReport(options, read, graph, sourcePair);
+    }
+
+    internal static async Task<(CombinedDependencyPathReport Report, IReadOnlySet<string> ReachedNodeIds)> BuildReportWithTraversalScopeAsync(
+        CombinedDependencyPathOptions options,
+        string? startNodeKind,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateOptions(options);
+        var sourcePair = ParseSourcePair(options.SourcePair);
+        var (read, graph) = await BuildGraphAsync(
+            options.IndexPath,
+            sourcePair,
+            options.IncludeLegacyRoots || IsLegacyView(options.View),
+            allowSingleIndex: true,
+            cancellationToken);
+        var sourceFilter = string.IsNullOrWhiteSpace(options.FromSource) ? null : options.FromSource.Trim();
+        var report = BuildReport(options, read, graph, sourcePair);
+        var starts = ResolveStartNodes(options, graph, sourceFilter).Nodes
+            .Where(node => startNodeKind is null || string.Equals(node.NodeKind, startNodeKind, StringComparison.Ordinal))
+            .ToArray();
+        var terminalNodes = ResolveTerminalNodes(options, graph, starts);
+        if (starts.Length == 0 || terminalNodes.Count == 0)
+        {
+            return (report, starts.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal));
+        }
+
+        return (report, Search(graph, starts, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier).ReachedNodeIds);
     }
 
     internal static async Task<CombinedPathGraphInventory> BuildGraphInventoryAsync(
@@ -2095,7 +2134,9 @@ public static class CombinedDependencyPathReporter
                 gap.CommitSha,
                 gap.ExtractorVersion,
                 gap.EvidenceScope,
-                gap.EndLine));
+                gap.EndLine,
+                gap.CandidateCount,
+                gap.CandidateLimit));
         }
     }
 
@@ -2279,6 +2320,7 @@ public static class CombinedDependencyPathReporter
 
         var paths = new List<CombinedPath>();
         var gaps = new List<CombinedPathGap>();
+        var reachedNodeIds = starts.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal);
         var truncated = false;
         var sequence = 0;
         while (queue.Count > 0 && paths.Count < maxPaths)
@@ -2326,6 +2368,7 @@ public static class CombinedDependencyPathReporter
                 }
 
                 queue.Enqueue(new PathState([.. state.NodeIds, edge.ToNodeId], [.. state.EdgeIds, edge.EdgeId]));
+                reachedNodeIds.Add(edge.ToNodeId);
             }
         }
 
@@ -2335,7 +2378,7 @@ public static class CombinedDependencyPathReporter
             gaps.Add(TruncatedGap("path", queue.Peek().NodeIds[0], graph));
         }
 
-        return new SearchResult(paths, gaps, truncated);
+        return new SearchResult(paths, gaps, truncated, reachedNodeIds);
     }
 
     private static bool IsDispatchCandidateCrossHop(EvidenceGraph graph, PathState state, GraphEdge edge)
@@ -4193,7 +4236,11 @@ public static class CombinedDependencyPathReporter
         }
     }
 
-    private sealed record SearchResult(IReadOnlyList<CombinedPath> Paths, IReadOnlyList<CombinedPathGap> Gaps, bool Truncated);
+    private sealed record SearchResult(
+        IReadOnlyList<CombinedPath> Paths,
+        IReadOnlyList<CombinedPathGap> Gaps,
+        bool Truncated,
+        IReadOnlySet<string> ReachedNodeIds);
 
     private sealed record PathState(IReadOnlyList<string> NodeIds, IReadOnlyList<string> EdgeIds);
 

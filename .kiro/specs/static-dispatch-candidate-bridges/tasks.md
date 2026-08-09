@@ -106,20 +106,20 @@ not part of this spec-only branch.
   - [x] Add tests for multiple registrations, open generics, syntax-only
         registrations, deterministic ordering, and safety.
 
-- [ ] 8. Thread candidates into route-flow.
-  - [ ] Reuse the shared candidate builder for route-flow interface/override
+- [x] 8. Thread candidates into route-flow.
+  - [x] Reuse the shared candidate builder for route-flow interface/override
         bridge rows.
-  - [ ] Define `interface-implementation-candidate` row kind schema compatible
+  - [x] Define `interface-implementation-candidate` row kind schema compatible
         with existing route-flow row processing.
-  - [ ] Preserve existing route-flow row kinds such as `method`,
+  - [x] Preserve existing route-flow row kinds such as `method`,
         `http-client`, and `sql-query`.
-  - [ ] Preserve `combined.route-flow.interface-bridge.v1` presentation rows
+  - [x] Preserve `combined.route-flow.interface-bridge.v1` presentation rows
         with supporting `combined.dispatch-candidate.v1` rule IDs.
-  - [ ] Cap affected rows at `NeedsReviewStaticRouteFlow` or
+  - [x] Cap affected rows at `NeedsReviewStaticRouteFlow` or
         `UnknownAnalysisGap`.
-  - [ ] Add tests for single candidate, multiple candidate, no candidate,
+  - [x] Add tests for single candidate, multiple candidate, no candidate,
         high fan-out, DI-context candidate, and reduced coverage.
-  - [ ] Add forbidden-wording tests for runtime binding and selected
+  - [x] Add forbidden-wording tests for runtime binding and selected
         implementation language.
 
 - [ ] 9. Thread candidates into reverse and impact context.
