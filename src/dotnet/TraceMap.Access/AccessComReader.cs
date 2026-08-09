@@ -661,6 +661,10 @@ public sealed class AccessComReader
                                 sql,
                                 metadata.Ordinal,
                                 metadata.Name);
+                            var staticProvenanceAligned = AccessQueryProjector.CanReconcileStaticOutputProvenanceByOrdinal(
+                                sql,
+                                metadata.Ordinal,
+                                metadata.Name);
                             var daoSources = metadata.SourceFieldStableKeys
                                 .Distinct(StringComparer.Ordinal)
                                 .ToArray();
@@ -677,10 +681,10 @@ public sealed class AccessComReader
                                 || (staticOrdinalAligned
                                     && staticOutput is { Coverage: "complete", SourceFieldStableKeys.Count: 1 });
                             var syntaxComplete = AccessQueryProjector.HasBalancedStaticSelectSyntax(sql);
-                            var aliasKind = staticOrdinalAligned && staticOutput is not null
+                            var aliasKind = staticProvenanceAligned && staticOutput is not null
                                 ? staticOutput.AliasKind
                                 : AccessQueryOutputAliasKinds.Unknown;
-                            var sourceExpressionHash = staticOrdinalAligned && staticOutput is not null
+                            var sourceExpressionHash = staticProvenanceAligned && staticOutput is not null
                                 ? staticOutput.SourceExpressionHash
                                 : null;
                             var coverage = distinctSources.Length == 1
@@ -750,7 +754,10 @@ public sealed class AccessComReader
                     else if (kind == "crosstab")
                     {
                         crosstabLineage = AccessQueryProjector.ProjectCrosstabLineage(sql, known, objectFieldLookups);
-                        foreach (var output in AccessQueryProjector.ProjectCrosstabOutputCatalog(sql, known, objectFieldLookups))
+                        var crosstabOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(sql, known, objectFieldLookups);
+                        if (crosstabOutputs.Count == 0)
+                            gaps.Add(new("AccessQueryOutputCatalogUnavailable", "query", identity.StableKey, RuleIds.LegacyAccessQuery));
+                        foreach (var output in crosstabOutputs)
                         {
                             var outputIdentity = AccessSafeValues.Identity(
                                 databaseIdentitySeed,

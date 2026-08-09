@@ -106,7 +106,20 @@ public sealed record AccessQueryOutputFieldProjection(
     string AliasKind = "unknown",
     string? SourceExpressionHash = null,
     IReadOnlyList<string>? PivotSourceFieldStableKeys = null,
-    string OutputKind = "unknown");
+    string OutputKind = "unknown")
+{
+    public AccessQueryOutputFieldProjection(
+        AccessSafeIdentity identity,
+        int ordinal,
+        string typeFamily,
+        IReadOnlyList<string> sourceFieldStableKeys,
+        string coverage,
+        string evidenceOrigin)
+        : this(identity, ordinal, typeFamily, sourceFieldStableKeys, coverage, evidenceOrigin,
+            AccessQueryOutputAliasKinds.Unknown, null, null, "unknown")
+    {
+    }
+}
 
 internal static class AccessQueryOutputEvidenceOrigins
 {
@@ -152,7 +165,20 @@ public sealed record AccessQueryCrosstabProjection(
     IReadOnlyList<string> StaticColumnHashes,
     string Coverage,
     IReadOnlyList<string>? AggregateSourceFieldStableKeys = null,
-    IReadOnlyList<string>? PivotSourceFieldStableKeys = null);
+    IReadOnlyList<string>? PivotSourceFieldStableKeys = null)
+{
+    public AccessQueryCrosstabProjection(
+        IReadOnlyList<string> rowHeadingFieldStableKeys,
+        string? aggregateExpressionHash,
+        string? valueExpressionHash,
+        string? pivotExpressionHash,
+        IReadOnlyList<string> staticColumnHashes,
+        string coverage)
+        : this(rowHeadingFieldStableKeys, aggregateExpressionHash, valueExpressionHash, pivotExpressionHash,
+            staticColumnHashes, coverage, null, null)
+    {
+    }
+}
 
 public sealed record AccessQueryStaticOutputProjection(
     int Ordinal,
@@ -160,7 +186,17 @@ public sealed record AccessQueryStaticOutputProjection(
     IReadOnlyList<string> SourceFieldStableKeys,
     string Coverage,
     string AliasKind = "unknown",
-    string? SourceExpressionHash = null);
+    string? SourceExpressionHash = null)
+{
+    public AccessQueryStaticOutputProjection(
+        int ordinal,
+        string? nameHash,
+        IReadOnlyList<string> sourceFieldStableKeys,
+        string coverage)
+        : this(ordinal, nameHash, sourceFieldStableKeys, coverage, AccessQueryOutputAliasKinds.Unknown, null)
+    {
+    }
+}
 
 public sealed record AccessQueryStaticProjection(
     string SqlHash,

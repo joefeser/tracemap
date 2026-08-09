@@ -377,6 +377,14 @@ public static partial class AccessQueryProjector
 
     internal static bool CanReconcileStaticOutputByOrdinal(string sql, int ordinal, string outputName)
     {
+        if (!CanReconcileStaticOutputProvenanceByOrdinal(sql, ordinal, outputName))
+            return false;
+        var select = SelectListAfterKeyword(MaskLiteralsAndComments(sql), "select")!;
+        return IsStaticDirectProjection(SplitSelectItems(select)[ordinal]);
+    }
+
+    internal static bool CanReconcileStaticOutputProvenanceByOrdinal(string sql, int ordinal, string outputName)
+    {
         if (string.IsNullOrWhiteSpace(sql) || ordinal < 0 || string.IsNullOrWhiteSpace(outputName))
             return false;
         var masked = MaskLiteralsAndComments(sql);
@@ -388,7 +396,6 @@ public static partial class AccessQueryProjector
             && ProjectionStructureComplete(select)
             && expressions.All(expression => !string.IsNullOrWhiteSpace(expression))
             && !expressions.Take(ordinal + 1).Any(IsWildcardProjectionItem)
-            && IsStaticDirectProjection(expressions[ordinal])
             && string.Equals(
                 StaticOutputName(expressions[ordinal]),
                 outputName.Trim(),

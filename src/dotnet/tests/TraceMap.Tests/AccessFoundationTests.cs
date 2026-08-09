@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.Data.Sqlite;
 using TraceMap.Access;
 using TraceMap.Access.Cli;
 using TraceMap.Core;
@@ -1515,6 +1516,32 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Com_reader_records_a_gap_when_crosstab_output_catalog_cannot_be_derived()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "UnsupportedCrosstab");
+        var gaps = new List<AccessGapProjection>();
+
+        var query = Assert.Single(new AccessComReader().ReadQueries(
+            new FakeDaoDatabase(new FakeDaoQuery("UnsupportedCrosstab", "PARAMETERS p Long;", 16)),
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["UnsupportedCrosstab"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal),
+            gaps,
+            []));
+
+        Assert.Empty(query.OutputFields!);
+        Assert.Contains(gaps, gap => gap.Classification == "AccessQueryOutputCatalogUnavailable"
+            && gap.StableScopeKey == queryIdentity.StableKey
+            && gap.RuleId == RuleIds.LegacyAccessQuery);
+    }
+
+    [Fact]
     public void Com_reader_keeps_query_outputs_when_dependency_coverage_is_partial()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
@@ -1622,6 +1649,57 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
+    public void Com_reader_preserves_calculated_alias_provenance_without_trusting_static_source_lineage()
+    {
+        var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
+        var queryIdentity = AccessSafeValues.Identity(seed, "query", "OrderTotals");
+        var tableIdentity = AccessSafeValues.Identity(seed, "table", "Orders");
+        var amount = new AccessFieldProjection(
+            AccessSafeValues.Identity(seed, $"field-{tableIdentity.StableKey}", "Amount"),
+            0,
+            "decimal",
+            16,
+            false);
+        var database = new FakeDaoDatabase(new FakeDaoQuery(
+            "OrderTotals",
+            "SELECT Sum(Orders.Amount) AS TotalAmount FROM Orders;",
+            new FakeDaoField("TotalAmount", throwOnSource: true)));
+
+        var query = Assert.Single(new AccessComReader().ReadQueries(
+            database,
+            seed,
+            new Dictionary<string, AccessSafeIdentity>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["OrderTotals"] = queryIdentity
+            },
+            new Dictionary<string, IReadOnlyList<(string StableKey, string Kind)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Orders"] = [(tableIdentity.StableKey, "table")]
+            },
+            new Dictionary<string, List<AccessTableProjection>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Orders"] = [new(tableIdentity, [amount], [])]
+            },
+            new Dictionary<string, Dictionary<string, List<AccessFieldProjection>>>(StringComparer.Ordinal)
+            {
+                [tableIdentity.StableKey] = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Amount"] = [amount]
+                }
+            },
+            [],
+            []));
+
+        var output = Assert.Single(query.OutputFields!);
+        Assert.Equal("explicit-as", output.AliasKind);
+        Assert.Equal(
+            AccessSafeValues.RoleHash("access-query-output-expression", "Sum(Orders.Amount)"),
+            output.SourceExpressionHash);
+        Assert.Equal("partial", output.Coverage);
+        Assert.Empty(output.SourceFieldStableKeys);
+    }
+
+    [Fact]
     public void Com_reader_does_not_reconcile_static_alias_ordinals_after_expanding_wildcards()
     {
         var seed = AccessSafeValues.DatabaseIdentitySeed("repo", new string('a', 40), "fixture.accdb", "hash");
@@ -1717,6 +1795,21 @@ public sealed class AccessFoundationTests
         Assert.True(AccessQueryProjector.CanReconcileStaticOutputByOrdinal(complete, 0, "OrderAlias"));
         Assert.False(AccessQueryProjector.CanReconcileStaticOutputByOrdinal(complete, 0, "DifferentAlias"));
         Assert.False(AccessQueryProjector.CanReconcileStaticOutputByOrdinal(incomplete, 0, "OrderAlias"));
+        Assert.True(AccessQueryProjector.CanReconcileStaticOutputProvenanceByOrdinal(
+            "SELECT Sum(Orders.Amount) AS TotalAmount FROM Orders;",
+            0,
+            "TotalAmount"));
+    }
+
+    [Fact]
+    public void Projection_records_retain_pre_provenance_constructor_signatures()
+    {
+        Assert.NotNull(typeof(AccessQueryOutputFieldProjection).GetConstructor(
+            [typeof(AccessSafeIdentity), typeof(int), typeof(string), typeof(IReadOnlyList<string>), typeof(string), typeof(string)]));
+        Assert.NotNull(typeof(AccessQueryCrosstabProjection).GetConstructor(
+            [typeof(IReadOnlyList<string>), typeof(string), typeof(string), typeof(string), typeof(IReadOnlyList<string>), typeof(string)]));
+        Assert.NotNull(typeof(AccessQueryStaticOutputProjection).GetConstructor(
+            [typeof(int), typeof(string), typeof(IReadOnlyList<string>), typeof(string)]));
     }
 
     [Fact]
@@ -2670,7 +2763,7 @@ public sealed class AccessFoundationTests
     }
 
     [Fact]
-    public void Query_output_gaps_reference_the_owning_query_declaration_fact()
+    public async Task Query_output_gaps_reference_the_owning_query_declaration_fact()
     {
         using var temp = new TempDirectory();
         var databasePath = Path.Combine(temp.Path, "fixture.accdb");
@@ -2717,6 +2810,30 @@ public sealed class AccessFoundationTests
             && fact.Properties.GetValueOrDefault("sourceRole") == "pivot-expression");
         Assert.Equal("pivot-field", pivotSource.TargetSymbol);
         Assert.Equal(declaration.FactId, gap.Properties["supportingFactIds"]);
+
+        await AccessArtifactWriter.WriteAsync(input.OutputFullPath, result, AccessLimits.Default);
+        var persistedOutput = File.ReadLines(Path.Combine(input.OutputFullPath, "facts.ndjson"))
+            .Select(line => JsonSerializer.Deserialize<CodeFact>(line, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            })!)
+            .Single(fact => fact.FactId == outputDeclaration.FactId);
+        Assert.Equal("pivot-literal", persistedOutput.Properties["aliasKind"]);
+        Assert.Equal("static-pivot", persistedOutput.Properties["outputKind"]);
+        Assert.Equal("pivot-expression-hash", persistedOutput.Properties["sourceExpressionHash"]);
+        Assert.Equal("pivot-field", persistedOutput.Properties["pivotSourceFieldStableKeys"]);
+
+        await using var connection = new SqliteConnection($"Data Source={Path.Combine(input.OutputFullPath, "index.sqlite")}");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select properties_json from facts where fact_id = $fact_id;";
+        command.Parameters.AddWithValue("$fact_id", outputDeclaration.FactId);
+        var persistedProperties = Assert.IsType<string>(await command.ExecuteScalarAsync());
+        using var properties = JsonDocument.Parse(persistedProperties);
+        Assert.Equal("pivot-literal", properties.RootElement.GetProperty("aliasKind").GetString());
+        Assert.Equal("static-pivot", properties.RootElement.GetProperty("outputKind").GetString());
+        Assert.Equal("pivot-expression-hash", properties.RootElement.GetProperty("sourceExpressionHash").GetString());
+        Assert.Equal("pivot-field", properties.RootElement.GetProperty("pivotSourceFieldStableKeys").GetString());
     }
 
     [Fact]
