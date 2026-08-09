@@ -265,25 +265,27 @@ internal static class StaticDispatchCandidateBuilder
                     "registration-compatibility-unproven",
                     "Registration evidence does not agree with a relationship-backed implementation candidate; no dispatch candidate was created from registration evidence alone.")
             };
-            var abstraction = matchingAbstractions[0];
-            gaps.Add(new StaticDispatchCandidateGap(
-                $"gap:dispatch:registration:{Hash($"{gapKind}:{registration.FactId}:{abstraction.NodeId}", 16)}",
-                gapKind,
-                StaticDispatchCandidateStates.CandidateGap,
-                message,
-                registration.SourceIndexId,
-                registration.SourceLabel,
-                abstraction.NodeId,
-                GapRuleId,
-                EvidenceTiers.Tier4Unknown,
-                registration.FilePath,
-                registration.StartLine,
-                reason,
-                registration.CommitSha,
-                registration.ExtractorVersion ?? extractorVersionFor(registration.SourceIndexId),
-                "dependency-registration-context",
-                registration.EndLine,
-                [registration.FactId]));
+            foreach (var abstraction in matchingAbstractions)
+            {
+                gaps.Add(new StaticDispatchCandidateGap(
+                    $"gap:dispatch:registration:{Hash($"{gapKind}:{registration.FactId}:{abstraction.NodeId}", 16)}",
+                    gapKind,
+                    StaticDispatchCandidateStates.CandidateGap,
+                    message,
+                    registration.SourceIndexId,
+                    registration.SourceLabel,
+                    abstraction.NodeId,
+                    GapRuleId,
+                    EvidenceTiers.Tier4Unknown,
+                    registration.FilePath,
+                    registration.StartLine,
+                    reason,
+                    registration.CommitSha,
+                    registration.ExtractorVersion ?? extractorVersionFor(registration.SourceIndexId),
+                    "dependency-registration-context",
+                    registration.EndLine,
+                    [registration.FactId]));
+            }
         }
     }
 
@@ -474,7 +476,9 @@ internal static class StaticDispatchCandidateBuilder
             extractorVersionFor(abstractionNode.SourceIndexId),
             "combined-symbol-relationships",
             abstractionNode.EndLine,
-            []));
+            [],
+            candidateCount,
+            candidateLimit));
     }
 
     private static void AddOverrideDepthGapIfNeeded(
@@ -508,7 +512,8 @@ internal static class StaticDispatchCandidateBuilder
             extractorVersionFor(abstractionNode.SourceIndexId),
             "combined-symbol-relationships",
             abstractionNode.EndLine,
-            []));
+            [],
+            CandidateLimit: maxOverrideDepth));
     }
 
     private static bool IsMemberCandidateRelationship(string? originalRelationshipKind)
@@ -897,4 +902,6 @@ internal sealed record StaticDispatchCandidateGap(
     string? ExtractorVersion,
     string? EvidenceScope,
     int? EndLine,
-    IReadOnlyList<string> SupportingFactIds);
+    IReadOnlyList<string> SupportingFactIds,
+    int? CandidateCount = null,
+    int? CandidateLimit = null);
