@@ -24,8 +24,9 @@
   retained with a deterministic ordinal identity, partial coverage, source
   candidates where provable, and an output-scoped gap rather than disappearing;
   crosstab pivot parsing now binds the static column list to the top-level `IN`
-  clause so an `IN` operator nested inside the pivot expression cannot truncate
-  provenance or manufacture complete coverage; aggregate aliases are stripped
+  clause that terminates the pivot statement so nested or preceding expression
+  `IN` operators cannot truncate provenance or manufacture complete coverage;
+  aggregate aliases are stripped
   before value/source resolution so a supported aliased `TRANSFORM` expression
   retains complete lineage.
 - Validation procedure: followed the Mac-only Microsoft Access adapter smoke in
