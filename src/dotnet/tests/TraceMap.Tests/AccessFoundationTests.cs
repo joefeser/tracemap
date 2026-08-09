@@ -1051,6 +1051,10 @@ public sealed class AccessFoundationTests
             "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan','Feb');",
             known,
             fields);
+        var aliasedLineage = AccessQueryProjector.ProjectCrosstabLineage(
+            "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan','Feb');",
+            known,
+            fields);
         Assert.Equal(["Category", "Jan", "Feb"], outputs.Select(output => output.Name));
         Assert.Equal(["row-heading", "static-pivot", "static-pivot"], outputs.Select(output => output.OutputKind));
         Assert.All(outputs, output => Assert.Equal("complete", output.Coverage));
@@ -1060,6 +1064,8 @@ public sealed class AccessFoundationTests
         Assert.Equal("direct-field", outputs[0].AliasKind);
         Assert.Equal("pivot-literal", outputs[1].AliasKind);
         Assert.Equal(["field-month"], outputs[1].PivotSourceFieldStableKeys);
+        Assert.Equal(["field-amount"], aliasedLineage.AggregateSourceFieldStableKeys);
+        Assert.Equal("complete", aliasedLineage.Coverage);
         Assert.Equal(
             AccessSafeValues.RoleHash("access-query-pivot", "Events.Month"),
             outputs[1].SourceExpressionHash);

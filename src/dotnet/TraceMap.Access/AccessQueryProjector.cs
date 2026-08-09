@@ -126,7 +126,7 @@ public static partial class AccessQueryProjector
         var row = rowExpressions.SelectMany(item => ResolveExpressionFields(item, knownObjects, fieldLookups)).Distinct(StringComparer.Ordinal).ToArray();
         var aggregate = MatchValue(masked, TransformPattern());
         var pivot = PivotExpression(masked);
-        var value = aggregate is null ? null : ExtractAggregateValue(aggregate);
+        var value = aggregate is null ? null : ExtractAggregateValue(RemoveOutputAlias(aggregate));
         var aggregateSources = value is null
             ? []
             : ResolveExpressionFields(value, knownObjects, fieldLookups);
