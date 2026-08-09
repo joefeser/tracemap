@@ -1065,6 +1065,20 @@ public sealed class AccessFoundationTests
             outputs[1].SourceExpressionHash);
         Assert.Equal(outputs[1].PivotSourceFieldStableKeys, outputs[2].PivotSourceFieldStableKeys);
 
+        const string nestedInSql =
+            "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT IIf(Events.Month In ('InnerOnly'), Events.Month, 'Other') IN ('Jan','Other');";
+        var nestedInOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            nestedInSql,
+            known,
+            fields);
+        var nestedInLineage = AccessQueryProjector.ProjectCrosstabLineage(nestedInSql, known, fields);
+        Assert.Equal(["Category", "Jan", "Other"], nestedInOutputs.Select(output => output.Name));
+        Assert.DoesNotContain(nestedInOutputs, output => output.Name == "InnerOnly");
+        Assert.All(nestedInOutputs, output => Assert.Equal("complete", output.Coverage));
+        Assert.Equal(["field-month"], nestedInOutputs[1].PivotSourceFieldStableKeys);
+        Assert.Equal("complete", nestedInLineage.Coverage);
+        Assert.Equal(nestedInLineage.PivotExpressionHash, nestedInOutputs[1].SourceExpressionHash);
+
         var aliasedOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
             "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Format(Events.EventDate, 'yyyy'), Events.Category AS CategoryLabel FROM Events GROUP BY Format(Events.EventDate, 'yyyy'), Events.Category PIVOT Events.Month IN ('Jan');",
             known,
