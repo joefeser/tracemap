@@ -345,8 +345,18 @@ public static class AccessDesignEvidenceComposer
                 // them from the unique output->source alias resolver so a
                 // crosstab does not become falsely ambiguous (aggregate field
                 // plus pivot field) for report/domain composition.
-                if (fact.Properties.GetValueOrDefault("sourceRole") == "pivot-expression")
+                var sourceRole = fact.Properties.GetValueOrDefault("sourceRole");
+                if (sourceRole == "pivot-expression")
                     continue;
+                if (sourceRole != "output-expression")
+                {
+                    normalizationGaps.Add(new(
+                        "AccessDesignInputQueryOutputSourceRoleInvalid",
+                        "query-field",
+                        fact.SourceSymbol,
+                        RuleIds.LegacyAccessDesignInput));
+                    continue;
+                }
                 if (!queryOutputSourcesByOutput.TryGetValue(fact.SourceSymbol, out var sourceCandidates))
                     queryOutputSourcesByOutput[fact.SourceSymbol] = sourceCandidates = [];
                 sourceCandidates.Add(fact.TargetSymbol);

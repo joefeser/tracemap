@@ -264,6 +264,10 @@ public static class AccessScreenDataFlowReporter
         int maxGaps,
         ref bool truncated)
     {
+        if (fact.FactType == FactTypes.AccessQueryOutputSourceCandidate
+            && fact.Properties.GetValueOrDefault("sourceRole") != "output-expression")
+            return null;
+
         string? kind = fact.FactType switch
         {
             FactTypes.AccessControlDeclared => "surface-control-ownership",
