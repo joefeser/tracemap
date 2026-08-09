@@ -1192,11 +1192,12 @@ public static class CombinedChangeImpactReporter
             return;
         }
 
-        builder.AppendLine("| Classification | Change | Kind | Source | Evidence | Rule | Tier | Span |");
-        builder.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- |");
+        builder.AppendLine("| Classification | Change | Kind | Source | Evidence | Rule | Tier | Span | Notes |");
+        builder.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
         foreach (var item in items.Take(200))
         {
-            builder.AppendLine($"| {Cell(item.Classification)} | {Cell(item.ChangeType)} | {Cell(item.EvidenceKind)} | {Cell(item.SourceLabel)} | {Cell(item.After?.DisplayName ?? item.Before?.DisplayName ?? item.StableKey)} | {Cell(item.ImpactRuleId)} | {Cell(item.EvidenceTier ?? "n/a")} | {Cell(Span(item))} |");
+            var notes = string.Join("; ", item.Notes.Select(note => $"{note.Code}: {note.Message}"));
+            builder.AppendLine($"| {Cell(item.Classification)} | {Cell(item.ChangeType)} | {Cell(item.EvidenceKind)} | {Cell(item.SourceLabel)} | {Cell(item.After?.DisplayName ?? item.Before?.DisplayName ?? item.StableKey)} | {Cell(item.ImpactRuleId)} | {Cell(item.EvidenceTier ?? "n/a")} | {Cell(Span(item))} | {Cell(notes)} |");
         }
 
         builder.AppendLine();
@@ -1221,11 +1222,16 @@ public static class CombinedChangeImpactReporter
             return;
         }
 
-        builder.AppendLine("| Classification | Kind | Source | Evidence | Before Paths | After Paths | Gaps |");
-        builder.AppendLine("| --- | --- | --- | --- | --- | --- | --- |");
+        builder.AppendLine("| Classification | Kind | Source | Evidence | Before Paths | After Paths | Rules | Gaps |");
+        builder.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- |");
         foreach (var item in rows.Take(200))
         {
-            builder.AppendLine($"| {Cell(item.PathContext.Classification)} | {Cell(item.EvidenceKind)} | {Cell(item.SourceLabel)} | {Cell(item.After?.DisplayName ?? item.Before?.DisplayName ?? item.StableKey)} | {item.PathContext.BeforePaths.Count} | {item.PathContext.AfterPaths.Count} | {item.PathContext.Gaps.Count} |");
+            var ruleIds = item.PathContext.BeforePaths
+                .Concat(item.PathContext.AfterPaths)
+                .SelectMany(path => path.RuleIds ?? [])
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal);
+            builder.AppendLine($"| {Cell(item.PathContext.Classification)} | {Cell(item.EvidenceKind)} | {Cell(item.SourceLabel)} | {Cell(item.After?.DisplayName ?? item.Before?.DisplayName ?? item.StableKey)} | {item.PathContext.BeforePaths.Count} | {item.PathContext.AfterPaths.Count} | {Cell(string.Join(", ", ruleIds))} | {item.PathContext.Gaps.Count} |");
         }
 
         builder.AppendLine();

@@ -1052,7 +1052,7 @@ public static class CombinedReverseReporter
                 var candidate = group.OrderBy(item => item.Node.SourceLabel, StringComparer.Ordinal).ThenBy(item => item.Node.DisplayName, StringComparer.Ordinal).First();
                 var pathIds = group.Select(item => item.PathId).Where(pathsById.ContainsKey).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
                 var rootPaths = pathIds.Select(id => pathsById[id]).ToArray();
-                var classification = rootPaths.Select(path => path.Classification).OrderBy(ClassificationRank).FirstOrDefault() ?? CombinedReverseClassifications.UnknownAnalysisGap;
+                var classification = AggregateRootClassification(rootPaths);
                 var source = sourcesById.TryGetValue(candidate.Node.SourceIndexId, out var found) ? found : null;
                 var caveats = source is not null && SourceHasReducedCoverage(source) ? new[] { $"Source `{source.Label}` has reduced coverage." } : [];
                 return new CombinedReverseRoot(
@@ -1071,6 +1071,18 @@ public static class CombinedReverseReporter
                     caveats);
             })
             .ToArray();
+    }
+
+    internal static string AggregateRootClassification(IReadOnlyList<CombinedReversePath> rootPaths)
+    {
+        var classification = rootPaths
+            .Select(path => path.Classification)
+            .OrderBy(ClassificationRank)
+            .FirstOrDefault() ?? CombinedReverseClassifications.UnknownAnalysisGap;
+        return rootPaths.Any(path => path.RuleIds.Contains("combined.dispatch-candidate.v1", StringComparer.Ordinal))
+            && ClassificationRank(classification) < ClassificationRank(CombinedReverseClassifications.NeedsReviewReversePath)
+                ? CombinedReverseClassifications.NeedsReviewReversePath
+                : classification;
     }
 
     private static bool IsTargetRoot(CombinedPathNode node, string target, string? sourceFilter)

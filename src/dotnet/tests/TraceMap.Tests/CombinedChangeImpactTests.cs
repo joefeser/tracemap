@@ -410,6 +410,9 @@ public sealed class CombinedChangeImpactTests
         Assert.Contains(edge.Notes, note => note.Code == "StaticDispatchCandidate");
 
         var markdown = await File.ReadAllTextAsync(Path.Combine(temp.Path, "impact", "impact-report.md"));
+        Assert.Contains("combined.dispatch-candidate.v1", markdown, StringComparison.Ordinal);
+        Assert.Contains("StaticDispatchCandidate", markdown, StringComparison.Ordinal);
+        Assert.Contains("does not prove runtime dispatch", markdown, StringComparison.Ordinal);
         Assert.DoesNotContain("proves impact", markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("selected implementation", markdown, StringComparison.OrdinalIgnoreCase);
     }

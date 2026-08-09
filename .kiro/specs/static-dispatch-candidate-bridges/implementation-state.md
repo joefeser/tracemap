@@ -74,11 +74,17 @@ extraction rules or infer runtime DI selection.
 
 Validation for Task 9 and its review corrections:
 
-- Focused reverse/impact/path tests: 64/64 passed.
-- Full .NET solution tests: 1,328/1,328 passed.
+- Focused reverse/impact/path tests: 65/65 passed.
+- Full .NET solution tests: 1,329/1,329 passed.
 - Targeted `dotnet format --verify-no-changes`: passed.
 - Private-path guard: passed.
 - `git diff --check`: passed.
+
+The exact-head Codex review then identified two presentation/aggregation gaps.
+Impact Markdown now renders candidate rule IDs and the bounded candidate note
+already present in JSON. Reverse root aggregation now applies the candidate cap
+when any supporting path is candidate-dependent, even when a sibling path is
+stronger; a direct aggregation regression proves that mixed-path invariant.
 
 ## Task 8 Pre-Implementation Decision
 
