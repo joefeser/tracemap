@@ -349,7 +349,7 @@ public static class CombinedRouteFlowReporter
         var clientSelector = NormalizeEndpointSelector(options.ClientCall);
         var endpointSelector = NormalizeEndpointSelector(options.FromEndpoint);
         var pathEndpointSelector = routeSelector ?? clientSelector ?? endpointSelector;
-        var pathReport = await CombinedDependencyPathReporter.BuildReportAsync(new CombinedDependencyPathOptions(
+        var pathOptions = new CombinedDependencyPathOptions(
             options.IndexPath,
             options.OutputPath,
             "json",
@@ -361,7 +361,9 @@ public static class CombinedRouteFlowReporter
             SurfaceName: options.SurfaceName,
             MaxDepth: options.MaxDepth,
             MaxPaths: options.MaxPaths,
-            MaxFrontier: options.MaxFrontier), cancellationToken);
+            MaxFrontier: options.MaxFrontier);
+        var pathReport = await CombinedDependencyPathReporter.BuildReportAsync(pathOptions, cancellationToken);
+        var selectedTraversalNodeIds = await CombinedDependencyPathReporter.BuildTraversalScopeAsync(pathOptions, cancellationToken);
         var inventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(options.IndexPath, cancellationToken: cancellationToken);
         var selectedPaths = FilterPathsForSelectorSide(pathReport.Paths, routeSelector, clientSelector).ToArray();
         var symbolKinds = await ReadCombinedSymbolKindsAsync(options.IndexPath, cancellationToken);
@@ -393,11 +395,7 @@ public static class CombinedRouteFlowReporter
             .SelectMany(path => path.Nodes)
             .Select(node => node.NodeId)
             .ToHashSet(StringComparer.Ordinal);
-        selectedRouteNodeIds.UnionWith(ReachableSelectedTraversalNodeIds(
-            selectedPaths,
-            inventory.Edges,
-            options.MaxDepth,
-            options.MaxFrontier));
+        selectedRouteNodeIds.UnionWith(selectedTraversalNodeIds);
         var pathGaps = pathReport.Gaps
             .Where(gap => !IsSharedDispatchGap(gap)
                 || (!string.IsNullOrWhiteSpace(gap.NodeId) && selectedRouteNodeIds.Contains(gap.NodeId)))
@@ -4342,60 +4340,6 @@ public static class CombinedRouteFlowReporter
     private static bool IsSharedDispatchGap(CombinedPathGap gap)
     {
         return gap.RuleId == StaticDispatchCandidateBuilder.GapRuleId;
-    }
-
-    private static IReadOnlySet<string> ReachableSelectedTraversalNodeIds(
-        IReadOnlyList<CombinedPath> selectedPaths,
-        IReadOnlyList<CombinedPathEdge> edges,
-        int maxDepth,
-        int maxFrontier)
-    {
-        var starts = selectedPaths
-            .Where(path => path.Nodes.Count > 0)
-            .Select(path => path.Nodes[0].NodeId)
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(nodeId => nodeId, StringComparer.Ordinal)
-            .ToArray();
-        var reached = starts.ToHashSet(StringComparer.Ordinal);
-        if (starts.Length == 0)
-        {
-            return reached;
-        }
-
-        var outgoing = edges
-            .GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
-            .ToDictionary(
-                group => group.Key,
-                group => group.OrderBy(edge => edge.EdgeId, StringComparer.Ordinal).ToArray(),
-                StringComparer.Ordinal);
-        var queue = new Queue<(IReadOnlyList<string> NodeIds, int Depth)>(starts.Select(nodeId => ((IReadOnlyList<string>)[nodeId], 0)));
-        while (queue.Count > 0)
-        {
-            if (queue.Count > maxFrontier)
-            {
-                break;
-            }
-
-            var (nodeIds, depth) = queue.Dequeue();
-            var nodeId = nodeIds[^1];
-            reached.Add(nodeId);
-            if (depth >= maxDepth)
-            {
-                continue;
-            }
-
-            foreach (var edge in outgoing.GetValueOrDefault(nodeId, []))
-            {
-                if (nodeIds.Contains(edge.ToNodeId, StringComparer.Ordinal))
-                {
-                    continue;
-                }
-
-                queue.Enqueue(([.. nodeIds, edge.ToNodeId], depth + 1));
-            }
-        }
-
-        return reached;
     }
 
     private static IReadOnlyList<string> PathGapLimitations(string gapKind, string pathReportCoverage)

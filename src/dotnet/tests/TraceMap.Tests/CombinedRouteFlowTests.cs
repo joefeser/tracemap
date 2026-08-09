@@ -1470,6 +1470,7 @@ public sealed class CombinedRouteFlowTests
         var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
         var server = Manifest("server", "tracemap-milestone15");
         var caller = "Server.DownstreamClient.Load()";
+        var incompleteCaller = "Server.StatusClient.Load()";
         var repository = "Server.CacheRepository.Query()";
         var firstStep = "Server.StatusPipeline.First()";
         var secondStep = "Server.StatusPipeline.Second()";
@@ -1478,9 +1479,10 @@ public sealed class CombinedRouteFlowTests
         var facts = new List<CodeFact>
         {
             HttpClientFact(server, "GET", "/api/downstream", "/api/downstream", "Services/DownstreamClient.cs", 10, caller),
+            HttpClientFact(server, "GET", "/api/downstream", "/api/downstream", "Services/StatusClient.cs", 11, incompleteCaller),
             CallFact(server, caller, repository, "Services/DownstreamClient.cs", 14),
             QueryPatternFact(server, repository, "Infrastructure/CacheRepository.cs", 31, attachSymbol: true),
-            CallFact(server, caller, firstStep, "Services/DownstreamClient.cs", 15),
+            CallFact(server, incompleteCaller, firstStep, "Services/StatusClient.cs", 15),
             CallFact(server, firstStep, secondStep, "Services/StatusPipeline.cs", 20),
             CallFact(server, secondStep, thirdStep, "Services/StatusPipeline.cs", 21),
             CallFact(server, thirdStep, service, "Services/StatusPipeline.cs", 22, targetSymbolKind: "InterfaceMember")
@@ -1510,6 +1512,50 @@ public sealed class CombinedRouteFlowTests
         Assert.Equal("ReducedCoverage", result.Report.ReportCoverage);
         Assert.True(result.Report.Summary.Truncated);
         Assert.NotEqual(RouteFlowClassifications.StrongStaticRouteFlow, result.Report.Summary.Classification);
+    }
+
+    [Fact]
+    public async Task Client_call_scope_does_not_cross_from_candidate_to_raw_relationship()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var caller = "Server.DownstreamClient.Load()";
+        var repository = "Server.CacheRepository.Query()";
+        var firstInterface = "Server.IFirstService.Get()";
+        var secondInterface = "Server.ISecondService.Get()";
+        var sharedImplementation = "Server.SharedService.Get()";
+        var facts = new List<CodeFact>
+        {
+            HttpClientFact(server, "GET", "/api/downstream", "/api/downstream", "Services/DownstreamClient.cs", 10, caller),
+            CallFact(server, caller, repository, "Services/DownstreamClient.cs", 14),
+            QueryPatternFact(server, repository, "Infrastructure/CacheRepository.cs", 31, attachSymbol: true),
+            CallFact(server, caller, firstInterface, "Services/DownstreamClient.cs", 15, targetSymbolKind: "InterfaceMember"),
+            SymbolRelationshipFact(server, sharedImplementation, firstInterface, "Services/SharedService.cs", 40),
+            SymbolRelationshipFact(server, sharedImplementation, secondInterface, "Services/SharedService.cs", 41)
+        };
+        for (var index = 0; index < 11; index++)
+        {
+            facts.Add(SymbolRelationshipFact(
+                server,
+                $"Server.SecondService{index}.Get()",
+                secondInterface,
+                $"Services/SecondService{index}.cs",
+                50 + index));
+        }
+
+        SqliteIndexWriter.Write(serverIndex, server, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            ClientCall: "GET /api/downstream",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(result.Report.DependencySurfaces, surface => surface.SurfaceKind == "sql-query");
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.GapKind == "DispatchCandidateFanOut");
     }
 
     [Fact]
@@ -1977,85 +2023,6 @@ public sealed class CombinedRouteFlowTests
 
         var supportingCallEdgeIds = Assert.IsAssignableFrom<IReadOnlyList<string>>(method!.Invoke(null, [path, 3]));
         Assert.Equal(["combined-edge:call", "edge:call"], supportingCallEdgeIds);
-    }
-
-    [Fact]
-    public void Route_flow_reachability_scope_uses_queue_frontier_not_cumulative_node_count()
-    {
-        var root = new CombinedPathNode(
-            NodeId: "node:root",
-            NodeKind: "Method",
-            DisplayName: "Server.Root()",
-            SourceIndexId: "server",
-            SourceLabel: "server",
-            ScanId: "scan-server",
-            CommitSha: "abc123",
-            SymbolId: "Server.Root()",
-            CombinedFactId: "server:root",
-            RuleId: RuleIds.CSharpSemanticCallGraph,
-            EvidenceTier: EvidenceTiers.Tier1Semantic,
-            FilePath: "Root.cs",
-            StartLine: 1,
-            EndLine: 1,
-            SurfaceKind: null,
-            SurfaceName: null,
-            HttpMethod: null,
-            NormalizedPathKey: null,
-            OperationName: null,
-            TableName: null,
-            ColumnNames: null,
-            SourceKind: null,
-            ShapeHash: null,
-            TextHash: null,
-            TextLength: null,
-            PackageName: null,
-            ConfigKey: null);
-        static CombinedPathEdge Edge(string id, string from, string to)
-        {
-            return new CombinedPathEdge(
-                id,
-                "calls",
-                from,
-                to,
-                CombinedDependencyPathClassifications.StrongStaticPath,
-                RuleIds.CSharpSemanticCallGraph,
-                EvidenceTiers.Tier1Semantic,
-                [$"fact:{id}"],
-                [$"combined:{id}"],
-                "Root.cs",
-                1,
-                1);
-        }
-
-        var selectedPath = new CombinedPath(
-            "path:selected",
-            CombinedDependencyPathClassifications.StrongStaticPath,
-            "High",
-            0,
-            root.NodeId,
-            root.NodeId,
-            [root],
-            [],
-            [],
-            [],
-            []);
-        var edges = new[]
-        {
-            Edge("edge:terminal", root.NodeId, "node:terminal"),
-            Edge("edge:branch-1", root.NodeId, "node:branch-1"),
-            Edge("edge:branch-2", "node:branch-1", "node:branch-2"),
-            Edge("edge:branch-3", "node:branch-2", "node:branch-3"),
-            Edge("edge:abstraction", "node:branch-3", "node:abstraction")
-        };
-        var method = typeof(CombinedRouteFlowReporter).GetMethod(
-            "ReachableSelectedTraversalNodeIds",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-        Assert.NotNull(method);
-
-        var reached = Assert.IsAssignableFrom<IReadOnlySet<string>>(method!.Invoke(null, [new[] { selectedPath }, edges, 10, 2]));
-
-        Assert.Contains("node:abstraction", reached);
-        Assert.True(reached.Count > 2);
     }
 
     [Fact]

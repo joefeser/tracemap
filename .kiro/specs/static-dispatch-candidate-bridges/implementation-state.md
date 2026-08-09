@@ -135,6 +135,10 @@ Task 8 route-flow slice:
   traversal queue-frontier semantics rather than treating the frontier as a
   cumulative node cap, and generalized duplicate removal to every shared
   dispatch gap kind using gap kind plus affected abstraction identity.
+- The final hosted follow-up removed that auxiliary walker entirely. Route-flow
+  now consumes the path engine's internal reached-node scope, so all selected
+  roots, queue/frontier limits, path-local cycles, and dispatch cross-hop rules
+  are shared by construction instead of reimplemented.
 
 - Audited the shipped `DependencyRegistered` shape and added deterministic
   service/implementation type symbol IDs plus a closed-set registration shape
@@ -284,6 +288,9 @@ Results:
   tests passed, 115 tests; full `.NET` solution passed, 1,310 tests; targeted
   format, private-path guard, and diff check passed.
 - Frontier/deduplication follow-up validation: focused route-flow/path tests
+  passed, 121 tests; full `.NET` solution passed, 1,316 tests; targeted format,
+  private-path guard, and diff check passed.
+- Shared traversal-scope follow-up validation: focused route-flow/path tests
   passed, 121 tests; full `.NET` solution passed, 1,316 tests; targeted format,
   private-path guard, and diff check passed.
 - `dotnet format --verify-no-changes` over changed C# files: passed.
