@@ -910,7 +910,7 @@ public static partial class AccessQueryProjector
         var clauseEnd = semicolon < 0 ? masked.Length : semicolon;
         inIndex = TopLevelKeywordIndexes(masked, "in", expressionStart)
             .Cast<int?>()
-            .FirstOrDefault(index => index < clauseEnd);
+            .LastOrDefault(index => index < clauseEnd);
         expressionEnd = inIndex ?? clauseEnd;
         return expressionStart < expressionEnd;
     }

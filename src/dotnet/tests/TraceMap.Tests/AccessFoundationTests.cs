@@ -1085,6 +1085,18 @@ public sealed class AccessFoundationTests
         Assert.Equal("complete", nestedInLineage.Coverage);
         Assert.Equal(nestedInLineage.PivotExpressionHash, nestedInOutputs[1].SourceExpressionHash);
 
+        const string topLevelInSql =
+            "TRANSFORM Sum(Events.Amount) SELECT Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month In ('Jan') IN (-1,0);";
+        var topLevelInOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
+            topLevelInSql,
+            known,
+            fields);
+        var topLevelInLineage = AccessQueryProjector.ProjectCrosstabLineage(topLevelInSql, known, fields);
+        Assert.Equal(["Category", "-1", "0"], topLevelInOutputs.Select(output => output.Name));
+        Assert.All(topLevelInOutputs, output => Assert.Equal("complete", output.Coverage));
+        Assert.Equal(["field-month"], topLevelInOutputs[1].PivotSourceFieldStableKeys);
+        Assert.Equal("complete", topLevelInLineage.Coverage);
+
         var aliasedOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
             "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Format(Events.EventDate, 'yyyy'), Events.Category AS CategoryLabel FROM Events GROUP BY Format(Events.EventDate, 'yyyy'), Events.Category PIVOT Events.Month IN ('Jan');",
             known,
