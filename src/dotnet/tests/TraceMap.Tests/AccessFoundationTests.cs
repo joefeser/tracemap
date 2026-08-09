@@ -1038,6 +1038,8 @@ public sealed class AccessFoundationTests
         Assert.Equal(2, staticShape.StaticColumnHashes.Count);
         Assert.NotEqual(staticShape.AggregateExpressionHash, staticShape.ValueExpressionHash);
         Assert.Equal("complete", staticShape.Coverage);
+        Assert.Equal(["field-amount"], staticShape.AggregateSourceFieldStableKeys);
+        Assert.Equal(["field-month"], staticShape.PivotSourceFieldStableKeys);
         Assert.Equal(2, alternateStaticShape.StaticColumnHashes.Count);
         Assert.Equal("partial", partiallyResolvedRows.Coverage);
         Assert.Equal("partial", unsupportedFunction.Coverage);
@@ -1054,6 +1056,13 @@ public sealed class AccessFoundationTests
         Assert.Equal(["field-row"], outputs[0].SourceFieldStableKeys);
         Assert.Equal(["field-amount"], outputs[1].SourceFieldStableKeys);
         Assert.Equal(["field-amount"], outputs[2].SourceFieldStableKeys);
+        Assert.Equal("direct-field", outputs[0].AliasKind);
+        Assert.Equal("pivot-literal", outputs[1].AliasKind);
+        Assert.Equal(["field-month"], outputs[1].PivotSourceFieldStableKeys);
+        Assert.Equal(
+            AccessSafeValues.RoleHash("access-query-pivot", "Events.Month"),
+            outputs[1].SourceExpressionHash);
+        Assert.Equal(outputs[1].PivotSourceFieldStableKeys, outputs[2].PivotSourceFieldStableKeys);
 
         var aliasedOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
             "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Format(Events.EventDate, 'yyyy'), Events.Category AS CategoryLabel FROM Events GROUP BY Format(Events.EventDate, 'yyyy'), Events.Category PIVOT Events.Month IN ('Jan');",
@@ -1063,6 +1072,7 @@ public sealed class AccessFoundationTests
         Assert.Equal(["CategoryLabel", "Jan"], aliasedOutputs.Select(output => output.Name));
         Assert.All(aliasedOutputs, output => Assert.Equal("complete", output.Coverage));
         Assert.Equal(["field-row"], aliasedOutputs[0].SourceFieldStableKeys);
+        Assert.Equal("explicit-as", aliasedOutputs[0].AliasKind);
 
         var accessAliasedOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
             "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT CategoryLabel: Events.Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
@@ -1070,6 +1080,7 @@ public sealed class AccessFoundationTests
             fields);
         Assert.Equal("complete", accessAliasedOutputs[0].Coverage);
         Assert.Equal(["field-row"], accessAliasedOutputs[0].SourceFieldStableKeys);
+        Assert.Equal("access-colon", accessAliasedOutputs[0].AliasKind);
 
         var malformedOutputs = AccessQueryProjector.ProjectCrosstabOutputCatalog(
             "TRANSFORM Sum(Events.Amount) AS TotalAmount SELECT Events.[Category FROM Events GROUP BY Events.Category PIVOT Events.Month IN ('Jan');",
@@ -1163,6 +1174,13 @@ public sealed class AccessFoundationTests
         var query = Assert.Single(queries);
         Assert.Equal(["Category", "Jan"], query.OutputFields!.Select(output => output.Identity.DisplayName));
         Assert.All(query.OutputFields!, output => Assert.Equal("complete", output.Coverage));
+        var staticPivot = Assert.Single(query.OutputFields!, output => output.Identity.DisplayName == "Jan");
+        Assert.Equal("static-pivot", staticPivot.OutputKind);
+        Assert.Equal("pivot-literal", staticPivot.AliasKind);
+        Assert.Equal([month.Identity.StableKey], staticPivot.PivotSourceFieldStableKeys);
+        Assert.Equal(
+            AccessSafeValues.RoleHash("access-query-pivot", "Events.Month"),
+            staticPivot.SourceExpressionHash);
         Assert.DoesNotContain(gaps, gap => gap.Classification == "AccessQueryCrosstabDownstreamCompositionUnavailable");
     }
 
@@ -2665,7 +2683,17 @@ public sealed class AccessFoundationTests
             $"query-field-{query.Identity.StableKey}",
             "OutputField",
             0);
-        var output = new AccessQueryOutputFieldProjection(outputIdentity, 0, "unknown", [], "partial");
+        var output = new AccessQueryOutputFieldProjection(
+            outputIdentity,
+            0,
+            "unknown",
+            [],
+            "partial",
+            "static-crosstab",
+            "pivot-literal",
+            "pivot-expression-hash",
+            ["pivot-field"],
+            "static-pivot");
         projection = projection with
         {
             Queries = [query with { OutputFields = [output] }],
@@ -2680,6 +2708,14 @@ public sealed class AccessFoundationTests
 
         Assert.Equal(outputIdentity.StableKey, gap.TargetSymbol);
         Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, outputDeclaration.EvidenceTier);
+        Assert.Equal("pivot-literal", outputDeclaration.Properties["aliasKind"]);
+        Assert.Equal("static-pivot", outputDeclaration.Properties["outputKind"]);
+        Assert.Equal("pivot-expression-hash", outputDeclaration.Properties["sourceExpressionHash"]);
+        Assert.Equal("pivot-field", outputDeclaration.Properties["pivotSourceFieldStableKeys"]);
+        var pivotSource = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.AccessQueryOutputSourceCandidate
+            && fact.Properties.GetValueOrDefault("sourceRole") == "pivot-expression");
+        Assert.Equal("pivot-field", pivotSource.TargetSymbol);
         Assert.Equal(declaration.FactId, gap.Properties["supportingFactIds"]);
     }
 

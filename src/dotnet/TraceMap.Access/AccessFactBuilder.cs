@@ -4,7 +4,7 @@ namespace TraceMap.Access;
 
 public static class AccessFactBuilder
 {
-    public const string ScannerVersion = "tracemap-access/0.3.1";
+    public const string ScannerVersion = "tracemap-access/0.3.2";
     private const string ExtractorId = "AccessCatalogExtractor";
 
     public static ScanResult Build(AccessValidatedInput input, AccessDatabaseProjection projection, AccessScanOptions options, AccessLimits? limits = null)
@@ -205,8 +205,14 @@ public static class AccessFactBuilder
                         ("ordinal", output.Ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                         ("typeFamily", output.TypeFamily),
                         ("evidenceOrigin", output.EvidenceOrigin),
+                        ("outputKind", output.OutputKind),
+                        ("aliasKind", output.AliasKind),
+                        ("sourceExpressionHash", output.SourceExpressionHash ?? ""),
+                        ("pivotSourceFieldStableKeys", output.PivotSourceFieldStableKeys is null
+                            ? ""
+                            : string.Join(';', output.PivotSourceFieldStableKeys)),
                         ("coverageLabel", output.Coverage),
-                        ("limitations", "querydef-or-static-select-output-name;source-lineage-may-be-partial;no-query-execution;no-row-read"))));
+                        ("limitations", "querydef-or-static-select-output-name;static-alias-or-pivot-literal-provenance-only;source-lineage-may-be-partial;no-query-execution;no-row-read"))));
                 foreach (var sourceField in output.SourceFieldStableKeys)
                 {
                     facts.Add(Create(manifest, FactTypes.AccessQueryOutputSourceCandidate, RuleIds.LegacyAccessQuery,
@@ -217,9 +223,25 @@ public static class AccessFactBuilder
                             ("queryStableKey", query.Identity.StableKey),
                             ("queryOutputStableKey", output.Identity.StableKey),
                             ("sourceFieldStableKey", sourceField),
+                            ("sourceRole", "output-expression"),
                             ("targetKind", "field"),
                             ("coverageLabel", output.Coverage),
                             ("limitations", "static-query-output-source-candidate;no-query-execution;no-row-read"))));
+                }
+                foreach (var sourceField in output.PivotSourceFieldStableKeys ?? [])
+                {
+                    facts.Add(Create(manifest, FactTypes.AccessQueryOutputSourceCandidate, RuleIds.LegacyAccessQuery,
+                        EvidenceTiers.Tier3SyntaxOrTextual, span,
+                        sourceSymbol: output.Identity.StableKey,
+                        targetSymbol: sourceField,
+                        properties: Props(
+                            ("queryStableKey", query.Identity.StableKey),
+                            ("queryOutputStableKey", output.Identity.StableKey),
+                            ("sourceFieldStableKey", sourceField),
+                            ("sourceRole", "pivot-expression"),
+                            ("targetKind", "field"),
+                            ("coverageLabel", output.Coverage),
+                            ("limitations", "static-pivot-expression-source-candidate;literal-column-not-an-alias-equivalence;no-query-execution;no-row-read"))));
                 }
             }
 
@@ -252,8 +274,14 @@ public static class AccessFactBuilder
                         ("valueExpressionHash", crosstab.ValueExpressionHash ?? ""),
                         ("pivotExpressionHash", crosstab.PivotExpressionHash ?? ""),
                         ("staticColumnHashes", string.Join(';', crosstab.StaticColumnHashes)),
+                        ("aggregateSourceFieldStableKeys", crosstab.AggregateSourceFieldStableKeys is null
+                            ? ""
+                            : string.Join(';', crosstab.AggregateSourceFieldStableKeys)),
+                        ("pivotSourceFieldStableKeys", crosstab.PivotSourceFieldStableKeys is null
+                            ? ""
+                            : string.Join(';', crosstab.PivotSourceFieldStableKeys)),
                         ("coverageLabel", crosstab.Coverage),
-                        ("limitations", "static-crosstab-shape-only;no-row-read;dynamic-pivot-values-remain-gaps"))));
+                        ("limitations", "static-crosstab-shape-only;literal-column-is-not-an-alias-equivalence;no-row-read;dynamic-pivot-values-remain-gaps"))));
             }
         }
 
