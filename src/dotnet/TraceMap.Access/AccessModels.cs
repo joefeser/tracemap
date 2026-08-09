@@ -96,13 +96,31 @@ public sealed record AccessQueryDependencyProjection(
     string TargetKind,
     string Coverage);
 
+[method: JsonConstructor]
 public sealed record AccessQueryOutputFieldProjection(
     AccessSafeIdentity Identity,
     int Ordinal,
     string TypeFamily,
     IReadOnlyList<string> SourceFieldStableKeys,
     string Coverage,
-    string EvidenceOrigin = "unknown");
+    string EvidenceOrigin = "unknown",
+    string AliasKind = "unknown",
+    string? SourceExpressionHash = null,
+    IReadOnlyList<string>? PivotSourceFieldStableKeys = null,
+    string OutputKind = "unknown")
+{
+    public AccessQueryOutputFieldProjection(
+        AccessSafeIdentity identity,
+        int ordinal,
+        string typeFamily,
+        IReadOnlyList<string> sourceFieldStableKeys,
+        string coverage,
+        string evidenceOrigin)
+        : this(identity, ordinal, typeFamily, sourceFieldStableKeys, coverage, evidenceOrigin,
+            AccessQueryOutputAliasKinds.Unknown, null, null, "unknown")
+    {
+    }
+}
 
 internal static class AccessQueryOutputEvidenceOrigins
 {
@@ -113,6 +131,15 @@ internal static class AccessQueryOutputEvidenceOrigins
 
     internal static bool IsSupported(string value) =>
         value is Unknown or QueryDef or StaticSelect or StaticCrosstab;
+}
+
+internal static class AccessQueryOutputAliasKinds
+{
+    internal const string Unknown = "unknown";
+    internal const string ExplicitAs = "explicit-as";
+    internal const string AccessColon = "access-colon";
+    internal const string DirectField = "direct-field";
+    internal const string PivotLiteral = "pivot-literal";
 }
 
 public sealed record AccessQueryFieldMappingProjection(
@@ -131,19 +158,47 @@ public sealed record AccessQueryActionProjection(
     IReadOnlyList<int> ParameterOrdinals,
     string Coverage);
 
+[method: JsonConstructor]
 public sealed record AccessQueryCrosstabProjection(
     IReadOnlyList<string> RowHeadingFieldStableKeys,
     string? AggregateExpressionHash,
     string? ValueExpressionHash,
     string? PivotExpressionHash,
     IReadOnlyList<string> StaticColumnHashes,
-    string Coverage);
+    string Coverage,
+    IReadOnlyList<string>? AggregateSourceFieldStableKeys = null,
+    IReadOnlyList<string>? PivotSourceFieldStableKeys = null)
+{
+    public AccessQueryCrosstabProjection(
+        IReadOnlyList<string> rowHeadingFieldStableKeys,
+        string? aggregateExpressionHash,
+        string? valueExpressionHash,
+        string? pivotExpressionHash,
+        IReadOnlyList<string> staticColumnHashes,
+        string coverage)
+        : this(rowHeadingFieldStableKeys, aggregateExpressionHash, valueExpressionHash, pivotExpressionHash,
+            staticColumnHashes, coverage, null, null)
+    {
+    }
+}
 
 public sealed record AccessQueryStaticOutputProjection(
     int Ordinal,
     string? NameHash,
     IReadOnlyList<string> SourceFieldStableKeys,
-    string Coverage);
+    string Coverage,
+    string AliasKind = "unknown",
+    string? SourceExpressionHash = null)
+{
+    public AccessQueryStaticOutputProjection(
+        int ordinal,
+        string? nameHash,
+        IReadOnlyList<string> sourceFieldStableKeys,
+        string coverage)
+        : this(ordinal, nameHash, sourceFieldStableKeys, coverage, AccessQueryOutputAliasKinds.Unknown, null)
+    {
+    }
+}
 
 public sealed record AccessQueryStaticProjection(
     string SqlHash,
