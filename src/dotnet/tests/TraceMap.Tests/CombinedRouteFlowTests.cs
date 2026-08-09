@@ -1387,7 +1387,13 @@ public sealed class CombinedRouteFlowTests
             Route: "GET /api/orders/{id}",
             ToSurface: "sql-query"));
 
-        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "DispatchCandidateTruncatedByLimit");
+        var depthGaps = result.Report.Gaps.Where(gap => gap.GapKind == "DispatchCandidateTruncatedByLimit").ToArray();
+        Assert.NotEmpty(depthGaps);
+        Assert.All(depthGaps, gap =>
+        {
+            Assert.Equal("ReducedCoverage", gap.Coverage);
+            Assert.Contains(gap.Limitations, limitation => limitation.Contains("runtime dependency-injection targets", StringComparison.OrdinalIgnoreCase));
+        });
         var candidates = result.Report.FlowRows
             .Where(row => row.RowKind == "interface-implementation-candidate"
                 && row.SourceSymbol.Contains(abstraction, StringComparison.Ordinal))
@@ -1405,6 +1411,65 @@ public sealed class CombinedRouteFlowTests
 
         var markdown = await File.ReadAllTextAsync(Path.Combine(temp.Path, "route-flow", "route-flow-report.md"));
         Assert.Contains($"count=unknown; omitted=unknown; limit={StaticDispatchCandidateBuilder.DefaultMaxOverrideDepth}; cap-reason=override-depth", markdown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Route_flow_preserves_fan_out_counts_when_override_depth_is_also_truncated()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get()";
+        var abstraction = "Server.OrderServiceBase.Get()";
+        var repository = "Server.OrderRepository.Query()";
+        var facts = new List<CodeFact>
+        {
+            RouteFact(server, "GET", "/api/orders", "/api/orders", controller, "Controllers/OrdersController.cs", 10, EvidenceTiers.Tier1Semantic),
+            CallFact(server, controller, abstraction, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31, attachSymbol: true)
+        };
+
+        string? chainParent = null;
+        for (var index = 0; index < 11; index++)
+        {
+            var implementation = $"Server.OrderService{index}.Get()";
+            facts.Add(SymbolRelationshipFact(server, implementation, abstraction, $"Services/OrderService{index}.cs", 40 + index, relationshipKind: "Overrides"));
+            facts.Add(CallFact(server, implementation, repository, $"Services/OrderService{index}.cs", 60 + index));
+            chainParent ??= implementation;
+        }
+
+        for (var depth = 0; depth < StaticDispatchCandidateBuilder.DefaultMaxOverrideDepth + 1; depth++)
+        {
+            var implementation = $"Server.DeepOrderService{depth}.Get()";
+            facts.Add(SymbolRelationshipFact(server, implementation, chainParent!, $"Services/DeepOrderService{depth}.cs", 80 + depth, relationshipKind: "Overrides"));
+            chainParent = implementation;
+        }
+
+        SqliteIndexWriter.Write(serverIndex, server, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedRouteFlowReporter.WriteAsync(new CombinedRouteFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "route-flow"),
+            Route: "GET /api/orders",
+            ToSurface: "sql-query"));
+
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "DispatchCandidateFanOut");
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "DispatchCandidateTruncatedByLimit");
+        var candidates = result.Report.FlowRows
+            .Where(row => row.RowKind == "interface-implementation-candidate"
+                && row.SourceSymbol.Contains(abstraction, StringComparison.Ordinal))
+            .ToArray();
+        Assert.NotEmpty(candidates);
+        Assert.All(candidates, row =>
+        {
+            Assert.True(row.CandidateCount > StaticDispatchCandidateBuilder.DefaultCandidateLimit);
+            Assert.True(row.OmittedCount > 0);
+            Assert.Equal(StaticDispatchCandidateBuilder.DefaultCandidateLimit, row.CandidateLimit);
+            Assert.Contains("dispatch-candidate-fanout", row.CandidateCapReason, StringComparison.Ordinal);
+            Assert.Contains("override-depth", row.CandidateCapReason, StringComparison.Ordinal);
+        });
     }
 
     [Fact]

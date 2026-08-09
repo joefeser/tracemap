@@ -2779,6 +2779,11 @@ rules:
       - TraversalBounds gap
       - TruncatedByLimit gap
       - UnsafeValueOmitted gap
+      - DispatchCandidateFanOut gap
+      - DispatchCandidateTruncatedByLimit gap
+      - RegistrationCompatibilityUnproven gap
+      - UnsupportedRegistrationShape gap
+      - GenericCandidateNeedsReview gap
     limitations:
       - Gaps are coverage-relative explanations of missing or weak static evidence and must not be rendered as clean absence under reduced coverage.
       - Endpoint composition gaps describe static bridge and terminal surface availability only and do not prove route reachability, request execution, dependency-injection target selection, dynamic dispatch, branch feasibility, database existence, query execution, or downstream absence.

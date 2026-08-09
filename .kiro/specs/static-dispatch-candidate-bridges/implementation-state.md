@@ -139,6 +139,18 @@ Task 8 route-flow slice:
   now consumes the path engine's internal reached-node scope, so all selected
   roots, queue/frontier limits, path-local cycles, and dispatch cross-hop rules
   are shared by construction instead of reimplemented.
+- An exact-head read-only Kiro review using `claude-opus-5` then identified
+  mixed fan-out/depth metadata precedence, inconsistent shared-gap coverage,
+  missing route-flow catalog emissions, and a redundant graph build. Those
+  valid findings were corrected together: route-flow now reuses one graph for
+  the path report and bounded reached-node scope, preserves known fan-out
+  counts and the applied candidate cap when depth truncation also exists, and
+  labels every shared dispatch gap as reduced coverage with the static/runtime
+  limitation. The suggested same-endpoint client/server "leak" was not a
+  defect: the combined graph intentionally connects matching client and route
+  endpoints, so downstream server dispatch evidence belongs to that client
+  flow. Start roots are nevertheless filtered to the requested selector side
+  before computing the auxiliary scope.
 
 - Audited the shipped `DependencyRegistered` shape and added deterministic
   service/implementation type symbol IDs plus a closed-set registration shape
