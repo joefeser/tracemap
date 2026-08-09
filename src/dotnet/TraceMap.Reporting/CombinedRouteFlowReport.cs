@@ -4353,7 +4353,9 @@ public static class CombinedRouteFlowReporter
         if (IsSharedDispatchGapKind(gapKind))
         {
             return [
-                "Static dispatch candidate fan-out is deterministically capped and remains review-tier.",
+                gapKind is "DispatchCandidateFanOut" or "DispatchCandidateTruncatedByLimit"
+                    ? "Static dispatch candidate derivation is deterministically capped and remains review-tier."
+                    : "Shared static dispatch gaps remain review-tier and describe evidence limits rather than runtime absence.",
                 "Candidate implementation rows identify compiler-known candidates only and do not prove runtime dependency-injection targets."
             ];
         }

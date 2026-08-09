@@ -151,6 +151,11 @@ Task 8 route-flow slice:
   endpoints, so downstream server dispatch evidence belongs to that client
   flow. Start roots are nevertheless filtered to the requested selector side
   before computing the auxiliary scope.
+- The exact-head follow-up also corrected registration-gap anchoring and
+  wording: unsupported/generic/compatibility gaps are emitted for every
+  deterministic matching service member, allowing node-scoped consumers to
+  retain the gap for the member they actually traverse, and non-fan-out gaps no
+  longer claim candidate fan-out was capped.
 
 - Audited the shipped `DependencyRegistered` shape and added deterministic
   service/implementation type symbol IDs plus a closed-set registration shape
