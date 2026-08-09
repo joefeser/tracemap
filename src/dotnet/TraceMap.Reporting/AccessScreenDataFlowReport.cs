@@ -264,9 +264,12 @@ public static class AccessScreenDataFlowReporter
         int maxGaps,
         ref bool truncated)
     {
-        if (fact.FactType == FactTypes.AccessQueryOutputSourceCandidate
-            && fact.Properties.GetValueOrDefault("sourceRole") != "output-expression")
-            return null;
+        if (fact.FactType == FactTypes.AccessQueryOutputSourceCandidate)
+        {
+            var sourceRole = fact.Properties.GetValueOrDefault("sourceRole");
+            if (!string.IsNullOrWhiteSpace(sourceRole) && sourceRole != "output-expression")
+                return null;
+        }
 
         string? kind = fact.FactType switch
         {

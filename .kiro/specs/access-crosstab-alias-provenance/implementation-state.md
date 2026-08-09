@@ -17,7 +17,8 @@
   the private-path guard and `git diff --check` passed.
 - Review correction: calculated aliases now preserve name-aligned provenance
   without weakening direct-field lineage trust; non-output source roles fail
-  closed in composition/flow; pre-provenance public constructor signatures are
+  closed in composition/flow while missing pre-0.3.2 roles retain their legacy
+  output-expression meaning; pre-provenance public constructor signatures are
   retained; empty crosstab output catalogs emit an explicit rule-backed gap.
 - Validation procedure: followed the Mac-only Microsoft Access adapter smoke in
   `docs/VALIDATION.md`. The private Windows corpus rerun remains explicitly

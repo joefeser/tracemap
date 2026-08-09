@@ -346,6 +346,8 @@ public static class AccessDesignEvidenceComposer
                 // crosstab does not become falsely ambiguous (aggregate field
                 // plus pivot field) for report/domain composition.
                 var sourceRole = fact.Properties.GetValueOrDefault("sourceRole");
+                if (string.IsNullOrWhiteSpace(sourceRole))
+                    sourceRole = "output-expression";
                 if (sourceRole == "pivot-expression")
                     continue;
                 if (sourceRole != "output-expression")
