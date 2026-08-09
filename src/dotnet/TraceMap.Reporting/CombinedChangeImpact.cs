@@ -503,9 +503,15 @@ public static class CombinedChangeImpactReporter
             await Task.WhenAll(beforeTask, afterTask);
             var before = await beforeTask;
             var after = await afterTask;
-            var pathContext = ClassifyPathContext(item, before, after);
+            var hasStaticDispatchCandidate = before.Paths.Any(HasStaticDispatchCandidate)
+                || after.Paths.Any(HasStaticDispatchCandidate);
+            var provisionalPathContext = ClassifyPathContext(item, before, after);
+            var contextualItem = ApplyPathContext(item, provisionalPathContext, hasStaticDispatchCandidate);
+            var pathContext = string.Equals(contextualItem.ImpactId, item.ImpactId, StringComparison.Ordinal)
+                ? provisionalPathContext
+                : ClassifyPathContext(contextualItem, before, after);
             globalGaps.AddRange(pathContext.Gaps);
-            contextual.Add(ApplyPathContext(item, pathContext));
+            contextual.Add(contextualItem with { PathContext = pathContext });
         }
 
         return contextual;
@@ -698,20 +704,26 @@ public static class CombinedChangeImpactReporter
             path.Edges.Select(edge => edge.RuleId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
     }
 
-    private static CombinedImpactItem ApplyPathContext(CombinedImpactItem item, CombinedImpactPathContext pathContext)
+    private static CombinedImpactItem ApplyPathContext(
+        CombinedImpactItem item,
+        CombinedImpactPathContext pathContext,
+        bool hasStaticDispatchCandidate)
     {
-        if (pathContext.Classification != CombinedImpactClassifications.NeedsReviewImpact)
+        if (!hasStaticDispatchCandidate)
         {
             return item with { PathContext = pathContext };
         }
 
         var notes = CandidateNotes(item.Notes, hasStaticDispatchCandidate: true);
-        if (ClassificationRank(item.Classification) >= ClassificationRank(CombinedImpactClassifications.NeedsReviewImpact))
+        var candidateCap = pathContext.Classification == CombinedImpactClassifications.UnknownAnalysisGap
+            ? CombinedImpactClassifications.UnknownAnalysisGap
+            : CombinedImpactClassifications.NeedsReviewImpact;
+        if (ClassificationRank(item.Classification) >= ClassificationRank(candidateCap))
         {
             return item with { PathContext = pathContext, Notes = notes };
         }
 
-        var classification = CombinedImpactClassifications.NeedsReviewImpact;
+        var classification = candidateCap;
         return item with
         {
             ImpactId = ImpactId(item.ChangeType, classification, item.EvidenceKind, item.StableKey, item.DiffRuleId, item.ImpactRuleId),
