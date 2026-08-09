@@ -113,7 +113,6 @@ public sealed class AccessScreenDataFlowTests
     [Theory]
     [InlineData("pivot-expression")]
     [InlineData("pivot_expression")]
-    [InlineData("")]
     public void Builder_excludes_non_output_roles_from_returned_value_flow(string sourceRole)
     {
         var facts = FlowFacts().ToList();
@@ -135,6 +134,27 @@ public sealed class AccessScreenDataFlowTests
         Assert.DoesNotContain(
             report.Paths.SelectMany(path => path.Edges),
             edge => edge.Evidence.FactId == "fact-query-output-non-value-source");
+    }
+
+    [Fact]
+    public void Builder_treats_missing_legacy_source_role_as_output_expression()
+    {
+        var facts = FlowFacts().ToList();
+        var outputSource = facts.Single(fact => fact.FactId == "fact-query-output-source");
+        facts[facts.IndexOf(outputSource)] = outputSource with
+        {
+            Properties = new SortedDictionary<string, string>(
+                outputSource.Properties
+                    .Where(item => item.Key != "sourceRole")
+                    .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+        };
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
+
+        Assert.Contains(
+            report.Paths.SelectMany(path => path.Edges),
+            edge => edge.Evidence.FactId == "fact-query-output-source");
     }
 
     [Fact]
