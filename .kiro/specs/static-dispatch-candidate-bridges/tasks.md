@@ -1,8 +1,8 @@
 # Static Dispatch Candidate Bridges Tasks
 
-Status: spec-ready
+Status: implementation-complete-awaiting-review
 
-Readiness: ready-for-implementation after recorded Kiro reviews and validation.
+Readiness: ready-for-review
 
 ## Spec Delivery Tasks
 
@@ -71,7 +71,7 @@ not part of this spec-only branch.
   - [x] Add rule-catalog resolution tests for all candidate gap kinds emitted
         by the shared builder.
 
-- [ ] 6. Extract a shared candidate builder.
+- [x] 6. Extract a shared candidate builder.
   - [x] Define an internal candidate edge/gap model with stable IDs,
         supporting fact IDs, supporting edge IDs, relationship IDs,
         registration fact IDs, file spans, rule IDs, evidence tiers, coverage
@@ -86,12 +86,22 @@ not part of this spec-only branch.
         display-name equality.
   - [x] Derive override candidates only from `Overrides` evidence and bounded
         override-chain traversal.
-  - [ ] Keep type-level fallback candidates as `WeakerCandidate` with
-        type-level-bridge-only limitations.
-  - [ ] Emit gaps for missing candidates, ambiguous identities, high fan-out,
+  - [x] Fail closed with `MemberCandidateUnavailable` when type-level evidence
+        exists but no safe member-level candidate can be derived; do not create
+        a display-name or type-only member edge.
+  - [x] Emit gaps for missing candidates, ambiguous identities, high fan-out,
         reduced coverage, missing schema, generic caveats, and truncation.
   - [x] Add deterministic ordering, caps, cycle protection, and byte-stability
         tests.
+
+  Final disposition: TraceMap does not emit type-level fallback member edges in
+  v1 because member-level compiler relationship evidence is the trusted
+  boundary. Type-level context without a member relation emits
+  `MemberCandidateUnavailable`; missing canonical identity emits
+  `DispatchCandidateIdentityUnverified`; reduced or unsupported source coverage
+  emits `DispatchCandidateReducedCoverage` and downgrades retained candidates.
+  Consumer schema gaps remain explicit `DispatchCandidateSchemaUnavailable`
+  records. Candidate absence is never promoted to a clean conclusion.
 
 - [x] 7. Add DI registration-context annotations.
   - [x] Audit existing `DependencyRegistered` fact shape and fact-symbol
@@ -174,3 +184,5 @@ not part of this spec-only branch.
 - Cross-language runtime binding approximation.
 - UI or interactive graph visualization.
 - Site copy describing the shipped capability.
+- Runtime-verified dispatch or type-only member guesses; both remain outside
+  the deterministic static-evidence boundary.
