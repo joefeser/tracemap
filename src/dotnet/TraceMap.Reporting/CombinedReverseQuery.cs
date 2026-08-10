@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using TraceMap.Core;
 
 namespace TraceMap.Reporting;
@@ -154,7 +155,14 @@ public sealed record CombinedReverseGap(
     int? StartLine,
     int? EndLine,
     string? Reason,
-    IReadOnlyDictionary<string, string> Metadata);
+    IReadOnlyDictionary<string, string> Metadata,
+    IReadOnlyList<string>? SupportingFactIds = null)
+{
+    [JsonIgnore]
+    public IReadOnlyList<string> EffectiveSupportingFactIds => SupportingFactIds is { Count: > 0 }
+        ? SupportingFactIds
+        : CombinedFactId is null ? [] : [CombinedFactId];
+}
 
 public static class CombinedReverseClassifications
 {
@@ -1186,7 +1194,8 @@ public static class CombinedReverseReporter
             gap.StartLine,
             null,
             gap.Reason,
-            EmptyMetadata());
+            EmptyMetadata(),
+            gap.EffectiveSupportingFactIds);
     }
 
     private static CombinedReverseGap TruncatedGap(string reason, CombinedReverseSurface surface, CombinedPathNode node)

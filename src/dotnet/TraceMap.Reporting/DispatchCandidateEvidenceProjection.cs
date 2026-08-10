@@ -70,7 +70,7 @@ internal static class DispatchCandidateEvidenceProjection
                 .ToArray(),
             edges.SelectMany(edge => edge.SupportingFactIds)
                 .Concat(edges.SelectMany(edge => edge.SupportingRegistrationFactIds ?? []))
-                .Concat(gaps.Select(gap => gap.CombinedFactId).Where(value => !string.IsNullOrWhiteSpace(value)).Cast<string>())
+                .Concat(gaps.SelectMany(gap => gap.EffectiveSupportingFactIds))
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .ToArray(),

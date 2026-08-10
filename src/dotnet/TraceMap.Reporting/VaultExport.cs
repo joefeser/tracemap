@@ -585,7 +585,7 @@ public static class VaultExporter
                     string.IsNullOrWhiteSpace(gap.EvidenceTier) ? EvidenceTiers.Tier4Unknown : gap.EvidenceTier,
                     SafeDiagnosticMessage(gap.Message),
                     gap.SourceIndexId,
-                    supportingFactIds: string.IsNullOrWhiteSpace(gap.CombinedFactId) ? [] : [gap.CombinedFactId],
+                    supportingFactIds: gap.EffectiveSupportingFactIds,
                     supportingRuleIds: isDispatchCandidateGap
                         ? [DispatchCandidateEvidenceProjection.VaultGapRuleId, StaticDispatchCandidateBuilder.GapRuleId]
                         : null));

@@ -827,9 +827,34 @@ public sealed class CombinedDependencyPathTests
         Assert.Equal(14, gap.StartLine);
         Assert.Equal(14, gap.EndLine);
         Assert.NotNull(gap.CombinedFactId);
+        Assert.Equal(2, gap.EffectiveSupportingFactIds.Count);
+        Assert.Contains(gap.EffectiveSupportingFactIds, id => id.Contains(call.FactId, StringComparison.Ordinal));
+        Assert.Contains(gap.EffectiveSupportingFactIds, id => id.Contains(typeRelationship.FactId, StringComparison.Ordinal));
         Assert.True(
             gap.CombinedFactId.Contains(call.FactId, StringComparison.Ordinal)
             || gap.CombinedFactId.Contains(typeRelationship.FactId, StringComparison.Ordinal));
+
+        var report = await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "report")));
+        Assert.All(gap.EffectiveSupportingFactIds, id => Assert.Contains(id, report.Report.DispatchCandidates.SupportingFactIds));
+
+        var vault = await VaultExporter.ExportAsync(new VaultExportOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "vault"),
+            Format: "json"));
+        var vaultGap = Assert.Single(vault.Graph.Gaps, item =>
+            item.Classification == "NeedsReviewPath"
+            && item.RuleId == DispatchCandidateEvidenceProjection.VaultGapRuleId);
+        Assert.Equal(gap.EffectiveSupportingFactIds, vaultGap.SupportingFactIds);
+
+        var docs = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "docs"),
+            Families: "dependency-surface,gap,limitation"));
+        var chunk = Assert.Single(docs.Chunks, item => item.Title == "Static dispatch candidate review context");
+        var docsGap = Assert.Single(chunk.Gaps, item => item.Reason == "MemberCandidateUnavailable");
+        Assert.All(gap.EffectiveSupportingFactIds, id => Assert.Contains(id, docsGap.SupportingIds));
     }
 
     [Fact]
