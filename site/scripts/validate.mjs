@@ -4,6 +4,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { buildSite, topNavigationLinks } from "./build.mjs";
 import { validateAdoptionPlaybookDist } from "./adoption-playbook.mjs";
+import { validateAccessSafeEvidenceAcquisitionDist } from "./access-safe-evidence-acquisition.mjs";
+import { validateAccessFormFieldLineageDist } from "./access-form-field-lineage.mjs";
 import { validateBuildReviewWorkflowStoryDist } from "./build-review-workflow-story.mjs";
 import { validateBlogProofPathSeriesDist } from "./blog-proof-path-series.mjs";
 import { validateChangeRiskLanguageGuideDist } from "./change-risk-language-guide.mjs";
@@ -98,6 +100,8 @@ export async function validateSite(options = {}) {
 export async function validateDist({
   baseUrl = defaultBaseUrl,
   requireMsbuildBinlogEvidence = true,
+  requireAccessSafeEvidenceAcquisition = true,
+  requireAccessFormFieldLineage = requireMsbuildBinlogEvidence,
   root = defaultRoot
 } = {}) {
   const dist = resolve(root, "dist");
@@ -114,6 +118,9 @@ export async function validateDist({
   const sitemapUrls = await readSitemapUrls(sitemapPath, errors);
   validateDiscoveryNotInSitemap({ errors, sitemapUrls });
   if (normalizedBaseUrl) {
+    if (requireAccessFormFieldLineage) {
+      await validateAccessFormFieldLineageDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    }
     await validateSitemapUrls({ baseUrl: normalizedBaseUrl, dist, errors, sitemapUrls });
   }
 
@@ -127,6 +134,9 @@ export async function validateDist({
     : 0;
 
   if (normalizedBaseUrl) {
+    if (requireAccessSafeEvidenceAcquisition) {
+      await validateAccessSafeEvidenceAcquisitionDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    }
     await validateRobotsSitemap({ baseUrl: normalizedBaseUrl, errors, robotsPath });
     await validateDiscoveryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateDeployAuditDist({ baseUrl: normalizedBaseUrl, dist, errors });
