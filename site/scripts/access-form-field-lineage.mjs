@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { decodeHtmlEntities, escapeRegExp, fileExists, normalizeBaseUrl, normalizeRenderedText, readSitemapLocSet } from "./validate-utils.mjs";
+import { decodeHtmlEntities, escapeRegExp, fileExists, normalizeBaseUrl, normalizeRenderedText, readSitemapLocSet, stripTagsQuoteAware } from "./validate-utils.mjs";
 
 export const accessFormFieldLineageSlug = "access-form-to-field-lineage";
 export const accessFormFieldLineageRoute = `/blog/${accessFormFieldLineageSlug}/`;
@@ -91,7 +91,18 @@ async function validateIndexes(dist, errors) {
     errors.push(withEvidence("Access form-to-field discovery output is missing.", "routes-index.json"));
     return;
   }
-  const entries = JSON.parse(await readFile(discoveryPath, "utf8")).entries ?? [];
+  let discovery;
+  try {
+    discovery = JSON.parse(await readFile(discoveryPath, "utf8"));
+  } catch {
+    errors.push(withEvidence("Access form-to-field discovery output is not valid JSON.", "routes-index.json"));
+    return;
+  }
+  if (!discovery || typeof discovery !== "object" || !Array.isArray(discovery.entries)) {
+    errors.push(withEvidence("Access form-to-field discovery output must contain an entries array.", "routes-index.json"));
+    return;
+  }
+  const entries = discovery.entries;
   const entry = entries.find((candidate) => candidate.path === accessFormFieldLineageRoute);
   if (!entry) errors.push(withEvidence("Access form-to-field discovery entry is missing.", "routes-index.json"));
   else {
@@ -106,17 +117,18 @@ async function validatePage(pagePath, errors) {
   const html = await readFile(pagePath, "utf8");
   const decoded = decodeHtmlEntities(html);
   const rendered = normalizeRenderedText(html);
-  const bounded = normalizeRenderedText(decoded.replace(/<section\b[^>]*data-access-lineage-boundary=["']non-claims["'][^>]*>[\s\S]*?<\/section>/gi, ""));
+  const tagCollapsed = decodeHtmlEntities(stripTagsQuoteAware(decoded)).replace(/\s+/g, " ").trim();
+  const safetySurfaces = [decoded, rendered, tagCollapsed];
   if (!html.includes("<title>From an Access Form to a Field | TraceMap</title>")) errors.push(withEvidence("Access form-to-field title is missing.", pageArtifact));
   if (!new RegExp(`<link\\b[^>]*rel=["']canonical["'][^>]*href=["']https://tracemap\\.tools${escapeRegExp(accessFormFieldLineageRoute)}["']`, "i").test(html)) errors.push(withEvidence("Access form-to-field canonical URL is missing or incorrect.", pageArtifact));
-  for (const block of blocks) if (!new RegExp(`<section\\b[^>]*data-access-lineage-block=["']${block}["']`, "i").test(html)) errors.push(withEvidence(`Access form-to-field article is missing block: ${block}`, pageArtifact));
+  for (const block of blocks) if (!new RegExp(`<section\\b[^>]*data-access-lineage-block\\s*=\\s*["']${block}["']`, "i").test(html)) errors.push(withEvidence(`Access form-to-field article is missing block: ${block}`, pageArtifact));
   for (const phrase of [...requiredText, ...rules]) if (!rendered.toLowerCase().includes(phrase.toLowerCase())) errors.push(withEvidence(`Access form-to-field article is missing required text: ${phrase}`, pageArtifact));
   for (const link of accessFormFieldLineageRequiredLinks) if (!hasHref(html, link)) errors.push(withEvidence(`Access form-to-field article is missing required link: ${link}`, pageArtifact));
   const words = rendered.split(/\s+/).filter(Boolean).length;
   if (words < 1000 || words > 1900) errors.push(withEvidence(`Access form-to-field word count must be between 1000 and 1900 words, got ${words}`, pageArtifact));
-  for (const pattern of forbiddenClaims) if (pattern.test(bounded)) errors.push(withEvidence(`Access form-to-field article contains unsupported positive claim: ${pattern}`, pageArtifact));
-  for (const pattern of rawPatterns) if (pattern.test(bounded)) errors.push(withEvidence(`Access form-to-field article contains raw or executable material: ${pattern}`, pageArtifact));
-  for (const pattern of privatePatterns) if (pattern.test(decoded)) errors.push(withEvidence(`Access form-to-field article contains hard private material: ${pattern}`, pageArtifact));
+  for (const pattern of forbiddenClaims) if (safetySurfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Access form-to-field article contains unsupported positive claim: ${pattern}`, pageArtifact));
+  for (const pattern of rawPatterns) if (safetySurfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Access form-to-field article contains raw or executable material: ${pattern}`, pageArtifact));
+  for (const pattern of privatePatterns) if (safetySurfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Access form-to-field article contains hard private material: ${pattern}`, pageArtifact));
 }
 
 function hasHref(html, href) { return new RegExp(`<a\\b[^>]*href\\s*=\\s*["']${escapeRegExp(href)}["'][^>]*>`, "i").test(html); }
