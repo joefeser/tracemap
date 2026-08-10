@@ -358,7 +358,7 @@ public static class CombinedDependencyReporter
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
         var messageReviewContext = BuildMessageReviewContext(surfaces, dependencyEdges, read.Sources, warnings);
-        var dispatchInventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(options.IndexPath, cancellationToken: cancellationToken);
+        var dispatchInventory = CombinedDependencyPathReporter.BuildGraphInventory(read);
         var dispatchCandidates = DispatchCandidateEvidenceProjection.Summarize(dispatchInventory);
         dispatchCandidates = dispatchCandidates with
         {

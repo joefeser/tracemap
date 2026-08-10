@@ -38,6 +38,18 @@ public sealed class EvidenceDocsExportTests
         Assert.Equal(
             await File.ReadAllTextAsync(Path.Combine(firstOut, "chunks.jsonl")),
             await File.ReadAllTextAsync(Path.Combine(secondOut, "chunks.jsonl")));
+
+        var vaultOut = Path.Combine(temp.Path, "vault");
+        await VaultExporter.ExportAsync(new VaultExportOptions(combinedPath, vaultOut, Format: "json"));
+        var fromVault = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "docs-from-vault"),
+            VaultGraphPaths: [Path.Combine(vaultOut, "graph.json")],
+            Families: "dependency-surface,gap,limitation"));
+        Assert.Contains(fromVault.Chunks, candidate =>
+            candidate.Title == "Vault static dispatch candidate evidence"
+            && candidate.Claim.Kind == "weak-static-evidence"
+            && candidate.SupportingIds.Any(id => id.StartsWith("edge:", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -347,11 +359,13 @@ public sealed class EvidenceDocsExportTests
               "classification": "hidden",
               "nodes": [{ "id": "node:one" }],
               "edges": [{
-                "edgeId": "edge:dispatch",
-                "ruleId": "vault-export.graph.dispatch-candidate.v1",
-                "supportingRuleIds": ["combined.dispatch-candidate.v1"]
+                "id": "edge:dispatch",
+                "ruleId": "combined.dispatch-candidate.v1"
               }],
-              "gaps": [],
+              "gaps": [{
+                "id": "gap:dispatch",
+                "ruleId": "combined.dispatch-gap.v1"
+              }],
               "limitations": []
             }
             """);
@@ -366,7 +380,11 @@ public sealed class EvidenceDocsExportTests
         Assert.Contains(result.Chunks, chunk =>
             chunk.Title == "Vault static dispatch candidate evidence"
             && chunk.Claim.Kind == "weak-static-evidence"
-            && chunk.RuleIds.Contains("combined.dispatch-candidate.v1", StringComparer.Ordinal));
+            && chunk.RuleIds.Contains("combined.dispatch-candidate.v1", StringComparer.Ordinal)
+            && chunk.RuleIds.Contains("combined.dispatch-gap.v1", StringComparer.Ordinal)
+            && chunk.SupportingIds.Contains("edge:dispatch", StringComparer.Ordinal)
+            && chunk.SupportingIds.Contains("gap:dispatch", StringComparer.Ordinal)
+            && chunk.BodyMarkdown.Contains("Static dispatch candidate gaps | `1`", StringComparison.Ordinal));
         Assert.Contains(result.Chunks, chunk => chunk.ChunkFamily == "limitation");
         Assert.DoesNotContain(result.Manifest.Gaps, gap => gap.Reason == "schema-incompatible" && gap.SupportingIds.Contains("vault-graph"));
     }
