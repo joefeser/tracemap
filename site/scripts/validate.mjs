@@ -100,7 +100,7 @@ export async function validateSite(options = {}) {
 export async function validateDist({
   baseUrl = defaultBaseUrl,
   requireMsbuildBinlogEvidence = true,
-  requireAccessSafeEvidenceAcquisition = requireMsbuildBinlogEvidence,
+  requireAccessSafeEvidenceAcquisition = true,
   requireAccessFormFieldLineage = requireMsbuildBinlogEvidence,
   root = defaultRoot
 } = {}) {
