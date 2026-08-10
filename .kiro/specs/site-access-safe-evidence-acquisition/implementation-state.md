@@ -1,6 +1,7 @@
 # Site Access Safe Evidence Acquisition Implementation State
 
-- Status: implementation and local validation complete; publication pending
+- Status: implementation and local validation complete; ready PR #625 open;
+  ACK pending
 - Branch: `codex/site-access-safe-acquisition`
 - Base: `origin/dev`
 - Base SHA: `1b2435f734af28cb4d6012cc63491022b5acd97b`
