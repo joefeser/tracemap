@@ -1,20 +1,20 @@
 # Static Dispatch Candidate Bridges Implementation State
 
-Status: implementation-task-10-complete-awaiting-pr
-Readiness: ready-for-pr-review
+Status: implementation-v1-complete-with-explicit-task-6-deferrals
+Readiness: ready-for-dev-to-main-promotion
 Merged PR 1: #331 (`086ad376e387ea8d87e430175ef2673cbc74c0f1`)
 Merged PR 2: #333 (`84f72e0faa9dd6c106c625de175a194d9c1515ff`)
 Merged PR 3: #610 (`6a8b5bd14187e5258a9805ee73cad6ff66cb9079`)
 Merged PR 4: #611 (`b3fde3aa1c6c53a3fbae55df58313d2609fcdcfb`)
 Merged PR 5: #614 (`36b133c43876811a048b046f4f5cb6eec2595a53`)
+Merged PR 6: #615 (`92548cab13aeeec0e818b774828194db57990047`)
 
 ## Branch
 
-- Branch: `codex/static-dispatch-report-vault-docs`
+- Branch: `codex/reconcile-static-dispatch-runway`
 - Base: `origin/dev`
-- Base SHA: `36b133c43876811a048b046f4f5cb6eec2595a53`
-- Scope: Task 10 combined-report, portfolio, vault, and docs-export consumption
-  of the existing shared dispatch candidate edges and gaps
+- Base SHA: `92548cab13aeeec0e818b774828194db57990047`
+- Scope: post-merge bookkeeping, explicit v1 boundary, and promotion readiness
 - Suggested PR target: `dev`
 
 ## Task 7 Pre-Implementation Decision
@@ -37,7 +37,7 @@ Merged PR 5: #614 (`36b133c43876811a048b046f4f5cb6eec2595a53`)
 
 ## Current Implementation State
 
-Tasks 8 and 9 are merged. This branch completes Task 10 by projecting the same
+Tasks 7 through 11 are complete. PR #615 completed Task 10 by projecting the same
 shared in-memory dispatch candidate inventory into combined dependency reports,
 portfolio reports, vault graphs, and evidence docs. No scanner, extractor,
 persisted combined-index schema, runtime probe, or DI execution behavior is
@@ -506,12 +506,14 @@ appropriate.
 
 - Type-level fallback candidates remain deferred within task 6.
 - Missing-candidate, ambiguous-identity, reduced-coverage, schema, and generic
-  gaps remain deferred within task 6.
-- Report/portfolio, vault, and docs-export consumption remain deferred to later
-  slices. Route-flow consumption is complete in PR #611; reverse and impact
-  consumption are complete in Task 9 on this branch.
-- The selected Task 6 slice merged through PR #333; later tasks remain explicit
-  follow-ups.
+  builder gaps remain deferred within task 6. Registration generic caveats are
+  already emitted; this item refers to the broader non-registration vocabulary.
+- Route-flow consumption is complete in PR #611; reverse and impact consumption
+  are complete in PR #614; report, portfolio, vault, and docs-export consumption
+  are complete in PR #615.
+- Type-level fallback is not required for the member-relationship-backed v1.
+  Adding it now would trade compiler identity for noisier review candidates, so
+  it remains an explicit later experiment rather than an implied missing claim.
 
 ## PR Review Loop Notes
 

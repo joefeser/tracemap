@@ -1,8 +1,8 @@
 # Static Dispatch Candidate Bridges Tasks
 
-Status: spec-ready
+Status: implementation-v1-complete-with-explicit-deferrals
 
-Readiness: ready-for-implementation after recorded Kiro reviews and validation.
+Readiness: ready-for-dev-to-main-promotion and public-story follow-up.
 
 ## Spec Delivery Tasks
 
@@ -93,6 +93,14 @@ not part of this spec-only branch.
   - [x] Add deterministic ordering, caps, cycle protection, and byte-stability
         tests.
 
+  V1 disposition: the two unchecked items above remain deliberate follow-ups.
+  TraceMap does not emit type-level fallback edges in v1 because member-level
+  compiler relationship evidence is the trusted boundary. The shipped closed
+  gap vocabulary covers fan-out, traversal limits, registration compatibility,
+  unsupported registration shapes, and generic registration caveats; broader
+  missing/identity/schema/reduced-coverage builder gaps remain future work and
+  must not be inferred from candidate absence.
+
 - [x] 7. Add DI registration-context annotations.
   - [x] Audit existing `DependencyRegistered` fact shape and fact-symbol
         attachments.
@@ -174,3 +182,5 @@ not part of this spec-only branch.
 - Cross-language runtime binding approximation.
 - UI or interactive graph visualization.
 - Site copy describing the shipped capability.
+- Type-level fallback candidates and the broader task-6 builder gap vocabulary;
+  neither is required for the completed member-evidence v1 runway.
