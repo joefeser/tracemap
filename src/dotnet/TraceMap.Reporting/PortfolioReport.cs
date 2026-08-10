@@ -495,9 +495,14 @@ public static class PortfolioReporter
         portfolioImpact = WithCappedGaps(portfolioImpact, allGaps);
         releaseReviewContext = WithCappedGaps(releaseReviewContext, allGaps);
         var dispatchCandidateContext = Section(
-            read.DispatchCandidateRows,
+            read.DispatchCandidateRows
+                .Where(row => activeFilteredSourceIds.Contains(Metadata(row.Metadata, "sourceId") ?? string.Empty))
+                .ToArray(),
             0,
-            allGaps.Where(gap => gap.Section == "dispatchCandidateContext").ToArray(),
+            allGaps.Where(gap =>
+                    gap.Section == "dispatchCandidateContext"
+                    && activeFilteredSourceIds.Contains(Metadata(gap.Metadata ?? [], "sourceId") ?? string.Empty))
+                .ToArray(),
             ["Static dispatch candidates are review context only and do not prove runtime binding, reachability, or impact."]);
         return new PortfolioReportDocument(
             ReportType,
@@ -569,21 +574,6 @@ public static class PortfolioReporter
             {
                 var read = await CombinedDependencyReporter.ReadAsync(connection, cancellationToken);
                 var dispatchInventory = CombinedDependencyPathReporter.BuildGraphInventory(read);
-                var dispatchSummary = DispatchCandidateEvidenceProjection.Summarize(dispatchInventory);
-                dispatchCandidateRows.Add(DispatchCandidateRow(input, side, dispatchSummary));
-                gaps.AddRange(DispatchCandidateEvidenceProjection.CandidateGaps(dispatchInventory).Select(gap =>
-                    Gap(
-                        gap.GapKind,
-                        "dispatchCandidateContext",
-                        DispatchCandidateEvidenceProjection.PortfolioRuleId,
-                        PortfolioReportClassifications.PartialAnalysis,
-                        "Static dispatch candidate derivation recorded a bounded or unavailable evidence gap.",
-                        gap.SourceLabel,
-                        CombinedReportHelpers.SortedMetadata([
-                            new("dispatchGapRuleId", gap.RuleId),
-                            new("dispatchGapId", gap.GapId),
-                            new("reason", gap.Reason)
-                        ]))));
                 var knownGapsBySource = read.KnownGaps
                     .GroupBy(gap => gap.SourceIndexId, StringComparer.Ordinal)
                     .ToDictionary(
@@ -595,8 +585,25 @@ public static class PortfolioReporter
                     knownGapsBySource.TryGetValue(source.SourceIndexId, out var knownGapCategories);
                     var row = ToPortfolioSource(source, input, side, knownGapCategories ?? []);
                     sources.Add(row);
+                    var dispatchSummary = DispatchCandidateEvidenceProjection.Summarize(dispatchInventory, source.SourceIndexId);
+                    dispatchCandidateRows.Add(DispatchCandidateRow(input, side, row, dispatchSummary));
                     AddExpectedIdentityGaps(input, row, gaps);
                 }
+
+                gaps.AddRange(DispatchCandidateEvidenceProjection.CandidateGaps(dispatchInventory).Select(gap =>
+                    Gap(
+                        gap.GapKind,
+                        "dispatchCandidateContext",
+                        DispatchCandidateEvidenceProjection.PortfolioRuleId,
+                        PortfolioReportClassifications.PartialAnalysis,
+                        "Static dispatch candidate derivation recorded a bounded or unavailable evidence gap.",
+                        gap.SourceLabel,
+                        CombinedReportHelpers.SortedMetadata([
+                            new("dispatchGapRuleId", gap.RuleId),
+                            new("dispatchGapId", gap.GapId),
+                            new("reason", gap.Reason),
+                            new("sourceId", SourceId(input.Label, side, gap.SourceLabel ?? string.Empty))
+                        ]))));
 
                 facts.AddRange(read.Facts.Select(fact => PrefixFact(fact, input.Label, side)));
                 edges.AddRange(read.Edges.Select(edge => PrefixEdge(edge, input.Label, side)));
@@ -621,7 +628,8 @@ public static class PortfolioReporter
                     read.Source.Label,
                     CombinedReportHelpers.SortedMetadata([
                         new("inputLabel", SafeToken(input.Label)),
-                        new("inputKind", "single")
+                        new("inputKind", "single"),
+                        new("sourceId", read.Source.SourceId)
                     ])));
                 AddExpectedIdentityGaps(input, read.Source, gaps);
             }
@@ -633,6 +641,7 @@ public static class PortfolioReporter
     private static PortfolioContextRow DispatchCandidateRow(
         PortfolioInputSpec input,
         string side,
+        PortfolioSourceRow source,
         DispatchCandidateEvidenceSummary summary)
     {
         var contextId = $"portfolio-dispatch:{CombinedReportHelpers.Hash(string.Join('\u001f', [side, input.Label, summary.CandidateCount.ToString(), summary.GapCount.ToString(), string.Join('|', summary.SupportingEdgeIds)]), 24)}";
@@ -645,6 +654,8 @@ public static class PortfolioReporter
             CombinedReportHelpers.SortedMetadata([
                 new("inputLabel", SafeToken(input.Label)),
                 new("side", side),
+                new("sourceId", source.SourceId),
+                new("sourceLabel", source.Label),
                 new("candidateCount", summary.CandidateCount.ToString()),
                 new("symbolBackedCandidateCount", summary.SymbolBackedCandidateCount.ToString()),
                 new("weakerCandidateCount", summary.WeakerCandidateCount.ToString()),

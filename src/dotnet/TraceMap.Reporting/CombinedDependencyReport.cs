@@ -370,7 +370,9 @@ public static class CombinedDependencyReporter
         };
         var report = new CombinedDependencyReportDocument(
             Version,
-            warnings.Length == 0 ? "FullEvidenceAvailable" : "ReducedCoverage",
+            warnings.Length == 0 && dispatchCandidates.GapCount == 0
+                ? "FullEvidenceAvailable"
+                : "ReducedCoverage",
             warnings,
             read.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             new CombinedReportSummary(

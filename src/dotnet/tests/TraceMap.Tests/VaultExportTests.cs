@@ -25,6 +25,8 @@ public sealed class VaultExportTests
         Assert.Equal("vault-export.graph.dispatch-candidate.v1", edge.RuleId);
         Assert.Contains("combined.dispatch-candidate.v1", edge.SupportingRuleIds!);
         Assert.Equal("NeedsReviewPath", edge.Classification);
+        Assert.Equal("SymbolBackedCandidate", edge.CandidateState);
+        Assert.Equal("interface-member", edge.CandidateBridgeKind);
         Assert.NotEmpty(edge.SupportingFactIds ?? []);
         Assert.NotEmpty(edge.EvidenceLocations ?? []);
         Assert.Contains(edge.Limitations ?? [], limitation => limitation.Contains("does not prove runtime dispatch", StringComparison.Ordinal));
