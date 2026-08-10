@@ -1,5 +1,20 @@
 [
   {
+    "slug": "access-form-to-field-lineage",
+    "category": "Microsoft Access evidence",
+    "title": "From an Access Form to a Field",
+    "h1": "From an Access form to a field",
+    "description": "How TraceMap composes bounded Access form, control, query, expression, event, and field candidates into a reviewable static lineage trail.",
+    "ogDescription": "Follow public-safe Microsoft Access binding evidence from a form control toward query and persisted-field candidates without runtime or reconstruction claims.",
+    "cardDescription": "A practical guide to direct bindings, lookup projections, subforms, expressions, event candidates, composed trails, and the gaps that remain unresolved.",
+    "hero": "A visible Access control can point toward stored data through several declared and candidate relationships. TraceMap keeps every hop, evidence tier, and unresolved gap visible.",
+    "published": "2026-08-10",
+    "publishedDisplay": "August 10, 2026",
+    "body": "articles/access-form-to-field-lineage.html",
+    "calloutHeading": "Start with the acquisition boundary.",
+    "calloutHtml": "Read <a href=\"/blog/reverse-engineering-access-without-running-it/\">how protected Access evidence is acquired</a>, then use the <a href=\"/evidence/gaps/\">gap guide</a> when a lineage hop remains unresolved."
+  },
+  {
     "slug": "reverse-engineering-access-without-running-it",
     "category": "Microsoft Access evidence",
     "title": "Reverse Engineering Access Without Running It",
