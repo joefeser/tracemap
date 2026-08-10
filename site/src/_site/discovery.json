@@ -1280,6 +1280,23 @@
     ]
   },
   {
+    "path": "/blog/access-form-to-field-lineage/",
+    "title": "From an Access Form to a Field",
+    "summary": "Demo-level article about composing bounded Access surface, binding, lookup, query, expression, event, and persisted-field candidates into a reviewable static lineage trail.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/blog/reverse-engineering-access-without-running-it/",
+    "limitations": [
+      "The article explains checked-in rule and projection contracts; it does not publish a database or claim that a representative application produced the illustrated trail.",
+      "Composed lineage cannot be stronger than its weakest hop, and ambiguous identities, dynamic sources, incomplete catalogs, unsupported expressions, cycles, and fan-out limits remain gaps."
+    ],
+    "nonClaims": [
+      "No runtime execution, query result, selected branch, event firing, user navigation, row access, data correctness, effective permission, production behavior, complete coverage, reconstruction success, release approval, or operational-safety proof.",
+      "No database file, raw serialized definition, SQL, VBA, macro body, source snippet, credential, connection material, local path, private identity, analyzer output, or private validation detail is public article material."
+    ]
+  },
+  {
     "path": "/manager-brief/",
     "title": "Manager Problem Brief",
     "summary": "Concept-level manager brief for the coordination problem TraceMap reduces with deterministic static evidence packets and visible limitations.",
