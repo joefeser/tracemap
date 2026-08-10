@@ -13,9 +13,9 @@ or promotion. Claims remain bounded by issue #622.
 
 ## Validation
 
-- Focused validator: 16 tests passed.
+- Focused validator: 22 tests passed.
 - Site build: passed.
-- Full site tests: 845 passed.
+- Full site tests: 851 passed.
 - Site validation: 103 HTML files, 3,498 internal references, and 102 sitemap URLs.
 - Private-path guard and `git diff --check`: passed.
 - Desktop (1440 by 1000) and mobile (390 by 844): blog discovery and article route rendered with 11 required sections, no horizontal overflow, and no console errors or warnings.
