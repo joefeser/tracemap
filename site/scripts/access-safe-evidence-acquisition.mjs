@@ -52,7 +52,7 @@ const requiredText = [
   "unable to prove"
 ];
 const forbiddenClaims = [
-  /\bTraceMap\b(?![^.]{0,50}\bdoes not\b)[^.]{0,140}\b(?:ran|rendered|queried|reconstructed)\b[^.]{0,140}\b(?:application|database)\b/i,
+  /\bTraceMap\b[^.]{0,140}\b(?:ran|rendered|queried|reconstructed)\b[^.]{0,140}\b(?:application|database)\b/i,
   /\b(?:runtime execution|event firing|production behavior|complete coverage|data correctness|effective permissions)\b[^.]{0,100}\b(?:is|are|was|were)\s+(?:proved|proven|verified|validated|established)\b/i,
   /\b(?:safe to run|safe to release|approved for release|reconstruction succeeded|validation passed)\b/i
 ];
@@ -118,7 +118,10 @@ async function validateBlogIndex({ dist, errors }) {
   const html = await readFile(path, "utf8");
   if (!hasHref(html, accessSafeEvidenceAcquisitionRoute)) {
     errors.push(withEvidence(`Access acquisition blog index is missing article link: ${accessSafeEvidenceAcquisitionRoute}`, "blog/index.html"));
+    return;
   }
+  const card = html.match(new RegExp(`<a\\b[^>]*href\\s*=\\s*["']${escapeRegExp(accessSafeEvidenceAcquisitionRoute)}["'][^>]*>[\\s\\S]*?<\\/a>`, "i"))?.[0] ?? "";
+  scanSafety([normalizeRenderedText(card), decodeHtmlEntities(card)], errors, "blog/index.html");
 }
 
 async function validateDiscovery({ dist, errors }) {
@@ -154,6 +157,11 @@ async function validateArticle({ baseUrl, pagePath, errors }) {
   const html = await readFile(pagePath, "utf8");
   const decoded = decodeHtmlEntities(html);
   const rendered = normalizeRenderedText(html);
+  const metadata = decodeHtmlEntities(
+    [...(html.match(/<head\b[^>]*>[\s\S]*?<\/head>/i)?.[0] ?? "").matchAll(/\bcontent\s*=\s*(["'])(.*?)\1/gi)]
+      .map((match) => match[2])
+      .join(" ")
+  );
 
   if (!html.includes("<title>Reverse Engineering Access Without Running It | TraceMap</title>")) {
     errors.push(withEvidence("Access acquisition article is missing expected title.", pageArtifact));
@@ -176,14 +184,19 @@ async function validateArticle({ baseUrl, pagePath, errors }) {
   }
   const words = rendered.split(/\s+/).filter(Boolean).length;
   if (words < 900 || words > 1800) errors.push(withEvidence(`Access acquisition article word count must be between 900 and 1800 words, got ${words}`, pageArtifact));
+  scanSafety([rendered, metadata], errors, pageArtifact, [decoded, metadata]);
+}
+
+function scanSafety(surfaces, errors, artifact, privateSurfaces = surfaces) {
+  const claimSurfaces = surfaces.map((surface) => surface.replace(/TraceMap does not claim that it ran, rendered, queried, or reconstructed the Access application\.?/gi, ""));
   for (const pattern of forbiddenClaims) {
-    if (pattern.test(rendered)) errors.push(withEvidence(`Access acquisition article contains unsupported positive claim: ${pattern}`, pageArtifact));
+    if (claimSurfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Access acquisition article contains unsupported positive claim: ${pattern}`, artifact));
   }
   for (const pattern of rawMaterialPatterns) {
-    if (pattern.test(rendered)) errors.push(withEvidence(`Access acquisition article contains raw or executable material: ${pattern}`, pageArtifact));
+    if (surfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Access acquisition article contains raw or executable material: ${pattern}`, artifact));
   }
   for (const pattern of hardPrivatePatterns) {
-    if (pattern.test(decoded)) errors.push(withEvidence(`Access acquisition article contains hard private material: ${pattern}`, pageArtifact));
+    if (privateSurfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Access acquisition article contains hard private material: ${pattern}`, artifact));
   }
 }
 
