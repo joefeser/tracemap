@@ -54,6 +54,27 @@ public sealed class EvidenceDocsExportTests
     }
 
     [Fact]
+    public async Task Docs_export_scopes_dispatch_gaps_to_their_owning_source()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await StaticDispatchCandidateConsumerFixture.CreateCombinedIndexAsync(
+            temp.Path,
+            includeUnsupportedRegistration: true,
+            includeSecondSource: true);
+
+        var result = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "docs-source-scoped-gap"),
+            Families: "dependency-surface,gap,limitation"));
+
+        var chunk = Assert.Single(result.Chunks, candidate =>
+            candidate.Title == "Static dispatch candidate review context");
+        var gap = Assert.Single(chunk.Gaps, candidate => candidate.Reason == "UnsupportedRegistrationShape");
+        var source = Assert.Single(gap.SourceRefs);
+        Assert.False(string.IsNullOrWhiteSpace(source.SourceId));
+    }
+
+    [Fact]
     public async Task Docs_export_writes_deterministic_markdown_jsonl_and_manifest()
     {
         using var temp = new TempDirectory();
