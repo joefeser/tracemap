@@ -9,6 +9,7 @@ import { validateAccessFormFieldLineageDist } from "./access-form-field-lineage.
 import { validateBuildReviewWorkflowStoryDist } from "./build-review-workflow-story.mjs";
 import { validateBlogProofPathSeriesDist } from "./blog-proof-path-series.mjs";
 import { validateChangeRiskLanguageGuideDist } from "./change-risk-language-guide.mjs";
+import { validateCsharpExtractionTruthDist } from "./csharp-extraction-truth.mjs";
 import { validateDatabaseDesignReviewShowcaseDist } from "./database-design-review-showcase.mjs";
 import {
   validateDiscoveryDist,
@@ -102,6 +103,7 @@ export async function validateDist({
   requireMsbuildBinlogEvidence = true,
   requireAccessSafeEvidenceAcquisition = true,
   requireAccessFormFieldLineage = requireMsbuildBinlogEvidence,
+  requireCsharpExtractionTruth = true,
   root = defaultRoot
 } = {}) {
   const dist = resolve(root, "dist");
@@ -136,6 +138,9 @@ export async function validateDist({
   if (normalizedBaseUrl) {
     if (requireAccessSafeEvidenceAcquisition) {
       await validateAccessSafeEvidenceAcquisitionDist({ baseUrl: normalizedBaseUrl, dist, errors });
+    }
+    if (requireCsharpExtractionTruth) {
+      await validateCsharpExtractionTruthDist({ baseUrl: normalizedBaseUrl, dist, errors });
     }
     await validateRobotsSitemap({ baseUrl: normalizedBaseUrl, errors, robotsPath });
     await validateDiscoveryDist({ baseUrl: normalizedBaseUrl, dist, errors });
