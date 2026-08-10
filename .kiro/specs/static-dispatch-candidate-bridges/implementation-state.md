@@ -627,6 +627,17 @@ appropriate.
 - Final follow-up validation passed 22 focused dispatch/schema tests, the full
   `.NET` solution at 1,349 tests, targeted format, the public combined
   paths/reverse smoke, private-path guard, and diff check.
+- A final exact-head Kiro `claude-opus-5` advisory at
+  `9e31dff837d5f2deb3cb153cfdc9f83c0009cdfb` identified three remaining P2
+  evidence-contract issues: withheld fan-out gaps lacked supporting evidence
+  and the abstraction label; the schema-gap message was combined-index
+  specific; and capped evidence buckets did not preserve exact pre-cap counts.
+  The bounded follow-up now carries the unverified call provenance into the
+  retained fan-out gap, uses source-neutral schema wording, caps call,
+  relationship, and registration evidence independently, and records exact
+  counts for every bucket. Validation passed 22 focused dispatch/schema tests,
+  the full `.NET` solution at 1,349 tests, targeted format, the public combined
+  paths/reverse smoke, private-path guard, and diff check.
 
 - Initial ACK returned `decision=actionable_findings`,
   `stopReason=UNRESOLVED_REVIEW_THREADS`, `patchAuthorized=true`, and

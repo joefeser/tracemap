@@ -184,7 +184,13 @@ public sealed record CombinedPathGap(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     int? GroupedEvidenceCount = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    int? SupportingFactLimit = null)
+    int? SupportingFactLimit = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? CallEvidenceCount = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? RelationshipEvidenceCount = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? RegistrationEvidenceCount = null)
 {
     [JsonIgnore]
     public IReadOnlyList<string> EffectiveSupportingFactIds => SupportingFactIds is { Count: > 0 }
@@ -2096,7 +2102,7 @@ public static class CombinedDependencyPathReporter
                 "gap:dispatch:schema:extractor-version",
                 "DispatchCandidateSchemaUnavailable",
                 CombinedDependencyPathClassifications.NeedsReviewPath,
-                "The combined fact schema does not expose per-fact extractor identity; static dispatch candidates are unavailable for this index.",
+                "The fact schema does not expose per-fact extractor identity; static dispatch candidates are unavailable for this index.",
                 null,
                 null,
                 null,
@@ -2248,7 +2254,10 @@ public static class CombinedDependencyPathReporter
                 gap.CandidateLimit,
                 gap.SupportingFactIds,
                 gap.GroupedEvidenceCount,
-                gap.SupportingFactLimit));
+                gap.SupportingFactLimit,
+                gap.CallEvidenceCount,
+                gap.RelationshipEvidenceCount,
+                gap.RegistrationEvidenceCount));
         }
     }
 
