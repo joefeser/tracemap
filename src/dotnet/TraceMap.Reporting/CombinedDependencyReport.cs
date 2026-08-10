@@ -1909,7 +1909,7 @@ public static class CombinedDependencyReporter
         return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0;
     }
 
-    private static async Task<bool> ColumnExistsAsync(
+    internal static async Task<bool> ColumnExistsAsync(
         SqliteConnection connection,
         string tableName,
         string columnName,

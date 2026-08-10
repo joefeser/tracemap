@@ -180,7 +180,11 @@ public sealed record CombinedPathGap(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     int? CandidateLimit = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<string>? SupportingFactIds = null)
+    IReadOnlyList<string>? SupportingFactIds = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? GroupedEvidenceCount = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? SupportingFactLimit = null)
 {
     [JsonIgnore]
     public IReadOnlyList<string> EffectiveSupportingFactIds => SupportingFactIds is { Count: > 0 }
@@ -866,7 +870,12 @@ public static class CombinedDependencyPathReporter
         var (source, manifestJson) = await ReadSingleSourceAsync(connection, indexPath, cancellationToken);
         var warnings = new List<string>();
         AddSingleCoverageWarnings(source, warnings);
-        var facts = await ReadSingleFactsAsync(connection, source, cancellationToken);
+        var hasFactExtractorVersion = await CombinedDependencyReporter.ColumnExistsAsync(
+            connection,
+            "facts",
+            "extractor_version",
+            cancellationToken);
+        var facts = await ReadSingleFactsAsync(connection, source, hasFactExtractorVersion, cancellationToken);
         var edges = await ReadSingleEdgesAsync(connection, source, cancellationToken);
         var counts = new SortedDictionary<string, long>(StringComparer.Ordinal);
         if (await TableExistsAsync(connection, "parameter_forward_edges", cancellationToken))
@@ -889,7 +898,8 @@ public static class CombinedDependencyPathReporter
             warnings.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             facts,
             edges,
-            counts.Where(pair => pair.Value > 0).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal));
+            counts.Where(pair => pair.Value > 0).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+            hasFactExtractorVersion);
     }
 
     private static async Task<(CombinedReportSource Source, string ManifestJson)> ReadSingleSourceAsync(SqliteConnection connection, string indexPath, CancellationToken cancellationToken)
@@ -929,13 +939,18 @@ public static class CombinedDependencyPathReporter
         return (source, reader.GetString(6));
     }
 
-    private static async Task<IReadOnlyList<CombinedFactRow>> ReadSingleFactsAsync(SqliteConnection connection, CombinedReportSource source, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<CombinedFactRow>> ReadSingleFactsAsync(
+        SqliteConnection connection,
+        CombinedReportSource source,
+        bool hasExtractorVersion,
+        CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = """
+        var extractorVersionExpression = hasExtractorVersion ? "extractor_version" : "null";
+        command.CommandText = $$"""
             select fact_id, scan_id, repo, commit_sha, fact_type, rule_id, evidence_tier,
                    source_symbol, target_symbol, contract_element, file_path, start_line, end_line, properties_json,
-                   extractor_version
+                   {{extractorVersionExpression}}
             from facts
             order by file_path, start_line, fact_type, fact_id;
             """;
@@ -2231,7 +2246,9 @@ public static class CombinedDependencyPathReporter
                 gap.EndLine,
                 gap.CandidateCount,
                 gap.CandidateLimit,
-                gap.SupportingFactIds));
+                gap.SupportingFactIds,
+                gap.GroupedEvidenceCount,
+                gap.SupportingFactLimit));
         }
     }
 

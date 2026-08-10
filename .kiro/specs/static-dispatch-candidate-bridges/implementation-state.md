@@ -617,6 +617,16 @@ appropriate.
 - The Kiro follow-up patch passed 20 focused dispatch/schema tests, the full
   `.NET` solution at 1,347 tests, targeted format, the public combined
   paths/reverse smoke, private-path guard, and diff check.
+- The fresh Opus recheck at `2bc03a23067c5f3e376e54a36adb42d74b9d8cbf`
+  found the same schema boundary on legacy single indexes plus two structured
+  gap-metadata defects. The final patch threads schema availability through
+  both combined and single-index readers, retains registration evidence ahead
+  of separately capped call/relationship evidence, uses dedicated grouped
+  evidence count/limit fields, and retains truthful candidate fan-out metadata
+  when call identity withholds every candidate.
+- Final follow-up validation passed 22 focused dispatch/schema tests, the full
+  `.NET` solution at 1,349 tests, targeted format, the public combined
+  paths/reverse smoke, private-path guard, and diff check.
 
 - Initial ACK returned `decision=actionable_findings`,
   `stopReason=UNRESOLVED_REVIEW_THREADS`, `patchAuthorized=true`, and
