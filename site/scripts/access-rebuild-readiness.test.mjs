@@ -16,13 +16,13 @@ test("Access rebuild-readiness article builds with bounded evidence and discover
 });
 
 test("Access rebuild-readiness validator rejects positive runtime and reconstruction claims", async (t) => {
-  for (const claim of ["TraceMap proves the rebuild is complete.", "The application is safe.", "The reconstruction succeeded."]) {
+  for (const claim of ["TraceMap proves the rebuild is complete.", "TraceMap verified runtime execution.", "The application is safe.", "The reconstruction succeeded."]) {
     await t.test(claim, async (subtest) => { const root = await fixture(subtest); await append(root, claim); await buildSite({ root, log() {} }); const errors = []; await validateAccessRebuildReadinessDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /unsupported positive claim/); });
   }
 });
 
 test("Access rebuild-readiness validator rejects private and executable material including encoded forms", async (t) => {
-  for (const leak of ["/Us" + "ers/example/workspace", "/Us<span>ers</span>/example/workspace", "/Us&#101rs/example/workspace", "SE<span>LECT</span> value FROM private_table", "Password=secret-value"]) {
+  for (const leak of ["/Us" + "ers/example/workspace", "/Us<span>ers</span>/example/workspace", "/Us&#101rs/example/workspace", "%2FUs" + "ers%2Fexample%2Fworkspace", "SE<span>LECT</span> value FROM private_table", "Password=secret-value"]) {
     await t.test(leak, async (subtest) => { const root = await fixture(subtest); await append(root, leak); await buildSite({ root, log() {} }); const errors = []; await validateAccessRebuildReadinessDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /hard private material|raw or executable material/); });
   }
 });

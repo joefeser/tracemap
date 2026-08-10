@@ -4,4 +4,5 @@
 - [x] Add the article, registry record, discovery metadata, and companion links.
 - [x] Add focused validation and regressions.
 - [x] Run full site and browser validation.
-- [ ] Commit, push, open a ready PR to `dev`, and run ACK.
+- [x] Commit, push, and open a ready PR to `dev`.
+- [ ] Resolve ACK-authorized findings and reach a terminal review handoff.

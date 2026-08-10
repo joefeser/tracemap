@@ -42,7 +42,7 @@ const requiredText = [
   "local Access review bundle"
 ];
 const forbiddenClaims = [
-  /\bTraceMap\b[^.]{0,160}\b(?:proves?|guarantees?|certifies?|establishes?)\b[^.]{0,160}\b(?:rebuild|runtime|execution|correctness|complete|safe|production)\b/i,
+  /\bTraceMap\b[^.]{0,160}\b(?:proves?|guarantees?|certifies?|establishes?|verif(?:y|ies|ied)|asserts?|asserted|confirms?|confirmed)\b[^.]{0,160}\b(?:rebuild|runtime|execution|correctness|complete|safe|production)\b/i,
   /\b(?:application|database|rebuild|migration)\b[^.]{0,140}\b(?:is|was|will be)\s+(?:complete|correct|successful|safe|approved|ready)\b/i,
   /\b(?:validation passed|reconstruction succeeded|permissions are effective|jobs? ran|release approved)\b/i
 ];
@@ -113,6 +113,7 @@ async function validatePage(pagePath, baseUrl, errors) {
   const rendered = normalizeRenderedText(browserDecoded);
   const tagCollapsed = decodeHtmlEntities(stripTagsQuoteAware(decoded)).replace(/\s+/g, " ").trim();
   const surfaces = [decoded, rendered, tagCollapsed];
+  surfaces.push(...surfaces.map(decodePercentEscapes));
   if (!html.includes("<title>Rebuild Readiness Is a Gap Register, Not a Promise | TraceMap</title>")) errors.push(withEvidence("Access rebuild-readiness title is missing.", artifact));
   if (!new RegExp(`<link\\b[^>]*rel=["']canonical["'][^>]*href=["']${escapeRegExp(baseUrl)}${escapeRegExp(accessRebuildReadinessRoute)}["']`, "i").test(html)) errors.push(withEvidence("Access rebuild-readiness canonical URL is missing or incorrect.", artifact));
   for (const block of blocks) if (!new RegExp(`<section\\b[^>]*data-access-readiness-block\\s*=\\s*["']${block}["']`, "i").test(html)) errors.push(withEvidence(`Access rebuild-readiness article is missing block: ${block}`, artifact));
@@ -127,6 +128,11 @@ async function validatePage(pagePath, baseUrl, errors) {
 
 function decodeBrowserNumericEntities(value) {
   return String(value).replace(/&#(?:x[0-9a-f]+|[0-9]+);?/gi, (entity) => decodeHtmlEntities(entity.endsWith(";") ? entity : `${entity};`));
+}
+
+function decodePercentEscapes(value) {
+  try { return decodeURIComponent(String(value)); }
+  catch { return String(value); }
 }
 
 function hasHref(html, href) { return new RegExp(`<a\\b[^>]*href\\s*=\\s*["']${escapeRegExp(href)}["'][^>]*>`, "i").test(html); }
