@@ -117,6 +117,8 @@ public sealed class CombinedDependencyPathTests
         var candidate = Assert.Single(path.Edges, edge => edge.EdgeKind == "interface-candidate");
         Assert.Equal("combined.dispatch-candidate.v1", candidate.RuleId);
         Assert.Equal(EvidenceTiers.Tier1Semantic, candidate.EvidenceTier);
+        Assert.Equal(StaticDispatchCandidateStates.SymbolBackedCandidate, candidate.CandidateState);
+        Assert.Equal("interface-member", candidate.CandidateBridgeKind);
         Assert.NotEmpty(candidate.SupportingCombinedEdgeIds);
         Assert.Contains(path.Notes, note => note.Code == "StaticDispatchCandidate");
         Assert.Equal("sql-query", path.Nodes.Last().SurfaceKind);

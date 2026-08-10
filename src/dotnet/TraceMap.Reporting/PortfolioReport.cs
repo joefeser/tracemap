@@ -61,6 +61,7 @@ public sealed record PortfolioReportDocument(
     PortfolioSection<PortfolioSurfaceRow> DependencySurfaces,
     PortfolioSection<PortfolioEdgeRow> DependencyEdges,
     PortfolioSection<PortfolioSharedSurfaceRow> SharedSurfaces,
+    PortfolioSection<PortfolioContextRow> DispatchCandidateContext,
     PortfolioSection<PortfolioContextRow> PathContext,
     PortfolioSection<PortfolioContextRow> ReverseContext,
     PortfolioSection<PortfolioDiffRow> PortfolioDiff,
@@ -380,6 +381,10 @@ public static class PortfolioReporter
         reverseContext = WithCappedGaps(reverseContext, allGaps);
         portfolioImpact = WithCappedGaps(portfolioImpact, allGaps);
         releaseReviewContext = WithCappedGaps(releaseReviewContext, allGaps);
+        var dispatchCandidateContext = DispatchCandidateSection(
+            before.DispatchCandidateRows.Concat(after.DispatchCandidateRows).ToArray(),
+            allGaps.Where(gap => gap.Section == "dispatchCandidateContext").ToArray(),
+            ["Static dispatch candidates are review context only and do not prove runtime binding, reachability, or impact."]);
         return new PortfolioReportDocument(
             ReportType,
             Version,
@@ -396,6 +401,7 @@ public static class PortfolioReporter
             EmptySection<PortfolioSurfaceRow>("dependencySurfaces", "Portfolio surface inventory is not emitted for before/after comparison v1."),
             EmptySection<PortfolioEdgeRow>("dependencyEdges", "Portfolio edge inventory is not emitted for before/after comparison v1."),
             EmptySection<PortfolioSharedSurfaceRow>("sharedSurfaces", "Shared surface grouping is not emitted for before/after comparison v1."),
+            dispatchCandidateContext,
             pathContext,
             reverseContext,
             diffSection,
@@ -482,11 +488,25 @@ public static class PortfolioReporter
         gaps.AddRange(portfolioImpact.Gaps);
         gaps.AddRange(releaseReviewContext.Gaps);
 
+        gaps = gaps.Where(gap =>
+                gap.Section != "dispatchCandidateContext"
+                || Metadata(gap.Metadata ?? [], "sourceId") is not { } sourceId
+                || activeFilteredSourceIds.Contains(sourceId))
+            .ToList();
         var allGaps = CapGaps(gaps, options.MaxGaps);
         pathContext = WithCappedGaps(pathContext, allGaps);
         reverseContext = WithCappedGaps(reverseContext, allGaps);
         portfolioImpact = WithCappedGaps(portfolioImpact, allGaps);
         releaseReviewContext = WithCappedGaps(releaseReviewContext, allGaps);
+        var dispatchCandidateContext = DispatchCandidateSection(
+            read.DispatchCandidateRows
+                .Where(row => activeFilteredSourceIds.Contains(Metadata(row.Metadata, "sourceId") ?? string.Empty))
+                .ToArray(),
+            allGaps.Where(gap =>
+                    gap.Section == "dispatchCandidateContext"
+                    && activeFilteredSourceIds.Contains(Metadata(gap.Metadata ?? [], "sourceId") ?? string.Empty))
+                .ToArray(),
+            ["Static dispatch candidates are review context only and do not prove runtime binding, reachability, or impact."]);
         return new PortfolioReportDocument(
             ReportType,
             Version,
@@ -503,6 +523,7 @@ public static class PortfolioReporter
             Section(cappedSurfaces.Rows, cappedSurfaces.OmittedCount, allGaps.Where(gap => gap.Section == "dependencySurfaces").ToArray(), ["Dependency surfaces preserve source provenance and safe metadata only."]),
             Section(cappedEdges.Rows, cappedEdges.OmittedCount, allGaps.Where(gap => gap.Section == "dependencyEdges").ToArray(), ["Dependency edges are static code evidence."]),
             Section(cappedShared.Rows, cappedShared.OmittedCount, allGaps.Where(gap => gap.Section == "sharedSurfaces").ToArray(), ["Shared surfaces are grouped by safe static identity and do not prove runtime coupling."]),
+            dispatchCandidateContext,
             pathContext,
             reverseContext,
             NotRequestedDiffSection(),
@@ -520,6 +541,7 @@ public static class PortfolioReporter
         var facts = new List<CombinedFactRow>();
         var edges = new List<CombinedDependencyEdgeRow>();
         var gaps = new List<PortfolioGap>();
+        var dispatchCandidateRows = new List<PortfolioContextRow>();
         foreach (var input in manifest.Inputs.OrderBy(input => input.Label, StringComparer.Ordinal))
         {
             var connectionString = new SqliteConnectionStringBuilder
@@ -554,6 +576,7 @@ public static class PortfolioReporter
             if (isCombined)
             {
                 var read = await CombinedDependencyReporter.ReadAsync(connection, cancellationToken);
+                var dispatchInventory = CombinedDependencyPathReporter.BuildGraphInventory(read);
                 var knownGapsBySource = read.KnownGaps
                     .GroupBy(gap => gap.SourceIndexId, StringComparer.Ordinal)
                     .ToDictionary(
@@ -565,8 +588,26 @@ public static class PortfolioReporter
                     knownGapsBySource.TryGetValue(source.SourceIndexId, out var knownGapCategories);
                     var row = ToPortfolioSource(source, input, side, knownGapCategories ?? []);
                     sources.Add(row);
+                    var dispatchSummary = DispatchCandidateEvidenceProjection.Summarize(dispatchInventory, source.SourceIndexId);
+                    dispatchCandidateRows.Add(DispatchCandidateRow(input, side, row, dispatchSummary));
                     AddExpectedIdentityGaps(input, row, gaps);
                 }
+
+                gaps.AddRange(DispatchCandidateEvidenceProjection.CandidateGaps(dispatchInventory).Select(gap =>
+                    Gap(
+                        gap.GapKind,
+                        "dispatchCandidateContext",
+                        DispatchCandidateEvidenceProjection.PortfolioRuleId,
+                        PortfolioReportClassifications.PartialAnalysis,
+                        "Static dispatch candidate derivation recorded a bounded or unavailable evidence gap.",
+                        gap.SourceLabel,
+                        CombinedReportHelpers.SortedMetadata([
+                            new("dispatchGapRuleId", gap.RuleId),
+                            new("dispatchGapId", gap.GapId),
+                            new("reason", gap.Reason),
+                            new("sourceId", SourceId(input.Label, side, gap.SourceLabel ?? string.Empty))
+                        ]),
+                        gap.GapId)));
 
                 facts.AddRange(read.Facts.Select(fact => PrefixFact(fact, input.Label, side)));
                 edges.AddRange(read.Edges.Select(edge => PrefixEdge(edge, input.Label, side)));
@@ -582,11 +623,54 @@ public static class PortfolioReporter
                 facts.AddRange(read.Facts);
                 edges.AddRange(read.Edges);
                 gaps.AddRange(read.Gaps);
+                gaps.Add(Gap(
+                    "DispatchCandidateSchemaUnavailable",
+                    "dispatchCandidateContext",
+                    DispatchCandidateEvidenceProjection.PortfolioRuleId,
+                    PortfolioReportClassifications.PartialAnalysis,
+                    "Static dispatch candidate composition requires a combined index; candidate absence is not claimed for this single-index input.",
+                    read.Source.Label,
+                    CombinedReportHelpers.SortedMetadata([
+                        new("inputLabel", SafeToken(input.Label)),
+                        new("inputKind", "single"),
+                        new("sourceId", read.Source.SourceId)
+                    ])));
                 AddExpectedIdentityGaps(input, read.Source, gaps);
             }
         }
 
-        return new PortfolioReadResult(inputs, sources, facts, edges, gaps);
+        return new PortfolioReadResult(inputs, sources, facts, edges, dispatchCandidateRows, gaps);
+    }
+
+    private static PortfolioContextRow DispatchCandidateRow(
+        PortfolioInputSpec input,
+        string side,
+        PortfolioSourceRow source,
+        DispatchCandidateEvidenceSummary summary)
+    {
+        var contextId = $"portfolio-dispatch:{CombinedReportHelpers.Hash(string.Join('\u001f', [side, input.Label, source.SourceId, summary.CandidateCount.ToString(), summary.GapCount.ToString(), string.Join('|', summary.SupportingEdgeIds)]), 24)}";
+        return new PortfolioContextRow(
+            contextId,
+            summary.Classification,
+            DispatchCandidateEvidenceProjection.PortfolioRuleId,
+            summary.EvidenceTiers.LastOrDefault() ?? EvidenceTiers.Tier4Unknown,
+            "Bounded static dispatch candidate review context; runtime dispatch and dependency-injection binding are not proven.",
+            CombinedReportHelpers.SortedMetadata([
+                new("inputLabel", SafeToken(input.Label)),
+                new("side", side),
+                new("sourceId", source.SourceId),
+                new("sourceLabel", source.Label),
+                new("candidateCount", summary.CandidateCount.ToString()),
+                new("symbolBackedCandidateCount", summary.SymbolBackedCandidateCount.ToString()),
+                new("weakerCandidateCount", summary.WeakerCandidateCount.ToString()),
+                new("registrationContextCandidateCount", summary.RegistrationContextCandidateCount.ToString()),
+                new("gapCount", summary.GapCount.ToString()),
+                new("fanOutOrTruncated", summary.FanOutOrTruncated.ToString().ToLowerInvariant()),
+                new("supportingFactIds", string.Join(';', summary.SupportingFactIds)),
+                new("supportingEdgeIds", string.Join(';', summary.SupportingEdgeIds)),
+                new("supportingRuleIds", string.Join(';', summary.RuleIds)),
+                new("coverageLabels", string.Join(';', summary.CoverageLabels))
+            ]));
     }
 
     private static async Task<SingleIndexReadResult> ReadSingleIndexAsync(SqliteConnection connection, PortfolioInputSpec input, string side, CancellationToken cancellationToken)
@@ -932,6 +1016,43 @@ public static class PortfolioReporter
         }
 
         return new PortfolioSection<T>(status, SelectRollup(gaps, rows.Count > 0, omittedCount > 0), rows, gaps, omittedCount, limitations);
+    }
+
+    private static PortfolioSection<PortfolioContextRow> DispatchCandidateSection(
+        IReadOnlyList<PortfolioContextRow> rows,
+        IReadOnlyList<PortfolioGap> gaps,
+        IReadOnlyList<string> limitations)
+    {
+        string rollup;
+        if (gaps.Any(gap => gap.Classification == PortfolioReportClassifications.UnknownAnalysisGap))
+        {
+            rollup = PortfolioReportClassifications.UnknownAnalysisGap;
+        }
+        else if (gaps.Any(gap => gap.Classification == PortfolioReportClassifications.TruncatedByLimit))
+        {
+            rollup = PortfolioReportClassifications.TruncatedByLimit;
+        }
+        else if (gaps.Any(gap => gap.Classification == PortfolioReportClassifications.PartialAnalysis)
+                 || rows.Any(row => row.Classification == DispatchCandidateEvidenceProjection.PartialReviewClassification))
+        {
+            rollup = PortfolioReportClassifications.PartialAnalysis;
+        }
+        else if (rows.Count > 0)
+        {
+            rollup = PortfolioReportClassifications.ReviewRecommended;
+        }
+        else
+        {
+            rollup = PortfolioReportClassifications.NoActionableEvidence;
+        }
+
+        return new PortfolioSection<PortfolioContextRow>(
+            PortfolioReportStatuses.Available,
+            rollup,
+            rows,
+            gaps,
+            0,
+            limitations);
     }
 
     private static PortfolioSection<T> EmptySection<T>(string section, string message)
@@ -2022,6 +2143,7 @@ public static class PortfolioReporter
         RenderSurfaces(builder, report.DependencySurfaces);
         RenderEdges(builder, report.DependencyEdges);
         RenderShared(builder, report.SharedSurfaces);
+        RenderDispatchCandidates(builder, report.DispatchCandidateContext);
         RenderContext(builder, "Optional Path and Reverse Context", report.PathContext, report.ReverseContext);
         RenderDiffImpact(builder, report.PortfolioDiff, report.PortfolioImpact);
         RenderReleaseReview(builder, report.ReleaseReviewContext);
@@ -2102,6 +2224,16 @@ public static class PortfolioReporter
         builder.AppendLine($"Status: `{section.Status}`");
         AppendRows(builder, section.Rows, "| Kind | Name | Classification | Sources | Evidence |", "| --- | --- | --- | --- | --- |",
             row => $"| {CombinedReportHelpers.Cell(row.SurfaceKind)} | {CombinedReportHelpers.Cell(row.DisplayName)} | {CombinedReportHelpers.Cell(row.Classification)} | {CombinedReportHelpers.Cell(string.Join(";", row.SourceLabels))} | {CombinedReportHelpers.Cell(row.EvidenceTier)} `{CombinedReportHelpers.Cell(row.RuleId)}` |");
+    }
+
+    private static void RenderDispatchCandidates(StringBuilder builder, PortfolioSection<PortfolioContextRow> section)
+    {
+        builder.AppendLine();
+        builder.AppendLine("## Static Dispatch Candidate Review Context");
+        builder.AppendLine();
+        builder.AppendLine($"Status: `{section.Status}`");
+        AppendRows(builder, section.Rows, "| Classification | Evidence | Message | Metadata |", "| --- | --- | --- | --- |",
+            row => $"| {CombinedReportHelpers.Cell(row.Classification)} | {CombinedReportHelpers.Cell(row.EvidenceTier)} `{CombinedReportHelpers.Cell(row.RuleId)}` | {CombinedReportHelpers.Cell(row.Message)} | {CombinedReportHelpers.Cell(MetadataText(row.Metadata))} |");
     }
 
     private static void RenderContext(StringBuilder builder, string title, PortfolioSection<PortfolioContextRow> paths, PortfolioSection<PortfolioContextRow> reverse)
@@ -2361,11 +2493,19 @@ public static class PortfolioReporter
             .ToArray();
     }
 
-    private static PortfolioGap Gap(string kind, string section, string ruleId, string classification, string message, string? sourceLabel = null)
+    private static PortfolioGap Gap(
+        string kind,
+        string section,
+        string ruleId,
+        string classification,
+        string message,
+        string? sourceLabel = null,
+        IReadOnlyList<KeyValuePair<string, string>>? metadata = null,
+        string? identityComponent = null)
     {
         var safeSource = SafeOptional(sourceLabel);
         return new PortfolioGap(
-            $"gap:{CombinedReportHelpers.Hash($"{kind}:{section}:{classification}:{message}:{safeSource}", 20)}",
+            $"gap:{CombinedReportHelpers.Hash($"{kind}:{section}:{classification}:{message}:{safeSource}:{identityComponent}", 20)}",
             kind,
             section,
             classification,
@@ -2373,7 +2513,7 @@ public static class PortfolioReporter
             classification == PortfolioReportClassifications.NoActionableEvidence ? EvidenceTiers.Tier2Structural : EvidenceTiers.Tier4Unknown,
             SafeMessage(message),
             safeSource,
-            []);
+            metadata ?? []);
     }
 
     private static string RepoHash(string? remoteUrl, string repoName, string? gitRootHash)
@@ -2528,7 +2668,7 @@ public static class PortfolioReporter
     }
 
     private sealed record PortfolioManifestInfo(string? PortfolioId, string? SnapshotId, string InputMode, IReadOnlyList<PortfolioInputSpec> Inputs);
-    private sealed record PortfolioReadResult(IReadOnlyList<PortfolioInputRow> Inputs, IReadOnlyList<PortfolioSourceRow> Sources, IReadOnlyList<CombinedFactRow> Facts, IReadOnlyList<CombinedDependencyEdgeRow> Edges, IReadOnlyList<PortfolioGap> Gaps);
+    private sealed record PortfolioReadResult(IReadOnlyList<PortfolioInputRow> Inputs, IReadOnlyList<PortfolioSourceRow> Sources, IReadOnlyList<CombinedFactRow> Facts, IReadOnlyList<CombinedDependencyEdgeRow> Edges, IReadOnlyList<PortfolioContextRow> DispatchCandidateRows, IReadOnlyList<PortfolioGap> Gaps);
     private sealed record SingleIndexReadResult(PortfolioSourceRow Source, IReadOnlyList<CombinedFactRow> Facts, IReadOnlyList<CombinedDependencyEdgeRow> Edges, IReadOnlyList<PortfolioGap> Gaps);
     private sealed record Capped<T>(IReadOnlyList<T> Rows, int OmittedCount);
     private sealed record PortfolioComparableDiffRecord(
