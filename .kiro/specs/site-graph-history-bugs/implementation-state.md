@@ -15,7 +15,7 @@ output, deployment, merge, or promotion. Claims remain bounded by issue #623.
 
 - Focused validator: 16 tests passed.
 - Site build: passed.
-- Full site tests: 861 passed.
+- Full site tests: 867 passed after merging the reviewed #628 validator hardening.
 - Site validation: 104 HTML files, 3,524 internal references, and 103 sitemap URLs.
 - Private-path guard and git diff check: passed.
 - Desktop (1440 by 1000) and mobile (390 by 844): blog discovery, article route, and reciprocal companion link rendered with 12 required sections, no horizontal overflow, and no console errors or warnings.
