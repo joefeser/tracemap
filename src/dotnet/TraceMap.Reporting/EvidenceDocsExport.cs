@@ -857,7 +857,7 @@ public static class EvidenceDocsExporter
             gap.SourceIndexId is not null && sourceById.TryGetValue(gap.SourceIndexId, out var gapSource)
                 ? [ToSourceRef(gapSource)]
                 : [],
-            DistinctSorted([gap.GapId, gap.CombinedFactId]),
+            DistinctSorted([gap.GapId, .. gap.EffectiveSupportingFactIds]),
             ["Candidate derivation is incomplete or bounded; this gap does not prove candidate absence or runtime behavior."]))
             .ToArray();
         var limitations = summary.Limitations.Select(message => new EvidenceDocLimitation(

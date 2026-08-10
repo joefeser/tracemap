@@ -89,6 +89,22 @@ substituting the source scanner version, and removes stale follow-up text that
 still described Task 6 as incomplete. Focused malformed-identity and combined
 readback regressions prove both product corrections.
 
+A subsequent exact-head Codex review found that `CombinedPathGap` retained only
+the first supporting fact ID even though the shared builder preserved the full
+call-plus-relationship evidence set. The additive path gap contract now carries
+the complete deterministic supporting-fact list while retaining the legacy
+single `combinedFactId` projection. Combined report, route-flow, reverse,
+release review, database design review, vault, and evidence-doc consumers use
+the complete list. End-to-end coverage proves the same two supporting facts
+survive paths, report summary, vault gap, and evidence-doc gap projections.
+
+Validation after this correction:
+
+- Focused static-dispatch and gap-projection tests: 10/10 passed.
+- Paths/route-flow/report/reverse/release-review/database-design/portfolio/vault/docs
+  tests: 293/293 passed.
+- Full .NET solution tests: 1,343/1,343 passed.
+
 ## Task 10 Implementation
 
 - Added one shared `DispatchCandidateEvidenceSummary` projection over the

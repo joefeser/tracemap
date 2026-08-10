@@ -178,7 +178,15 @@ public sealed record CombinedPathGap(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     int? CandidateCount = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    int? CandidateLimit = null);
+    int? CandidateLimit = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<string>? SupportingFactIds = null)
+{
+    [JsonIgnore]
+    public IReadOnlyList<string> EffectiveSupportingFactIds => SupportingFactIds is { Count: > 0 }
+        ? SupportingFactIds
+        : CombinedFactId is null ? [] : [CombinedFactId];
+}
 
 public sealed record CombinedPathInventory(
     IReadOnlyDictionary<string, int> NodesByKind,
@@ -2197,7 +2205,8 @@ public static class CombinedDependencyPathReporter
                 gap.EvidenceScope,
                 gap.EndLine,
                 gap.CandidateCount,
-                gap.CandidateLimit));
+                gap.CandidateLimit,
+                gap.SupportingFactIds));
         }
     }
 
