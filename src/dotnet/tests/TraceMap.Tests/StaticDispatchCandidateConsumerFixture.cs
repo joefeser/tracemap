@@ -33,7 +33,12 @@ internal static class StaticDispatchCandidateConsumerFixture
                 new EvidenceSpan("Controllers/OrdersController.cs", 14, 14, null, "test", "test/1.0"),
                 sourceSymbol: controller,
                 targetSymbol: abstraction,
-                properties: new SortedDictionary<string, string>(StringComparer.Ordinal) { ["callKind"] = "method" }),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["callKind"] = "method",
+                    ["targetContainingSymbolId"] = "type:Sample.IOrderService",
+                    ["targetSymbolId"] = abstraction
+                }),
             FactFactory.Create(
                 manifest,
                 FactTypes.SymbolRelationship,

@@ -589,8 +589,20 @@ public sealed class CombinedChangeImpactTests
             targetSymbol: callee,
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
-                ["callKind"] = "method"
+                ["callKind"] = "method",
+                ["targetContainingSymbolId"] = callee == "Server.IOrderService.Get(System.Int32)"
+                    ? "Server.IOrderService"
+                    : ContainingType(callee),
+                ["targetSymbolId"] = callee
             });
+    }
+
+    private static string ContainingType(string member)
+    {
+        var signatureStart = member.IndexOf('(', StringComparison.Ordinal);
+        var memberEnd = signatureStart >= 0 ? signatureStart : member.Length;
+        var separator = member.LastIndexOf('.', memberEnd - 1);
+        return separator > 0 ? member[..separator] : member;
     }
 
     private static CodeFact SymbolRelationshipFact(

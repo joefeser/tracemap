@@ -149,6 +149,7 @@ internal static class StaticDispatchCandidateBuilder
             allRelationships,
             memberRelationships,
             memberRelationshipEvidence,
+            registrationFacts,
             calls,
             sources,
             extractorVersionFor);
@@ -182,11 +183,13 @@ internal static class StaticDispatchCandidateBuilder
         IReadOnlyList<StaticDispatchRelationshipEdge> allRelationships,
         IReadOnlyList<StaticDispatchRelationshipEdge> memberRelationships,
         IReadOnlyList<StaticDispatchRelationshipEdge> memberRelationshipEvidence,
+        IReadOnlyList<StaticDispatchRegistrationFact> registrations,
         IReadOnlyList<StaticDispatchCallTarget> calls,
         IReadOnlyList<StaticDispatchSourceContext> sources,
         Func<string, string?> extractorVersionFor)
     {
         var relevantSourceIds = allRelationships.Select(relationship => nodes.GetValueOrDefault(relationship.FromNodeId)?.SourceIndexId)
+            .Concat(registrations.Select(registration => registration.SourceIndexId))
             .Concat(calls.Select(call => call.SourceIndexId))
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Cast<string>()
@@ -239,6 +242,15 @@ internal static class StaticDispatchCandidateBuilder
                     call.SourceLabel,
                     call.CommitSha,
                     FactId = call.FactId
+                }))
+            .Concat(registrations
+                .Where(registration => string.IsNullOrWhiteSpace(registration.ExtractorVersion))
+                .Select(registration => new
+                {
+                    registration.SourceIndexId,
+                    registration.SourceLabel,
+                    registration.CommitSha,
+                    FactId = registration.FactId
                 }))
             .GroupBy(item => item.SourceIndexId, StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal);
@@ -302,6 +314,7 @@ internal static class StaticDispatchCandidateBuilder
         var memberTargets = memberRelationships
             .Select(relationship => relationship.ToNodeId)
             .ToHashSet(StringComparer.Ordinal);
+        var unverifiedCallTargetNodeIds = new HashSet<string>(StringComparer.Ordinal);
         var typeRelationships = allRelationships
             .Where(relationship => IsTypeCandidateRelationship(relationship.OriginalRelationshipKind))
             .ToArray();
@@ -309,6 +322,31 @@ internal static class StaticDispatchCandidateBuilder
         {
             if (memberTargets.Contains(call.TargetNodeId))
             {
+                var matchingMemberRelationships = memberRelationships
+                    .Where(relationship => string.Equals(relationship.ToNodeId, call.TargetNodeId, StringComparison.Ordinal))
+                    .ToArray();
+                if (string.IsNullOrWhiteSpace(call.TargetSymbolId)
+                    || string.IsNullOrWhiteSpace(call.TargetContainingSymbolId)
+                    || !matchingMemberRelationships.Any(relationship =>
+                        string.Equals(relationship.TargetSymbolId, call.TargetSymbolId, StringComparison.Ordinal)
+                        && string.Equals(relationship.TargetContainingSymbolId, call.TargetContainingSymbolId, StringComparison.Ordinal)))
+                {
+                    unverifiedCallTargetNodeIds.Add(call.TargetNodeId);
+                    gaps.Add(CreateContextGap(
+                        "DispatchCandidateIdentityUnverified",
+                        "call-target-identity-unverified",
+                        "Call evidence targeting a dispatch abstraction lacks matching canonical member/type identity; relationship-backed candidates were withheld for that target.",
+                        call.SourceIndexId,
+                        call.SourceLabel,
+                        call.TargetNodeId,
+                        call.CommitSha,
+                        call.ExtractorVersion ?? extractorVersionFor(call.SourceIndexId),
+                        [call.FactId, .. matchingMemberRelationships.SelectMany(relationship => relationship.SupportingFactIds)],
+                        call.FilePath,
+                        call.StartLine,
+                        call.EndLine));
+                }
+
                 continue;
             }
 
@@ -359,6 +397,8 @@ internal static class StaticDispatchCandidateBuilder
                 call.StartLine,
                 call.EndLine));
         }
+
+        candidates.RemoveAll(candidate => unverifiedCallTargetNodeIds.Contains(candidate.AbstractionSymbolId));
     }
 
     private static StaticDispatchCandidateGap CreateContextGap(
