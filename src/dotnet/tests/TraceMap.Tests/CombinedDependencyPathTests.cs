@@ -763,14 +763,13 @@ public sealed class CombinedDependencyPathTests
                 EvidenceTiers.Tier1Semantic, "Controllers/OrdersController.cs", 14 + index, 14 + index,
                 "commit", "test/1.0"))
             .ToArray();
-        var registrations = new[]
-        {
-            new StaticDispatchRegistrationFact(
-                "registration-fact", "server", "server", "Server.IOrderService", "Server.OrderService",
+        var registrations = Enumerable.Range(0, 12)
+            .Select(index => new StaticDispatchRegistrationFact(
+                $"registration-{index:D2}", "server", "server", "Server.IOrderService", "Server.OrderService",
                 serviceTypeId, implementationTypeId, "AddScoped", StaticDispatchRegistrationShapes.ClosedTypePair,
                 EvidenceTiers.Tier1Semantic, RuleIds.CSharpSemanticRuntimeEvidence,
-                "Startup/CompositionRoot.cs", 30, 30, "commit", "test/1.0")
-        };
+                "Startup/CompositionRoot.cs", 30 + index, 30 + index, "commit", "test/1.0"))
+            .ToArray();
 
         var result = StaticDispatchCandidateBuilder.Build(
             nodes,
@@ -781,12 +780,16 @@ public sealed class CombinedDependencyPathTests
         Assert.Empty(result.Edges);
         var gap = Assert.Single(result.Gaps, item => item.GapKind == "DispatchCandidateIdentityUnverified");
         Assert.Equal("call-target-identity-unverified", gap.Reason);
-        Assert.Equal(12, gap.SupportingFactIds.Count);
+        Assert.Equal(21, gap.SupportingFactIds.Count);
         Assert.Contains("member-fact", gap.SupportingFactIds);
-        Assert.Contains("registration-fact", gap.SupportingFactIds);
+        Assert.Contains("registration-00", gap.SupportingFactIds);
         Assert.Equal(10, gap.SupportingFactIds.Count(id => id.StartsWith("call-", StringComparison.Ordinal)));
+        Assert.Equal(10, gap.SupportingFactIds.Count(id => id.StartsWith("registration-", StringComparison.Ordinal)));
         Assert.Equal(12, gap.GroupedEvidenceCount);
         Assert.Equal(10, gap.SupportingFactLimit);
+        Assert.Equal(12, gap.CallEvidenceCount);
+        Assert.Equal(1, gap.RelationshipEvidenceCount);
+        Assert.Equal(12, gap.RegistrationEvidenceCount);
         Assert.Null(gap.CandidateCount);
         Assert.Null(gap.CandidateLimit);
         Assert.Equal("Controllers/OrdersController.cs", gap.FilePath);
@@ -834,6 +837,8 @@ public sealed class CombinedDependencyPathTests
         Assert.Equal(11, fanout.CandidateCount);
         Assert.Equal(10, fanout.CandidateLimit);
         Assert.Contains("withheld", fanout.Message, StringComparison.Ordinal);
+        Assert.Contains("Server.IOrderService.Get()", fanout.Message, StringComparison.Ordinal);
+        Assert.Contains("call", fanout.SupportingFactIds);
     }
 
     [Fact]

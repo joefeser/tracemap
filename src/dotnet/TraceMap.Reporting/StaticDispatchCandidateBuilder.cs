@@ -420,9 +420,19 @@ internal static class StaticDispatchCandidateBuilder
                 && gap.NodeId is not null
                 && unverifiedCallTargetNodeIds.Contains(gap.NodeId))
             {
+                var supportingFactIds = gaps
+                    .Where(candidateGap => candidateGap.GapKind == "DispatchCandidateIdentityUnverified"
+                        && string.Equals(candidateGap.SourceIndexId, gap.SourceIndexId, StringComparison.Ordinal)
+                        && string.Equals(candidateGap.NodeId, gap.NodeId, StringComparison.Ordinal))
+                    .SelectMany(candidateGap => candidateGap.SupportingFactIds)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray();
+                var abstractionDisplay = nodes.GetValueOrDefault(gap.NodeId)?.DisplayName ?? "the abstraction";
                 gaps[index] = gap with
                 {
-                    Message = $"Static dispatch candidate derivation found {gap.CandidateCount} candidates, but all candidates for this abstraction were withheld because call identity was unverified; the configured candidate cap is {gap.CandidateLimit}."
+                    Message = $"Static dispatch candidate derivation found {gap.CandidateCount} candidates for `{abstractionDisplay}`, but all candidates were withheld because call identity was unverified; the configured candidate cap is {gap.CandidateLimit}.",
+                    SupportingFactIds = supportingFactIds
                 };
             }
         }
@@ -454,14 +464,14 @@ internal static class StaticDispatchCandidateBuilder
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .ToArray();
-            var supportingFactIds = allSupportingFactIds
-                .Where(registrationFactIds.Contains)
-                .Concat(allSupportingFactIds
-                    .Where(value => !registrationFactIds.Contains(value) && !callFactIds.Contains(value))
-                    .Take(supportingFactLimit))
-                .Concat(allSupportingFactIds
-                    .Where(callFactIds.Contains)
-                    .Take(supportingFactLimit))
+            var registrationEvidence = allSupportingFactIds.Where(registrationFactIds.Contains).ToArray();
+            var relationshipEvidence = allSupportingFactIds
+                .Where(value => !registrationFactIds.Contains(value) && !callFactIds.Contains(value))
+                .ToArray();
+            var callEvidence = allSupportingFactIds.Where(callFactIds.Contains).ToArray();
+            var supportingFactIds = registrationEvidence.Take(supportingFactLimit)
+                .Concat(relationshipEvidence.Take(supportingFactLimit))
+                .Concat(callEvidence.Take(supportingFactLimit))
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .ToArray();
@@ -469,7 +479,7 @@ internal static class StaticDispatchCandidateBuilder
             gaps.Add(CreateContextGap(
                 first.GapKind,
                 first.Reason!,
-                $"{first.Message} {ordered.Length} call-site evidence rows were grouped; call-site and relationship supporting facts are each capped at {supportingFactLimit}, while registration provenance is retained.",
+                $"{first.Message} {ordered.Length} call-site evidence rows were grouped; call, relationship, and registration supporting facts are each capped at {supportingFactLimit}, with exact pre-cap counts preserved.",
                 first.SourceIndexId!,
                 first.SourceLabel!,
                 first.NodeId,
@@ -481,7 +491,10 @@ internal static class StaticDispatchCandidateBuilder
                 first.EndLine) with
             {
                 GroupedEvidenceCount = ordered.Length,
-                SupportingFactLimit = supportingFactLimit
+                SupportingFactLimit = supportingFactLimit,
+                CallEvidenceCount = callEvidence.Length,
+                RelationshipEvidenceCount = relationshipEvidence.Length,
+                RegistrationEvidenceCount = registrationEvidence.Length
             });
         }
     }
@@ -1338,4 +1351,7 @@ internal sealed record StaticDispatchCandidateGap(
     int? CandidateCount = null,
     int? CandidateLimit = null,
     int? GroupedEvidenceCount = null,
-    int? SupportingFactLimit = null);
+    int? SupportingFactLimit = null,
+    int? CallEvidenceCount = null,
+    int? RelationshipEvidenceCount = null,
+    int? RegistrationEvidenceCount = null);
