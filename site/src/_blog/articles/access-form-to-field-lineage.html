@@ -1,0 +1,205 @@
+<p>
+  <strong>Public claim level: demo.</strong>
+  A reviewer looking at an Access form often starts with a deceptively simple
+  question: where does this control’s value come from, and where could it be
+  persisted? The answer may cross a form record source, a control source, a
+  lookup projection, a saved query, a subform correspondence, a calculated
+  expression, or a static event candidate. TraceMap composes those declared
+  and candidate relationships without pretending it observed the application
+  run.
+</p>
+
+<section data-access-lineage-block="starting-point">
+  <h2>Begin with the owning surface and the control binding.</h2>
+  <p>
+    A form or report can declare a <code>RecordSource</code>. A bound control can
+    declare a <code>ControlSource</code>. Together they form the shortest useful
+    static trail: control → owning surface → record source → query output or
+    table field candidate. A direct field binding is stronger than a textual
+    resemblance because the relationship retains stable identities, rule ID,
+    evidence tier, coverage label, extractor version, and bounded design
+    coordinates.
+  </p>
+  <p>
+    The trail is still a declaration. It does not say that the form opened, a
+    record was loaded, a user edited the control, or a write occurred. If the
+    source identity is missing or ambiguous, TraceMap keeps the candidate at
+    review tier or emits a Tier 4 gap instead of picking a same-named object.
+  </p>
+</section>
+
+<section data-access-lineage-block="lookup">
+  <h2>Lookup controls have two different data stories.</h2>
+  <p>
+    A combo box or list control may use <code>RowSource</code> and
+    <code>RowSourceType</code> to describe the values shown in the lookup. Its
+    <code>BoundColumn</code> and bounded projection ordinal indicate which
+    projected value could become the control value. That lookup-population path
+    is distinct from the control’s persistence binding through
+    <code>ControlSource</code> and the form’s <code>RecordSource</code>.
+  </p>
+  <p>
+    Keeping those branches separate prevents a plausible wrong join. A display
+    column is not automatically the stored column. An ordinal beyond the known
+    projection, an incomplete source declaration, a dynamic row source, or an
+    ambiguous query output becomes an explicit gap. Bounded fan-out limits keep
+    a broad lookup from producing an unreviewable cloud of candidates.
+  </p>
+</section>
+
+<section data-access-lineage-block="subforms">
+  <h2>Subforms add correspondence, not runtime navigation.</h2>
+  <p>
+    A subform or subreport control can declare a source object together with
+    master and child link fields. TraceMap can retain the surface relationship
+    and bounded master/child correspondences as static candidates. That helps a
+    reviewer move from a parent surface toward the child surface’s record
+    source and fields while preserving which declaration supplied each hop.
+  </p>
+  <p>
+    The metadata does not establish that navigation occurred, that parent and
+    child values matched at runtime, or that referential integrity was enforced.
+    Missing pairs, duplicate identities, unsupported expressions, and
+    incomplete catalogs remain unresolved rather than being normalized into a
+    single convenient answer.
+  </p>
+</section>
+
+<section data-access-lineage-block="queries">
+  <h2>Saved-query outputs can narrow a field candidate.</h2>
+  <p>
+    When a saved query exposes bounded output declarations and an exact static
+    source-field candidate, the trail can continue from a form or lookup source
+    through the query output toward a table field. The evidence identifies the
+    output position and the source relationship that supports the candidate.
+    It does not publish the underlying query text.
+  </p>
+  <p>
+    Action queries, crosstabs, parameters, aliases, calculated outputs, and
+    incomplete catalogs can weaken or interrupt that path. TraceMap distinguishes
+    exact declarations from static candidates and illustrative alternatives.
+    Dynamic SQL and names that cannot be resolved safely stay Tier 4 unknown;
+    an empty trail does not prove that no data dependency exists.
+  </p>
+</section>
+
+<section data-access-lineage-block="expressions">
+  <h2>Calculated expressions widen the question carefully.</h2>
+  <p>
+    A calculated control or query output may reference fields, controls, or
+    supported domain-function categories. TraceMap can project bounded
+    dependencies where the source-neutral expression evidence provides an
+    exact candidate. Those relationships help a reviewer see that the displayed
+    value may depend on more than the direct persistence binding.
+  </p>
+  <p>
+    Unknown functions, unsupported syntax, dynamic references, ambiguous
+    control scope, and incomplete projection remain gaps. A calculated
+    dependency is not evidence that the expression evaluated successfully, that
+    its result was correct, or that every possible input was represented.
+  </p>
+</section>
+
+<section data-access-lineage-block="events">
+  <h2>Event evidence remains a candidate, even when the name is exact.</h2>
+  <p>
+    A populated event property can point to an exact same-module procedure
+    candidate. Protected VBA projection can also retain bounded static
+    categories such as a literal conditional <code>RowSource</code> assignment,
+    with hash-safe branch context rather than the source body. That can add a
+    second possible lookup source to the review trail.
+  </p>
+  <p>
+    Exact identity does not prove event firing, lifecycle order, selected
+    branch, user navigation, or runtime reachability. Dynamic handlers,
+    embedded macros, unsupported branches, and unresolved references remain
+    visible gaps. The candidate is useful because its limitation stays attached,
+    not because TraceMap upgrades it into observed behavior.
+  </p>
+</section>
+
+<section data-access-lineage-block="composed-trail">
+  <h2>Read the composed trail hop by hop.</h2>
+  <p>
+    A representative public-safe trail can be read as: lookup population
+    candidate → bounded projected column → control value candidate → direct
+    control persistence binding → owning form record source → saved-query
+    output candidate → table field candidate. A conditional event assignment
+    may appear as an alternative lookup-population branch. A subform may add a
+    separate master/child correspondence toward another surface.
+  </p>
+  <p>
+    Each hop carries its own strength. Direct declared bindings can use Tier 2
+    structural evidence. Expression or source-text candidates may be Tier 3
+    syntax or textual evidence. Missing, ambiguous, unsupported, incomplete, or
+    capped relationships are Tier 4 unknown. The composed path cannot be
+    stronger than its weakest required hop.
+  </p>
+</section>
+
+<section data-access-lineage-block="rules">
+  <h2>Five rule families keep the story auditable.</h2>
+  <p>
+    <code>legacy.access.ui-surface.v1</code> covers form, report, and control
+    inventory. <code>legacy.access.binding.v1</code> covers source and binding
+    declarations. <code>legacy.access.vba.v1</code> covers protected static VBA
+    candidates. <code>legacy.access.event-binding.v1</code> covers event-property
+    to same-module procedure candidates. Finally,
+    <code>legacy.access.screen-data-flow.v1</code> composes bounded trails from
+    already persisted evidence and carries cycles, fan-out, coverage, and gap
+    state forward.
+  </p>
+  <p>
+    The <a href="/evidence/">evidence model</a> explains the tiers, and the
+    <a href="/evidence/gaps/">gap guide</a> explains why uncertainty must remain
+    visible. Read the
+    <a href="/blog/reverse-engineering-access-without-running-it/">Access
+    acquisition boundary</a> first: the lineage story depends on protected
+    source-neutral evidence and does not widen that safety contract.
+  </p>
+</section>
+
+<section data-access-lineage-block="handoff">
+  <h2>Turn the trail into owner questions.</h2>
+  <p>
+    A manager can ask which controls have direct bindings, which paths depend on
+    query outputs or expressions, which lookup projection is only a candidate,
+    where subform correspondences are incomplete, which event alternatives are
+    unresolved, and which owner can validate the runtime behavior. Use the
+    <a href="/proof-paths/for-managers/">manager proof path</a>,
+    <a href="/static-vs-runtime/">static-versus-runtime guide</a>,
+    <a href="/capabilities/">capability index</a>,
+    <a href="/use-cases/change-review/">change-review use case</a>, and
+    <a href="/limitations/">limitations</a> to keep that handoff bounded.
+  </p>
+</section>
+
+<section data-access-lineage-block="non-claims" data-access-lineage-boundary="non-claims">
+  <h2>What the lineage does not prove.</h2>
+  <p>
+    The trail does not prove runtime execution, query results, selected
+    branches, event firing, user navigation, row access, data correctness,
+    effective permissions, production behavior, complete coverage, successful
+    reconstruction, release approval, or operational safety. It does not
+    replace an Access owner, database owner, testing, runtime observation,
+    security review, or human approval.
+  </p>
+  <p>
+    Public material includes no database file, serialized definition, SQL, VBA
+    or macro body, source snippet, credential, connection material,
+    machine-specific path, private object identity, analyzer dump, or private
+    validation detail. No LLM, embedding, vector, or prompt classification is
+    used to invent the lineage.
+  </p>
+</section>
+
+<section data-access-lineage-block="bottom-line">
+  <h2>The result is a reviewable candidate path, not a reconstructed app.</h2>
+  <p>
+    TraceMap can show how declared Access bindings and bounded static candidates
+    connect a visible design control toward query and persisted-field evidence.
+    The value comes from seeing the exact hops, alternatives, evidence tiers,
+    and gaps together—while leaving runtime truth with the owners and systems
+    that can actually observe it.
+  </p>
+</section>
