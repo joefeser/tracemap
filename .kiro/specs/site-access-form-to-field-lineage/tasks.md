@@ -7,5 +7,5 @@
 - [x] Add focused route, metadata, link, claim, and private-material validation.
 - [x] Run focused and full site validation.
 - [x] Complete desktop and mobile browser checks.
-- [ ] Commit, push, and open a ready stacked PR.
+- [x] Commit, push, and open ready stacked PR #626.
 - [ ] Run ACK to a terminal handoff.
