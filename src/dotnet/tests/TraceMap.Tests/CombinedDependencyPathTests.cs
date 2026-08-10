@@ -756,19 +756,13 @@ public sealed class CombinedDependencyPathTests
                 "csharp method test Server.IOrderService.Get(System.Int32)",
                 "test/1.0")
         };
-        var calls = new[]
-        {
-            new StaticDispatchCallTarget(
-                "call-a", "server", "server", "service",
+        var calls = Enumerable.Range(0, 12)
+            .Select(index => new StaticDispatchCallTarget(
+                $"call-{index:D2}", "server", "server", "service",
                 "Server.IOrderService.Get(System.Int32)", null, null,
-                EvidenceTiers.Tier1Semantic, "Controllers/OrdersController.cs", 14, 14,
-                "commit", "test/1.0"),
-            new StaticDispatchCallTarget(
-                "call-b", "server", "server", "service",
-                "Server.IOrderService.Get(System.Int32)", null, null,
-                EvidenceTiers.Tier1Semantic, "Controllers/OrdersController.cs", 15, 15,
-                "commit", "test/1.0")
-        };
+                EvidenceTiers.Tier1Semantic, "Controllers/OrdersController.cs", 14 + index, 14 + index,
+                "commit", "test/1.0"))
+            .ToArray();
         var registrations = new[]
         {
             new StaticDispatchRegistrationFact(
@@ -787,13 +781,59 @@ public sealed class CombinedDependencyPathTests
         Assert.Empty(result.Edges);
         var gap = Assert.Single(result.Gaps, item => item.GapKind == "DispatchCandidateIdentityUnverified");
         Assert.Equal("call-target-identity-unverified", gap.Reason);
-        Assert.Equal(["call-a", "call-b", "member-fact", "registration-fact"], gap.SupportingFactIds);
-        Assert.Equal(2, gap.CandidateCount);
-        Assert.Equal(10, gap.CandidateLimit);
+        Assert.Equal(12, gap.SupportingFactIds.Count);
+        Assert.Contains("member-fact", gap.SupportingFactIds);
+        Assert.Contains("registration-fact", gap.SupportingFactIds);
+        Assert.Equal(10, gap.SupportingFactIds.Count(id => id.StartsWith("call-", StringComparison.Ordinal)));
+        Assert.Equal(12, gap.GroupedEvidenceCount);
+        Assert.Equal(10, gap.SupportingFactLimit);
+        Assert.Null(gap.CandidateCount);
+        Assert.Null(gap.CandidateLimit);
         Assert.Equal("Controllers/OrdersController.cs", gap.FilePath);
         Assert.Equal(14, gap.StartLine);
         Assert.Equal(14, gap.EndLine);
         Assert.DoesNotContain(result.Gaps, item => item.GapKind == "DispatchCandidateFanOut");
+    }
+
+    [Fact]
+    public void Static_dispatch_retains_truthful_fanout_metadata_when_unverified_calls_withhold_candidates()
+    {
+        var nodes = new Dictionary<string, StaticDispatchCandidateNode>(StringComparer.Ordinal)
+        {
+            ["service"] = new(
+                "service", "Method", "Server.IOrderService.Get()",
+                "server", "server", "commit", "Services/IOrderService.cs", 10, 10)
+        };
+        var relationships = new List<StaticDispatchRelationshipEdge>();
+        for (var index = 0; index < 11; index++)
+        {
+            var nodeId = $"implementation-{index:D2}";
+            nodes[nodeId] = new(
+                nodeId, "Method", $"Server.OrderService{index}.Get()",
+                "server", "server", "commit", $"Services/OrderService{index}.cs", 20 + index, 20 + index);
+            relationships.Add(new StaticDispatchRelationshipEdge(
+                $"relationship-{index:D2}", "implements", "ImplementsInterfaceMember",
+                nodeId, "service", EvidenceTiers.Tier1Semantic,
+                [$"member-fact-{index:D2}"], [$"member-edge-{index:D2}"],
+                $"Services/OrderService{index}.cs", 20 + index, 20 + index,
+                TestTypeSymbolId($"Server.OrderService{index}"), TestTypeSymbolId("Server.IOrderService"),
+                $"csharp method test Server.OrderService{index}.Get()",
+                "csharp method test Server.IOrderService.Get()", "test/1.0"));
+        }
+        var calls = new[]
+        {
+            new StaticDispatchCallTarget(
+                "call", "server", "server", "service", "Server.IOrderService.Get()", null, null,
+                EvidenceTiers.Tier1Semantic, "Controllers/OrdersController.cs", 14, 14, "commit", "test/1.0")
+        };
+
+        var result = StaticDispatchCandidateBuilder.Build(nodes, relationships, callTargets: calls);
+
+        Assert.Empty(result.Edges);
+        var fanout = Assert.Single(result.Gaps, gap => gap.GapKind == "DispatchCandidateFanOut");
+        Assert.Equal(11, fanout.CandidateCount);
+        Assert.Equal(10, fanout.CandidateLimit);
+        Assert.Contains("withheld", fanout.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1041,6 +1081,32 @@ public sealed class CombinedDependencyPathTests
         var gap = Assert.Single(inventory.Gaps, item => item.GapKind == "DispatchCandidateSchemaUnavailable");
         Assert.Equal("combined.dispatch-gap.v1", gap.RuleId);
         Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal("combined-fact-extractor-schema-unavailable", gap.Reason);
+    }
+
+    [Fact]
+    public async Task Paths_emit_schema_gap_for_single_index_without_fact_extractor_column()
+    {
+        using var temp = new TempDirectory();
+        var sourceIndex = Path.Combine(temp.Path, "source.sqlite");
+        var manifest = Manifest("server", "tracemap-milestone15");
+        SqliteIndexWriter.Write(sourceIndex, manifest, []);
+        await using (var connection = new SqliteConnection($"Data Source={sourceIndex}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "alter table facts drop column extractor_version;";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(new CombinedDependencyPathOptions(
+            sourceIndex,
+            Path.Combine(temp.Path, "paths"),
+            FromSymbol: "missing",
+            ToSurface: "sql-query"));
+
+        var gap = Assert.Single(report.Gaps, item => item.GapKind == "DispatchCandidateSchemaUnavailable");
+        Assert.Equal("combined.dispatch-gap.v1", gap.RuleId);
         Assert.Equal("combined-fact-extractor-schema-unavailable", gap.Reason);
     }
 
