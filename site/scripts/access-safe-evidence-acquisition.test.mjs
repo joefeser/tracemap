@@ -33,6 +33,21 @@ test("Access acquisition validator rejects planted runtime and reconstruction cl
   }
 });
 
+test("Access acquisition validator rejects positive claims and executable material inside the non-claim boundary", async (t) => {
+  for (const planted of ["<p>TraceMap ran the Access application.</p>", "<p>SELECT value FROM private_table</p>"]) {
+    await t.test(planted, async (subtest) => {
+      const root = await createSiteFixture(subtest);
+      const path = join(root, "src", "_blog", "articles", "reverse-engineering-access-without-running-it.html");
+      const html = await readFile(path, "utf8");
+      await writeFile(path, html.replace('<section data-access-acquisition-block="non-claims" data-access-acquisition-boundary="non-claims">', `<section data-access-acquisition-block="non-claims" data-access-acquisition-boundary="non-claims">${planted}`), "utf8");
+      await buildSite({ root, log() {} });
+      const errors = [];
+      await validateAccessSafeEvidenceAcquisitionDist({ dist: join(root, "dist"), errors });
+      assert.match(errors.join("\n"), /unsupported positive claim|raw or executable material/);
+    });
+  }
+});
+
 test("Access acquisition validator rejects planted private and executable material", async (t) => {
   const slash = String.fromCharCode(47);
   for (const leak of [`${slash}Users${slash}example${slash}private`, "Password=leak-sentinel", "SELECT value FROM private_table"]) {
@@ -59,6 +74,29 @@ test("Access acquisition validator rejects discovery claim-level drift", async (
   const errors = [];
   await validateAccessSafeEvidenceAcquisitionDist({ dist: join(root, "dist"), errors });
   assert.match(errors.join("\n"), /claim level must be demo/);
+});
+
+test("Access acquisition validator aggregates malformed discovery output", async (t) => {
+  const root = await createSiteFixture(t);
+  await buildSite({ root, log() {} });
+  await writeFile(join(root, "dist", "routes-index.json"), "{not-json", "utf8");
+  const errors = [];
+  await validateAccessSafeEvidenceAcquisitionDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /invalid JSON/);
+});
+
+test("Access acquisition validator accepts attribute spacing and the supplied canonical base URL", async (t) => {
+  const root = await createSiteFixture(t);
+  const sourcePath = join(root, "src", "_blog", "articles", "reverse-engineering-access-without-running-it.html");
+  await writeFile(sourcePath, (await readFile(sourcePath, "utf8")).replace('data-access-acquisition-block="file-first"', 'data-access-acquisition-block = "file-first"'), "utf8");
+  await buildSite({ root, log() {} });
+  const pagePath = join(root, "dist", "blog", "reverse-engineering-access-without-running-it", "index.html");
+  await writeFile(pagePath, (await readFile(pagePath, "utf8")).replaceAll("https://tracemap.tools", "https://preview.example"), "utf8");
+  const sitemapPath = join(root, "dist", "sitemap.xml");
+  await writeFile(sitemapPath, (await readFile(sitemapPath, "utf8")).replaceAll("https://tracemap.tools", "https://preview.example"), "utf8");
+  const errors = [];
+  await validateAccessSafeEvidenceAcquisitionDist({ baseUrl: "https://preview.example/", dist: join(root, "dist"), errors });
+  assert.deepEqual(errors, []);
 });
 
 async function createSiteFixture(t) {
