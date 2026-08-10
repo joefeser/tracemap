@@ -739,6 +739,11 @@ public sealed class CombinedDependencyReportTests
         Assert.Equal("jvm", labels["jvm"]);
         Assert.Equal("python", labels["python"]);
         Assert.Equal("swift", labels["swift"]);
+
+        var result = await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "report")));
+        Assert.Equal("swift", Assert.Single(result.Report.Sources, source => source.Label == "swift").Language);
     }
 
     private static ScanManifest Manifest(

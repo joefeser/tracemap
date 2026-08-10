@@ -2111,10 +2111,10 @@ public static class CombinedDependencyPathReporter
                 EvidenceTiers.Tier4Unknown,
                 null,
                 null,
-                "combined-fact-extractor-schema-unavailable",
+                "fact-extractor-schema-unavailable",
                 null,
                 null,
-                "combined-dispatch-candidate-context"));
+                "dispatch-candidate-context"));
             return;
         }
 
@@ -4051,6 +4051,11 @@ public static class CombinedDependencyPathReporter
         if (scannerVersion.Contains("python", StringComparison.OrdinalIgnoreCase))
         {
             return "python";
+        }
+
+        if (scannerVersion.Contains("swift", StringComparison.OrdinalIgnoreCase))
+        {
+            return "swift";
         }
 
         if (scannerVersion.Contains("tracemap", StringComparison.OrdinalIgnoreCase))

@@ -1690,6 +1690,11 @@ public static class CombinedDependencyReporter
             return "python";
         }
 
+        if (scannerVersion.Contains("swift", StringComparison.OrdinalIgnoreCase))
+        {
+            return "swift";
+        }
+
         if (scannerVersion.Contains("tracemap", StringComparison.OrdinalIgnoreCase))
         {
             return "csharp";
