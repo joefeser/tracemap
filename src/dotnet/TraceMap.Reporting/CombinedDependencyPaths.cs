@@ -924,7 +924,8 @@ public static class CombinedDependencyPathReporter
         await using var command = connection.CreateCommand();
         command.CommandText = """
             select fact_id, scan_id, repo, commit_sha, fact_type, rule_id, evidence_tier,
-                   source_symbol, target_symbol, contract_element, file_path, start_line, end_line, properties_json
+                   source_symbol, target_symbol, contract_element, file_path, start_line, end_line, properties_json,
+                   extractor_version
             from facts
             order by file_path, start_line, fact_type, fact_id;
             """;
@@ -950,7 +951,8 @@ public static class CombinedDependencyPathReporter
                 reader.GetString(10),
                 reader.GetInt32(11),
                 reader.GetInt32(12),
-                ParseProperties(reader.GetString(13))));
+                ParseProperties(reader.GetString(13)),
+                reader.IsDBNull(14) ? null : reader.GetString(14)));
         }
 
         return rows;
@@ -2108,7 +2110,7 @@ public static class CombinedDependencyPathReporter
                 fact.StartLine,
                 fact.EndLine,
                 fact.CommitSha,
-                graph.ScannerVersionFor(fact.SourceIndexId)))
+                fact.ExtractorVersion))
             .OrderBy(call => call.FactId, StringComparer.Ordinal)
             .ToArray();
         var sourceContexts = sources
@@ -2144,7 +2146,8 @@ public static class CombinedDependencyPathReporter
                     relationshipFact?.Properties.GetValueOrDefault("sourceContainingSymbolId"),
                     relationshipFact?.Properties.GetValueOrDefault("targetContainingSymbolId"),
                     relationshipFact?.Properties.GetValueOrDefault("sourceSymbolId"),
-                    relationshipFact?.Properties.GetValueOrDefault("targetSymbolId"));
+                    relationshipFact?.Properties.GetValueOrDefault("targetSymbolId"),
+                    relationshipFact?.ExtractorVersion);
             }),
             graph.ScannerVersionFor,
             registrations: registrations,
@@ -2241,7 +2244,7 @@ public static class CombinedDependencyPathReporter
             fact.StartLine,
             fact.EndLine,
             fact.CommitSha,
-            null);
+            fact.ExtractorVersion);
     }
 
     private static string ClassifyStaticDispatchRegistrationShape(

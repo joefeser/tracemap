@@ -254,7 +254,8 @@ internal sealed record CombinedFactRow(
     string FilePath,
     int StartLine,
     int EndLine,
-    IReadOnlyDictionary<string, string> Properties);
+    IReadOnlyDictionary<string, string> Properties,
+    string? ExtractorVersion = null);
 
 internal sealed record EndpointCandidate(
     CombinedFactRow Fact,
@@ -616,7 +617,8 @@ public static class CombinedDependencyReporter
                    facts.file_path,
                    facts.start_line,
                    facts.end_line,
-                   facts.properties_json
+                   facts.properties_json,
+                   facts.extractor_version
             from combined_facts facts
             join index_sources sources on sources.source_index_id = facts.source_index_id
             order by facts.file_path, facts.start_line, facts.fact_type, facts.combined_fact_id;
@@ -642,7 +644,8 @@ public static class CombinedDependencyReporter
                 reader.GetString(13),
                 reader.GetInt32(14),
                 reader.GetInt32(15),
-                ParseProperties(reader.GetString(16))));
+                ParseProperties(reader.GetString(16)),
+                reader.IsDBNull(17) ? null : reader.GetString(17)));
         }
 
         return rows;
