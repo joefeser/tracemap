@@ -593,6 +593,19 @@ appropriate.
 - Added regressions for a registered candidate at position 11 under a cap of
   10 and a closed constructed generic registration.
 
+- PR #616 exact-head Codex follow-up found two additional fail-closed gaps.
+  Calls without canonical target member/type identity are now reported as
+  `DispatchCandidateIdentityUnverified`, and relationship-backed candidates
+  for that target are withheld rather than reached through display-derived
+  node equality. Registration facts without per-fact extractor identity now
+  participate in reduced-coverage aggregation, preserve their supporting fact
+  IDs, and downgrade annotated candidates to review-only `Tier4Unknown`.
+- Added direct regressions for both boundaries, including identity/provenance,
+  source span, supporting-fact, candidate-state, and evidence-tier assertions.
+- Exact-head follow-up validation passed: 17 focused static-dispatch tests,
+  115 route-flow/path tests, 1,345 full `.NET` solution tests, targeted format,
+  combined paths/reverse public smoke, private-path guard, and diff check.
+
 - Initial ACK returned `decision=actionable_findings`,
   `stopReason=UNRESOLVED_REVIEW_THREADS`, `patchAuthorized=true`, and
   `canMerge=false` for PR #333 at head

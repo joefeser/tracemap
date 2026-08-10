@@ -4360,6 +4360,7 @@ public sealed class CombinedRouteFlowTests
                 ["sourceSymbolKind"] = "Method",
                 ["sourceSymbolLanguage"] = "csharp",
                 ["targetSymbolDisplayName"] = callee,
+                ["targetContainingSymbolId"] = TestTypeSymbolId(ContainingType(callee)),
                 ["targetSymbolId"] = callee,
                 ["targetSymbolKind"] = targetSymbolKind,
                 ["targetSymbolLanguage"] = "csharp"

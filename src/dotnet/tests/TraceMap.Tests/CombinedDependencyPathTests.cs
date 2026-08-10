@@ -732,6 +732,97 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
+    public void Static_dispatch_withholds_member_candidates_when_call_identity_is_unverified()
+    {
+        var serviceTypeId = TestTypeSymbolId("Server.IOrderService");
+        var implementationTypeId = TestTypeSymbolId("Server.OrderService");
+        var nodes = new Dictionary<string, StaticDispatchCandidateNode>(StringComparer.Ordinal)
+        {
+            ["service"] = new(
+                "service", "Method", "Server.IOrderService.Get(System.Int32)",
+                "server", "server", "commit", "Services/IOrderService.cs", 10, 10),
+            ["implementation"] = new(
+                "implementation", "Method", "Server.OrderService.Get(System.Int32)",
+                "server", "server", "commit", "Services/OrderService.cs", 20, 20)
+        };
+        var relationships = new[]
+        {
+            new StaticDispatchRelationshipEdge(
+                "member-relationship", "implements", "ImplementsInterfaceMember",
+                "implementation", "service", EvidenceTiers.Tier1Semantic,
+                ["member-fact"], ["member-edge"], "Services/OrderService.cs", 20, 20,
+                implementationTypeId, serviceTypeId,
+                "csharp method test Server.OrderService.Get(System.Int32)",
+                "csharp method test Server.IOrderService.Get(System.Int32)",
+                "test/1.0")
+        };
+        var calls = new[]
+        {
+            new StaticDispatchCallTarget(
+                "call-fact", "server", "server", "service",
+                "Server.IOrderService.Get(System.Int32)", null, null,
+                EvidenceTiers.Tier1Semantic, "Controllers/OrdersController.cs", 14, 14,
+                "commit", "test/1.0")
+        };
+
+        var result = StaticDispatchCandidateBuilder.Build(nodes, relationships, callTargets: calls);
+
+        Assert.Empty(result.Edges);
+        var gap = Assert.Single(result.Gaps, item => item.GapKind == "DispatchCandidateIdentityUnverified");
+        Assert.Equal("call-target-identity-unverified", gap.Reason);
+        Assert.Equal(["call-fact", "member-fact"], gap.SupportingFactIds);
+        Assert.Equal("Controllers/OrdersController.cs", gap.FilePath);
+        Assert.Equal(14, gap.StartLine);
+        Assert.Equal(14, gap.EndLine);
+    }
+
+    [Fact]
+    public void Static_dispatch_downgrades_candidates_when_registration_extractor_identity_is_missing()
+    {
+        var serviceTypeId = TestTypeSymbolId("Server.IOrderService");
+        var implementationTypeId = TestTypeSymbolId("Server.OrderService");
+        var nodes = new Dictionary<string, StaticDispatchCandidateNode>(StringComparer.Ordinal)
+        {
+            ["service"] = new(
+                "service", "Method", "Server.IOrderService.Get(System.Int32)",
+                "server", "server", "commit", "Services/IOrderService.cs", 10, 10),
+            ["implementation"] = new(
+                "implementation", "Method", "Server.OrderService.Get(System.Int32)",
+                "server", "server", "commit", "Services/OrderService.cs", 20, 20)
+        };
+        var relationships = new[]
+        {
+            new StaticDispatchRelationshipEdge(
+                "member-relationship", "implements", "ImplementsInterfaceMember",
+                "implementation", "service", EvidenceTiers.Tier1Semantic,
+                ["member-fact"], ["member-edge"], "Services/OrderService.cs", 20, 20,
+                implementationTypeId, serviceTypeId,
+                "csharp method test Server.OrderService.Get(System.Int32)",
+                "csharp method test Server.IOrderService.Get(System.Int32)",
+                "test/1.0")
+        };
+        var registrations = new[]
+        {
+            new StaticDispatchRegistrationFact(
+                "registration-fact", "server", "server", "Server.IOrderService", "Server.OrderService",
+                serviceTypeId, implementationTypeId, "AddScoped", StaticDispatchRegistrationShapes.ClosedTypePair,
+                EvidenceTiers.Tier1Semantic, RuleIds.CSharpSemanticRuntimeEvidence,
+                "Startup/CompositionRoot.cs", 30, 30, "commit", null)
+        };
+
+        var result = StaticDispatchCandidateBuilder.Build(nodes, relationships, registrations: registrations);
+
+        var candidate = Assert.Single(result.Edges);
+        Assert.Equal(StaticDispatchCandidateStates.WeakerCandidate, candidate.State);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, candidate.EvidenceTier);
+        Assert.Contains("registration-fact", candidate.SupportingFactIds);
+        var gap = Assert.Single(result.Gaps, item => item.GapKind == "DispatchCandidateReducedCoverage");
+        Assert.Equal("supporting-fact-extractor-identity-unavailable", gap.Reason);
+        Assert.Equal(["registration-fact"], gap.SupportingFactIds);
+        Assert.Null(gap.ExtractorVersion);
+    }
+
+    [Fact]
     public void Static_dispatch_downgrades_member_candidates_for_reduced_source_coverage()
     {
         var nodes = new Dictionary<string, StaticDispatchCandidateNode>(StringComparer.Ordinal)
@@ -1774,7 +1865,9 @@ public sealed class CombinedDependencyPathTests
             targetSymbol: callee,
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
-                ["callKind"] = "method"
+                ["callKind"] = "method",
+                ["targetContainingSymbolId"] = TestTypeSymbolId(ContainingType(callee)),
+                ["targetSymbolId"] = callee
             });
     }
 
