@@ -1,8 +1,8 @@
 # Static Dispatch Candidate Bridges Tasks
 
-Status: implementation-v1-complete-with-explicit-deferrals
+Status: implementation-task-6-remainder-required
 
-Readiness: ready-for-dev-to-main-promotion and public-story follow-up.
+Readiness: ready-for-task-6-remainder
 
 ## Spec Delivery Tasks
 
@@ -93,7 +93,8 @@ not part of this spec-only branch.
   - [x] Add deterministic ordering, caps, cycle protection, and byte-stability
         tests.
 
-  V1 disposition: the two unchecked items above remain deliberate follow-ups.
+  Current disposition: the two unchecked items above remain mandatory before
+  this spec can be called complete.
   TraceMap does not emit type-level fallback edges in v1 because member-level
   compiler relationship evidence is the trusted boundary. The shipped closed
   gap vocabulary covers fan-out, traversal limits, registration compatibility,
@@ -183,4 +184,4 @@ not part of this spec-only branch.
 - UI or interactive graph visualization.
 - Site copy describing the shipped capability.
 - Type-level fallback candidates and the broader task-6 builder gap vocabulary;
-  neither is required for the completed member-evidence v1 runway.
+  both remain required by the normative acceptance criteria before promotion.
