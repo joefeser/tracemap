@@ -1,0 +1,184 @@
+<p>
+  <strong>Public claim level: demo.</strong>
+  “Reverse engineering” can sound as though a tool launched an application,
+  exercised its screens, followed every event, and recovered a complete design.
+  That is not the claim here. TraceMap’s checked-in Microsoft Access contracts
+  support a narrower outcome: bounded static evidence about one explicitly
+  selected database file, with protected acquisition, deterministic provenance,
+  explicit gaps, and limitations that travel with the result.
+</p>
+
+<section data-access-acquisition-block="threat-boundary">
+  <h2>Start with the file as potentially hostile input.</h2>
+  <p>
+    An Access database is not merely a neutral document. It may contain startup
+    behavior, linked sources, forms, reports, queries, VBA, and macros. A useful
+    evidence workflow therefore begins with a threat boundary, not an assumption
+    that opening the file is harmless. The operator selects one authorized local
+    file on an isolated Windows system with Microsoft Access available. Network
+    locations and ambiguous file shapes are outside the supported file-first
+    boundary.
+  </p>
+  <p>
+    The ordinary reader remains count-only for forms, reports, VBA modules, and
+    macros. It does not read rows, open recordsets, run queries, render screens,
+    invoke events, refresh links, or inspect protected command bodies. Those
+    exclusions are product behavior, not merely advice added after extraction.
+  </p>
+</section>
+
+<section data-access-acquisition-block="file-first">
+  <h2>File-first means verified copy, generic identity, and disposable provenance.</h2>
+  <p>
+    The file-first path validates the selected file, hashes it, copies it under
+    a generic database name into restricted scratch space, and verifies that the
+    copy matches. TraceMap creates a no-remote disposable repository around that
+    private copy so the resulting evidence still has a deterministic commit and
+    scan identity. The provenance label is
+    <code>local-file-snapshot</code>, which is deliberately different from an
+    upstream repository commit.
+  </p>
+  <p>
+    After scanning, the original is checked again. A changed source, failed
+    integrity check, timeout, or cleanup problem stops the workflow instead of
+    becoming clean evidence. The original filename and machine-specific
+    location are not persisted. The generic snapshot is removed on success,
+    failure, or cancellation. This establishes a bounded chain of custody for
+    the analyzed bytes; it does not establish that the database is safe,
+    complete, correct, or representative of production.
+  </p>
+</section>
+
+<section data-access-acquisition-block="provenance">
+  <h2>Two provenance kinds answer different questions.</h2>
+  <p>
+    A clean tracked database can be anchored to a repository and commit. A
+    locally selected database can be anchored to a verified disposable
+    snapshot. Both preserve the rule ID, evidence tier, extractor version,
+    coverage label, and bounded coordinate needed for review. They are not
+    interchangeable. The local snapshot proves which verified copy TraceMap
+    analyzed; it does not imply that the copy came from source control.
+  </p>
+  <p>
+    This distinction matters during handoff. A reviewer can ask whether a
+    repository-backed artifact or an operator-supplied snapshot was used,
+    whether its identity remained stable, and which owner can attest to the
+    source. TraceMap supplies the evidence fields. It does not supply that owner
+    attestation.
+  </p>
+</section>
+
+<section data-access-acquisition-block="protected-design">
+  <h2>Protected design acquisition is separate from ordinary scanning.</h2>
+  <p>
+    Form and report bindings require a different input surface from catalog
+    inventory. A Windows-only producer can create a protected, source-neutral
+    design bundle from another verified disposable copy. Before Access is
+    opened, startup behavior is suppressed on that inner copy. Automation stays
+    invisible and force-disabled; canaries, source hashes, timeouts, process
+    state, and scratch cleanup are checked. Any failed boundary becomes a stop
+    or an explicit gap.
+  </p>
+  <p>
+    The bundle can describe closed categories such as record-source bindings,
+    control-source bindings, row-source bindings, subform links, and report
+    grouping or sorting evidence. Deterministic parsing and composition can then
+    happen cross-platform without launching Access. Standard outputs retain
+    stable opaque identities, hashes, categories, rule IDs, tiers, coverage,
+    provenance, coordinates, and limitations—not the raw serialized design.
+  </p>
+</section>
+
+<section data-access-acquisition-block="vba-lane">
+  <h2>The optional VBA lane is a second protected boundary.</h2>
+  <p>
+    VBA source acquisition is not part of the ordinary database scan or the
+    form/report metadata producer. It is a separate, optional Windows-only
+    export lane with its own verified copy, startup suppression, invisibility,
+    canaries, hash checks, timeouts, and cleanup gates. Protected source is
+    processed locally and omitted from standard artifacts.
+  </p>
+  <p>
+    Static same-module candidates and event-property links can help orient a
+    reviewer, but they do not prove that an event fired, that lifecycle order
+    was observed, that a branch was feasible, or that a user followed a
+    workflow. Embedded macros, dynamic handlers, and unsupported shapes remain
+    gaps instead of guessed behavior.
+  </p>
+</section>
+
+<section data-access-acquisition-block="evidence-contract">
+  <h2>Rules keep the public evidence smaller than the protected input.</h2>
+  <p>
+    <code>legacy.access.database.inventory.v1</code> records the selected
+    database and safe local capability evidence at Tier 2 structural or Tier 4
+    unknown. <code>legacy.access.design-input.v1</code> records acceptance and
+    bounded gaps for a versioned design bundle bound to a completed base scan.
+    <code>legacy.access.coverage-gap.v1</code> records platform, provider,
+    trust, timeout, cleanup, parsing, ambiguity, unsafe-value, and extraction
+    limits as Tier 4 unknown.
+  </p>
+  <p>
+    A gap means “unable to prove,” not “nothing exists.” A valid bundle proves
+    only that its declared schema, hashes, binding, bounds, and vocabulary were
+    checked. It does not prove exporter safety, catalog completeness, business
+    intent, runtime reachability, or correctness. See the broader
+    <a href="/evidence/">evidence model</a> and
+    <a href="/evidence/gaps/">gap guidance</a> for how tiers and reduced
+    coverage should constrain wording.
+  </p>
+</section>
+
+<section data-access-acquisition-block="review-handoff">
+  <h2>What a manager or reviewer can ask next.</h2>
+  <p>
+    The acquisition record makes concrete questions visible: Which provenance
+    kind was used? Did source identity remain stable? Which protected producer
+    supplied design evidence? What categories were omitted? Did any timeout,
+    cleanup, ambiguity, or completeness gap reduce coverage? Who owns the file,
+    the Access environment, and the runtime validation still required?
+  </p>
+  <p>
+    Use the <a href="/proof-paths/for-managers/">manager proof path</a> to keep
+    those questions attached to evidence, the
+    <a href="/static-vs-runtime/">static-versus-runtime guide</a> to separate
+    declared structure from observed behavior, the
+    <a href="/capabilities/">capability index</a> to locate the supported
+    surface, and the <a href="/use-cases/change-review/">change-review use
+    case</a> to frame owner follow-up. The
+    <a href="/limitations/">limitations page</a> remains part of the answer.
+  </p>
+</section>
+
+<section data-access-acquisition-block="non-claims" data-access-acquisition-boundary="non-claims">
+  <h2>What this article does not prove.</h2>
+  <p>
+    TraceMap does not claim that it ran, rendered, queried, or reconstructed the
+    Access application. It does not establish runtime execution, selected
+    branches, event firing, production behavior, complete coverage, data
+    correctness, effective permissions, successful reconstruction, release
+    approval, or operational safety. Static evidence does not replace the
+    database owner, Access specialist, security review, testing, runtime
+    observation, or human approval.
+  </p>
+  <p>
+    Public material includes no database file, serialized definition, SQL or
+    scheduled-command body, VBA or macro body, source snippet, credential,
+    connection material, machine-specific path, private object identity,
+    analyzer dump, or private validation detail. TraceMap core adds no LLM,
+    embedding, vector, or prompt-based classification to make these findings.
+  </p>
+</section>
+
+<section data-access-acquisition-block="bottom-line">
+  <h2>The useful claim is intentionally modest.</h2>
+  <p>
+    TraceMap can produce bounded static evidence about one selected Access file
+    while keeping raw acquisition material protected and uncertainty explicit.
+    That evidence can make a modernization or change-review conversation more
+    concrete. It cannot turn a static file into proof of a running application.
+    Continue with <a href="/blog/access-form-to-field-lineage/">the form-to-field
+    lineage story</a> to see how protected binding evidence becomes a bounded
+    review path.
+  </p>
+</section>
