@@ -145,7 +145,8 @@ public sealed record CombinedPathEvidence(
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> SupportingEdgeIds,
     IReadOnlyList<CombinedPathFileSpan> FileSpans,
-    IReadOnlyList<KeyValuePair<string, string>> TerminalSurfaceMetadata);
+    IReadOnlyList<KeyValuePair<string, string>> TerminalSurfaceMetadata,
+    IReadOnlyList<string>? RuleIds = null);
 
 public sealed record CombinedPathFileSpan(
     string FilePath,
@@ -917,7 +918,8 @@ public static class CombinedDependencyDiffer
                             path.SupportingFactIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                             path.SupportingEdgeIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                             PathFileSpans(path),
-                            TerminalMetadata(path)),
+                            TerminalMetadata(path),
+                            path.Edges.Select(edge => edge.RuleId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray()),
                         path.Classification,
                         path.Classification != CombinedDependencyPathClassifications.StrongStaticPath);
                 })
@@ -933,7 +935,7 @@ public static class CombinedDependencyDiffer
                 new ComparablePathRecord(
                     $"path-error:{side}:{CombinedReportHelpers.Hash(exception.Message, 16)}",
                     CombinedReportHelpers.Hash(exception.Message),
-                    new CombinedPathEvidence("path-error", CombinedDependencyPathClassifications.UnknownAnalysisGap, "n/a", "n/a", null, null, null, [], [], [], [], []),
+                    new CombinedPathEvidence("path-error", CombinedDependencyPathClassifications.UnknownAnalysisGap, "n/a", "n/a", null, null, null, [], [], [], [], [], []),
                     CombinedDependencyPathClassifications.UnknownAnalysisGap,
                     true)
             ];
