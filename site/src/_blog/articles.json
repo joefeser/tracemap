@@ -1,5 +1,20 @@
 [
   {
+    "slug": "access-rebuild-readiness-gaps",
+    "category": "Microsoft Access evidence",
+    "title": "Rebuild Readiness Is a Gap Register, Not a Promise",
+    "h1": "Rebuild readiness is a gap register, not a promise",
+    "description": "How TraceMap organizes bounded Microsoft Access query, flow, event, and copy-candidate evidence into an owner-reviewed rebuild-readiness gap register.",
+    "ogDescription": "A public-safe guide to Access rebuild-readiness evidence, deterministic bounds, explicit gaps, and owner questions without reconstruction claims.",
+    "cardDescription": "Read action-query, crosstab, event, lookup, copy-candidate, and coverage evidence as a gap register—not an automatic rebuild plan.",
+    "hero": "A useful rebuild conversation begins by separating what static evidence supports from what an Access owner still needs to explain, validate, or reject.",
+    "published": "2026-08-10",
+    "publishedDisplay": "August 10, 2026",
+    "body": "articles/access-rebuild-readiness-gaps.html",
+    "calloutHeading": "Read the evidence boundary first.",
+    "calloutHtml": "Start with <a href=\"/blog/reverse-engineering-access-without-running-it/\">safe Access evidence acquisition</a>, then follow <a href=\"/blog/access-form-to-field-lineage/\">form-to-field lineage</a> before using this gap register."
+  },
+  {
     "slug": "bugs-hiding-in-graph-history",
     "category": "C# evidence integrity",
     "title": "The Bugs Hiding in Graph History",
