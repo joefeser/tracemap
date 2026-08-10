@@ -121,7 +121,13 @@ public sealed record VaultGraphEdge(
     IReadOnlyList<string> Limitations,
     IReadOnlyList<VaultEvidenceLocation>? EvidenceLocations = null,
     string? NavigationCategory = null,
-    IReadOnlyList<string>? SupportingRuleIds = null);
+    IReadOnlyList<string>? SupportingRuleIds = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? CandidateState = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? CandidateBridgeKind = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? RegistrationContext = null);
 
 public sealed record VaultGraphGap(
     string Id,
@@ -555,7 +561,10 @@ public static class VaultExporter
                     EvidenceLocations(pathEdge),
                     SupportingRuleIds: isDispatchCandidate
                         ? DistinctSorted([DispatchCandidateEvidenceProjection.VaultEdgeRuleId, pathEdge.RuleId])
-                        : null));
+                        : null,
+                    CandidateState: isDispatchCandidate ? pathEdge.CandidateState : null,
+                    CandidateBridgeKind: isDispatchCandidate ? pathEdge.CandidateBridgeKind : null,
+                    RegistrationContext: isDispatchCandidate ? pathEdge.RegistrationContext : null));
             }
 
             foreach (var warning in inventory.CoverageWarnings.OrderBy(value => value, StringComparer.Ordinal))

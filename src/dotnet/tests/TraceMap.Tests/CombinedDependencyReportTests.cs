@@ -57,6 +57,7 @@ public sealed class CombinedDependencyReportTests
             Path.Combine(temp.Path, "report")));
 
         Assert.Equal("NeedsReviewStaticCandidatePartial", result.Report.DispatchCandidates.Classification);
+        Assert.Equal("ReducedCoverage", result.Report.ReportCoverage);
         Assert.Contains("reduced-static-evidence", result.Report.DispatchCandidates.CoverageLabels);
         Assert.True(result.Report.DispatchCandidates.GapCount > 0);
         Assert.NotEmpty(result.Report.DispatchCandidates.SupportingFactIds);

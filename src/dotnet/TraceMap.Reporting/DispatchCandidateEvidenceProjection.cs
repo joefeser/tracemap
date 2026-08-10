@@ -83,6 +83,30 @@ internal static class DispatchCandidateEvidenceProjection
             ]);
     }
 
+    public static DispatchCandidateEvidenceSummary Summarize(
+        CombinedPathGraphInventory inventory,
+        string sourceIndexId)
+    {
+        var selectedNodes = inventory.Nodes
+            .Where(node => string.Equals(node.SourceIndexId, sourceIndexId, StringComparison.Ordinal))
+            .ToArray();
+        var selectedNodeIds = selectedNodes
+            .Select(node => node.NodeId)
+            .ToHashSet(StringComparer.Ordinal);
+        return Summarize(new CombinedPathGraphInventory(
+            inventory.Sources
+                .Where(source => string.Equals(source.SourceIndexId, sourceIndexId, StringComparison.Ordinal))
+                .ToArray(),
+            [],
+            selectedNodes,
+            inventory.Edges
+                .Where(edge => selectedNodeIds.Contains(edge.FromNodeId))
+                .ToArray(),
+            inventory.Gaps
+                .Where(gap => string.Equals(gap.SourceIndexId, sourceIndexId, StringComparison.Ordinal))
+                .ToArray()));
+    }
+
     public static IEnumerable<CombinedPathEdge> CandidateEdges(CombinedPathGraphInventory inventory) =>
         inventory.Edges.Where(edge => edge.RuleId == StaticDispatchCandidateBuilder.CandidateRuleId);
 

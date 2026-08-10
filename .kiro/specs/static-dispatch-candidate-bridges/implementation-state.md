@@ -90,6 +90,14 @@ execution, and impact are not proven.
   graphs whose top-level rule remains `combined.dispatch-candidate.v1` or
   `combined.dispatch-gap.v1`. An end-to-end generated vault fixture prevents
   hand-authored JSON from masking serialization drift.
+- Fresh exact-head Codex review then identified three consumer truthfulness
+  gaps. Combined report coverage now becomes reduced when dispatch derivation
+  records gaps even if the ordinary warning list is empty. Portfolio dispatch
+  summaries and gaps are projected per source and filtered by the active
+  source/max-source selection instead of leaking excluded inputs. Vault edges
+  now retain candidate state, bridge kind, and registration context, and the
+  vault-to-docs projection reports those strength categories without upgrading
+  them into runtime claims.
 
 Validation for Task 10:
 
@@ -98,6 +106,9 @@ Validation for Task 10:
 - Focused paths/report/portfolio/vault/docs tests after review corrections:
   141/141 passed.
 - Full .NET solution tests: 1,333/1,333 passed.
+- After the fresh exact-head Codex corrections, focused
+  report/portfolio/vault/docs tests passed 105/105 and the full .NET solution
+  passed 1,334/1,334 with a clean zero-warning build.
 - Targeted changed-file whitespace formatting and verification: passed.
 - Repo-wide `dotnet format --verify-no-changes`: deferred because existing
   unrelated formatting violations remain in unchanged files; no unrelated

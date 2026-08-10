@@ -39,6 +39,15 @@ public sealed class PortfolioReportTests
         Assert.Contains(single.Report.DispatchCandidateContext.Gaps, gap =>
             gap.GapKind == "DispatchCandidateSchemaUnavailable"
             && gap.RuleId == "portfolio.context.dispatch-candidate.v1");
+
+        var filtered = await PortfolioReporter.WriteAsync(new PortfolioReportOptions([
+            new PortfolioInputSpec("stack", combinedPath),
+            new PortfolioInputSpec("single-input", singleIndex)
+        ], Path.Combine(temp.Path, "filtered-portfolio"), Source: "single-input"));
+        Assert.Empty(filtered.Report.DispatchCandidateContext.Rows);
+        Assert.Single(filtered.Report.DispatchCandidateContext.Gaps, gap =>
+            gap.GapKind == "DispatchCandidateSchemaUnavailable"
+            && gap.SourceLabel == "single-input");
     }
 
     [Fact]

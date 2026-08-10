@@ -49,6 +49,7 @@ public sealed class EvidenceDocsExportTests
         Assert.Contains(fromVault.Chunks, candidate =>
             candidate.Title == "Vault static dispatch candidate evidence"
             && candidate.Claim.Kind == "weak-static-evidence"
+            && candidate.BodyMarkdown.Contains("Symbol-backed dispatch candidates | `1`", StringComparison.Ordinal)
             && candidate.SupportingIds.Any(id => id.StartsWith("edge:", StringComparison.Ordinal)));
     }
 

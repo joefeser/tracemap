@@ -974,6 +974,12 @@ public static class EvidenceDocsExporter
                     .OrderBy(value => value, StringComparer.Ordinal)
                     .ToArray();
                 var dispatchGapCount = dispatchGaps.Length;
+                var symbolBackedDispatchCount = dispatchEdges.Count(edge =>
+                    StringProperty(edge, "candidateState") == StaticDispatchCandidateStates.SymbolBackedCandidate);
+                var weakerDispatchCount = dispatchEdges.Count(edge =>
+                    StringProperty(edge, "candidateState") == StaticDispatchCandidateStates.WeakerCandidate);
+                var registrationContextDispatchCount = dispatchEdges.Count(edge =>
+                    StringProperty(edge, "registrationContext") == StaticDispatchRegistrationContexts.Candidate);
                 var hasDispatchCandidates = dispatchEdges.Length > 0 || dispatchGaps.Length > 0;
                 IReadOnlyList<string> dispatchRules;
                 if (hasDispatchCandidates)
@@ -1010,6 +1016,9 @@ public static class EvidenceDocsExporter
                     | Edges | `{edgeCount}` |
                     | Gaps | `{gapCount}` |
                     | Static dispatch candidate edges | `{dispatchEdgeIds.Length}` |
+                    | Symbol-backed dispatch candidates | `{symbolBackedDispatchCount}` |
+                    | Weaker dispatch candidates | `{weakerDispatchCount}` |
+                    | Registration-context candidates | `{registrationContextDispatchCount}` |
                     | Static dispatch candidate gaps | `{dispatchGapCount}` |
 
                     Vault graph chunks preserve generated graph metadata and do not reinterpret source evidence. Static dispatch candidates remain bounded review context and do not prove runtime dispatch or selected dependency-injection implementations.
