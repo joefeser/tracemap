@@ -226,7 +226,8 @@ internal static class StaticDispatchCandidateBuilder
             .SelectMany(relationship => relationship.SupportingFactIds.Select(factId => new
             {
                 Source = nodes.GetValueOrDefault(relationship.FromNodeId),
-                FactId = factId
+                FactId = factId,
+                EvidenceKind = "relationship"
             }))
             .Where(item => item.Source is not null)
             .Select(item => new
@@ -234,7 +235,8 @@ internal static class StaticDispatchCandidateBuilder
                 SourceIndexId = item.Source!.SourceIndexId,
                 item.Source.SourceLabel,
                 item.Source.CommitSha,
-                item.FactId
+                item.FactId,
+                item.EvidenceKind
             })
             .Concat(calls
                 .Where(call => string.IsNullOrWhiteSpace(call.ExtractorVersion))
@@ -243,7 +245,8 @@ internal static class StaticDispatchCandidateBuilder
                     call.SourceIndexId,
                     call.SourceLabel,
                     call.CommitSha,
-                    FactId = call.FactId
+                    FactId = call.FactId,
+                    EvidenceKind = "call"
                 }))
             .Concat(registrations
                 .Where(registration => string.IsNullOrWhiteSpace(registration.ExtractorVersion))
@@ -252,27 +255,49 @@ internal static class StaticDispatchCandidateBuilder
                     registration.SourceIndexId,
                     registration.SourceLabel,
                     registration.CommitSha,
-                    FactId = registration.FactId
+                    FactId = registration.FactId,
+                    EvidenceKind = "registration"
                 }))
             .GroupBy(item => item.SourceIndexId, StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal);
+        var missingExtractorFactIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var group in missingExtractorFacts)
         {
             var first = group.OrderBy(item => item.FactId, StringComparer.Ordinal).First();
-            reducedSourceIds.Add(group.Key);
+            var callEvidence = group.Where(item => item.EvidenceKind == "call")
+                .Select(item => item.FactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+            var relationshipEvidence = group.Where(item => item.EvidenceKind == "relationship")
+                .Select(item => item.FactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+            var registrationEvidence = group.Where(item => item.EvidenceKind == "registration")
+                .Select(item => item.FactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+            missingExtractorFactIds.UnionWith(callEvidence);
+            missingExtractorFactIds.UnionWith(relationshipEvidence);
+            missingExtractorFactIds.UnionWith(registrationEvidence);
             gaps.Add(CreateContextGap(
                 "DispatchCandidateReducedCoverage",
                 "supporting-fact-extractor-identity-unavailable",
-                "Static dispatch supporting evidence lacks per-fact extractor identity; retained candidates are review-only and candidate absence is not conclusive.",
+                "Static dispatch supporting evidence lacks per-fact extractor identity; directly supported candidates are review-only and candidate absence is not conclusive.",
                 group.Key,
                 first.SourceLabel,
                 null,
                 first.CommitSha,
                 null,
-                group.Select(item => item.FactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                registrationEvidence.Take(candidateLimit)
+                    .Concat(relationshipEvidence.Take(candidateLimit))
+                    .Concat(callEvidence.Take(candidateLimit))
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray(),
                 null,
                 null,
-                null));
+                null) with
+            {
+                GroupedEvidenceCount = callEvidence.Length + relationshipEvidence.Length + registrationEvidence.Length,
+                SupportingFactLimit = candidateLimit,
+                CallEvidenceCount = callEvidence.Length,
+                RelationshipEvidenceCount = relationshipEvidence.Length,
+                RegistrationEvidenceCount = registrationEvidence.Length
+            });
         }
 
         foreach (var relationship in memberRelationshipEvidence.Where(relationship => !HasVerifiedMemberIdentity(relationship)))
@@ -296,7 +321,10 @@ internal static class StaticDispatchCandidateBuilder
         for (var index = 0; index < candidates.Count; index++)
         {
             var candidate = candidates[index];
-            if (!reducedSourceIds.Contains(candidate.SourceIndexId))
+            var hasMissingExtractorSupport = candidate.SupportingFactIds
+                .Concat(candidate.SupportingRegistrationFactIds)
+                .Any(missingExtractorFactIds.Contains);
+            if (!reducedSourceIds.Contains(candidate.SourceIndexId) && !hasMissingExtractorSupport)
             {
                 continue;
             }
@@ -306,7 +334,9 @@ internal static class StaticDispatchCandidateBuilder
                 State = StaticDispatchCandidateStates.WeakerCandidate,
                 EvidenceTier = WeakestEvidenceTier([candidate.EvidenceTier, EvidenceTiers.Tier4Unknown]),
                 Limitations = candidate.Limitations
-                    .Append("Source coverage is reduced or unsupported; this candidate is review context only and candidate absence is not conclusive.")
+                    .Append(reducedSourceIds.Contains(candidate.SourceIndexId)
+                        ? "Source coverage is reduced or unsupported; this candidate is review context only and candidate absence is not conclusive."
+                        : "Direct supporting evidence lacks extractor identity; this candidate is review context only.")
                     .Distinct(StringComparer.Ordinal)
                     .OrderBy(value => value, StringComparer.Ordinal)
                     .ToArray()
@@ -408,11 +438,13 @@ internal static class StaticDispatchCandidateBuilder
                 call.EndLine));
         }
 
+        var callFactIds = calls.Select(call => call.FactId).ToHashSet(StringComparer.Ordinal);
+        var registrationFactIds = registrations.Select(registration => registration.FactId).ToHashSet(StringComparer.Ordinal);
         ConsolidateCallContextGaps(
             gaps,
             candidateLimit,
-            calls.Select(call => call.FactId).ToHashSet(StringComparer.Ordinal),
-            registrations.Select(registration => registration.FactId).ToHashSet(StringComparer.Ordinal));
+            callFactIds,
+            registrationFactIds);
         for (var index = 0; index < gaps.Count; index++)
         {
             var gap = gaps[index];
@@ -420,10 +452,12 @@ internal static class StaticDispatchCandidateBuilder
                 && gap.NodeId is not null
                 && unverifiedCallTargetNodeIds.Contains(gap.NodeId))
             {
-                var supportingFactIds = gaps
+                var matchingIdentityGaps = gaps
                     .Where(candidateGap => candidateGap.GapKind == "DispatchCandidateIdentityUnverified"
                         && string.Equals(candidateGap.SourceIndexId, gap.SourceIndexId, StringComparison.Ordinal)
                         && string.Equals(candidateGap.NodeId, gap.NodeId, StringComparison.Ordinal))
+                    .ToArray();
+                var supportingFactIds = matchingIdentityGaps
                     .SelectMany(candidateGap => candidateGap.SupportingFactIds)
                     .Distinct(StringComparer.Ordinal)
                     .OrderBy(value => value, StringComparer.Ordinal)
@@ -431,8 +465,13 @@ internal static class StaticDispatchCandidateBuilder
                 var abstractionDisplay = nodes.GetValueOrDefault(gap.NodeId)?.DisplayName ?? "the abstraction";
                 gaps[index] = gap with
                 {
-                    Message = $"Static dispatch candidate derivation found {gap.CandidateCount} candidates for `{abstractionDisplay}`, but all candidates were withheld because call identity was unverified; the configured candidate cap is {gap.CandidateLimit}.",
-                    SupportingFactIds = supportingFactIds
+                    Message = $"Static dispatch candidate derivation found {gap.CandidateCount} candidates for `{abstractionDisplay}`, but all candidates were withheld because at least one call identity was unverified; verified relationship evidence remains non-traversable for this abstraction and the configured candidate cap is {gap.CandidateLimit}.",
+                    SupportingFactIds = supportingFactIds,
+                    GroupedEvidenceCount = matchingIdentityGaps.Sum(item => item.GroupedEvidenceCount ?? 1),
+                    SupportingFactLimit = candidateLimit,
+                    CallEvidenceCount = matchingIdentityGaps.Sum(item => item.CallEvidenceCount ?? item.SupportingFactIds.Count(callFactIds.Contains)),
+                    RelationshipEvidenceCount = matchingIdentityGaps.Sum(item => item.RelationshipEvidenceCount ?? item.SupportingFactIds.Count(value => !callFactIds.Contains(value) && !registrationFactIds.Contains(value))),
+                    RegistrationEvidenceCount = matchingIdentityGaps.Sum(item => item.RegistrationEvidenceCount ?? item.SupportingFactIds.Count(registrationFactIds.Contains))
                 };
             }
         }
@@ -447,9 +486,13 @@ internal static class StaticDispatchCandidateBuilder
         IReadOnlySet<string> registrationFactIds)
     {
         var grouped = gaps
-            .Where(gap => gap.Reason is "call-target-identity-unverified" or "type-level-relationship-only" or "candidate-identity-unverified")
-            .GroupBy(gap => new { gap.SourceIndexId, gap.NodeId, gap.Reason })
-            .Where(group => group.Count() > 1)
+            .Where(gap => gap.Reason is "call-target-identity-unverified" or "type-level-relationship-only" or "candidate-identity-unverified" or "member-relationship-identity-unverified")
+            .GroupBy(gap => new
+            {
+                gap.SourceIndexId,
+                NodeId = gap.Reason == "member-relationship-identity-unverified" ? null : gap.NodeId,
+                gap.Reason
+            })
             .ToArray();
         foreach (var group in grouped)
         {
@@ -479,10 +522,10 @@ internal static class StaticDispatchCandidateBuilder
             gaps.Add(CreateContextGap(
                 first.GapKind,
                 first.Reason!,
-                $"{first.Message} {ordered.Length} call-site evidence rows were grouped; call, relationship, and registration supporting facts are each capped at {supportingFactLimit}, with exact pre-cap counts preserved.",
+                $"{first.Message} {ordered.Length} evidence row(s) were summarized; call, relationship, and registration supporting facts are each capped at {supportingFactLimit}, with exact pre-cap counts preserved.",
                 first.SourceIndexId!,
                 first.SourceLabel!,
-                first.NodeId,
+                group.Key.NodeId,
                 first.CommitSha,
                 first.ExtractorVersion,
                 supportingFactIds,
@@ -526,7 +569,7 @@ internal static class StaticDispatchCandidateBuilder
             reason,
             commitSha,
             extractorVersion,
-            "combined-dispatch-candidate-context",
+            "dispatch-candidate-context",
             endLine,
             supportingFactIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
 

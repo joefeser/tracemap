@@ -2728,8 +2728,9 @@ rules:
       - Open generic, factory, keyed, instance, scanning, custom-container, syntax-only, and compatibility-unproven registration shapes remain review gaps in v1.
       - Type-level implementation or inheritance relationships do not create guessed member candidates; when a called member lacks source-local member relationship evidence, MemberCandidateUnavailable preserves the bounded type context as a gap.
       - Missing canonical member or containing-type identity fails closed as DispatchCandidateIdentityUnverified; display names are not joined as authoritative identity.
+      - Because candidate edges are shared at the abstraction node, one unverified call identity withholds that abstraction's traversable candidates rather than allowing an unrelated call site to inherit them; the gap preserves the withheld fan-out and supporting evidence.
       - Reduced, failed, unsupported-adapter, or unverifiable source coverage emits DispatchCandidateReducedCoverage and downgrades any retained candidate to review-only Tier4 context.
-      - Consumers that cannot load the required combined dispatch schema emit DispatchCandidateSchemaUnavailable rather than infer candidate absence.
+      - Consumers that cannot load the required fact extractor schema emit DispatchCandidateSchemaUnavailable rather than infer candidate absence.
       - Missing relationship evidence under reduced coverage must remain an unknown analysis gap rather than a clean absence conclusion.
 
   - id: combined.route-flow.logic-surface.v1

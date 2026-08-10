@@ -638,6 +638,18 @@ appropriate.
   counts for every bucket. Validation passed 22 focused dispatch/schema tests,
   the full `.NET` solution at 1,349 tests, targeted format, the public combined
   paths/reverse smoke, private-path guard, and diff check.
+- The exact-head Kiro verification at
+  `90d2611ea98a76564e08ce8bd2b6d07b4f4ac0e1` reported no P1s and five P2s.
+  The final bounded patch carries cap/count metadata into withheld fan-out
+  gaps; bounds missing-extractor and invalid-member evidence per source;
+  replaces combined-index-specific schema reason/scope tokens with neutral
+  tokens; limits missing-extractor downgrades to candidates directly supported
+  by those facts; and corrects Swift scanner language inference before using
+  language as an adapter-capability signal. One unverified call still
+  withholds the abstraction's shared traversable candidates by design because
+  the current candidate edge is abstraction-scoped rather than call-scoped;
+  the gap now explicitly discloses that conservative blast radius. This is a
+  fail-closed limitation, not a runtime or candidate-selection claim.
 
 - Initial ACK returned `decision=actionable_findings`,
   `stopReason=UNRESOLVED_REVIEW_THREADS`, `patchAuthorized=true`, and
