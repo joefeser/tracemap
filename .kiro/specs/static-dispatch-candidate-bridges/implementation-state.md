@@ -105,6 +105,11 @@ execution, and impact are not proven.
   same-kind gaps from collapsing during capping. Vault docs now derive their
   evidence-tier set from the matching serialized edges and gaps, so syntax or
   unknown evidence cannot be upgraded to structural evidence.
+- A third exact-head review found three multi-source provenance leaks. The
+  portfolio top-level gap collection now removes dispatch gaps owned only by
+  excluded sources before applying the gap cap; dispatch context IDs include
+  source identity; and evidence-doc candidate gaps reference only their owning
+  combined source. Multi-source regressions cover all three boundaries.
 
 Validation for Task 10:
 
@@ -118,6 +123,9 @@ Validation for Task 10:
   passed 1,334/1,334 with a clean zero-warning build.
 - After the second exact-head review corrections, focused consumer tests passed
   106/106 and the full .NET solution passed 1,335/1,335 with a clean
+  zero-warning build.
+- After the third exact-head review corrections, focused consumer tests passed
+  108/108 and the full .NET solution passed 1,337/1,337 with a clean
   zero-warning build.
 - Targeted changed-file whitespace formatting and verification: passed.
 - Repo-wide `dotnet format --verify-no-changes`: deferred because existing

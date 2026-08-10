@@ -854,7 +854,9 @@ public static class EvidenceDocsExporter
             gap.EvidenceTier ?? Tier4Unknown,
             gap.GapKind,
             "dependency-surface",
-            sourceRefs,
+            gap.SourceIndexId is not null && sourceById.TryGetValue(gap.SourceIndexId, out var gapSource)
+                ? [ToSourceRef(gapSource)]
+                : [],
             DistinctSorted([gap.GapId, gap.CombinedFactId]),
             ["Candidate derivation is incomplete or bounded; this gap does not prove candidate absence or runtime behavior."]))
             .ToArray();

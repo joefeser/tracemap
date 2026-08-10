@@ -488,6 +488,11 @@ public static class PortfolioReporter
         gaps.AddRange(portfolioImpact.Gaps);
         gaps.AddRange(releaseReviewContext.Gaps);
 
+        gaps = gaps.Where(gap =>
+                gap.Section != "dispatchCandidateContext"
+                || Metadata(gap.Metadata ?? [], "sourceId") is not { } sourceId
+                || activeFilteredSourceIds.Contains(sourceId))
+            .ToList();
         var allGaps = CapGaps(gaps, options.MaxGaps);
         pathContext = WithCappedGaps(pathContext, allGaps);
         reverseContext = WithCappedGaps(reverseContext, allGaps);
@@ -643,7 +648,7 @@ public static class PortfolioReporter
         PortfolioSourceRow source,
         DispatchCandidateEvidenceSummary summary)
     {
-        var contextId = $"portfolio-dispatch:{CombinedReportHelpers.Hash(string.Join('\u001f', [side, input.Label, summary.CandidateCount.ToString(), summary.GapCount.ToString(), string.Join('|', summary.SupportingEdgeIds)]), 24)}";
+        var contextId = $"portfolio-dispatch:{CombinedReportHelpers.Hash(string.Join('\u001f', [side, input.Label, source.SourceId, summary.CandidateCount.ToString(), summary.GapCount.ToString(), string.Join('|', summary.SupportingEdgeIds)]), 24)}";
         return new PortfolioContextRow(
             contextId,
             summary.Classification,

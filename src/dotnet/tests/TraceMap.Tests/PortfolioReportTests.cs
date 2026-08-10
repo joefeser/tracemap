@@ -74,6 +74,34 @@ public sealed class PortfolioReportTests
     }
 
     [Fact]
+    public async Task Portfolio_dispatch_context_ids_are_source_scoped_and_excluded_gaps_do_not_leak()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await StaticDispatchCandidateConsumerFixture.CreateCombinedIndexAsync(
+            temp.Path,
+            includeUnsupportedRegistration: true,
+            includeSecondSource: true);
+
+        var complete = await PortfolioReporter.WriteAsync(new PortfolioReportOptions([
+            new PortfolioInputSpec("stack", combinedPath)
+        ], Path.Combine(temp.Path, "portfolio-all")));
+        Assert.Equal(2, complete.Report.DispatchCandidateContext.Rows.Count);
+        Assert.Equal(
+            2,
+            complete.Report.DispatchCandidateContext.Rows
+                .Select(row => row.ContextId)
+                .Distinct(StringComparer.Ordinal)
+                .Count());
+
+        var filtered = await PortfolioReporter.WriteAsync(new PortfolioReportOptions([
+            new PortfolioInputSpec("stack", combinedPath)
+        ], Path.Combine(temp.Path, "portfolio-filtered"), Source: "dispatch-second"));
+        Assert.Single(filtered.Report.DispatchCandidateContext.Rows);
+        Assert.DoesNotContain(filtered.Report.Gaps, gap => gap.GapKind == "UnsupportedRegistrationShape");
+        Assert.DoesNotContain(filtered.Report.DispatchCandidateContext.Gaps, gap => gap.GapKind == "UnsupportedRegistrationShape");
+    }
+
+    [Fact]
     public async Task Portfolio_direct_inputs_write_deterministic_markdown_json_and_group_shared_surfaces()
     {
         using var temp = new TempDirectory();

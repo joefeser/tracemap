@@ -12,7 +12,8 @@ internal static class StaticDispatchCandidateConsumerFixture
         string analysisLevel = "Level1SemanticAnalysis",
         string buildStatus = "Succeeded",
         bool includeUnsupportedRegistration = false,
-        bool includeSecondUnsupportedRegistration = false)
+        bool includeSecondUnsupportedRegistration = false,
+        bool includeSecondSource = false)
     {
         var indexPath = Path.Combine(root, $"{suffix}-source.sqlite");
         var combinedPath = Path.Combine(root, $"{suffix}-combined.sqlite");
@@ -110,7 +111,37 @@ internal static class StaticDispatchCandidateConsumerFixture
         }
 
         SqliteIndexWriter.Write(indexPath, manifest, facts);
-        await CombinedIndexBuilder.CombineAsync(new CombineOptions([indexPath], combinedPath, [suffix]));
+        if (includeSecondSource)
+        {
+            var secondSuffix = $"{suffix}-second";
+            var secondManifest = Manifest(secondSuffix, analysisLevel, buildStatus) with
+            {
+                CommitSha = "2222222222222222222222222222222222222222",
+                ScanRootPathHash = FactFactory.Hash(secondSuffix, 32),
+                GitRootHash = FactFactory.Hash($"git-root:{secondSuffix}", 32)
+            };
+            var secondIndexPath = Path.Combine(root, $"{secondSuffix}-source.sqlite");
+            var secondFacts = facts
+                .Where(fact => fact.FactType != FactTypes.DependencyRegistered)
+                .Select(fact => fact with
+                {
+                    FactId = $"second-{fact.FactId}",
+                    ScanId = secondManifest.ScanId,
+                    Repo = secondManifest.RepoName,
+                    CommitSha = secondManifest.CommitSha
+                })
+                .ToArray();
+            SqliteIndexWriter.Write(secondIndexPath, secondManifest, secondFacts);
+            await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+                [indexPath, secondIndexPath],
+                combinedPath,
+                [suffix, secondSuffix]));
+        }
+        else
+        {
+            await CombinedIndexBuilder.CombineAsync(new CombineOptions([indexPath], combinedPath, [suffix]));
+        }
+
         return combinedPath;
     }
 
