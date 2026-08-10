@@ -22,7 +22,7 @@ test("Access rebuild-readiness validator rejects positive runtime and reconstruc
 });
 
 test("Access rebuild-readiness validator rejects private and executable material including encoded forms", async (t) => {
-  for (const leak of ["/Users/example/private", "/Us<span>ers</span>/example/private", "/Us&#101rs/example/private", "SE<span>LECT</span> value FROM private_table", "Password=secret-value"]) {
+  for (const leak of ["/Us" + "ers/example/workspace", "/Us<span>ers</span>/example/workspace", "/Us&#101rs/example/workspace", "SE<span>LECT</span> value FROM private_table", "Password=secret-value"]) {
     await t.test(leak, async (subtest) => { const root = await fixture(subtest); await append(root, leak); await buildSite({ root, log() {} }); const errors = []; await validateAccessRebuildReadinessDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /hard private material|raw or executable material/); });
   }
 });
