@@ -45,7 +45,8 @@ export async function validateCsharpExtractionTruthDist({ baseUrl = "https://tra
   if (!(await fileExists(pagePath))) { errors.push(withEvidence(`C# extraction truth article is missing required route: ${csharpExtractionTruthRoute}`, artifact)); return; }
 
   const sitemapPath = resolve(dist, "sitemap.xml");
-  if (await fileExists(sitemapPath)) if (!(await readSitemapLocSet(sitemapPath)).has(`${cleanBaseUrl}${csharpExtractionTruthRoute}`)) localErrors.push(withEvidence("C# extraction truth sitemap route is missing.", "sitemap.xml"));
+  if (!(await fileExists(sitemapPath))) localErrors.push(withEvidence("C# extraction truth sitemap is missing.", "sitemap.xml"));
+  else if (!(await readSitemapLocSet(sitemapPath)).has(`${cleanBaseUrl}${csharpExtractionTruthRoute}`)) localErrors.push(withEvidence("C# extraction truth sitemap route is missing.", "sitemap.xml"));
   await validateIndexes(dist, localErrors);
   await validatePage(pagePath, cleanBaseUrl, localErrors);
   errors.push(...localErrors);

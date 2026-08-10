@@ -13,7 +13,7 @@ const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 test("Graph history article builds with bounded evidence and reciprocal discovery", async (t) => { const root = await fixture(t); await buildSite({ root, log() {} }); const errors = []; await validateGraphHistoryBugsDist({ dist: join(root, "dist"), errors }); assert.deepEqual(errors, []); });
 
 test("Graph history validator rejects unsupported positive claims", async (t) => {
-  for (const claim of ["TraceMap proves runtime reachability.", "The graph is complete.", "Production correctness established."]) await t.test(claim, async (subtest) => { const root = await fixture(subtest); await append(root, claim); await buildSite({ root, log() {} }); const errors = []; await validateGraphHistoryBugsDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /unsupported positive claim/); });
+  for (const claim of ["TraceMap proves runtime reachability.", "The graph is complete.", "The analysis is complete.", "The coverage is safe.", "Production correctness established."]) await t.test(claim, async (subtest) => { const root = await fixture(subtest); await append(root, claim); await buildSite({ root, log() {} }); const errors = []; await validateGraphHistoryBugsDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /unsupported positive claim/); });
 });
 
 test("Graph history validator rejects private and source material including encoded forms", async (t) => {
@@ -26,6 +26,10 @@ test("Graph history validator rejects discovery, required-link, and reciprocal-l
 
 test("Graph history validator scans the public blog card", async (t) => {
   const root = await fixture(t); const metadataPath = join(root, "src/_blog/articles.json"); const articles = JSON.parse(await readFile(metadataPath, "utf8")); articles.find((article) => article.slug === "bugs-hiding-in-graph-history").cardDescription = "TraceMap proves runtime reachability."; await writeFile(metadataPath, `${JSON.stringify(articles, null, 2)}\n`, "utf8"); await buildSite({ root, log() {} }); const errors = []; await validateGraphHistoryBugsDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /blog card contains unsupported positive claim/);
+});
+
+test("Graph history validator scans discovery text", async (t) => {
+  for (const planted of ["The graph is complete.", "The analysis is complete.", "/Us" + "ers/example/workspace"]) await t.test(planted, async (subtest) => { const root = await fixture(subtest); await buildSite({ root, log() {} }); const discoveryPath = join(root, "dist/routes-index.json"); const discovery = JSON.parse(await readFile(discoveryPath, "utf8")); discovery.entries.find((entry) => entry.path === "/blog/bugs-hiding-in-graph-history/").summary = planted; await writeFile(discoveryPath, `${JSON.stringify(discovery, null, 2)}\n`, "utf8"); const errors = []; await validateGraphHistoryBugsDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /discovery entry contains unsupported positive claim|discovery entry contains hard private material/); });
 });
 
 test("Graph history validator rejects a missing sitemap", async (t) => {
