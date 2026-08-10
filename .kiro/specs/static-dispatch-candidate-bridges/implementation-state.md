@@ -1,7 +1,7 @@
 # Static Dispatch Candidate Bridges Implementation State
 
-Status: implementation-v1-complete-with-explicit-task-6-deferrals
-Readiness: ready-for-dev-to-main-promotion
+Status: implementation-task-6-remainder-required
+Readiness: ready-for-task-6-remainder
 Merged PR 1: #331 (`086ad376e387ea8d87e430175ef2673cbc74c0f1`)
 Merged PR 2: #333 (`84f72e0faa9dd6c106c625de175a194d9c1515ff`)
 Merged PR 3: #610 (`6a8b5bd14187e5258a9805ee73cad6ff66cb9079`)
@@ -14,7 +14,7 @@ Merged PR 6: #615 (`92548cab13aeeec0e818b774828194db57990047`)
 - Branch: `codex/reconcile-static-dispatch-runway`
 - Base: `origin/dev`
 - Base SHA: `92548cab13aeeec0e818b774828194db57990047`
-- Scope: post-merge bookkeeping, explicit v1 boundary, and promotion readiness
+- Scope: post-merge bookkeeping and explicit remaining Task 6 boundary
 - Suggested PR target: `dev`
 
 ## Task 7 Pre-Implementation Decision
@@ -511,9 +511,11 @@ appropriate.
 - Route-flow consumption is complete in PR #611; reverse and impact consumption
   are complete in PR #614; report, portfolio, vault, and docs-export consumption
   are complete in PR #615.
-- Type-level fallback is not required for the member-relationship-backed v1.
-  Adding it now would trade compiler identity for noisier review candidates, so
-  it remains an explicit later experiment rather than an implied missing claim.
+- Type-level fallback and the broader missing/identity/schema/reduced-coverage
+  gap vocabulary remain mandatory under `requirements.md`. They must land as a
+  bounded Task 6 remainder before this spec is declared complete or promoted as
+  a completed public capability. Type-only edges must remain review-tier and
+  every unsupported derivation must fail closed as a rule-backed gap.
 
 ## PR Review Loop Notes
 
