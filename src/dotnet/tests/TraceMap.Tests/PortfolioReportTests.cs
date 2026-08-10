@@ -11,6 +11,35 @@ namespace TraceMap.Tests;
 public sealed class PortfolioReportTests
 {
     [Fact]
+    public async Task Portfolio_projects_combined_static_dispatch_context_and_gaps_single_indexes()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await StaticDispatchCandidateConsumerFixture.CreateCombinedIndexAsync(temp.Path);
+        var combinedOut = Path.Combine(temp.Path, "combined-portfolio");
+
+        var combined = await PortfolioReporter.WriteAsync(new PortfolioReportOptions([
+            new PortfolioInputSpec("stack", combinedPath)
+        ], combinedOut));
+
+        var row = Assert.Single(combined.Report.DispatchCandidateContext.Rows);
+        Assert.Equal("portfolio.context.dispatch-candidate.v1", row.RuleId);
+        Assert.Equal("NeedsReviewStaticCandidate", row.Classification);
+        Assert.Contains(row.Metadata, value => value.Key == "candidateCount" && value.Value == "1");
+        Assert.Contains(row.Metadata, value => value.Key == "supportingRuleIds" && value.Value.Contains("combined.dispatch-candidate.v1", StringComparison.Ordinal));
+        Assert.Contains("Static Dispatch Candidate Review Context", await File.ReadAllTextAsync(Path.Combine(combinedOut, "portfolio-report.md")));
+
+        var singleIndex = Path.Combine(temp.Path, "single.sqlite");
+        SqliteIndexWriter.Write(singleIndex, Manifest("single", ScannerVersions.TraceMap, "git-single"), []);
+        var single = await PortfolioReporter.WriteAsync(new PortfolioReportOptions([
+            new PortfolioInputSpec("single", singleIndex)
+        ], Path.Combine(temp.Path, "single-portfolio")));
+        Assert.Empty(single.Report.DispatchCandidateContext.Rows);
+        Assert.Contains(single.Report.DispatchCandidateContext.Gaps, gap =>
+            gap.GapKind == "DispatchCandidateSchemaUnavailable"
+            && gap.RuleId == "portfolio.context.dispatch-candidate.v1");
+    }
+
+    [Fact]
     public async Task Portfolio_direct_inputs_write_deterministic_markdown_json_and_group_shared_surfaces()
     {
         using var temp = new TempDirectory();

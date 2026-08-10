@@ -13,6 +13,45 @@ namespace TraceMap.Tests;
 public sealed class VaultExportTests
 {
     [Fact]
+    public async Task Vault_export_preserves_static_dispatch_candidate_identity_and_provenance()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await StaticDispatchCandidateConsumerFixture.CreateCombinedIndexAsync(temp.Path);
+        var outDir = Path.Combine(temp.Path, "vault-dispatch");
+
+        var result = await VaultExporter.ExportAsync(new VaultExportOptions(combinedPath, outDir, Format: "markdown,json"));
+
+        var edge = Assert.Single(result.Graph.Edges, candidate => candidate.Kind == "interface-candidate");
+        Assert.Equal("vault-export.graph.dispatch-candidate.v1", edge.RuleId);
+        Assert.Contains("combined.dispatch-candidate.v1", edge.SupportingRuleIds!);
+        Assert.Equal("NeedsReviewPath", edge.Classification);
+        Assert.NotEmpty(edge.SupportingFactIds ?? []);
+        Assert.NotEmpty(edge.EvidenceLocations ?? []);
+        Assert.Contains(edge.Limitations ?? [], limitation => limitation.Contains("does not prove runtime dispatch", StringComparison.Ordinal));
+        var graphJson = await File.ReadAllTextAsync(Path.Combine(outDir, "graph.json"));
+        Assert.Contains("interface-candidate", graphJson);
+        Assert.DoesNotContain("selected implementation is", graphJson, StringComparison.OrdinalIgnoreCase);
+
+        var catalog = await File.ReadAllTextAsync(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
+        foreach (var ruleId in new[]
+                 {
+                     "combined.report.dispatch-candidate-summary.v1",
+                     "portfolio.context.dispatch-candidate.v1",
+                     "vault-export.graph.dispatch-candidate.v1",
+                     "vault-export.gap.dispatch-candidate.v1",
+                     "docs-export.chunk.dispatch-candidate.v1",
+                     "docs-export.gap.dispatch-candidate.v1"
+                 })
+        {
+            var start = catalog.IndexOf($"- id: {ruleId}", StringComparison.Ordinal);
+            Assert.True(start >= 0, $"Missing rule catalog entry for {ruleId}.");
+            var block = catalog[start..Math.Min(catalog.Length, start + 1000)];
+            Assert.Contains("evidenceTier:", block);
+            Assert.Contains("limitations:", block);
+        }
+    }
+
+    [Fact]
     public async Task Vault_export_writes_deterministic_json_and_markdown_without_private_paths()
     {
         using var temp = new TempDirectory();

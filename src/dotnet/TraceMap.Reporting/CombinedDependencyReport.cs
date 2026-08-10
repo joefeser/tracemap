@@ -29,6 +29,7 @@ public sealed record CombinedDependencyReportDocument(
     IReadOnlyList<CombinedNeedsReviewRow> NeedsReview,
     IReadOnlyList<CombinedKnownGapRow> KnownGaps,
     MessageReviewContext MessageReviewContext,
+    DispatchCandidateEvidenceSummary DispatchCandidates,
     IReadOnlyList<string> Limitations);
 
 public sealed record CombinedReportSummary(
@@ -357,6 +358,16 @@ public static class CombinedDependencyReporter
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
         var messageReviewContext = BuildMessageReviewContext(surfaces, dependencyEdges, read.Sources, warnings);
+        var dispatchInventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(options.IndexPath, cancellationToken: cancellationToken);
+        var dispatchCandidates = DispatchCandidateEvidenceProjection.Summarize(dispatchInventory);
+        dispatchCandidates = dispatchCandidates with
+        {
+            RuleIds = dispatchCandidates.RuleIds
+                .Append(DispatchCandidateEvidenceProjection.ReportRuleId)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray()
+        };
         var report = new CombinedDependencyReportDocument(
             Version,
             warnings.Length == 0 ? "FullEvidenceAvailable" : "ReducedCoverage",
@@ -385,6 +396,7 @@ public static class CombinedDependencyReporter
             needsReview,
             read.KnownGaps,
             messageReviewContext,
+            dispatchCandidates,
             Limitations);
 
         var (markdownPath, jsonPath) = await WriteOutputsAsync(options.OutputPath, format, report, cancellationToken);
@@ -1453,6 +1465,19 @@ public static class CombinedDependencyReporter
             row => $"| {Cell(row.ContextKind)} | {Cell(row.Classification)} | {Cell(row.SafeDestinationDisplay)} | {Cell(string.Join(";", row.SourceLabels))} | {Cell($"{row.RuleId} {row.EvidenceTier} facts:{string.Join(";", row.SupportingFactIds)} edges:{string.Join(";", row.SupportingEdgeIds)}")} | {Cell(string.Join(" ", row.Caveats))} |");
         AppendRows(builder, report.MessageReviewContext.Gaps, "| Gap | Classification | Message | Evidence |", "| --- | --- | --- | --- |",
             gap => $"| {Cell(gap.GapKind)} | {Cell(gap.Classification)} | {Cell(gap.Message)} | {Cell($"{gap.RuleId} {gap.EvidenceTier}")} |");
+
+        builder.AppendLine("## Static Dispatch Candidate Review Context");
+        builder.AppendLine();
+        builder.AppendLine($"- Classification: `{Cell(report.DispatchCandidates.Classification)}`");
+        builder.AppendLine($"- Candidates: `{report.DispatchCandidates.CandidateCount}`");
+        builder.AppendLine($"- Registration-context candidates: `{report.DispatchCandidates.RegistrationContextCandidateCount}`");
+        builder.AppendLine($"- Candidate gaps: `{report.DispatchCandidates.GapCount}`");
+        builder.AppendLine($"- Fan-out or truncation observed: `{report.DispatchCandidates.FanOutOrTruncated.ToString().ToLowerInvariant()}`");
+        AppendDictionary(builder, "Candidates by source", report.DispatchCandidates.CandidatesBySource);
+        AppendDictionary(builder, "Candidates by bridge kind", report.DispatchCandidates.CandidatesByBridgeKind);
+        AppendDictionary(builder, "Candidate gaps by kind", report.DispatchCandidates.GapsByKind);
+        AppendList(builder, "Candidate rules", report.DispatchCandidates.RuleIds);
+        AppendList(builder, "Candidate limitations", report.DispatchCandidates.Limitations);
 
         builder.AppendLine("## Needs Review");
         builder.AppendLine();

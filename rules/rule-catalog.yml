@@ -499,6 +499,26 @@ rules:
       - Data-surface chunks describe static evidence availability and do not prove runtime data access, database existence, production data, ownership, or deployment.
       - Legacy data descriptor chunks cite static metadata and projection rules only; they do not prove SQL execution, provider runtime selection, live schema existence, migrations, or production database usage.
 
+  - id: docs-export.chunk.dispatch-candidate.v1
+    name: Docs export static dispatch candidate chunk
+    description: Packages bounded interface, override, and compatible registration-context candidate evidence for external review while preserving underlying dispatch rules and supporting identifiers.
+    evidenceTier: Inherits weakest supporting candidate evidence tier
+    emits:
+      - docs-export dispatch candidate review-context chunk
+    limitations:
+      - Candidate chunks do not prove runtime dispatch, dependency-injection binding, a selected implementation, reachability, execution, production behavior, or impact.
+      - Candidate absence is coverage-relative; supporting combined.dispatch-candidate.v1 and combined.dispatch-gap.v1 evidence remains authoritative.
+
+  - id: docs-export.gap.dispatch-candidate.v1
+    name: Docs export static dispatch candidate gap
+    description: Packages bounded candidate derivation gaps without converting them into clean absence claims.
+    evidenceTier: Inherits candidate gap evidence tier or Tier4Unknown
+    emits:
+      - docs-export dispatch candidate gap
+    limitations:
+      - Candidate gaps describe incomplete, unsupported, ambiguous, fan-out, generic, registration, identity, or truncated static evidence only.
+      - Gap chunks must preserve combined.dispatch-gap.v1 as supporting evidence and must not echo snippets, SQL, config, URLs, remotes, local paths, or secrets.
+
   - id: docs-export.chunk.package-config.v1
     name: Docs export package and config chunk
     description: Packages existing package, target-framework, config key, and config surface metadata using safe identifiers or redaction records.
@@ -998,6 +1018,26 @@ rules:
       - Navigation is derived only from structured property-flow terminalContextKind metadata on the terminal path node; report prose cannot create it.
       - Static path-scoped navigation does not prove runtime execution, dependency execution, database execution, impact, release safety, or complete coverage.
       - Terminal-context navigation remains hidden and is never promoted by a source claim catalog.
+
+  - id: vault-export.graph.dispatch-candidate.v1
+    name: Vault export static dispatch candidate review edge
+    description: Projects bounded dispatch candidates as explicit review-context graph edges while preserving the underlying combined dispatch candidate rule.
+    evidenceTier: Inherits candidate evidence tier
+    emits:
+      - vault dispatch candidate review-context edge
+    limitations:
+      - Review-context edges are not ordinary calls and do not prove runtime dispatch, dependency-injection binding, selected implementation, reachability, execution, or impact.
+      - Supporting combined.dispatch-candidate.v1 rule IDs, facts, relationships, registrations, coverage, and safe evidence locations remain authoritative.
+
+  - id: vault-export.gap.dispatch-candidate.v1
+    name: Vault export static dispatch candidate gap
+    description: Projects shared dispatch candidate gaps into the vault graph with consumer and underlying rule provenance.
+    evidenceTier: Inherits candidate gap evidence tier or Tier4Unknown
+    emits:
+      - vault dispatch candidate gap
+    limitations:
+      - The gap does not prove candidate absence, runtime binding, runtime reachability, or clean coverage.
+      - Raw snippets, SQL, config values, URLs, hostnames, remotes, local paths, and secrets remain forbidden.
 
   - id: vault-export.gap.terminal-context-omitted.v1
     name: Vault export terminal-context omission gap
@@ -4662,6 +4702,27 @@ rules:
       - Repository identity is hash-based and cannot prove runtime deployment, ownership, or service equivalence.
       - Duplicate source identity is excluded from cross-source grouping to avoid double-counting evidence.
       - Manifest expected identity is a validation hint, not a replacement for indexed source provenance.
+
+  - id: portfolio.context.dispatch-candidate.v1
+    name: Portfolio static dispatch candidate context
+    description: Summarizes bounded static dispatch candidate counts, registration context, gaps, fan-out, source coverage, rules, and limitations across portfolio inputs.
+    evidenceTier: Inherits weakest supporting candidate evidence tier
+    emits:
+      - PortfolioContextRow
+      - PortfolioGap
+    limitations:
+      - Portfolio candidate context is review-only and does not prove runtime dispatch, dependency-injection binding, selected implementation, reachability, execution, or impact.
+      - Single indexes without combined relationship context cannot manufacture candidate evidence; unavailable or reduced evidence remains explicit.
+
+  - id: combined.report.dispatch-candidate-summary.v1
+    name: Combined report static dispatch candidate summary
+    description: Summarizes shared candidate edges and gaps by source, bridge kind, registration context, coverage, and cap state in combined dependency reports.
+    evidenceTier: Inherits weakest supporting candidate evidence tier
+    emits:
+      - DispatchCandidateEvidenceSummary
+    limitations:
+      - Summary counts are bounded static review context and do not prove runtime dispatch, dependency-injection binding, selected implementation, reachability, execution, production behavior, or impact.
+      - Candidate absence is coverage-relative and underlying combined.dispatch-candidate.v1 and combined.dispatch-gap.v1 evidence remains authoritative.
 
   - id: portfolio.coverage.v1
     name: Portfolio coverage summary

@@ -1,19 +1,20 @@
 # Static Dispatch Candidate Bridges Implementation State
 
-Status: implementation-task-9-complete-awaiting-pr
+Status: implementation-task-10-complete-awaiting-pr
 Readiness: ready-for-pr-review
 Merged PR 1: #331 (`086ad376e387ea8d87e430175ef2673cbc74c0f1`)
 Merged PR 2: #333 (`84f72e0faa9dd6c106c625de175a194d9c1515ff`)
 Merged PR 3: #610 (`6a8b5bd14187e5258a9805ee73cad6ff66cb9079`)
 Merged PR 4: #611 (`b3fde3aa1c6c53a3fbae55df58313d2609fcdcfb`)
+Merged PR 5: #614 (`36b133c43876811a048b046f4f5cb6eec2595a53`)
 
 ## Branch
 
-- Branch: `codex/static-dispatch-reverse-impact`
+- Branch: `codex/static-dispatch-report-vault-docs`
 - Base: `origin/dev`
-- Base SHA: `703bda880681526dc9948413abb94c42d38ba854`
-- Scope: Task 9 reverse and impact consumption of the existing shared dispatch
-  candidate edges and gaps
+- Base SHA: `36b133c43876811a048b046f4f5cb6eec2595a53`
+- Scope: Task 10 combined-report, portfolio, vault, and docs-export consumption
+  of the existing shared dispatch candidate edges and gaps
 - Suggested PR target: `dev`
 
 ## Task 7 Pre-Implementation Decision
@@ -36,18 +37,64 @@ Merged PR 4: #611 (`b3fde3aa1c6c53a3fbae55df58313d2609fcdcfb`)
 
 ## Current Implementation State
 
-This branch completes Task 8 over the Task 6/7 shared builder. Route-flow now
-consumes the candidate edges and gaps already present in the combined path
-inventory instead of reconstructing them from normalized `implements` and
-`overrides` labels. This preserves candidate IDs, underlying dispatch rule IDs,
-supporting relationship IDs, registration context, registration fact IDs, and
-fan-out counts while keeping route-flow presentation under
-`combined.route-flow.interface-bridge.v1`.
+Tasks 8 and 9 are merged. This branch completes Task 10 by projecting the same
+shared in-memory dispatch candidate inventory into combined dependency reports,
+portfolio reports, vault graphs, and evidence docs. No scanner, extractor,
+persisted combined-index schema, runtime probe, or DI execution behavior is
+added.
 
-Task 8 intentionally did not add type-level fallback candidates,
-reverse/impact/report/vault/docs-export consumption, or new persisted candidate
-tables. Task 9 adds only reverse/impact consumer semantics; it does not add
-extraction rules or infer runtime DI selection.
+Type-level fallback candidates and the broader Task 6 missing/identity/generic
+and reduced-coverage gap vocabulary remain deferred. Every Task 10 consumer
+keeps candidate evidence review-tier, preserves the underlying dispatch rules,
+and states that runtime dispatch, selected implementation, reachability,
+execution, and impact are not proven.
+
+## Task 10 Implementation
+
+- Added one shared `DispatchCandidateEvidenceSummary` projection over the
+  existing graph inventory. Combined reports summarize candidate, symbol-backed,
+  weaker, registration-context, source, bridge-kind, gap, fan-out, coverage,
+  supporting ID, rule, tier, and limitation state.
+- Portfolio reports expose the same bounded summary under
+  `portfolio.context.dispatch-candidate.v1`. Single-index portfolio inputs emit
+  `DispatchCandidateSchemaUnavailable` rather than silently claiming that no
+  candidates exist.
+- Vault export keeps `interface-candidate` and `override-candidate` edge kinds,
+  wraps them with `vault-export.graph.dispatch-candidate.v1`, and preserves
+  `combined.dispatch-candidate.v1` as supporting provenance. Shared candidate
+  gaps use the corresponding vault gap rule and remain review-only.
+- Evidence docs emit a `weak-static-evidence` dependency-surface chunk with
+  file spans, commit SHAs, extractor versions, supporting fact/edge IDs,
+  coverage labels, tiers, rules, gaps, and limitations. Compatible vault graph
+  inputs retain candidate classification and rules instead of being flattened
+  into generic static graph metadata.
+- Older/minimal combined-index shapes that cannot support graph composition
+  emit a docs schema gap. Candidate absence is never inferred from an
+  unavailable schema.
+- Added catalog entries for the combined-report, portfolio, vault-edge,
+  vault-gap, docs-chunk, and docs-gap presentation rules, each with explicit
+  static-only limitations.
+- Added consumer-focused tests for deterministic Markdown/JSON/docs output,
+  vault provenance and edge kind, weak docs claims, schema gaps, catalog
+  resolution, and forbidden stronger wording. Existing vault/docs safety suites
+  continue to cover raw snippets, SQL, configuration, URLs, hostnames, remotes,
+  local paths, private labels, and secrets.
+
+Validation for Task 10:
+
+- `dotnet restore src/dotnet/TraceMap.sln --locked-mode`: passed.
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with 0 warnings.
+- Focused report/portfolio/vault/docs tests: 104/104 passed.
+- Full .NET solution tests: 1,333/1,333 passed.
+- Targeted changed-file whitespace formatting and verification: passed.
+- Repo-wide `dotnet format --verify-no-changes`: deferred because existing
+  unrelated formatting violations remain in unchanged files; no unrelated
+  files were reformatted.
+- Public `./scripts/smoke-combined-paths.sh`: passed after locked TypeScript
+  dependency installation. The reduced public fixture rendered a deterministic
+  zero-candidate summary with coverage-relative absence limitations.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
 
 ## Task 9 Implementation
 
@@ -125,11 +172,21 @@ stronger; a direct aggregation regression proves that mixed-path invariant.
 
 - `src/dotnet/TraceMap.Core/CSharpSemanticExtractor.cs`
 - `src/dotnet/TraceMap.Reporting/CombinedDependencyPaths.cs`
+- `src/dotnet/TraceMap.Reporting/CombinedDependencyReport.cs`
 - `src/dotnet/TraceMap.Reporting/CombinedRouteFlowReport.cs`
+- `src/dotnet/TraceMap.Reporting/DispatchCandidateEvidenceProjection.cs`
+- `src/dotnet/TraceMap.Reporting/EvidenceDocsExport.cs`
+- `src/dotnet/TraceMap.Reporting/PortfolioReport.cs`
 - `src/dotnet/TraceMap.Reporting/StaticDispatchCandidateBuilder.cs`
+- `src/dotnet/TraceMap.Reporting/VaultExport.cs`
 - `src/dotnet/tests/TraceMap.Tests/CSharpSemanticExtractorTests.cs`
+- `src/dotnet/tests/TraceMap.Tests/CombinedDependencyReportTests.cs`
 - `src/dotnet/tests/TraceMap.Tests/CombinedDependencyPathTests.cs`
 - `src/dotnet/tests/TraceMap.Tests/CombinedRouteFlowTests.cs`
+- `src/dotnet/tests/TraceMap.Tests/EvidenceDocsExportTests.cs`
+- `src/dotnet/tests/TraceMap.Tests/PortfolioReportTests.cs`
+- `src/dotnet/tests/TraceMap.Tests/StaticDispatchCandidateConsumerFixture.cs`
+- `src/dotnet/tests/TraceMap.Tests/VaultExportTests.cs`
 - `rules/rule-catalog.yml`
 - `.kiro/specs/static-dispatch-candidate-bridges/tasks.md`
 - `.kiro/specs/static-dispatch-candidate-bridges/implementation-state.md`
