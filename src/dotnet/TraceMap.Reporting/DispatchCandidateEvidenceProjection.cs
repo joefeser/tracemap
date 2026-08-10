@@ -30,6 +30,7 @@ internal static class DispatchCandidateEvidenceProjection
     public const string DocsChunkRuleId = "docs-export.chunk.dispatch-candidate.v1";
     public const string DocsGapRuleId = "docs-export.gap.dispatch-candidate.v1";
     public const string ReviewClassification = "NeedsReviewStaticCandidate";
+    public const string PartialReviewClassification = "NeedsReviewStaticCandidatePartial";
 
     public static DispatchCandidateEvidenceSummary Summarize(CombinedPathGraphInventory inventory)
     {
@@ -42,7 +43,7 @@ internal static class DispatchCandidateEvidenceProjection
             || inventory.Sources.Any(IsReducedCoverage);
         return new DispatchCandidateEvidenceSummary(
             "available",
-            reduced ? "NeedsReviewStaticCandidatePartial" : ReviewClassification,
+            reduced ? PartialReviewClassification : ReviewClassification,
             edges.Length,
             edges.Count(edge => edge.CandidateState == StaticDispatchCandidateStates.SymbolBackedCandidate),
             edges.Count(edge => edge.CandidateState == StaticDispatchCandidateStates.WeakerCandidate),

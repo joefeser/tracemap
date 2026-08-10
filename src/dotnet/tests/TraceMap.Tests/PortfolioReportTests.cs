@@ -24,6 +24,7 @@ public sealed class PortfolioReportTests
         var row = Assert.Single(combined.Report.DispatchCandidateContext.Rows);
         Assert.Equal("portfolio.context.dispatch-candidate.v1", row.RuleId);
         Assert.Equal("NeedsReviewStaticCandidate", row.Classification);
+        Assert.Equal(PortfolioReportClassifications.ReviewRecommended, combined.Report.DispatchCandidateContext.RollupClassification);
         Assert.Contains(row.Metadata, value => value.Key == "candidateCount" && value.Value == "1");
         Assert.Contains(row.Metadata, value => value.Key == "supportingFactIds" && !string.IsNullOrWhiteSpace(value.Value));
         Assert.Contains(row.Metadata, value => value.Key == "supportingEdgeIds" && !string.IsNullOrWhiteSpace(value.Value));
@@ -39,6 +40,7 @@ public sealed class PortfolioReportTests
         Assert.Contains(single.Report.DispatchCandidateContext.Gaps, gap =>
             gap.GapKind == "DispatchCandidateSchemaUnavailable"
             && gap.RuleId == "portfolio.context.dispatch-candidate.v1");
+        Assert.Equal(PortfolioReportClassifications.PartialAnalysis, single.Report.DispatchCandidateContext.RollupClassification);
 
         var filtered = await PortfolioReporter.WriteAsync(new PortfolioReportOptions([
             new PortfolioInputSpec("stack", combinedPath),
@@ -48,6 +50,27 @@ public sealed class PortfolioReportTests
         Assert.Single(filtered.Report.DispatchCandidateContext.Gaps, gap =>
             gap.GapKind == "DispatchCandidateSchemaUnavailable"
             && gap.SourceLabel == "single-input");
+    }
+
+    [Fact]
+    public async Task Portfolio_preserves_distinct_underlying_dispatch_gap_identities()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await StaticDispatchCandidateConsumerFixture.CreateCombinedIndexAsync(
+            temp.Path,
+            includeUnsupportedRegistration: true,
+            includeSecondUnsupportedRegistration: true);
+
+        var result = await PortfolioReporter.WriteAsync(new PortfolioReportOptions([
+            new PortfolioInputSpec("stack", combinedPath)
+        ], Path.Combine(temp.Path, "portfolio-gaps")));
+
+        var dispatchGaps = result.Report.DispatchCandidateContext.Gaps
+            .Where(gap => gap.GapKind == "UnsupportedRegistrationShape")
+            .ToArray();
+        Assert.Equal(2, dispatchGaps.Length);
+        Assert.Equal(2, dispatchGaps.Select(gap => gap.GapId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(PortfolioReportClassifications.PartialAnalysis, result.Report.DispatchCandidateContext.RollupClassification);
     }
 
     [Fact]
