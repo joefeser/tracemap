@@ -367,6 +367,103 @@ public sealed class CombinedChangeImpactTests
     }
 
     [Fact]
+    public async Task Impact_caps_static_dispatch_candidate_path_context_at_needs_review()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after.sqlite");
+        var manifest = Manifest("api", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.IOrderService.Get(System.Int32)";
+        var implementation = "Server.OrderService.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        var shared = new CodeFact[]
+        {
+            SymbolRelationshipFact(manifest, implementation, service, "Services/OrderService.cs", 18),
+            CallFact(manifest, implementation, repository, "Services/OrderService.cs", 21),
+            QueryPatternFact(manifest, repository, "Infrastructure/OrderRepository.cs", 31)
+        };
+        await WriteSingleCombinedAsync(temp, beforeCombined, "before", manifest, [
+            CallFact(manifest, controller, service, "Controllers/OrdersController.cs", 14),
+            .. shared
+        ]);
+        await WriteSingleCombinedAsync(temp, afterCombined, "after", manifest, [
+            CallFact(manifest, controller, service, "Controllers/OrdersController.cs", 15),
+            .. shared
+        ]);
+
+        var result = await CombinedChangeImpactReporter.WriteAsync(new CombinedChangeImpactOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "impact"),
+            Scope: "edges",
+            IncludePaths: true,
+            MaxPathsPerItem: 5,
+            MaxPathQueries: 10));
+
+        var edge = Assert.Single(result.Report.ImpactItems, item => item.EvidenceKind == "edge");
+        Assert.Equal(CombinedImpactClassifications.NeedsReviewImpact, edge.Classification);
+        Assert.Equal(CombinedImpactClassifications.NeedsReviewImpact, edge.PathContext.Classification);
+        Assert.Contains(edge.PathContext.BeforePaths, path => path.RuleIds?.Contains("combined.dispatch-candidate.v1", StringComparer.Ordinal) == true);
+        Assert.Contains(edge.PathContext.AfterPaths, path => path.RuleIds?.Contains("combined.dispatch-candidate.v1", StringComparer.Ordinal) == true);
+        Assert.Contains(edge.Notes, note => note.Code == "StaticDispatchCandidate");
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(temp.Path, "impact", "impact-report.md"));
+        Assert.Contains("combined.dispatch-candidate.v1", markdown, StringComparison.Ordinal);
+        Assert.Contains("StaticDispatchCandidate", markdown, StringComparison.Ordinal);
+        Assert.Contains("does not prove runtime dispatch", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("proves impact", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("selected implementation", markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Impact_keeps_candidate_limit_when_other_snapshot_has_unknown_path_coverage()
+    {
+        using var temp = new TempDirectory();
+        var beforeCombined = Path.Combine(temp.Path, "before.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after.sqlite");
+        var beforeManifest = Manifest("api", "tracemap-milestone15", "Level1SemanticAnalysisReduced", "FailedOrPartial");
+        var afterManifest = Manifest("api", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.IOrderService.Get(System.Int32)";
+        var implementation = "Server.OrderService.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        await WriteSingleCombinedAsync(temp, beforeCombined, "before", beforeManifest, [
+            CallFact(beforeManifest, controller, service, "Controllers/OrdersController.cs", 14),
+            QueryPatternFact(beforeManifest, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await WriteSingleCombinedAsync(temp, afterCombined, "after", afterManifest, [
+            CallFact(afterManifest, controller, service, "Controllers/OrdersController.cs", 15),
+            SymbolRelationshipFact(afterManifest, implementation, service, "Services/OrderService.cs", 18),
+            CallFact(afterManifest, implementation, repository, "Services/OrderService.cs", 21),
+            QueryPatternFact(afterManifest, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+
+        var result = await CombinedChangeImpactReporter.WriteAsync(new CombinedChangeImpactOptions(
+            beforeCombined,
+            afterCombined,
+            Path.Combine(temp.Path, "impact"),
+            Scope: "edges",
+            IncludePaths: true,
+            MaxPathsPerItem: 5,
+            MaxPathQueries: 20));
+
+        var edge = Assert.Single(result.Report.ImpactItems, item =>
+            item.EvidenceKind == "edge"
+            && item.After?.SafeMetadata.Any(pair => pair.Key == "sourceSymbol" && pair.Value == controller) == true
+            && item.After.SafeMetadata.Any(pair => pair.Key == "targetSymbol" && pair.Value == service));
+        Assert.Contains(edge.PathContext.AfterPaths, path => path.RuleIds?.Contains("combined.dispatch-candidate.v1", StringComparer.Ordinal) == true);
+        Assert.Equal(CombinedImpactClassifications.UnknownAnalysisGap, edge.Classification);
+        Assert.Equal(CombinedImpactClassifications.UnknownAnalysisGap, edge.PathContext.Classification);
+        Assert.Contains(edge.Notes, note => note.Code == "StaticDispatchCandidate");
+        Assert.NotEmpty(edge.PathContext.Gaps);
+        Assert.All(edge.PathContext.Gaps, gap => Assert.Contains(edge.ImpactId, gap.GapId, StringComparison.Ordinal));
+        Assert.All(edge.PathContext.Gaps, gap => Assert.Contains(result.Report.Gaps, global => global.GapId == gap.GapId));
+    }
+
+    [Fact]
     public async Task Impact_include_paths_enforces_global_path_query_cap()
     {
         using var temp = new TempDirectory();
@@ -493,6 +590,34 @@ public sealed class CombinedChangeImpactTests
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
                 ["callKind"] = "method"
+            });
+    }
+
+    private static CodeFact SymbolRelationshipFact(
+        ScanManifest manifest,
+        string implementationMethodSymbol,
+        string interfaceMethodSymbol,
+        string file,
+        int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.SymbolRelationship,
+            RuleIds.CSharpSemanticSymbolRelationship,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: implementationMethodSymbol,
+            targetSymbol: interfaceMethodSymbol,
+            contractElement: "ImplementsInterfaceMember",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["relationshipKind"] = "ImplementsInterfaceMember",
+                ["sourceContainingSymbolId"] = "Server.OrderService",
+                ["sourceSymbolDisplayName"] = implementationMethodSymbol,
+                ["sourceSymbolId"] = implementationMethodSymbol,
+                ["targetContainingSymbolId"] = "Server.IOrderService",
+                ["targetSymbolDisplayName"] = interfaceMethodSymbol,
+                ["targetSymbolId"] = interfaceMethodSymbol
             });
     }
 
