@@ -1,6 +1,7 @@
 # Site Access Form-to-Field Lineage Implementation State
 
-- Status: implementation and local validation complete; publication pending
+- Status: implementation and local validation complete; ready stacked PR #626
+  open; ACK pending
 - Branch: `codex/site-access-form-field-lineage`
 - Stack base: `codex/site-access-safe-acquisition` / PR #625
 - Base SHA: `667fa94633d9f195c8fba418d5388e876f8675fa`
