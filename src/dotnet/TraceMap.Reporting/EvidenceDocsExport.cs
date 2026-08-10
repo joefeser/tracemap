@@ -302,6 +302,7 @@ public static class EvidenceDocsExporter
         ApplyCatalogClaims(input.Sources, catalog, diagnostics);
 
         var chunks = ProjectIndexChunks(input, selectedFamilies, diagnostics);
+        chunks.AddRange(await ProjectDispatchCandidateChunksAsync(options.IndexPath, input, selectedFamilies, cancellationToken));
         chunks.AddRange(await ProjectReportChunksAsync(options, input.Sources, selectedFamilies, diagnostics, cancellationToken));
         AddRequestedUnsupportedFamilyGaps(input.Sources, selectedFamilies, chunks);
         AddCatalogUnmatchedGaps(input.Sources, catalog, selectedFamilies, chunks, diagnostics);
@@ -780,6 +781,125 @@ public static class EvidenceDocsExporter
         return chunks;
     }
 
+    private static async Task<IReadOnlyList<EvidenceDocChunk>> ProjectDispatchCandidateChunksAsync(
+        string indexPath,
+        IndexInput input,
+        IReadOnlyList<string> selectedFamilies,
+        CancellationToken cancellationToken)
+    {
+        if (input.Kind != "combined-index" || !selectedFamilies.Contains("dependency-surface", StringComparer.Ordinal))
+        {
+            return [];
+        }
+
+        CombinedPathGraphInventory inventory;
+        try
+        {
+            inventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(indexPath, cancellationToken: cancellationToken);
+        }
+        catch (InvalidDataException)
+        {
+            return [CreateGapChunk(
+                "dispatch-candidate-schema-unavailable",
+                DispatchCandidateEvidenceProjection.DocsGapRuleId,
+                "schema-incompatible",
+                "dependency-surface",
+                input.Sources,
+                ["combined-index:dispatch-candidate-schema"],
+                "hidden")];
+        }
+        var edges = DispatchCandidateEvidenceProjection.CandidateEdges(inventory).ToArray();
+        var candidateGaps = DispatchCandidateEvidenceProjection.CandidateGaps(inventory).ToArray();
+        if (edges.Length == 0 && candidateGaps.Length == 0)
+        {
+            return [];
+        }
+
+        var summary = DispatchCandidateEvidenceProjection.Summarize(inventory);
+        var sourceById = input.Sources.ToDictionary(source => source.SourceId, StringComparer.Ordinal);
+        var nodeById = inventory.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var sourceRefs = input.Sources.Select(ToSourceRef).ToArray();
+        var citations = edges.Select(edge =>
+        {
+            var source = nodeById.TryGetValue(edge.FromNodeId, out var node)
+                && sourceById.TryGetValue(node.SourceIndexId, out var matched)
+                    ? matched
+                    : input.Sources.FirstOrDefault();
+            if (source is null)
+            {
+                return null;
+            }
+
+            return new EvidenceDocCitation(
+                StableId("citation", "docs-export/dispatch-candidate-citation/v1", [new("edgeId", edge.EdgeId), new("source", source.SourceId)]),
+                source.Label,
+                source.Scope,
+                source.ScanId,
+                source.CommitSha,
+                source.CoverageLabel,
+                SafeRelativePathOrNull(edge.FilePath),
+                edge.StartLine,
+                edge.EndLine,
+                [DispatchCandidateEvidenceProjection.DocsChunkRuleId, StaticDispatchCandidateBuilder.CandidateRuleId],
+                edge.EvidenceTier,
+                "static-dispatch-candidate-bridges",
+                source.ExtractorVersion,
+                edge.SupportingFactIds,
+                edge.SupportingCombinedEdgeIds,
+                []);
+        }).OfType<EvidenceDocCitation>().ToArray();
+        var gaps = candidateGaps.Select(gap => new EvidenceDocGap(
+            StableId("gap", "docs-export/dispatch-candidate-gap/v1", [new("gapId", gap.GapId)]),
+            DispatchCandidateEvidenceProjection.DocsGapRuleId,
+            gap.EvidenceTier ?? Tier4Unknown,
+            gap.GapKind,
+            "dependency-surface",
+            sourceRefs,
+            DistinctSorted([gap.GapId, gap.CombinedFactId]),
+            ["Candidate derivation is incomplete or bounded; this gap does not prove candidate absence or runtime behavior."]))
+            .ToArray();
+        var limitations = summary.Limitations.Select(message => new EvidenceDocLimitation(
+            StableId("limitation", "docs-export/dispatch-candidate-limitation/v1", [new("message", message)]),
+            DispatchCandidateEvidenceProjection.DocsChunkRuleId,
+            Tier4Unknown,
+            message,
+            "dependency-surface",
+            summary.SupportingFactIds.Concat(summary.SupportingEdgeIds).ToArray()))
+            .ToArray();
+        var body = $"""
+            ## Static dispatch candidate review context
+
+            This chunk packages bounded static candidate evidence. It does not identify a runtime target or selected dependency-injection implementation.
+
+            | Field | Value |
+            | --- | --- |
+            | Classification | `{summary.Classification}` |
+            | Candidate count | `{summary.CandidateCount}` |
+            | Symbol-backed candidates | `{summary.SymbolBackedCandidateCount}` |
+            | Weaker candidates | `{summary.WeakerCandidateCount}` |
+            | Registration-context candidates | `{summary.RegistrationContextCandidateCount}` |
+            | Candidate gaps | `{summary.GapCount}` |
+            | Fan-out or truncation | `{summary.FanOutOrTruncated.ToString().ToLowerInvariant()}` |
+
+            Candidate identities and supporting IDs are preserved for deterministic review; runtime dispatch, reachability, impact, and production behavior remain unclaimed.
+            """;
+        return [CreateChunk(
+            "dependency-surface",
+            "weak-static-evidence",
+            input.Sources.Count == 0 ? "hidden" : MinClaim(input.Sources.Select(source => source.ClaimLevel)),
+            "Static dispatch candidate review context",
+            "Bounded interface, override, and registration-context candidate evidence.",
+            body,
+            citations,
+            sourceRefs,
+            summary.SupportingFactIds.Concat(summary.SupportingEdgeIds).Concat(edges.Select(edge => edge.EdgeId)).ToArray(),
+            [DispatchCandidateEvidenceProjection.DocsChunkRuleId, StaticDispatchCandidateBuilder.CandidateRuleId, .. candidateGaps.Select(_ => StaticDispatchCandidateBuilder.GapRuleId)],
+            summary.EvidenceTiers,
+            summary.CoverageLabels,
+            gaps,
+            limitations)];
+    }
+
     private static async Task<IReadOnlyList<EvidenceDocChunk>> ProjectReportChunksAsync(
         EvidenceDocsExportOptions options,
         IReadOnlyList<DocSource> sources,
@@ -835,6 +955,19 @@ public static class EvidenceDocsExporter
                 var nodeCount = document.RootElement.TryGetProperty("nodes", out var nodes) && nodes.ValueKind == JsonValueKind.Array ? nodes.GetArrayLength() : 0;
                 var edgeCount = document.RootElement.TryGetProperty("edges", out var edges) && edges.ValueKind == JsonValueKind.Array ? edges.GetArrayLength() : 0;
                 var gapCount = document.RootElement.TryGetProperty("gaps", out var gaps) && gaps.ValueKind == JsonValueKind.Array ? gaps.GetArrayLength() : 0;
+                var dispatchEdgeIds = edges.ValueKind == JsonValueKind.Array
+                    ? edges.EnumerateArray()
+                        .Where(IsVaultDispatchCandidate)
+                        .Select(edge => StringProperty(edge, "edgeId"))
+                        .Where(value => !string.IsNullOrWhiteSpace(value))
+                        .Cast<string>()
+                        .OrderBy(value => value, StringComparer.Ordinal)
+                        .ToArray()
+                    : [];
+                var dispatchGapCount = gaps.ValueKind == JsonValueKind.Array
+                    ? gaps.EnumerateArray().Count(IsVaultDispatchCandidateGap)
+                    : 0;
+                var hasDispatchCandidates = dispatchEdgeIds.Length > 0 || dispatchGapCount > 0;
                 var body = $"""
                     ## Vault graph evidence
 
@@ -847,20 +980,26 @@ public static class EvidenceDocsExporter
                     | Nodes | `{nodeCount}` |
                     | Edges | `{edgeCount}` |
                     | Gaps | `{gapCount}` |
+                    | Static dispatch candidate edges | `{dispatchEdgeIds.Length}` |
+                    | Static dispatch candidate gaps | `{dispatchGapCount}` |
 
-                    Vault graph chunks preserve generated graph metadata and do not reinterpret source evidence.
+                    Vault graph chunks preserve generated graph metadata and do not reinterpret source evidence. Static dispatch candidates remain bounded review context and do not prove runtime dispatch or selected dependency-injection implementations.
                     """;
                 chunks.Add(CreateChunk(
                     "dependency-surface",
-                    "claim",
+                    hasDispatchCandidates ? "weak-static-evidence" : "claim",
                     classification,
-                    "Vault graph evidence",
-                    "Compatible vault graph metadata supplied to docs export.",
+                    hasDispatchCandidates ? "Vault static dispatch candidate evidence" : "Vault graph evidence",
+                    hasDispatchCandidates
+                        ? "Compatible vault graph metadata preserves bounded static dispatch candidate evidence."
+                        : "Compatible vault graph metadata supplied to docs export.",
                     body,
                     [CreateReportCitation(graphId, "evidence-graph-vault-export.v1", sources)],
                     sources.Select(ToSourceRef).ToArray(),
-                    [graphId],
-                    [DependencySurfaceRuleId],
+                    [graphId, .. dispatchEdgeIds],
+                    hasDispatchCandidates
+                        ? [DispatchCandidateEvidenceProjection.DocsChunkRuleId, DispatchCandidateEvidenceProjection.VaultEdgeRuleId, StaticDispatchCandidateBuilder.CandidateRuleId]
+                        : [DependencySurfaceRuleId],
                     [EvidenceTiers.Tier2Structural],
                     sources.Select(source => source.CoverageLabel).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).DefaultIfEmpty("vault-graph").ToArray(),
                     [],
@@ -877,6 +1016,14 @@ public static class EvidenceDocsExporter
             }
         }
     }
+
+    private static bool IsVaultDispatchCandidate(JsonElement edge) =>
+        StringProperty(edge, "ruleId") == DispatchCandidateEvidenceProjection.VaultEdgeRuleId
+        || StringArrayProperty(edge, "supportingRuleIds").Contains(StaticDispatchCandidateBuilder.CandidateRuleId, StringComparer.Ordinal);
+
+    private static bool IsVaultDispatchCandidateGap(JsonElement gap) =>
+        StringProperty(gap, "ruleId") == DispatchCandidateEvidenceProjection.VaultGapRuleId
+        || StringArrayProperty(gap, "supportingRuleIds").Contains(StaticDispatchCandidateBuilder.GapRuleId, StringComparer.Ordinal);
 
     private static async Task AddPropertyFlowReportChunksAsync(
         IReadOnlyList<string> paths,
@@ -1415,7 +1562,8 @@ public static class EvidenceDocsExporter
             values.Add("limitation-question");
         }
 
-        if (evidenceTiers.Any(tier => tier is EvidenceTiers.Tier3SyntaxOrTextual or Tier4Unknown)
+        if (type == "weak-static-evidence"
+            || evidenceTiers.Any(tier => tier is EvidenceTiers.Tier3SyntaxOrTextual or Tier4Unknown)
             || coverageLabels.Any(IsWeakCoverageLabel)
             || gaps.Count > 0
             || type == "gap")
@@ -1458,6 +1606,7 @@ public static class EvidenceDocsExporter
         {
             "gap" => "gap-statement",
             "limitation" => "limitation-statement",
+            "weak-static-evidence" => "weak-static-evidence",
             _ when evidenceTiers.Any(tier => tier is EvidenceTiers.Tier3SyntaxOrTextual or Tier4Unknown)
                 || coverageLabels.Any(IsWeakCoverageLabel)
                 || gaps.Count > 0 => "weak-static-evidence",
@@ -2968,6 +3117,18 @@ public static class EvidenceDocsExporter
             ? property.GetString()
             : null;
     }
+
+    private static IReadOnlyList<string> StringArrayProperty(JsonElement element, string propertyName) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(propertyName, out var property)
+        && property.ValueKind == JsonValueKind.Array
+            ? property.EnumerateArray()
+                .Where(value => value.ValueKind == JsonValueKind.String)
+                .Select(value => value.GetString())
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Cast<string>()
+                .ToArray()
+            : [];
 
     private static string InferLanguage(string? scannerVersion)
     {

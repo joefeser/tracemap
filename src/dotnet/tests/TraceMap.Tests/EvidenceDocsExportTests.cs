@@ -9,6 +9,38 @@ namespace TraceMap.Tests;
 public sealed class EvidenceDocsExportTests
 {
     [Fact]
+    public async Task Docs_export_packages_static_dispatch_candidates_as_weak_review_evidence()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await StaticDispatchCandidateConsumerFixture.CreateCombinedIndexAsync(temp.Path);
+        var firstOut = Path.Combine(temp.Path, "docs-dispatch-a");
+        var secondOut = Path.Combine(temp.Path, "docs-dispatch-b");
+
+        var first = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(combinedPath, firstOut));
+        await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(combinedPath, secondOut));
+
+        var chunk = Assert.Single(first.Chunks, candidate =>
+            candidate.ChunkFamily == "dependency-surface"
+            && candidate.ChunkType == "weak-static-evidence"
+            && candidate.RuleIds.Contains("docs-export.chunk.dispatch-candidate.v1", StringComparer.Ordinal));
+        Assert.Contains("combined.dispatch-candidate.v1", chunk.RuleIds);
+        Assert.Equal("weak-static-evidence", chunk.Claim.Kind);
+        Assert.Contains("weak-evidence-question", chunk.QuestionFamilies);
+        var citation = Assert.Single(chunk.Citations);
+        Assert.Equal("1111111111111111111111111111111111111111", citation.CommitSha);
+        Assert.Equal("Services/OrderService.cs", citation.FilePath);
+        Assert.Equal(18, citation.StartLine);
+        Assert.Contains("combined.dispatch-candidate.v1", citation.RuleIds);
+        Assert.NotEmpty(citation.SupportingFactIds);
+        Assert.NotEmpty(citation.SupportingEdgeIds);
+        Assert.Contains(chunk.Limitations, limitation => limitation.Message.Contains("do not prove runtime dispatch", StringComparison.Ordinal));
+        Assert.DoesNotContain("selected implementation is", chunk.BodyMarkdown, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(firstOut, "chunks.jsonl")),
+            await File.ReadAllTextAsync(Path.Combine(secondOut, "chunks.jsonl")));
+    }
+
+    [Fact]
     public async Task Docs_export_writes_deterministic_markdown_jsonl_and_manifest()
     {
         using var temp = new TempDirectory();
@@ -314,7 +346,11 @@ public sealed class EvidenceDocsExportTests
               "schemaVersion": "evidence-graph-vault-export.v1",
               "classification": "hidden",
               "nodes": [{ "id": "node:one" }],
-              "edges": [],
+              "edges": [{
+                "edgeId": "edge:dispatch",
+                "ruleId": "vault-export.graph.dispatch-candidate.v1",
+                "supportingRuleIds": ["combined.dispatch-candidate.v1"]
+              }],
               "gaps": [],
               "limitations": []
             }
@@ -327,6 +363,10 @@ public sealed class EvidenceDocsExportTests
             Families: "dependency-surface,limitation,gap"));
 
         Assert.Contains(result.Chunks, chunk => chunk.ChunkFamily == "dependency-surface" && chunk.SupportingIds.Any(id => id.StartsWith("vault-graph:", StringComparison.Ordinal)));
+        Assert.Contains(result.Chunks, chunk =>
+            chunk.Title == "Vault static dispatch candidate evidence"
+            && chunk.Claim.Kind == "weak-static-evidence"
+            && chunk.RuleIds.Contains("combined.dispatch-candidate.v1", StringComparer.Ordinal));
         Assert.Contains(result.Chunks, chunk => chunk.ChunkFamily == "limitation");
         Assert.DoesNotContain(result.Manifest.Gaps, gap => gap.Reason == "schema-incompatible" && gap.SupportingIds.Contains("vault-graph"));
     }

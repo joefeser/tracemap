@@ -11,6 +11,38 @@ namespace TraceMap.Tests;
 public sealed class CombinedDependencyReportTests
 {
     [Fact]
+    public async Task Report_projects_static_dispatch_candidates_as_deterministic_review_context()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await StaticDispatchCandidateConsumerFixture.CreateCombinedIndexAsync(temp.Path);
+        var firstOut = Path.Combine(temp.Path, "report-a");
+        var secondOut = Path.Combine(temp.Path, "report-b");
+
+        var first = await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(combinedPath, firstOut));
+        await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(combinedPath, secondOut));
+
+        Assert.Equal("available", first.Report.DispatchCandidates.Status);
+        Assert.Equal("NeedsReviewStaticCandidate", first.Report.DispatchCandidates.Classification);
+        Assert.Equal(1, first.Report.DispatchCandidates.CandidateCount);
+        Assert.Equal(1, first.Report.DispatchCandidates.SymbolBackedCandidateCount);
+        Assert.Equal(0, first.Report.DispatchCandidates.WeakerCandidateCount);
+        Assert.Equal(1, first.Report.DispatchCandidates.CandidatesByBridgeKind["interface-member"]);
+        Assert.Contains("combined.dispatch-candidate.v1", first.Report.DispatchCandidates.RuleIds);
+        Assert.Contains("combined.report.dispatch-candidate-summary.v1", first.Report.DispatchCandidates.RuleIds);
+        Assert.NotEmpty(first.Report.DispatchCandidates.SupportingFactIds);
+        Assert.NotEmpty(first.Report.DispatchCandidates.SupportingEdgeIds);
+        Assert.Contains(first.Report.DispatchCandidates.Limitations, limitation => limitation.Contains("do not prove runtime dispatch", StringComparison.Ordinal));
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(firstOut, "dependency-report.md"));
+        var json = await File.ReadAllTextAsync(Path.Combine(firstOut, "dependency-report.json"));
+        Assert.Contains("Static Dispatch Candidate Review Context", markdown);
+        Assert.Contains("NeedsReviewStaticCandidate", json);
+        Assert.DoesNotContain("selected implementation is", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(markdown, await File.ReadAllTextAsync(Path.Combine(secondOut, "dependency-report.md")));
+        Assert.Equal(json, await File.ReadAllTextAsync(Path.Combine(secondOut, "dependency-report.json")));
+    }
+
+    [Fact]
     public async Task Report_rejects_single_language_index()
     {
         using var temp = new TempDirectory();

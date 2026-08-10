@@ -120,7 +120,8 @@ public sealed record VaultGraphEdge(
     IReadOnlyList<string> SupportingEdgeIds,
     IReadOnlyList<string> Limitations,
     IReadOnlyList<VaultEvidenceLocation>? EvidenceLocations = null,
-    string? NavigationCategory = null);
+    string? NavigationCategory = null,
+    IReadOnlyList<string>? SupportingRuleIds = null);
 
 public sealed record VaultGraphGap(
     string Id,
@@ -131,7 +132,8 @@ public sealed record VaultGraphGap(
     string Message,
     string? SourceScope,
     IReadOnlyList<string> Limitations,
-    IReadOnlyList<string>? SupportingFactIds = null);
+    IReadOnlyList<string>? SupportingFactIds = null,
+    IReadOnlyList<string>? SupportingRuleIds = null);
 
 public sealed record VaultGraphLimitation(
     string Id,
@@ -536,6 +538,7 @@ public static class VaultExporter
                     continue;
                 }
 
+                var isDispatchCandidate = pathEdge.RuleId == StaticDispatchCandidateBuilder.CandidateRuleId;
                 edges.Add(new VaultGraphEdge(
                     edgeId,
                     NormalizeEdgeKind(pathEdge.EdgeKind),
@@ -543,13 +546,16 @@ public static class VaultExporter
                     to,
                     claim,
                     pathEdge.Classification,
-                    pathEdge.RuleId,
+                    isDispatchCandidate ? DispatchCandidateEvidenceProjection.VaultEdgeRuleId : pathEdge.RuleId,
                     pathEdge.EvidenceTier,
                     null,
                     DistinctSorted(pathEdge.SupportingFactIds),
                     DistinctSorted(pathEdge.SupportingCombinedEdgeIds),
                     EdgeLimitations(pathEdge),
-                    EvidenceLocations(pathEdge)));
+                    EvidenceLocations(pathEdge),
+                    SupportingRuleIds: isDispatchCandidate
+                        ? DistinctSorted([DispatchCandidateEvidenceProjection.VaultEdgeRuleId, pathEdge.RuleId])
+                        : null));
             }
 
             foreach (var warning in inventory.CoverageWarnings.OrderBy(value => value, StringComparer.Ordinal))
@@ -559,14 +565,21 @@ public static class VaultExporter
 
             foreach (var gap in inventory.Gaps)
             {
+                var isDispatchCandidateGap = gap.RuleId == StaticDispatchCandidateBuilder.GapRuleId;
                 gaps.Add(CreateGap(
                     gap.GapId,
                     sourceClaimBySourceIndexId.GetValueOrDefault(gap.SourceIndexId ?? string.Empty, "hidden"),
                     gap.Classification,
-                    string.IsNullOrWhiteSpace(gap.RuleId) ? SchemaGapRuleId : gap.RuleId,
+                    isDispatchCandidateGap
+                        ? DispatchCandidateEvidenceProjection.VaultGapRuleId
+                        : string.IsNullOrWhiteSpace(gap.RuleId) ? SchemaGapRuleId : gap.RuleId,
                     string.IsNullOrWhiteSpace(gap.EvidenceTier) ? EvidenceTiers.Tier4Unknown : gap.EvidenceTier,
                     SafeDiagnosticMessage(gap.Message),
-                    gap.SourceIndexId));
+                    gap.SourceIndexId,
+                    supportingFactIds: string.IsNullOrWhiteSpace(gap.CombinedFactId) ? [] : [gap.CombinedFactId],
+                    supportingRuleIds: isDispatchCandidateGap
+                        ? [DispatchCandidateEvidenceProjection.VaultGapRuleId, StaticDispatchCandidateBuilder.GapRuleId]
+                        : null));
             }
 
             var accessEvidence = await ReleaseReviewReporter.ReadAccessEvidencePresenceAsync(
@@ -3102,6 +3115,10 @@ public static class VaultExporter
     private static IReadOnlyList<string> EdgeLimitations(CombinedPathEdge edge)
     {
         var limitations = new List<string> { "Static evidence relationship only; this edge does not prove runtime execution." };
+        if (edge.RuleId == StaticDispatchCandidateBuilder.CandidateRuleId)
+        {
+            limitations.Add("Static dispatch candidate review context only; this edge does not prove runtime dispatch, dependency-injection binding, a selected implementation, reachability, or impact.");
+        }
         if (edge.EvidenceTier == EvidenceTiers.Tier4Unknown)
         {
             limitations.Add("Unknown evidence tier preserved from source evidence.");
@@ -3110,10 +3127,19 @@ public static class VaultExporter
         return limitations.OrderBy(value => value, StringComparer.Ordinal).ToArray();
     }
 
-    private static VaultGraphGap CreateGap(string key, string claimLevel, string classification, string ruleId, string evidenceTier, string message, string? sourceScope)
+    private static VaultGraphGap CreateGap(
+        string key,
+        string claimLevel,
+        string classification,
+        string ruleId,
+        string evidenceTier,
+        string message,
+        string? sourceScope,
+        IReadOnlyList<string>? supportingFactIds = null,
+        IReadOnlyList<string>? supportingRuleIds = null)
     {
         var id = $"gap:{Hash(string.Join('\u001f', ["gap/v1", key, claimLevel, classification, ruleId, evidenceTier, sourceScope ?? ""]), IdHashLength)}";
-        return new VaultGraphGap(id, claimLevel, classification, ruleId, evidenceTier, message, sourceScope, []);
+        return new VaultGraphGap(id, claimLevel, classification, ruleId, evidenceTier, message, sourceScope, [], supportingFactIds, supportingRuleIds);
     }
 
     private static VaultGraphGap CreateSafetyGap(string key, string classification, string message, string? sourceScope, string? category)
