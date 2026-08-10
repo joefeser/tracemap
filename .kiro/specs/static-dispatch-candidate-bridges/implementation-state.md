@@ -72,15 +72,22 @@ Validation for the final Task 6 slice:
 
 - Locked solution restore: passed.
 - Solution build: passed with 0 warnings and 0 errors.
-- Focused static-dispatch builder and end-to-end gap tests: 8/8 passed.
+- Focused static-dispatch builder and end-to-end gap tests: 10/10 passed.
 - Paths, route-flow, combined report, portfolio, vault, and evidence-doc tests:
-  234/234 passed.
-- Full .NET solution tests: 1,341/1,341 passed.
+  237/237 passed.
+- Full .NET solution tests: 1,343/1,343 passed.
 - Targeted changed-file formatting: passed.
 - Public combined paths/reverse smoke: passed after installing the locked
   TypeScript dependencies in the isolated worktree; deterministic targeted
   output and public-path safety assertions passed.
 - Private-path guard and `git diff --check`: passed.
+
+The exact-head Codex review found three Task 6 truthfulness defects. The review
+patch rejects member-level relationship facts that lack canonical source or
+target symbol IDs, reads the persisted per-fact extractor version instead of
+substituting the source scanner version, and removes stale follow-up text that
+still described Task 6 as incomplete. Focused malformed-identity and combined
+readback regressions prove both product corrections.
 
 ## Task 10 Implementation
 
@@ -373,8 +380,10 @@ Task 8 route-flow slice:
   `rules/rule-catalog.yml` to document the override-chain depth bound and
   cycle protection.
 - The shared builder now emits `DispatchCandidateFanOut` and
-  `DispatchCandidateTruncatedByLimit` gaps. Broader missing/identity/generic
-  and reduced-coverage gap vocabulary remains deferred.
+  `DispatchCandidateTruncatedByLimit` gaps. The final Task 6 slice additionally
+  emits missing-member, identity-unverified, and reduced-coverage gaps; generic
+  registration caveats and consumer schema gaps retain their existing explicit
+  gap records.
 
 ## Kiro Review State
 
@@ -537,18 +546,20 @@ appropriate.
 
 ## Follow-Up Items
 
-- Type-level fallback candidates remain deferred within task 6.
-- Missing-candidate, ambiguous-identity, reduced-coverage, schema, and generic
-  builder gaps remain deferred within task 6. Registration generic caveats are
-  already emitted; this item refers to the broader non-registration vocabulary.
+- Type-level member guesses remain intentionally unsupported. Type-only
+  relationship context emits `MemberCandidateUnavailable` instead of creating
+  a weaker traversable edge.
+- Member relationships without canonical source and target symbol IDs are
+  rejected as `DispatchCandidateIdentityUnverified`. Missing per-fact extractor
+  identity emits `DispatchCandidateReducedCoverage` and downgrades retained
+  candidates.
+- Generic registration caveats and unavailable consumer schemas retain their
+  existing explicit gap records. No mandatory Task 6 gap work remains.
 - Route-flow consumption is complete in PR #611; reverse and impact consumption
   are complete in PR #614; report, portfolio, vault, and docs-export consumption
   are complete in PR #615.
-- Type-level fallback and the broader missing/identity/schema/reduced-coverage
-  gap vocabulary remain mandatory under `requirements.md`. They must land as a
-  bounded Task 6 remainder before this spec is declared complete or promoted as
-  a completed public capability. Type-only edges must remain review-tier and
-  every unsupported derivation must fail closed as a rule-backed gap.
+- Runtime dispatch, selected implementation, dynamic container behavior, and
+  type-only candidate expansion remain outside this static-evidence runway.
 
 ## PR Review Loop Notes
 

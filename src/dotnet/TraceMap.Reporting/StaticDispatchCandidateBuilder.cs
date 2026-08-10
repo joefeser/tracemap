@@ -39,12 +39,15 @@ internal static class StaticDispatchCandidateBuilder
             .ToArray() ?? [];
         var registrationIndex = BuildRegistrationIndex(registrationFacts);
         var compatibleRegistrationFactIds = new HashSet<string>(StringComparer.Ordinal);
-        var memberRelationships = allRelationships
+        var memberRelationshipEvidence = allRelationships
             .Where(edge => IsMemberCandidateRelationship(edge.OriginalRelationshipKind))
             .Where(edge => nodes.TryGetValue(edge.FromNodeId, out var implementation)
                 && nodes.TryGetValue(edge.ToNodeId, out var abstraction)
                 && IsMethodNode(implementation)
                 && IsMethodNode(abstraction))
+            .ToArray();
+        var memberRelationships = memberRelationshipEvidence
+            .Where(HasVerifiedMemberIdentity)
             .ToArray();
         var interfaceRelationships = memberRelationships
             .Where(edge => edge.OriginalRelationshipKind == "ImplementsInterfaceMember")
@@ -145,6 +148,7 @@ internal static class StaticDispatchCandidateBuilder
             nodes,
             allRelationships,
             memberRelationships,
+            memberRelationshipEvidence,
             calls,
             sources,
             extractorVersionFor);
@@ -177,6 +181,7 @@ internal static class StaticDispatchCandidateBuilder
         IReadOnlyDictionary<string, StaticDispatchCandidateNode> nodes,
         IReadOnlyList<StaticDispatchRelationshipEdge> allRelationships,
         IReadOnlyList<StaticDispatchRelationshipEdge> memberRelationships,
+        IReadOnlyList<StaticDispatchRelationshipEdge> memberRelationshipEvidence,
         IReadOnlyList<StaticDispatchCallTarget> calls,
         IReadOnlyList<StaticDispatchSourceContext> sources,
         Func<string, string?> extractorVersionFor)
@@ -209,6 +214,69 @@ internal static class StaticDispatchCandidateBuilder
                 null,
                 null,
                 null));
+        }
+
+        var missingExtractorFacts = allRelationships
+            .Where(relationship => string.IsNullOrWhiteSpace(relationship.ExtractorVersion))
+            .SelectMany(relationship => relationship.SupportingFactIds.Select(factId => new
+            {
+                Source = nodes.GetValueOrDefault(relationship.FromNodeId),
+                FactId = factId
+            }))
+            .Where(item => item.Source is not null)
+            .Select(item => new
+            {
+                SourceIndexId = item.Source!.SourceIndexId,
+                item.Source.SourceLabel,
+                item.Source.CommitSha,
+                item.FactId
+            })
+            .Concat(calls
+                .Where(call => string.IsNullOrWhiteSpace(call.ExtractorVersion))
+                .Select(call => new
+                {
+                    call.SourceIndexId,
+                    call.SourceLabel,
+                    call.CommitSha,
+                    FactId = call.FactId
+                }))
+            .GroupBy(item => item.SourceIndexId, StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal);
+        foreach (var group in missingExtractorFacts)
+        {
+            var first = group.OrderBy(item => item.FactId, StringComparer.Ordinal).First();
+            reducedSourceIds.Add(group.Key);
+            gaps.Add(CreateContextGap(
+                "DispatchCandidateReducedCoverage",
+                "supporting-fact-extractor-identity-unavailable",
+                "Static dispatch supporting evidence lacks per-fact extractor identity; retained candidates are review-only and candidate absence is not conclusive.",
+                group.Key,
+                first.SourceLabel,
+                null,
+                first.CommitSha,
+                null,
+                group.Select(item => item.FactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                null,
+                null,
+                null));
+        }
+
+        foreach (var relationship in memberRelationshipEvidence.Where(relationship => !HasVerifiedMemberIdentity(relationship)))
+        {
+            var source = nodes[relationship.FromNodeId];
+            gaps.Add(CreateContextGap(
+                "DispatchCandidateIdentityUnverified",
+                "member-relationship-identity-unverified",
+                "Member-level dispatch relationship evidence lacks canonical source or target symbol identity; no traversable candidate was created from display text.",
+                source.SourceIndexId,
+                source.SourceLabel,
+                relationship.ToNodeId,
+                source.CommitSha,
+                relationship.ExtractorVersion ?? extractorVersionFor(source.SourceIndexId),
+                relationship.SupportingFactIds,
+                relationship.FilePath,
+                relationship.StartLine,
+                relationship.EndLine));
         }
 
         for (var index = 0; index < candidates.Count; index++)
@@ -347,6 +415,10 @@ internal static class StaticDispatchCandidateBuilder
 
     private static bool IsTypeCandidateRelationship(string? originalRelationshipKind) =>
         originalRelationshipKind is "ImplementsInterface" or "InheritsFrom" or "ExtendsInterface";
+
+    private static bool HasVerifiedMemberIdentity(StaticDispatchRelationshipEdge relationship) =>
+        !string.IsNullOrWhiteSpace(relationship.SourceSymbolId)
+        && !string.IsNullOrWhiteSpace(relationship.TargetSymbolId);
 
     private static bool TypeRelationshipMatchesCall(
         StaticDispatchRelationshipEdge relationship,
@@ -1048,7 +1120,8 @@ internal sealed record StaticDispatchRelationshipEdge(
     string? SourceContainingSymbolId = null,
     string? TargetContainingSymbolId = null,
     string? SourceSymbolId = null,
-    string? TargetSymbolId = null);
+    string? TargetSymbolId = null,
+    string? ExtractorVersion = null);
 
 internal sealed record StaticDispatchCallTarget(
     string FactId,

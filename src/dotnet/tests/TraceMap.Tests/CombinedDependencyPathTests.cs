@@ -292,7 +292,10 @@ public sealed class CombinedDependencyPathTests
                 [$"edge-{index}"],
                 $"Services/Processor{index}.cs",
                 20 + index,
-                20 + index))
+                20 + index,
+                SourceSymbolId: $"method-symbol-{index}",
+                TargetSymbolId: $"method-symbol-{index - 1}",
+                ExtractorVersion: "test/1.0"))
             .Append(new StaticDispatchRelationshipEdge(
                 "rel-cycle",
                 "overrides",
@@ -304,7 +307,10 @@ public sealed class CombinedDependencyPathTests
                 ["edge-cycle"],
                 "Services/Processor0.cs",
                 40,
-                40))
+                40,
+                SourceSymbolId: "method-symbol-0",
+                TargetSymbolId: "method-symbol-2",
+                ExtractorVersion: "test/1.0"))
             .Reverse()
             .ToArray();
 
@@ -480,7 +486,10 @@ public sealed class CombinedDependencyPathTests
             new StaticDispatchRelationshipEdge(
                 "relationship", "implements", "ImplementsInterfaceMember", "implementation", "service",
                 EvidenceTiers.Tier1Semantic, ["relationship-fact"], ["relationship-edge"], "Services/Repository.cs", 20, 20,
-                implementationDefinitionId, serviceDefinitionId)
+                implementationDefinitionId, serviceDefinitionId,
+                "csharp method test Server.Repository<T>.Get(System.Int32)",
+                "csharp method test Server.IRepository<T>.Get(System.Int32)",
+                "test/1.0")
         };
         var registrations = new[]
         {
@@ -514,7 +523,8 @@ public sealed class CombinedDependencyPathTests
             relationships.Add(new StaticDispatchRelationshipEdge(
                 $"relationship-{index}", "implements", "ImplementsInterfaceMember", nodeId, "service",
                 EvidenceTiers.Tier1Semantic, [$"fact-{index}"], [$"edge-{index}"], $"Services/StatusService{index}.cs", 20 + index, 20 + index,
-                TestTypeSymbolId(type), TestTypeSymbolId("Server.IStatusService")));
+                TestTypeSymbolId(type), TestTypeSymbolId("Server.IStatusService"),
+                $"csharp method test {type}.Get()", "csharp method test Server.IStatusService.Get()", "test/1.0"));
         }
 
         var registration = new StaticDispatchRegistrationFact(
@@ -545,7 +555,10 @@ public sealed class CombinedDependencyPathTests
             new StaticDispatchRelationshipEdge(
                 "relationship", "implements", "ImplementsInterfaceMember", "implementation", "service",
                 EvidenceTiers.Tier1Semantic, ["relationship-fact"], ["relationship-edge"], "Services/OrderService.cs", 20, 20,
-                TestTypeSymbolId("Server.OrderService"), TestTypeSymbolId("Server.IOrderService"))
+                TestTypeSymbolId("Server.OrderService"), TestTypeSymbolId("Server.IOrderService"),
+                "csharp method test Server.OrderService.Get(System.Int32)",
+                "csharp method test Server.IOrderService.Get(System.Int32)",
+                "test/1.0")
         };
         var registrations = new[]
         {
@@ -615,7 +628,8 @@ public sealed class CombinedDependencyPathTests
                 "type-relationship", "implements", "ImplementsInterface",
                 "implementation-type", "service-type", EvidenceTiers.Tier1Semantic,
                 ["type-fact"], ["type-edge"], "Services/OrderService.cs", 6, 6,
-                SourceSymbolId: implementationTypeId, TargetSymbolId: interfaceTypeId)
+                SourceSymbolId: implementationTypeId, TargetSymbolId: interfaceTypeId,
+                ExtractorVersion: "test/1.0")
         };
         var calls = new[]
         {
@@ -663,7 +677,8 @@ public sealed class CombinedDependencyPathTests
             new StaticDispatchRelationshipEdge(
                 "type-relationship", "implements", "ImplementsInterface",
                 "implementation-type", "service-type", EvidenceTiers.Tier1Semantic,
-                ["type-fact"], ["type-edge"], "Services/OrderService.cs", 6, 6)
+                ["type-fact"], ["type-edge"], "Services/OrderService.cs", 6, 6,
+                ExtractorVersion: "test/1.0")
         };
         var calls = new[]
         {
@@ -680,6 +695,40 @@ public sealed class CombinedDependencyPathTests
         Assert.Single(result.Gaps, gap => gap.GapKind == "DispatchCandidateIdentityUnverified"
             && gap.SupportingFactIds.SequenceEqual(["call-fact", "type-fact"]));
         Assert.DoesNotContain(result.Gaps, gap => gap.GapKind == "MemberCandidateUnavailable");
+    }
+
+    [Fact]
+    public void Static_dispatch_rejects_member_relationships_without_canonical_identity()
+    {
+        var nodes = new Dictionary<string, StaticDispatchCandidateNode>(StringComparer.Ordinal)
+        {
+            ["service"] = new(
+                "service", "Method", "Server.IOrderService.Get(System.Int32)",
+                "server", "server", "commit", "Services/IOrderService.cs", 10, 10),
+            ["implementation"] = new(
+                "implementation", "Method", "Server.OrderService.Get(System.Int32)",
+                "server", "server", "commit", "Services/OrderService.cs", 20, 20)
+        };
+        var relationships = new[]
+        {
+            new StaticDispatchRelationshipEdge(
+                "member-relationship", "implements", "ImplementsInterfaceMember",
+                "implementation", "service", EvidenceTiers.Tier1Semantic,
+                ["member-fact"], ["member-edge"], "Services/OrderService.cs", 20, 20,
+                SourceContainingSymbolId: TestTypeSymbolId("Server.OrderService"),
+                TargetContainingSymbolId: TestTypeSymbolId("Server.IOrderService"),
+                ExtractorVersion: "test/1.0")
+        };
+
+        var result = StaticDispatchCandidateBuilder.Build(nodes, relationships);
+
+        Assert.Empty(result.Edges);
+        var gap = Assert.Single(result.Gaps, item => item.GapKind == "DispatchCandidateIdentityUnverified");
+        Assert.Equal("member-relationship-identity-unverified", gap.Reason);
+        Assert.Equal(["member-fact"], gap.SupportingFactIds);
+        Assert.Equal("Services/OrderService.cs", gap.FilePath);
+        Assert.Equal(20, gap.StartLine);
+        Assert.Equal(20, gap.EndLine);
     }
 
     [Fact]
@@ -701,7 +750,10 @@ public sealed class CombinedDependencyPathTests
                 "implementation", "service", EvidenceTiers.Tier1Semantic,
                 ["member-fact"], ["member-edge"], "Services/OrderService.cs", 20, 20,
                 SourceContainingSymbolId: TestTypeSymbolId("Server.OrderService"),
-                TargetContainingSymbolId: TestTypeSymbolId("Server.IOrderService"))
+                TargetContainingSymbolId: TestTypeSymbolId("Server.IOrderService"),
+                SourceSymbolId: "csharp method test Server.OrderService.Get(System.Int32)",
+                TargetSymbolId: "csharp method test Server.IOrderService.Get(System.Int32)",
+                ExtractorVersion: "test/1.0")
         };
         var sources = new[]
         {
@@ -778,6 +830,54 @@ public sealed class CombinedDependencyPathTests
         Assert.True(
             gap.CombinedFactId.Contains(call.FactId, StringComparison.Ordinal)
             || gap.CombinedFactId.Contains(typeRelationship.FactId, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Paths_downgrade_candidate_when_supporting_fact_extractor_identity_is_missing()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var server = Manifest("server", "tracemap-milestone15");
+        var service = "Server.IOrderService.Get(System.Int32)";
+        var implementation = "Server.OrderService.Get(System.Int32)";
+        var relationship = FactFactory.Create(
+            server,
+            FactTypes.SymbolRelationship,
+            RuleIds.CSharpSemanticSymbolRelationship,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan("Services/OrderService.cs", 20, 20, null, "test", "test/1.0"),
+            sourceSymbol: implementation,
+            targetSymbol: service,
+            contractElement: "ImplementsInterfaceMember",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["relationshipKind"] = "ImplementsInterfaceMember",
+                ["sourceContainingSymbolId"] = TestTypeSymbolId("Server.OrderService"),
+                ["sourceSymbolId"] = "csharp method test Server.OrderService.Get(System.Int32)",
+                ["targetContainingSymbolId"] = TestTypeSymbolId("Server.IOrderService"),
+                ["targetSymbolId"] = "csharp method test Server.IOrderService.Get(System.Int32)"
+            });
+
+        SqliteIndexWriter.Write(serverIndex, server, [relationship]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+        await using (var connection = new SqliteConnection($"Data Source={combinedPath}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "update combined_facts set extractor_version = null where fact_type = $fact_type;";
+            command.Parameters.AddWithValue("$fact_type", FactTypes.SymbolRelationship);
+            Assert.Equal(1, await command.ExecuteNonQueryAsync());
+        }
+
+        var inventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedPath);
+
+        var candidate = Assert.Single(inventory.Edges, edge => edge.EdgeKind == "interface-candidate");
+        Assert.Equal(StaticDispatchCandidateStates.WeakerCandidate, candidate.CandidateState);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, candidate.EvidenceTier);
+        var gap = Assert.Single(inventory.Gaps, item => item.GapKind == "DispatchCandidateReducedCoverage");
+        Assert.Equal("supporting-fact-extractor-identity-unavailable", gap.Reason);
+        Assert.Null(gap.ExtractorVersion);
     }
 
     [Fact]
