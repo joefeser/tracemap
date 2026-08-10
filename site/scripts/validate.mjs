@@ -99,7 +99,7 @@ export async function validateSite(options = {}) {
 export async function validateDist({
   baseUrl = defaultBaseUrl,
   requireMsbuildBinlogEvidence = true,
-  requireAccessSafeEvidenceAcquisition = requireMsbuildBinlogEvidence,
+  requireAccessSafeEvidenceAcquisition = true,
   root = defaultRoot
 } = {}) {
   const dist = resolve(root, "dist");
