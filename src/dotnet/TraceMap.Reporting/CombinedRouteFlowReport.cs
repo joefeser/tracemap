@@ -1812,7 +1812,7 @@ public static class CombinedRouteFlowReporter
             "ReducedCoverage",
             SafeLabel(gap.SourceLabel ?? node.SourceLabel),
             node.NodeId,
-            new[] { gap.CombinedFactId, node.CombinedFactId }
+            gap.EffectiveSupportingFactIds.Append(node.CombinedFactId)
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .Select(value => value!)
                 .Distinct(StringComparer.Ordinal)
@@ -4333,7 +4333,7 @@ public static class CombinedRouteFlowReporter
             CoverageForPathGap(gap, gapKind, pathReportCoverage),
             SafeSelector(gap.SourceLabel),
             gap.NodeId,
-            gap.CombinedFactId is null ? [] : [gap.CombinedFactId],
+            gap.EffectiveSupportingFactIds,
             PathGapLimitations(gapKind, pathReportCoverage),
             CombinedReportHelpers.SafePath(gap.FilePath) ?? "unknown",
             gap.StartLine,

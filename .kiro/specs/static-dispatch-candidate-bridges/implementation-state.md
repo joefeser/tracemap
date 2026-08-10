@@ -1,20 +1,20 @@
 # Static Dispatch Candidate Bridges Implementation State
 
-Status: implementation-task-10-complete-awaiting-pr
-Readiness: ready-for-pr-review
+Status: implementation-complete-awaiting-review
+Readiness: ready-for-review
 Merged PR 1: #331 (`086ad376e387ea8d87e430175ef2673cbc74c0f1`)
 Merged PR 2: #333 (`84f72e0faa9dd6c106c625de175a194d9c1515ff`)
 Merged PR 3: #610 (`6a8b5bd14187e5258a9805ee73cad6ff66cb9079`)
 Merged PR 4: #611 (`b3fde3aa1c6c53a3fbae55df58313d2609fcdcfb`)
 Merged PR 5: #614 (`36b133c43876811a048b046f4f5cb6eec2595a53`)
+Merged PR 6: #615 (`92548cab13aeeec0e818b774828194db57990047`)
 
 ## Branch
 
-- Branch: `codex/static-dispatch-report-vault-docs`
+- Branch: `codex/reconcile-static-dispatch-runway`
 - Base: `origin/dev`
-- Base SHA: `36b133c43876811a048b046f4f5cb6eec2595a53`
-- Scope: Task 10 combined-report, portfolio, vault, and docs-export consumption
-  of the existing shared dispatch candidate edges and gaps
+- Base SHA: `92548cab13aeeec0e818b774828194db57990047`
+- Scope: post-merge bookkeeping and final Task 6 fail-closed gap behavior
 - Suggested PR target: `dev`
 
 ## Task 7 Pre-Implementation Decision
@@ -37,17 +37,73 @@ Merged PR 5: #614 (`36b133c43876811a048b046f4f5cb6eec2595a53`)
 
 ## Current Implementation State
 
-Tasks 8 and 9 are merged. This branch completes Task 10 by projecting the same
+Tasks 6 through 11 are complete. PR #615 completed Task 10 by projecting the same
 shared in-memory dispatch candidate inventory into combined dependency reports,
-portfolio reports, vault graphs, and evidence docs. No scanner, extractor,
-persisted combined-index schema, runtime probe, or DI execution behavior is
-added.
+portfolio reports, vault graphs, and evidence docs. The final Task 6 slice on
+this branch makes absence truthfulness explicit without adding a scanner,
+extractor, persisted combined-index schema, runtime probe, or DI execution path.
 
-Type-level fallback candidates and the broader Task 6 missing/identity/generic
-and reduced-coverage gap vocabulary remain deferred. Every Task 10 consumer
-keeps candidate evidence review-tier, preserves the underlying dispatch rules,
-and states that runtime dispatch, selected implementation, reachability,
-execution, and impact are not proven.
+Every consumer keeps candidate evidence review-tier, preserves the underlying
+dispatch rules, and states that runtime dispatch, selected implementation,
+reachability, execution, and impact are not proven.
+
+## Task 6 Final Boundary
+
+- Type-level `ImplementsInterface`, `InheritsFrom`, and `ExtendsInterface`
+  evidence never creates a guessed member edge. When a called member has
+  matching type context but no member relationship, the builder emits
+  `MemberCandidateUnavailable` with the call and type-relationship fact IDs.
+- If the call or type relationship lacks canonical member/type identity, the
+  builder fails closed as `DispatchCandidateIdentityUnverified`; display text
+  is not treated as identity.
+- Reduced semantic analysis, failed/partial builds, unsupported adapters,
+  missing commit identity, or missing extractor identity emit one bounded
+  `DispatchCandidateReducedCoverage` gap per relevant source. Existing member
+  candidates from that source are downgraded to `WeakerCandidate` / Tier4.
+- Existing report, portfolio, vault, and docs consumers already emit
+  `DispatchCandidateSchemaUnavailable` when required combined schema is absent.
+  The rule catalog now documents the complete closed gap vocabulary.
+- Direct regressions prove deterministic IDs, supporting provenance, file
+  spans, rule IDs, evidence tiers, fail-closed identity behavior, and reduced
+  coverage downgrades. No runtime binding or candidate absence conclusion is
+  added.
+
+Validation for the final Task 6 slice:
+
+- Locked solution restore: passed.
+- Solution build: passed with 0 warnings and 0 errors.
+- Focused static-dispatch builder and end-to-end gap tests: 10/10 passed.
+- Paths, route-flow, combined report, portfolio, vault, and evidence-doc tests:
+  237/237 passed.
+- Full .NET solution tests: 1,343/1,343 passed.
+- Targeted changed-file formatting: passed.
+- Public combined paths/reverse smoke: passed after installing the locked
+  TypeScript dependencies in the isolated worktree; deterministic targeted
+  output and public-path safety assertions passed.
+- Private-path guard and `git diff --check`: passed.
+
+The exact-head Codex review found three Task 6 truthfulness defects. The review
+patch rejects member-level relationship facts that lack canonical source or
+target symbol IDs, reads the persisted per-fact extractor version instead of
+substituting the source scanner version, and removes stale follow-up text that
+still described Task 6 as incomplete. Focused malformed-identity and combined
+readback regressions prove both product corrections.
+
+A subsequent exact-head Codex review found that `CombinedPathGap` retained only
+the first supporting fact ID even though the shared builder preserved the full
+call-plus-relationship evidence set. The additive path gap contract now carries
+the complete deterministic supporting-fact list while retaining the legacy
+single `combinedFactId` projection. Combined report, route-flow, reverse,
+release review, database design review, vault, and evidence-doc consumers use
+the complete list. End-to-end coverage proves the same two supporting facts
+survive paths, report summary, vault gap, and evidence-doc gap projections.
+
+Validation after this correction:
+
+- Focused static-dispatch and gap-projection tests: 10/10 passed.
+- Paths/route-flow/report/reverse/release-review/database-design/portfolio/vault/docs
+  tests: 293/293 passed.
+- Full .NET solution tests: 1,343/1,343 passed.
 
 ## Task 10 Implementation
 
@@ -340,8 +396,10 @@ Task 8 route-flow slice:
   `rules/rule-catalog.yml` to document the override-chain depth bound and
   cycle protection.
 - The shared builder now emits `DispatchCandidateFanOut` and
-  `DispatchCandidateTruncatedByLimit` gaps. Broader missing/identity/generic
-  and reduced-coverage gap vocabulary remains deferred.
+  `DispatchCandidateTruncatedByLimit` gaps. The final Task 6 slice additionally
+  emits missing-member, identity-unverified, and reduced-coverage gaps; generic
+  registration caveats and consumer schema gaps retain their existing explicit
+  gap records.
 
 ## Kiro Review State
 
@@ -504,14 +562,20 @@ appropriate.
 
 ## Follow-Up Items
 
-- Type-level fallback candidates remain deferred within task 6.
-- Missing-candidate, ambiguous-identity, reduced-coverage, schema, and generic
-  gaps remain deferred within task 6.
-- Report/portfolio, vault, and docs-export consumption remain deferred to later
-  slices. Route-flow consumption is complete in PR #611; reverse and impact
-  consumption are complete in Task 9 on this branch.
-- The selected Task 6 slice merged through PR #333; later tasks remain explicit
-  follow-ups.
+- Type-level member guesses remain intentionally unsupported. Type-only
+  relationship context emits `MemberCandidateUnavailable` instead of creating
+  a weaker traversable edge.
+- Member relationships without canonical source and target symbol IDs are
+  rejected as `DispatchCandidateIdentityUnverified`. Missing per-fact extractor
+  identity emits `DispatchCandidateReducedCoverage` and downgrades retained
+  candidates.
+- Generic registration caveats and unavailable consumer schemas retain their
+  existing explicit gap records. No mandatory Task 6 gap work remains.
+- Route-flow consumption is complete in PR #611; reverse and impact consumption
+  are complete in PR #614; report, portfolio, vault, and docs-export consumption
+  are complete in PR #615.
+- Runtime dispatch, selected implementation, dynamic container behavior, and
+  type-only candidate expansion remain outside this static-evidence runway.
 
 ## PR Review Loop Notes
 
@@ -528,6 +592,64 @@ appropriate.
   P2.
 - Added regressions for a registered candidate at position 11 under a cap of
   10 and a closed constructed generic registration.
+
+- PR #616 exact-head Codex follow-up found two additional fail-closed gaps.
+  Calls without canonical target member/type identity are now reported as
+  `DispatchCandidateIdentityUnverified`, and relationship-backed candidates
+  for that target are withheld rather than reached through display-derived
+  node equality. Registration facts without per-fact extractor identity now
+  participate in reduced-coverage aggregation, preserve their supporting fact
+  IDs, and downgrade annotated candidates to review-only `Tier4Unknown`.
+- Added direct regressions for both boundaries, including identity/provenance,
+  source span, supporting-fact, candidate-state, and evidence-tier assertions.
+- Exact-head follow-up validation passed: 17 focused static-dispatch tests,
+  115 route-flow/path tests, 1,345 full `.NET` solution tests, targeted format,
+  combined paths/reverse public smoke, private-path guard, and diff check.
+- A fresh read-only Kiro CLI review used explicit model `claude-opus-5` against
+  exact head `82ce95312bad2d1b74c60c9f6dc36c121ecb8e6c`. It found no P1s and four
+  actionable P2s. The bounded patch keeps older combined indexes readable and
+  emits `DispatchCandidateSchemaUnavailable` when per-fact extractor schema is
+  absent; admits normalized `inherits` relationships as type-only gap context;
+  preserves registration provenance when identity-less calls withhold a
+  candidate; and groups/caps repeated call-context gaps with deterministic
+  count metadata. Kiro remains advisory unless ACK verifies and admits its
+  exact-head evidence.
+- The Kiro follow-up patch passed 20 focused dispatch/schema tests, the full
+  `.NET` solution at 1,347 tests, targeted format, the public combined
+  paths/reverse smoke, private-path guard, and diff check.
+- The fresh Opus recheck at `2bc03a23067c5f3e376e54a36adb42d74b9d8cbf`
+  found the same schema boundary on legacy single indexes plus two structured
+  gap-metadata defects. The final patch threads schema availability through
+  both combined and single-index readers, retains registration evidence ahead
+  of separately capped call/relationship evidence, uses dedicated grouped
+  evidence count/limit fields, and retains truthful candidate fan-out metadata
+  when call identity withholds every candidate.
+- Final follow-up validation passed 22 focused dispatch/schema tests, the full
+  `.NET` solution at 1,349 tests, targeted format, the public combined
+  paths/reverse smoke, private-path guard, and diff check.
+- A final exact-head Kiro `claude-opus-5` advisory at
+  `9e31dff837d5f2deb3cb153cfdc9f83c0009cdfb` identified three remaining P2
+  evidence-contract issues: withheld fan-out gaps lacked supporting evidence
+  and the abstraction label; the schema-gap message was combined-index
+  specific; and capped evidence buckets did not preserve exact pre-cap counts.
+  The bounded follow-up now carries the unverified call provenance into the
+  retained fan-out gap, uses source-neutral schema wording, caps call,
+  relationship, and registration evidence independently, and records exact
+  counts for every bucket. Validation passed 22 focused dispatch/schema tests,
+  the full `.NET` solution at 1,349 tests, targeted format, the public combined
+  paths/reverse smoke, private-path guard, and diff check.
+- The exact-head Kiro verification at
+  `90d2611ea98a76564e08ce8bd2b6d07b4f4ac0e1` reported no P1s and five P2s.
+  The final bounded patch carries cap/count metadata into withheld fan-out
+  gaps; bounds missing-extractor and invalid-member evidence per source;
+  replaces combined-index-specific schema reason/scope tokens with neutral
+  tokens; limits missing-extractor downgrades to candidates directly supported
+  by those facts; and corrects Swift scanner language inference before using
+  language as an adapter-capability signal. One unverified call still
+  withholds the abstraction's shared traversable candidates by design because
+  the current candidate edge is abstraction-scoped rather than call-scoped;
+  the gap now explicitly discloses that conservative blast radius. This is a
+  fail-closed limitation, not a runtime or candidate-selection claim.
 
 - Initial ACK returned `decision=actionable_findings`,
   `stopReason=UNRESOLVED_REVIEW_THREADS`, `patchAuthorized=true`, and
