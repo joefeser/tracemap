@@ -1,0 +1,219 @@
+<p>
+  <strong>Public claim level: demo.</strong>
+  The most dangerous dependency-graph defects are not always crashes. They are
+  quiet transformations that leave a believable picture behind: two symbols
+  become one, a caller and target swap direction, an old edge survives a new
+  scan, or an omitted file looks intentionally excluded. TraceMap's checked-in
+  synthetic C# fixture matrix turns those historical failure modes into
+  explicit graph-integrity contracts.
+</p>
+
+<section data-graph-history-block="manager-question">
+  <h2>Which historical bugs can make a graph look right while being wrong?</h2>
+  <p>
+    Five families deserve attention: identity collapse, receiver guessing,
+    direction loss, stale snapshot state, and silent omission. Each can
+    preserve familiar names and tidy diagrams while changing the answer to
+    “what calls this?” or “what depends on this?” A manager should ask for the
+    canonical IDs, relationship direction, exact spans, rule IDs, evidence
+    tiers, commit SHA, extractor ID/version, coverage labels, and gaps behind
+    the picture.
+  </p>
+  <p>
+    This is not a claim that every historical defect is covered. It is a
+    public-safe taxonomy grounded in the current fixture contract. The fixtures
+    are useful because they define what must remain distinct, what may degrade,
+    and what must never be inferred.
+  </p>
+</section>
+
+<section data-graph-history-block="identity-collapse">
+  <h2>Bug family one: same-looking symbols collapse.</h2>
+  <p>
+    A display-name join can merge types from different assemblies or
+    namespaces. It can merge overloads that share a method label, aliases with
+    their targets in the wrong direction, incompatible generic substitutions,
+    or nested types whose containers differ. The resulting node still looks
+    reasonable to a human, but its incoming and outgoing edges now describe
+    several distinct programs at once.
+  </p>
+  <p>
+    The current contract uses <code>csharp.semantic.symbolidentity.v1</code>
+    and <code>csharp.semantic.declarations.v1</code> to keep compiler-selected
+    identity attached. Partial declarations across files share one canonical
+    type only when compiler identity supports that relationship; an assembly
+    boundary is not erased for convenience.
+  </p>
+</section>
+
+<section data-graph-history-block="receiver-guessing">
+  <h2>Bug family two: a plausible receiver is guessed.</h2>
+  <p>
+    Receiver names are especially deceptive. A local can shadow a field. A
+    parameter, property, pattern variable, inline declaration, static member,
+    extension method, or interface-typed value can select a different target
+    than a textual scan suggests. Binding an unresolved invocation to the
+    nearest same-named declaration produces a neat edge with no compiler
+    authority.
+  </p>
+  <p>
+    Under <code>csharp.semantic.callgraph.v1</code>, the compiler-selected
+    target and exact call-site span are the semantic evidence. If selection
+    fails, <code>csharp.syntax.invocation.v1</code> or
+    <code>csharp.syntax.callgraph.v1</code> may preserve Tier 3 syntax while
+    <code>csharp.semantic.workspace.v1</code> records a Tier 4 gap. TraceMap
+    refuses to upgrade a type-only member guess or display-name match to Tier 1.
+  </p>
+</section>
+
+<section data-graph-history-block="direction">
+  <h2>Bug family three: edge direction changes during projection.</h2>
+  <p>
+    A call relationship has a declared source and target. Forward paths,
+    machine-readable facts, the standard index, and reverse queries must agree
+    on that stored direction. Reverse traversal walks the relationship
+    backwards for a question; it does not mutate the underlying edge.
+  </p>
+  <p>
+    A direction bug is difficult to spot because both endpoints are real.
+    A reversed edge can still form a convincing path, especially after several
+    projections compose it into a report. The fixture contract therefore
+    checks direction round trips instead of trusting a display diagram.
+  </p>
+</section>
+
+<section data-graph-history-block="snapshots">
+  <h2>Bug family four: old evidence survives a new repository state.</h2>
+  <p>
+    A file span identifies where evidence was observed; it is not mutation or
+    deletion authority. Treating spans as ownership can delete unrelated
+    evidence or leave stale edges after a target moves, disappears, or becomes
+    excluded. Incremental-looking updates are particularly risky when their
+    replacement boundary is not explicit.
+  </p>
+  <p>
+    TraceMap's current C# contract rebuilds immutable full snapshots. Repository
+    and commit identity, selected scope, source inventory, and source-byte
+    identity bind the extraction state. A dirty file that keeps the same byte
+    count is still different content. The present contract does not advertise
+    in-place incremental replacement.
+  </p>
+</section>
+
+<section data-graph-history-block="omission">
+  <h2>Bug family five: missing evidence is presented as absence.</h2>
+  <p>
+    A file may be unavailable, out of declared scope, intentionally excluded,
+    linked into a selected project, or missed because project loading failed.
+    Those states are not interchangeable. Only recorded scope or exclusion
+    authority can label an omission intentional; matching path text or a
+    normalized spelling is not enough.
+  </p>
+  <p>
+    Unicode-equivalent names and case behavior make accidental exclusion
+    authority especially hazardous. Missing inventory must remain a gap. A
+    failed build is not a clean repository, and an empty semantic edge set is
+    not evidence that no dependency exists.
+  </p>
+</section>
+
+<section data-graph-history-block="legacy">
+  <h2>Legacy inputs expose the difference between partial and empty.</h2>
+  <p>
+    A non-compiling project or unavailable reference may still yield syntax
+    declarations, syntax invocations, structural diagnostics, and project
+    context. Those observations remain valuable when their Tier 3 evidence and
+    Tier 4 gaps travel together. Inventing semantic endpoints would make the
+    graph more complete-looking while making its provenance less truthful.
+  </p>
+  <p>
+    Referenced projects may contribute compilation context without adding
+    out-of-scope facts to the selected inventory. Linked compile items that
+    belong to the selected project remain inventoried. Out-of-root compiler
+    identity can be represented with bounded synthetic provenance rather than
+    host-local location details.
+  </p>
+</section>
+
+<section data-graph-history-block="downstream">
+  <h2>A local extraction bug becomes a portfolio-wide story.</h2>
+  <p>
+    Paths, route-flow views, reverse queries, impact reports, portfolios,
+    review packets, vault entries, and evidence documents reuse graph
+    relationships. Repetition does not independently confirm an edge. If a
+    canonical identity, direction, receiver, or snapshot is wrong upstream,
+    every downstream surface can repeat the same plausible error.
+  </p>
+  <p>
+    Downstream composition must carry the weakest evidence tier, gaps,
+    truncation state, cycle state, and coverage label. A report cannot promote
+    an unresolved or bounded candidate simply because the layout looks
+    decisive.
+  </p>
+</section>
+
+<section data-graph-history-block="review-questions">
+  <h2>Questions that reveal a plausible wrong graph.</h2>
+  <p>
+    Ask whether node identity includes assembly, namespace, containing type,
+    member signature, generic substitution, and alias resolution. Ask whether
+    every call preserves its exact span and compiler-selected receiver. Ask
+    whether stored direction survives each projection and whether reverse
+    traversal is merely a query orientation.
+  </p>
+  <p>
+    Then ask which repository state produced the graph, whether the inventory
+    changed during extraction, who authorized exclusions, and what happened
+    when project loading or symbol resolution failed. The absence of a gap is
+    meaningful only when the corresponding evidence contract ran successfully.
+  </p>
+</section>
+
+<section data-graph-history-block="limitations">
+  <h2>The fixture matrix is a boundary, not universal coverage.</h2>
+  <p>
+    The checked-in matrix covers representative identity, receiver, direction,
+    snapshot, omission, and legacy cases. It does not establish complete C#
+    language or project-system coverage, all generated-source behavior,
+    multiple build configurations, runtime dispatch, reflection, dynamic
+    loading, branch feasibility, selected DI implementation, or production
+    reachability.
+  </p>
+  <p>
+    Read the companion
+    <a href="/blog/csharp-extraction-without-plausible-wrong-graphs/">C# extraction truth article</a>,
+    the <a href="/evidence/">evidence model</a>,
+    <a href="/evidence/gaps/">gap guide</a>,
+    <a href="/static-vs-runtime/">static-versus-runtime boundary</a>,
+    <a href="/proof-paths/for-managers/">manager proof path</a>,
+    <a href="/validation/">validation guide</a>, and
+    <a href="/limitations/">limitations</a> before repeating a graph conclusion.
+  </p>
+</section>
+
+<section data-graph-history-block="non-claims" data-graph-history-boundary="non-claims">
+  <h2>What this history does not establish.</h2>
+  <p>
+    It does not establish that every historical defect is represented,
+    universal graph completeness or correctness, or that static evidence proves runtime
+    dispatch, execution, production behavior, severity, required testing,
+    release approval, or operational safety.
+  </p>
+  <p>
+    The public article includes no source snippet, analyzer output, raw index,
+    machine-local path, private identity, credential, or private validation
+    detail. No LLM, embedding, vector, or prompt classification supplies a
+    missing relationship.
+  </p>
+</section>
+
+<section data-graph-history-block="bottom-line">
+  <h2>Loud incompleteness is safer than a plausible wrong graph.</h2>
+  <p>
+    A visible Tier 4 gap gives an owner a question to answer. A fabricated
+    semantic edge removes that question and can redirect the entire review.
+    TraceMap's graph-integrity contract therefore values canonical identity,
+    preserved direction, immutable snapshots, and explicit reduced coverage
+    over a graph that merely looks finished.
+  </p>
+</section>
