@@ -152,6 +152,7 @@ internal static class StaticDispatchCandidateBuilder
             registrationFacts,
             calls,
             sources,
+            candidateLimit,
             extractorVersionFor);
 
         return new StaticDispatchCandidateBuildResult(
@@ -186,6 +187,7 @@ internal static class StaticDispatchCandidateBuilder
         IReadOnlyList<StaticDispatchRegistrationFact> registrations,
         IReadOnlyList<StaticDispatchCallTarget> calls,
         IReadOnlyList<StaticDispatchSourceContext> sources,
+        int candidateLimit,
         Func<string, string?> extractorVersionFor)
     {
         var relevantSourceIds = allRelationships.Select(relationship => nodes.GetValueOrDefault(relationship.FromNodeId)?.SourceIndexId)
@@ -332,6 +334,10 @@ internal static class StaticDispatchCandidateBuilder
                         && string.Equals(relationship.TargetContainingSymbolId, call.TargetContainingSymbolId, StringComparison.Ordinal)))
                 {
                     unverifiedCallTargetNodeIds.Add(call.TargetNodeId);
+                    var supportingRegistrationFactIds = candidates
+                        .Where(candidate => string.Equals(candidate.AbstractionSymbolId, call.TargetNodeId, StringComparison.Ordinal))
+                        .SelectMany(candidate => candidate.SupportingRegistrationFactIds)
+                        .Distinct(StringComparer.Ordinal);
                     gaps.Add(CreateContextGap(
                         "DispatchCandidateIdentityUnverified",
                         "call-target-identity-unverified",
@@ -341,7 +347,11 @@ internal static class StaticDispatchCandidateBuilder
                         call.TargetNodeId,
                         call.CommitSha,
                         call.ExtractorVersion ?? extractorVersionFor(call.SourceIndexId),
-                        [call.FactId, .. matchingMemberRelationships.SelectMany(relationship => relationship.SupportingFactIds)],
+                        [
+                            call.FactId,
+                            .. matchingMemberRelationships.SelectMany(relationship => relationship.SupportingFactIds),
+                            .. supportingRegistrationFactIds
+                        ],
                         call.FilePath,
                         call.StartLine,
                         call.EndLine));
@@ -398,7 +408,53 @@ internal static class StaticDispatchCandidateBuilder
                 call.EndLine));
         }
 
+        ConsolidateCallContextGaps(gaps, candidateLimit);
+        gaps.RemoveAll(gap => gap.GapKind == "DispatchCandidateFanOut"
+            && gap.NodeId is not null
+            && unverifiedCallTargetNodeIds.Contains(gap.NodeId));
         candidates.RemoveAll(candidate => unverifiedCallTargetNodeIds.Contains(candidate.AbstractionSymbolId));
+    }
+
+    private static void ConsolidateCallContextGaps(List<StaticDispatchCandidateGap> gaps, int supportingFactLimit)
+    {
+        var grouped = gaps
+            .Where(gap => gap.Reason is "call-target-identity-unverified" or "type-level-relationship-only" or "candidate-identity-unverified")
+            .GroupBy(gap => new { gap.SourceIndexId, gap.NodeId, gap.Reason })
+            .Where(group => group.Count() > 1)
+            .ToArray();
+        foreach (var group in grouped)
+        {
+            var ordered = group
+                .OrderBy(gap => gap.FilePath, StringComparer.Ordinal)
+                .ThenBy(gap => gap.StartLine ?? 0)
+                .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
+                .ToArray();
+            var first = ordered[0];
+            var supportingFactIds = ordered
+                .SelectMany(gap => gap.SupportingFactIds)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .Take(supportingFactLimit)
+                .ToArray();
+            gaps.RemoveAll(gap => group.Contains(gap));
+            gaps.Add(CreateContextGap(
+                first.GapKind,
+                first.Reason!,
+                $"{first.Message} {ordered.Length} call-site evidence rows were grouped; supporting facts are capped at {supportingFactLimit}.",
+                first.SourceIndexId!,
+                first.SourceLabel!,
+                first.NodeId,
+                first.CommitSha,
+                first.ExtractorVersion,
+                supportingFactIds,
+                first.FilePath,
+                first.StartLine,
+                first.EndLine) with
+            {
+                CandidateCount = ordered.Length,
+                CandidateLimit = supportingFactLimit
+            });
+        }
     }
 
     private static StaticDispatchCandidateGap CreateContextGap(

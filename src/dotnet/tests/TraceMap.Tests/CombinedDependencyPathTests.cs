@@ -732,7 +732,7 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
-    public void Static_dispatch_withholds_member_candidates_when_call_identity_is_unverified()
+    public void Static_dispatch_withholds_member_candidates_and_groups_unverified_calls_with_registration_provenance()
     {
         var serviceTypeId = TestTypeSymbolId("Server.IOrderService");
         var implementationTypeId = TestTypeSymbolId("Server.OrderService");
@@ -759,21 +759,41 @@ public sealed class CombinedDependencyPathTests
         var calls = new[]
         {
             new StaticDispatchCallTarget(
-                "call-fact", "server", "server", "service",
+                "call-a", "server", "server", "service",
                 "Server.IOrderService.Get(System.Int32)", null, null,
                 EvidenceTiers.Tier1Semantic, "Controllers/OrdersController.cs", 14, 14,
+                "commit", "test/1.0"),
+            new StaticDispatchCallTarget(
+                "call-b", "server", "server", "service",
+                "Server.IOrderService.Get(System.Int32)", null, null,
+                EvidenceTiers.Tier1Semantic, "Controllers/OrdersController.cs", 15, 15,
                 "commit", "test/1.0")
         };
+        var registrations = new[]
+        {
+            new StaticDispatchRegistrationFact(
+                "registration-fact", "server", "server", "Server.IOrderService", "Server.OrderService",
+                serviceTypeId, implementationTypeId, "AddScoped", StaticDispatchRegistrationShapes.ClosedTypePair,
+                EvidenceTiers.Tier1Semantic, RuleIds.CSharpSemanticRuntimeEvidence,
+                "Startup/CompositionRoot.cs", 30, 30, "commit", "test/1.0")
+        };
 
-        var result = StaticDispatchCandidateBuilder.Build(nodes, relationships, callTargets: calls);
+        var result = StaticDispatchCandidateBuilder.Build(
+            nodes,
+            relationships,
+            registrations: registrations,
+            callTargets: calls);
 
         Assert.Empty(result.Edges);
         var gap = Assert.Single(result.Gaps, item => item.GapKind == "DispatchCandidateIdentityUnverified");
         Assert.Equal("call-target-identity-unverified", gap.Reason);
-        Assert.Equal(["call-fact", "member-fact"], gap.SupportingFactIds);
+        Assert.Equal(["call-a", "call-b", "member-fact", "registration-fact"], gap.SupportingFactIds);
+        Assert.Equal(2, gap.CandidateCount);
+        Assert.Equal(10, gap.CandidateLimit);
         Assert.Equal("Controllers/OrdersController.cs", gap.FilePath);
         Assert.Equal(14, gap.StartLine);
         Assert.Equal(14, gap.EndLine);
+        Assert.DoesNotContain(result.Gaps, item => item.GapKind == "DispatchCandidateFanOut");
     }
 
     [Fact]
@@ -864,8 +884,10 @@ public sealed class CombinedDependencyPathTests
         Assert.Equal("test/1.0", gap.ExtractorVersion);
     }
 
-    [Fact]
-    public async Task Paths_preserve_type_only_dispatch_context_as_member_unavailable_gap()
+    [Theory]
+    [InlineData("ImplementsInterface")]
+    [InlineData("InheritsFrom")]
+    public async Task Paths_preserve_type_only_dispatch_context_as_member_unavailable_gap(string relationshipKind)
     {
         using var temp = new TempDirectory();
         var serverIndex = Path.Combine(temp.Path, "server.sqlite");
@@ -898,10 +920,10 @@ public sealed class CombinedDependencyPathTests
             new EvidenceSpan("Services/OrderService.cs", 6, 6, null, "test", "test/1.0"),
             sourceSymbol: implementationType,
             targetSymbol: interfaceType,
-            contractElement: "ImplementsInterface",
+            contractElement: relationshipKind,
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
-                ["relationshipKind"] = "ImplementsInterface",
+                ["relationshipKind"] = relationshipKind,
                 ["sourceSymbolId"] = implementationTypeId,
                 ["targetSymbolId"] = interfaceTypeId
             });
@@ -994,6 +1016,32 @@ public sealed class CombinedDependencyPathTests
         var gap = Assert.Single(inventory.Gaps, item => item.GapKind == "DispatchCandidateReducedCoverage");
         Assert.Equal("supporting-fact-extractor-identity-unavailable", gap.Reason);
         Assert.Null(gap.ExtractorVersion);
+    }
+
+    [Fact]
+    public async Task Paths_emit_schema_gap_for_combined_index_without_fact_extractor_column()
+    {
+        using var temp = new TempDirectory();
+        var sourceIndex = Path.Combine(temp.Path, "source.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var manifest = Manifest("server", "tracemap-milestone15");
+        SqliteIndexWriter.Write(sourceIndex, manifest, []);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([sourceIndex], combinedPath, ["server"]));
+        await using (var connection = new SqliteConnection($"Data Source={combinedPath}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "alter table combined_facts drop column extractor_version;";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var inventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combinedPath);
+
+        Assert.DoesNotContain(inventory.Edges, edge => edge.EdgeKind is "interface-candidate" or "override-candidate");
+        var gap = Assert.Single(inventory.Gaps, item => item.GapKind == "DispatchCandidateSchemaUnavailable");
+        Assert.Equal("combined.dispatch-gap.v1", gap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal("combined-fact-extractor-schema-unavailable", gap.Reason);
     }
 
     [Fact]

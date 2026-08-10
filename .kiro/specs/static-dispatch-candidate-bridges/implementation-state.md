@@ -605,6 +605,18 @@ appropriate.
 - Exact-head follow-up validation passed: 17 focused static-dispatch tests,
   115 route-flow/path tests, 1,345 full `.NET` solution tests, targeted format,
   combined paths/reverse public smoke, private-path guard, and diff check.
+- A fresh read-only Kiro CLI review used explicit model `claude-opus-5` against
+  exact head `82ce95312bad2d1b74c60c9f6dc36c121ecb8e6c`. It found no P1s and four
+  actionable P2s. The bounded patch keeps older combined indexes readable and
+  emits `DispatchCandidateSchemaUnavailable` when per-fact extractor schema is
+  absent; admits normalized `inherits` relationships as type-only gap context;
+  preserves registration provenance when identity-less calls withhold a
+  candidate; and groups/caps repeated call-context gaps with deterministic
+  count metadata. Kiro remains advisory unless ACK verifies and admits its
+  exact-head evidence.
+- The Kiro follow-up patch passed 20 focused dispatch/schema tests, the full
+  `.NET` solution at 1,347 tests, targeted format, the public combined
+  paths/reverse smoke, private-path guard, and diff check.
 
 - Initial ACK returned `decision=actionable_findings`,
   `stopReason=UNRESOLVED_REVIEW_THREADS`, `patchAuthorized=true`, and

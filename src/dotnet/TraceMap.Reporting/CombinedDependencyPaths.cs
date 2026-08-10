@@ -372,6 +372,8 @@ public static class CombinedDependencyPathReporter
                 .Select(edge => edge.ToReportEdge())
                 .ToArray(),
             graph.Gaps
+                .GroupBy(gap => gap.GapId, StringComparer.Ordinal)
+                .Select(group => group.First())
                 .OrderBy(gap => gap.GapKind, StringComparer.Ordinal)
                 .ThenBy(gap => gap.SourceLabel, StringComparer.Ordinal)
                 .ThenBy(gap => gap.FilePath, StringComparer.Ordinal)
@@ -694,7 +696,7 @@ public static class CombinedDependencyPathReporter
             var from = graph.GetOrAddSymbolNode(edge.SourceIndexId, edge.SourceLabel, edge.SourceSymbol, edge.FilePath, edge.StartLine, edge.EndLine, edge.RuleId, edge.EvidenceTier);
             var to = graph.GetOrAddSymbolNode(edge.SourceIndexId, edge.SourceLabel, edge.TargetSymbol, edge.FilePath, edge.StartLine, edge.EndLine, edge.RuleId, edge.EvidenceTier);
             var normalizedEdgeKind = NormalizeEdgeKind(edge.EdgeKind);
-            var supportingFactIds = normalizedEdgeKind is "implements" or "overrides"
+            var supportingFactIds = normalizedEdgeKind is "implements" or "inherits" or "overrides"
                 && factsById.ContainsKey(edge.EdgeId)
                     ? new[] { edge.EdgeId }
                     : [];
@@ -832,7 +834,7 @@ public static class CombinedDependencyPathReporter
         }
 
         AddSymbolReconciliationEdges(graph);
-        AddDispatchCandidateEdges(graph, read.Facts, read.Sources);
+        AddDispatchCandidateEdges(graph, read.Facts, read.Sources, read.HasFactExtractorVersion);
         graph.Sort();
         return graph;
     }
@@ -2070,11 +2072,34 @@ public static class CombinedDependencyPathReporter
     private static void AddDispatchCandidateEdges(
         EvidenceGraph graph,
         IReadOnlyList<CombinedFactRow> facts,
-        IReadOnlyList<CombinedReportSource> sources)
+        IReadOnlyList<CombinedReportSource> sources,
+        bool hasFactExtractorVersion)
     {
+        if (!hasFactExtractorVersion)
+        {
+            graph.Gaps.Add(new CombinedPathGap(
+                "gap:dispatch:schema:extractor-version",
+                "DispatchCandidateSchemaUnavailable",
+                CombinedDependencyPathClassifications.NeedsReviewPath,
+                "The combined fact schema does not expose per-fact extractor identity; static dispatch candidates are unavailable for this index.",
+                null,
+                null,
+                null,
+                null,
+                StaticDispatchCandidateBuilder.GapRuleId,
+                EvidenceTiers.Tier4Unknown,
+                null,
+                null,
+                "combined-fact-extractor-schema-unavailable",
+                null,
+                null,
+                "combined-dispatch-candidate-context"));
+            return;
+        }
+
         var factsById = facts.ToDictionary(fact => fact.CombinedFactId, StringComparer.Ordinal);
         var relationshipEdges = graph.Edges
-            .Where(edge => edge.EdgeKind is "implements" or "overrides")
+            .Where(edge => edge.EdgeKind is "implements" or "inherits" or "overrides")
             .ToArray();
         var candidateNodes = graph.Nodes.Keys
             .OrderBy(value => value, StringComparer.Ordinal)
