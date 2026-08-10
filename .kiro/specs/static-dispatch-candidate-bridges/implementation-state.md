@@ -79,12 +79,24 @@ execution, and impact are not proven.
   resolution, and forbidden stronger wording. Existing vault/docs safety suites
   continue to cover raw snippets, SQL, configuration, URLs, hostnames, remotes,
   local paths, private labels, and secrets.
+- Exact-head hosted review found six bounded follow-ups. The corrected
+  implementation now treats every non-`Succeeded` or non-Level1-semantic
+  source as reduced, includes candidate-gap fact IDs in summaries, reuses the
+  already-loaded combined read for report and portfolio graph construction,
+  and includes concrete supporting fact/edge IDs in portfolio metadata.
+- Vault-to-docs composition now reads canonical vault `id` fields (with the
+  legacy `edgeId`/`gapId` aliases accepted), preserves matching edge and gap
+  IDs plus both candidate and gap rule pairs, and recognizes legacy vault
+  graphs whose top-level rule remains `combined.dispatch-candidate.v1` or
+  `combined.dispatch-gap.v1`. An end-to-end generated vault fixture prevents
+  hand-authored JSON from masking serialization drift.
 
 Validation for Task 10:
 
 - `dotnet restore src/dotnet/TraceMap.sln --locked-mode`: passed.
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with 0 warnings.
-- Focused report/portfolio/vault/docs tests: 104/104 passed.
+- Focused paths/report/portfolio/vault/docs tests after review corrections:
+  141/141 passed.
 - Full .NET solution tests: 1,333/1,333 passed.
 - Targeted changed-file whitespace formatting and verification: passed.
 - Repo-wide `dotnet format --verify-no-changes`: deferred because existing

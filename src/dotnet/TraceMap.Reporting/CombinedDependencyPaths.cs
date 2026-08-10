@@ -334,6 +334,22 @@ public static class CombinedDependencyPathReporter
 
         var parsedSourcePair = ParseSourcePair(sourcePair);
         var (read, graph) = await BuildGraphAsync(indexPath, parsedSourcePair, includeLegacyRoots: false, allowSingleIndex: false, cancellationToken);
+        return ToGraphInventory(read, graph);
+    }
+
+    internal static CombinedPathGraphInventory BuildGraphInventory(
+        CombinedReadResult read,
+        string? sourcePair = null)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        var parsedSourcePair = ParseSourcePair(sourcePair);
+        var endpointFindings = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
+        var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts, read.Sources);
+        return ToGraphInventory(read, BuildGraph(read, endpointFindings, surfaces, parsedSourcePair, includeLegacyRoots: false));
+    }
+
+    private static CombinedPathGraphInventory ToGraphInventory(CombinedReadResult read, EvidenceGraph graph)
+    {
         return new CombinedPathGraphInventory(
             read.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             read.CoverageWarnings.OrderBy(value => value, StringComparer.Ordinal).ToArray(),

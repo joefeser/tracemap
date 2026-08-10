@@ -37,7 +37,9 @@ internal static class DispatchCandidateEvidenceProjection
         var gaps = CandidateGaps(inventory).ToArray();
         var nodeById = inventory.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
         var fanOutOrTruncated = gaps.Any(gap => gap.GapKind is "DispatchCandidateFanOut" or "DispatchCandidateTruncatedByLimit");
-        var reduced = inventory.CoverageWarnings.Count > 0 || gaps.Length > 0;
+        var reduced = inventory.CoverageWarnings.Count > 0
+            || gaps.Length > 0
+            || inventory.Sources.Any(IsReducedCoverage);
         return new DispatchCandidateEvidenceSummary(
             "available",
             reduced ? "NeedsReviewStaticCandidatePartial" : ReviewClassification,
@@ -51,10 +53,7 @@ internal static class DispatchCandidateEvidenceProjection
             CountBy(edges, edge => edge.CandidateBridgeKind ?? "unknown"),
             CountBy(gaps, gap => gap.GapKind),
             inventory.Sources
-                .Select(source => source.AnalysisLevel.Contains("Reduced", StringComparison.OrdinalIgnoreCase)
-                    || source.BuildStatus.Contains("Partial", StringComparison.OrdinalIgnoreCase)
-                        ? "reduced-static-evidence"
-                        : "static-evidence")
+                .Select(source => IsReducedCoverage(source) ? "reduced-static-evidence" : "static-evidence")
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .ToArray(),
@@ -70,6 +69,7 @@ internal static class DispatchCandidateEvidenceProjection
                 .ToArray(),
             edges.SelectMany(edge => edge.SupportingFactIds)
                 .Concat(edges.SelectMany(edge => edge.SupportingRegistrationFactIds ?? []))
+                .Concat(gaps.Select(gap => gap.CombinedFactId).Where(value => !string.IsNullOrWhiteSpace(value)).Cast<string>())
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .ToArray(),
@@ -96,4 +96,8 @@ internal static class DispatchCandidateEvidenceProjection
 
     private static string SourceLabel(CombinedPathEdge edge, IReadOnlyDictionary<string, CombinedPathNode> nodes) =>
         nodes.TryGetValue(edge.FromNodeId, out var source) ? source.SourceLabel : "unknown";
+
+    private static bool IsReducedCoverage(CombinedReportSource source) =>
+        !string.Equals(source.BuildStatus, "Succeeded", StringComparison.Ordinal)
+        || !string.Equals(source.AnalysisLevel, "Level1SemanticAnalysis", StringComparison.Ordinal);
 }

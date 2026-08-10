@@ -568,7 +568,7 @@ public static class PortfolioReporter
             if (isCombined)
             {
                 var read = await CombinedDependencyReporter.ReadAsync(connection, cancellationToken);
-                var dispatchInventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(input.IndexPath, cancellationToken: cancellationToken);
+                var dispatchInventory = CombinedDependencyPathReporter.BuildGraphInventory(read);
                 var dispatchSummary = DispatchCandidateEvidenceProjection.Summarize(dispatchInventory);
                 dispatchCandidateRows.Add(DispatchCandidateRow(input, side, dispatchSummary));
                 gaps.AddRange(DispatchCandidateEvidenceProjection.CandidateGaps(dispatchInventory).Select(gap =>
@@ -651,6 +651,8 @@ public static class PortfolioReporter
                 new("registrationContextCandidateCount", summary.RegistrationContextCandidateCount.ToString()),
                 new("gapCount", summary.GapCount.ToString()),
                 new("fanOutOrTruncated", summary.FanOutOrTruncated.ToString().ToLowerInvariant()),
+                new("supportingFactIds", string.Join(';', summary.SupportingFactIds)),
+                new("supportingEdgeIds", string.Join(';', summary.SupportingEdgeIds)),
                 new("supportingRuleIds", string.Join(';', summary.RuleIds)),
                 new("coverageLabels", string.Join(';', summary.CoverageLabels))
             ]));

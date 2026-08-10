@@ -25,6 +25,8 @@ public sealed class PortfolioReportTests
         Assert.Equal("portfolio.context.dispatch-candidate.v1", row.RuleId);
         Assert.Equal("NeedsReviewStaticCandidate", row.Classification);
         Assert.Contains(row.Metadata, value => value.Key == "candidateCount" && value.Value == "1");
+        Assert.Contains(row.Metadata, value => value.Key == "supportingFactIds" && !string.IsNullOrWhiteSpace(value.Value));
+        Assert.Contains(row.Metadata, value => value.Key == "supportingEdgeIds" && !string.IsNullOrWhiteSpace(value.Value));
         Assert.Contains(row.Metadata, value => value.Key == "supportingRuleIds" && value.Value.Contains("combined.dispatch-candidate.v1", StringComparison.Ordinal));
         Assert.Contains("Static Dispatch Candidate Review Context", await File.ReadAllTextAsync(Path.Combine(combinedOut, "portfolio-report.md")));
 

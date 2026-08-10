@@ -955,19 +955,48 @@ public static class EvidenceDocsExporter
                 var nodeCount = document.RootElement.TryGetProperty("nodes", out var nodes) && nodes.ValueKind == JsonValueKind.Array ? nodes.GetArrayLength() : 0;
                 var edgeCount = document.RootElement.TryGetProperty("edges", out var edges) && edges.ValueKind == JsonValueKind.Array ? edges.GetArrayLength() : 0;
                 var gapCount = document.RootElement.TryGetProperty("gaps", out var gaps) && gaps.ValueKind == JsonValueKind.Array ? gaps.GetArrayLength() : 0;
-                var dispatchEdgeIds = edges.ValueKind == JsonValueKind.Array
-                    ? edges.EnumerateArray()
-                        .Where(IsVaultDispatchCandidate)
-                        .Select(edge => StringProperty(edge, "edgeId"))
+                var dispatchEdges = edges.ValueKind == JsonValueKind.Array
+                    ? edges.EnumerateArray().Where(IsVaultDispatchCandidate).ToArray()
+                    : [];
+                var dispatchEdgeIds = dispatchEdges
+                        .Select(edge => StringProperty(edge, "id") ?? StringProperty(edge, "edgeId"))
                         .Where(value => !string.IsNullOrWhiteSpace(value))
                         .Cast<string>()
                         .OrderBy(value => value, StringComparer.Ordinal)
-                        .ToArray()
+                        .ToArray();
+                var dispatchGaps = gaps.ValueKind == JsonValueKind.Array
+                    ? gaps.EnumerateArray().Where(IsVaultDispatchCandidateGap).ToArray()
                     : [];
-                var dispatchGapCount = gaps.ValueKind == JsonValueKind.Array
-                    ? gaps.EnumerateArray().Count(IsVaultDispatchCandidateGap)
-                    : 0;
-                var hasDispatchCandidates = dispatchEdgeIds.Length > 0 || dispatchGapCount > 0;
+                var dispatchGapIds = dispatchGaps
+                    .Select(gap => StringProperty(gap, "id") ?? StringProperty(gap, "gapId"))
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Cast<string>()
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray();
+                var dispatchGapCount = dispatchGaps.Length;
+                var hasDispatchCandidates = dispatchEdges.Length > 0 || dispatchGaps.Length > 0;
+                IReadOnlyList<string> dispatchRules;
+                if (hasDispatchCandidates)
+                {
+                    var rules = new List<string> { DispatchCandidateEvidenceProjection.DocsChunkRuleId };
+                    if (dispatchEdges.Length > 0)
+                    {
+                        rules.Add(DispatchCandidateEvidenceProjection.VaultEdgeRuleId);
+                        rules.Add(StaticDispatchCandidateBuilder.CandidateRuleId);
+                    }
+
+                    if (dispatchGaps.Length > 0)
+                    {
+                        rules.Add(DispatchCandidateEvidenceProjection.VaultGapRuleId);
+                        rules.Add(StaticDispatchCandidateBuilder.GapRuleId);
+                    }
+
+                    dispatchRules = DistinctSorted(rules);
+                }
+                else
+                {
+                    dispatchRules = [DependencySurfaceRuleId];
+                }
                 var body = $"""
                     ## Vault graph evidence
 
@@ -996,10 +1025,8 @@ public static class EvidenceDocsExporter
                     body,
                     [CreateReportCitation(graphId, "evidence-graph-vault-export.v1", sources)],
                     sources.Select(ToSourceRef).ToArray(),
-                    [graphId, .. dispatchEdgeIds],
-                    hasDispatchCandidates
-                        ? [DispatchCandidateEvidenceProjection.DocsChunkRuleId, DispatchCandidateEvidenceProjection.VaultEdgeRuleId, StaticDispatchCandidateBuilder.CandidateRuleId]
-                        : [DependencySurfaceRuleId],
+                    [graphId, .. dispatchEdgeIds, .. dispatchGapIds],
+                    dispatchRules,
                     [EvidenceTiers.Tier2Structural],
                     sources.Select(source => source.CoverageLabel).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).DefaultIfEmpty("vault-graph").ToArray(),
                     [],
@@ -1019,10 +1046,12 @@ public static class EvidenceDocsExporter
 
     private static bool IsVaultDispatchCandidate(JsonElement edge) =>
         StringProperty(edge, "ruleId") == DispatchCandidateEvidenceProjection.VaultEdgeRuleId
+        || StringProperty(edge, "ruleId") == StaticDispatchCandidateBuilder.CandidateRuleId
         || StringArrayProperty(edge, "supportingRuleIds").Contains(StaticDispatchCandidateBuilder.CandidateRuleId, StringComparer.Ordinal);
 
     private static bool IsVaultDispatchCandidateGap(JsonElement gap) =>
         StringProperty(gap, "ruleId") == DispatchCandidateEvidenceProjection.VaultGapRuleId
+        || StringProperty(gap, "ruleId") == StaticDispatchCandidateBuilder.GapRuleId
         || StringArrayProperty(gap, "supportingRuleIds").Contains(StaticDispatchCandidateBuilder.GapRuleId, StringComparer.Ordinal);
 
     private static async Task AddPropertyFlowReportChunksAsync(

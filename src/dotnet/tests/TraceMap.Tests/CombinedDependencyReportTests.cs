@@ -43,6 +43,26 @@ public sealed class CombinedDependencyReportTests
     }
 
     [Fact]
+    public async Task Report_marks_failed_candidate_sources_reduced_and_preserves_gap_fact_ids()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await StaticDispatchCandidateConsumerFixture.CreateCombinedIndexAsync(
+            temp.Path,
+            analysisLevel: "Level1SyntaxFallback",
+            buildStatus: "Failed",
+            includeUnsupportedRegistration: true);
+
+        var result = await CombinedDependencyReporter.WriteAsync(new CombinedDependencyReportOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "report")));
+
+        Assert.Equal("NeedsReviewStaticCandidatePartial", result.Report.DispatchCandidates.Classification);
+        Assert.Contains("reduced-static-evidence", result.Report.DispatchCandidates.CoverageLabels);
+        Assert.True(result.Report.DispatchCandidates.GapCount > 0);
+        Assert.NotEmpty(result.Report.DispatchCandidates.SupportingFactIds);
+    }
+
+    [Fact]
     public async Task Report_rejects_single_language_index()
     {
         using var temp = new TempDirectory();
