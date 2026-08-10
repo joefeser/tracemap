@@ -40,6 +40,10 @@ test("C# extraction truth validator reports malformed discovery", async (t) => {
   for (const malformed of ["{", JSON.stringify({ entries: {} })]) await t.test(malformed, async (subtest) => { const root = await fixture(subtest); await buildSite({ root, log() {} }); await writeFile(join(root, "dist/routes-index.json"), malformed, "utf8"); const errors = []; await validateCsharpExtractionTruthDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /valid JSON|entries array/); });
 });
 
+test("C# extraction truth validator rejects a missing sitemap", async (t) => {
+  const root = await fixture(t); await buildSite({ root, log() {} }); await rm(join(root, "dist/sitemap.xml")); const errors = []; await validateCsharpExtractionTruthDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /sitemap is missing/);
+});
+
 test("C# extraction truth validator accepts attribute spacing and normalizes supplied base URL to its origin", async (t) => { const root = await fixture(t); await buildSite({ root, log() {} }); const pagePath = join(root, "dist/blog/csharp-extraction-without-plausible-wrong-graphs/index.html"); await writeFile(pagePath, (await readFile(pagePath, "utf8")).replaceAll("data-csharp-truth-block=", "data-csharp-truth-block = ").replaceAll("https://tracemap.tools", "https://preview.example"), "utf8"); const sitemapPath = join(root, "dist/sitemap.xml"); await writeFile(sitemapPath, (await readFile(sitemapPath, "utf8")).replaceAll("https://tracemap.tools", "https://preview.example"), "utf8"); const errors = []; await validateCsharpExtractionTruthDist({ baseUrl: "https://preview.example/docs/?view=site", dist: join(root, "dist"), errors }); assert.deepEqual(errors, []); });
 
 test("C# extraction truth validator reports an invalid base URL", async (t) => { const root = await fixture(t); await buildSite({ root, log() {} }); const errors = []; await validateCsharpExtractionTruthDist({ baseUrl: "not a URL", dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /base URL is invalid/); });

@@ -32,7 +32,7 @@ const requiredText = [
 ];
 const forbiddenClaims = [
   /\bTraceMap\b[^.]{0,160}\b(?:proves?|guarantees?|certifies?|establishes?)\b[^.]{0,160}\b(?:runtime|complete|correct|safe|production|dispatch|reachability)\b/i,
-  /\b(?:the )?graph (?:is|was) (?:complete|correct)\b/i,
+  /\b(?:graph|analysis|coverage|implementation|release)\b[^.]{0,120}\b(?:is|was)\s+(?:complete|correct|safe|approved|production-ready)\b/i,
   /\b(?:validation passed|release approved|runtime reachability confirmed|production correctness established)\b/i
 ];
 const rawPatterns = [/\bnamespace\s+[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\s*\{/i, /\bclass\s+[A-Za-z_]\w*\s*\{/i, /\b(?:public|private|internal|protected)\s+(?:static\s+)?[A-Za-z_]\w*(?:<[^>]+>)?\s+[A-Za-z_]\w*\s*\([^)]*\)\s*\{/i, /\b(?:Password|Server|User Id|ConnectionString)\s*=/i];
@@ -79,6 +79,8 @@ async function validateIndexes(dist, errors) {
     if (entry.preferredProofPath !== "/evidence/") errors.push(withEvidence("Graph history preferred proof path must remain /evidence/.", "routes-index.json"));
     if (!Array.isArray(entry.limitations) || entry.limitations.length < 2) errors.push(withEvidence("Graph history discovery must retain at least two limitations.", "routes-index.json"));
     if (!Array.isArray(entry.nonClaims) || entry.nonClaims.length < 2) errors.push(withEvidence("Graph history discovery must retain at least two non-claims.", "routes-index.json"));
+    const discoveryText = [entry.title, entry.summary, ...(Array.isArray(entry.limitations) ? entry.limitations : []), ...(Array.isArray(entry.nonClaims) ? entry.nonClaims : [])].filter((value) => typeof value === "string").join(" ");
+    scanSafetySurfaces(discoveryText, "Graph history discovery entry", "routes-index.json", errors);
   }
 }
 
