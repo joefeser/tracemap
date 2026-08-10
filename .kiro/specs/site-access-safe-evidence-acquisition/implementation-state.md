@@ -31,11 +31,14 @@ Protected and private inputs remain omitted.
 ## Validation
 
 - `cd site && npm run build`: passed.
-- `cd site && npm test`: 797 passed, 0 failed.
+- `cd site && npm test`: 802 passed, 0 failed after the ACK-authorized
+  validator hardening pass.
 - `cd site && npm run validate`: passed for 101 HTML files, 3,444 internal
   references, and 100 sitemap URLs.
-- Focused validator: 10 passed, including planted runtime/reconstruction claim,
-  executable material, credential, private-path, and discovery-level failures.
+- Focused validator: 15 passed, including planted runtime/reconstruction claim,
+  executable material inside and outside the non-claim boundary, credential,
+  private-path, malformed discovery, attribute-spacing, alternate-base canonical,
+  and discovery-level failures.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
 - Desktop at 1,440 × 1,000 and mobile at 390 × 844 passed for `/blog/` and
@@ -43,3 +46,13 @@ Protected and private inputs remain omitted.
   navigation worked, all nine required sections and required links were
   present, no horizontal document overflow appeared, and no browser warnings
   or errors were observed.
+
+## PR review
+
+ACK authorized a focused validator hardening pass for current findings on PR
+#625. The patch scans raw and affirmative overclaim material across the full
+article, aggregates malformed discovery output, accepts normal attribute
+spacing, binds canonical validation to the supplied base URL, and decouples
+the Access validator's default from the MSBuild fixture toggle. The earlier
+PR-checkbox finding was already obsolete on the current head. ACK rerun is
+pending after push.

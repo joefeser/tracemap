@@ -52,7 +52,7 @@ const requiredText = [
   "unable to prove"
 ];
 const forbiddenClaims = [
-  /\bTraceMap\b[^.]{0,140}\b(?:ran|rendered|queried|reconstructed)\b[^.]{0,140}\b(?:application|database)\b/i,
+  /\bTraceMap\b(?![^.]{0,50}\bdoes not\b)[^.]{0,140}\b(?:ran|rendered|queried|reconstructed)\b[^.]{0,140}\b(?:application|database)\b/i,
   /\b(?:runtime execution|event firing|production behavior|complete coverage|data correctness|effective permissions)\b[^.]{0,100}\b(?:is|are|was|were)\s+(?:proved|proven|verified|validated|established)\b/i,
   /\b(?:safe to run|safe to release|approved for release|reconstruction succeeded|validation passed)\b/i
 ];
@@ -96,7 +96,7 @@ export async function validateAccessSafeEvidenceAcquisitionDist({
   await validateSitemap({ baseUrl: cleanBaseUrl, dist, errors: localErrors });
   await validateBlogIndex({ dist, errors: localErrors });
   await validateDiscovery({ dist, errors: localErrors });
-  await validateArticle({ pagePath, errors: localErrors });
+  await validateArticle({ baseUrl: cleanBaseUrl, pagePath, errors: localErrors });
   errors.push(...localErrors);
 }
 
@@ -127,7 +127,18 @@ async function validateDiscovery({ dist, errors }) {
     errors.push(withEvidence("Access acquisition routes discovery output is missing.", "routes-index.json"));
     return;
   }
-  const entries = JSON.parse(await readFile(path, "utf8")).entries ?? [];
+  let parsed;
+  try {
+    parsed = JSON.parse(await readFile(path, "utf8"));
+  } catch (error) {
+    errors.push(withEvidence(`Access acquisition routes discovery output is invalid JSON: ${error.message}`, "routes-index.json"));
+    return;
+  }
+  if (!parsed || !Array.isArray(parsed.entries)) {
+    errors.push(withEvidence("Access acquisition routes discovery output must contain an entries array.", "routes-index.json"));
+    return;
+  }
+  const entries = parsed.entries;
   const entry = entries.find((candidate) => candidate.path === accessSafeEvidenceAcquisitionRoute);
   if (!entry) {
     errors.push(withEvidence("Access acquisition discovery entry is missing.", "routes-index.json"));
@@ -139,21 +150,19 @@ async function validateDiscovery({ dist, errors }) {
   if (!Array.isArray(entry.nonClaims) || entry.nonClaims.length < 2) errors.push(withEvidence("Access acquisition discovery must include at least two non-claims.", "routes-index.json"));
 }
 
-async function validateArticle({ pagePath, errors }) {
+async function validateArticle({ baseUrl, pagePath, errors }) {
   const html = await readFile(pagePath, "utf8");
   const decoded = decodeHtmlEntities(html);
   const rendered = normalizeRenderedText(html);
-  const bounded = stripNonClaimBoundary(decoded);
-  const boundedText = normalizeRenderedText(bounded);
 
   if (!html.includes("<title>Reverse Engineering Access Without Running It | TraceMap</title>")) {
     errors.push(withEvidence("Access acquisition article is missing expected title.", pageArtifact));
   }
-  if (!new RegExp(`<link\\b[^>]*rel=["']canonical["'][^>]*href=["']https://tracemap\\.tools${escapeRegExp(accessSafeEvidenceAcquisitionRoute)}["']`, "i").test(html)) {
+  if (!new RegExp(`<link\\b[^>]*rel=["']canonical["'][^>]*href=["']${escapeRegExp(baseUrl)}${escapeRegExp(accessSafeEvidenceAcquisitionRoute)}["']`, "i").test(html)) {
     errors.push(withEvidence("Access acquisition article canonical URL is missing or incorrect.", pageArtifact));
   }
   for (const block of requiredBlocks) {
-    if (!new RegExp(`<section\\b[^>]*data-access-acquisition-block=["']${escapeRegExp(block)}["']`, "i").test(html)) {
+    if (!new RegExp(`<section\\b[^>]*data-access-acquisition-block\\s*=\\s*["']${escapeRegExp(block)}["']`, "i").test(html)) {
       errors.push(withEvidence(`Access acquisition article is missing required block: ${block}`, pageArtifact));
     }
   }
@@ -168,18 +177,14 @@ async function validateArticle({ pagePath, errors }) {
   const words = rendered.split(/\s+/).filter(Boolean).length;
   if (words < 900 || words > 1800) errors.push(withEvidence(`Access acquisition article word count must be between 900 and 1800 words, got ${words}`, pageArtifact));
   for (const pattern of forbiddenClaims) {
-    if (pattern.test(boundedText)) errors.push(withEvidence(`Access acquisition article contains unsupported positive claim: ${pattern}`, pageArtifact));
+    if (pattern.test(rendered)) errors.push(withEvidence(`Access acquisition article contains unsupported positive claim: ${pattern}`, pageArtifact));
   }
   for (const pattern of rawMaterialPatterns) {
-    if (pattern.test(boundedText)) errors.push(withEvidence(`Access acquisition article contains raw or executable material: ${pattern}`, pageArtifact));
+    if (pattern.test(rendered)) errors.push(withEvidence(`Access acquisition article contains raw or executable material: ${pattern}`, pageArtifact));
   }
   for (const pattern of hardPrivatePatterns) {
     if (pattern.test(decoded)) errors.push(withEvidence(`Access acquisition article contains hard private material: ${pattern}`, pageArtifact));
   }
-}
-
-function stripNonClaimBoundary(html) {
-  return html.replace(/<section\b[^>]*data-access-acquisition-boundary=["']non-claims["'][^>]*>[\s\S]*?<\/section>/gi, "");
 }
 
 function hasHref(html, href) {
