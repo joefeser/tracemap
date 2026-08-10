@@ -19,7 +19,7 @@ test("Access acquisition article builds with bounded claims, discovery, links, a
 });
 
 test("Access acquisition validator rejects planted runtime and reconstruction claims", async (t) => {
-  for (const claim of ["TraceMap ran the Access application.", "The reconstruction succeeded.", "The file is safe to run."]) {
+  for (const claim of ["TraceMap ran the Access application.", "TraceMap does not merely inventory; it ran the Access application.", "The reconstruction succeeded.", "The file is safe to run."]) {
     await t.test(claim, async (subtest) => {
       const root = await createSiteFixture(subtest);
       const path = join(root, "src", "_blog", "articles", "reverse-engineering-access-without-running-it.html");
@@ -29,6 +29,22 @@ test("Access acquisition validator rejects planted runtime and reconstruction cl
       const errors = [];
       await validateAccessSafeEvidenceAcquisitionDist({ dist: join(root, "dist"), errors });
       assert.match(errors.join("\n"), /unsupported positive claim/);
+    });
+  }
+});
+
+test("Access acquisition validator rejects forbidden material in published article metadata", async (t) => {
+  for (const [field, planted] of [["description", "TraceMap ran the Access application."], ["ogDescription", "SELECT secret FROM customer_table"], ["cardDescription", "TraceMap ran the Access application."]]) {
+    await t.test(field, async (subtest) => {
+      const root = await createSiteFixture(subtest);
+      const path = join(root, "src", "_blog", "articles.json");
+      const articles = JSON.parse(await readFile(path, "utf8"));
+      articles.find((article) => article.slug === "reverse-engineering-access-without-running-it")[field] = planted;
+      await writeFile(path, `${JSON.stringify(articles, null, 2)}\n`, "utf8");
+      await buildSite({ root, log() {} });
+      const errors = [];
+      await validateAccessSafeEvidenceAcquisitionDist({ dist: join(root, "dist"), errors });
+      assert.match(errors.join("\n"), /unsupported positive claim|raw or executable material/);
     });
   }
 });
