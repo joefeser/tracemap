@@ -1,5 +1,20 @@
 [
   {
+    "slug": "reverse-engineering-access-without-running-it",
+    "category": "Microsoft Access evidence",
+    "title": "Reverse Engineering Access Without Running It",
+    "h1": "Reverse engineering Access without running it",
+    "description": "How TraceMap acquires bounded Microsoft Access static evidence through protected local snapshots and source-neutral bundles without claiming execution or reconstruction.",
+    "ogDescription": "A public-safe explanation of TraceMap's file-first Access evidence boundary, protected design acquisition, explicit gaps, and runtime non-claims.",
+    "cardDescription": "A practical guide to obtaining reviewable Access evidence while keeping execution, reconstruction, raw design material, and operational conclusions outside the claim.",
+    "hero": "An Access file can be treated as potentially hostile input and still yield bounded static evidence—if acquisition, provenance, cleanup, gaps, and non-claims remain visible.",
+    "published": "2026-08-10",
+    "publishedDisplay": "August 10, 2026",
+    "body": "articles/reverse-engineering-access-without-running-it.html",
+    "calloutHeading": "Keep the evidence boundary attached.",
+    "calloutHtml": "Read the <a href=\"/evidence/\">evidence model</a>, inspect <a href=\"/evidence/gaps/\">explicit gaps</a>, and use the <a href=\"/proof-paths/for-managers/\">manager proof path</a> before repeating a conclusion."
+  },
+  {
     "slug": "what-an-msbuild-binlog-knows-that-a-source-diff-does-not",
     "category": "Build evidence",
     "title": "What an MSBuild Binlog Knows That a Source Diff Does Not",
