@@ -1,0 +1,207 @@
+<p>
+  <strong>Public claim level: demo.</strong>
+  “Can we rebuild this Access application?” sounds like a yes-or-no question.
+  Static evidence cannot honestly answer it that way. TraceMap instead turns
+  checked-in query, binding, event, flow, and coverage evidence into a bounded
+  gap register: what is visible, what supports each candidate relationship,
+  what was omitted by a limit, and which questions still belong to an Access
+  owner.
+</p>
+
+<section data-access-readiness-block="question">
+  <h2>Rebuild readiness is a review state, not a generated verdict.</h2>
+  <p>
+    A database inventory may show tables, fields, relationships, saved-query
+    kinds, forms, reports, controls, modules, and macros. That inventory is a
+    starting point. A rebuild plan also needs behavior, ordering, business
+    meaning, external dependencies, permissions, data rules, and acceptance
+    criteria that static extraction may not observe.
+  </p>
+  <p>
+    TraceMap therefore keeps conclusions attached to rule IDs, evidence tiers,
+    repository-relative spans, commit identity, extractor versions, coverage
+    labels, supporting fact IDs, and limitations. A missing relationship is not
+    silently converted into absence. It becomes an explicit owner question or
+    a Tier 4 gap.
+  </p>
+</section>
+
+<section data-access-readiness-block="query-shapes">
+  <h2>Action queries and crosstabs reveal shape, not results.</h2>
+  <p>
+    <code>legacy.access.query.v1</code> records bounded saved-query categories.
+    Action-query evidence can distinguish append, make-table, update, delete,
+    bulk, or compound mutation shapes where the protected input supports that
+    category. Crosstab evidence can retain declared row-heading, column-heading,
+    value, aggregate, and bounded pivot-alias provenance. Those categories help
+    an owner identify likely migration work without publishing query text.
+  </p>
+  <p>
+    Source and target participants or field correspondences remain candidates
+    unless role-specific evidence supports them. TraceMap does not execute the
+    query, inspect rows, calculate runtime pivot columns, or infer transaction
+    boundaries. Concatenated query text, unsupported parameters, external
+    sources, and incomplete query catalogs stay visible as reduced coverage.
+  </p>
+</section>
+
+<section data-access-readiness-block="copy-candidates">
+  <h2>A mutation shape is not proof of a copy workflow.</h2>
+  <p>
+    <code>legacy.access.copy-clone-candidate.v1</code> composes already-persisted
+    query and flow evidence. An append shape may become a bounded
+    <em>bulk-append-shape</em> candidate; a make-table shape may become a
+    <em>table-creation-shape</em> candidate. Update, bulk, and compound shapes
+    remain review-tier mutation candidates. Select, delete, pass-through,
+    unknown, and name-only evidence do not become copy candidates.
+  </p>
+  <p>
+    Names containing “copy,” “clone,” “duplicate,” or “new” are never evidence
+    by themselves. The report does not infer business intent, source-to-target
+    direction, field mapping, generated-key handling, parent/child sequence,
+    semantic row equivalence, or transactionality. A candidate without a
+    matching bounded flow path remains useful query evidence and gains a flow
+    availability gap.
+  </p>
+</section>
+
+<section data-access-readiness-block="behavior">
+  <h2>Bindings and events add behavior candidates with hard limits.</h2>
+  <p>
+    <code>legacy.access.binding.v1</code> can connect declared record sources,
+    control sources, lookup sources, projection ordinals, and master/child
+    correspondences. <code>legacy.access.event-binding.v1</code> can connect a
+    populated event property to an exact same-module procedure candidate.
+    Calculated expressions, supported domain-function categories, command
+    controls, and literal conditional lookup assignments can widen the set of
+    questions an owner should review.
+  </p>
+  <p>
+    None of those candidates establish event firing, branch feasibility,
+    lifecycle order, user navigation, write sequencing, or runtime state.
+    Embedded macros, dynamic dispatch, indirect handlers, unsupported
+    expressions, and concatenated query construction are explicit gaps rather
+    than guessed edges.
+  </p>
+</section>
+
+<section data-access-readiness-block="flow">
+  <h2>Composition preserves cycles, ambiguity, and fan-out.</h2>
+  <p>
+    <code>legacy.access.screen-data-flow.v1</code> composes bounded paths from
+    UI surfaces through bindings, queries, expressions, events, and persisted
+    fields. Each hop retains its supporting facts and evidence strength. Tier 2
+    structural declarations can coexist with Tier 3 syntax or textual
+    candidates and Tier 4 unknown gaps. A path cannot be stronger than its
+    weakest required hop.
+  </p>
+  <p>
+    Cycles are reported rather than traversed forever. Fan-out is capped rather
+    than presented as a complete neighborhood. Ambiguous participants remain
+    alternatives. External links stay categorical and protected. These are
+    useful constraints for scoping owner review, not evidence that a workflow
+    is reachable or complete.
+  </p>
+</section>
+
+<section data-access-readiness-block="bounds">
+  <h2>Bounds are part of the evidence contract.</h2>
+  <p>
+    Deterministic ordering makes the same bounded input produce the same
+    public-safe projection. Candidate, path, finding, and gap limits keep a
+    dense legacy application reviewable. When a limit omits rows, the output
+    records <code>truncated</code> state, an omitted count, partial coverage,
+    and a rule-backed <code>TruncatedByLimit</code> gap. It does not treat the
+    retained rows as the complete application.
+  </p>
+  <p>
+    <code>legacy.access.coverage-gap.v1</code> carries unavailable, incomplete,
+    unsupported, ambiguous, or protected evidence forward. Macro bodies remain
+    unavailable under <code>legacy.access.macro-gap.v1</code>. An empty
+    candidate set can therefore mean “nothing supported was found within this
+    evidence boundary,” never “the behavior does not exist.”
+  </p>
+</section>
+
+<section data-access-readiness-block="bundle">
+  <h2>The local review bundle keeps the gaps beside the evidence.</h2>
+  <p>
+    The documented local Access review bundle collects the Access evidence
+    scope, release-review projection, explorer, manifest, deterministic file
+    hashes, coverage state, limitations, and owner questions in one private
+    directory. Its default finding bound is explicit, and replacement is
+    limited to an intact TraceMap-generated bundle. The bundle remains local by
+    default; it is not a public evidence pack.
+  </p>
+  <p>
+    That packaging matters because a rebuild discussion can otherwise detach a
+    compelling diagram from its gaps. Reviewers can see which query shapes and
+    UI paths are supported, which catalogs were incomplete, which rows were
+    truncated, and which conclusions the evidence contract forbids.
+  </p>
+</section>
+
+<section data-access-readiness-block="owner-questions">
+  <h2>Turn unknowns into named owner questions.</h2>
+  <p>
+    Before a rebuild or migration decision, ask an Access owner which macros
+    and dynamic handlers matter, which branches are feasible, how generated
+    keys propagate, what mutation ordering is required, which external links
+    are available, and where effective permission evidence is still missing. Ask which calculated
+    fields are business rules, which runtime pivot columns are expected, which
+    validation behavior users depend on, and what acceptance evidence would be
+    sufficient.
+  </p>
+  <p>
+    The <a href="/proof-paths/for-managers/">manager proof path</a> helps keep
+    those questions connected to evidence. Use the
+    <a href="/evidence/">evidence model</a>,
+    <a href="/evidence/gaps/">gap guide</a>,
+    <a href="/static-vs-runtime/">static-versus-runtime boundary</a>,
+    <a href="/capabilities/">capability index</a>,
+    <a href="/use-cases/change-review/">change-review use case</a>, and
+    <a href="/limitations/">limitations</a> when handing the register to owners.
+  </p>
+</section>
+
+<section data-access-readiness-block="companions">
+  <h2>Read the three Access stories as one evidence chain.</h2>
+  <p>
+    First, read <a href="/blog/reverse-engineering-access-without-running-it/">how
+    Access evidence is acquired without running the application</a>. Next,
+    follow <a href="/blog/access-form-to-field-lineage/">a form-to-field static
+    lineage trail</a>. This article adds the management layer: how to preserve
+    bounded candidates, omitted evidence, and owner questions without turning
+    either companion story into a reconstruction promise.
+  </p>
+</section>
+
+<section data-access-readiness-block="non-claims" data-access-readiness-boundary="non-claims">
+  <h2>What the gap register does not establish.</h2>
+  <p>
+    It does not establish runtime execution, query results, production
+    behavior, complete coverage, successful reconstruction, effective
+    permissions, data correctness, selected branches, event firing, release
+    approval, or operational safety. It does not replace an Access owner,
+    migration architect, database owner, testing, runtime observation, or human
+    approval.
+  </p>
+  <p>
+    The public article includes no database, serialized definition, raw query
+    text, VBA or macro body, source snippet, credential, connection material,
+    machine-local path, private identity, raw analyzer output, or private
+    validation detail. No LLM, embedding, vector, or prompt classification is
+    used to create the evidence.
+  </p>
+</section>
+
+<section data-access-readiness-block="bottom-line">
+  <h2>A loud gap is more useful than a quiet promise.</h2>
+  <p>
+    TraceMap can make rebuild review more concrete by organizing static query
+    shapes, bindings, event candidates, flow paths, provenance, coverage, and
+    limits. The responsible output is not “rebuildable.” It is a deterministic
+    register of supported evidence and unresolved questions that owners can use
+    to plan the next validation step.
+  </p>
+</section>
