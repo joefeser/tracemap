@@ -11,7 +11,8 @@ internal static class StaticDispatchCandidateConsumerFixture
         string suffix = "dispatch",
         string analysisLevel = "Level1SemanticAnalysis",
         string buildStatus = "Succeeded",
-        bool includeUnsupportedRegistration = false)
+        bool includeUnsupportedRegistration = false,
+        bool includeSecondUnsupportedRegistration = false)
     {
         var indexPath = Path.Combine(root, $"{suffix}-source.sqlite");
         var combinedPath = Path.Combine(root, $"{suffix}-combined.sqlite");
@@ -83,6 +84,29 @@ internal static class StaticDispatchCandidateConsumerFixture
                     ["serviceType"] = "Sample.IOrderService",
                     ["serviceTypeSymbolId"] = "type:Sample.IOrderService"
                 }));
+            if (includeSecondUnsupportedRegistration)
+            {
+                facts.Add(FactFactory.Create(
+                    manifest,
+                    FactTypes.DependencyRegistered,
+                    RuleIds.CSharpSemanticRuntimeEvidence,
+                    EvidenceTiers.Tier1Semantic,
+                    new EvidenceSpan("Composition/Services.cs", 10, 10, null, "test", "test/1.0"),
+                    sourceSymbol: "Sample.CompositionRoot.Configure()",
+                    targetSymbol: "Sample.IOrderService",
+                    contractElement: "AddKeyedTransient",
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["argumentCount"] = "3",
+                        ["evidenceKind"] = "DependencyRegistered",
+                        ["implementationType"] = "Sample.AlternateOrderService",
+                        ["implementationTypeSymbolId"] = "type:Sample.AlternateOrderService",
+                        ["registrationKind"] = "AddKeyedTransient",
+                        ["registrationShape"] = "keyed-registration",
+                        ["serviceType"] = "Sample.IOrderService",
+                        ["serviceTypeSymbolId"] = "type:Sample.IOrderService"
+                    }));
+            }
         }
 
         SqliteIndexWriter.Write(indexPath, manifest, facts);

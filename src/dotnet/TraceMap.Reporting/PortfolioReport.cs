@@ -381,9 +381,8 @@ public static class PortfolioReporter
         reverseContext = WithCappedGaps(reverseContext, allGaps);
         portfolioImpact = WithCappedGaps(portfolioImpact, allGaps);
         releaseReviewContext = WithCappedGaps(releaseReviewContext, allGaps);
-        var dispatchCandidateContext = Section(
+        var dispatchCandidateContext = DispatchCandidateSection(
             before.DispatchCandidateRows.Concat(after.DispatchCandidateRows).ToArray(),
-            0,
             allGaps.Where(gap => gap.Section == "dispatchCandidateContext").ToArray(),
             ["Static dispatch candidates are review context only and do not prove runtime binding, reachability, or impact."]);
         return new PortfolioReportDocument(
@@ -494,11 +493,10 @@ public static class PortfolioReporter
         reverseContext = WithCappedGaps(reverseContext, allGaps);
         portfolioImpact = WithCappedGaps(portfolioImpact, allGaps);
         releaseReviewContext = WithCappedGaps(releaseReviewContext, allGaps);
-        var dispatchCandidateContext = Section(
+        var dispatchCandidateContext = DispatchCandidateSection(
             read.DispatchCandidateRows
                 .Where(row => activeFilteredSourceIds.Contains(Metadata(row.Metadata, "sourceId") ?? string.Empty))
                 .ToArray(),
-            0,
             allGaps.Where(gap =>
                     gap.Section == "dispatchCandidateContext"
                     && activeFilteredSourceIds.Contains(Metadata(gap.Metadata ?? [], "sourceId") ?? string.Empty))
@@ -603,7 +601,8 @@ public static class PortfolioReporter
                             new("dispatchGapId", gap.GapId),
                             new("reason", gap.Reason),
                             new("sourceId", SourceId(input.Label, side, gap.SourceLabel ?? string.Empty))
-                        ]))));
+                        ]),
+                        gap.GapId)));
 
                 facts.AddRange(read.Facts.Select(fact => PrefixFact(fact, input.Label, side)));
                 edges.AddRange(read.Edges.Select(edge => PrefixEdge(edge, input.Label, side)));
@@ -1012,6 +1011,43 @@ public static class PortfolioReporter
         }
 
         return new PortfolioSection<T>(status, SelectRollup(gaps, rows.Count > 0, omittedCount > 0), rows, gaps, omittedCount, limitations);
+    }
+
+    private static PortfolioSection<PortfolioContextRow> DispatchCandidateSection(
+        IReadOnlyList<PortfolioContextRow> rows,
+        IReadOnlyList<PortfolioGap> gaps,
+        IReadOnlyList<string> limitations)
+    {
+        string rollup;
+        if (gaps.Any(gap => gap.Classification == PortfolioReportClassifications.UnknownAnalysisGap))
+        {
+            rollup = PortfolioReportClassifications.UnknownAnalysisGap;
+        }
+        else if (gaps.Any(gap => gap.Classification == PortfolioReportClassifications.TruncatedByLimit))
+        {
+            rollup = PortfolioReportClassifications.TruncatedByLimit;
+        }
+        else if (gaps.Any(gap => gap.Classification == PortfolioReportClassifications.PartialAnalysis)
+                 || rows.Any(row => row.Classification == DispatchCandidateEvidenceProjection.PartialReviewClassification))
+        {
+            rollup = PortfolioReportClassifications.PartialAnalysis;
+        }
+        else if (rows.Count > 0)
+        {
+            rollup = PortfolioReportClassifications.ReviewRecommended;
+        }
+        else
+        {
+            rollup = PortfolioReportClassifications.NoActionableEvidence;
+        }
+
+        return new PortfolioSection<PortfolioContextRow>(
+            PortfolioReportStatuses.Available,
+            rollup,
+            rows,
+            gaps,
+            0,
+            limitations);
     }
 
     private static PortfolioSection<T> EmptySection<T>(string section, string message)
@@ -2459,11 +2495,12 @@ public static class PortfolioReporter
         string classification,
         string message,
         string? sourceLabel = null,
-        IReadOnlyList<KeyValuePair<string, string>>? metadata = null)
+        IReadOnlyList<KeyValuePair<string, string>>? metadata = null,
+        string? identityComponent = null)
     {
         var safeSource = SafeOptional(sourceLabel);
         return new PortfolioGap(
-            $"gap:{CombinedReportHelpers.Hash($"{kind}:{section}:{classification}:{message}:{safeSource}", 20)}",
+            $"gap:{CombinedReportHelpers.Hash($"{kind}:{section}:{classification}:{message}:{safeSource}:{identityComponent}", 20)}",
             kind,
             section,
             classification,

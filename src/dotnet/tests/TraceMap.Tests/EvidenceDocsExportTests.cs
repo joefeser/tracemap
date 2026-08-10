@@ -361,11 +361,13 @@ public sealed class EvidenceDocsExportTests
               "nodes": [{ "id": "node:one" }],
               "edges": [{
                 "id": "edge:dispatch",
-                "ruleId": "combined.dispatch-candidate.v1"
+                "ruleId": "combined.dispatch-candidate.v1",
+                "evidenceTier": "Tier3SyntaxOrTextual"
               }],
               "gaps": [{
                 "id": "gap:dispatch",
-                "ruleId": "combined.dispatch-gap.v1"
+                "ruleId": "combined.dispatch-gap.v1",
+                "evidenceTier": "Tier4Unknown"
               }],
               "limitations": []
             }
@@ -385,6 +387,8 @@ public sealed class EvidenceDocsExportTests
             && chunk.RuleIds.Contains("combined.dispatch-gap.v1", StringComparer.Ordinal)
             && chunk.SupportingIds.Contains("edge:dispatch", StringComparer.Ordinal)
             && chunk.SupportingIds.Contains("gap:dispatch", StringComparer.Ordinal)
+            && chunk.EvidenceTiers.Contains("Tier3SyntaxOrTextual", StringComparer.Ordinal)
+            && chunk.EvidenceTiers.Contains("Tier4Unknown", StringComparer.Ordinal)
             && chunk.BodyMarkdown.Contains("Static dispatch candidate gaps | `1`", StringComparison.Ordinal));
         Assert.Contains(result.Chunks, chunk => chunk.ChunkFamily == "limitation");
         Assert.DoesNotContain(result.Manifest.Gaps, gap => gap.Reason == "schema-incompatible" && gap.SupportingIds.Contains("vault-graph"));

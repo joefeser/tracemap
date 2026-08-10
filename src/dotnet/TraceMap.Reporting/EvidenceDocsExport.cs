@@ -981,6 +981,12 @@ public static class EvidenceDocsExporter
                 var registrationContextDispatchCount = dispatchEdges.Count(edge =>
                     StringProperty(edge, "registrationContext") == StaticDispatchRegistrationContexts.Candidate);
                 var hasDispatchCandidates = dispatchEdges.Length > 0 || dispatchGaps.Length > 0;
+                var dispatchEvidenceTiers = dispatchEdges
+                    .Select(edge => StringProperty(edge, "evidenceTier") ?? Tier4Unknown)
+                    .Concat(dispatchGaps.Select(gap => StringProperty(gap, "evidenceTier") ?? Tier4Unknown))
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray();
                 IReadOnlyList<string> dispatchRules;
                 if (hasDispatchCandidates)
                 {
@@ -1036,7 +1042,7 @@ public static class EvidenceDocsExporter
                     sources.Select(ToSourceRef).ToArray(),
                     [graphId, .. dispatchEdgeIds, .. dispatchGapIds],
                     dispatchRules,
-                    [EvidenceTiers.Tier2Structural],
+                    hasDispatchCandidates ? dispatchEvidenceTiers : [EvidenceTiers.Tier2Structural],
                     sources.Select(source => source.CoverageLabel).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).DefaultIfEmpty("vault-graph").ToArray(),
                     [],
                     [LimitationForFamily("dependency-surface", [graphId])]));

@@ -98,6 +98,13 @@ execution, and impact are not proven.
   now retain candidate state, bridge kind, and registration context, and the
   vault-to-docs projection reports those strength categories without upgrading
   them into runtime claims.
+- A second exact-head review found three remaining projection inconsistencies.
+  Dispatch portfolio sections now roll up complete candidates as review
+  recommended and reduced/gapped candidates as partial rather than actionable.
+  Portfolio gap identity includes the underlying dispatch gap ID, preventing
+  same-kind gaps from collapsing during capping. Vault docs now derive their
+  evidence-tier set from the matching serialized edges and gaps, so syntax or
+  unknown evidence cannot be upgraded to structural evidence.
 
 Validation for Task 10:
 
@@ -109,6 +116,9 @@ Validation for Task 10:
 - After the fresh exact-head Codex corrections, focused
   report/portfolio/vault/docs tests passed 105/105 and the full .NET solution
   passed 1,334/1,334 with a clean zero-warning build.
+- After the second exact-head review corrections, focused consumer tests passed
+  106/106 and the full .NET solution passed 1,335/1,335 with a clean
+  zero-warning build.
 - Targeted changed-file whitespace formatting and verification: passed.
 - Repo-wide `dotnet format --verify-no-changes`: deferred because existing
   unrelated formatting violations remain in unchanged files; no unrelated
