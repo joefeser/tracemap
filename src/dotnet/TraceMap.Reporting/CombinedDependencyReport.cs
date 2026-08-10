@@ -274,7 +274,8 @@ internal sealed record CombinedReadResult(
     IReadOnlyList<string> CoverageWarnings,
     IReadOnlyList<CombinedFactRow> Facts,
     IReadOnlyList<CombinedDependencyEdgeRow> Edges,
-    IReadOnlyDictionary<string, long> ValueOriginEvidenceCounts);
+    IReadOnlyDictionary<string, long> ValueOriginEvidenceCounts,
+    bool HasFactExtractorVersion = true);
 
 internal sealed record MessageCandidateEdgeResult(
     IReadOnlyList<CombinedDependencyEdgeRow> Edges,
@@ -436,11 +437,19 @@ public static class CombinedDependencyReporter
             knownGaps.AddRange(ReadKnownGaps(row.Source, row.ManifestJson, warnings));
         }
 
-        var facts = await ReadFactsAsync(connection, cancellationToken);
+        var hasFactExtractorVersion = await ColumnExistsAsync(connection, "combined_facts", "extractor_version", cancellationToken);
+        var facts = await ReadFactsAsync(connection, hasFactExtractorVersion, cancellationToken);
         knownGaps.AddRange(ReadAnalyzerCapabilityKnownGaps(sources, facts, warnings));
         var edges = await ReadEdgesAsync(connection, cancellationToken);
         var valueOriginCounts = await ReadValueOriginEvidenceCountsAsync(connection, cancellationToken);
-        return new CombinedReadResult(sources, knownGaps, warnings.Distinct(StringComparer.Ordinal).ToArray(), facts, edges, valueOriginCounts);
+        return new CombinedReadResult(
+            sources,
+            knownGaps,
+            warnings.Distinct(StringComparer.Ordinal).ToArray(),
+            facts,
+            edges,
+            valueOriginCounts,
+            hasFactExtractorVersion);
     }
 
     private static IReadOnlyList<CombinedKnownGapRow> ReadAnalyzerCapabilityKnownGaps(
@@ -597,10 +606,14 @@ public static class CombinedDependencyReporter
         return rows;
     }
 
-    private static async Task<IReadOnlyList<CombinedFactRow>> ReadFactsAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<CombinedFactRow>> ReadFactsAsync(
+        SqliteConnection connection,
+        bool hasExtractorVersion,
+        CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = """
+        var extractorVersionExpression = hasExtractorVersion ? "facts.extractor_version" : "null";
+        command.CommandText = $$"""
             select facts.combined_fact_id,
                    facts.source_index_id,
                    sources.label,
@@ -618,7 +631,7 @@ public static class CombinedDependencyReporter
                    facts.start_line,
                    facts.end_line,
                    facts.properties_json,
-                   facts.extractor_version
+                   {{extractorVersionExpression}}
             from combined_facts facts
             join index_sources sources on sources.source_index_id = facts.source_index_id
             order by facts.file_path, facts.start_line, facts.fact_type, facts.combined_fact_id;
@@ -1893,6 +1906,19 @@ public static class CombinedDependencyReporter
         await using var command = connection.CreateCommand();
         command.CommandText = "select count(*) from sqlite_master where type = 'table' and name = $name;";
         command.Parameters.AddWithValue("$name", tableName);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0;
+    }
+
+    private static async Task<bool> ColumnExistsAsync(
+        SqliteConnection connection,
+        string tableName,
+        string columnName,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select count(*) from pragma_table_info($table) where name = $column collate nocase;";
+        command.Parameters.AddWithValue("$table", tableName);
+        command.Parameters.AddWithValue("$column", columnName);
         return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0;
     }
 
