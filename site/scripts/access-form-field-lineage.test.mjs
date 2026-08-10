@@ -34,6 +34,12 @@ test("Access form-to-field validator scans tag-collapsed private and executable 
   }
 });
 
+test("Access form-to-field validator decodes semicolonless numeric entities before scanning", async (t) => {
+  for (const leak of ["/Us&#101rs/example/private", "S&#69LECT value FROM private_table"]) {
+    await t.test(leak, async (subtest) => { const root = await fixture(subtest); await append(root, leak); await buildSite({ root, log() {} }); const errors = []; await validateAccessFormFieldLineageDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /hard private material|raw or executable material/); });
+  }
+});
+
 test("Access form-to-field validator scans the non-claim boundary for unsafe material", async (t) => {
   const root = await fixture(t);
   const path = join(root, "src", "_blog", "articles", "access-form-to-field-lineage.html");

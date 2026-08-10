@@ -115,8 +115,9 @@ async function validateIndexes(dist, errors) {
 
 async function validatePage(pagePath, errors) {
   const html = await readFile(pagePath, "utf8");
-  const decoded = decodeHtmlEntities(html);
-  const rendered = normalizeRenderedText(html);
+  const browserDecoded = decodeBrowserNumericEntities(html);
+  const decoded = decodeHtmlEntities(browserDecoded);
+  const rendered = normalizeRenderedText(browserDecoded);
   const tagCollapsed = decodeHtmlEntities(stripTagsQuoteAware(decoded)).replace(/\s+/g, " ").trim();
   const safetySurfaces = [decoded, rendered, tagCollapsed];
   if (!html.includes("<title>From an Access Form to a Field | TraceMap</title>")) errors.push(withEvidence("Access form-to-field title is missing.", pageArtifact));
@@ -129,6 +130,10 @@ async function validatePage(pagePath, errors) {
   for (const pattern of forbiddenClaims) if (safetySurfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Access form-to-field article contains unsupported positive claim: ${pattern}`, pageArtifact));
   for (const pattern of rawPatterns) if (safetySurfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Access form-to-field article contains raw or executable material: ${pattern}`, pageArtifact));
   for (const pattern of privatePatterns) if (safetySurfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Access form-to-field article contains hard private material: ${pattern}`, pageArtifact));
+}
+
+function decodeBrowserNumericEntities(value) {
+  return String(value).replace(/&#(?:x[0-9a-f]+|[0-9]+);?/gi, (entity) => decodeHtmlEntities(entity.endsWith(";") ? entity : `${entity};`));
 }
 
 function hasHref(html, href) { return new RegExp(`<a\\b[^>]*href\\s*=\\s*["']${escapeRegExp(href)}["'][^>]*>`, "i").test(html); }
