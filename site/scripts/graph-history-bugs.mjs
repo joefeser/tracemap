@@ -45,7 +45,8 @@ export async function validateGraphHistoryBugsDist({ baseUrl = "https://tracemap
   if (!(await fileExists(pagePath))) { errors.push(withEvidence(`Graph history article is missing required route: ${graphHistoryRoute}`, artifact)); return; }
 
   const sitemapPath = resolve(dist, "sitemap.xml");
-  if (await fileExists(sitemapPath) && !(await readSitemapLocSet(sitemapPath)).has(`${cleanBaseUrl}${graphHistoryRoute}`)) localErrors.push(withEvidence("Graph history sitemap route is missing.", "sitemap.xml"));
+  if (!(await fileExists(sitemapPath))) localErrors.push(withEvidence("Graph history sitemap is missing.", "sitemap.xml"));
+  else if (!(await readSitemapLocSet(sitemapPath)).has(`${cleanBaseUrl}${graphHistoryRoute}`)) localErrors.push(withEvidence("Graph history sitemap route is missing.", "sitemap.xml"));
   await validateIndexes(dist, localErrors);
   await validatePage(pagePath, cleanBaseUrl, localErrors);
   errors.push(...localErrors);
@@ -53,7 +54,16 @@ export async function validateGraphHistoryBugsDist({ baseUrl = "https://tracemap
 
 async function validateIndexes(dist, errors) {
   const blogPath = resolve(dist, "blog/index.html");
-  if (!(await fileExists(blogPath)) || !hasHref(await readFile(blogPath, "utf8"), graphHistoryRoute)) errors.push(withEvidence("Graph history blog index link is missing.", "blog/index.html"));
+  if (!(await fileExists(blogPath))) errors.push(withEvidence("Graph history blog index link is missing.", "blog/index.html"));
+  else {
+    const blogHtml = await readFile(blogPath, "utf8");
+    if (!hasHref(blogHtml, graphHistoryRoute)) errors.push(withEvidence("Graph history blog index link is missing.", "blog/index.html"));
+    else {
+      const card = extractLinkedAnchor(blogHtml, graphHistoryRoute);
+      if (!card) errors.push(withEvidence("Graph history blog card could not be isolated.", "blog/index.html"));
+      else scanSafetySurfaces(card, "Graph history blog card", "blog/index.html", errors);
+    }
+  }
   const companionPath = resolve(dist, "blog/csharp-extraction-without-plausible-wrong-graphs/index.html");
   if (!(await fileExists(companionPath)) || !hasHref(await readFile(companionPath, "utf8"), graphHistoryRoute)) errors.push(withEvidence("Graph history reciprocal companion link is missing.", "blog/csharp-extraction-without-plausible-wrong-graphs/index.html"));
   const path = resolve(dist, "routes-index.json");
@@ -78,7 +88,6 @@ async function validatePage(pagePath, baseUrl, errors) {
   const decoded = decodeHtmlEntities(browserDecoded);
   const rendered = normalizeRenderedText(browserDecoded);
   const tagCollapsed = decodeHtmlEntities(stripTagsQuoteAware(decoded)).replace(/\s+/g, " ").trim();
-  const surfaces = [decoded, rendered, tagCollapsed];
   if (!html.includes("<title>The Bugs Hiding in Graph History | TraceMap</title>")) errors.push(withEvidence("Graph history title is missing.", artifact));
   if (!new RegExp(`<link\\b[^>]*rel=["']canonical["'][^>]*href=["']${escapeRegExp(baseUrl)}${escapeRegExp(graphHistoryRoute)}["']`, "i").test(html)) errors.push(withEvidence("Graph history canonical URL is missing or incorrect.", artifact));
   for (const block of blocks) if (!new RegExp(`<section\\b[^>]*data-graph-history-block\\s*=\\s*["']${block}["']`, "i").test(html)) errors.push(withEvidence(`Graph history article is missing block: ${block}`, artifact));
@@ -86,11 +95,19 @@ async function validatePage(pagePath, baseUrl, errors) {
   for (const link of graphHistoryRequiredLinks) if (!hasHref(html, link)) errors.push(withEvidence(`Graph history article is missing required link: ${link}`, artifact));
   const words = rendered.split(/\s+/).filter(Boolean).length;
   if (words < 1100 || words > 2100) errors.push(withEvidence(`Graph history word count must be between 1100 and 2100 words, got ${words}`, artifact));
-  for (const pattern of forbiddenClaims) if (surfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Graph history article contains unsupported positive claim: ${pattern}`, artifact));
-  for (const pattern of rawPatterns) if (surfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Graph history article contains source or executable material: ${pattern}`, artifact));
-  for (const pattern of privatePatterns) if (surfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Graph history article contains hard private material: ${pattern}`, artifact));
+  scanSafetySurfaces([decoded, rendered, tagCollapsed], "Graph history article", artifact, errors);
 }
 
 function decodeBrowserNumericEntities(value) { return String(value).replace(/&#(?:x[0-9a-f]+|[0-9]+);?/gi, (entity) => decodeHtmlEntities(entity.endsWith(";") ? entity : `${entity};`)); }
 function hasHref(html, href) { return new RegExp(`<a\\b[^>]*href\\s*=\\s*["']${escapeRegExp(href)}["'][^>]*>`, "i").test(html); }
+function extractLinkedAnchor(html, href) { return String(html).match(new RegExp(`<a\\b[^>]*href\\s*=\\s*["']${escapeRegExp(href)}["'][^>]*>[\\s\\S]*?<\\/a>`, "i"))?.[0] ?? ""; }
+function scanSafetySurfaces(value, label, evidenceArtifact, errors) {
+  const raw = Array.isArray(value) ? value.join(" ") : String(value);
+  const browserDecoded = decodeBrowserNumericEntities(raw);
+  const decoded = decodeHtmlEntities(browserDecoded);
+  const surfaces = [decoded, normalizeRenderedText(browserDecoded), decodeHtmlEntities(stripTagsQuoteAware(decoded)).replace(/\s+/g, " ").trim()];
+  for (const pattern of forbiddenClaims) if (surfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`${label} contains unsupported positive claim: ${pattern}`, evidenceArtifact));
+  for (const pattern of rawPatterns) if (surfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`${label} contains source or executable material: ${pattern}`, evidenceArtifact));
+  for (const pattern of privatePatterns) if (surfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`${label} contains hard private material: ${pattern}`, evidenceArtifact));
+}
 function withEvidence(message, evidenceArtifact) { return `${message} Evidence: ${evidenceArtifact}.`; }

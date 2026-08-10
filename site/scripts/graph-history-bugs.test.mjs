@@ -24,6 +24,14 @@ test("Graph history validator rejects discovery, required-link, and reciprocal-l
   const root = await fixture(t); const discoveryPath = join(root, "src/_site/discovery.json"); const entries = JSON.parse(await readFile(discoveryPath, "utf8")); entries.find((entry) => entry.path === "/blog/bugs-hiding-in-graph-history/").publicClaimLevel = "concept"; await writeFile(discoveryPath, `${JSON.stringify(entries, null, 2)}\n`, "utf8"); const articlePath = join(root, "src/_blog/articles/bugs-hiding-in-graph-history.html"); await writeFile(articlePath, (await readFile(articlePath, "utf8")).replaceAll('href="/proof-paths/for-managers/"', 'href="/"'), "utf8"); const companionPath = join(root, "src/_blog/articles/csharp-extraction-without-plausible-wrong-graphs.html"); await writeFile(companionPath, (await readFile(companionPath, "utf8")).replaceAll('href="/blog/bugs-hiding-in-graph-history/"', 'href="/blog/"'), "utf8"); await buildSite({ root, log() {} }); const errors = []; await validateGraphHistoryBugsDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /claim level must be demo/); assert.match(errors.join("\n"), /missing required link/); assert.match(errors.join("\n"), /reciprocal companion link is missing/);
 });
 
+test("Graph history validator scans the public blog card", async (t) => {
+  const root = await fixture(t); const metadataPath = join(root, "src/_blog/articles.json"); const articles = JSON.parse(await readFile(metadataPath, "utf8")); articles.find((article) => article.slug === "bugs-hiding-in-graph-history").cardDescription = "TraceMap proves runtime reachability."; await writeFile(metadataPath, `${JSON.stringify(articles, null, 2)}\n`, "utf8"); await buildSite({ root, log() {} }); const errors = []; await validateGraphHistoryBugsDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /blog card contains unsupported positive claim/);
+});
+
+test("Graph history validator rejects a missing sitemap", async (t) => {
+  const root = await fixture(t); await buildSite({ root, log() {} }); await rm(join(root, "dist/sitemap.xml")); const errors = []; await validateGraphHistoryBugsDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /sitemap is missing/);
+});
+
 test("Graph history validator reports malformed discovery", async (t) => {
   for (const malformed of ["{", JSON.stringify({ entries: {} })]) await t.test(malformed, async (subtest) => { const root = await fixture(subtest); await buildSite({ root, log() {} }); await writeFile(join(root, "dist/routes-index.json"), malformed, "utf8"); const errors = []; await validateGraphHistoryBugsDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /valid JSON|entries array/); });
 });
