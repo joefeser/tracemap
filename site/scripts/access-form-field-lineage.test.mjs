@@ -28,6 +28,32 @@ test("Access form-to-field validator rejects planted private and executable mate
   }
 });
 
+test("Access form-to-field validator scans tag-collapsed private and executable material", async (t) => {
+  for (const leak of ["/Us<span>ers</span>/example/private", "SE<span>LECT</span> value FROM private_table"]) {
+    await t.test(leak, async (subtest) => { const root = await fixture(subtest); await append(root, leak); await buildSite({ root, log() {} }); const errors = []; await validateAccessFormFieldLineageDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /hard private material|raw or executable material/); });
+  }
+});
+
+test("Access form-to-field validator scans the non-claim boundary for unsafe material", async (t) => {
+  const root = await fixture(t);
+  const path = join(root, "src", "_blog", "articles", "access-form-to-field-lineage.html");
+  await writeFile(path, (await readFile(path, "utf8")).replace("<h2>What the lineage does not prove.</h2>", "<h2>What the lineage does not prove.</h2><p>SELECT value FROM private_table</p>"), "utf8");
+  await buildSite({ root, log() {} }); const errors = []; await validateAccessFormFieldLineageDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /raw or executable material/);
+});
+
+test("Access form-to-field validator reports malformed discovery output", async (t) => {
+  for (const malformed of ["{", JSON.stringify({ entries: {} })]) {
+    await t.test(malformed, async (subtest) => { const root = await fixture(subtest); await buildSite({ root, log() {} }); await writeFile(join(root, "dist", "routes-index.json"), malformed, "utf8"); const errors = []; await validateAccessFormFieldLineageDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /valid JSON|entries array/); });
+  }
+});
+
+test("Access form-to-field validator accepts block attribute spacing", async (t) => {
+  const root = await fixture(t); await buildSite({ root, log() {} });
+  const path = join(root, "dist", "blog", "access-form-to-field-lineage", "index.html");
+  await writeFile(path, (await readFile(path, "utf8")).replaceAll("data-access-lineage-block=", "data-access-lineage-block = "), "utf8");
+  const errors = []; await validateAccessFormFieldLineageDist({ dist: join(root, "dist"), errors }); assert.deepEqual(errors, []);
+});
+
 test("Access form-to-field validator rejects missing companion cross-link and discovery drift", async (t) => {
   const root = await fixture(t);
   const companion = join(root, "src", "_blog", "articles", "reverse-engineering-access-without-running-it.html");
