@@ -149,7 +149,11 @@ public sealed record CombinedPathEdge(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     int? CandidateLimit = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    string? CandidateCapReason = null);
+    string? CandidateCapReason = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? CandidateState = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? CandidateBridgeKind = null);
 
 public sealed record CombinedPathNote(string Code, string Message);
 
@@ -330,6 +334,22 @@ public static class CombinedDependencyPathReporter
 
         var parsedSourcePair = ParseSourcePair(sourcePair);
         var (read, graph) = await BuildGraphAsync(indexPath, parsedSourcePair, includeLegacyRoots: false, allowSingleIndex: false, cancellationToken);
+        return ToGraphInventory(read, graph);
+    }
+
+    internal static CombinedPathGraphInventory BuildGraphInventory(
+        CombinedReadResult read,
+        string? sourcePair = null)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        var parsedSourcePair = ParseSourcePair(sourcePair);
+        var endpointFindings = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
+        var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts, read.Sources);
+        return ToGraphInventory(read, BuildGraph(read, endpointFindings, surfaces, parsedSourcePair, includeLegacyRoots: false));
+    }
+
+    private static CombinedPathGraphInventory ToGraphInventory(CombinedReadResult read, EvidenceGraph graph)
+    {
         return new CombinedPathGraphInventory(
             read.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             read.CoverageWarnings.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
@@ -2112,7 +2132,9 @@ public static class CombinedDependencyPathReporter
                 candidate.EndLine,
                 candidate.RelationshipKind,
                 candidate.RegistrationContext == StaticDispatchRegistrationContexts.None ? null : candidate.RegistrationContext,
-                candidate.SupportingRegistrationFactIds.Count == 0 ? null : candidate.SupportingRegistrationFactIds));
+                candidate.SupportingRegistrationFactIds.Count == 0 ? null : candidate.SupportingRegistrationFactIds,
+                candidate.State,
+                candidate.BridgeKind));
         }
 
         foreach (var gap in candidates.Gaps)
@@ -4331,7 +4353,9 @@ public static class CombinedDependencyPathReporter
         int? EndLine,
         string? OriginalRelationshipKind = null,
         string? RegistrationContext = null,
-        IReadOnlyList<string>? SupportingRegistrationFactIds = null)
+        IReadOnlyList<string>? SupportingRegistrationFactIds = null,
+        string? CandidateState = null,
+        string? CandidateBridgeKind = null)
     {
         public CombinedPathEdge ToReportEdge()
         {
@@ -4349,7 +4373,9 @@ public static class CombinedDependencyPathReporter
                 StartLine,
                 EndLine,
                 RegistrationContext,
-                SupportingRegistrationFactIds?.OrderBy(value => value, StringComparer.Ordinal).ToArray());
+                SupportingRegistrationFactIds?.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                CandidateState: CandidateState,
+                CandidateBridgeKind: CandidateBridgeKind);
         }
     }
 }

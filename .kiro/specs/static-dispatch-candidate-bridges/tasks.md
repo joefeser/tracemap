@@ -134,35 +134,35 @@ not part of this spec-only branch.
   - [x] Add focused reverse and impact tests for candidate paths, no-candidate
         gaps, reduced coverage, and truncation.
 
-- [ ] 10. Add report, portfolio, vault, and docs-export consumption.
-  - [ ] Summarize candidate counts, registration-context counts, gaps,
+- [x] 10. Add report, portfolio, vault, and docs-export consumption.
+  - [x] Summarize candidate counts, registration-context counts, gaps,
         fan-out caps, source coverage, and limitations in combined report and
         portfolio report.
-  - [ ] Audit existing `vault-export.*` and `docs-export.*` rule IDs in the
+  - [x] Audit existing `vault-export.*` and `docs-export.*` rule IDs in the
         catalog.
-  - [ ] Add new vault/docs candidate edge or gap rules to the catalog if no
+  - [x] Add new vault/docs candidate edge or gap rules to the catalog if no
         existing presentation rule can honestly wrap candidate evidence.
-  - [ ] Ensure vault graph and docs-export candidate artifacts cite both the
+  - [x] Ensure vault graph and docs-export candidate artifacts cite both the
         consumer presentation rule and the underlying dispatch candidate/gap
         rules.
-  - [ ] Export candidate edges and gaps to vault graph as review-context edges,
+  - [x] Export candidate edges and gaps to vault graph as review-context edges,
         not ordinary call edges.
-  - [ ] Include candidate chunks in docs-export/RAG-ready evidence docs with
+  - [x] Include candidate chunks in docs-export/RAG-ready evidence docs with
         rule IDs, tiers, supporting IDs, coverage labels, and limitations.
-  - [ ] Add safety tests for raw snippets, SQL, config, URLs, hostnames, raw
+  - [x] Add safety tests for raw snippets, SQL, config, URLs, hostnames, raw
         remotes, local paths, private labels, and secrets.
-  - [ ] Add byte-stability tests for JSON, Markdown, vault graph, and
+  - [x] Add byte-stability tests for JSON, Markdown, vault graph, and
         docs-export outputs where those commands promise stability.
 
-- [ ] 11. Validate implementation.
-  - [ ] Run `dotnet test src/dotnet/TraceMap.sln`.
-  - [ ] Run the CLI against at least one public-safe sample and confirm
+- [x] 11. Validate implementation.
+  - [x] Run `dotnet test src/dotnet/TraceMap.sln`.
+  - [x] Run the CLI against at least one public-safe sample and confirm
         candidate output/gaps are deterministic and safe.
-  - [ ] Follow `docs/VALIDATION.md` and run or explicitly defer relevant
+  - [x] Follow `docs/VALIDATION.md` and run or explicitly defer relevant
         pinned smoke checks with evidence.
-  - [ ] Run `./scripts/check-private-paths.sh`.
-  - [ ] Run `git diff --check`.
-  - [ ] Confirm generated outputs do not contain unsafe values or runtime proof
+  - [x] Run `./scripts/check-private-paths.sh`.
+  - [x] Run `git diff --check`.
+  - [x] Confirm generated outputs do not contain unsafe values or runtime proof
         language.
 
 ## Deferred Follow-Ups

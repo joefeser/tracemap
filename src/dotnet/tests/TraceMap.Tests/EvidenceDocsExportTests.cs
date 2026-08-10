@@ -9,6 +9,72 @@ namespace TraceMap.Tests;
 public sealed class EvidenceDocsExportTests
 {
     [Fact]
+    public async Task Docs_export_packages_static_dispatch_candidates_as_weak_review_evidence()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await StaticDispatchCandidateConsumerFixture.CreateCombinedIndexAsync(temp.Path);
+        var firstOut = Path.Combine(temp.Path, "docs-dispatch-a");
+        var secondOut = Path.Combine(temp.Path, "docs-dispatch-b");
+
+        var first = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(combinedPath, firstOut));
+        await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(combinedPath, secondOut));
+
+        var chunk = Assert.Single(first.Chunks, candidate =>
+            candidate.ChunkFamily == "dependency-surface"
+            && candidate.ChunkType == "weak-static-evidence"
+            && candidate.RuleIds.Contains("docs-export.chunk.dispatch-candidate.v1", StringComparer.Ordinal));
+        Assert.Contains("combined.dispatch-candidate.v1", chunk.RuleIds);
+        Assert.Equal("weak-static-evidence", chunk.Claim.Kind);
+        Assert.Contains("weak-evidence-question", chunk.QuestionFamilies);
+        var citation = Assert.Single(chunk.Citations);
+        Assert.Equal("1111111111111111111111111111111111111111", citation.CommitSha);
+        Assert.Equal("Services/OrderService.cs", citation.FilePath);
+        Assert.Equal(18, citation.StartLine);
+        Assert.Contains("combined.dispatch-candidate.v1", citation.RuleIds);
+        Assert.NotEmpty(citation.SupportingFactIds);
+        Assert.NotEmpty(citation.SupportingEdgeIds);
+        Assert.Contains(chunk.Limitations, limitation => limitation.Message.Contains("do not prove runtime dispatch", StringComparison.Ordinal));
+        Assert.DoesNotContain("selected implementation is", chunk.BodyMarkdown, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(firstOut, "chunks.jsonl")),
+            await File.ReadAllTextAsync(Path.Combine(secondOut, "chunks.jsonl")));
+
+        var vaultOut = Path.Combine(temp.Path, "vault");
+        await VaultExporter.ExportAsync(new VaultExportOptions(combinedPath, vaultOut, Format: "json"));
+        var fromVault = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "docs-from-vault"),
+            VaultGraphPaths: [Path.Combine(vaultOut, "graph.json")],
+            Families: "dependency-surface,gap,limitation"));
+        Assert.Contains(fromVault.Chunks, candidate =>
+            candidate.Title == "Vault static dispatch candidate evidence"
+            && candidate.Claim.Kind == "weak-static-evidence"
+            && candidate.BodyMarkdown.Contains("Symbol-backed dispatch candidates | `1`", StringComparison.Ordinal)
+            && candidate.SupportingIds.Any(id => id.StartsWith("edge:", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task Docs_export_scopes_dispatch_gaps_to_their_owning_source()
+    {
+        using var temp = new TempDirectory();
+        var combinedPath = await StaticDispatchCandidateConsumerFixture.CreateCombinedIndexAsync(
+            temp.Path,
+            includeUnsupportedRegistration: true,
+            includeSecondSource: true);
+
+        var result = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "docs-source-scoped-gap"),
+            Families: "dependency-surface,gap,limitation"));
+
+        var chunk = Assert.Single(result.Chunks, candidate =>
+            candidate.Title == "Static dispatch candidate review context");
+        var gap = Assert.Single(chunk.Gaps, candidate => candidate.Reason == "UnsupportedRegistrationShape");
+        var source = Assert.Single(gap.SourceRefs);
+        Assert.False(string.IsNullOrWhiteSpace(source.SourceId));
+    }
+
+    [Fact]
     public async Task Docs_export_writes_deterministic_markdown_jsonl_and_manifest()
     {
         using var temp = new TempDirectory();
@@ -314,8 +380,16 @@ public sealed class EvidenceDocsExportTests
               "schemaVersion": "evidence-graph-vault-export.v1",
               "classification": "hidden",
               "nodes": [{ "id": "node:one" }],
-              "edges": [],
-              "gaps": [],
+              "edges": [{
+                "id": "edge:dispatch",
+                "ruleId": "combined.dispatch-candidate.v1",
+                "evidenceTier": "Tier3SyntaxOrTextual"
+              }],
+              "gaps": [{
+                "id": "gap:dispatch",
+                "ruleId": "combined.dispatch-gap.v1",
+                "evidenceTier": "Tier4Unknown"
+              }],
               "limitations": []
             }
             """);
@@ -327,6 +401,16 @@ public sealed class EvidenceDocsExportTests
             Families: "dependency-surface,limitation,gap"));
 
         Assert.Contains(result.Chunks, chunk => chunk.ChunkFamily == "dependency-surface" && chunk.SupportingIds.Any(id => id.StartsWith("vault-graph:", StringComparison.Ordinal)));
+        Assert.Contains(result.Chunks, chunk =>
+            chunk.Title == "Vault static dispatch candidate evidence"
+            && chunk.Claim.Kind == "weak-static-evidence"
+            && chunk.RuleIds.Contains("combined.dispatch-candidate.v1", StringComparer.Ordinal)
+            && chunk.RuleIds.Contains("combined.dispatch-gap.v1", StringComparer.Ordinal)
+            && chunk.SupportingIds.Contains("edge:dispatch", StringComparer.Ordinal)
+            && chunk.SupportingIds.Contains("gap:dispatch", StringComparer.Ordinal)
+            && chunk.EvidenceTiers.Contains("Tier3SyntaxOrTextual", StringComparer.Ordinal)
+            && chunk.EvidenceTiers.Contains("Tier4Unknown", StringComparer.Ordinal)
+            && chunk.BodyMarkdown.Contains("Static dispatch candidate gaps | `1`", StringComparison.Ordinal));
         Assert.Contains(result.Chunks, chunk => chunk.ChunkFamily == "limitation");
         Assert.DoesNotContain(result.Manifest.Gaps, gap => gap.Reason == "schema-incompatible" && gap.SupportingIds.Contains("vault-graph"));
     }
