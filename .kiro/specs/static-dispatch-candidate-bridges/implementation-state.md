@@ -1,7 +1,7 @@
 # Static Dispatch Candidate Bridges Implementation State
 
-Status: implementation-task-6-remainder-required
-Readiness: ready-for-task-6-remainder
+Status: implementation-complete-awaiting-review
+Readiness: ready-for-review
 Merged PR 1: #331 (`086ad376e387ea8d87e430175ef2673cbc74c0f1`)
 Merged PR 2: #333 (`84f72e0faa9dd6c106c625de175a194d9c1515ff`)
 Merged PR 3: #610 (`6a8b5bd14187e5258a9805ee73cad6ff66cb9079`)
@@ -14,7 +14,7 @@ Merged PR 6: #615 (`92548cab13aeeec0e818b774828194db57990047`)
 - Branch: `codex/reconcile-static-dispatch-runway`
 - Base: `origin/dev`
 - Base SHA: `92548cab13aeeec0e818b774828194db57990047`
-- Scope: post-merge bookkeeping and explicit remaining Task 6 boundary
+- Scope: post-merge bookkeeping and final Task 6 fail-closed gap behavior
 - Suggested PR target: `dev`
 
 ## Task 7 Pre-Implementation Decision
@@ -37,17 +37,50 @@ Merged PR 6: #615 (`92548cab13aeeec0e818b774828194db57990047`)
 
 ## Current Implementation State
 
-Tasks 7 through 11 are complete. PR #615 completed Task 10 by projecting the same
+Tasks 6 through 11 are complete. PR #615 completed Task 10 by projecting the same
 shared in-memory dispatch candidate inventory into combined dependency reports,
-portfolio reports, vault graphs, and evidence docs. No scanner, extractor,
-persisted combined-index schema, runtime probe, or DI execution behavior is
-added.
+portfolio reports, vault graphs, and evidence docs. The final Task 6 slice on
+this branch makes absence truthfulness explicit without adding a scanner,
+extractor, persisted combined-index schema, runtime probe, or DI execution path.
 
-Type-level fallback candidates and the broader Task 6 missing/identity/generic
-and reduced-coverage gap vocabulary remain deferred. Every Task 10 consumer
-keeps candidate evidence review-tier, preserves the underlying dispatch rules,
-and states that runtime dispatch, selected implementation, reachability,
-execution, and impact are not proven.
+Every consumer keeps candidate evidence review-tier, preserves the underlying
+dispatch rules, and states that runtime dispatch, selected implementation,
+reachability, execution, and impact are not proven.
+
+## Task 6 Final Boundary
+
+- Type-level `ImplementsInterface`, `InheritsFrom`, and `ExtendsInterface`
+  evidence never creates a guessed member edge. When a called member has
+  matching type context but no member relationship, the builder emits
+  `MemberCandidateUnavailable` with the call and type-relationship fact IDs.
+- If the call or type relationship lacks canonical member/type identity, the
+  builder fails closed as `DispatchCandidateIdentityUnverified`; display text
+  is not treated as identity.
+- Reduced semantic analysis, failed/partial builds, unsupported adapters,
+  missing commit identity, or missing extractor identity emit one bounded
+  `DispatchCandidateReducedCoverage` gap per relevant source. Existing member
+  candidates from that source are downgraded to `WeakerCandidate` / Tier4.
+- Existing report, portfolio, vault, and docs consumers already emit
+  `DispatchCandidateSchemaUnavailable` when required combined schema is absent.
+  The rule catalog now documents the complete closed gap vocabulary.
+- Direct regressions prove deterministic IDs, supporting provenance, file
+  spans, rule IDs, evidence tiers, fail-closed identity behavior, and reduced
+  coverage downgrades. No runtime binding or candidate absence conclusion is
+  added.
+
+Validation for the final Task 6 slice:
+
+- Locked solution restore: passed.
+- Solution build: passed with 0 warnings and 0 errors.
+- Focused static-dispatch builder and end-to-end gap tests: 8/8 passed.
+- Paths, route-flow, combined report, portfolio, vault, and evidence-doc tests:
+  234/234 passed.
+- Full .NET solution tests: 1,341/1,341 passed.
+- Targeted changed-file formatting: passed.
+- Public combined paths/reverse smoke: passed after installing the locked
+  TypeScript dependencies in the isolated worktree; deterministic targeted
+  output and public-path safety assertions passed.
+- Private-path guard and `git diff --check`: passed.
 
 ## Task 10 Implementation
 

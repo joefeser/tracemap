@@ -18,7 +18,9 @@ internal static class StaticDispatchCandidateBuilder
         IEnumerable<StaticDispatchRelationshipEdge> relationships,
         Func<string, string?>? extractorVersionFor = null,
         StaticDispatchCandidateBuildOptions? options = null,
-        IEnumerable<StaticDispatchRegistrationFact>? registrations = null)
+        IEnumerable<StaticDispatchRegistrationFact>? registrations = null,
+        IEnumerable<StaticDispatchCallTarget>? callTargets = null,
+        IEnumerable<StaticDispatchSourceContext>? sourceContexts = null)
     {
         var candidateLimit = Math.Max(1, options?.CandidateLimit ?? DefaultCandidateLimit);
         var maxOverrideDepth = Math.Clamp(options?.MaxOverrideDepth ?? DefaultMaxOverrideDepth, 1, DefaultMaxOverrideDepth);
@@ -28,6 +30,12 @@ internal static class StaticDispatchCandidateBuilder
         var allRelationships = relationships.ToArray();
         var registrationFacts = registrations?
             .OrderBy(registration => registration.FactId, StringComparer.Ordinal)
+            .ToArray() ?? [];
+        var calls = callTargets?
+            .OrderBy(call => call.FactId, StringComparer.Ordinal)
+            .ToArray() ?? [];
+        var sources = sourceContexts?
+            .OrderBy(source => source.SourceIndexId, StringComparer.Ordinal)
             .ToArray() ?? [];
         var registrationIndex = BuildRegistrationIndex(registrationFacts);
         var compatibleRegistrationFactIds = new HashSet<string>(StringComparer.Ordinal);
@@ -131,6 +139,15 @@ internal static class StaticDispatchCandidateBuilder
             compatibleRegistrationFactIds,
             allRelationships.ToDictionary(relationship => relationship.EdgeId, StringComparer.Ordinal),
             extractorVersionFor);
+        ApplyCoverageAndMissingMemberContext(
+            candidates,
+            gaps,
+            nodes,
+            allRelationships,
+            memberRelationships,
+            calls,
+            sources,
+            extractorVersionFor);
 
         return new StaticDispatchCandidateBuildResult(
             candidates
@@ -152,6 +169,197 @@ internal static class StaticDispatchCandidateBuilder
                 .ThenBy(gap => gap.StartLine ?? 0)
                 .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
                 .ToArray());
+    }
+
+    private static void ApplyCoverageAndMissingMemberContext(
+        List<StaticDispatchCandidateEdge> candidates,
+        List<StaticDispatchCandidateGap> gaps,
+        IReadOnlyDictionary<string, StaticDispatchCandidateNode> nodes,
+        IReadOnlyList<StaticDispatchRelationshipEdge> allRelationships,
+        IReadOnlyList<StaticDispatchRelationshipEdge> memberRelationships,
+        IReadOnlyList<StaticDispatchCallTarget> calls,
+        IReadOnlyList<StaticDispatchSourceContext> sources,
+        Func<string, string?> extractorVersionFor)
+    {
+        var relevantSourceIds = allRelationships.Select(relationship => nodes.GetValueOrDefault(relationship.FromNodeId)?.SourceIndexId)
+            .Concat(calls.Select(call => call.SourceIndexId))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Cast<string>()
+            .ToHashSet(StringComparer.Ordinal);
+        var reducedSourceIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var source in sources.Where(source => relevantSourceIds.Contains(source.SourceIndexId)))
+        {
+            var reason = SourceReductionReason(source);
+            if (reason is null)
+            {
+                continue;
+            }
+
+            reducedSourceIds.Add(source.SourceIndexId);
+            gaps.Add(CreateContextGap(
+                "DispatchCandidateReducedCoverage",
+                reason,
+                "Static dispatch candidate derivation has reduced or unsupported source coverage; candidate absence is not a clean conclusion.",
+                source.SourceIndexId,
+                source.SourceLabel,
+                null,
+                source.CommitSha,
+                source.ScannerVersion,
+                [],
+                null,
+                null,
+                null));
+        }
+
+        for (var index = 0; index < candidates.Count; index++)
+        {
+            var candidate = candidates[index];
+            if (!reducedSourceIds.Contains(candidate.SourceIndexId))
+            {
+                continue;
+            }
+
+            candidates[index] = candidate with
+            {
+                State = StaticDispatchCandidateStates.WeakerCandidate,
+                EvidenceTier = WeakestEvidenceTier([candidate.EvidenceTier, EvidenceTiers.Tier4Unknown]),
+                Limitations = candidate.Limitations
+                    .Append("Source coverage is reduced or unsupported; this candidate is review context only and candidate absence is not conclusive.")
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray()
+            };
+        }
+
+        var memberTargets = memberRelationships
+            .Select(relationship => relationship.ToNodeId)
+            .ToHashSet(StringComparer.Ordinal);
+        var typeRelationships = allRelationships
+            .Where(relationship => IsTypeCandidateRelationship(relationship.OriginalRelationshipKind))
+            .ToArray();
+        foreach (var call in calls)
+        {
+            if (memberTargets.Contains(call.TargetNodeId))
+            {
+                continue;
+            }
+
+            var matchingTypeRelationships = typeRelationships
+                .Where(relationship => nodes.TryGetValue(relationship.ToNodeId, out var targetType)
+                    && targetType.SourceIndexId == call.SourceIndexId
+                    && TypeRelationshipMatchesCall(relationship, targetType, call))
+                .OrderBy(relationship => relationship.EdgeId, StringComparer.Ordinal)
+                .ToArray();
+            if (matchingTypeRelationships.Length == 0)
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(call.TargetSymbolId)
+                || string.IsNullOrWhiteSpace(call.TargetContainingSymbolId)
+                || matchingTypeRelationships.Any(relationship =>
+                    string.IsNullOrWhiteSpace(relationship.SourceSymbolId)
+                    || string.IsNullOrWhiteSpace(relationship.TargetSymbolId)))
+            {
+                gaps.Add(CreateContextGap(
+                    "DispatchCandidateIdentityUnverified",
+                    "candidate-identity-unverified",
+                    "Type-level dispatch context was present, but source-local canonical member/type identity was unavailable; no candidate was joined by display text.",
+                    call.SourceIndexId,
+                    call.SourceLabel,
+                    call.TargetNodeId,
+                    call.CommitSha,
+                    call.ExtractorVersion ?? extractorVersionFor(call.SourceIndexId),
+                    [call.FactId, .. matchingTypeRelationships.SelectMany(relationship => relationship.SupportingFactIds)],
+                    call.FilePath,
+                    call.StartLine,
+                    call.EndLine));
+                continue;
+            }
+
+            gaps.Add(CreateContextGap(
+                "MemberCandidateUnavailable",
+                "type-level-relationship-only",
+                "Type-level implementation or inheritance evidence exists, but matching member-level relationship evidence is unavailable; no type-only candidate edge was inferred.",
+                call.SourceIndexId,
+                call.SourceLabel,
+                call.TargetNodeId,
+                call.CommitSha,
+                call.ExtractorVersion ?? extractorVersionFor(call.SourceIndexId),
+                [call.FactId, .. matchingTypeRelationships.SelectMany(relationship => relationship.SupportingFactIds)],
+                call.FilePath,
+                call.StartLine,
+                call.EndLine));
+        }
+    }
+
+    private static StaticDispatchCandidateGap CreateContextGap(
+        string gapKind,
+        string reason,
+        string message,
+        string sourceIndexId,
+        string sourceLabel,
+        string? nodeId,
+        string? commitSha,
+        string? extractorVersion,
+        IReadOnlyList<string> supportingFactIds,
+        string? filePath,
+        int? startLine,
+        int? endLine) => new(
+            $"gap:dispatch:context:{Hash($"{gapKind}:{sourceIndexId}:{nodeId}:{reason}:{string.Join("|", supportingFactIds.OrderBy(value => value, StringComparer.Ordinal))}", 16)}",
+            gapKind,
+            StaticDispatchCandidateStates.CandidateGap,
+            message,
+            sourceIndexId,
+            sourceLabel,
+            nodeId,
+            GapRuleId,
+            EvidenceTiers.Tier4Unknown,
+            filePath,
+            startLine,
+            reason,
+            commitSha,
+            extractorVersion,
+            "combined-dispatch-candidate-context",
+            endLine,
+            supportingFactIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
+
+    private static string? SourceReductionReason(StaticDispatchSourceContext source)
+    {
+        if (!string.Equals(source.Language, "csharp", StringComparison.OrdinalIgnoreCase))
+        {
+            return "adapter-member-relationships-unavailable";
+        }
+
+        if (!string.Equals(source.AnalysisLevel, "Level1SemanticAnalysis", StringComparison.Ordinal)
+            || !string.Equals(source.BuildStatus, "Succeeded", StringComparison.Ordinal))
+        {
+            return "reduced-semantic-coverage";
+        }
+
+        if (string.IsNullOrWhiteSpace(source.CommitSha) || source.CommitSha == "unknown")
+        {
+            return "commit-identity-unverified";
+        }
+
+        return string.IsNullOrWhiteSpace(source.ScannerVersion) ? "extractor-identity-unavailable" : null;
+    }
+
+    private static bool IsTypeCandidateRelationship(string? originalRelationshipKind) =>
+        originalRelationshipKind is "ImplementsInterface" or "InheritsFrom" or "ExtendsInterface";
+
+    private static bool TypeRelationshipMatchesCall(
+        StaticDispatchRelationshipEdge relationship,
+        StaticDispatchCandidateNode targetType,
+        StaticDispatchCallTarget call)
+    {
+        if (!string.IsNullOrWhiteSpace(call.TargetContainingSymbolId)
+            && !string.IsNullOrWhiteSpace(relationship.TargetSymbolId))
+        {
+            return string.Equals(call.TargetContainingSymbolId, relationship.TargetSymbolId, StringComparison.Ordinal);
+        }
+
+        return string.Equals(ContainingTypeDisplay(call.TargetDisplayName), targetType.DisplayName, StringComparison.Ordinal);
     }
 
     private static void ApplyRegistrationContext(
@@ -838,7 +1046,33 @@ internal sealed record StaticDispatchRelationshipEdge(
     int? StartLine,
     int? EndLine,
     string? SourceContainingSymbolId = null,
-    string? TargetContainingSymbolId = null);
+    string? TargetContainingSymbolId = null,
+    string? SourceSymbolId = null,
+    string? TargetSymbolId = null);
+
+internal sealed record StaticDispatchCallTarget(
+    string FactId,
+    string SourceIndexId,
+    string SourceLabel,
+    string TargetNodeId,
+    string TargetDisplayName,
+    string? TargetSymbolId,
+    string? TargetContainingSymbolId,
+    string EvidenceTier,
+    string? FilePath,
+    int? StartLine,
+    int? EndLine,
+    string? CommitSha,
+    string? ExtractorVersion);
+
+internal sealed record StaticDispatchSourceContext(
+    string SourceIndexId,
+    string SourceLabel,
+    string? Language,
+    string AnalysisLevel,
+    string BuildStatus,
+    string? CommitSha,
+    string? ScannerVersion);
 
 internal sealed record StaticDispatchRegistrationFact(
     string FactId,

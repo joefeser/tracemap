@@ -824,7 +824,7 @@ public static class CombinedDependencyPathReporter
         }
 
         AddSymbolReconciliationEdges(graph);
-        AddDispatchCandidateEdges(graph, read.Facts);
+        AddDispatchCandidateEdges(graph, read.Facts, read.Sources);
         graph.Sort();
         return graph;
     }
@@ -2057,7 +2057,10 @@ public static class CombinedDependencyPathReporter
             from.EndLine ?? to.EndLine));
     }
 
-    private static void AddDispatchCandidateEdges(EvidenceGraph graph, IReadOnlyList<CombinedFactRow> facts)
+    private static void AddDispatchCandidateEdges(
+        EvidenceGraph graph,
+        IReadOnlyList<CombinedFactRow> facts,
+        IReadOnlyList<CombinedReportSource> sources)
     {
         var factsById = facts.ToDictionary(fact => fact.CombinedFactId, StringComparer.Ordinal);
         var relationshipEdges = graph.Edges
@@ -2089,6 +2092,35 @@ public static class CombinedDependencyPathReporter
             .Select(registration => registration!)
             .OrderBy(registration => registration.FactId, StringComparer.Ordinal)
             .ToArray();
+        var callTargets = facts
+            .Where(fact => fact.FactType == FactTypes.CallEdge)
+            .Where(fact => !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+            .Select(fact => new StaticDispatchCallTarget(
+                fact.CombinedFactId,
+                fact.SourceIndexId,
+                fact.SourceLabel,
+                SymbolNodeId(fact.SourceIndexId, fact.TargetSymbol!),
+                fact.TargetSymbol!,
+                fact.Properties.GetValueOrDefault("targetSymbolId"),
+                fact.Properties.GetValueOrDefault("targetContainingSymbolId"),
+                fact.EvidenceTier,
+                SafePath(fact.FilePath),
+                fact.StartLine,
+                fact.EndLine,
+                fact.CommitSha,
+                graph.ScannerVersionFor(fact.SourceIndexId)))
+            .OrderBy(call => call.FactId, StringComparer.Ordinal)
+            .ToArray();
+        var sourceContexts = sources
+            .Select(source => new StaticDispatchSourceContext(
+                source.SourceIndexId,
+                source.Label,
+                source.Language,
+                source.AnalysisLevel,
+                source.BuildStatus,
+                source.CommitSha,
+                source.ScannerVersion))
+            .ToArray();
         var candidates = StaticDispatchCandidateBuilder.Build(
             candidateNodes,
             relationshipEdges.Select(edge =>
@@ -2110,10 +2142,14 @@ public static class CombinedDependencyPathReporter
                     edge.StartLine,
                     edge.EndLine,
                     relationshipFact?.Properties.GetValueOrDefault("sourceContainingSymbolId"),
-                    relationshipFact?.Properties.GetValueOrDefault("targetContainingSymbolId"));
+                    relationshipFact?.Properties.GetValueOrDefault("targetContainingSymbolId"),
+                    relationshipFact?.Properties.GetValueOrDefault("sourceSymbolId"),
+                    relationshipFact?.Properties.GetValueOrDefault("targetSymbolId"));
             }),
             graph.ScannerVersionFor,
-            registrations: registrations);
+            registrations: registrations,
+            callTargets: callTargets,
+            sourceContexts: sourceContexts);
 
         foreach (var candidate in candidates.Edges)
         {
