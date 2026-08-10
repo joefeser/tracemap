@@ -1297,6 +1297,23 @@
     ]
   },
   {
+    "path": "/blog/access-rebuild-readiness-gaps/",
+    "title": "Rebuild Readiness Is a Gap Register, Not a Promise",
+    "summary": "Demo-level article about organizing bounded Access query, binding, event, flow, copy-candidate, coverage, and truncation evidence into an owner-reviewed gap register.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/blog/reverse-engineering-access-without-running-it/",
+    "limitations": [
+      "The article explains checked-in rule, report, and packaging contracts; it does not publish a representative database or establish that any application can be rebuilt.",
+      "Query roles, field mappings, generated keys, sequencing, dynamic behavior, external availability, effective permissions, and incomplete catalogs remain owner-reviewed gaps."
+    ],
+    "nonClaims": [
+      "No runtime execution, query result, production behavior, complete coverage, reconstruction success, effective permission, data correctness, selected branch, event firing, release approval, or operational-safety proof.",
+      "No database, raw serialized definition, query text, VBA, macro body, source snippet, credential, connection material, local path, private identity, analyzer output, or private validation detail is public article material."
+    ]
+  },
+  {
     "path": "/blog/bugs-hiding-in-graph-history/",
     "title": "The Bugs Hiding in Graph History",
     "summary": "Demo-level article about identity collapse, guessed receivers, reversed edges, stale snapshots, silent omission, and why loud incompleteness is safer.",

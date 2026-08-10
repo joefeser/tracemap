@@ -6,6 +6,7 @@ import { buildSite, topNavigationLinks } from "./build.mjs";
 import { validateAdoptionPlaybookDist } from "./adoption-playbook.mjs";
 import { validateAccessSafeEvidenceAcquisitionDist } from "./access-safe-evidence-acquisition.mjs";
 import { validateAccessFormFieldLineageDist } from "./access-form-field-lineage.mjs";
+import { validateAccessRebuildReadinessDist } from "./access-rebuild-readiness.mjs";
 import { validateBuildReviewWorkflowStoryDist } from "./build-review-workflow-story.mjs";
 import { validateBlogProofPathSeriesDist } from "./blog-proof-path-series.mjs";
 import { validateChangeRiskLanguageGuideDist } from "./change-risk-language-guide.mjs";
@@ -106,6 +107,7 @@ export async function validateDist({
   requireAccessFormFieldLineage = requireMsbuildBinlogEvidence,
   requireCsharpExtractionTruth = true,
   requireGraphHistoryBugs = true,
+  requireAccessRebuildReadiness = true,
   root = defaultRoot
 } = {}) {
   const dist = resolve(root, "dist");
@@ -141,12 +143,15 @@ export async function validateDist({
     if (requireAccessSafeEvidenceAcquisition) {
       await validateAccessSafeEvidenceAcquisitionDist({ baseUrl: normalizedBaseUrl, dist, errors });
     }
-    if (requireCsharpExtractionTruth) {
-      await validateCsharpExtractionTruthDist({ baseUrl: normalizedBaseUrl, dist, errors });
-    }
-    if (requireGraphHistoryBugs) {
-      await validateGraphHistoryBugsDist({ baseUrl: normalizedBaseUrl, dist, errors });
-    }
+  if (requireCsharpExtractionTruth) {
+    await validateCsharpExtractionTruthDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requireGraphHistoryBugs) {
+    await validateGraphHistoryBugsDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requireAccessRebuildReadiness) {
+    await validateAccessRebuildReadinessDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
     await validateRobotsSitemap({ baseUrl: normalizedBaseUrl, errors, robotsPath });
     await validateDiscoveryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateDeployAuditDist({ baseUrl: normalizedBaseUrl, dist, errors });
