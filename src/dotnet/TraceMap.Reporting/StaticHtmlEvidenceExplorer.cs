@@ -3034,6 +3034,7 @@ public static partial class StaticHtmlEvidenceExplorer
         builder.AppendLine("  <link rel=\"stylesheet\" href=\"assets/explorer.css\">");
         builder.AppendLine("</head>");
         builder.AppendLine("<body>");
+        builder.AppendLine("  <a class=\"skip-link\" href=\"#main-content\">Skip to evidence content</a>");
         builder.AppendLine("  <header>");
         builder.AppendLine("    <p class=\"eyebrow\">Local generated artifact</p>");
         builder.AppendLine("    <h1>TraceMap Evidence Explorer</h1>");
@@ -3050,7 +3051,8 @@ public static partial class StaticHtmlEvidenceExplorer
         }
         builder.AppendLine("  </ul></nav>");
 
-        builder.AppendLine("  <main>");
+        builder.AppendLine("  <main id=\"main-content\" tabindex=\"-1\">");
+        builder.AppendLine("    <noscript><p class=\"notice no-script-notice\">All evidence sections and the deterministic evidence-row baseline remain available. Interactive table filtering requires JavaScript.</p></noscript>");
         RenderOverview(builder, data.Summary);
         RenderCoverage(builder, data.SectionStatuses);
         RenderCompatibilityLedger(builder, data.CompatibilityLedger);
@@ -3172,15 +3174,15 @@ public static partial class StaticHtmlEvidenceExplorer
         builder.AppendLine("    <section id=\"surfaces\" aria-labelledby=\"surfaces-heading\">");
         builder.AppendLine("      <h2 id=\"surfaces-heading\">Surfaces</h2>");
         builder.AppendLine("      <p>These rows are static dependency-surface evidence from compatible generated reports. They do not prove runtime reachability, execution, production use, or impact.</p>");
-        builder.AppendLine("      <table data-filterable=\"true\"><caption>Rule-backed static dependency surfaces</caption><thead><tr><th>Surface</th><th>Kind</th><th>Classification</th><th>Rule ID</th><th>Tier</th><th>Coverage</th><th>Source</th><th>Commit SHA</th><th>Extractor</th><th>File span</th><th>Support IDs</th><th>Limitations</th></tr></thead><tbody>");
+        builder.AppendLine("      <table id=\"surfaces-table\" data-filterable=\"true\" data-filter-name=\"static dependency surfaces\"><caption>Rule-backed static dependency surfaces</caption><thead><tr><th>Surface</th><th>Kind</th><th>Classification</th><th>Rule ID</th><th>Tier</th><th>Coverage</th><th>Source</th><th>Commit SHA</th><th>Extractor</th><th>File span</th><th>Support IDs</th><th>Limitations</th></tr></thead><tbody>");
         foreach (var surface in surfaces)
         {
             var span = surface.FilePath is null ? "n/a" : $"{surface.FilePath}:{surface.StartLine}-{surface.EndLine}";
-            builder.AppendLine($"        <tr><th scope=\"row\">{Html(surface.SurfaceId)}</th><td>{Html(surface.SurfaceKind)}</td><td>{Html(surface.Classification)}</td><td>{Html(surface.RuleId)}</td><td>{Html(surface.EvidenceTier)}</td><td>{Html(surface.CoverageLabel)}</td><td>{Html(surface.SourceId)}</td><td>{Html(surface.CommitSha)}</td><td>{Html(surface.ExtractorVersion)}</td><td>{Html(span)}</td><td>{Html(string.Join(", ", surface.SupportIds))}</td><td>{Html(string.Join(", ", surface.LimitationIds))}</td></tr>");
+            builder.AppendLine($"        <tr data-filter-row=\"true\"><th scope=\"row\">{Html(surface.SurfaceId)}</th><td>{Html(surface.SurfaceKind)}</td><td>{Html(surface.Classification)}</td><td>{Html(surface.RuleId)}</td><td>{Html(surface.EvidenceTier)}</td><td>{Html(surface.CoverageLabel)}</td><td>{Html(surface.SourceId)}</td><td>{Html(surface.CommitSha)}</td><td>{Html(surface.ExtractorVersion)}</td><td>{Html(span)}</td><td>{Html(string.Join(", ", surface.SupportIds))}</td><td>{Html(string.Join(", ", surface.LimitationIds))}</td></tr>");
         }
         if (surfaces.Count == 0)
         {
-            builder.AppendLine("        <tr><td colspan=\"12\">No compatible static dependency-surface rows were provided under the current coverage.</td></tr>");
+            builder.AppendLine("        <tr data-empty-row=\"true\"><td colspan=\"12\">No compatible static dependency-surface rows were provided under the current coverage.</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
@@ -3191,18 +3193,18 @@ public static partial class StaticHtmlEvidenceExplorer
         builder.AppendLine("    <section id=\"paths\" aria-labelledby=\"paths-heading\">");
         builder.AppendLine("      <h2 id=\"paths-heading\">Paths</h2>");
         builder.AppendLine("      <p>Paths preserve deterministic static hop evidence and existing classifications. They are not runtime traces or reducer-backed impact conclusions.</p>");
-        builder.AppendLine("      <table data-filterable=\"true\"><caption>Ordered static dependency-path hops</caption><thead><tr><th>Path</th><th>Classification</th><th>Confidence</th><th>Hop</th><th>Edge kind</th><th>Rule ID</th><th>Tier</th><th>Coverage</th><th>From</th><th>To</th><th>Source</th><th>Commit SHA</th><th>Extractor</th><th>File span</th><th>Support IDs</th><th>Limitations</th></tr></thead><tbody>");
+        builder.AppendLine("      <table id=\"paths-table\" data-filterable=\"true\" data-filter-name=\"static dependency paths\"><caption>Ordered static dependency-path hops</caption><thead><tr><th>Path</th><th>Classification</th><th>Confidence</th><th>Hop</th><th>Edge kind</th><th>Rule ID</th><th>Tier</th><th>Coverage</th><th>From</th><th>To</th><th>Source</th><th>Commit SHA</th><th>Extractor</th><th>File span</th><th>Support IDs</th><th>Limitations</th></tr></thead><tbody>");
         foreach (var path in paths)
         {
             foreach (var hop in path.Hops)
             {
                 var span = hop.FilePath is null ? "n/a" : $"{hop.FilePath}:{hop.StartLine}-{hop.EndLine}";
-                builder.AppendLine($"        <tr><th scope=\"row\">{Html(path.PathId)}</th><td>{Html(path.Classification)}</td><td>{Html(path.Confidence)}</td><td>{hop.Sequence}</td><td>{Html(hop.EdgeKind)}</td><td>{Html(hop.RuleId)}</td><td>{Html(hop.EvidenceTier)}</td><td>{Html(path.CoverageLabel)}</td><td>{Html(hop.FromNodeId)}</td><td>{Html(hop.ToNodeId)}</td><td>{Html(hop.SourceId)}</td><td>{Html(hop.CommitSha)}</td><td>{Html(hop.ExtractorVersion)}</td><td>{Html(span)}</td><td>{Html(string.Join(", ", hop.SupportIds))}</td><td>{Html(string.Join(", ", hop.LimitationIds))}</td></tr>");
+                builder.AppendLine($"        <tr data-filter-row=\"true\"><th scope=\"row\">{Html(path.PathId)}</th><td>{Html(path.Classification)}</td><td>{Html(path.Confidence)}</td><td>{hop.Sequence}</td><td>{Html(hop.EdgeKind)}</td><td>{Html(hop.RuleId)}</td><td>{Html(hop.EvidenceTier)}</td><td>{Html(path.CoverageLabel)}</td><td>{Html(hop.FromNodeId)}</td><td>{Html(hop.ToNodeId)}</td><td>{Html(hop.SourceId)}</td><td>{Html(hop.CommitSha)}</td><td>{Html(hop.ExtractorVersion)}</td><td>{Html(span)}</td><td>{Html(string.Join(", ", hop.SupportIds))}</td><td>{Html(string.Join(", ", hop.LimitationIds))}</td></tr>");
             }
         }
         if (paths.Count == 0)
         {
-            builder.AppendLine("        <tr><td colspan=\"16\">No compatible static dependency paths were provided under the current coverage.</td></tr>");
+            builder.AppendLine("        <tr data-empty-row=\"true\"><td colspan=\"16\">No compatible static dependency paths were provided under the current coverage.</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
@@ -3213,14 +3215,14 @@ public static partial class StaticHtmlEvidenceExplorer
         builder.AppendLine("    <section id=\"reducer-results\" aria-labelledby=\"reducer-results-heading\">");
         builder.AppendLine("      <h2 id=\"reducer-results-heading\">Reducer Results</h2>");
         builder.AppendLine("      <p>These impact classifications come from a compatible deterministic TraceMap reducer artifact. They describe static, coverage-relative evidence and do not prove runtime reachability, production behavior, business impact, or release safety.</p>");
-        builder.AppendLine("      <table data-filterable=\"true\"><caption>Rule-backed contract-delta impact results</caption><thead><tr><th>Result</th><th>Classification</th><th>Confidence</th><th>Rule ID</th><th>Tier</th><th>Reducer</th><th>Coverage</th><th>Evidence IDs</th><th>Support IDs</th><th>Limitations</th></tr></thead><tbody>");
+        builder.AppendLine("      <table id=\"reducer-results-table\" data-filterable=\"true\" data-filter-name=\"contract-delta reducer results\"><caption>Rule-backed contract-delta impact results</caption><thead><tr><th>Result</th><th>Classification</th><th>Confidence</th><th>Rule ID</th><th>Tier</th><th>Reducer</th><th>Coverage</th><th>Evidence IDs</th><th>Support IDs</th><th>Limitations</th></tr></thead><tbody>");
         foreach (var result in results)
         {
-            builder.AppendLine($"        <tr><th scope=\"row\">{Html(result.ResultId)}</th><td>{Html(result.Classification)}</td><td>{Html(result.Confidence)}</td><td>{Html(result.RuleId)}</td><td>{Html(result.EvidenceTier)}</td><td>{Html(result.ReducerVersion)}</td><td>{Html(result.CoverageLabel)}</td><td>{Html(string.Join(", ", result.EvidenceIds))}</td><td>{Html(string.Join(", ", result.SupportIds))}</td><td>{Html(string.Join(", ", result.LimitationIds))}</td></tr>");
+            builder.AppendLine($"        <tr data-filter-row=\"true\"><th scope=\"row\">{Html(result.ResultId)}</th><td>{Html(result.Classification)}</td><td>{Html(result.Confidence)}</td><td>{Html(result.RuleId)}</td><td>{Html(result.EvidenceTier)}</td><td>{Html(result.ReducerVersion)}</td><td>{Html(result.CoverageLabel)}</td><td>{Html(string.Join(", ", result.EvidenceIds))}</td><td>{Html(string.Join(", ", result.SupportIds))}</td><td>{Html(string.Join(", ", result.LimitationIds))}</td></tr>");
         }
         if (results.Count == 0)
         {
-            builder.AppendLine("        <tr><td colspan=\"10\">No compatible reducer-backed result rows were provided under the current coverage.</td></tr>");
+            builder.AppendLine("        <tr data-empty-row=\"true\"><td colspan=\"10\">No compatible reducer-backed result rows were provided under the current coverage.</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
@@ -3302,7 +3304,7 @@ public static partial class StaticHtmlEvidenceExplorer
         {
             builder.AppendLine($"      <p>The no-JavaScript baseline renders the first {EvidenceRowNoScriptLimit} deterministic rows out of {rows.Count}. The full safe row set is available in data/explorer-data.json.</p>");
         }
-        builder.AppendLine("      <table data-filterable=\"true\"><caption>Safe evidence rows</caption><thead><tr><th>Evidence</th><th>Rule ID</th><th>Tier</th><th>Kind</th><th>Support ID</th><th>Artifact ID</th><th>Source ID</th><th>Coverage</th><th>Commit SHA</th><th>File span</th><th>Snippet hash</th><th>Extractor</th><th>Limitations</th></tr></thead><tbody>");
+        builder.AppendLine("      <table id=\"evidence-rows-table\" data-filterable=\"true\" data-filter-name=\"safe evidence rows\"><caption>Safe evidence rows</caption><thead><tr><th>Evidence</th><th>Rule ID</th><th>Tier</th><th>Kind</th><th>Support ID</th><th>Artifact ID</th><th>Source ID</th><th>Coverage</th><th>Commit SHA</th><th>File span</th><th>Snippet hash</th><th>Extractor</th><th>Limitations</th></tr></thead><tbody>");
         foreach (var row in rows.Take(EvidenceRowNoScriptLimit))
         {
             var span = row.FilePath is null ? "n/a" : $"{row.FilePath}:{row.StartLine}-{row.EndLine}";
@@ -3310,14 +3312,14 @@ public static partial class StaticHtmlEvidenceExplorer
             var extractorVersion = Html(row.ExtractorVersion ?? "unknown");
             var commitSha = Html(row.CommitSha ?? "partial");
             var limitations = Html(string.Join(", ", row.Limitations));
-            builder.AppendLine($"        <tr><th scope=\"row\">{Html(row.EvidenceId)}</th><td>{Html(row.RuleId)}</td><td>{Html(row.EvidenceTier)}</td><td>{Html(row.EvidenceKind)}</td><td>{Html(row.SupportId)}</td><td>{Html(row.ArtifactId)}</td><td>{Html(row.SourceId ?? "unknown")}</td><td>{Html(row.CoverageLabel ?? "UnknownCoverage")}</td><td>{commitSha}</td><td>{Html(span)}</td><td>{snippetHash}</td><td>{extractorVersion}</td><td>{limitations}</td></tr>");
+            builder.AppendLine($"        <tr data-filter-row=\"true\"><th scope=\"row\">{Html(row.EvidenceId)}</th><td>{Html(row.RuleId)}</td><td>{Html(row.EvidenceTier)}</td><td>{Html(row.EvidenceKind)}</td><td>{Html(row.SupportId)}</td><td>{Html(row.ArtifactId)}</td><td>{Html(row.SourceId ?? "unknown")}</td><td>{Html(row.CoverageLabel ?? "UnknownCoverage")}</td><td>{commitSha}</td><td>{Html(span)}</td><td>{snippetHash}</td><td>{extractorVersion}</td><td>{limitations}</td></tr>");
         }
         if (rows.Count == 0)
         {
             var message = compatibleEvidenceArtifactProvided
                 ? "No static evidence rows were found in the compatible evidence artifacts under the current coverage."
                 : "Evidence rows are unavailable because no compatible fact, path, or reducer artifact was provided.";
-            builder.AppendLine($"        <tr><td colspan=\"13\">{Html(message)}</td></tr>");
+            builder.AppendLine($"        <tr data-empty-row=\"true\"><td colspan=\"13\">{Html(message)}</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
@@ -3377,6 +3379,22 @@ public static partial class StaticHtmlEvidenceExplorer
               font: 15px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             }
 
+            .skip-link {
+              position: fixed;
+              top: 8px;
+              left: 8px;
+              z-index: 10;
+              padding: 10px 12px;
+              background: var(--panel);
+              border: 2px solid var(--accent);
+              border-radius: 4px;
+              transform: translateY(-160%);
+            }
+
+            .skip-link:focus {
+              transform: translateY(0);
+            }
+
             header,
             nav,
             main {
@@ -3426,6 +3444,35 @@ public static partial class StaticHtmlEvidenceExplorer
             input:focus {
               outline: 3px solid #86b8ff;
               outline-offset: 2px;
+            }
+
+            main:focus {
+              outline: 3px solid #86b8ff;
+              outline-offset: -3px;
+            }
+
+            .table-filter {
+              display: grid;
+              gap: 4px;
+              max-width: 34rem;
+              margin: 12px 0;
+              font-weight: 700;
+            }
+
+            .table-filter input {
+              min-height: 44px;
+              padding: 8px 10px;
+              border: 1px solid var(--line);
+              border-radius: 4px;
+              background: var(--panel);
+              color: var(--text);
+              font: inherit;
+            }
+
+            .filter-status {
+              min-height: 1.5em;
+              margin: -4px 0 12px;
+              color: var(--muted);
             }
 
             section {
@@ -3484,6 +3531,30 @@ public static partial class StaticHtmlEvidenceExplorer
               background: #eaf0ec;
               text-align: left;
             }
+
+            @media (max-width: 720px) {
+              header,
+              nav,
+              main {
+                padding: 16px;
+              }
+
+              header {
+                padding-top: 32px;
+              }
+
+              nav a {
+                display: inline-flex;
+                align-items: center;
+                min-height: 44px;
+                padding: 4px;
+              }
+
+              th,
+              td {
+                padding: 6px;
+              }
+            }
             """.ReplaceLineEndings("\n");
     }
 
@@ -3493,21 +3564,44 @@ public static partial class StaticHtmlEvidenceExplorer
             (() => {
               "use strict";
               for (const table of document.querySelectorAll("table[data-filterable='true']")) {
+                if (!table.id || !table.dataset.filterName) {
+                  continue;
+                }
+                const filterId = `${table.id}-filter`;
+                const statusId = `${table.id}-filter-status`;
                 const label = document.createElement("label");
-                label.textContent = "Filter safe rendered rows";
+                label.className = "table-filter";
+                label.htmlFor = filterId;
+                label.textContent = `Filter ${table.dataset.filterName}`;
                 const input = document.createElement("input");
+                input.id = filterId;
                 input.type = "search";
                 input.autocomplete = "off";
-                input.setAttribute("aria-label", "Filter safe rendered evidence rows");
-                label.append(" ", input);
-                table.before(label);
-                const rows = Array.from(table.tBodies[0]?.rows ?? []);
-                input.addEventListener("input", () => {
+                input.setAttribute("aria-controls", table.id);
+                input.setAttribute("aria-describedby", statusId);
+                label.append(input);
+                const status = document.createElement("p");
+                status.id = statusId;
+                status.className = "filter-status";
+                status.setAttribute("role", "status");
+                status.setAttribute("aria-live", "polite");
+                table.before(label, status);
+                const rows = Array.from(table.querySelectorAll("tbody tr[data-filter-row='true']"));
+                const update = () => {
                   const needle = input.value.toLowerCase();
+                  let visibleCount = 0;
                   for (const row of rows) {
                     row.hidden = needle.length > 0 && !row.textContent.toLowerCase().includes(needle);
+                    if (!row.hidden) {
+                      visibleCount += 1;
+                    }
                   }
-                });
+                  status.textContent = rows.length === 0
+                    ? "No filterable rows are available under the current coverage."
+                    : `Showing ${visibleCount} of ${rows.length} rows.`;
+                };
+                input.addEventListener("input", update);
+                update();
               }
             })();
             """.ReplaceLineEndings("\n");
