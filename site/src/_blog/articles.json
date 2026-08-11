@@ -1,5 +1,35 @@
 [
   {
+    "slug": "what-depends-on-this-symbol",
+    "category": "Reverse impact",
+    "title": "What Depends on This Symbol?",
+    "h1": "What depends on this symbol?",
+    "description": "How persisted reverse-impact traversal answers a bounded dependency question with canonical identity, evidence-backed hops, explicit limits, and gaps.",
+    "ogDescription": "A public-safe guide to TraceMap reverse impact: direct and transitive dependents, relationship allowlists, cycles, truncation, provenance, and non-claims.",
+    "cardDescription": "Follow a canonical symbol backward through persisted static evidence while keeping depth, relationship families, truncation, coverage, and gaps visible.",
+    "hero": "A useful reverse-impact answer identifies its root, relationships, bounds, evidence, and unknowns before anyone turns the result into a runtime claim.",
+    "published": "2026-08-10",
+    "publishedDisplay": "August 10, 2026",
+    "body": "articles/what-depends-on-this-symbol.html",
+    "calloutHeading": "Interfaces add review-tier branches.",
+    "calloutHtml": "Continue with <a href=\"/blog/interfaces-make-blast-radius-harder/\">why interfaces make blast radius harder</a>, then inspect the <a href=\"/evidence/gaps/\">gap guide</a>."
+  },
+  {
+    "slug": "interfaces-make-blast-radius-harder",
+    "category": "Static dispatch",
+    "title": "Interfaces Make Blast Radius Harder",
+    "h1": "Interfaces make blast radius harder",
+    "description": "How TraceMap composes compiler-backed interface and override candidates with compatible DI context while keeping every continuation at review tier.",
+    "ogDescription": "A public-safe explanation of static dispatch candidates, bounded fan-out, DI registration context, downstream composition, and explicit gaps.",
+    "cardDescription": "See why interface and override candidates help blast-radius review without proving which implementation a runtime container selected.",
+    "hero": "Static candidates can expose important possible continuations when identity, compatibility, fan-out, evidence strength, and runtime non-claims stay attached.",
+    "published": "2026-08-10",
+    "publishedDisplay": "August 10, 2026",
+    "body": "articles/interfaces-make-blast-radius-harder.html",
+    "calloutHeading": "Start from the traversal question.",
+    "calloutHtml": "Read <a href=\"/blog/what-depends-on-this-symbol/\">what depends on this symbol?</a>, then use the <a href=\"/static-vs-runtime/\">static-versus-runtime boundary</a>."
+  },
+  {
     "slug": "access-rebuild-readiness-gaps",
     "category": "Microsoft Access evidence",
     "title": "Rebuild Readiness Is a Gap Register, Not a Promise",
