@@ -85,8 +85,9 @@ public sealed record ExplorerSurface(
     string EvidenceTier,
     string CoverageLabel,
     string ArtifactId,
-    string? SourceId,
-    string? CommitSha,
+    string SourceId,
+    string CommitSha,
+    string ExtractorVersion,
     string? FilePath,
     int? StartLine,
     int? EndLine,
@@ -112,7 +113,9 @@ public sealed record ExplorerPathHop(
     string EvidenceTier,
     string FromNodeId,
     string ToNodeId,
-    string? SourceId,
+    string SourceId,
+    string CommitSha,
+    string ExtractorVersion,
     string? FilePath,
     int? StartLine,
     int? EndLine,
@@ -1282,8 +1285,13 @@ public static class StaticHtmlEvidenceExplorer
                 {
                     var edge = reportPath.Edges[index];
                     var fromNode = reportPath.Nodes[index];
-                    var sourceId = sourceIdByIndex[fromNode.SourceIndexId];
-                    var source = sourceByIndex[fromNode.SourceIndexId];
+                    var toNode = reportPath.Nodes[index + 1];
+                    // Endpoint-match evidence is emitted at the matched server endpoint.
+                    // Other path-edge evidence is emitted at the originating node.
+                    var evidenceNode = edge.EdgeKind == "endpoint-match" ? toNode : fromNode;
+                    var sourceId = sourceIdByIndex[evidenceNode.SourceIndexId];
+                    var source = sourceByIndex[evidenceNode.SourceIndexId];
+                    var extractorVersion = SafeClosedText(source.ScannerVersion, "paths-report.scanner-version", redactions);
                     var supportIds = SafeSupportIds(edge.SupportingFactIds.Concat(edge.SupportingCombinedEdgeIds));
                     var hop = new ExplorerPathHop(
                         $"hop:{Hash($"{reportPath.PathId}:{index}:{edge.EdgeId}", 24)}",
@@ -1294,6 +1302,8 @@ public static class StaticHtmlEvidenceExplorer
                         $"node:{Hash(edge.FromNodeId, 24)}",
                         $"node:{Hash(edge.ToNodeId, 24)}",
                         sourceId,
+                        source.CommitSha,
+                        extractorVersion,
                         SafeOptionalRepositoryPath(edge.FilePath, redactions),
                         edge.StartLine,
                         edge.EndLine,
@@ -1312,9 +1322,9 @@ public static class StaticHtmlEvidenceExplorer
                         hop.FilePath,
                         hop.StartLine,
                         hop.EndLine,
-                        "n/a",
+                        null,
                         report.ReportCoverage,
-                        SafeClosedText(source.ScannerVersion, "paths-report.scanner-version", redactions),
+                        extractorVersion,
                         [limitationId]));
                 }
 
@@ -1338,6 +1348,8 @@ public static class StaticHtmlEvidenceExplorer
                     }
 
                     var sourceId = sourceIdByIndex[node.SourceIndexId];
+                    var source = sourceByIndex[node.SourceIndexId];
+                    var extractorVersion = SafeClosedText(source.ScannerVersion, "paths-report.scanner-version", redactions);
                     var supportIds = SafeSupportIds(node.CombinedFactId is null ? [] : [node.CombinedFactId]);
                     var surface = new ExplorerSurface(
                         surfaceId,
@@ -1350,7 +1362,8 @@ public static class StaticHtmlEvidenceExplorer
                         report.ReportCoverage,
                         artifactId,
                         sourceId,
-                        node.CommitSha,
+                        node.CommitSha ?? source.CommitSha,
+                        extractorVersion,
                         SafeOptionalRepositoryPath(node.FilePath, redactions),
                         node.StartLine,
                         node.EndLine,
@@ -1369,9 +1382,9 @@ public static class StaticHtmlEvidenceExplorer
                         surface.FilePath,
                         surface.StartLine,
                         surface.EndLine,
-                        "n/a",
+                        null,
                         surface.CoverageLabel,
-                        SafeClosedText(sourceByIndex[node.SourceIndexId].ScannerVersion, "paths-report.scanner-version", redactions),
+                        extractorVersion,
                         [limitationId]));
                 }
             }
@@ -1389,7 +1402,8 @@ public static class StaticHtmlEvidenceExplorer
                     "paths",
                     report.ReportCoverage,
                     "The paths report preserved a rule-backed static path analysis gap; the explorer does not reinterpret its free-text message.",
-                    SafeSupportIds(reportGap.EffectiveSupportingFactIds).Append(artifactId).OrderBy(value => value, StringComparer.Ordinal).ToArray()));
+                    SafeSupportIds(reportGap.EffectiveSupportingFactIds).Append(artifactId).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                    tier));
             }
 
             RecordOmittedPathsReportText(report, redactions);
@@ -1431,6 +1445,7 @@ public static class StaticHtmlEvidenceExplorer
         }
 
         var sourceIds = new HashSet<string>(StringComparer.Ordinal);
+        var commitBySourceIndex = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var source in report.Sources)
         {
             if (source is null
@@ -1441,6 +1456,8 @@ public static class StaticHtmlEvidenceExplorer
             {
                 throw new InvalidDataException("paths report source identity unavailable");
             }
+
+            commitBySourceIndex.Add(source.SourceIndexId, source.CommitSha);
         }
 
         var pathIds = new HashSet<string>(StringComparer.Ordinal);
@@ -1487,7 +1504,7 @@ public static class StaticHtmlEvidenceExplorer
                     || !sourceIds.Contains(node.SourceIndexId)
                     || (!string.IsNullOrWhiteSpace(node.CommitSha) && !IsUsableCommitSha(node.CommitSha))
                     || (!string.IsNullOrWhiteSpace(node.CommitSha)
-                        && !report.Sources.Single(source => source.SourceIndexId == node.SourceIndexId).CommitSha.Equals(node.CommitSha, StringComparison.OrdinalIgnoreCase))
+                        && !commitBySourceIndex[node.SourceIndexId].Equals(node.CommitSha, StringComparison.OrdinalIgnoreCase))
                     || (!string.IsNullOrWhiteSpace(node.SurfaceKind)
                         && (!CombinedTerminalSurfaceKinds.AllSet.Contains(node.SurfaceKind)
                             || !IsSafeRuleId(node.RuleId)
@@ -1801,12 +1818,13 @@ public static class StaticHtmlEvidenceExplorer
         string affectedSection,
         string coverageLabel,
         string message,
-        IReadOnlyList<string> supportIds)
+        IReadOnlyList<string> supportIds,
+        string evidenceTier = Tier4Unknown)
     {
         return new ExplorerGap(
             $"gap:{idPart}",
             ruleId,
-            Tier4Unknown,
+            evidenceTier,
             gapKind,
             scope,
             affectedSection,
@@ -1980,16 +1998,21 @@ public static class StaticHtmlEvidenceExplorer
         var compatibleRuleCatalogLoaded = context.CatalogRulesLoaded;
         var unsupportedJsonProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "unsupported-json");
         var coverageLabel = context.CoverageLabels.FirstOrDefault() ?? "UnknownCoverage";
-        var evidenceRowsStatus = factsProvided
-            ? (context.EvidenceRows.Count == 0
+        var pathReportReduced = compatiblePathsReport
+            && pathsReport!.CoverageLabels.Contains("PathsReducedCoverage", StringComparer.Ordinal);
+        var evidenceArtifactProvided = factsProvided || compatiblePathsReport;
+        var evidenceRowsStatus = evidenceArtifactProvided
+            ? pathReportReduced
+                ? "partial"
+                : context.EvidenceRows.Count == 0
                 ? "no-evidence-under-current-coverage"
-                : SectionStatusFromGaps(context.Gaps, "evidence-rows", true))
+                : SectionStatusFromGaps(context.Gaps, "evidence-rows", true)
             : "not-provided";
-        var evidenceRowsMessage = factsProvided
-            ? (context.EvidenceRows.Count == 0
-                ? "facts.ndjson was provided and compatible, but no static evidence rows were present under the current coverage."
-                : "Evidence rows are rendered from facts.ndjson after safety filtering and deterministic ordering.")
-            : "Evidence rows are unavailable because no compatible fact stream was provided.";
+        var evidenceRowsMessage = evidenceArtifactProvided
+            ? context.EvidenceRows.Count == 0
+                ? "Compatible evidence artifacts were provided, but no static evidence rows were present under the current coverage."
+                : "Evidence rows are rendered from compatible fact and path artifacts after safety filtering and deterministic ordering."
+            : "Evidence rows are unavailable because no compatible fact or path artifact was provided.";
         var rows = new List<ExplorerSectionStatus>
         {
             SectionStatus(
@@ -2021,12 +2044,20 @@ public static class StaticHtmlEvidenceExplorer
                 evidenceRowsStatus,
                 coverageLabel,
                 evidenceRowsMessage,
-                factsProvided ? ["artifact:facts-ndjson"] : ["input-directory"]),
+                factsProvided && compatiblePathsReport
+                    ? ["artifact:facts-ndjson", "artifact:paths-report"]
+                    : factsProvided
+                        ? ["artifact:facts-ndjson"]
+                        : compatiblePathsReport
+                            ? ["artifact:paths-report"]
+                            : ["input-directory"]),
             SectionStatus(
                 "surfaces",
                 "Surfaces",
                 compatiblePathsReport
-                    ? context.Surfaces.Count == 0
+                    ? pathReportReduced
+                        ? "partial"
+                        : context.Surfaces.Count == 0
                         ? context.Gaps.Any(gap => gap.AffectedSection == "surfaces") ? "partial" : "no-evidence-under-current-coverage"
                         : SectionStatusFromGaps(context.Gaps, "surfaces", true)
                     : pathsReport is not null ? "unsupported-schema" : sqliteProvided ? "not-rendered-in-current-slice" : "not-provided",
@@ -2045,7 +2076,9 @@ public static class StaticHtmlEvidenceExplorer
                 "paths",
                 "Paths",
                 compatiblePathsReport
-                    ? context.Paths.Count == 0
+                    ? pathReportReduced
+                        ? "partial"
+                        : context.Paths.Count == 0
                         ? context.Gaps.Any(gap => gap.AffectedSection == "paths") ? "partial" : "no-evidence-under-current-coverage"
                         : SectionStatusFromGaps(context.Gaps, "paths", true)
                     : pathsReport is not null ? "unsupported-schema" : sqliteProvided ? "not-rendered-in-current-slice" : "not-provided",
@@ -2965,15 +2998,15 @@ public static class StaticHtmlEvidenceExplorer
         builder.AppendLine("    <section id=\"surfaces\" aria-labelledby=\"surfaces-heading\">");
         builder.AppendLine("      <h2 id=\"surfaces-heading\">Surfaces</h2>");
         builder.AppendLine("      <p>These rows are static dependency-surface evidence from compatible generated reports. They do not prove runtime reachability, execution, production use, or impact.</p>");
-        builder.AppendLine("      <table data-filterable=\"true\"><caption>Rule-backed static dependency surfaces</caption><thead><tr><th>Surface</th><th>Kind</th><th>Classification</th><th>Rule ID</th><th>Tier</th><th>Coverage</th><th>Source</th><th>Commit SHA</th><th>File span</th><th>Support IDs</th><th>Limitations</th></tr></thead><tbody>");
+        builder.AppendLine("      <table data-filterable=\"true\"><caption>Rule-backed static dependency surfaces</caption><thead><tr><th>Surface</th><th>Kind</th><th>Classification</th><th>Rule ID</th><th>Tier</th><th>Coverage</th><th>Source</th><th>Commit SHA</th><th>Extractor</th><th>File span</th><th>Support IDs</th><th>Limitations</th></tr></thead><tbody>");
         foreach (var surface in surfaces)
         {
             var span = surface.FilePath is null ? "n/a" : $"{surface.FilePath}:{surface.StartLine}-{surface.EndLine}";
-            builder.AppendLine($"        <tr><th scope=\"row\">{Html(surface.SurfaceId)}</th><td>{Html(surface.SurfaceKind)}</td><td>{Html(surface.Classification)}</td><td>{Html(surface.RuleId)}</td><td>{Html(surface.EvidenceTier)}</td><td>{Html(surface.CoverageLabel)}</td><td>{Html(surface.SourceId ?? "unknown")}</td><td>{Html(surface.CommitSha ?? "partial")}</td><td>{Html(span)}</td><td>{Html(string.Join(", ", surface.SupportIds))}</td><td>{Html(string.Join(", ", surface.LimitationIds))}</td></tr>");
+            builder.AppendLine($"        <tr><th scope=\"row\">{Html(surface.SurfaceId)}</th><td>{Html(surface.SurfaceKind)}</td><td>{Html(surface.Classification)}</td><td>{Html(surface.RuleId)}</td><td>{Html(surface.EvidenceTier)}</td><td>{Html(surface.CoverageLabel)}</td><td>{Html(surface.SourceId)}</td><td>{Html(surface.CommitSha)}</td><td>{Html(surface.ExtractorVersion)}</td><td>{Html(span)}</td><td>{Html(string.Join(", ", surface.SupportIds))}</td><td>{Html(string.Join(", ", surface.LimitationIds))}</td></tr>");
         }
         if (surfaces.Count == 0)
         {
-            builder.AppendLine("        <tr><td colspan=\"11\">No compatible static dependency-surface rows were provided under the current coverage.</td></tr>");
+            builder.AppendLine("        <tr><td colspan=\"12\">No compatible static dependency-surface rows were provided under the current coverage.</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
@@ -2984,18 +3017,18 @@ public static class StaticHtmlEvidenceExplorer
         builder.AppendLine("    <section id=\"paths\" aria-labelledby=\"paths-heading\">");
         builder.AppendLine("      <h2 id=\"paths-heading\">Paths</h2>");
         builder.AppendLine("      <p>Paths preserve deterministic static hop evidence and existing classifications. They are not runtime traces or reducer-backed impact conclusions.</p>");
-        builder.AppendLine("      <table data-filterable=\"true\"><caption>Ordered static dependency-path hops</caption><thead><tr><th>Path</th><th>Classification</th><th>Confidence</th><th>Hop</th><th>Edge kind</th><th>Rule ID</th><th>Tier</th><th>Coverage</th><th>From</th><th>To</th><th>Source</th><th>File span</th><th>Support IDs</th><th>Limitations</th></tr></thead><tbody>");
+        builder.AppendLine("      <table data-filterable=\"true\"><caption>Ordered static dependency-path hops</caption><thead><tr><th>Path</th><th>Classification</th><th>Confidence</th><th>Hop</th><th>Edge kind</th><th>Rule ID</th><th>Tier</th><th>Coverage</th><th>From</th><th>To</th><th>Source</th><th>Commit SHA</th><th>Extractor</th><th>File span</th><th>Support IDs</th><th>Limitations</th></tr></thead><tbody>");
         foreach (var path in paths)
         {
             foreach (var hop in path.Hops)
             {
                 var span = hop.FilePath is null ? "n/a" : $"{hop.FilePath}:{hop.StartLine}-{hop.EndLine}";
-                builder.AppendLine($"        <tr><th scope=\"row\">{Html(path.PathId)}</th><td>{Html(path.Classification)}</td><td>{Html(path.Confidence)}</td><td>{hop.Sequence}</td><td>{Html(hop.EdgeKind)}</td><td>{Html(hop.RuleId)}</td><td>{Html(hop.EvidenceTier)}</td><td>{Html(path.CoverageLabel)}</td><td>{Html(hop.FromNodeId)}</td><td>{Html(hop.ToNodeId)}</td><td>{Html(hop.SourceId ?? "unknown")}</td><td>{Html(span)}</td><td>{Html(string.Join(", ", hop.SupportIds))}</td><td>{Html(string.Join(", ", hop.LimitationIds))}</td></tr>");
+                builder.AppendLine($"        <tr><th scope=\"row\">{Html(path.PathId)}</th><td>{Html(path.Classification)}</td><td>{Html(path.Confidence)}</td><td>{hop.Sequence}</td><td>{Html(hop.EdgeKind)}</td><td>{Html(hop.RuleId)}</td><td>{Html(hop.EvidenceTier)}</td><td>{Html(path.CoverageLabel)}</td><td>{Html(hop.FromNodeId)}</td><td>{Html(hop.ToNodeId)}</td><td>{Html(hop.SourceId)}</td><td>{Html(hop.CommitSha)}</td><td>{Html(hop.ExtractorVersion)}</td><td>{Html(span)}</td><td>{Html(string.Join(", ", hop.SupportIds))}</td><td>{Html(string.Join(", ", hop.LimitationIds))}</td></tr>");
             }
         }
         if (paths.Count == 0)
         {
-            builder.AppendLine("        <tr><td colspan=\"14\">No compatible static dependency paths were provided under the current coverage.</td></tr>");
+            builder.AppendLine("        <tr><td colspan=\"16\">No compatible static dependency paths were provided under the current coverage.</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
