@@ -119,6 +119,9 @@ public sealed class StaticHtmlEvidenceExplorerTests
         var css = await File.ReadAllTextAsync(Path.Combine(output, "assets", "explorer.css"));
         Assert.Contains(".skip-link:focus", css);
         Assert.Contains("transform: translateY(0)", css);
+        Assert.Contains("main:focus", css);
+        Assert.Contains("outline-offset: -3px", css);
+        Assert.DoesNotContain("outline: none", css);
         Assert.Contains("min-height: 44px", css);
         Assert.Contains("@media (max-width: 720px)", css);
     }

@@ -3447,7 +3447,8 @@ public static partial class StaticHtmlEvidenceExplorer
             }
 
             main:focus {
-              outline: none;
+              outline: 3px solid #86b8ff;
+              outline-offset: -3px;
             }
 
             .table-filter {

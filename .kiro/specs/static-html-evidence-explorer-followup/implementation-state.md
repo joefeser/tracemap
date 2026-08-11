@@ -558,3 +558,6 @@ Validation:
   pinned by focused structural tests. The in-app browser did not dispatch its
   synthetic Tab/fragment gesture reliably, so no automated keyboard-navigation
   success is claimed beyond those semantic contracts.
+- Review fix: the focusable main target retains an explicit inset focus outline
+  after skip-link navigation; focused tests pin that the generated CSS never
+  suppresses focus outlines.
