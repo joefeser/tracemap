@@ -499,6 +499,26 @@ rules:
       - Data-surface chunks describe static evidence availability and do not prove runtime data access, database existence, production data, ownership, or deployment.
       - Legacy data descriptor chunks cite static metadata and projection rules only; they do not prove SQL execution, provider runtime selection, live schema existence, migrations, or production database usage.
 
+  - id: docs-export.chunk.dispatch-candidate.v1
+    name: Docs export static dispatch candidate chunk
+    description: Packages bounded interface, override, and compatible registration-context candidate evidence for external review while preserving underlying dispatch rules and supporting identifiers.
+    evidenceTier: Inherits weakest supporting candidate evidence tier
+    emits:
+      - docs-export dispatch candidate review-context chunk
+    limitations:
+      - Candidate chunks do not prove runtime dispatch, dependency-injection binding, a selected implementation, reachability, execution, production behavior, or impact.
+      - Candidate absence is coverage-relative; supporting combined.dispatch-candidate.v1 and combined.dispatch-gap.v1 evidence remains authoritative.
+
+  - id: docs-export.gap.dispatch-candidate.v1
+    name: Docs export static dispatch candidate gap
+    description: Packages bounded candidate derivation gaps without converting them into clean absence claims.
+    evidenceTier: Inherits candidate gap evidence tier or Tier4Unknown
+    emits:
+      - docs-export dispatch candidate gap
+    limitations:
+      - Candidate gaps describe incomplete, unsupported, ambiguous, fan-out, generic, registration, identity, or truncated static evidence only.
+      - Gap chunks must preserve combined.dispatch-gap.v1 as supporting evidence and must not echo snippets, SQL, config, URLs, remotes, local paths, or secrets.
+
   - id: docs-export.chunk.package-config.v1
     name: Docs export package and config chunk
     description: Packages existing package, target-framework, config key, and config surface metadata using safe identifiers or redaction records.
@@ -999,6 +1019,26 @@ rules:
       - Static path-scoped navigation does not prove runtime execution, dependency execution, database execution, impact, release safety, or complete coverage.
       - Terminal-context navigation remains hidden and is never promoted by a source claim catalog.
 
+  - id: vault-export.graph.dispatch-candidate.v1
+    name: Vault export static dispatch candidate review edge
+    description: Projects bounded dispatch candidates as explicit review-context graph edges while preserving the underlying combined dispatch candidate rule.
+    evidenceTier: Inherits candidate evidence tier
+    emits:
+      - vault dispatch candidate review-context edge
+    limitations:
+      - Review-context edges are not ordinary calls and do not prove runtime dispatch, dependency-injection binding, selected implementation, reachability, execution, or impact.
+      - Supporting combined.dispatch-candidate.v1 rule IDs, facts, relationships, registrations, coverage, and safe evidence locations remain authoritative.
+
+  - id: vault-export.gap.dispatch-candidate.v1
+    name: Vault export static dispatch candidate gap
+    description: Projects shared dispatch candidate gaps into the vault graph with consumer and underlying rule provenance.
+    evidenceTier: Inherits candidate gap evidence tier or Tier4Unknown
+    emits:
+      - vault dispatch candidate gap
+    limitations:
+      - The gap does not prove candidate absence, runtime binding, runtime reachability, or clean coverage.
+      - Raw snippets, SQL, config values, URLs, hostnames, remotes, local paths, and secrets remain forbidden.
+
   - id: vault-export.gap.terminal-context-omitted.v1
     name: Vault export terminal-context omission gap
     description: Records when structured property-flow terminal-context evidence is incompatible, unsafe, unrecognized, inconsistent with bounded report prose, or omitted by demo/public claim filtering.
@@ -1462,6 +1502,7 @@ rules:
       - Query result fields and recordsets are never enumerated for pass-through, action, DDL, or unsafe query kinds.
       - QueryDef output-field metadata is enumerated only for supported select queries; no recordset is opened and pass-through, action, DDL, or unsafe query kinds retain no output-field conclusion.
       - Blank, calculated, ambiguous, or unavailable SourceTable/SourceField metadata remains partial unless a bounded direct SELECT projection independently resolves exactly one source field. Static aliases can recover a source-lineage candidate but do not prove result values or runtime execution.
+      - Static output facts may include aliasKind, a role-scoped sourceExpressionHash, and separate pivot-expression source candidates. A pivot literal such as `[1]` is provenance for a declared crosstab column only; it is never treated as an alias-equivalence claim for a different name such as `W1`.
 
   - id: legacy.access.external-link.v1
     name: Microsoft Access external boundary
@@ -2420,6 +2461,7 @@ rules:
     limitations:
       - Path context is opt-in, bounded, and must not be treated as complete dependency coverage when truncated.
       - Path evidence is a static trail, not runtime execution, full taint analysis, or proof of business impact.
+      - Paths containing `combined.dispatch-candidate.v1` evidence are capped at NeedsReviewImpact or a weaker unknown classification and preserve the dispatch rule as supporting review evidence.
 
   - id: combined.impact.path-context.v1
     name: Combined change impact path context
@@ -2435,6 +2477,7 @@ rules:
       - Path context is static graph evidence and does not prove runtime reachability, branch feasibility, dynamic dispatch, dependency injection binding, or data flow.
       - Unsupported selector mappings must emit review or unknown gaps rather than guessed paths.
       - Reduced coverage and traversal truncation make no-path conclusions coverage-relative.
+      - Candidate-dependent context is capped at NeedsReviewImpact; when candidate evidence and unknown coverage coexist, the weaker UnknownAnalysisGap classification wins while the candidate limitation remains explicit.
 
   - id: combined.impact.selector.v1
     name: Combined change impact selector handling
@@ -2496,6 +2539,7 @@ rules:
       - Reverse paths are static evidence trails, not runtime execution, full taint analysis, mutation semantics, or proof of business impact.
       - Traversal is bounded by surface, depth, frontier, root, and per-root path limits.
       - Fallback, name-only, syntax-only, dynamic, duplicate-identity, or ambiguous path evidence must be downgraded to review-tier or unknown classifications.
+      - Paths and roots containing `combined.dispatch-candidate.v1` evidence are capped at NeedsReviewReversePath or weaker and do not prove runtime dispatch or a selected dependency-injection implementation.
 
   - id: combined.reverse.selector.v1
     name: Combined reverse selector handling
@@ -2630,7 +2674,7 @@ rules:
 
   - id: combined.route-flow.interface-bridge.v1
     name: Route-flow interface implementation candidate bridge
-    description: Emits candidate interface-to-implementation bridge rows only when combined symbol-relationship evidence supports the candidate.
+    description: Projects shared dispatch candidate edges into route-flow interface or override bridge rows only when combined symbol-relationship evidence supports the candidate, preserving dispatch identity, supporting call/relationship IDs, optional registration context, and deterministic candidate counts.
     evidenceTier: Inherits relationship evidence and caps classification at NeedsReviewStaticRouteFlow
     emits:
       - interface-implementation-candidate row
@@ -2639,6 +2683,8 @@ rules:
       - DispatchCandidateFanOut gap
     limitations:
       - Candidate implementation evidence is not runtime dependency-injection target proof and must not select one runtime implementation.
+      - Route-flow consumes `combined.dispatch-candidate.v1` edges and `combined.dispatch-gap.v1` gaps without independently reconstructing candidates from normalized relationship labels.
+      - Candidate count and omitted count describe the bounded static candidate set, not runtime registrations, activations, or selected implementations.
       - Name-only, syntax-only, fallback, cross-source, or cross-language implementation guesses are not strong bridge evidence in v1.
       - High fan-out implementation candidates are deterministically capped and remain review-tier; omitted candidates may still be possible static review evidence.
       - Reflection, factories, service locators, configuration-driven bindings, and dynamic dispatch remain analysis gaps unless a future deterministic rule covers them.
@@ -2646,15 +2692,19 @@ rules:
   - id: combined.dispatch-candidate.v1
     name: Combined dispatch candidate edge
     description: Derives bounded in-memory path edges from interface or override method symbols to statically known implementation or override method candidates using combined symbol-relationship evidence.
-    evidenceTier: Inherits relationship evidence and caps path classification at NeedsReviewPath
+    evidenceTier: Inherits relationship evidence and caps paths, reverse paths, route-flow rows, and impact context at their consumer-specific review tiers
     emits:
       - interface-candidate path edge
       - override-candidate path edge
+      - registration-context-candidate annotation
     limitations:
       - Candidate edges are static review evidence only and do not prove runtime dispatch, dependency-injection target selection, object lifetime, branch feasibility, or production execution.
       - Candidates are derived only from source-local method-level relationship evidence; type-level inheritance or interface relationships do not substitute for member-level evidence in v1.
+      - DependencyRegistered facts may annotate and deterministically order an already relationship-backed candidate only when compiler-backed service and implementation type-definition identities agree and generic displays are compatible; registration evidence never creates a candidate edge by itself.
+      - Registration context does not resolve registration order, factories, keyed or named services, decorators, service locators, custom containers, branches, object lifetime, or runtime selection.
       - Override candidate chain traversal follows only `Overrides` relationship evidence and is bounded to a maximum depth of 5 with cycle protection.
       - Syntax-only, fallback, reduced-coverage, ambiguous, generated-code uncertain, or high fan-out candidates remain review-tier and must not strengthen downstream classifications.
+      - Consumer projections must preserve this rule ID and cap paths at NeedsReviewPath, reverse paths and roots at NeedsReviewReversePath, route-flow rows at NeedsReviewStaticRouteFlow, and impact context at NeedsReviewImpact or weaker.
 
   - id: combined.dispatch-gap.v1
     name: Combined dispatch candidate gap
@@ -2663,9 +2713,24 @@ rules:
     emits:
       - DispatchCandidateFanOut gap
       - DispatchCandidateTruncatedByLimit gap
+      - RegistrationCompatibilityUnproven gap
+      - UnsupportedRegistrationShape gap
+      - GenericCandidateNeedsReview gap
+      - MemberCandidateUnavailable gap
+      - DispatchCandidateIdentityUnverified gap
+      - DispatchCandidateReducedCoverage gap
+      - DispatchCandidateSchemaUnavailable gap
     limitations:
       - Gap rows describe limits of the current static evidence graph and must not be read as proof that no runtime target exists.
       - Candidate caps are deterministic traversal limits; omitted candidates may still be possible static review evidence outside the configured bound.
+      - Fan-out gaps preserve structured candidate count and limit metadata so consumers can report exact omitted counts without parsing prose.
+      - Registration gaps preserve static context only and do not prove that a registration is invalid, unused, or absent at runtime.
+      - Open generic, factory, keyed, instance, scanning, custom-container, syntax-only, and compatibility-unproven registration shapes remain review gaps in v1.
+      - Type-level implementation or inheritance relationships do not create guessed member candidates; when a called member lacks source-local member relationship evidence, MemberCandidateUnavailable preserves the bounded type context as a gap.
+      - Missing canonical member or containing-type identity fails closed as DispatchCandidateIdentityUnverified; display names are not joined as authoritative identity.
+      - Because candidate edges are shared at the abstraction node, one unverified call identity withholds that abstraction's traversable candidates rather than allowing an unrelated call site to inherit them; the gap preserves the withheld fan-out and supporting evidence.
+      - Reduced, failed, unsupported-adapter, or unverifiable source coverage emits DispatchCandidateReducedCoverage and downgrades any retained candidate to review-only Tier4 context.
+      - Consumers that cannot load the required fact extractor schema emit DispatchCandidateSchemaUnavailable rather than infer candidate absence.
       - Missing relationship evidence under reduced coverage must remain an unknown analysis gap rather than a clean absence conclusion.
 
   - id: combined.route-flow.logic-surface.v1
@@ -2768,6 +2833,11 @@ rules:
       - TraversalBounds gap
       - TruncatedByLimit gap
       - UnsafeValueOmitted gap
+      - DispatchCandidateFanOut gap
+      - DispatchCandidateTruncatedByLimit gap
+      - RegistrationCompatibilityUnproven gap
+      - UnsupportedRegistrationShape gap
+      - GenericCandidateNeedsReview gap
     limitations:
       - Gaps are coverage-relative explanations of missing or weak static evidence and must not be rendered as clean absence under reduced coverage.
       - Endpoint composition gaps describe static bridge and terminal surface availability only and do not prove route reachability, request execution, dependency-injection target selection, dynamic dispatch, branch feasibility, database existence, query execution, or downstream absence.
@@ -3210,6 +3280,7 @@ rules:
       - Native workspace messages are sanitized to stable categories before shareable artifacts are written; raw local paths, remotes, package sources, config values, credentials, and source-like snippets are omitted.
       - Source documents outside the repository use deterministic synthetic evidence paths derived from bounded non-host descriptors. The original path is not retained, and same-named unrecognized external sources can share an identity.
       - Explicit scan-scope gaps report only a categorical omitted-document count at repository evidence path `.`; they do not identify excluded source files, prove build failure, or describe runtime behavior.
+      - Exclusion comparison follows detected host path case semantics and macOS Unicode-equivalence semantics without rewriting persisted evidence paths. Unicode-distinct names remain distinct on hosts whose filesystems treat them as distinct.
 
   - id: build.environment.target-framework.v1
     name: Build environment target framework diagnostics
@@ -4640,6 +4711,27 @@ rules:
       - Repository identity is hash-based and cannot prove runtime deployment, ownership, or service equivalence.
       - Duplicate source identity is excluded from cross-source grouping to avoid double-counting evidence.
       - Manifest expected identity is a validation hint, not a replacement for indexed source provenance.
+
+  - id: portfolio.context.dispatch-candidate.v1
+    name: Portfolio static dispatch candidate context
+    description: Summarizes bounded static dispatch candidate counts, registration context, gaps, fan-out, source coverage, rules, and limitations across portfolio inputs.
+    evidenceTier: Inherits weakest supporting candidate evidence tier
+    emits:
+      - PortfolioContextRow
+      - PortfolioGap
+    limitations:
+      - Portfolio candidate context is review-only and does not prove runtime dispatch, dependency-injection binding, selected implementation, reachability, execution, or impact.
+      - Single indexes without combined relationship context cannot manufacture candidate evidence; unavailable or reduced evidence remains explicit.
+
+  - id: combined.report.dispatch-candidate-summary.v1
+    name: Combined report static dispatch candidate summary
+    description: Summarizes shared candidate edges and gaps by source, bridge kind, registration context, coverage, and cap state in combined dependency reports.
+    evidenceTier: Inherits weakest supporting candidate evidence tier
+    emits:
+      - DispatchCandidateEvidenceSummary
+    limitations:
+      - Summary counts are bounded static review context and do not prove runtime dispatch, dependency-injection binding, selected implementation, reachability, execution, production behavior, or impact.
+      - Candidate absence is coverage-relative and underlying combined.dispatch-candidate.v1 and combined.dispatch-gap.v1 evidence remains authoritative.
 
   - id: portfolio.coverage.v1
     name: Portfolio coverage summary

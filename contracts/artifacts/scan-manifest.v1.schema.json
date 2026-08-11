@@ -27,6 +27,11 @@
     "projects": { "type": "array", "items": { "type": "string" } },
     "targetFrameworks": { "type": "array", "items": { "type": "string" } },
     "knownGaps": { "type": "array", "items": { "type": "string" } },
+    "sourceSnapshotDigest": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 identity of the sorted logical paths, kinds, sizes, and bytes included in the analyzed source snapshot when the adapter provides it."
+    },
     "extractorVersions": {
       "type": "object",
       "additionalProperties": { "type": "string", "minLength": 1 }

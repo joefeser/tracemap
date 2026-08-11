@@ -1,5 +1,9 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace TraceMap.Core;
 
+[method: JsonConstructor]
 public sealed record ScanManifest(
     string ScanId,
     string RepoName,
@@ -16,7 +20,61 @@ public sealed record ScanManifest(
     IReadOnlyList<string> KnownGaps,
     string? ScanRootRelativePath = null,
     string? ScanRootPathHash = null,
-    string? GitRootHash = null);
+    string? GitRootHash = null,
+    string? SourceSnapshotDigest = null) : IJsonOnDeserialized
+{
+    public string? SourceSnapshotDigest { get; init; } = ValidateSourceSnapshotDigest(SourceSnapshotDigest);
+
+    void IJsonOnDeserialized.OnDeserialized()
+    {
+        ValidateSourceSnapshotDigest(SourceSnapshotDigest);
+    }
+
+    private static string? ValidateSourceSnapshotDigest(string? value) =>
+        value is null
+        || (value.Length == 64
+            && value.All(character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f')))
+            ? value
+            : throw new JsonException("sourceSnapshotDigest must be null or a 64-character lowercase hexadecimal SHA-256 digest.");
+
+    public ScanManifest(
+        string ScanId,
+        string RepoName,
+        string? RemoteUrl,
+        string? Branch,
+        string CommitSha,
+        string ScannerVersion,
+        DateTimeOffset ScannedAt,
+        string AnalysisLevel,
+        string BuildStatus,
+        IReadOnlyList<string> Solutions,
+        IReadOnlyList<string> Projects,
+        IReadOnlyList<string> TargetFrameworks,
+        IReadOnlyList<string> KnownGaps,
+        string? ScanRootRelativePath,
+        string? ScanRootPathHash,
+        string? GitRootHash)
+        : this(
+            ScanId,
+            RepoName,
+            RemoteUrl,
+            Branch,
+            CommitSha,
+            ScannerVersion,
+            ScannedAt,
+            AnalysisLevel,
+            BuildStatus,
+            Solutions,
+            Projects,
+            TargetFrameworks,
+            KnownGaps,
+            ScanRootRelativePath,
+            ScanRootPathHash,
+            GitRootHash,
+            SourceSnapshotDigest: null)
+    {
+    }
+}
 
 public sealed record EvidenceSpan(
     string FilePath,
@@ -457,7 +515,7 @@ public static class RuleIds
 
 public static class ScannerVersions
 {
-    public const string TraceMap = "tracemap-milestone16";
+    public const string TraceMap = TraceMapDiagnostics.ToolVersion;
     public const string RepoManifestExtractor = "repo-manifest/0.1.0";
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
     public const string ProjectFileExtractor = "project-file/0.1.0";
@@ -484,7 +542,7 @@ public static class ScannerVersions
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.1.0";
     public const string LegacyDataExtractor = "legacy-data/0.1.0";
-    public const string AccessExtractor = "legacy-access/0.3.1";
+    public const string AccessExtractor = "legacy-access/0.3.2";
     public const string EndpointAlignment = "endpoint-alignment/0.1.0";
     public const string RazorBindingExtractor = "csharp-razor-binding/0.1.0";
 }

@@ -80,6 +80,69 @@ public sealed class CombinedReverseQueryTests
     }
 
     [Fact]
+    public async Task Reverse_caps_static_dispatch_candidate_paths_and_roots_at_needs_review()
+    {
+        using var temp = new TempDirectory();
+        var serverIndex = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var outDir = Path.Combine(temp.Path, "reverse");
+        var server = Manifest("server", "tracemap-milestone15");
+        var controller = "Server.OrdersController.Get(System.Int32)";
+        var service = "Server.IOrderService.Get(System.Int32)";
+        var implementation = "Server.OrderService.Get(System.Int32)";
+        var repository = "Server.OrderRepository.Query(System.Int32)";
+
+        SqliteIndexWriter.Write(serverIndex, server, [
+            RouteFact(server, "GET", "/api/orders/{id}", "/api/orders/{}", controller, "Controllers/OrdersController.cs", 10),
+            CallFact(server, controller, service, "Controllers/OrdersController.cs", 14),
+            SymbolRelationshipFact(server, implementation, service, "Services/OrderService.cs", 18),
+            CallFact(server, implementation, repository, "Services/OrderService.cs", 21),
+            QueryPatternFact(server, repository, "Infrastructure/OrderRepository.cs", 31)
+        ]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([serverIndex], combinedPath, ["server"]));
+
+        var result = await CombinedReverseReporter.WriteAsync(new CombinedReverseOptions(
+            combinedPath,
+            outDir,
+            Surface: "sql-query",
+            SurfaceName: "orders",
+            To: "endpoints"));
+
+        var path = Assert.Single(result.Report.Paths, candidate => candidate.Edges.Any(edge => edge.EdgeKind == "interface-candidate"));
+        Assert.Equal(CombinedReverseClassifications.NeedsReviewReversePath, path.Classification);
+        Assert.Contains("combined.dispatch-candidate.v1", path.RuleIds);
+        Assert.Contains(path.Notes, note => note.Code == "StaticDispatchCandidate");
+        var root = Assert.Single(result.Report.ReverseRoots, candidate => candidate.PathIds.Contains(path.PathId, StringComparer.Ordinal));
+        Assert.Equal(CombinedReverseClassifications.NeedsReviewReversePath, root.Classification);
+
+        var markdown = await File.ReadAllTextAsync(Path.Combine(outDir, "reverse-report.md"));
+        Assert.Contains("StaticDispatchCandidate", markdown);
+        Assert.DoesNotContain("runtime target", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("selected implementation", markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Reverse_and_impact_candidate_caps_are_documented_in_the_rule_catalog()
+    {
+        var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
+
+        Assert.Contains("Paths and roots containing `combined.dispatch-candidate.v1` evidence are capped at NeedsReviewReversePath or weaker", catalog, StringComparison.Ordinal);
+        Assert.Contains("Paths containing `combined.dispatch-candidate.v1` evidence are capped at NeedsReviewImpact or a weaker unknown classification", catalog, StringComparison.Ordinal);
+        Assert.Contains("impact context at NeedsReviewImpact or weaker", catalog, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Reverse_mixed_path_root_is_capped_when_any_supporting_path_is_a_dispatch_candidate()
+    {
+        var strong = ReversePath("strong", CombinedReverseClassifications.StrongStaticReversePath, ["combined.reverse.path.v1"]);
+        var candidate = ReversePath("candidate", CombinedReverseClassifications.NeedsReviewReversePath, ["combined.dispatch-candidate.v1", "combined.reverse.path.v1"]);
+
+        Assert.Equal(
+            CombinedReverseClassifications.NeedsReviewReversePath,
+            CombinedReverseReporter.AggregateRootClassification([strong, candidate]));
+    }
+
+    [Fact]
     public async Task Reverse_selectors_caps_and_source_matching_are_deterministic()
     {
         using var temp = new TempDirectory();
@@ -576,6 +639,22 @@ public sealed class CombinedReverseQueryTests
         Assert.Contains("combined index", ex.Message);
     }
 
+    private static CombinedReversePath ReversePath(string id, string classification, IReadOnlyList<string> ruleIds) =>
+        new(
+            id,
+            "root",
+            "surface",
+            classification,
+            "Low",
+            0,
+            [],
+            [],
+            ruleIds,
+            [],
+            [],
+            [],
+            []);
+
     private static ScanManifest Manifest(
         string repo,
         string scannerVersion,
@@ -663,7 +742,47 @@ public sealed class CombinedReverseQueryTests
             targetSymbol: callee,
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
-                ["callKind"] = "method"
+                ["callKind"] = "method",
+                ["targetContainingSymbolId"] = callee == "Server.IOrderService.Get(System.Int32)"
+                    ? "Server.IOrderService"
+                    : ContainingType(callee),
+                ["targetSymbolId"] = callee
+            });
+    }
+
+    private static string ContainingType(string member)
+    {
+        var signatureStart = member.IndexOf('(', StringComparison.Ordinal);
+        var memberEnd = signatureStart >= 0 ? signatureStart : member.Length;
+        var separator = member.LastIndexOf('.', memberEnd - 1);
+        return separator > 0 ? member[..separator] : member;
+    }
+
+    private static CodeFact SymbolRelationshipFact(
+        ScanManifest manifest,
+        string implementationMethodSymbol,
+        string interfaceMethodSymbol,
+        string file,
+        int line)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.SymbolRelationship,
+            RuleIds.CSharpSemanticSymbolRelationship,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: implementationMethodSymbol,
+            targetSymbol: interfaceMethodSymbol,
+            contractElement: "ImplementsInterfaceMember",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["relationshipKind"] = "ImplementsInterfaceMember",
+                ["sourceContainingSymbolId"] = "Server.OrderService",
+                ["sourceSymbolDisplayName"] = implementationMethodSymbol,
+                ["sourceSymbolId"] = implementationMethodSymbol,
+                ["targetContainingSymbolId"] = "Server.IOrderService",
+                ["targetSymbolDisplayName"] = interfaceMethodSymbol,
+                ["targetSymbolId"] = interfaceMethodSymbol
             });
     }
 
@@ -812,5 +931,21 @@ public sealed class CombinedReverseQueryTests
                 Assert.Equal(root.RootId, path!.RootId);
             }
         }
+    }
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "rules", "rule-catalog.yml")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root.");
     }
 }

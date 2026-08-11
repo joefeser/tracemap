@@ -1,9 +1,17 @@
+using System.Buffers.Binary;
+using System.Security.Cryptography;
+using System.Text;
+
 namespace TraceMap.Core;
 
 public static class ScanEngine
 {
-    public static ScanResult Scan(ScanOptions options)
+    public static ScanResult Scan(ScanOptions options) => Scan(options, CancellationToken.None);
+
+    public static ScanResult Scan(ScanOptions options, CancellationToken cancellationToken)
     {
+        using var scanOperation = TraceMapDiagnostics.StartScan(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         var repoPath = Path.GetFullPath(options.RepoPath);
         var outputPath = Path.GetFullPath(options.OutputPath);
         if (!Directory.Exists(repoPath))
@@ -11,12 +19,85 @@ public static class ScanEngine
             throw new DirectoryNotFoundException($"Repository path does not exist: {repoPath}");
         }
 
-        var git = GitMetadataProvider.Detect(repoPath);
-        MsBuildBinlogExtractor.ValidateCommitBinding(git.CommitSha, options.BinlogPaths, options.BinlogCommitSha);
-        var fullInventory = FileInventory.Collect(repoPath, outputPath);
-        var inventory = ApplyScope(fullInventory, repoPath, options);
-        var semanticResult = CSharpSemanticExtractor.Extract(repoPath, inventory, options, fullInventory);
+        GitMetadata git;
+        IReadOnlyList<FileInventoryItem> fullInventory;
+        IReadOnlyList<FileInventoryItem> inventory;
+        using (var discoveryOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.Discovery, cancellationToken))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            git = GitMetadataProvider.Detect(repoPath);
+            MsBuildBinlogExtractor.ValidateCommitBinding(git.CommitSha, options.BinlogPaths, options.BinlogCommitSha);
+            var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
+            fullInventory = FileInventory.Collect(
+                repoPath,
+                outputPath,
+                options.ExcludeGlobs,
+                sourcePathComparer,
+                options.IncludeGlobs);
+            inventory = ApplyScope(fullInventory, repoPath, options);
+            cancellationToken.ThrowIfCancellationRequested();
+            discoveryOperation.RecordItems(inventory.Count);
+            discoveryOperation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+        }
+
+        IReadOnlyDictionary<string, string> semanticInputSnapshot;
+        try
+        {
+            semanticInputSnapshot = CaptureSemanticInputSnapshot(repoPath, fullInventory);
+        }
+        catch (SourceInventoryException ex)
+        {
+            throw new SourceSnapshotException(ex);
+        }
+        SemanticExtractionResult semanticResult;
+        using (var semanticOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.SemanticAnalysis, cancellationToken))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            semanticResult = CSharpSemanticExtractor.Extract(repoPath, inventory, options, fullInventory);
+            cancellationToken.ThrowIfCancellationRequested();
+            VerifySemanticInputSnapshot(repoPath, fullInventory, semanticResult, semanticInputSnapshot);
+            semanticOperation.Complete(semanticResult.ReducedCoverage
+                ? TraceMapDiagnosticOutcome.Partial
+                : TraceMapDiagnosticOutcome.Succeeded);
+        }
+
         inventory = IncludeSemanticallyAnalyzedFiles(inventory, fullInventory, semanticResult);
+        var discoveredSnapshotInventory = IncludeSemanticInputs(inventory, fullInventory, semanticResult);
+        IReadOnlyList<FileInventoryItem> authoritativeSnapshotInventory;
+        try
+        {
+            var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
+            var refreshedFullInventory = FileInventory.Collect(
+                repoPath,
+                outputPath,
+                options.ExcludeGlobs,
+                sourcePathComparer,
+                options.IncludeGlobs);
+            var refreshedInventory = ApplyScope(refreshedFullInventory, repoPath, options);
+            refreshedInventory = IncludeSemanticallyAnalyzedFiles(
+                refreshedInventory,
+                refreshedFullInventory,
+                semanticResult);
+            var refreshedSnapshotInventory = IncludeSemanticInputs(
+                refreshedInventory,
+                refreshedFullInventory,
+                semanticResult);
+            VerifySourceSnapshotInventoryMembership(discoveredSnapshotInventory, refreshedSnapshotInventory);
+            VerifySemanticInputSnapshot(
+                repoPath,
+                refreshedFullInventory,
+                semanticResult,
+                semanticInputSnapshot);
+            fullInventory = refreshedFullInventory;
+            inventory = refreshedInventory;
+            authoritativeSnapshotInventory = refreshedSnapshotInventory;
+        }
+        catch (SourceInventoryException ex)
+        {
+            throw new SourceSnapshotException(ex);
+        }
+
+        var sourceSnapshotDigest = CreateSourceSnapshotDigest(repoPath, authoritativeSnapshotInventory);
         var solutions = inventory
             .Where(item => item.Kind == "Solution")
             .Select(item => item.RelativePath)
@@ -46,7 +127,7 @@ public static class ScanEngine
             : "Level3SyntaxAnalysis";
 
         var provisionalManifest = new ScanManifest(
-            CreateScanId(git, inventory, options),
+            CreateScanId(git, inventory, sourceSnapshotDigest, options),
             git.RepoName,
             git.RemoteUrl,
             git.Branch,
@@ -61,7 +142,8 @@ public static class ScanEngine
             semanticKnownGaps,
             GetScanRootRelativePath(repoPath, git),
             FactFactory.Hash(repoPath, 32),
-            string.IsNullOrWhiteSpace(git.GitRootPath) ? null : FactFactory.Hash(Path.GetFullPath(git.GitRootPath), 32));
+            string.IsNullOrWhiteSpace(git.GitRootPath) ? null : FactFactory.Hash(Path.GetFullPath(git.GitRootPath), 32),
+            sourceSnapshotDigest);
 
         var binlogFacts = MsBuildBinlogExtractor.Extract(repoPath, provisionalManifest, options.BinlogPaths);
         var binlogGaps = binlogFacts
@@ -87,16 +169,209 @@ public static class ScanEngine
             KnownGaps = knownGaps
         };
 
-        var facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult, options, binlogFacts);
+        IReadOnlyList<CodeFact> facts;
+        using (var extractionOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.StaticExtraction, cancellationToken))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult, options, binlogFacts);
+            cancellationToken.ThrowIfCancellationRequested();
+            extractionOperation.RecordItems(facts.Count);
+            extractionOperation.Complete(manifest.BuildStatus == "FailedOrPartial"
+                ? TraceMapDiagnosticOutcome.Partial
+                : TraceMapDiagnosticOutcome.Succeeded);
+        }
+
+        string verificationDigest;
+        try
+        {
+            var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
+            var verificationFullInventory = FileInventory.Collect(
+                repoPath,
+                outputPath,
+                options.ExcludeGlobs,
+                sourcePathComparer,
+                options.IncludeGlobs);
+            var verificationInventory = ApplyScope(verificationFullInventory, repoPath, options);
+            verificationInventory = IncludeSemanticallyAnalyzedFiles(
+                verificationInventory,
+                verificationFullInventory,
+                semanticResult);
+            var verificationSnapshotInventory = IncludeSemanticInputs(
+                verificationInventory,
+                verificationFullInventory,
+                semanticResult);
+            VerifySourceSnapshotInventory(authoritativeSnapshotInventory, verificationSnapshotInventory);
+            verificationDigest = CreateSourceSnapshotDigest(repoPath, verificationSnapshotInventory);
+        }
+        catch (SourceInventoryException ex)
+        {
+            throw new SourceSnapshotException(ex);
+        }
+        if (!string.Equals(sourceSnapshotDigest, verificationDigest, StringComparison.Ordinal))
+        {
+            throw new SourceSnapshotException();
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        scanOperation.RecordItems(facts.Count);
+        scanOperation.Complete(
+            manifest.BuildStatus == "FailedOrPartial"
+                ? TraceMapDiagnosticOutcome.Partial
+                : TraceMapDiagnosticOutcome.Succeeded,
+            manifest.AnalysisLevel,
+            manifest.BuildStatus);
         return new ScanResult(manifest, facts, inventory);
     }
 
-    private static string CreateScanId(GitMetadata git, IReadOnlyList<FileInventoryItem> inventory, ScanOptions options)
+    private static string CreateScanId(
+        GitMetadata git,
+        IReadOnlyList<FileInventoryItem> inventory,
+        string sourceSnapshotDigest,
+        ScanOptions options)
     {
         var signature = string.Join('\n', inventory.Select(item => $"{item.RelativePath}|{item.Kind}|{item.SizeBytes}"));
         var binlogSignature = MsBuildBinlogExtractor.CreateInputSignature(options.BinlogPaths, repoPath: options.RepoPath);
         var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
-        return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{signature}|{binlogSignature}", 20);
+        return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{sourceSnapshotDigest}|{signature}|{binlogSignature}", 20);
+    }
+
+    internal static string CreateSourceSnapshotDigest(string repoPath, IReadOnlyList<FileInventoryItem> inventory)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        Span<byte> lengthBuffer = stackalloc byte[sizeof(long)];
+        var buffer = new byte[64 * 1024];
+
+        try
+        {
+            foreach (var item in inventory.OrderBy(candidate => candidate.RelativePath, StringComparer.Ordinal))
+            {
+                AppendString(hash, item.RelativePath, lengthBuffer);
+                AppendString(hash, item.Kind, lengthBuffer);
+                var path = Path.Combine(repoPath, item.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                if (stream.Length != item.SizeBytes)
+                    throw new SourceSnapshotException();
+
+                BinaryPrimitives.WriteInt64BigEndian(lengthBuffer, item.SizeBytes);
+                hash.AppendData(lengthBuffer);
+
+                long bytesRead = 0;
+                int read;
+                while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    hash.AppendData(buffer.AsSpan(0, read));
+                    bytesRead += read;
+                }
+
+                if (bytesRead != item.SizeBytes || stream.Length != item.SizeBytes)
+                    throw new SourceSnapshotException();
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new SourceInventoryException(ex);
+        }
+
+        return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+    }
+
+    internal static void VerifySourceSnapshotInventory(
+        IReadOnlyList<FileInventoryItem> expected,
+        IReadOnlyList<FileInventoryItem> observed)
+    {
+        var expectedItems = expected.OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
+        var observedItems = observed.OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
+        if (!expectedItems.SequenceEqual(observedItems))
+            throw new SourceSnapshotException();
+    }
+
+    private static void VerifySourceSnapshotInventoryMembership(
+        IReadOnlyList<FileInventoryItem> expected,
+        IReadOnlyList<FileInventoryItem> observed)
+    {
+        var expectedItems = expected
+            .Select(item => (item.RelativePath, item.Kind))
+            .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
+            .ToArray();
+        var observedItems = observed
+            .Select(item => (item.RelativePath, item.Kind))
+            .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
+            .ToArray();
+        if (!expectedItems.SequenceEqual(observedItems))
+            throw new SourceSnapshotException();
+    }
+
+    internal static IReadOnlyDictionary<string, string> CaptureSemanticInputSnapshot(
+        string repoPath,
+        IReadOnlyList<FileInventoryItem> inventory)
+    {
+        return inventory
+            .Where(item => FileInventory.IsCSharpKind(item.Kind) || IsSemanticMetadataKind(item.Kind))
+            .ToDictionary(
+                item => item.RelativePath,
+                item => CreateSourceSnapshotDigest(repoPath, [item]),
+                StringComparer.Ordinal);
+    }
+
+    internal static void VerifySemanticInputSnapshot(
+        string repoPath,
+        IReadOnlyList<FileInventoryItem> inventory,
+        SemanticExtractionResult semanticResult,
+        IReadOnlyDictionary<string, string> baseline)
+    {
+        var protectedPaths = GetSemanticallyAnalyzedFiles(semanticResult)
+            .Concat(semanticResult.CompilationInputFiles?.AsEnumerable() ?? Enumerable.Empty<string>())
+            .Concat(inventory.Where(item => IsSemanticMetadataKind(item.Kind)).Select(item => item.RelativePath))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var itemsByPath = inventory.ToDictionary(item => item.RelativePath, StringComparer.Ordinal);
+        try
+        {
+            foreach (var path in protectedPaths)
+            {
+                if (path.StartsWith("__external__/", StringComparison.Ordinal))
+                    continue;
+
+                if (!baseline.TryGetValue(path, out var expected)
+                    || !itemsByPath.TryGetValue(path, out var item)
+                    || !string.Equals(expected, CreateSourceSnapshotDigest(repoPath, [item]), StringComparison.Ordinal))
+                {
+                    throw new SourceSnapshotException();
+                }
+            }
+        }
+        catch (SourceInventoryException ex)
+        {
+            throw new SourceSnapshotException(ex);
+        }
+    }
+
+    private static bool IsSemanticMetadataKind(string kind) =>
+        kind is "Solution" or "Project" or "MSBuildProps" or "MSBuildTargets";
+
+    private static IReadOnlyList<FileInventoryItem> IncludeSemanticInputs(
+        IReadOnlyList<FileInventoryItem> inventory,
+        IReadOnlyList<FileInventoryItem> fullInventory,
+        SemanticExtractionResult semanticResult)
+    {
+        var compilationInputFiles = semanticResult.CompilationInputFiles ?? new HashSet<string>(StringComparer.Ordinal);
+        return inventory
+            .Concat(fullInventory.Where(item =>
+                IsSemanticMetadataKind(item.Kind)
+                || compilationInputFiles.Contains(item.RelativePath)))
+            .GroupBy(item => item.RelativePath, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static void AppendString(IncrementalHash hash, string value, Span<byte> lengthBuffer)
+    {
+        var bytes = Encoding.UTF8.GetBytes(value);
+        BinaryPrimitives.WriteInt64BigEndian(lengthBuffer, bytes.Length);
+        hash.AppendData(lengthBuffer);
+        hash.AppendData(bytes);
     }
 
     private static string GetScanRootRelativePath(string repoPath, GitMetadata git)
@@ -414,13 +689,14 @@ public static class ScanEngine
         var projectPaths = NormalizeOptionPaths(repoPath, options.ProjectPaths);
         var includeGlobs = (options.IncludeGlobs ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).ToArray();
         var excludeGlobs = (options.ExcludeGlobs ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).ToArray();
+        var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
         var projectDirectories = projectPaths
             .Select(path => FileInventory.NormalizeRelativePath(Path.GetDirectoryName(path) ?? "."))
             .ToArray();
 
         return inventory
-            .Where(item => includeGlobs.Length == 0 || includeGlobs.Any(glob => GlobMatches(item.RelativePath, glob)))
-            .Where(item => excludeGlobs.Length == 0 || !excludeGlobs.Any(glob => GlobMatches(item.RelativePath, glob)))
+            .Where(item => includeGlobs.Length == 0 || includeGlobs.Any(glob => GlobMatches(item.RelativePath, glob, sourcePathComparer)))
+            .Where(item => excludeGlobs.Length == 0 || !excludeGlobs.Any(glob => GlobMatches(item.RelativePath, glob, sourcePathComparer)))
             .Where(item => solutionPaths.Count == 0 || item.Kind != "Solution" || solutionPaths.Contains(item.RelativePath))
             .Where(item => projectPaths.Count == 0 || item.Kind is not ("Project" or "SqlProject") || projectPaths.Contains(item.RelativePath))
             .Where(item => projectDirectories.Length == 0
@@ -482,9 +758,11 @@ public static class ScanEngine
         return relativePath.StartsWith(normalizedDirectory, StringComparison.Ordinal);
     }
 
-    internal static bool GlobMatches(string relativePath, string glob)
+    internal static bool GlobMatches(string relativePath, string glob, StringComparer? pathComparer = null)
     {
-        var normalizedGlob = FileInventory.NormalizeRelativePath(glob.Trim());
+        pathComparer ??= StringComparer.Ordinal;
+        var normalizedPath = NormalizePathForFileSystemComparison(relativePath);
+        var normalizedGlob = NormalizePathForFileSystemComparison(glob.Trim());
         if (string.IsNullOrWhiteSpace(normalizedGlob))
         {
             return false;
@@ -492,13 +770,29 @@ public static class ScanEngine
 
         if (!normalizedGlob.Contains('*', StringComparison.Ordinal))
         {
-            return relativePath.Equals(normalizedGlob, StringComparison.Ordinal)
-                || relativePath.StartsWith(normalizedGlob.TrimEnd('/') + "/", StringComparison.Ordinal);
+            var directoryPrefix = normalizedGlob.TrimEnd('/') + "/";
+            var comparison = pathComparer.Equals("a", "A")
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            return normalizedPath.Equals(normalizedGlob, comparison)
+                || normalizedPath.StartsWith(directoryPrefix, comparison);
         }
 
         var regex = "^" + System.Text.RegularExpressions.Regex.Escape(normalizedGlob)
+            .Replace("\\*\\*/", "(?:.*/)?", StringComparison.Ordinal)
             .Replace("\\*\\*", ".*", StringComparison.Ordinal)
             .Replace("\\*", "[^/]*", StringComparison.Ordinal) + "$";
-        return System.Text.RegularExpressions.Regex.IsMatch(relativePath, regex);
+        var regexOptions = System.Text.RegularExpressions.RegexOptions.CultureInvariant;
+        if (pathComparer.Equals("a", "A"))
+            regexOptions |= System.Text.RegularExpressions.RegexOptions.IgnoreCase;
+        return System.Text.RegularExpressions.Regex.IsMatch(normalizedPath, regex, regexOptions);
+    }
+
+    private static string NormalizePathForFileSystemComparison(string path)
+    {
+        var normalized = FileInventory.NormalizeRelativePath(path);
+        return OperatingSystem.IsMacOS()
+            ? normalized.Normalize(NormalizationForm.FormC)
+            : normalized;
     }
 }
