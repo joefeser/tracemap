@@ -2055,7 +2055,7 @@ public static class CombinedRouteFlowReporter
                         : EvidenceFromEdge(RouteRuleIdForRowKind(rowKind), edge, [edge.RuleId], sources, previous?.SourceLabel, previous?.CommitSha),
                     SupportingDispatchCandidateId: isDispatchCandidate ? edge!.EdgeId : null,
                     SupportingCallEdgeIds: isDispatchCandidate ? SupportingCallEdgeIds(path, index) : null,
-                    SupportingRelationshipIds: isDispatchCandidate ? edge!.SupportingCombinedEdgeIds : null,
+                    SupportingRelationshipIds: isDispatchCandidate ? edge!.SupportingRelationshipIds : null,
                     RegistrationContext: isDispatchCandidate ? edge!.RegistrationContext : null,
                     SupportingRegistrationFactIds: isDispatchCandidate ? edge!.SupportingRegistrationFactIds : null,
                     CandidateCount: isDispatchCandidate ? edge!.CandidateCount : null,
