@@ -1,5 +1,22 @@
 [
   {
+    "path": "/blog/how-a-gap-becomes-a-rule/",
+    "title": "How a Gap Becomes a Rule",
+    "summary": "A concept-level explanation of the deterministic hardening path from reproduced uncertainty to fail-closed invariant, synthetic fixture, rule ID, evidence tier, explicit gap, persistence, and limitation.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/evidence/gaps/",
+    "limitations": [
+      "The process describes a reusable contract; it does not imply that every observed issue becomes a cataloged rule or that every unsupported shape is resolved.",
+      "Checked-in synthetic fixtures prove bounded regression behavior, not complete language, runtime, production, or release coverage."
+    ],
+    "nonClaims": [
+      "No automatic gap repair, private-validation success, complete coverage, production correctness, owner bypass, release approval, or safety claim.",
+      "No private tickets, source snippets, analyzer output, raw SQLite, host paths, credentials, private identities, LLM classification, embeddings, vectors, or prompt analysis."
+    ]
+  },
+  {
     "path": "/blog/what-depends-on-this-symbol/",
     "title": "What Depends on This Symbol?",
     "summary": "A demo-level explanation of persisted reverse-impact traversal over canonical identities, explicit relationship families, bounded state, evidence-backed hops, and gaps.",
