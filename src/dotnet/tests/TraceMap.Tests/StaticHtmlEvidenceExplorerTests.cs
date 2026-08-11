@@ -71,11 +71,86 @@ public sealed class StaticHtmlEvidenceExplorerTests
             && redaction.Location == "scan-manifest.projects"
             && redaction.Category == "project-path");
         Assert.Contains(result.Manifest.Limitations, limitation =>
-            limitation.RuleId == StaticHtmlEvidenceExplorer.ProvenanceConflictRuleId
-            && limitation.LimitationKind == "claim-level-conflict-detection-deferred"
+            limitation.RuleId == StaticHtmlEvidenceExplorer.PartialSectionRuleId
+            && limitation.LimitationKind == "claim-level-metadata-unknown"
             && limitation.ClaimEffect == "claim-level");
+        Assert.Equal("tracemap-static-html-evidence-explorer.v2", result.Data.SchemaVersion);
+        Assert.Contains("Compatibility Ledger", allGenerated);
+        Assert.Contains("explorer.render.compatibility-ledger.v1", allGenerated);
         Assert.Contains("Local generated artifact", allGenerated);
         Assert.Contains("does not rescan source code", allGenerated);
+    }
+
+    [Fact]
+    public async Task Explorer_generate_emits_deterministic_safe_compatibility_ledger_with_absence_states()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("1"));
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectKind == "artifact"
+            && row.SubjectId == "artifact:scan-manifest"
+            && row.CompatibilityStatus == "rendered-compatible"
+            && row.RuleId == StaticHtmlEvidenceExplorer.CompatibilityLedgerRuleId);
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectId == "artifact:sqlite-index"
+            && row.CompatibilityStatus == "provenance-only");
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectId == "artifact:rule-catalog"
+            && row.CompatibilityStatus == "not-provided"
+            && row.Message.Contains("does not prove evidence absence", StringComparison.Ordinal));
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectKind == "section"
+            && row.SubjectId == "surfaces"
+            && row.CompatibilityStatus == "provenance-only");
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectKind == "safety-profile"
+            && row.SubjectId == "safety-profile:public-demo"
+            && row.CompatibilityStatus == "compatible");
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectKind == "claim-level"
+            && row.SubjectId == "claim-level:unknown"
+            && row.CompatibilityStatus == "partial"
+            && row.LimitationIds.Contains("claim-level-metadata-unavailable"));
+        Assert.DoesNotContain(result.Data.CompatibilityLedger, row =>
+            row.CompatibilityStatus == "profile-incompatible"
+            || row.SubjectId.Contains("claim-level-conflict", StringComparison.Ordinal));
+
+        var ordered = result.Data.CompatibilityLedger
+            .OrderBy(row => row.SubjectKind, StringComparer.Ordinal)
+            .ThenBy(row => row.SubjectId, StringComparer.Ordinal)
+            .ThenBy(row => row.CompatibilityStatus, StringComparer.Ordinal)
+            .ThenBy(row => row.RuleId, StringComparer.Ordinal)
+            .ThenBy(row => row.RowId, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(ordered, result.Data.CompatibilityLedger);
+        Assert.All(result.Data.CompatibilityLedger, row =>
+        {
+            Assert.Equal(EvidenceTiers.Tier4Unknown, row.EvidenceTier);
+            Assert.NotEmpty(row.RuleId);
+            Assert.NotEmpty(row.SupportIds);
+            Assert.Equal(row.SupportIds.OrderBy(value => value, StringComparer.Ordinal), row.SupportIds);
+            Assert.Equal(row.LimitationIds.OrderBy(value => value, StringComparer.Ordinal), row.LimitationIds);
+            Assert.DoesNotContain("impacted", row.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("safe to deploy", row.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("used in production", row.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("runtime reachable", row.Message, StringComparison.OrdinalIgnoreCase);
+        });
+
+        var html = await File.ReadAllTextAsync(Path.Combine(output, "index.html"));
+        Assert.Contains("<h2 id=\"compatibility-ledger-heading\">Compatibility Ledger</h2>", html);
+        Assert.Contains("artifact:rule-catalog", html);
+        Assert.Contains("claim-level:unknown", html);
+        var dataJson = await File.ReadAllTextAsync(Path.Combine(output, "data", "explorer-data.json"));
+        using var document = JsonDocument.Parse(dataJson);
+        Assert.Equal(result.Data.CompatibilityLedger.Count, document.RootElement.GetProperty("compatibilityLedger").GetArrayLength());
+        Assert.DoesNotContain("C:\\sample-root", dataJson);
+        Assert.DoesNotContain("git@example.com:internal/example-repo.git", dataJson);
     }
 
     [Fact]
@@ -456,6 +531,11 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Equal("partial", result.Manifest.CoverageStatus);
         Assert.Contains(result.Gaps, gap => gap.RuleId == StaticHtmlEvidenceExplorer.PartialSectionRuleId && gap.GapKind == "not-provided" && gap.AffectedSection == "sources");
         Assert.Contains(result.Gaps, gap => gap.RuleId == StaticHtmlEvidenceExplorer.UnsupportedSchemaRuleId && gap.GapKind == "unsupported-schema");
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectKind == "artifact"
+            && row.SubjectId.StartsWith("artifact:unsupported-json:", StringComparison.Ordinal)
+            && row.CompatibilityStatus == "unsupported-schema"
+            && row.RuleId == StaticHtmlEvidenceExplorer.UnsupportedSchemaRuleId);
         var html = await File.ReadAllTextAsync(Path.Combine(output, "index.html"));
         Assert.Contains("partial", html);
         Assert.Contains("Unsupported JSON artifact", html);
@@ -476,6 +556,11 @@ public sealed class StaticHtmlEvidenceExplorerTests
             gap.RuleId == StaticHtmlEvidenceExplorer.ProvenanceConflictRuleId
             && gap.GapKind == "commit-conflict"
             && gap.AffectedSection == "evidence-rows");
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectId == "artifact:facts-ndjson"
+            && row.CompatibilityStatus == "partial"
+            && row.RuleId == StaticHtmlEvidenceExplorer.ProvenanceConflictRuleId
+            && row.LimitationIds.Any(id => id.Contains("commit-conflict", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -565,6 +650,26 @@ public sealed class StaticHtmlEvidenceExplorerTests
     }
 
     [Fact]
+    public async Task Explorer_generate_force_recognizes_prior_v1_generated_manifest_during_v2_upgrade()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        Directory.CreateDirectory(Path.Combine(output, "data"));
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("7"));
+        await File.WriteAllTextAsync(Path.Combine(output, "data", "explorer-manifest.json"), """
+            {"schemaVersion":"tracemap-static-html-evidence-explorer.v1","tracemapGenerated":true}
+            """);
+        await File.WriteAllTextAsync(Path.Combine(output, "index.html"), "<!doctype html><title>v1 generated output</title>");
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output, Force: true));
+
+        Assert.Equal("tracemap-static-html-evidence-explorer.v2", result.Manifest.SchemaVersion);
+        Assert.DoesNotContain("v1 generated output", await File.ReadAllTextAsync(Path.Combine(output, "index.html")));
+    }
+
+    [Fact]
     public async Task Explorer_generate_hidden_local_is_visibly_labeled_and_recorded()
     {
         using var temp = new TempDirectory();
@@ -579,6 +684,10 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Equal("hidden-local", result.Manifest.ClaimLevel);
         Assert.All(result.Manifest.Inputs, artifact => Assert.Equal("hidden-local", artifact.ClaimLevel));
         Assert.True(result.Manifest.Counts.RedactionCount > 0);
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectKind == "safety-profile"
+            && row.SubjectId == "safety-profile:hidden-local"
+            && row.CompatibilityStatus == "compatible");
         var html = await File.ReadAllTextAsync(Path.Combine(output, "index.html"));
         Assert.Contains("Hidden/local output", html);
         Assert.Contains("Redacted or hashed", html);
@@ -626,6 +735,9 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Contains(sectionStatuses, row =>
             row.GetProperty("sectionId").GetString() == "surfaces"
             && row.GetProperty("status").GetString() == "not-provided");
+        Assert.Contains(document.RootElement.GetProperty("compatibilityLedger").EnumerateArray(), row =>
+            row.GetProperty("subjectId").GetString() == "artifact:facts-ndjson"
+            && row.GetProperty("compatibilityStatus").GetString() == "compatible-empty");
     }
 
     [Fact]
