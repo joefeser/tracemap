@@ -172,7 +172,7 @@ Public claim level: hidden
   wording. Other path families and reducer readers remain separate slices.
 - [x] PR 3b: Reducer readers, preserving reducer-only impact wording and
   public-safe validation.
-- [ ] PR 4: Browser accessibility and no-JavaScript validation expansion.
+- [x] PR 4: Browser accessibility and no-JavaScript validation expansion.
 
 ## Deferred Follow-Ups
 

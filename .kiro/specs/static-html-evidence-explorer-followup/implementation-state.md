@@ -502,3 +502,59 @@ Validation:
   results retain the reducer artifact as support without inventing source-fact
   evidence; result rows continue to link every available location/provenance
   row by evidence ID.
+
+## Implementation PR 4 — Accessibility And No-JavaScript Validation
+
+Branch: `codex/static-html-explorer-accessibility`
+
+Starting point:
+
+- Base: fresh `origin/dev`
+- Base SHA: `e088f8a5fc4c635bb1cd1877f39b92978f147876`
+- The base includes the complete compatibility, report-reader, path-reader,
+  and reducer-reader slices through explorer schema v4.
+
+Implemented boundary:
+
+- Added a keyboard-visible skip link targeting the explorer's main evidence
+  content and preserved stable section anchors and ordering.
+- Added an explicit no-JavaScript notice while retaining every evidence,
+  coverage, compatibility, gap, limitation, rule, and empty-state table in the
+  static HTML baseline.
+- Assigned stable IDs and closed safe labels to each filterable table. Local
+  progressive enhancement now creates associated search labels, `aria-controls`
+  relationships, and polite live visible-row counts.
+- Marked real filter targets separately from coverage-relative empty rows, so
+  filtering cannot conceal why a table has no compatible evidence.
+- Retained the first 200 deterministic evidence rows in HTML and the complete
+  safe row set in `data/explorer-data.json`; regression coverage pins both sides
+  of that contract.
+- Added narrow-viewport spacing and touch-target rules without changing the
+  explorer data schema, evidence contracts, rule IDs, or public claim boundary.
+
+Deferred:
+
+- Broad visual redesign, graph visualization, hosted sharing, remote assets,
+  and full SQLite browsing remain outside this completed follow-up runway.
+
+Validation:
+
+- Locked dependency restore: passed.
+- Focused `StaticHtmlEvidenceExplorerTests`: 60/60 passed.
+- Solution build: passed with 0 warnings and 0 errors.
+- Full .NET solution tests: passed.
+- Targeted `dotnet format --verify-no-changes`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Real CLI smoke scanned `samples/modern-sample` with full semantic coverage,
+  wrote 27 facts, and generated the six-file local explorer bundle with all 27
+  safe evidence rows.
+- Desktop (1440x900) and mobile (390x844) local HTTP browser checks passed:
+  four distinct filters were available, the evidence count updated from 27 to
+  0 for a non-match, empty coverage rows remained visible, page width stayed
+  bounded, mobile inputs and navigation links measured 44 pixels, no remote
+  assets were requested, and no browser warnings or errors were reported.
+- The generated skip link, focusable main target, and no-JavaScript notice are
+  pinned by focused structural tests. The in-app browser did not dispatch its
+  synthetic Tab/fragment gesture reliably, so no automated keyboard-navigation
+  success is claimed beyond those semantic contracts.
