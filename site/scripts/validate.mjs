@@ -12,6 +12,8 @@ import { validateBlogProofPathSeriesDist } from "./blog-proof-path-series.mjs";
 import { validateChangeRiskLanguageGuideDist } from "./change-risk-language-guide.mjs";
 import { validateCsharpExtractionTruthDist } from "./csharp-extraction-truth.mjs";
 import { validateGraphHistoryBugsDist } from "./graph-history-bugs.mjs";
+import { validateGraphifyLessonsDist } from "./graphify-lessons.mjs";
+import { validateGapBecomesRuleDist } from "./gap-becomes-rule.mjs";
 import { validateReverseImpactDispatchStoriesDist } from "./reverse-impact-dispatch-stories.mjs";
 import { validateDatabaseDesignReviewShowcaseDist } from "./database-design-review-showcase.mjs";
 import {
@@ -109,6 +111,8 @@ export async function validateDist({
   requireCsharpExtractionTruth = true,
   requireGraphHistoryBugs = true,
   requireReverseImpactDispatchStories = true,
+  requireGapBecomesRule = true,
+  requireGraphifyLessons = true,
   requireAccessRebuildReadiness = true,
   root = defaultRoot
 } = {}) {
@@ -153,6 +157,12 @@ export async function validateDist({
   }
   if (requireReverseImpactDispatchStories) {
     await validateReverseImpactDispatchStoriesDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requireGapBecomesRule) {
+    await validateGapBecomesRuleDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requireGraphifyLessons) {
+    await validateGraphifyLessonsDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }
   if (requireAccessRebuildReadiness) {
     await validateAccessRebuildReadinessDist({ baseUrl: normalizedBaseUrl, dist, errors });

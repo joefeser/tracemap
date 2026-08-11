@@ -1,5 +1,35 @@
 [
   {
+    "slug": "what-tracemap-learned-from-graphify",
+    "category": "External research",
+    "title": "What TraceMap Learned from Graphify—Without Becoming Graphify",
+    "h1": "What TraceMap learned from Graphify—without becoming Graphify",
+    "description": "How TraceMap studied Graphify's persistent-graph, provenance, affected-traversal, ambiguity, and incremental-correctness ideas while preserving an independent evidence contract.",
+    "ogDescription": "A bounded research story about external architecture lessons, independent TraceMap fixtures and implementation, deliberate product differences, and attribution boundaries.",
+    "cardDescription": "See which persistent-graph and correctness ideas sharpened TraceMap, which behaviors were independently implemented, and which directions remained outside scope.",
+    "hero": "External research is useful when it sharpens a local invariant without becoming local evidence, copied implementation, or an accidental product roadmap.",
+    "published": "2026-08-10",
+    "publishedDisplay": "August 10, 2026",
+    "body": "articles/what-tracemap-learned-from-graphify.html",
+    "calloutHeading": "Follow the independent hardening trail.",
+    "calloutHtml": "Read <a href=\"/blog/how-a-gap-becomes-a-rule/\">how a gap becomes a rule</a> and <a href=\"/blog/bugs-hiding-in-graph-history/\">how failure classes became synthetic regression fixtures</a>."
+  },
+  {
+    "slug": "how-a-gap-becomes-a-rule",
+    "category": "Evidence hardening",
+    "title": "How a Gap Becomes a Rule",
+    "h1": "How a gap becomes a rule",
+    "description": "How TraceMap turns a reproduced uncertainty into a fail-closed invariant, synthetic fixture, versioned rule, evidence tier, persisted gap, and documented limitation.",
+    "ogDescription": "A concept-level guide to TraceMap's deterministic hardening process from observed unknown to evidence-backed rule and downstream readback.",
+    "cardDescription": "Follow an uncertainty from independent reproduction through a synthetic fixture, rule catalog, evidence tier, explicit gap, persistence, and owner question.",
+    "hero": "A discovered unknown becomes durable when the dangerous conclusion is refused by a versioned, persisted, and testable evidence contract.",
+    "published": "2026-08-10",
+    "publishedDisplay": "August 10, 2026",
+    "body": "articles/how-a-gap-becomes-a-rule.html",
+    "calloutHeading": "See the contracts this process produced.",
+    "calloutHtml": "Read <a href=\"/blog/csharp-extraction-without-plausible-wrong-graphs/\">the C# extraction contract</a> and <a href=\"/blog/bugs-hiding-in-graph-history/\">the graph-history regression story</a>."
+  },
+  {
     "slug": "what-depends-on-this-symbol",
     "category": "Reverse impact",
     "title": "What Depends on This Symbol?",

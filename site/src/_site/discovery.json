@@ -1,5 +1,39 @@
 [
   {
+    "path": "/blog/what-tracemap-learned-from-graphify/",
+    "title": "What TraceMap Learned from Graphify—Without Becoming Graphify",
+    "summary": "A concept-level research story distinguishing external persistent-graph lessons from independently implemented TraceMap evidence, fixtures, boundaries, and deliberate non-adoption decisions.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "roadmap",
+    "preferredProofPath": "/evidence/",
+    "limitations": [
+      "Graphify is an evolving external project; descriptions must remain bounded to its public documentation and are not TraceMap product evidence.",
+      "Shared architectural premises and independently reproduced failure classes do not establish copied implementation, feature parity, or superiority."
+    ],
+    "nonClaims": [
+      "No runtime reachability, production use, complete graph coverage, release readiness, safety, feature-parity, or superiority claim.",
+      "No external source excerpt, private-repository detail, analyzer dump, raw SQLite, credential, host path, private identity, LLM impact classification, embedding, vector, or prompt analysis in TraceMap core."
+    ]
+  },
+  {
+    "path": "/blog/how-a-gap-becomes-a-rule/",
+    "title": "How a Gap Becomes a Rule",
+    "summary": "A concept-level explanation of the deterministic hardening path from reproduced uncertainty to fail-closed invariant, synthetic fixture, rule ID, evidence tier, explicit gap, persistence, and limitation.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/evidence/gaps/",
+    "limitations": [
+      "The process describes a reusable contract; it does not imply that every observed issue becomes a cataloged rule or that every unsupported shape is resolved.",
+      "Checked-in synthetic fixtures prove bounded regression behavior, not complete language, runtime, production, or release coverage."
+    ],
+    "nonClaims": [
+      "No automatic gap repair, private-validation success, complete coverage, production correctness, owner bypass, release approval, or safety claim.",
+      "No private tickets, source snippets, analyzer output, raw SQLite, host paths, credentials, private identities, LLM classification, embeddings, vectors, or prompt analysis."
+    ]
+  },
+  {
     "path": "/blog/what-depends-on-this-symbol/",
     "title": "What Depends on This Symbol?",
     "summary": "A demo-level explanation of persisted reverse-impact traversal over canonical identities, explicit relationship families, bounded state, evidence-backed hops, and gaps.",
