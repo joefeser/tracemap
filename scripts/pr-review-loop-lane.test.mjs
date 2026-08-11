@@ -93,4 +93,5 @@ test('TraceMap authorizes only the bounded exact-head Opus fallback contract', (
   assert.match(runbook, /aggregate\s+authorized spend is at most \$8/)
   assert.match(runbook, /A PR cannot\s+authorize its own fallback from head-only configuration/)
   assert.match(runbook, /--owner-authorized-local-review/)
+  assert.match(runbook, /node "\$ACK_ROOT\/dist\/cli\.js" pr-loop/)
 })

@@ -87,7 +87,7 @@ default. The command expects normal GitHub CLI authentication or a GitHub token
 available to Agent Control, such as `GITHUB_TOKEN`:
 
 ```bash
-node ../agent-control-kit/dist/cli.js pr-loop \
+node "$ACK_ROOT/dist/cli.js" pr-loop \
   --repo joefeser/tracemap --pr <number> --base <branch> --json
 ```
 
