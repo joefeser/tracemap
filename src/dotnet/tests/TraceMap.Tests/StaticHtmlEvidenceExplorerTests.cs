@@ -177,7 +177,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
             Assert.Equal(
                 ["ReleaseReviewAfterReduced", "ReleaseReviewBeforeFull", "ReleaseReviewGapsPresent", "ReleaseReviewNotTruncated"],
                 artifact.CoverageLabels);
-            Assert.Contains("release-review-content-not-rendered", artifact.Limitations);
+            Assert.Contains("limitation:release-review-content-not-rendered", artifact.Limitations);
             Assert.Contains(result.Data.Limitations, limitation =>
                 limitation.LimitationId == "limitation:release-review-content-not-rendered"
                 && limitation.RuleId == StaticHtmlEvidenceExplorer.ReleaseReviewInputRuleId
@@ -185,7 +185,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
             Assert.Contains(result.Data.CompatibilityLedger, row =>
                 row.SubjectId == "artifact:release-review"
                 && row.CompatibilityStatus == "rendered-compatible"
-                && row.LimitationIds.Contains("release-review-content-not-rendered"));
+                && row.LimitationIds.Contains("limitation:release-review-content-not-rendered"));
             Assert.Contains(result.Data.Rules, rule => rule.RuleId == StaticHtmlEvidenceExplorer.ReleaseReviewInputRuleId);
             Assert.DoesNotContain(result.Gaps, gap => gap.Scope == "artifact:release-review");
         }
@@ -291,6 +291,39 @@ public sealed class StaticHtmlEvidenceExplorerTests
             row.SubjectId == "artifact:release-review"
             && row.CompatibilityStatus == "partial"
             && row.LimitationIds.Contains(gap.GapId));
+    }
+
+    [Fact]
+    public async Task Explorer_generate_rejects_partially_unidentified_fact_stream_as_commit_authority()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        var validCommit = FortyCharCommit("4");
+        await JsonlFactWriter.WriteAsync(
+            Path.Combine(input, "facts.ndjson"),
+            [
+                Fact(validCommit) with { FactId = "fact-valid" },
+                Fact("unknown") with { FactId = "fact-unknown" }
+            ]);
+        await WriteReleaseReviewArtifactAsync(input, afterCommitSha: validCommit);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "release-review");
+        Assert.Empty(artifact.SourceIds);
+        Assert.Contains(result.Gaps, row =>
+            row.Scope == "artifact:facts-ndjson"
+            && row.RuleId == StaticHtmlEvidenceExplorer.MissingCommitRuleId
+            && row.GapKind == "missing-commit");
+        Assert.Contains(result.Gaps, row =>
+            row.Scope == "artifact:release-review"
+            && row.RuleId == StaticHtmlEvidenceExplorer.MissingCommitRuleId
+            && row.GapKind == "source-association-unknown");
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectId == "artifact:release-review"
+            && row.CompatibilityStatus == "partial");
     }
 
     [Fact]

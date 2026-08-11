@@ -344,3 +344,12 @@ Review follow-up:
 - Post-fix build remained clean, focused tests passed 34/34, full tests passed
   1,376/1,376, and the real CLI smoke confirmed exact source binding for the
   matching same-snapshot report.
+- A fresh exact-head Codex review found two additional P2 contract defects.
+  Manifest-less fact streams now establish commit authority only when every
+  fact carries the same usable commit; mixed usable/unusable provenance emits
+  explicit missing-commit and source-association gaps and leaves the release
+  review unbound. Release-review artifacts and compatibility rows now reference
+  the exact emitted `limitation:release-review-content-not-rendered` identity.
+- The second focused review regression run passed 35/35; the full .NET suite
+  passed 1,377/1,377, and targeted formatting, private-path, and diff checks
+  remained clean.
