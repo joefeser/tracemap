@@ -87,7 +87,15 @@ public static class FileInventory
         string repoPath,
         string? outputPath,
         IReadOnlyList<string>? excludeGlobs,
-        StringComparer? pathComparer)
+        StringComparer? pathComparer) =>
+        Collect(repoPath, outputPath, excludeGlobs, pathComparer, includeGlobs: null);
+
+    public static IReadOnlyList<FileInventoryItem> Collect(
+        string repoPath,
+        string? outputPath,
+        IReadOnlyList<string>? excludeGlobs,
+        StringComparer? pathComparer,
+        IReadOnlyList<string>? includeGlobs)
     {
         var root = Path.GetFullPath(repoPath);
         var outputFullPath = string.IsNullOrWhiteSpace(outputPath)
@@ -98,7 +106,7 @@ public static class FileInventory
         {
             RecurseSubdirectories = false,
             IgnoreInaccessible = false,
-            AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint
+            AttributesToSkip = FileAttributes.Hidden | FileAttributes.System
         };
 
         string[] candidateFiles;
@@ -109,7 +117,8 @@ public static class FileInventory
                 options,
                 outputFullPath,
                 excludeGlobs ?? [],
-                pathComparer ?? StringComparer.Ordinal).ToArray();
+                pathComparer ?? StringComparer.Ordinal,
+                includeGlobs ?? []).ToArray();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -140,7 +149,8 @@ public static class FileInventory
         EnumerationOptions options,
         string? outputFullPath,
         IReadOnlyList<string> excludeGlobs,
-        StringComparer pathComparer)
+        StringComparer pathComparer,
+        IReadOnlyList<string> includeGlobs)
     {
         var pending = new Stack<string>();
         pending.Push(root);
@@ -155,14 +165,89 @@ public static class FileInventory
                     continue;
                 }
 
+                if (IsReparsePoint(childDirectory))
+                {
+                    if (!CanContainIncludedFile(root, childDirectory, includeGlobs, pathComparer))
+                        continue;
+
+                    RejectReparsePoint(childDirectory);
+                }
+
                 pending.Push(childDirectory);
             }
 
             foreach (var file in Directory.EnumerateFiles(directory, "*", options))
             {
-                if (!ShouldExclude(root, file, outputFullPath))
+                if (!ShouldExclude(root, file, outputFullPath)
+                    && !IsExplicitlyExcludedFile(root, file, excludeGlobs, pathComparer))
+                {
                     yield return file;
+                }
             }
+        }
+    }
+
+    private static bool CanContainIncludedFile(
+        string root,
+        string directory,
+        IReadOnlyList<string> includeGlobs,
+        StringComparer pathComparer)
+    {
+        var configuredGlobs = includeGlobs
+            .Where(glob => !string.IsNullOrWhiteSpace(glob))
+            .Select(glob => NormalizeRelativePath(glob.Trim()))
+            .ToArray();
+        if (configuredGlobs.Length == 0)
+            return true;
+
+        var directoryParts = NormalizeRelativePath(Path.GetRelativePath(root, directory))
+            .Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return configuredGlobs.Any(glob =>
+        {
+            var globParts = glob.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var literalDirectoryPartCount = 0;
+            while (literalDirectoryPartCount < globParts.Length - 1
+                && !ContainsGlobWildcard(globParts[literalDirectoryPartCount]))
+            {
+                literalDirectoryPartCount++;
+            }
+
+            if (literalDirectoryPartCount == 0)
+                return true;
+
+            var comparablePartCount = Math.Min(directoryParts.Length, literalDirectoryPartCount);
+            for (var index = 0; index < comparablePartCount; index++)
+            {
+                if (!pathComparer.Equals(directoryParts[index], globParts[index]))
+                    return false;
+            }
+
+            return true;
+        });
+    }
+
+    private static bool ContainsGlobWildcard(string value) =>
+        value.Contains('*', StringComparison.Ordinal)
+        || value.Contains('?', StringComparison.Ordinal);
+
+    private static void RejectReparsePoint(string path)
+    {
+        if (IsReparsePoint(path))
+        {
+            throw new SourceInventoryException(
+                new IOException("An in-scope source path is a reparse point and cannot be inventoried truthfully."));
+        }
+    }
+
+    private static bool IsReparsePoint(string path)
+    {
+        try
+        {
+            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new SourceInventoryException(ex);
         }
     }
 
@@ -176,15 +261,57 @@ public static class FileInventory
             return false;
 
         var relativePath = NormalizeRelativePath(Path.GetRelativePath(root, directory));
-        return excludeGlobs.Any(glob =>
-            ScanEngine.GlobMatches(relativePath, glob, pathComparer)
-            || ScanEngine.GlobMatches(relativePath + "/", glob, pathComparer));
+        return excludeGlobs.Any(glob => ExcludesEntireDirectory(relativePath, glob, pathComparer));
+    }
+
+    private static bool ExcludesEntireDirectory(
+        string relativePath,
+        string glob,
+        StringComparer pathComparer)
+    {
+        var normalizedGlob = NormalizeRelativePath(glob.Trim()).TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(normalizedGlob))
+            return false;
+
+        if (!normalizedGlob.Contains('*', StringComparison.Ordinal))
+            return ScanEngine.GlobMatches(relativePath, normalizedGlob, pathComparer);
+
+        if (normalizedGlob is "**" or "**/*")
+            return true;
+
+        const string recursiveDirectorySuffix = "/**";
+        const string recursiveFileSuffix = "/**/*";
+        var suffixLength = normalizedGlob.EndsWith(recursiveFileSuffix, StringComparison.Ordinal)
+            ? recursiveFileSuffix.Length
+            : normalizedGlob.EndsWith(recursiveDirectorySuffix, StringComparison.Ordinal)
+                ? recursiveDirectorySuffix.Length
+                : 0;
+        if (suffixLength == 0)
+            return false;
+
+        var directoryGlob = normalizedGlob[..^suffixLength];
+        return !string.IsNullOrWhiteSpace(directoryGlob)
+            && ScanEngine.GlobMatches(relativePath, directoryGlob, pathComparer);
+    }
+
+    private static bool IsExplicitlyExcludedFile(
+        string root,
+        string file,
+        IReadOnlyList<string> excludeGlobs,
+        StringComparer pathComparer)
+    {
+        if (excludeGlobs.Count == 0)
+            return false;
+
+        var relativePath = NormalizeRelativePath(Path.GetRelativePath(root, file));
+        return excludeGlobs.Any(glob => ScanEngine.GlobMatches(relativePath, glob, pathComparer));
     }
 
     private static FileInventoryItem CreateItem(string root, string path, ISet<string> serviceReferenceFolders, ISet<string> webReferenceFolders)
     {
         try
         {
+            RejectReparsePoint(path);
             var info = new FileInfo(path);
             return new FileInventoryItem(
                 NormalizeRelativePath(Path.GetRelativePath(root, path)),

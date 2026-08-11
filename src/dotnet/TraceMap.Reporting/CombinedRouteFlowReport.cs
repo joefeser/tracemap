@@ -2055,7 +2055,7 @@ public static class CombinedRouteFlowReporter
                         : EvidenceFromEdge(RouteRuleIdForRowKind(rowKind), edge, [edge.RuleId], sources, previous?.SourceLabel, previous?.CommitSha),
                     SupportingDispatchCandidateId: isDispatchCandidate ? edge!.EdgeId : null,
                     SupportingCallEdgeIds: isDispatchCandidate ? SupportingCallEdgeIds(path, index) : null,
-                    SupportingRelationshipIds: isDispatchCandidate ? edge!.SupportingCombinedEdgeIds : null,
+                    SupportingRelationshipIds: isDispatchCandidate ? edge!.SupportingRelationshipIds : null,
                     RegistrationContext: isDispatchCandidate ? edge!.RegistrationContext : null,
                     SupportingRegistrationFactIds: isDispatchCandidate ? edge!.SupportingRegistrationFactIds : null,
                     CandidateCount: isDispatchCandidate ? edge!.CandidateCount : null,
@@ -5204,13 +5204,6 @@ public static class CombinedRouteFlowReporter
         command.CommandText = "select count(*) from sqlite_master where type = 'view' and name = $name;";
         command.Parameters.AddWithValue("$name", viewName);
         return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0;
-    }
-
-    private static async Task<long> CountRowsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        command.CommandText = $"select count(*) from {tableName};";
-        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
     }
 
     private static string RenderMarkdown(RouteFlowReport report)
