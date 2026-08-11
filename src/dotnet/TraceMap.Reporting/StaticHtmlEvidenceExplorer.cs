@@ -299,11 +299,18 @@ public static class StaticHtmlEvidenceExplorer
         var redactions = new Dictionary<(string RuleId, string Category, string Location, string Action), int>();
         var coverageLabels = new SortedSet<string>(StringComparer.Ordinal);
         ScanManifest? manifest = null;
+        string? sourceCommitSha = null;
+        string? sourceCommitSupportId = null;
 
         var manifestPath = Path.Combine(inputDirectory, "scan-manifest.json");
         if (File.Exists(manifestPath))
         {
             manifest = await ReadJsonAsync<ScanManifest>(manifestPath, cancellationToken);
+            if (IsUsableCommitSha(manifest.CommitSha))
+            {
+                sourceCommitSha = manifest.CommitSha;
+                sourceCommitSupportId = "artifact:scan-manifest";
+            }
             var manifestCoverage = CoverageLabelsFromManifest(manifest);
             foreach (var label in manifestCoverage)
             {
@@ -374,6 +381,11 @@ public static class StaticHtmlEvidenceExplorer
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+            if (sourceCommitSha is null && factCommitShas.Length == 1)
+            {
+                sourceCommitSha = factCommitShas[0];
+                sourceCommitSupportId = "artifact:facts-ndjson";
+            }
 
             if (manifest is not null && IsUsableCommitSha(manifest.CommitSha))
             {
@@ -473,7 +485,15 @@ public static class StaticHtmlEvidenceExplorer
 
         await AddOptionalArtifactAsync(inputDirectory, "index.sqlite", "sqlite-index", "SQLite index", "index.sqlite.v1", safetyProfile, artifacts, gaps, cancellationToken);
         await AddOptionalArtifactAsync(inputDirectory, "report.md", "markdown-report", "Markdown report", "report.md.v1", safetyProfile, artifacts, gaps, cancellationToken);
-        await AddReleaseReviewArtifactAsync(inputDirectory, safetyProfile, artifacts, gaps, limitations, cancellationToken);
+        await AddReleaseReviewArtifactAsync(
+            inputDirectory,
+            safetyProfile,
+            sourceCommitSha,
+            sourceCommitSupportId,
+            artifacts,
+            gaps,
+            limitations,
+            cancellationToken);
         var catalogLoad = await AddRuleCatalogArtifactAsync(inputDirectory, safetyProfile, artifacts, gaps, redactions, cancellationToken);
         var catalogRules = catalogLoad.Entries;
         await AddUnsupportedJsonArtifactsAsync(inputDirectory, safetyProfile, artifacts, gaps, cancellationToken);
@@ -767,6 +787,8 @@ public static class StaticHtmlEvidenceExplorer
     private static async Task AddReleaseReviewArtifactAsync(
         string inputDirectory,
         string safetyProfile,
+        string? sourceCommitSha,
+        string? sourceCommitSupportId,
         List<ExplorerInputArtifact> artifacts,
         List<ExplorerGap> gaps,
         List<ExplorerLimitation> limitations,
@@ -816,19 +838,51 @@ public static class StaticHtmlEvidenceExplorer
                 "ReleaseReviewCombinedV1" => "combined",
                 _ => throw new InvalidDataException("unsupported release-review mode")
             };
-            var beforeCoverage = ReadReleaseReviewSnapshot(root, "beforeSnapshot", "before", expectedIndexKind);
-            var afterCoverage = ReadReleaseReviewSnapshot(root, "afterSnapshot", "after", expectedIndexKind);
+            var beforeSnapshot = ReadReleaseReviewSnapshot(root, "beforeSnapshot", "before", expectedIndexKind);
+            var afterSnapshot = ReadReleaseReviewSnapshot(root, "afterSnapshot", "after", expectedIndexKind);
             var summary = RequireObject(RequireProperty(root, "summary"), "summary");
             var truncated = RequireBoolean(summary, "truncated");
             var gapCount = RequireNonNegativeInt32(summary, "gapCount");
 
             var coverageLabels = new SortedSet<string>(StringComparer.Ordinal)
             {
-                $"ReleaseReviewBefore{beforeCoverage}",
-                $"ReleaseReviewAfter{afterCoverage}",
+                $"ReleaseReviewBefore{beforeSnapshot.Coverage}",
+                $"ReleaseReviewAfter{afterSnapshot.Coverage}",
                 truncated ? "ReleaseReviewTruncated" : "ReleaseReviewNotTruncated",
                 gapCount > 0 ? "ReleaseReviewGapsPresent" : "ReleaseReviewNoRecordedGaps"
             };
+            IReadOnlyList<string> sourceIds;
+            if (sourceCommitSha is null || sourceCommitSupportId is null)
+            {
+                sourceIds = [];
+                gaps.Add(CreateGap(
+                    "release-review-source-association-unknown",
+                    MissingCommitRuleId,
+                    "source-association-unknown",
+                    artifactId,
+                    "artifacts",
+                    "PartialAnalysis",
+                    "The explorer could not establish an authoritative scan commit for release-review source association, so the artifact remains unbound.",
+                    [artifactId]));
+            }
+            else if (!afterSnapshot.CommitShas.Contains(sourceCommitSha, StringComparer.OrdinalIgnoreCase))
+            {
+                sourceIds = [];
+                gaps.Add(CreateGap(
+                    "release-review-commit-conflict",
+                    ProvenanceConflictRuleId,
+                    "commit-conflict",
+                    artifactId,
+                    "artifacts",
+                    "PartialAnalysis",
+                    "The release-review after snapshot does not contain the authoritative scan commit, so the artifact is not bound to the scan source.",
+                    [artifactId, sourceCommitSupportId]));
+            }
+            else
+            {
+                sourceIds = [SourceId];
+            }
+
             artifacts.Add(new ExplorerInputArtifact(
                 artifactId,
                 "release-review",
@@ -837,7 +891,7 @@ public static class StaticHtmlEvidenceExplorer
                 "release-review/1.2",
                 ClaimLevelForSafetyProfile(safetyProfile),
                 coverageLabels.ToArray(),
-                [SourceId],
+                sourceIds,
                 ["release-review-content-not-rendered"],
                 [],
                 "supported"));
@@ -879,7 +933,7 @@ public static class StaticHtmlEvidenceExplorer
             "release-review/unsupported",
             ClaimLevelForSafetyProfile(safetyProfile),
             [],
-            [SourceId],
+            [],
             [],
             [UnsupportedSchemaRuleId],
             "unsupported"));
@@ -894,7 +948,7 @@ public static class StaticHtmlEvidenceExplorer
             [artifactId]));
     }
 
-    private static string ReadReleaseReviewSnapshot(
+    private static ReleaseReviewSnapshotMetadata ReadReleaseReviewSnapshot(
         JsonElement root,
         string propertyName,
         string expectedSide,
@@ -919,6 +973,7 @@ public static class StaticHtmlEvidenceExplorer
             throw new InvalidDataException("release-review sources unavailable");
         }
 
+        var commitShas = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var sourceElement in sources.EnumerateArray())
         {
             var source = RequireObject(sourceElement, "source");
@@ -936,9 +991,14 @@ public static class StaticHtmlEvidenceExplorer
             {
                 throw new InvalidDataException("release-review source commit identity invalid");
             }
+
+            if (commit.ValueKind == JsonValueKind.String)
+            {
+                commitShas.Add(commit.GetString()!);
+            }
         }
 
-        return coverage;
+        return new ReleaseReviewSnapshotMetadata(coverage, commitShas.ToArray());
     }
 
     private static JsonElement RequireProperty(JsonElement element, string propertyName)
@@ -2057,29 +2117,39 @@ public static class StaticHtmlEvidenceExplorer
         long maxBytes,
         CancellationToken cancellationToken)
     {
+        if (new FileInfo(path).Length > maxBytes)
+        {
+            return new BoundedArtifactSnapshot("unavailable:artifact-too-large", null);
+        }
+
         await using var stream = File.OpenRead(path);
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         using var content = new MemoryStream();
         var buffer = new byte[81_920];
         long totalBytes = 0;
-        var tooLarge = false;
         int read;
-        while ((read = await stream.ReadAsync(buffer, cancellationToken)) > 0)
+        while (true)
         {
-            hash.AppendData(buffer, 0, read);
+            var bytesUntilDecision = maxBytes - totalBytes + 1;
+            var requestedBytes = (int)Math.Min(buffer.Length, bytesUntilDecision);
+            read = await stream.ReadAsync(buffer.AsMemory(0, requestedBytes), cancellationToken);
+            if (read == 0)
+            {
+                break;
+            }
+
             totalBytes += read;
-            if (totalBytes <= maxBytes)
+            if (totalBytes > maxBytes)
             {
-                await content.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                return new BoundedArtifactSnapshot("unavailable:artifact-too-large", null);
             }
-            else
-            {
-                tooLarge = true;
-            }
+
+            hash.AppendData(buffer, 0, read);
+            await content.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
         }
 
         var contentHash = $"sha256:{Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant()}";
-        return new BoundedArtifactSnapshot(contentHash, tooLarge ? null : content.ToArray());
+        return new BoundedArtifactSnapshot(contentHash, content.ToArray());
     }
 
     private static string Hash(string value, int length = 64)
@@ -2696,4 +2766,8 @@ public static class StaticHtmlEvidenceExplorer
     private sealed record BoundedArtifactSnapshot(
         string ContentHash,
         byte[]? Content);
+
+    private sealed record ReleaseReviewSnapshotMetadata(
+        string Coverage,
+        IReadOnlyList<string> CommitShas);
 }

@@ -163,7 +163,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
         var hiddenOutput = Path.Combine(temp.Path, "hidden-explorer");
         Directory.CreateDirectory(input);
         await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("a"));
-        await WriteReleaseReviewArtifactAsync(input);
+        await WriteReleaseReviewArtifactAsync(input, afterCommitSha: FortyCharCommit("a"));
 
         var publicResult = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, publicOutput));
         var hiddenResult = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, hiddenOutput, "hidden-local"));
@@ -211,7 +211,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
         var output = Path.Combine(temp.Path, "explorer");
         Directory.CreateDirectory(input);
         await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("b"));
-        await WriteReleaseReviewArtifactAsync(input, fixtureKind);
+        await WriteReleaseReviewArtifactAsync(input, fixtureKind, FortyCharCommit("b"));
 
         var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
 
@@ -237,12 +237,60 @@ public sealed class StaticHtmlEvidenceExplorerTests
         var secondOutput = Path.Combine(temp.Path, "second");
         Directory.CreateDirectory(input);
         await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("c"));
-        await WriteReleaseReviewArtifactAsync(input);
+        await WriteReleaseReviewArtifactAsync(input, afterCommitSha: FortyCharCommit("c"));
 
         await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, firstOutput));
         await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, secondOutput));
 
         Assert.Equal(RelativeFileMap(firstOutput), RelativeFileMap(secondOutput));
+    }
+
+    [Fact]
+    public async Task Explorer_generate_does_not_bind_release_review_when_after_snapshot_commit_differs()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("1"));
+        await WriteReleaseReviewArtifactAsync(input, afterCommitSha: FortyCharCommit("2"));
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "release-review");
+        Assert.Empty(artifact.SourceIds);
+        var gap = Assert.Single(result.Gaps, row =>
+            row.Scope == "artifact:release-review"
+            && row.RuleId == StaticHtmlEvidenceExplorer.ProvenanceConflictRuleId
+            && row.GapKind == "commit-conflict");
+        Assert.Contains("artifact:scan-manifest", gap.SupportIds);
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectId == "artifact:release-review"
+            && row.CompatibilityStatus == "partial"
+            && row.LimitationIds.Contains(gap.GapId));
+    }
+
+    [Fact]
+    public async Task Explorer_generate_keeps_release_review_unbound_without_authoritative_scan_commit()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "report-only-input");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteReleaseReviewArtifactAsync(input, afterCommitSha: FortyCharCommit("3"));
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "release-review");
+        Assert.Empty(artifact.SourceIds);
+        var gap = Assert.Single(result.Gaps, row =>
+            row.Scope == "artifact:release-review"
+            && row.RuleId == StaticHtmlEvidenceExplorer.MissingCommitRuleId
+            && row.GapKind == "source-association-unknown");
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectId == "artifact:release-review"
+            && row.CompatibilityStatus == "partial"
+            && row.LimitationIds.Contains(gap.GapId));
     }
 
     [Fact]
@@ -257,6 +305,8 @@ public sealed class StaticHtmlEvidenceExplorerTests
 
         var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
 
+        var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "release-review");
+        Assert.Equal("unavailable:artifact-too-large", artifact.ContentHash);
         Assert.Contains(result.Gaps, gap =>
             gap.Scope == "artifact:release-review"
             && gap.RuleId == StaticHtmlEvidenceExplorer.UnsupportedSchemaRuleId
@@ -998,7 +1048,10 @@ public sealed class StaticHtmlEvidenceExplorerTests
         await File.WriteAllTextAsync(Path.Combine(directory, "report.md"), "# Report\n");
     }
 
-    private static async Task WriteReleaseReviewArtifactAsync(string directory, string fixtureKind = "compatible")
+    private static async Task WriteReleaseReviewArtifactAsync(
+        string directory,
+        string fixtureKind = "compatible",
+        string? afterCommitSha = null)
     {
         var version = fixtureKind == "unsupported-version" ? "9.9" : "1.2";
         var beforeCommit = fixtureKind == "invalid-commit" ? "not-a-commit" : FortyCharCommit("d");
@@ -1020,7 +1073,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
                 side = "after",
                 indexKind = "single",
                 reportCoverage = "Reduced",
-                sources = new[] { new { sourceLabel = "private-source-name", commitSha = FortyCharCommit("e") } }
+                sources = new[] { new { sourceLabel = "private-source-name", commitSha = afterCommitSha ?? FortyCharCommit("e") } }
             },
             summary = new
             {
