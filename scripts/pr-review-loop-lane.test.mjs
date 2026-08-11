@@ -24,29 +24,48 @@ const codex = blockAfter(/^    codex:\s*$/m, 6)
 const claudeLocal = blockAfter(/^    claude-local:\s*$/m, 6)
 const localReviewFallback = blockAfter(/^  localReviewFallback:\s*$/m, 4)
 
-function onePassQodoEligible({ codexCurrent, qodoPriorClean, qodoCountersZero }) {
+function boundedCurrentHeadRecoveryEligible({ codexCurrent, qodoReturnedOnce, qodoRequestCountZero }) {
   const fastQuorum = /minimumReturned:\s*1\b/.test(quorum)
     && /preferAllReturned:\s*false\b/.test(quorum)
   const qodoOnePass = /requirement:\s*required\b/.test(qodo)
-    && /waitUntilReturnedBeforeProcessing:\s*false\b/.test(qodo)
+    && /waitUntilReturnedBeforeProcessing:\s*true\b/.test(qodo)
     && /requestAllowed:\s*explicit_only\b/.test(qodo)
+    && /requestRetryCeiling:\s*0\b/.test(qodo)
   const codexExactHeadRequired = /requirement:\s*required\b/.test(codex)
     && /waitUntilReturnedBeforeProcessing:\s*true\b/.test(codex)
     && /requestAllowed:\s*policy\b/.test(codex)
+    && /requestRetryCeiling:\s*2\b/.test(codex)
   return fastQuorum && qodoOnePass && codexExactHeadRequired
-    && codexCurrent && qodoPriorClean && qodoCountersZero
+    && codexCurrent && qodoReturnedOnce && qodoRequestCountZero
 }
 
-test('TraceMap selects ACK PR #281 one-pass Qodo policy without weakening Codex', () => {
-  assert.match(lane, /requiredVersion:\s*">=0\.2\.0"/)
+test('TraceMap selects stable ACK v0.4.4 one-pass Qodo and bounded Codex recovery', () => {
+  assert.match(lane, /requiredVersion:\s*">=0\.4\.4 <0\.5\.0"/)
   assert.match(lane, /- reviewQuorum/)
   assert.match(lane, /- requiredReviewerBatching/)
-  assert.equal(onePassQodoEligible({ codexCurrent: true, qodoPriorClean: true, qodoCountersZero: true }), true)
+  assert.equal(boundedCurrentHeadRecoveryEligible({
+    codexCurrent: true,
+    qodoReturnedOnce: true,
+    qodoRequestCountZero: true,
+  }), true)
 })
 
 test('stale Codex plus stale Qodo cannot satisfy the consumer lane contract', () => {
-  assert.equal(onePassQodoEligible({ codexCurrent: false, qodoPriorClean: true, qodoCountersZero: true }), false)
-  assert.equal(onePassQodoEligible({ codexCurrent: true, qodoPriorClean: true, qodoCountersZero: false }), false)
+  assert.equal(boundedCurrentHeadRecoveryEligible({
+    codexCurrent: false,
+    qodoReturnedOnce: true,
+    qodoRequestCountZero: true,
+  }), false)
+  assert.equal(boundedCurrentHeadRecoveryEligible({
+    codexCurrent: true,
+    qodoReturnedOnce: false,
+    qodoRequestCountZero: true,
+  }), false)
+  assert.equal(boundedCurrentHeadRecoveryEligible({
+    codexCurrent: true,
+    qodoReturnedOnce: true,
+    qodoRequestCountZero: false,
+  }), false)
 })
 
 test('TraceMap authorizes only the bounded exact-head Opus fallback contract', () => {
@@ -74,4 +93,5 @@ test('TraceMap authorizes only the bounded exact-head Opus fallback contract', (
   assert.match(runbook, /aggregate\s+authorized spend is at most \$8/)
   assert.match(runbook, /A PR cannot\s+authorize its own fallback from head-only configuration/)
   assert.match(runbook, /--owner-authorized-local-review/)
+  assert.match(runbook, /node "\$ACK_ROOT\/dist\/cli\.js" pr-loop/)
 })
