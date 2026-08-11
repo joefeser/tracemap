@@ -12,6 +12,7 @@ import { validateBlogProofPathSeriesDist } from "./blog-proof-path-series.mjs";
 import { validateChangeRiskLanguageGuideDist } from "./change-risk-language-guide.mjs";
 import { validateCsharpExtractionTruthDist } from "./csharp-extraction-truth.mjs";
 import { validateGraphHistoryBugsDist } from "./graph-history-bugs.mjs";
+import { validateReverseImpactDispatchStoriesDist } from "./reverse-impact-dispatch-stories.mjs";
 import { validateDatabaseDesignReviewShowcaseDist } from "./database-design-review-showcase.mjs";
 import {
   validateDiscoveryDist,
@@ -107,6 +108,7 @@ export async function validateDist({
   requireAccessFormFieldLineage = requireMsbuildBinlogEvidence,
   requireCsharpExtractionTruth = true,
   requireGraphHistoryBugs = true,
+  requireReverseImpactDispatchStories = true,
   requireAccessRebuildReadiness = true,
   root = defaultRoot
 } = {}) {
@@ -148,6 +150,9 @@ export async function validateDist({
   }
   if (requireGraphHistoryBugs) {
     await validateGraphHistoryBugsDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requireReverseImpactDispatchStories) {
+    await validateReverseImpactDispatchStoriesDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }
   if (requireAccessRebuildReadiness) {
     await validateAccessRebuildReadinessDist({ baseUrl: normalizedBaseUrl, dist, errors });

@@ -1,5 +1,39 @@
 [
   {
+    "path": "/blog/what-depends-on-this-symbol/",
+    "title": "What Depends on This Symbol?",
+    "summary": "A demo-level explanation of persisted reverse-impact traversal over canonical identities, explicit relationship families, bounded state, evidence-backed hops, and gaps.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/evidence/",
+    "limitations": [
+      "Results are bounded to the supplied persisted artifact, selector, relationship allowlist, depth, frontier, result caps, and recorded source coverage.",
+      "Optional HTTP or database relationship families retain their own static evidence tiers and limitations."
+    ],
+    "nonClaims": [
+      "No runtime reachability, observed execution, production use, branch feasibility, complete coverage, severity, required testing, release approval, or safety claim.",
+      "No LLM classification, embeddings, vectors, prompt analysis, raw source, SQL, configuration, credentials, private paths, or analyzer output."
+    ]
+  },
+  {
+    "path": "/blog/interfaces-make-blast-radius-harder/",
+    "title": "Interfaces Make Blast Radius Harder",
+    "summary": "A demo-level explanation of compiler-backed interface and override candidates, compatible DI registration context, downstream review-tier composition, and explicit dispatch gaps.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/evidence/",
+    "limitations": [
+      "Candidate sets are bounded by available member relationships, identity, schema, source coverage, generic support, and fan-out caps.",
+      "Registration context can annotate a relationship-backed candidate but cannot select a runtime implementation."
+    ],
+    "nonClaims": [
+      "No runtime dispatch, selected DI implementation, registration order, lifetime, branch feasibility, production use, complete coverage, release approval, or safety claim.",
+      "No display-name join, type-only member guess, LLM classification, embeddings, vectors, prompt analysis, source snippet, raw index, or private validation output."
+    ]
+  },
+  {
     "path": "/",
     "title": "TraceMap Home",
     "summary": "Start with the deterministic static evidence boundary, then follow routes to proof, limitations, docs, and demo pages.",
