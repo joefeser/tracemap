@@ -96,8 +96,8 @@ async function validateStory(dist, baseUrl, story, errors) {
 }
 
 function decodeBrowserNumericEntities(value) { return String(value).replace(/&#(?:x[0-9a-f]+|[0-9]+);?/gi, (entity) => decodeHtmlEntities(entity.endsWith(";") ? entity : `${entity};`)); }
-function hasHref(html, href) { return new RegExp(`<a\\b[^>]*href\\s*=\\s*["']${escapeRegExp(href)}["'][^>]*>`, "i").test(html); }
-function extractLinkedAnchor(html, href) { return String(html).match(new RegExp(`<a\\b[^>]*href\\s*=\\s*["']${escapeRegExp(href)}["'][^>]*>[\\s\\S]*?<\\/a>`, "i"))?.[0] ?? ""; }
+function hasHref(html, href) { return new RegExp(`<a\\b[^>]*\\shref\\s*=\\s*["']${escapeRegExp(href)}["'][^>]*>`, "i").test(html); }
+function extractLinkedAnchor(html, href) { return String(html).match(new RegExp(`<a\\b[^>]*\\shref\\s*=\\s*["']${escapeRegExp(href)}["'][^>]*>[\\s\\S]*?<\\/a>`, "i"))?.[0] ?? ""; }
 function scanSafetySurfaces(value, label, evidenceArtifact, errors) {
   const raw = Array.isArray(value) ? value.join(" ") : String(value);
   const browserDecoded = decodeBrowserNumericEntities(raw);

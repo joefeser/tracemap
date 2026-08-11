@@ -64,8 +64,9 @@
   <p>
     Every traversal has configured bounds. Maximum depth limits how far the
     search may expand. Frontier and result caps constrain breadth. Stable
-    visited state prevents a cycle from causing unbounded work, while cycle
-    evidence remains part of the path context. If a limit is reached, the
+    visited state prevents a cycle from causing unbounded work by suppressing
+    re-expansion of already visited state. The current result contract does not
+    emit a separate cycle marker or cycle gap. If a limit is reached, the
     response says it was truncated and reports omitted or frontier state where
     the contract provides it.
   </p>
