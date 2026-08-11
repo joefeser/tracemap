@@ -221,6 +221,24 @@ rules:
       - The reader supports the ordinary paths-report v1.0 contract only. Legacy-flow variants, other report families, reducer results, and runtime evidence require separate bounded readers.
       - A 32 MiB input bound plus 1,000-source, 1,000-path, and 10,000-hop caps limit this reader; over-limit reports remain unsupported and oversized reports do not receive a full-content digest.
 
+  - id: explorer.input.contract-delta-impact.v1
+    name: Static HTML explorer contract-delta impact reader
+    description: Validates bounded contract-delta impact v2 reducer output and projects deterministic reducer classifications, evidence provenance, gaps, and limitations into safe explorer rows.
+    evidenceTier: Tier4Unknown
+    emits:
+      - compatible contract-delta impact input artifact
+      - explorer reducer result
+      - explorer reducer evidence row
+      - reducer impact gap
+      - reducer compatibility limitation
+    limitations:
+      - Projected impact wording is copied only from existing reducer classifications and rule-backed evidence; the explorer does not infer impact, risk, runtime reachability, execution, production behavior, business effect, release safety, or complete dependency coverage.
+      - The reader supports contract-delta-impact-single and contract-delta-impact-combined version 2.0 with contract-delta-fact-match version 2.0 only; SQL impact, combined-change-impact, package, route-flow, and other reducer families remain unsupported.
+      - Full, Reduced, and Partial reducer coverage remain distinct; Partial includes bounded truncation and never becomes full explorer coverage.
+      - Finding elements, reasons, warnings, references, source labels, scan IDs, evidence symbols and metadata, gap kinds and messages, and free-text upstream limitations are omitted rather than rendered.
+      - Finding, fact, source-index, and gap identities are projected as stable explorer-local hashes; repository paths use the existing public-safe path policy while commit SHA, scanner version, rule ID, tier, and spans remain provenance.
+      - A 32 MiB input bound plus 1,000-source, 1,000-result, 10,000-evidence-row, and 1,000-gap caps limit this reader; unsupported or over-limit reports remain unavailable rather than partially guessed.
+
   - id: explorer.validation.generated-file-stale.v1
     name: Static HTML explorer stale generated file guard
     description: Prevents overwriting stale or unverified generated explorer files without explicit operator intent.

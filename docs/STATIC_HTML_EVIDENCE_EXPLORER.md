@@ -30,13 +30,36 @@ The explorer currently supports:
 - `index.sqlite` as a hashed provenance artifact only;
 - `report.md` as a hashed provenance artifact only;
 - `release-review.json` v1.2 through a bounded compatibility-metadata reader;
-- `paths-report.json` v1.0 through a bounded static surface/path reader.
+- `paths-report.json` v1.0 through a bounded static surface/path reader;
+- `impact-report.json` contract-delta impact v2 through a bounded reducer-result reader.
 
 Other top-level JSON files are labeled unsupported with
 `explorer.input.unsupported-schema.v1` gaps instead of being silently merged.
 That still includes report JSON artifacts such as `dependency-report.json`,
-`route-flow-report.json`, `demo-summary.json`, and other combined/reducer report JSON files; compatible
+`route-flow-report.json`, `demo-summary.json`, and other report JSON families; compatible
 readers for those artifacts are deferred to later slices.
+
+The `impact-report.json` reader accepts only `contract-delta-impact-single` or
+`contract-delta-impact-combined` version `2.0` output produced by
+`contract-delta-fact-match/2.0`. It preserves the reducer's closed
+classification, confidence, rule ID, evidence tier, coverage, scanner version,
+commit SHA, safe file span, supporting fact identities, and explicit gaps. It
+does not run a reducer or infer impact. Finding/change labels, reasons,
+warnings, references, source labels, scan IDs, symbols, metadata, gap text, and
+free-text limitations are omitted; sensitive identifiers become stable
+explorer-local hashes. SQL impact, combined-change-impact, route-flow, package,
+and other reducer/report families remain unsupported.
+The accepted report coverage vocabulary is `Full`, `Reduced`, or `Partial`;
+`Partial` is retained when reducer limits truncate otherwise valid output and
+is authoritative truncation evidence even when the producer's summary flag is
+false.
+
+Compatible reducer reports add `reducerResults` plus linked safe evidence rows.
+Impact wording appears only in those reducer-backed rows. It describes bounded
+static evidence under the report's recorded coverage and does not prove runtime
+reachability, execution, production behavior, business effect, release safety,
+or complete dependency coverage. The reader is capped at 32 MiB, 1,000
+sources, 1,000 results, 10,000 evidence rows, and 1,000 gaps.
 
 The `paths-report.json` reader accepts the ordinary version `1.0` combined
 dependency-path contract only. It requires usable source commits, unique source
@@ -149,10 +172,10 @@ Closed compatibility statuses are:
 Missing and unsupported rows describe explorer compatibility only. They do not
 claim evidence is absent from an artifact or repository.
 
-The v3 explorer data contract adds `surfaces` and `paths` arrays plus matching
-no-JavaScript HTML tables. Existing v1 and v2 generated bundles remain
-recognizable for guarded `--force` replacement, while all newly generated
-bundles use v3.
+The v4 explorer data contract adds populated `reducerResults` rows plus a
+matching no-JavaScript HTML table. Existing v1, v2, and v3 generated bundles
+remain recognizable for guarded `--force` replacement, while all newly
+generated bundles use v4.
 
 Section status rows retain their existing semantic order in JSON: overview,
 sources, artifacts, evidence rows, surfaces, paths, reducer results, rules,
@@ -191,9 +214,9 @@ generated artifact path without printing the unsafe raw value.
 ## Manifest Schema
 
 `data/explorer-manifest.json` and `data/explorer-data.json` use schema version
-`tracemap-static-html-evidence-explorer.v3`. The generator recognizes prior
-v1 and v2 TraceMap-generated manifests when `--force` replaces an existing
-generated bundle, but all newly written bundles use v3. The manifest includes:
+`tracemap-static-html-evidence-explorer.v4`. The generator recognizes prior
+v1, v2, and v3 TraceMap-generated manifests when `--force` replaces an existing
+generated bundle, but all newly written bundles use v4. The manifest includes:
 
 - generator name, schema version, and TraceMap assembly version;
 - safety profile and claim level;
@@ -242,8 +265,8 @@ partial or unavailable:
 
 - raw SQLite surfaces and paths remain provenance-only, while a compatible
   `paths-report.json` supplies rendered static surface and path rows;
-- reducer-backed results are shown as not provided unless a future compatible
-  reducer artifact reader is added;
+- reducer-backed results are rendered only from compatible contract-delta
+  impact v2 reports; other reducer families remain unsupported;
 - rule catalog rendering uses a compatible `rule-catalog.yml` or
   `rules/rule-catalog.yml` artifact when provided, and otherwise falls back to
   built-in explorer rule stubs plus observed rule IDs in evidence rows. When
