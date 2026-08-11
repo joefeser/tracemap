@@ -1584,7 +1584,7 @@ public static class ReleaseReviewReporter
             MapGapClassification(gap.Classification),
             gap.Message,
             [],
-            gap.CombinedFactId is null ? [] : [gap.CombinedFactId],
+            gap.EffectiveSupportingFactIds,
             [],
             SafeMetadata(gap.Metadata));
     }

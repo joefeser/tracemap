@@ -1,8 +1,8 @@
 # Static Dispatch Candidate Bridges Tasks
 
-Status: spec-ready
+Status: implementation-complete-awaiting-review
 
-Readiness: ready-for-implementation after recorded Kiro reviews and validation.
+Readiness: ready-for-review
 
 ## Spec Delivery Tasks
 
@@ -71,7 +71,7 @@ not part of this spec-only branch.
   - [x] Add rule-catalog resolution tests for all candidate gap kinds emitted
         by the shared builder.
 
-- [ ] 6. Extract a shared candidate builder.
+- [x] 6. Extract a shared candidate builder.
   - [x] Define an internal candidate edge/gap model with stable IDs,
         supporting fact IDs, supporting edge IDs, relationship IDs,
         registration fact IDs, file spans, rule IDs, evidence tiers, coverage
@@ -86,83 +86,93 @@ not part of this spec-only branch.
         display-name equality.
   - [x] Derive override candidates only from `Overrides` evidence and bounded
         override-chain traversal.
-  - [ ] Keep type-level fallback candidates as `WeakerCandidate` with
-        type-level-bridge-only limitations.
-  - [ ] Emit gaps for missing candidates, ambiguous identities, high fan-out,
+  - [x] Fail closed with `MemberCandidateUnavailable` when type-level evidence
+        exists but no safe member-level candidate can be derived; do not create
+        a display-name or type-only member edge.
+  - [x] Emit gaps for missing candidates, ambiguous identities, high fan-out,
         reduced coverage, missing schema, generic caveats, and truncation.
   - [x] Add deterministic ordering, caps, cycle protection, and byte-stability
         tests.
 
-- [ ] 7. Add DI registration-context annotations.
-  - [ ] Audit existing `DependencyRegistered` fact shape and fact-symbol
+  Final disposition: TraceMap does not emit type-level fallback member edges in
+  v1 because member-level compiler relationship evidence is the trusted
+  boundary. Type-level context without a member relation emits
+  `MemberCandidateUnavailable`; missing canonical identity emits
+  `DispatchCandidateIdentityUnverified`; reduced or unsupported source coverage
+  emits `DispatchCandidateReducedCoverage` and downgrades retained candidates.
+  Consumer schema gaps remain explicit `DispatchCandidateSchemaUnavailable`
+  records. Candidate absence is never promoted to a clean conclusion.
+
+- [x] 7. Add DI registration-context annotations.
+  - [x] Audit existing `DependencyRegistered` fact shape and fact-symbol
         attachments.
-  - [ ] Annotate candidates as `registration-context-candidate` only when DI
+  - [x] Annotate candidates as `registration-context-candidate` only when DI
         service/implementation evidence and relationship compatibility agree.
-  - [ ] Emit `RegistrationCompatibilityUnproven` when registration evidence
+  - [x] Emit `RegistrationCompatibilityUnproven` when registration evidence
         lacks relationship compatibility.
-  - [ ] Emit unsupported registration gaps for factories, scanning,
+  - [x] Emit unsupported registration gaps for factories, scanning,
         keyed/named services, decorators, service locators, reflection,
         config, dynamic branches, custom containers, and open generics.
-  - [ ] Add tests for multiple registrations, open generics, syntax-only
+  - [x] Add tests for multiple registrations, open generics, syntax-only
         registrations, deterministic ordering, and safety.
 
-- [ ] 8. Thread candidates into route-flow.
-  - [ ] Reuse the shared candidate builder for route-flow interface/override
+- [x] 8. Thread candidates into route-flow.
+  - [x] Reuse the shared candidate builder for route-flow interface/override
         bridge rows.
-  - [ ] Define `interface-implementation-candidate` row kind schema compatible
+  - [x] Define `interface-implementation-candidate` row kind schema compatible
         with existing route-flow row processing.
-  - [ ] Preserve existing route-flow row kinds such as `method`,
+  - [x] Preserve existing route-flow row kinds such as `method`,
         `http-client`, and `sql-query`.
-  - [ ] Preserve `combined.route-flow.interface-bridge.v1` presentation rows
+  - [x] Preserve `combined.route-flow.interface-bridge.v1` presentation rows
         with supporting `combined.dispatch-candidate.v1` rule IDs.
-  - [ ] Cap affected rows at `NeedsReviewStaticRouteFlow` or
+  - [x] Cap affected rows at `NeedsReviewStaticRouteFlow` or
         `UnknownAnalysisGap`.
-  - [ ] Add tests for single candidate, multiple candidate, no candidate,
+  - [x] Add tests for single candidate, multiple candidate, no candidate,
         high fan-out, DI-context candidate, and reduced coverage.
-  - [ ] Add forbidden-wording tests for runtime binding and selected
+  - [x] Add forbidden-wording tests for runtime binding and selected
         implementation language.
 
-- [ ] 9. Thread candidates into reverse and impact context.
-  - [ ] Let reverse traversal cross candidate edges while preserving root to
+- [x] 9. Thread candidates into reverse and impact context.
+  - [x] Let reverse traversal cross candidate edges while preserving root to
         surface path order.
-  - [ ] Cap candidate-dependent reverse roots/paths at
+  - [x] Cap candidate-dependent reverse roots/paths at
         `NeedsReviewReversePath` or weaker.
-  - [ ] Ensure `tracemap impact --include-paths` and future reverse context
+  - [x] Ensure `tracemap impact --include-paths` and future reverse context
         preserve candidate paths as review context only.
-  - [ ] Prevent candidate context from producing `StaticImpactEvidence`,
+  - [x] Prevent candidate context from producing `StaticImpactEvidence`,
         `DefiniteImpact`, or runtime impact wording.
-  - [ ] Add focused reverse and impact tests for candidate paths, no-candidate
+  - [x] Add focused reverse and impact tests for candidate paths, no-candidate
         gaps, reduced coverage, and truncation.
 
-- [ ] 10. Add report, portfolio, vault, and docs-export consumption.
-  - [ ] Summarize candidate counts, registration-context counts, gaps,
+- [x] 10. Add report, portfolio, vault, and docs-export consumption.
+  - [x] Summarize candidate counts, registration-context counts, gaps,
         fan-out caps, source coverage, and limitations in combined report and
         portfolio report.
-  - [ ] Audit existing `vault-export.*` and `docs-export.*` rule IDs in the
+  - [x] Audit existing `vault-export.*` and `docs-export.*` rule IDs in the
         catalog.
-  - [ ] Add new vault/docs candidate edge or gap rules to the catalog if no
+  - [x] Add new vault/docs candidate edge or gap rules to the catalog if no
         existing presentation rule can honestly wrap candidate evidence.
-  - [ ] Ensure vault graph and docs-export candidate artifacts cite both the
+  - [x] Ensure vault graph and docs-export candidate artifacts cite both the
         consumer presentation rule and the underlying dispatch candidate/gap
         rules.
-  - [ ] Export candidate edges and gaps to vault graph as review-context edges,
+  - [x] Export candidate edges and gaps to vault graph as review-context edges,
         not ordinary call edges.
-  - [ ] Include candidate chunks in docs-export/RAG-ready evidence docs with
+  - [x] Include candidate chunks in docs-export/RAG-ready evidence docs with
         rule IDs, tiers, supporting IDs, coverage labels, and limitations.
-  - [ ] Add safety tests for raw snippets, SQL, config, URLs, hostnames, raw
+  - [x] Add safety tests for raw snippets, SQL, config, URLs, hostnames, raw
         remotes, local paths, private labels, and secrets.
-  - [ ] Add byte-stability tests for JSON, Markdown, vault graph, and
+  - [x] Add byte-stability tests for JSON, Markdown, vault graph, and
         docs-export outputs where those commands promise stability.
 
-- [ ] 11. Validate implementation.
-  - [ ] Run `dotnet test src/dotnet/TraceMap.sln`.
-  - [ ] Run the CLI against at least one public-safe sample and confirm
+- [x] 11. Validate implementation.
+  - [x] Run `dotnet test src/dotnet/TraceMap.sln`.
+  - [x] Run the CLI against at least one public-safe sample and confirm
         candidate output/gaps are deterministic and safe.
-  - [ ] Follow `docs/VALIDATION.md` and run or explicitly defer relevant
+  - [x] Follow `docs/VALIDATION.md` and run or explicitly defer relevant
         pinned smoke checks with evidence.
-  - [ ] Run `./scripts/check-private-paths.sh`.
-  - [ ] Run `git diff --check`.
-  - [ ] Confirm generated outputs do not contain unsafe values or runtime proof
+  - [x] Run `./scripts/check-private-paths.sh`.
+  - [x] Run `git diff --check`.
+  - [x] Confirm generated outputs do not contain unsafe values or runtime proof
         language.
 
 ## Deferred Follow-Ups
@@ -174,3 +184,5 @@ not part of this spec-only branch.
 - Cross-language runtime binding approximation.
 - UI or interactive graph visualization.
 - Site copy describing the shipped capability.
+- Runtime-verified dispatch or type-only member guesses; both remain outside
+  the deterministic static-evidence boundary.

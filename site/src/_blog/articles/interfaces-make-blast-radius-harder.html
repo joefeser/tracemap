@@ -1,0 +1,188 @@
+<p>
+  <strong>Public claim level: demo.</strong>
+  Interface and override relationships make a static blast-radius review more
+  useful and more dangerous. TraceMap can surface compiler-backed possible
+  continuations and compatible registration context, but it keeps every such
+  continuation at review tier because static evidence does not select the
+  implementation used at runtime.
+</p>
+
+<section data-static-dispatch-block="question">
+  <h2>Why is an interface call harder than a direct call?</h2>
+  <p>
+    A direct semantic call has a compiler-selected target symbol. An interface
+    member or virtual member can have several statically visible implementing
+    or overriding members. Which one executes may depend on object creation,
+    dependency-injection configuration, registration order, keyed services,
+    decorators, factories, runtime types, branches, reflection, or deployment
+    configuration that a repository scan does not observe.
+  </p>
+  <p>
+    Ignoring every possible continuation hides useful review context. Picking
+    one “likely” implementation fabricates certainty. TraceMap instead records
+    bounded static dispatch candidates and their gaps.
+  </p>
+</section>
+
+<section data-static-dispatch-block="identity">
+  <h2>Member identity comes before candidate composition.</h2>
+  <p>
+    Compiler-backed <code>ImplementsInterfaceMember</code> and
+    <code>Overrides</code> relationships connect exact member identities.
+    Explicit interface implementations, overloads, generics, nested types,
+    and same-named methods remain distinct. Rule
+    <code>combined.dispatch-candidate.v1</code> derives candidate edges only
+    from compatible graph evidence; <code>combined.dispatch-gap.v1</code>
+    records what prevents a stronger or complete candidate set.
+  </p>
+  <p>
+    TraceMap refuses display-name joins and type-only member guesses. When only
+    type-level inheritance or implementation evidence exists, it may provide
+    weaker review context or emit a member-candidate-unavailable gap. A short
+    name is never enough to manufacture a method edge.
+  </p>
+</section>
+
+<section data-static-dispatch-block="states">
+  <h2>Candidate state preserves strength without claiming selection.</h2>
+  <p>
+    A fully symbol-backed relationship can be a
+    <code>SymbolBackedCandidate</code>. Retained candidates are downgraded to
+    <code>WeakerCandidate</code> when coverage is reduced, extractor evidence
+    is missing, or compatible DI registration supplies only context. Type-level
+    or identity-ambiguous evidence, unsupported or open-generic registration,
+    and missing schema, relationship, implementation, or compatible evidence
+    produce a <code>CandidateGap</code> instead of inventing a candidate.
+    High fan-out retains the bounded relationship-backed candidates and emits
+    a separate fan-out gap.
+  </p>
+  <p>
+    Even the strongest candidate is still a possible static continuation. It
+    is not a runtime target, selected implementation, actual binding, or
+    executed call. Candidate state helps reviewers order questions; it does
+    not cross the static-versus-runtime boundary.
+  </p>
+</section>
+
+<section data-static-dispatch-block="di">
+  <h2>Dependency-injection registration is context, not a verdict.</h2>
+  <p>
+    When statically visible DI registration evidence names a service and an
+    implementation already proven compatible by relationship evidence,
+    TraceMap can annotate or prioritize that candidate as registration
+    context. Registration evidence alone cannot create a member candidate.
+    Unproven compatibility produces a gap.
+  </p>
+  <p>
+    Factories, lambdas, assembly scanning, modules, custom containers, open
+    generics, keyed or named registrations, decorators, service locators,
+    conditional branches, registration order, and lifetime behavior remain
+    unresolved or weaker context. The analysis does not run a container and
+    does not choose the object a request receives.
+  </p>
+</section>
+
+<section data-static-dispatch-block="fanout">
+  <h2>Fan-out is bounded and visible.</h2>
+  <p>
+    One interface member can have many implementation candidates. Stable caps
+    prevent an unbounded candidate expansion from dominating every path. When
+    a cap is reached, truncation and omitted-candidate state remain visible.
+    Multiple registrations or generic families remain multiple candidates
+    rather than being collapsed into a convenient winner.
+  </p>
+  <p>
+    Identity-unverified, member-unavailable, implementation-unavailable,
+    override-unavailable, registration-compatibility, schema, generic,
+    reduced-coverage, and fan-out gaps are part of the result. A zero-candidate
+    summary is meaningful only relative to the schemas and sources that were
+    actually available.
+  </p>
+</section>
+
+<section data-static-dispatch-block="consumers">
+  <h2>The same candidate contract reaches downstream review surfaces.</h2>
+  <p>
+    Candidate edges can appear in paths, route-flow, combined reverse, change
+    impact, combined reports, portfolio summaries, release and design review,
+    vault export, and evidence documents. Route-flow preserves
+    <code>combined.route-flow.interface-bridge.v1</code> while retaining the
+    underlying dispatch rule. Reports use
+    <code>combined.report.dispatch-candidate-summary.v1</code>; portfolios use
+    <code>portfolio.context.dispatch-candidate.v1</code>.
+  </p>
+  <p>
+    Vault and evidence-document projections retain their own presentation
+    rules, including <code>vault-export.graph.dispatch-candidate.v1</code> and
+    <code>docs-export.chunk.dispatch-candidate.v1</code>, plus supporting edge,
+    fact, gap, tier, coverage, and limitation metadata. A downstream layout
+    cannot strengthen the candidate merely by repeating it.
+  </p>
+</section>
+
+<section data-static-dispatch-block="classifications">
+  <h2>Consumer classifications remain capped.</h2>
+  <p>
+    Candidate-dependent paths remain needs-review paths. Route-flow stays
+    review-tier static context. Reverse paths and impact items stay at their
+    needs-review classifications unless unknown coverage is weaker. If a path
+    combines a candidate with a Tier 4 gap, the unknown classification wins
+    while the candidate limitation remains visible.
+  </p>
+  <p>
+    This prevents a symbol-backed candidate from becoming “definite impact” as
+    it moves through reports. It also prevents a weaker candidate from becoming
+    an operational recommendation in a portfolio or release packet.
+  </p>
+</section>
+
+<section data-static-dispatch-block="review">
+  <h2>A plausible candidate is a question worth assigning.</h2>
+  <p>
+    Review the call-site identity, interface or override member relationship,
+    candidate state, DI compatibility context, supporting IDs, rule IDs,
+    evidence tiers, source spans, extractor versions, coverage, fan-out, and
+    gaps. Then ask an owner which runtime configuration, registration rules,
+    and construction path apply to the deployment under review.
+  </p>
+  <p>
+    Use the <a href="/evidence/">evidence model</a>,
+    <a href="/evidence/gaps/">gap guide</a>,
+    <a href="/static-vs-runtime/">static-versus-runtime boundary</a>,
+    <a href="/proof-paths/for-managers/">manager proof path</a>,
+    <a href="/capabilities/">capability map</a>,
+    <a href="/use-cases/change-review/">change-review use case</a>, and the
+    <a href="/proof-paths/route-flow/">route-flow proof path</a> when forming that question.
+  </p>
+</section>
+
+<section data-static-dispatch-block="non-claims" data-static-dispatch-boundary="non-claims">
+  <h2>What static dispatch candidates do not establish.</h2>
+  <p>
+    They do not establish runtime reachability, observed execution, selected DI
+    implementation, registration order, object lifetime, branch feasibility,
+    production use, complete coverage, severity, required testing, release
+    approval, or safety. A candidate-dependent path is not proof of a defect.
+  </p>
+  <p>
+    This public article includes no source snippet, raw SQL, configuration,
+    credential, connection material, raw SQLite, analyzer output, local path,
+    or private identity. No LLM, embedding, vector, or prompt classification
+    chooses or ranks an implementation.
+  </p>
+</section>
+
+<section data-static-dispatch-block="bottom-line">
+  <h2>Keep the candidate and the uncertainty together.</h2>
+  <p>
+    Compiler identity, compatible relationship evidence, bounded DI context,
+    stable fan-out, review-tier classifications, and explicit gaps make an
+    interface continuation useful without pretending it was selected. The
+    result is a better review queue, not runtime proof.
+  </p>
+  <p>
+    For the traversal that brings these candidates into blast-radius review,
+    read <a href="/blog/what-depends-on-this-symbol/">what depends on this
+    symbol?</a>
+  </p>
+</section>

@@ -25,7 +25,8 @@ public sealed record SemanticExtractionResult(
     bool Attempted,
     bool ReducedCoverage,
     IReadOnlySet<string>? AnalyzedFiles = null,
-    bool ScopeReduced = false);
+    bool ScopeReduced = false,
+    IReadOnlySet<string>? CompilationInputFiles = null);
 
 public static class CSharpSemanticExtractor
 {
@@ -144,6 +145,7 @@ public static class CSharpSemanticExtractor
         var facts = new List<SemanticFactCandidate>();
         var gaps = new List<SemanticFactCandidate>();
         var analyzedFiles = new HashSet<string>(StringComparer.Ordinal);
+        var compilationInputFiles = new HashSet<string>(StringComparer.Ordinal);
         var projects = inventory.Where(item => item.Kind == "Project").OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
         var solutions = inventory.Where(item => item.Kind == "Solution").OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
         var useFullSourceInventory = options.ProjectPaths is { Count: > 0 }
@@ -153,6 +155,12 @@ public static class CSharpSemanticExtractor
             .ToArray();
         var sourcePathComparer = CreateSourcePathComparer(repoPath);
         var inventoriedCSharpPaths = csharpFiles
+            .Select(item => item.RelativePath)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .GroupBy(path => path, sourcePathComparer)
+            .ToDictionary(group => group.Key, group => group.First(), sourcePathComparer);
+        var compilationInputPaths = (fullInventory ?? inventory)
+            .Where(item => FileInventory.IsCSharpKind(item.Kind))
             .Select(item => item.RelativePath)
             .OrderBy(path => path, StringComparer.Ordinal)
             .GroupBy(path => path, sourcePathComparer)
@@ -219,12 +227,14 @@ public static class CSharpSemanticExtractor
                         repoPath,
                         solution,
                         inventoriedCSharpPaths,
+                        compilationInputPaths,
                         excludeGlobs,
                         explicitlyExcludedSourcePaths,
                         facts,
                         gaps,
                         loadedProjectPaths,
                         analyzedFiles,
+                        compilationInputFiles,
                         options.ProjectPaths is { Count: > 0 } ? selectedProjectPaths : null);
                 }
                 catch (Exception ex) when (IsWorkspaceException(ex))
@@ -253,7 +263,15 @@ public static class CSharpSemanticExtractor
                 explicitlyExcludedSourcePaths.UnionWith(excludedPaths);
                 project = filteredSolution.GetProject(project.Id)
                     ?? throw new InvalidOperationException($"Filtered solution no longer contains project '{projectItem.RelativePath}'.");
-                ExtractProject(repoPath, project, inventoriedCSharpPaths, facts, gaps, analyzedFiles);
+                ExtractProject(
+                    repoPath,
+                    project,
+                    inventoriedCSharpPaths,
+                    compilationInputPaths,
+                    facts,
+                    gaps,
+                    analyzedFiles,
+                    compilationInputFiles);
                 loadedProjectPaths.Add(projectItem.RelativePath);
             }
             catch (Exception ex) when (IsWorkspaceException(ex))
@@ -276,7 +294,8 @@ public static class CSharpSemanticExtractor
             Attempted: attempted,
             ReducedCoverage: gaps.Count > 0,
             AnalyzedFiles: analyzedFiles,
-            ScopeReduced: explicitlyExcludedSourcePaths.Count > 0);
+            ScopeReduced: explicitlyExcludedSourcePaths.Count > 0,
+            CompilationInputFiles: compilationInputFiles);
     }
 
     public static IReadOnlyList<CodeFact> MaterializeFacts(ScanManifest manifest, IEnumerable<SemanticFactCandidate> candidates)
@@ -396,12 +415,14 @@ public static class CSharpSemanticExtractor
         string repoPath,
         Solution solution,
         IReadOnlyDictionary<string, string> inventoriedCSharpPaths,
+        IReadOnlyDictionary<string, string> compilationInputPaths,
         IReadOnlyList<string> excludeGlobs,
         HashSet<string> explicitlyExcludedSourcePaths,
         List<SemanticFactCandidate> facts,
         List<SemanticFactCandidate> gaps,
         HashSet<string> loadedProjectPaths,
         HashSet<string> analyzedFiles,
+        HashSet<string> compilationInputFiles,
         IReadOnlySet<string>? selectedProjectPaths)
     {
         solution = RemoveExplicitlyExcludedSourceDocuments(
@@ -418,7 +439,15 @@ public static class CSharpSemanticExtractor
                 continue;
             }
 
-            ExtractProject(repoPath, project, inventoriedCSharpPaths, facts, gaps, analyzedFiles);
+            ExtractProject(
+                repoPath,
+                project,
+                inventoriedCSharpPaths,
+                compilationInputPaths,
+                facts,
+                gaps,
+                analyzedFiles,
+                compilationInputFiles);
             if (!string.IsNullOrWhiteSpace(project.FilePath))
             {
                 loadedProjectPaths.Add(relativeProjectPath);
@@ -430,9 +459,11 @@ public static class CSharpSemanticExtractor
         string repoPath,
         Project project,
         IReadOnlyDictionary<string, string> inventoriedCSharpPaths,
+        IReadOnlyDictionary<string, string> compilationInputPaths,
         List<SemanticFactCandidate> facts,
         List<SemanticFactCandidate> gaps,
-        HashSet<string> analyzedFiles)
+        HashSet<string> analyzedFiles,
+        HashSet<string> compilationInputFiles)
     {
         var projectPath = ToRelativePath(repoPath, project.FilePath);
         Compilation? compilation;
@@ -461,6 +492,14 @@ public static class CSharpSemanticExtractor
         foreach (var document in project.Documents.OrderBy(document => ToRelativePath(repoPath, document.FilePath), StringComparer.Ordinal))
         {
             var projection = ToRelativePathProjection(repoPath, document.FilePath);
+            if (!projection.IsExternal && !IsCompilerGeneratedDocument(document))
+            {
+                compilationInputFiles.Add(
+                    compilationInputPaths.TryGetValue(projection.Path, out var canonicalCompilationInputPath)
+                        ? canonicalCompilationInputPath
+                        : projection.Path);
+            }
+
             string? canonicalEvidencePath = null;
             if (!projection.IsExternal
                 && !inventoriedCSharpPaths.TryGetValue(projection.Path, out canonicalEvidencePath))
@@ -492,6 +531,7 @@ public static class CSharpSemanticExtractor
             return solution;
         }
 
+        var sourcePathComparer = CreateSourcePathComparer(repoPath);
         var excludedDocuments = solution.Projects
             .SelectMany(project => project.Documents)
             .Where(document => !string.IsNullOrWhiteSpace(document.FilePath))
@@ -501,11 +541,14 @@ public static class CSharpSemanticExtractor
                 document.Id,
                 RelativePath = ToRelativePath(repoPath, document.FilePath)
             })
-            .Where(document => excludeGlobs.Any(glob => ScanEngine.GlobMatches(document.RelativePath, glob)))
+            .Where(document => excludeGlobs.Any(glob => ScanEngine.GlobMatches(
+                document.RelativePath,
+                glob,
+                sourcePathComparer)))
             .ToArray();
         excludedPaths = excludedDocuments
             .Select(document => document.RelativePath)
-            .Distinct(CreateSourcePathComparer(repoPath))
+            .Distinct(sourcePathComparer)
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
 
@@ -2324,11 +2367,32 @@ public static class CSharpSemanticExtractor
         foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
             if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method
-                || !TryGetDependencyRegistration(method, invocation, model, out var registrationKind, out var serviceType, out var implementationType))
+                || !TryGetDependencyRegistration(
+                    method,
+                    invocation,
+                    model,
+                    out var registrationKind,
+                    out var registrationShape,
+                    out var serviceType,
+                    out var implementationType,
+                    out var serviceTypeSymbol,
+                    out var implementationTypeSymbol))
             {
                 continue;
             }
 
+            var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["evidenceKind"] = "DependencyRegistered",
+                ["registrationKind"] = registrationKind,
+                ["registrationShape"] = registrationShape,
+                ["serviceType"] = serviceType,
+                ["implementationType"] = implementationType,
+                ["methodSymbol"] = method.ToDisplayString(SymbolFormat),
+                ["argumentCount"] = invocation.ArgumentList.Arguments.Count.ToString()
+            };
+            AddSymbolProperties(properties, "serviceType", serviceTypeSymbol);
+            AddSymbolProperties(properties, "implementationType", implementationTypeSymbol);
             facts.Add(CreateSemanticFact(
                 FactTypes.DependencyRegistered,
                 RuleIds.CSharpSemanticRuntimeEvidence,
@@ -2339,15 +2403,7 @@ public static class CSharpSemanticExtractor
                 targetSymbol: serviceType,
                 contractElement: method.Name,
                 properties: AddAssemblyProperties(
-                    new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["evidenceKind"] = "DependencyRegistered",
-                        ["registrationKind"] = registrationKind,
-                        ["serviceType"] = serviceType,
-                        ["implementationType"] = implementationType,
-                        ["methodSymbol"] = method.ToDisplayString(SymbolFormat),
-                        ["argumentCount"] = invocation.ArgumentList.Arguments.Count.ToString()
-                    },
+                    properties,
                     model.GetEnclosingSymbol(invocation.SpanStart)?.ContainingAssembly,
                     method.ContainingAssembly)));
         }
@@ -2628,12 +2684,18 @@ public static class CSharpSemanticExtractor
         InvocationExpressionSyntax invocation,
         SemanticModel model,
         out string registrationKind,
+        out string registrationShape,
         out string serviceType,
-        out string implementationType)
+        out string implementationType,
+        out ITypeSymbol? serviceTypeSymbol,
+        out ITypeSymbol? implementationTypeSymbol)
     {
         registrationKind = string.Empty;
+        registrationShape = string.Empty;
         serviceType = string.Empty;
         implementationType = string.Empty;
+        serviceTypeSymbol = null;
+        implementationTypeSymbol = null;
 
         var methodName = method.Name;
         var isKnownRegistrationName = methodName is "AddSingleton" or "AddScoped" or "AddTransient"
@@ -2645,31 +2707,52 @@ public static class CSharpSemanticExtractor
         }
 
         var typeArguments = method.TypeArguments
-            .Select(argument => argument.ToDisplayString(SymbolFormat))
-            .Where(argument => !string.IsNullOrWhiteSpace(argument))
+            .Where(argument => !string.IsNullOrWhiteSpace(argument.ToDisplayString(SymbolFormat)))
             .ToArray();
         var typeOfArguments = invocation.ArgumentList.Arguments
-            .Select(argument => GetTypeOfExpressionDisplay(argument.Expression, model))
-            .Where(type => !string.IsNullOrWhiteSpace(type))
+            .Select(argument => argument.Expression is TypeOfExpressionSyntax typeOfExpression
+                ? model.GetTypeInfo(typeOfExpression.Type).Type
+                : null)
+            .OfType<ITypeSymbol>()
             .ToArray();
 
         if (typeArguments.Length > 0)
         {
-            serviceType = typeArguments[0];
-            implementationType = typeArguments.Length > 1 ? typeArguments[1] : serviceType;
+            serviceTypeSymbol = typeArguments[0];
+            implementationTypeSymbol = typeArguments.Length > 1 ? typeArguments[1] : serviceTypeSymbol;
         }
         else if (typeOfArguments.Length > 0)
         {
-            serviceType = typeOfArguments[0]!;
-            implementationType = typeOfArguments.Length > 1 ? typeOfArguments[1]! : serviceType;
+            serviceTypeSymbol = typeOfArguments[0];
+            implementationTypeSymbol = typeOfArguments.Length > 1 ? typeOfArguments[1] : serviceTypeSymbol;
         }
         else
         {
             return false;
         }
 
+        serviceType = serviceTypeSymbol.ToDisplayString(SymbolFormat);
+        implementationType = implementationTypeSymbol.ToDisplayString(SymbolFormat);
         registrationKind = methodName;
+        var hasStaticTypePair = invocation.ArgumentList.Arguments.Count == 0
+            || invocation.ArgumentList.Arguments.Count == 2 && typeOfArguments.Length == 2;
+        registrationShape = methodName.Contains("Keyed", StringComparison.Ordinal)
+            ? "keyed-registration"
+            : methodName == "RegisterInstance"
+                ? "instance-registration"
+                : IsOpenRegistrationType(serviceTypeSymbol) || IsOpenRegistrationType(implementationTypeSymbol)
+                    ? "open-generic"
+                    : hasStaticTypePair
+                        ? "closed-type-pair"
+                        : "factory-or-dynamic";
         return true;
+    }
+
+    private static bool IsOpenRegistrationType(ITypeSymbol type)
+    {
+        return type is ITypeParameterSymbol
+            || type is INamedTypeSymbol namedType
+                && (namedType.IsUnboundGenericType || namedType.TypeArguments.Any(IsOpenRegistrationType));
     }
 
     private static bool TryGetSerializerContractAttribute(

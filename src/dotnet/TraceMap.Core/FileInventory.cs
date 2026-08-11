@@ -1,5 +1,25 @@
 namespace TraceMap.Core;
 
+public sealed class SourceInventoryException : Exception
+{
+    public const string ErrorCode = "SourceInventoryIncomplete";
+
+    public SourceInventoryException(Exception innerException)
+        : base(ErrorCode, innerException)
+    {
+    }
+}
+
+public sealed class SourceSnapshotException : Exception
+{
+    public const string ErrorCode = "SourceSnapshotChangedDuringScan";
+
+    public SourceSnapshotException(Exception? innerException = null)
+        : base(ErrorCode, innerException)
+    {
+    }
+}
+
 public static class FileInventory
 {
     private static readonly HashSet<string> IncludedExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -60,7 +80,22 @@ public static class FileInventory
         "obj"
     };
 
-    public static IReadOnlyList<FileInventoryItem> Collect(string repoPath, string? outputPath = null)
+    public static IReadOnlyList<FileInventoryItem> Collect(string repoPath, string? outputPath = null) =>
+        Collect(repoPath, outputPath, excludeGlobs: null, pathComparer: null);
+
+    public static IReadOnlyList<FileInventoryItem> Collect(
+        string repoPath,
+        string? outputPath,
+        IReadOnlyList<string>? excludeGlobs,
+        StringComparer? pathComparer) =>
+        Collect(repoPath, outputPath, excludeGlobs, pathComparer, includeGlobs: null);
+
+    public static IReadOnlyList<FileInventoryItem> Collect(
+        string repoPath,
+        string? outputPath,
+        IReadOnlyList<string>? excludeGlobs,
+        StringComparer? pathComparer,
+        IReadOnlyList<string>? includeGlobs)
     {
         var root = Path.GetFullPath(repoPath);
         var outputFullPath = string.IsNullOrWhiteSpace(outputPath)
@@ -69,11 +104,26 @@ public static class FileInventory
 
         var options = new EnumerationOptions
         {
-            RecurseSubdirectories = true,
-            IgnoreInaccessible = true
+            RecurseSubdirectories = false,
+            IgnoreInaccessible = false,
+            AttributesToSkip = FileAttributes.Hidden | FileAttributes.System
         };
 
-        var candidateFiles = EnumerateCandidateFiles(root, options, outputFullPath).ToArray();
+        string[] candidateFiles;
+        try
+        {
+            candidateFiles = EnumerateCandidateFiles(
+                root,
+                options,
+                outputFullPath,
+                excludeGlobs ?? [],
+                pathComparer ?? StringComparer.Ordinal,
+                includeGlobs ?? []).ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new SourceInventoryException(ex);
+        }
 
         var serviceReferenceFolders = candidateFiles
             .Where(path => Path.GetExtension(path).Equals(".svcmap", StringComparison.OrdinalIgnoreCase))
@@ -87,22 +137,168 @@ public static class FileInventory
 
         var items = candidateFiles
             .Where(path => ShouldInclude(root, path, serviceReferenceFolders, webReferenceFolders))
-            .Select(path => TryCreateItem(root, path, serviceReferenceFolders, webReferenceFolders))
-            .Where(item => item is not null)
-            .Select(item => item!)
+            .Select(path => CreateItem(root, path, serviceReferenceFolders, webReferenceFolders))
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .ToArray();
 
         return items;
     }
 
-    private static IEnumerable<string> EnumerateCandidateFiles(string root, EnumerationOptions options, string? outputFullPath)
+    private static IEnumerable<string> EnumerateCandidateFiles(
+        string root,
+        EnumerationOptions options,
+        string? outputFullPath,
+        IReadOnlyList<string> excludeGlobs,
+        StringComparer pathComparer,
+        IReadOnlyList<string> includeGlobs)
     {
-        return Directory.EnumerateFiles(root, "*", options)
-            .Where(path => !ShouldExclude(root, path, outputFullPath));
+        var pending = new Stack<string>();
+        pending.Push(root);
+        while (pending.Count > 0)
+        {
+            var directory = pending.Pop();
+            foreach (var childDirectory in Directory.EnumerateDirectories(directory, "*", options))
+            {
+                if (ShouldExclude(root, childDirectory, outputFullPath)
+                    || IsExplicitlyExcludedDirectory(root, childDirectory, excludeGlobs, pathComparer)
+                    || !CanContainIncludedFile(root, childDirectory, includeGlobs, pathComparer))
+                {
+                    continue;
+                }
+
+                RejectReparsePoint(childDirectory);
+
+                pending.Push(childDirectory);
+            }
+
+            foreach (var file in Directory.EnumerateFiles(directory, "*", options))
+            {
+                if (!ShouldExclude(root, file, outputFullPath)
+                    && !IsExplicitlyExcludedFile(root, file, excludeGlobs, pathComparer))
+                {
+                    RejectReparsePoint(file);
+                    yield return file;
+                }
+            }
+        }
     }
 
-    private static FileInventoryItem? TryCreateItem(string root, string path, ISet<string> serviceReferenceFolders, ISet<string> webReferenceFolders)
+    private static bool CanContainIncludedFile(
+        string root,
+        string directory,
+        IReadOnlyList<string> includeGlobs,
+        StringComparer pathComparer)
+    {
+        var configuredGlobs = includeGlobs
+            .Where(glob => !string.IsNullOrWhiteSpace(glob))
+            .Select(glob => NormalizeRelativePath(glob.Trim()))
+            .ToArray();
+        if (configuredGlobs.Length == 0)
+            return true;
+
+        var directoryParts = NormalizeRelativePath(Path.GetRelativePath(root, directory))
+            .Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return configuredGlobs.Any(glob =>
+        {
+            var globParts = glob.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var literalDirectoryPartCount = 0;
+            while (literalDirectoryPartCount < globParts.Length - 1
+                && !ContainsGlobWildcard(globParts[literalDirectoryPartCount]))
+            {
+                literalDirectoryPartCount++;
+            }
+
+            if (literalDirectoryPartCount == 0)
+                return true;
+
+            var comparablePartCount = Math.Min(directoryParts.Length, literalDirectoryPartCount);
+            for (var index = 0; index < comparablePartCount; index++)
+            {
+                if (!pathComparer.Equals(directoryParts[index], globParts[index]))
+                    return false;
+            }
+
+            return true;
+        });
+    }
+
+    private static bool ContainsGlobWildcard(string value) =>
+        value.Contains('*', StringComparison.Ordinal)
+        || value.Contains('?', StringComparison.Ordinal);
+
+    private static void RejectReparsePoint(string path)
+    {
+        try
+        {
+            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new SourceInventoryException(
+                    new IOException("An in-scope source path is a reparse point and cannot be inventoried truthfully."));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new SourceInventoryException(ex);
+        }
+    }
+
+    private static bool IsExplicitlyExcludedDirectory(
+        string root,
+        string directory,
+        IReadOnlyList<string> excludeGlobs,
+        StringComparer pathComparer)
+    {
+        if (excludeGlobs.Count == 0)
+            return false;
+
+        var relativePath = NormalizeRelativePath(Path.GetRelativePath(root, directory));
+        return excludeGlobs.Any(glob => ExcludesEntireDirectory(relativePath, glob, pathComparer));
+    }
+
+    private static bool ExcludesEntireDirectory(
+        string relativePath,
+        string glob,
+        StringComparer pathComparer)
+    {
+        var normalizedGlob = NormalizeRelativePath(glob.Trim()).TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(normalizedGlob))
+            return false;
+
+        if (!normalizedGlob.Contains('*', StringComparison.Ordinal))
+            return ScanEngine.GlobMatches(relativePath, normalizedGlob, pathComparer);
+
+        if (normalizedGlob is "**" or "**/*")
+            return true;
+
+        const string recursiveDirectorySuffix = "/**";
+        const string recursiveFileSuffix = "/**/*";
+        var suffixLength = normalizedGlob.EndsWith(recursiveFileSuffix, StringComparison.Ordinal)
+            ? recursiveFileSuffix.Length
+            : normalizedGlob.EndsWith(recursiveDirectorySuffix, StringComparison.Ordinal)
+                ? recursiveDirectorySuffix.Length
+                : 0;
+        if (suffixLength == 0)
+            return false;
+
+        var directoryGlob = normalizedGlob[..^suffixLength];
+        return !string.IsNullOrWhiteSpace(directoryGlob)
+            && ScanEngine.GlobMatches(relativePath, directoryGlob, pathComparer);
+    }
+
+    private static bool IsExplicitlyExcludedFile(
+        string root,
+        string file,
+        IReadOnlyList<string> excludeGlobs,
+        StringComparer pathComparer)
+    {
+        if (excludeGlobs.Count == 0)
+            return false;
+
+        var relativePath = NormalizeRelativePath(Path.GetRelativePath(root, file));
+        return excludeGlobs.Any(glob => ScanEngine.GlobMatches(relativePath, glob, pathComparer));
+    }
+
+    private static FileInventoryItem CreateItem(string root, string path, ISet<string> serviceReferenceFolders, ISet<string> webReferenceFolders)
     {
         try
         {
@@ -114,7 +310,7 @@ public static class FileInventory
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return null;
+            throw new SourceInventoryException(ex);
         }
     }
 

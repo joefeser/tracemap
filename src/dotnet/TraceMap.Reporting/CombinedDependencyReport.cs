@@ -29,6 +29,7 @@ public sealed record CombinedDependencyReportDocument(
     IReadOnlyList<CombinedNeedsReviewRow> NeedsReview,
     IReadOnlyList<CombinedKnownGapRow> KnownGaps,
     MessageReviewContext MessageReviewContext,
+    DispatchCandidateEvidenceSummary DispatchCandidates,
     IReadOnlyList<string> Limitations);
 
 public sealed record CombinedReportSummary(
@@ -253,7 +254,8 @@ internal sealed record CombinedFactRow(
     string FilePath,
     int StartLine,
     int EndLine,
-    IReadOnlyDictionary<string, string> Properties);
+    IReadOnlyDictionary<string, string> Properties,
+    string? ExtractorVersion = null);
 
 internal sealed record EndpointCandidate(
     CombinedFactRow Fact,
@@ -272,7 +274,8 @@ internal sealed record CombinedReadResult(
     IReadOnlyList<string> CoverageWarnings,
     IReadOnlyList<CombinedFactRow> Facts,
     IReadOnlyList<CombinedDependencyEdgeRow> Edges,
-    IReadOnlyDictionary<string, long> ValueOriginEvidenceCounts);
+    IReadOnlyDictionary<string, long> ValueOriginEvidenceCounts,
+    bool HasFactExtractorVersion = true);
 
 internal sealed record MessageCandidateEdgeResult(
     IReadOnlyList<CombinedDependencyEdgeRow> Edges,
@@ -357,9 +360,21 @@ public static class CombinedDependencyReporter
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
         var messageReviewContext = BuildMessageReviewContext(surfaces, dependencyEdges, read.Sources, warnings);
+        var dispatchInventory = CombinedDependencyPathReporter.BuildGraphInventory(read);
+        var dispatchCandidates = DispatchCandidateEvidenceProjection.Summarize(dispatchInventory);
+        dispatchCandidates = dispatchCandidates with
+        {
+            RuleIds = dispatchCandidates.RuleIds
+                .Append(DispatchCandidateEvidenceProjection.ReportRuleId)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray()
+        };
         var report = new CombinedDependencyReportDocument(
             Version,
-            warnings.Length == 0 ? "FullEvidenceAvailable" : "ReducedCoverage",
+            warnings.Length == 0 && dispatchCandidates.GapCount == 0
+                ? "FullEvidenceAvailable"
+                : "ReducedCoverage",
             warnings,
             read.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             new CombinedReportSummary(
@@ -385,6 +400,7 @@ public static class CombinedDependencyReporter
             needsReview,
             read.KnownGaps,
             messageReviewContext,
+            dispatchCandidates,
             Limitations);
 
         var (markdownPath, jsonPath) = await WriteOutputsAsync(options.OutputPath, format, report, cancellationToken);
@@ -421,11 +437,19 @@ public static class CombinedDependencyReporter
             knownGaps.AddRange(ReadKnownGaps(row.Source, row.ManifestJson, warnings));
         }
 
-        var facts = await ReadFactsAsync(connection, cancellationToken);
+        var hasFactExtractorVersion = await ColumnExistsAsync(connection, "combined_facts", "extractor_version", cancellationToken);
+        var facts = await ReadFactsAsync(connection, hasFactExtractorVersion, cancellationToken);
         knownGaps.AddRange(ReadAnalyzerCapabilityKnownGaps(sources, facts, warnings));
         var edges = await ReadEdgesAsync(connection, cancellationToken);
         var valueOriginCounts = await ReadValueOriginEvidenceCountsAsync(connection, cancellationToken);
-        return new CombinedReadResult(sources, knownGaps, warnings.Distinct(StringComparer.Ordinal).ToArray(), facts, edges, valueOriginCounts);
+        return new CombinedReadResult(
+            sources,
+            knownGaps,
+            warnings.Distinct(StringComparer.Ordinal).ToArray(),
+            facts,
+            edges,
+            valueOriginCounts,
+            hasFactExtractorVersion);
     }
 
     private static IReadOnlyList<CombinedKnownGapRow> ReadAnalyzerCapabilityKnownGaps(
@@ -582,10 +606,14 @@ public static class CombinedDependencyReporter
         return rows;
     }
 
-    private static async Task<IReadOnlyList<CombinedFactRow>> ReadFactsAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<CombinedFactRow>> ReadFactsAsync(
+        SqliteConnection connection,
+        bool hasExtractorVersion,
+        CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = """
+        var extractorVersionExpression = hasExtractorVersion ? "facts.extractor_version" : "null";
+        command.CommandText = $$"""
             select facts.combined_fact_id,
                    facts.source_index_id,
                    sources.label,
@@ -602,7 +630,8 @@ public static class CombinedDependencyReporter
                    facts.file_path,
                    facts.start_line,
                    facts.end_line,
-                   facts.properties_json
+                   facts.properties_json,
+                   {{extractorVersionExpression}}
             from combined_facts facts
             join index_sources sources on sources.source_index_id = facts.source_index_id
             order by facts.file_path, facts.start_line, facts.fact_type, facts.combined_fact_id;
@@ -628,7 +657,8 @@ public static class CombinedDependencyReporter
                 reader.GetString(13),
                 reader.GetInt32(14),
                 reader.GetInt32(15),
-                ParseProperties(reader.GetString(16))));
+                ParseProperties(reader.GetString(16)),
+                reader.IsDBNull(17) ? null : reader.GetString(17)));
         }
 
         return rows;
@@ -1454,6 +1484,19 @@ public static class CombinedDependencyReporter
         AppendRows(builder, report.MessageReviewContext.Gaps, "| Gap | Classification | Message | Evidence |", "| --- | --- | --- | --- |",
             gap => $"| {Cell(gap.GapKind)} | {Cell(gap.Classification)} | {Cell(gap.Message)} | {Cell($"{gap.RuleId} {gap.EvidenceTier}")} |");
 
+        builder.AppendLine("## Static Dispatch Candidate Review Context");
+        builder.AppendLine();
+        builder.AppendLine($"- Classification: `{Cell(report.DispatchCandidates.Classification)}`");
+        builder.AppendLine($"- Candidates: `{report.DispatchCandidates.CandidateCount}`");
+        builder.AppendLine($"- Registration-context candidates: `{report.DispatchCandidates.RegistrationContextCandidateCount}`");
+        builder.AppendLine($"- Candidate gaps: `{report.DispatchCandidates.GapCount}`");
+        builder.AppendLine($"- Fan-out or truncation observed: `{report.DispatchCandidates.FanOutOrTruncated.ToString().ToLowerInvariant()}`");
+        AppendDictionary(builder, "Candidates by source", report.DispatchCandidates.CandidatesBySource);
+        AppendDictionary(builder, "Candidates by bridge kind", report.DispatchCandidates.CandidatesByBridgeKind);
+        AppendDictionary(builder, "Candidate gaps by kind", report.DispatchCandidates.GapsByKind);
+        AppendList(builder, "Candidate rules", report.DispatchCandidates.RuleIds);
+        AppendList(builder, "Candidate limitations", report.DispatchCandidates.Limitations);
+
         builder.AppendLine("## Needs Review");
         builder.AppendLine();
         AppendRows(builder, report.NeedsReview, "| Kind | Source | Message | Evidence |", "| --- | --- | --- | --- |",
@@ -1645,6 +1688,11 @@ public static class CombinedDependencyReporter
         if (scannerVersion.Contains("python", StringComparison.OrdinalIgnoreCase))
         {
             return "python";
+        }
+
+        if (scannerVersion.Contains("swift", StringComparison.OrdinalIgnoreCase))
+        {
+            return "swift";
         }
 
         if (scannerVersion.Contains("tracemap", StringComparison.OrdinalIgnoreCase))
@@ -1863,6 +1911,19 @@ public static class CombinedDependencyReporter
         await using var command = connection.CreateCommand();
         command.CommandText = "select count(*) from sqlite_master where type = 'table' and name = $name;";
         command.Parameters.AddWithValue("$name", tableName);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0;
+    }
+
+    internal static async Task<bool> ColumnExistsAsync(
+        SqliteConnection connection,
+        string tableName,
+        string columnName,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select count(*) from pragma_table_info($table) where name = $column collate nocase;";
+        command.Parameters.AddWithValue("$table", tableName);
+        command.Parameters.AddWithValue("$column", columnName);
         return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0;
     }
 

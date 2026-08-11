@@ -66,9 +66,10 @@ public static class TraceMapCommand
             return command is "scan" or "report" or "database-design-review" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
+        using var commandOperation = TraceMapDiagnostics.StartCommand(command);
         try
         {
-            return command switch
+            var exitCode = command switch
             {
                 "scan" => await RunScanAsync(rest, output, error, cancellationToken),
                 "report" => await RunReportAsync(rest, output, error, cancellationToken),
@@ -99,13 +100,19 @@ public static class TraceMapCommand
                 "explorer" => await RunExplorerAsync(rest, output, error, cancellationToken),
                 _ => await UnknownCommandAsync(command, error)
             };
+            commandOperation.Complete(exitCode == 0
+                ? TraceMapDiagnosticOutcome.Succeeded
+                : TraceMapDiagnosticOutcome.Failed);
+            return exitCode;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            commandOperation.Complete(TraceMapDiagnosticOutcome.Cancelled);
             throw;
         }
         catch (Exception ex)
         {
+            commandOperation.Complete(TraceMapDiagnosticOutcome.Failed);
             await error.WriteLineAsync($"error: {ex.Message}");
             return 1;
         }
@@ -149,31 +156,39 @@ public static class TraceMapCommand
             return 1;
         }
 
-        var result = await ContractDeltaReducer.ReduceAsync(
-            new ReduceOptions(
-                indexPath,
-                contractDeltaPath,
-                outputPath,
-                format,
-                values.GetValueOrDefault("--scope"),
-                values.GetValueOrDefault("--source"),
-                values.GetValueOrDefault("--change-id"),
-                values.GetValueOrDefault("--kind"),
-                values.GetValueOrDefault("--surface"),
-                values.GetValueOrDefault("--endpoint"),
-                values.HasFlag("--include-paths"),
-                values.HasFlag("--include-reverse"),
-                values.HasFlag("--exit-code"),
-                ParsePositiveInt(values, "--max-findings", 100),
-                ParsePositiveInt(values, "--max-evidence-rows", 500),
-                ParsePositiveInt(values, "--max-paths-per-change", 5),
-                ParsePositiveInt(values, "--max-context-queries", 50),
-                ParsePositiveInt(values, "--max-gaps", 1000),
-                sqlSchemaDeltaPath,
-                values.GetValueOrDefault("--table"),
-                values.GetValueOrDefault("--column"),
-                values.GetValueOrDefault("--query-shape")),
-            cancellationToken);
+        ReduceResult result;
+        using (var reductionOperation = TraceMapDiagnostics.StartPhase("reduce", TraceMapDiagnosticPhases.Reduction, cancellationToken))
+        {
+            result = await ContractDeltaReducer.ReduceAsync(
+                new ReduceOptions(
+                    indexPath,
+                    contractDeltaPath,
+                    outputPath,
+                    format,
+                    values.GetValueOrDefault("--scope"),
+                    values.GetValueOrDefault("--source"),
+                    values.GetValueOrDefault("--change-id"),
+                    values.GetValueOrDefault("--kind"),
+                    values.GetValueOrDefault("--surface"),
+                    values.GetValueOrDefault("--endpoint"),
+                    values.HasFlag("--include-paths"),
+                    values.HasFlag("--include-reverse"),
+                    values.HasFlag("--exit-code"),
+                    ParsePositiveInt(values, "--max-findings", 100),
+                    ParsePositiveInt(values, "--max-evidence-rows", 500),
+                    ParsePositiveInt(values, "--max-paths-per-change", 5),
+                    ParsePositiveInt(values, "--max-context-queries", 50),
+                    ParsePositiveInt(values, "--max-gaps", 1000),
+                    sqlSchemaDeltaPath,
+                    values.GetValueOrDefault("--table"),
+                    values.GetValueOrDefault("--column"),
+                    values.GetValueOrDefault("--query-shape")),
+                cancellationToken);
+            reductionOperation.RecordItems(result.Report.Findings.Count);
+            reductionOperation.Complete(result.Report.ReportCoverage.Contains("partial", StringComparison.OrdinalIgnoreCase)
+                ? TraceMapDiagnosticOutcome.Partial
+                : TraceMapDiagnosticOutcome.Succeeded);
+        }
 
         await output.WriteLineAsync($"TraceMap reduce completed: {result.MarkdownPath ?? result.JsonPath}");
         await output.WriteLineAsync($"Changes analyzed: {result.Report.Summary.ChangeCount}");
@@ -213,24 +228,48 @@ public static class TraceMapCommand
             TargetFramework: values.GetValueOrDefault("--target-framework"),
             Restore: values.HasFlag("--restore"),
             BinlogPaths: values.GetMany("--binlog"),
-            BinlogCommitSha: values.GetValueOrDefault("--binlog-commit-sha")));
+            BinlogCommitSha: values.GetValueOrDefault("--binlog-commit-sha")), cancellationToken);
         var fullOutputPath = Path.GetFullPath(outputPath);
         var logsPath = Path.Combine(fullOutputPath, "logs");
         Directory.CreateDirectory(logsPath);
 
-        await ManifestWriter.WriteAsync(Path.Combine(fullOutputPath, "scan-manifest.json"), result.Manifest, cancellationToken);
-        await JsonlFactWriter.WriteAsync(Path.Combine(fullOutputPath, "facts.ndjson"), result.Facts, cancellationToken);
-        SqliteIndexWriter.Write(Path.Combine(fullOutputPath, "index.sqlite"), result.Manifest, result.Facts);
-        var staticPacket = SqlRunbookPacketBuilder.Build(result);
-        var validationComposition = await SqlValidationSummaryReader.ReadAsync(
-            sqlValidationSummaryPaths,
-            [SqlRunbookPacketBuilder.ValidationExpectedSource(result, staticPacket, evaluatedAt: sqlValidationAsOf)],
-            cancellationToken);
-        var packetCandidate = SqlRunbookPacketBuilder.Build(result, validationComposition);
-        await MarkdownReportWriter.WriteAsync(Path.Combine(fullOutputPath, "report.md"), result, packetCandidate, cancellationToken);
-        if (SqlRunbookPacketBuilder.HasMeaningfulContent(packetCandidate))
-            await SqlRunbookPacketWriter.WriteAsync(fullOutputPath, packetCandidate, cancellationToken);
-        await WriteAnalyzerLogAsync(Path.Combine(logsPath, "analyzer.log"), result, cancellationToken);
+        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ManifestWrite, cancellationToken))
+        {
+            await ManifestWriter.WriteAsync(Path.Combine(fullOutputPath, "scan-manifest.json"), result.Manifest, cancellationToken);
+            operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+        }
+        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.FactsWrite, cancellationToken))
+        {
+            await JsonlFactWriter.WriteAsync(Path.Combine(fullOutputPath, "facts.ndjson"), result.Facts, cancellationToken);
+            operation.RecordItems(result.Facts.Count);
+            operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+        }
+        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.IndexWrite, cancellationToken))
+        {
+            SqliteIndexWriter.Write(Path.Combine(fullOutputPath, "index.sqlite"), result.Manifest, result.Facts);
+            operation.RecordItems(result.Facts.Count);
+            operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+        }
+        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ReportWrite, cancellationToken))
+        {
+            var staticPacket = SqlRunbookPacketBuilder.Build(result);
+            var validationComposition = await SqlValidationSummaryReader.ReadAsync(
+                sqlValidationSummaryPaths,
+                [SqlRunbookPacketBuilder.ValidationExpectedSource(result, staticPacket, evaluatedAt: sqlValidationAsOf)],
+                cancellationToken);
+            var packetCandidate = SqlRunbookPacketBuilder.Build(result, validationComposition);
+            await MarkdownReportWriter.WriteAsync(Path.Combine(fullOutputPath, "report.md"), result, packetCandidate, cancellationToken);
+            if (SqlRunbookPacketBuilder.HasMeaningfulContent(packetCandidate))
+                await SqlRunbookPacketWriter.WriteAsync(fullOutputPath, packetCandidate, cancellationToken);
+            operation.Complete(validationComposition.Gaps.Count > 0
+                ? TraceMapDiagnosticOutcome.Partial
+                : TraceMapDiagnosticOutcome.Succeeded);
+        }
+        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.AnalyzerLogWrite, cancellationToken))
+        {
+            await WriteAnalyzerLogAsync(Path.Combine(logsPath, "analyzer.log"), result, cancellationToken);
+            operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+        }
 
         await output.WriteLineAsync($"TraceMap scan completed: {fullOutputPath}");
         await output.WriteLineAsync($"Facts written: {result.Facts.Count}");
@@ -262,9 +301,15 @@ public static class TraceMapCommand
             return 1;
         }
 
-        var result = await CombinedDependencyReporter.WriteAsync(
-            new CombinedDependencyReportOptions(indexPath, outputPath, format),
-            cancellationToken);
+        CombinedDependencyReportResult result;
+        using (var reportOperation = TraceMapDiagnostics.StartPhase("report", TraceMapDiagnosticPhases.CombinedReport, cancellationToken))
+        {
+            result = await CombinedDependencyReporter.WriteAsync(
+                new CombinedDependencyReportOptions(indexPath, outputPath, format),
+                cancellationToken);
+            reportOperation.RecordItems(result.Report.Summary.FactCount);
+            reportOperation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+        }
 
         await output.WriteLineAsync($"TraceMap report completed: {result.MarkdownPath ?? result.JsonPath}");
         await output.WriteLineAsync($"Sources: {result.Report.Summary.SourceCount}");
@@ -2211,6 +2256,10 @@ public static class TraceMapCommand
               index.sqlite
               report.md
               logs/analyzer.log
+
+            Truthfulness failures (exit code 1; no scan artifacts are written):
+              SourceInventoryIncomplete          An in-scope inventory entry could not be read.
+              SourceSnapshotChangedDuringScan    Protected input bytes changed or disappeared during analysis.
             """;
     }
 

@@ -17,19 +17,37 @@ internal static class StaticDispatchCandidateBuilder
         IReadOnlyDictionary<string, StaticDispatchCandidateNode> nodes,
         IEnumerable<StaticDispatchRelationshipEdge> relationships,
         Func<string, string?>? extractorVersionFor = null,
-        StaticDispatchCandidateBuildOptions? options = null)
+        StaticDispatchCandidateBuildOptions? options = null,
+        IEnumerable<StaticDispatchRegistrationFact>? registrations = null,
+        IEnumerable<StaticDispatchCallTarget>? callTargets = null,
+        IEnumerable<StaticDispatchSourceContext>? sourceContexts = null)
     {
         var candidateLimit = Math.Max(1, options?.CandidateLimit ?? DefaultCandidateLimit);
         var maxOverrideDepth = Math.Clamp(options?.MaxOverrideDepth ?? DefaultMaxOverrideDepth, 1, DefaultMaxOverrideDepth);
         extractorVersionFor ??= static _ => null;
         var candidates = new List<StaticDispatchCandidateEdge>();
         var gaps = new List<StaticDispatchCandidateGap>();
-        var memberRelationships = relationships
+        var allRelationships = relationships.ToArray();
+        var registrationFacts = registrations?
+            .OrderBy(registration => registration.FactId, StringComparer.Ordinal)
+            .ToArray() ?? [];
+        var calls = callTargets?
+            .OrderBy(call => call.FactId, StringComparer.Ordinal)
+            .ToArray() ?? [];
+        var sources = sourceContexts?
+            .OrderBy(source => source.SourceIndexId, StringComparer.Ordinal)
+            .ToArray() ?? [];
+        var registrationIndex = BuildRegistrationIndex(registrationFacts);
+        var compatibleRegistrationFactIds = new HashSet<string>(StringComparer.Ordinal);
+        var memberRelationshipEvidence = allRelationships
             .Where(edge => IsMemberCandidateRelationship(edge.OriginalRelationshipKind))
             .Where(edge => nodes.TryGetValue(edge.FromNodeId, out var implementation)
                 && nodes.TryGetValue(edge.ToNodeId, out var abstraction)
                 && IsMethodNode(implementation)
                 && IsMethodNode(abstraction))
+            .ToArray();
+        var memberRelationships = memberRelationshipEvidence
+            .Where(HasVerifiedMemberIdentity)
             .ToArray();
         var interfaceRelationships = memberRelationships
             .Where(edge => edge.OriginalRelationshipKind == "ImplementsInterfaceMember")
@@ -46,7 +64,19 @@ internal static class StaticDispatchCandidateBuilder
 
         foreach (var group in GroupRelationshipsByAbstraction(interfaceRelationships, nodes))
         {
-            var sortedRelationships = SortRelationships(group, nodes).ToArray();
+            var sortedRelationships = SortRelationships(group, nodes, registrationIndex).ToArray();
+            foreach (var relationship in sortedRelationships)
+            {
+                AddCompatibleRegistrationFactIds(
+                    compatibleRegistrationFactIds,
+                    CandidateRegistrationKey(
+                        nodes[relationship.ToNodeId].SourceIndexId,
+                        relationship.TargetContainingSymbolId,
+                        relationship.SourceContainingSymbolId),
+                    nodes[relationship.ToNodeId],
+                    nodes[relationship.FromNodeId],
+                    registrationIndex);
+            }
             foreach (var relationship in sortedRelationships.Take(candidateLimit))
             {
                 candidates.Add(CreateCandidate(
@@ -65,7 +95,29 @@ internal static class StaticDispatchCandidateBuilder
         foreach (var group in GroupRelationshipsByAbstraction(overrideRelationships, nodes))
         {
             var overrideResult = BuildOverrideCandidatePaths(group.Key, overrideRelationshipsByTarget, nodes, maxOverrideDepth);
-            foreach (var path in overrideResult.Paths.Take(candidateLimit))
+            var sortedPaths = overrideResult.Paths
+                .OrderBy(path => RegistrationRank(
+                    CandidateRegistrationKey(group.Key, path, nodes),
+                    nodes[group.Key],
+                    nodes[path.CandidateNodeId],
+                    registrationIndex))
+                .ThenBy(path => nodes[path.CandidateNodeId].SourceLabel, StringComparer.Ordinal)
+                .ThenBy(path => nodes[path.CandidateNodeId].DisplayName, StringComparer.Ordinal)
+                .ThenBy(path => path.LeafRelationship.FilePath, StringComparer.Ordinal)
+                .ThenBy(path => path.LeafRelationship.StartLine ?? 0)
+                .ThenBy(path => path.CandidateNodeId, StringComparer.Ordinal)
+                .ToArray();
+            foreach (var path in sortedPaths)
+            {
+                AddCompatibleRegistrationFactIds(
+                    compatibleRegistrationFactIds,
+                    CandidateRegistrationKey(group.Key, path, nodes),
+                    nodes[group.Key],
+                    nodes[path.CandidateNodeId],
+                    registrationIndex);
+            }
+
+            foreach (var path in sortedPaths.Take(candidateLimit))
             {
                 candidates.Add(CreateCandidate(
                     nodes,
@@ -77,11 +129,625 @@ internal static class StaticDispatchCandidateBuilder
                     "override-candidate"));
             }
 
-            AddFanOutGapIfNeeded(gaps, overrideResult.Paths.Count, candidateLimit, group.Key, nodes, extractorVersionFor);
+            AddFanOutGapIfNeeded(gaps, sortedPaths.Length, candidateLimit, group.Key, nodes, extractorVersionFor);
             AddOverrideDepthGapIfNeeded(gaps, overrideResult.TruncatedByDepth, maxOverrideDepth, group.Key, nodes, extractorVersionFor);
         }
 
-        return new StaticDispatchCandidateBuildResult(candidates, gaps);
+        ApplyRegistrationContext(
+            candidates,
+            gaps,
+            nodes,
+            registrationFacts,
+            registrationIndex,
+            compatibleRegistrationFactIds,
+            allRelationships.ToDictionary(relationship => relationship.EdgeId, StringComparer.Ordinal),
+            extractorVersionFor);
+        ApplyCoverageAndMissingMemberContext(
+            candidates,
+            gaps,
+            nodes,
+            allRelationships,
+            memberRelationships,
+            memberRelationshipEvidence,
+            registrationFacts,
+            calls,
+            sources,
+            candidateLimit,
+            extractorVersionFor);
+
+        return new StaticDispatchCandidateBuildResult(
+            candidates
+                .OrderBy(candidate => EvidenceTierRank(candidate.EvidenceTier))
+                .ThenBy(candidate => RegistrationContextRank(candidate.RegistrationContext))
+                .ThenBy(candidate => candidate.BridgeKind, StringComparer.Ordinal)
+                .ThenBy(candidate => nodes[candidate.CandidateSymbolId].SourceLabel, StringComparer.Ordinal)
+                .ThenBy(candidate => nodes[candidate.CandidateSymbolId].DisplayName, StringComparer.Ordinal)
+                .ThenBy(candidate => candidate.FilePath, StringComparer.Ordinal)
+                .ThenBy(candidate => candidate.StartLine ?? 0)
+                .ThenBy(candidate => candidate.EndLine ?? 0)
+                .ThenBy(candidate => candidate.CandidateSymbolId, StringComparer.Ordinal)
+                .ThenBy(candidate => candidate.CandidateId, StringComparer.Ordinal)
+                .ToArray(),
+            gaps
+                .OrderBy(gap => gap.GapKind, StringComparer.Ordinal)
+                .ThenBy(gap => gap.SourceLabel, StringComparer.Ordinal)
+                .ThenBy(gap => gap.FilePath, StringComparer.Ordinal)
+                .ThenBy(gap => gap.StartLine ?? 0)
+                .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
+                .ToArray());
+    }
+
+    private static void ApplyCoverageAndMissingMemberContext(
+        List<StaticDispatchCandidateEdge> candidates,
+        List<StaticDispatchCandidateGap> gaps,
+        IReadOnlyDictionary<string, StaticDispatchCandidateNode> nodes,
+        IReadOnlyList<StaticDispatchRelationshipEdge> allRelationships,
+        IReadOnlyList<StaticDispatchRelationshipEdge> memberRelationships,
+        IReadOnlyList<StaticDispatchRelationshipEdge> memberRelationshipEvidence,
+        IReadOnlyList<StaticDispatchRegistrationFact> registrations,
+        IReadOnlyList<StaticDispatchCallTarget> calls,
+        IReadOnlyList<StaticDispatchSourceContext> sources,
+        int candidateLimit,
+        Func<string, string?> extractorVersionFor)
+    {
+        var relevantSourceIds = allRelationships.Select(relationship => nodes.GetValueOrDefault(relationship.FromNodeId)?.SourceIndexId)
+            .Concat(registrations.Select(registration => registration.SourceIndexId))
+            .Concat(calls.Select(call => call.SourceIndexId))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Cast<string>()
+            .ToHashSet(StringComparer.Ordinal);
+        var reducedSourceIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var source in sources.Where(source => relevantSourceIds.Contains(source.SourceIndexId)))
+        {
+            var reason = SourceReductionReason(source);
+            if (reason is null)
+            {
+                continue;
+            }
+
+            reducedSourceIds.Add(source.SourceIndexId);
+            gaps.Add(CreateContextGap(
+                "DispatchCandidateReducedCoverage",
+                reason,
+                "Static dispatch candidate derivation has reduced or unsupported source coverage; candidate absence is not a clean conclusion.",
+                source.SourceIndexId,
+                source.SourceLabel,
+                null,
+                source.CommitSha,
+                source.ScannerVersion,
+                [],
+                null,
+                null,
+                null));
+        }
+
+        var missingExtractorFacts = allRelationships
+            .Where(relationship => string.IsNullOrWhiteSpace(relationship.ExtractorVersion))
+            .SelectMany(relationship => relationship.SupportingFactIds.Select(factId => new
+            {
+                Source = nodes.GetValueOrDefault(relationship.FromNodeId),
+                FactId = factId,
+                EvidenceKind = "relationship"
+            }))
+            .Where(item => item.Source is not null)
+            .Select(item => new
+            {
+                SourceIndexId = item.Source!.SourceIndexId,
+                item.Source.SourceLabel,
+                item.Source.CommitSha,
+                item.FactId,
+                item.EvidenceKind
+            })
+            .Concat(calls
+                .Where(call => string.IsNullOrWhiteSpace(call.ExtractorVersion))
+                .Select(call => new
+                {
+                    call.SourceIndexId,
+                    call.SourceLabel,
+                    call.CommitSha,
+                    FactId = call.FactId,
+                    EvidenceKind = "call"
+                }))
+            .Concat(registrations
+                .Where(registration => string.IsNullOrWhiteSpace(registration.ExtractorVersion))
+                .Select(registration => new
+                {
+                    registration.SourceIndexId,
+                    registration.SourceLabel,
+                    registration.CommitSha,
+                    FactId = registration.FactId,
+                    EvidenceKind = "registration"
+                }))
+            .GroupBy(item => item.SourceIndexId, StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal);
+        var missingExtractorFactIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var group in missingExtractorFacts)
+        {
+            var first = group.OrderBy(item => item.FactId, StringComparer.Ordinal).First();
+            var callEvidence = group.Where(item => item.EvidenceKind == "call")
+                .Select(item => item.FactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+            var relationshipEvidence = group.Where(item => item.EvidenceKind == "relationship")
+                .Select(item => item.FactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+            var registrationEvidence = group.Where(item => item.EvidenceKind == "registration")
+                .Select(item => item.FactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+            missingExtractorFactIds.UnionWith(callEvidence);
+            missingExtractorFactIds.UnionWith(relationshipEvidence);
+            missingExtractorFactIds.UnionWith(registrationEvidence);
+            gaps.Add(CreateContextGap(
+                "DispatchCandidateReducedCoverage",
+                "supporting-fact-extractor-identity-unavailable",
+                "Static dispatch supporting evidence lacks per-fact extractor identity; directly supported candidates are review-only and candidate absence is not conclusive.",
+                group.Key,
+                first.SourceLabel,
+                null,
+                first.CommitSha,
+                null,
+                registrationEvidence.Take(candidateLimit)
+                    .Concat(relationshipEvidence.Take(candidateLimit))
+                    .Concat(callEvidence.Take(candidateLimit))
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray(),
+                null,
+                null,
+                null) with
+            {
+                GroupedEvidenceCount = callEvidence.Length + relationshipEvidence.Length + registrationEvidence.Length,
+                SupportingFactLimit = candidateLimit,
+                CallEvidenceCount = callEvidence.Length,
+                RelationshipEvidenceCount = relationshipEvidence.Length,
+                RegistrationEvidenceCount = registrationEvidence.Length
+            });
+        }
+
+        foreach (var relationship in memberRelationshipEvidence.Where(relationship => !HasVerifiedMemberIdentity(relationship)))
+        {
+            var source = nodes[relationship.FromNodeId];
+            gaps.Add(CreateContextGap(
+                "DispatchCandidateIdentityUnverified",
+                "member-relationship-identity-unverified",
+                "Member-level dispatch relationship evidence lacks canonical source or target symbol identity; no traversable candidate was created from display text.",
+                source.SourceIndexId,
+                source.SourceLabel,
+                relationship.ToNodeId,
+                source.CommitSha,
+                relationship.ExtractorVersion ?? extractorVersionFor(source.SourceIndexId),
+                relationship.SupportingFactIds,
+                relationship.FilePath,
+                relationship.StartLine,
+                relationship.EndLine));
+        }
+
+        for (var index = 0; index < candidates.Count; index++)
+        {
+            var candidate = candidates[index];
+            var hasMissingExtractorSupport = candidate.SupportingFactIds
+                .Concat(candidate.SupportingRegistrationFactIds)
+                .Any(missingExtractorFactIds.Contains);
+            if (!reducedSourceIds.Contains(candidate.SourceIndexId) && !hasMissingExtractorSupport)
+            {
+                continue;
+            }
+
+            candidates[index] = candidate with
+            {
+                State = StaticDispatchCandidateStates.WeakerCandidate,
+                EvidenceTier = WeakestEvidenceTier([candidate.EvidenceTier, EvidenceTiers.Tier4Unknown]),
+                Limitations = candidate.Limitations
+                    .Append(reducedSourceIds.Contains(candidate.SourceIndexId)
+                        ? "Source coverage is reduced or unsupported; this candidate is review context only and candidate absence is not conclusive."
+                        : "Direct supporting evidence lacks extractor identity; this candidate is review context only.")
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray()
+            };
+        }
+
+        var memberTargets = memberRelationships
+            .Select(relationship => relationship.ToNodeId)
+            .ToHashSet(StringComparer.Ordinal);
+        var unverifiedCallTargetNodeIds = new HashSet<string>(StringComparer.Ordinal);
+        var typeRelationships = allRelationships
+            .Where(relationship => IsTypeCandidateRelationship(relationship.OriginalRelationshipKind))
+            .ToArray();
+        foreach (var call in calls)
+        {
+            if (memberTargets.Contains(call.TargetNodeId))
+            {
+                var matchingMemberRelationships = memberRelationships
+                    .Where(relationship => string.Equals(relationship.ToNodeId, call.TargetNodeId, StringComparison.Ordinal))
+                    .ToArray();
+                if (string.IsNullOrWhiteSpace(call.TargetSymbolId)
+                    || string.IsNullOrWhiteSpace(call.TargetContainingSymbolId)
+                    || !matchingMemberRelationships.Any(relationship =>
+                        string.Equals(relationship.TargetSymbolId, call.TargetSymbolId, StringComparison.Ordinal)
+                        && string.Equals(relationship.TargetContainingSymbolId, call.TargetContainingSymbolId, StringComparison.Ordinal)))
+                {
+                    unverifiedCallTargetNodeIds.Add(call.TargetNodeId);
+                    var supportingRegistrationFactIds = candidates
+                        .Where(candidate => string.Equals(candidate.AbstractionSymbolId, call.TargetNodeId, StringComparison.Ordinal))
+                        .SelectMany(candidate => candidate.SupportingRegistrationFactIds)
+                        .Distinct(StringComparer.Ordinal);
+                    gaps.Add(CreateContextGap(
+                        "DispatchCandidateIdentityUnverified",
+                        "call-target-identity-unverified",
+                        "Call evidence targeting a dispatch abstraction lacks matching canonical member/type identity; relationship-backed candidates were withheld for that target.",
+                        call.SourceIndexId,
+                        call.SourceLabel,
+                        call.TargetNodeId,
+                        call.CommitSha,
+                        call.ExtractorVersion ?? extractorVersionFor(call.SourceIndexId),
+                        [
+                            call.FactId,
+                            .. matchingMemberRelationships.SelectMany(relationship => relationship.SupportingFactIds),
+                            .. supportingRegistrationFactIds
+                        ],
+                        call.FilePath,
+                        call.StartLine,
+                        call.EndLine));
+                }
+
+                continue;
+            }
+
+            var matchingTypeRelationships = typeRelationships
+                .Where(relationship => nodes.TryGetValue(relationship.ToNodeId, out var targetType)
+                    && targetType.SourceIndexId == call.SourceIndexId
+                    && TypeRelationshipMatchesCall(relationship, targetType, call))
+                .OrderBy(relationship => relationship.EdgeId, StringComparer.Ordinal)
+                .ToArray();
+            if (matchingTypeRelationships.Length == 0)
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(call.TargetSymbolId)
+                || string.IsNullOrWhiteSpace(call.TargetContainingSymbolId)
+                || matchingTypeRelationships.Any(relationship =>
+                    string.IsNullOrWhiteSpace(relationship.SourceSymbolId)
+                    || string.IsNullOrWhiteSpace(relationship.TargetSymbolId)))
+            {
+                gaps.Add(CreateContextGap(
+                    "DispatchCandidateIdentityUnverified",
+                    "candidate-identity-unverified",
+                    "Type-level dispatch context was present, but source-local canonical member/type identity was unavailable; no candidate was joined by display text.",
+                    call.SourceIndexId,
+                    call.SourceLabel,
+                    call.TargetNodeId,
+                    call.CommitSha,
+                    call.ExtractorVersion ?? extractorVersionFor(call.SourceIndexId),
+                    [call.FactId, .. matchingTypeRelationships.SelectMany(relationship => relationship.SupportingFactIds)],
+                    call.FilePath,
+                    call.StartLine,
+                    call.EndLine));
+                continue;
+            }
+
+            gaps.Add(CreateContextGap(
+                "MemberCandidateUnavailable",
+                "type-level-relationship-only",
+                "Type-level implementation or inheritance evidence exists, but matching member-level relationship evidence is unavailable; no type-only candidate edge was inferred.",
+                call.SourceIndexId,
+                call.SourceLabel,
+                call.TargetNodeId,
+                call.CommitSha,
+                call.ExtractorVersion ?? extractorVersionFor(call.SourceIndexId),
+                [call.FactId, .. matchingTypeRelationships.SelectMany(relationship => relationship.SupportingFactIds)],
+                call.FilePath,
+                call.StartLine,
+                call.EndLine));
+        }
+
+        var callFactIds = calls.Select(call => call.FactId).ToHashSet(StringComparer.Ordinal);
+        var registrationFactIds = registrations.Select(registration => registration.FactId).ToHashSet(StringComparer.Ordinal);
+        ConsolidateCallContextGaps(
+            gaps,
+            candidateLimit,
+            callFactIds,
+            registrationFactIds);
+        for (var index = 0; index < gaps.Count; index++)
+        {
+            var gap = gaps[index];
+            if (gap.GapKind == "DispatchCandidateFanOut"
+                && gap.NodeId is not null
+                && unverifiedCallTargetNodeIds.Contains(gap.NodeId))
+            {
+                var matchingIdentityGaps = gaps
+                    .Where(candidateGap => candidateGap.GapKind == "DispatchCandidateIdentityUnverified"
+                        && string.Equals(candidateGap.SourceIndexId, gap.SourceIndexId, StringComparison.Ordinal)
+                        && string.Equals(candidateGap.NodeId, gap.NodeId, StringComparison.Ordinal))
+                    .ToArray();
+                var supportingFactIds = matchingIdentityGaps
+                    .SelectMany(candidateGap => candidateGap.SupportingFactIds)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray();
+                var abstractionDisplay = nodes.GetValueOrDefault(gap.NodeId)?.DisplayName ?? "the abstraction";
+                gaps[index] = gap with
+                {
+                    Message = $"Static dispatch candidate derivation found {gap.CandidateCount} candidates for `{abstractionDisplay}`, but all candidates were withheld because at least one call identity was unverified; verified relationship evidence remains non-traversable for this abstraction and the configured candidate cap is {gap.CandidateLimit}.",
+                    SupportingFactIds = supportingFactIds,
+                    GroupedEvidenceCount = matchingIdentityGaps.Sum(item => item.GroupedEvidenceCount ?? 1),
+                    SupportingFactLimit = candidateLimit,
+                    CallEvidenceCount = matchingIdentityGaps.Sum(item => item.CallEvidenceCount ?? item.SupportingFactIds.Count(callFactIds.Contains)),
+                    RelationshipEvidenceCount = matchingIdentityGaps.Sum(item => item.RelationshipEvidenceCount ?? item.SupportingFactIds.Count(value => !callFactIds.Contains(value) && !registrationFactIds.Contains(value))),
+                    RegistrationEvidenceCount = matchingIdentityGaps.Sum(item => item.RegistrationEvidenceCount ?? item.SupportingFactIds.Count(registrationFactIds.Contains))
+                };
+            }
+        }
+
+        candidates.RemoveAll(candidate => unverifiedCallTargetNodeIds.Contains(candidate.AbstractionSymbolId));
+    }
+
+    private static void ConsolidateCallContextGaps(
+        List<StaticDispatchCandidateGap> gaps,
+        int supportingFactLimit,
+        IReadOnlySet<string> callFactIds,
+        IReadOnlySet<string> registrationFactIds)
+    {
+        var grouped = gaps
+            .Where(gap => gap.Reason is "call-target-identity-unverified" or "type-level-relationship-only" or "candidate-identity-unverified" or "member-relationship-identity-unverified")
+            .GroupBy(gap => new
+            {
+                gap.SourceIndexId,
+                NodeId = gap.Reason == "member-relationship-identity-unverified" ? null : gap.NodeId,
+                gap.Reason
+            })
+            .ToArray();
+        foreach (var group in grouped)
+        {
+            var ordered = group
+                .OrderBy(gap => gap.FilePath, StringComparer.Ordinal)
+                .ThenBy(gap => gap.StartLine ?? 0)
+                .ThenBy(gap => gap.GapId, StringComparer.Ordinal)
+                .ToArray();
+            var first = ordered[0];
+            var allSupportingFactIds = ordered
+                .SelectMany(gap => gap.SupportingFactIds)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            var registrationEvidence = allSupportingFactIds.Where(registrationFactIds.Contains).ToArray();
+            var relationshipEvidence = allSupportingFactIds
+                .Where(value => !registrationFactIds.Contains(value) && !callFactIds.Contains(value))
+                .ToArray();
+            var callEvidence = allSupportingFactIds.Where(callFactIds.Contains).ToArray();
+            var supportingFactIds = registrationEvidence.Take(supportingFactLimit)
+                .Concat(relationshipEvidence.Take(supportingFactLimit))
+                .Concat(callEvidence.Take(supportingFactLimit))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            gaps.RemoveAll(gap => group.Contains(gap));
+            gaps.Add(CreateContextGap(
+                first.GapKind,
+                first.Reason!,
+                $"{first.Message} {ordered.Length} evidence row(s) were summarized; call, relationship, and registration supporting facts are each capped at {supportingFactLimit}, with exact pre-cap counts preserved.",
+                first.SourceIndexId!,
+                first.SourceLabel!,
+                group.Key.NodeId,
+                first.CommitSha,
+                first.ExtractorVersion,
+                supportingFactIds,
+                first.FilePath,
+                first.StartLine,
+                first.EndLine) with
+            {
+                GroupedEvidenceCount = ordered.Length,
+                SupportingFactLimit = supportingFactLimit,
+                CallEvidenceCount = callEvidence.Length,
+                RelationshipEvidenceCount = relationshipEvidence.Length,
+                RegistrationEvidenceCount = registrationEvidence.Length
+            });
+        }
+    }
+
+    private static StaticDispatchCandidateGap CreateContextGap(
+        string gapKind,
+        string reason,
+        string message,
+        string sourceIndexId,
+        string sourceLabel,
+        string? nodeId,
+        string? commitSha,
+        string? extractorVersion,
+        IReadOnlyList<string> supportingFactIds,
+        string? filePath,
+        int? startLine,
+        int? endLine) => new(
+            $"gap:dispatch:context:{Hash($"{gapKind}:{sourceIndexId}:{nodeId}:{reason}:{string.Join("|", supportingFactIds.OrderBy(value => value, StringComparer.Ordinal))}", 16)}",
+            gapKind,
+            StaticDispatchCandidateStates.CandidateGap,
+            message,
+            sourceIndexId,
+            sourceLabel,
+            nodeId,
+            GapRuleId,
+            EvidenceTiers.Tier4Unknown,
+            filePath,
+            startLine,
+            reason,
+            commitSha,
+            extractorVersion,
+            "dispatch-candidate-context",
+            endLine,
+            supportingFactIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
+
+    private static string? SourceReductionReason(StaticDispatchSourceContext source)
+    {
+        if (!string.Equals(source.Language, "csharp", StringComparison.OrdinalIgnoreCase))
+        {
+            return "adapter-member-relationships-unavailable";
+        }
+
+        if (!string.Equals(source.AnalysisLevel, "Level1SemanticAnalysis", StringComparison.Ordinal)
+            || !string.Equals(source.BuildStatus, "Succeeded", StringComparison.Ordinal))
+        {
+            return "reduced-semantic-coverage";
+        }
+
+        if (string.IsNullOrWhiteSpace(source.CommitSha) || source.CommitSha == "unknown")
+        {
+            return "commit-identity-unverified";
+        }
+
+        return string.IsNullOrWhiteSpace(source.ScannerVersion) ? "extractor-identity-unavailable" : null;
+    }
+
+    private static bool IsTypeCandidateRelationship(string? originalRelationshipKind) =>
+        originalRelationshipKind is "ImplementsInterface" or "InheritsFrom" or "ExtendsInterface";
+
+    private static bool HasVerifiedMemberIdentity(StaticDispatchRelationshipEdge relationship) =>
+        !string.IsNullOrWhiteSpace(relationship.SourceSymbolId)
+        && !string.IsNullOrWhiteSpace(relationship.TargetSymbolId);
+
+    private static bool TypeRelationshipMatchesCall(
+        StaticDispatchRelationshipEdge relationship,
+        StaticDispatchCandidateNode targetType,
+        StaticDispatchCallTarget call)
+    {
+        if (!string.IsNullOrWhiteSpace(call.TargetContainingSymbolId)
+            && !string.IsNullOrWhiteSpace(relationship.TargetSymbolId))
+        {
+            return string.Equals(call.TargetContainingSymbolId, relationship.TargetSymbolId, StringComparison.Ordinal);
+        }
+
+        return string.Equals(ContainingTypeDisplay(call.TargetDisplayName), targetType.DisplayName, StringComparison.Ordinal);
+    }
+
+    private static void ApplyRegistrationContext(
+        List<StaticDispatchCandidateEdge> candidates,
+        List<StaticDispatchCandidateGap> gaps,
+        IReadOnlyDictionary<string, StaticDispatchCandidateNode> nodes,
+        IReadOnlyList<StaticDispatchRegistrationFact> registrations,
+        IReadOnlyDictionary<RegistrationCompatibilityKey, StaticDispatchRegistrationFact[]> registrationIndex,
+        IReadOnlySet<string> compatibleRegistrationFactIds,
+        IReadOnlyDictionary<string, StaticDispatchRelationshipEdge> relationshipsById,
+        Func<string, string?> extractorVersionFor)
+    {
+        if (registrations.Count == 0)
+        {
+            return;
+        }
+
+        var annotatedRegistrationFactIds = new HashSet<string>(StringComparer.Ordinal);
+        for (var index = 0; index < candidates.Count; index++)
+        {
+            var candidate = candidates[index];
+            var abstraction = nodes[candidate.AbstractionSymbolId];
+            var implementation = nodes[candidate.CandidateSymbolId];
+            var registrationKey = CandidateRegistrationKey(candidate, relationshipsById);
+            var matchingRegistrations = registrationKey is not null
+                && registrationIndex.TryGetValue(registrationKey.Value, out var indexedRegistrations)
+                    ? indexedRegistrations
+                        .Where(registration => RegistrationDisplaysMatch(registration, abstraction, implementation))
+                        .ToArray()
+                    : [];
+            if (matchingRegistrations.Length == 0)
+            {
+                continue;
+            }
+
+            var registrationFactIds = matchingRegistrations
+                .Select(registration => registration.FactId)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            annotatedRegistrationFactIds.UnionWith(registrationFactIds);
+            var supportingFactIds = candidate.SupportingFactIds
+                .Concat(registrationFactIds)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            var limitations = candidate.Limitations
+                .Append("Static DI registration context supports review ordering only and does not prove runtime binding, registration order, object lifetime, or execution.")
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            candidates[index] = candidate with
+            {
+                CandidateId = $"dispatch-candidate:{Hash($"{candidate.CandidateId}:{string.Join("|", registrationFactIds)}", 16)}",
+                State = StaticDispatchCandidateStates.WeakerCandidate,
+                EvidenceTier = WeakestEvidenceTier([
+                    candidate.EvidenceTier,
+                    .. matchingRegistrations.Select(registration => registration.EvidenceTier)
+                ]),
+                SupportingFactIds = supportingFactIds,
+                SupportingRegistrationFactIds = registrationFactIds,
+                RegistrationContext = StaticDispatchRegistrationContexts.Candidate,
+                Limitations = limitations
+            };
+        }
+
+        var methodNodesByContainingType = nodes.Values
+            .Where(IsMethodNode)
+            .Select(node => (Node: node, ContainingType: ContainingTypeDisplay(node.DisplayName)))
+            .Where(item => !string.IsNullOrWhiteSpace(item.ContainingType))
+            .GroupBy(
+                item => new RegistrationServiceDisplayKey(item.Node.SourceIndexId, NormalizeDisplayName(item.ContainingType ?? string.Empty)),
+                item => item.Node)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderBy(node => node.DisplayName, StringComparer.Ordinal)
+                    .ThenBy(node => node.NodeId, StringComparer.Ordinal)
+                    .ToArray());
+        foreach (var registration in registrations)
+        {
+            if (!methodNodesByContainingType.TryGetValue(
+                    new RegistrationServiceDisplayKey(registration.SourceIndexId, NormalizeDisplayName(registration.ServiceType)),
+                    out var matchingAbstractions))
+            {
+                continue;
+            }
+
+            if (annotatedRegistrationFactIds.Contains(registration.FactId)
+                || compatibleRegistrationFactIds.Contains(registration.FactId))
+            {
+                continue;
+            }
+
+            var (gapKind, reason, message) = registration.Shape switch
+            {
+                StaticDispatchRegistrationShapes.OpenGeneric => (
+                    "GenericCandidateNeedsReview",
+                    "open-generic-registration",
+                    "Open or partially closed registration evidence requires call-site generic closure and remains review context; no dispatch candidate was selected from it."),
+                StaticDispatchRegistrationShapes.Unsupported => (
+                    "UnsupportedRegistrationShape",
+                    "unsupported-registration-shape",
+                    "The registration uses a factory, keyed/named, instance, scanning, custom-container, or otherwise unsupported shape; no dispatch candidate was selected from it."),
+                StaticDispatchRegistrationShapes.ObservationOnly => (
+                    "RegistrationCompatibilityUnproven",
+                    "registration-observation-only",
+                    "Registration evidence is syntax-only or otherwise insufficient to prove compatibility; no dispatch candidate was selected from it."),
+                _ => (
+                    "RegistrationCompatibilityUnproven",
+                    "registration-compatibility-unproven",
+                    "Registration evidence does not agree with a relationship-backed implementation candidate; no dispatch candidate was created from registration evidence alone.")
+            };
+            foreach (var abstraction in matchingAbstractions)
+            {
+                gaps.Add(new StaticDispatchCandidateGap(
+                    $"gap:dispatch:registration:{Hash($"{gapKind}:{registration.FactId}:{abstraction.NodeId}", 16)}",
+                    gapKind,
+                    StaticDispatchCandidateStates.CandidateGap,
+                    message,
+                    registration.SourceIndexId,
+                    registration.SourceLabel,
+                    abstraction.NodeId,
+                    GapRuleId,
+                    EvidenceTiers.Tier4Unknown,
+                    registration.FilePath,
+                    registration.StartLine,
+                    reason,
+                    registration.CommitSha,
+                    registration.ExtractorVersion ?? extractorVersionFor(registration.SourceIndexId),
+                    "dependency-registration-context",
+                    registration.EndLine,
+                    [registration.FactId]));
+            }
+        }
     }
 
     private static IOrderedEnumerable<IGrouping<string, StaticDispatchRelationshipEdge>> GroupRelationshipsByAbstraction(
@@ -97,10 +763,19 @@ internal static class StaticDispatchCandidateBuilder
 
     private static IEnumerable<StaticDispatchRelationshipEdge> SortRelationships(
         IEnumerable<StaticDispatchRelationshipEdge> relationships,
-        IReadOnlyDictionary<string, StaticDispatchCandidateNode> nodes)
+        IReadOnlyDictionary<string, StaticDispatchCandidateNode> nodes,
+        IReadOnlyDictionary<RegistrationCompatibilityKey, StaticDispatchRegistrationFact[]>? registrationIndex = null)
     {
         return relationships
-            .OrderBy(edge => nodes[edge.FromNodeId].SourceLabel, StringComparer.Ordinal)
+            .OrderBy(edge => RegistrationRank(
+                CandidateRegistrationKey(
+                    nodes[edge.ToNodeId].SourceIndexId,
+                    edge.TargetContainingSymbolId,
+                    edge.SourceContainingSymbolId),
+                nodes[edge.ToNodeId],
+                nodes[edge.FromNodeId],
+                registrationIndex))
+            .ThenBy(edge => nodes[edge.FromNodeId].SourceLabel, StringComparer.Ordinal)
             .ThenBy(edge => nodes[edge.FromNodeId].DisplayName, StringComparer.Ordinal)
             .ThenBy(edge => edge.FilePath, StringComparer.Ordinal)
             .ThenBy(edge => edge.StartLine ?? 0)
@@ -223,7 +898,7 @@ internal static class StaticDispatchCandidateBuilder
             supportingEdges,
             relationshipIds,
             [],
-            "none",
+            StaticDispatchRegistrationContexts.None,
             leafRelationship.FilePath,
             leafRelationship.StartLine,
             leafRelationship.EndLine,
@@ -261,7 +936,10 @@ internal static class StaticDispatchCandidateBuilder
             abstractionNode.CommitSha,
             extractorVersionFor(abstractionNode.SourceIndexId),
             "combined-symbol-relationships",
-            abstractionNode.EndLine));
+            abstractionNode.EndLine,
+            [],
+            candidateCount,
+            candidateLimit));
     }
 
     private static void AddOverrideDepthGapIfNeeded(
@@ -294,7 +972,9 @@ internal static class StaticDispatchCandidateBuilder
             abstractionNode.CommitSha,
             extractorVersionFor(abstractionNode.SourceIndexId),
             "combined-symbol-relationships",
-            abstractionNode.EndLine));
+            abstractionNode.EndLine,
+            [],
+            CandidateLimit: maxOverrideDepth));
     }
 
     private static bool IsMemberCandidateRelationship(string? originalRelationshipKind)
@@ -308,6 +988,116 @@ internal static class StaticDispatchCandidateBuilder
             || node.DisplayName.IndexOf('(', StringComparison.Ordinal) >= 0;
     }
 
+    private static IReadOnlyDictionary<RegistrationCompatibilityKey, StaticDispatchRegistrationFact[]> BuildRegistrationIndex(
+        IReadOnlyList<StaticDispatchRegistrationFact> registrations)
+    {
+        return registrations
+            .Where(registration => registration.Shape == StaticDispatchRegistrationShapes.ClosedTypePair)
+            .Where(registration => IsStrongRegistrationEvidence(registration.EvidenceTier))
+            .Where(registration => !string.IsNullOrWhiteSpace(registration.ServiceTypeSymbolId)
+                && !string.IsNullOrWhiteSpace(registration.ImplementationTypeSymbolId))
+            .GroupBy(
+                registration => new RegistrationCompatibilityKey(
+                    registration.SourceIndexId,
+                    registration.ServiceTypeSymbolId ?? string.Empty,
+                    registration.ImplementationTypeSymbolId ?? string.Empty))
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(registration => registration.FactId, StringComparer.Ordinal).ToArray());
+    }
+
+    private static RegistrationCompatibilityKey? CandidateRegistrationKey(
+        string sourceIndexId,
+        string? serviceTypeSymbolId,
+        string? implementationTypeSymbolId)
+    {
+        return string.IsNullOrWhiteSpace(serviceTypeSymbolId) || string.IsNullOrWhiteSpace(implementationTypeSymbolId)
+            ? null
+            : new RegistrationCompatibilityKey(sourceIndexId, serviceTypeSymbolId, implementationTypeSymbolId);
+    }
+
+    private static RegistrationCompatibilityKey? CandidateRegistrationKey(
+        string abstractionNodeId,
+        OverrideCandidatePath path,
+        IReadOnlyDictionary<string, StaticDispatchCandidateNode> nodes)
+    {
+        var abstractionRelationship = path.RelationshipChain
+            .FirstOrDefault(relationship => relationship.ToNodeId == abstractionNodeId);
+        var implementationRelationship = path.RelationshipChain
+            .FirstOrDefault(relationship => relationship.FromNodeId == path.CandidateNodeId);
+        return CandidateRegistrationKey(
+            nodes[abstractionNodeId].SourceIndexId,
+            abstractionRelationship?.TargetContainingSymbolId,
+            implementationRelationship?.SourceContainingSymbolId);
+    }
+
+    private static RegistrationCompatibilityKey? CandidateRegistrationKey(
+        StaticDispatchCandidateEdge candidate,
+        IReadOnlyDictionary<string, StaticDispatchRelationshipEdge> relationshipsById)
+    {
+        var candidateRelationships = candidate.SupportingRelationshipIds
+            .Where(relationshipsById.ContainsKey)
+            .Select(id => relationshipsById[id])
+            .ToArray();
+        return CandidateRegistrationKey(
+            candidate.SourceIndexId,
+            candidateRelationships
+                .FirstOrDefault(relationship => relationship.ToNodeId == candidate.AbstractionSymbolId)
+                ?.TargetContainingSymbolId,
+            candidateRelationships
+                .FirstOrDefault(relationship => relationship.FromNodeId == candidate.CandidateSymbolId)
+                ?.SourceContainingSymbolId);
+    }
+
+    private static int RegistrationRank(
+        RegistrationCompatibilityKey? key,
+        StaticDispatchCandidateNode abstraction,
+        StaticDispatchCandidateNode implementation,
+        IReadOnlyDictionary<RegistrationCompatibilityKey, StaticDispatchRegistrationFact[]>? registrationIndex)
+    {
+        return key is not null
+            && registrationIndex is not null
+            && registrationIndex.TryGetValue(key.Value, out var registrations)
+            && registrations.Any(registration => RegistrationDisplaysMatch(registration, abstraction, implementation))
+                ? 0
+                : 1;
+    }
+
+    private static void AddCompatibleRegistrationFactIds(
+        HashSet<string> compatibleFactIds,
+        RegistrationCompatibilityKey? key,
+        StaticDispatchCandidateNode abstraction,
+        StaticDispatchCandidateNode implementation,
+        IReadOnlyDictionary<RegistrationCompatibilityKey, StaticDispatchRegistrationFact[]> registrationIndex)
+    {
+        if (key is null || !registrationIndex.TryGetValue(key.Value, out var registrations))
+        {
+            return;
+        }
+
+        compatibleFactIds.UnionWith(registrations
+            .Where(registration => RegistrationDisplaysMatch(registration, abstraction, implementation))
+            .Select(registration => registration.FactId));
+    }
+
+    private static bool RegistrationDisplaysMatch(
+        StaticDispatchRegistrationFact registration,
+        StaticDispatchCandidateNode abstraction,
+        StaticDispatchCandidateNode implementation)
+    {
+        return IsMemberOfType(abstraction.DisplayName, registration.ServiceType)
+            && IsMemberOfType(implementation.DisplayName, registration.ImplementationType);
+    }
+
+    private static string? ContainingTypeDisplay(string memberDisplayName)
+    {
+        var normalized = NormalizeDisplayName(memberDisplayName);
+        var parameterStart = normalized.IndexOf('(', StringComparison.Ordinal);
+        var memberPrefix = parameterStart < 0 ? normalized : normalized[..parameterStart];
+        var memberSeparator = memberPrefix.LastIndexOf('.');
+        return memberSeparator < 0 ? null : memberPrefix[..memberSeparator];
+    }
+
     private static string WeakestEvidenceTier(IReadOnlyList<StaticDispatchRelationshipEdge> relationships)
     {
         return relationships
@@ -315,6 +1105,84 @@ internal static class StaticDispatchCandidateBuilder
             .OrderByDescending(EvidenceTierRank)
             .ThenBy(value => value, StringComparer.Ordinal)
             .FirstOrDefault() ?? EvidenceTiers.Tier4Unknown;
+    }
+
+    private static string WeakestEvidenceTier(IEnumerable<string> tiers)
+    {
+        return tiers
+            .Select(NormalizeEvidenceTier)
+            .OrderByDescending(EvidenceTierRank)
+            .ThenBy(value => value, StringComparer.Ordinal)
+            .FirstOrDefault() ?? EvidenceTiers.Tier4Unknown;
+    }
+
+    private static bool IsStrongRegistrationEvidence(string evidenceTier)
+    {
+        return evidenceTier is EvidenceTiers.Tier1Semantic or EvidenceTiers.Tier2Structural;
+    }
+
+    private static bool IsMemberOfType(string memberDisplayName, string typeDisplayName)
+    {
+        var member = NormalizeDisplayName(memberDisplayName);
+        var type = NormalizeDisplayName(typeDisplayName);
+        if (member.StartsWith($"{type}.", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var memberContainingType = ContainingTypeDisplay(member);
+        // The registration index has already required exact compiler-backed type-definition IDs.
+        // Displays may still differ because relationship members retain <T> while registrations
+        // retain their closed type arguments, so compare their display definitions only here.
+        return memberContainingType is not null
+            && ContainsGenericArguments(memberContainingType)
+            && ContainsGenericArguments(type)
+            && string.Equals(
+                RemoveGenericArguments(memberContainingType),
+                RemoveGenericArguments(type),
+                StringComparison.Ordinal);
+    }
+
+    private static bool ContainsGenericArguments(string value)
+    {
+        return value.IndexOf('<', StringComparison.Ordinal) >= 0;
+    }
+
+    private static string RemoveGenericArguments(string value)
+    {
+        var result = new StringBuilder(value.Length);
+        var depth = 0;
+        foreach (var character in value)
+        {
+            if (character == '<')
+            {
+                depth++;
+                continue;
+            }
+
+            if (character == '>' && depth > 0)
+            {
+                depth--;
+                continue;
+            }
+
+            if (depth == 0)
+            {
+                result.Append(character);
+            }
+        }
+
+        return result.ToString();
+    }
+
+    private static string NormalizeDisplayName(string value)
+    {
+        return value.Trim().Replace("global::", string.Empty, StringComparison.Ordinal);
+    }
+
+    private static int RegistrationContextRank(string context)
+    {
+        return context == StaticDispatchRegistrationContexts.Candidate ? 0 : 1;
     }
 
     private static string NormalizeEvidenceTier(string tier)
@@ -370,6 +1238,20 @@ internal static class StaticDispatchBridgeKinds
     public const string OverrideMember = "override-member";
 }
 
+internal static class StaticDispatchRegistrationContexts
+{
+    public const string None = "none";
+    public const string Candidate = "registration-context-candidate";
+}
+
+internal static class StaticDispatchRegistrationShapes
+{
+    public const string ClosedTypePair = "closed-type-pair";
+    public const string OpenGeneric = "open-generic";
+    public const string ObservationOnly = "observation-only";
+    public const string Unsupported = "unsupported";
+}
+
 internal sealed record OverrideCandidatePath(
     string CandidateNodeId,
     StaticDispatchRelationshipEdge LeafRelationship,
@@ -383,6 +1265,15 @@ internal sealed record OverrideTraversalFrame(
     string CurrentNodeId,
     IReadOnlyList<StaticDispatchRelationshipEdge> RelationshipChain,
     IReadOnlyList<string> VisitedNodeIds);
+
+internal readonly record struct RegistrationCompatibilityKey(
+    string SourceIndexId,
+    string ServiceTypeSymbolId,
+    string ImplementationTypeSymbolId);
+
+internal readonly record struct RegistrationServiceDisplayKey(
+    string SourceIndexId,
+    string ServiceTypeDisplay);
 
 internal sealed record StaticDispatchCandidateNode(
     string NodeId,
@@ -406,7 +1297,54 @@ internal sealed record StaticDispatchRelationshipEdge(
     IReadOnlyList<string> SupportingCombinedEdgeIds,
     string? FilePath,
     int? StartLine,
-    int? EndLine);
+    int? EndLine,
+    string? SourceContainingSymbolId = null,
+    string? TargetContainingSymbolId = null,
+    string? SourceSymbolId = null,
+    string? TargetSymbolId = null,
+    string? ExtractorVersion = null);
+
+internal sealed record StaticDispatchCallTarget(
+    string FactId,
+    string SourceIndexId,
+    string SourceLabel,
+    string TargetNodeId,
+    string TargetDisplayName,
+    string? TargetSymbolId,
+    string? TargetContainingSymbolId,
+    string EvidenceTier,
+    string? FilePath,
+    int? StartLine,
+    int? EndLine,
+    string? CommitSha,
+    string? ExtractorVersion);
+
+internal sealed record StaticDispatchSourceContext(
+    string SourceIndexId,
+    string SourceLabel,
+    string? Language,
+    string AnalysisLevel,
+    string BuildStatus,
+    string? CommitSha,
+    string? ScannerVersion);
+
+internal sealed record StaticDispatchRegistrationFact(
+    string FactId,
+    string SourceIndexId,
+    string SourceLabel,
+    string ServiceType,
+    string ImplementationType,
+    string? ServiceTypeSymbolId,
+    string? ImplementationTypeSymbolId,
+    string RegistrationKind,
+    string Shape,
+    string EvidenceTier,
+    string RuleId,
+    string FilePath,
+    int StartLine,
+    int EndLine,
+    string? CommitSha,
+    string? ExtractorVersion);
 
 internal sealed record StaticDispatchCandidateEdge(
     string CandidateId,
@@ -451,4 +1389,12 @@ internal sealed record StaticDispatchCandidateGap(
     string? CommitSha,
     string? ExtractorVersion,
     string? EvidenceScope,
-    int? EndLine);
+    int? EndLine,
+    IReadOnlyList<string> SupportingFactIds,
+    int? CandidateCount = null,
+    int? CandidateLimit = null,
+    int? GroupedEvidenceCount = null,
+    int? SupportingFactLimit = null,
+    int? CallEvidenceCount = null,
+    int? RelationshipEvidenceCount = null,
+    int? RegistrationEvidenceCount = null);
