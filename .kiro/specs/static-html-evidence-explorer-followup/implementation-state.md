@@ -257,3 +257,73 @@ Initial PR review follow-up:
   empty-compatible state for section rows, and a focused regression pins both
   artifact and section gap traceability. Focused coverage is now 25/25 and the
   full suite is 1,367/1,367.
+
+## Implementation PR 2 — Release Review Compatibility Reader
+
+Branch: `codex/static-html-explorer-release-review-reader`
+
+Starting point:
+
+- Base: fresh `origin/dev`
+- Base SHA: `0d4fc027446f5f2c0e3b0b34fb7cdbb780ffd5a7`
+- The base includes merged PR #635 and explorer schema v2.
+
+Selected artifact family:
+
+- `release-review.json` only.
+- Accepted identity: `reportType: release-review`, version `1.2`.
+- Accepted modes: `ReleaseReviewSingleV1` and `ReleaseReviewCombinedV1`, with
+  matching single/combined before/after snapshot kinds.
+
+Implemented boundary:
+
+- The reader validates exact report identity/version, mode, before/after side
+  and index kind, closed `Full`/`Reduced` coverage values, non-empty source
+  collections, valid-or-null source commit identities, a boolean truncation
+  field, and a non-negative summary gap count.
+- Required properties must occur exactly once. Malformed JSON, duplicate
+  required properties, unsupported versions/modes, inconsistent snapshots,
+  invalid commit identities, and inputs above the 16 MiB reader limit become
+  sanitized `explorer.input.unsupported-schema.v1` gaps.
+- Compatible artifacts contribute a deterministic SHA-256 content identity,
+  `release-review/1.2` schema label, closed coverage labels, and a
+  rule-backed compatibility limitation.
+- The reader does not read or render finding bodies, source labels, paths,
+  messages, metadata, checklist text, SQL, or reducer conclusions.
+- No explorer schema bump is required because this slice populates the
+  existing v2 artifact and compatibility-ledger contracts without adding
+  top-level fields.
+- Added `explorer.input.release-review.v1` to code and the rule catalog before
+  emitting its limitation.
+
+Deferred:
+
+- Dependency, route-flow, property-flow, reverse, impact, portfolio, snapshot,
+  and other report JSON families.
+- Release-review finding, surface, path, reducer-result, checklist, and
+  priority rendering; those belong to separately bounded PR 3 readers.
+- Any runtime, production, release-approval, deployment-safety, or complete
+  analysis claim.
+
+Validation:
+
+- Focused `StaticHtmlEvidenceExplorerTests`: 32/32 passed after adding public
+  and hidden compatibility, unsupported-version, duplicate-property,
+  invalid-commit, oversized-input, rule-catalog, no-leak, and determinism
+  coverage.
+- Locked dependency restore and solution build passed with 0 warnings and 0
+  errors.
+- Full .NET solution: 1,374/1,374 passed.
+- Targeted `dotnet format --verify-no-changes`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Real CLI smoke: scanned `samples/modern-sample` with 27 facts, generated a
+  same-snapshot release review with 4 explicit gaps, and generated a six-file
+  public/demo explorer bundle. The explorer accepted the report as
+  `release-review/1.2`, recorded its SHA-256 identity, emitted four closed
+  coverage labels, and retained the content-not-rendered limitation.
+- Direct generated-output inspection found no local/private paths, URLs, raw
+  SQL, credentials, or release-review body values.
+- Browser revalidation was deferred because this slice changes no HTML, CSS,
+  JavaScript, navigation, or interaction code; it only adds rows through the
+  already browser-validated v2 artifact and compatibility-ledger renderers.

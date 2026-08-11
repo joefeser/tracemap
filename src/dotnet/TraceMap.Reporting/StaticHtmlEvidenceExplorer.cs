@@ -214,6 +214,7 @@ public static class StaticHtmlEvidenceExplorer
     public const string PartialSectionRuleId = "explorer.render.partial-section.v1";
     public const string SectionStatusRuleId = "explorer.render.section-status.v1";
     public const string CompatibilityLedgerRuleId = "explorer.render.compatibility-ledger.v1";
+    public const string ReleaseReviewInputRuleId = "explorer.input.release-review.v1";
     public const string GeneratedFileStaleRuleId = "explorer.validation.generated-file-stale.v1";
     public const string UserFileCollisionRuleId = "explorer.validation.user-file-collision.v1";
     public const string UnsafeRejectedRuleId = "explorer.validation.unsafe-value-rejected.v1";
@@ -226,6 +227,7 @@ public static class StaticHtmlEvidenceExplorer
     private const int EvidenceRowNoScriptLimit = 200;
     private const int MaxRuleCatalogTextLength = 360;
     private const long MaxRuleCatalogBytes = 1_048_576;
+    private const long MaxReleaseReviewBytes = 16_777_216;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -471,6 +473,7 @@ public static class StaticHtmlEvidenceExplorer
 
         await AddOptionalArtifactAsync(inputDirectory, "index.sqlite", "sqlite-index", "SQLite index", "index.sqlite.v1", safetyProfile, artifacts, gaps, cancellationToken);
         await AddOptionalArtifactAsync(inputDirectory, "report.md", "markdown-report", "Markdown report", "report.md.v1", safetyProfile, artifacts, gaps, cancellationToken);
+        await AddReleaseReviewArtifactAsync(inputDirectory, safetyProfile, artifacts, gaps, limitations, cancellationToken);
         var catalogLoad = await AddRuleCatalogArtifactAsync(inputDirectory, safetyProfile, artifacts, gaps, redactions, cancellationToken);
         var catalogRules = catalogLoad.Entries;
         await AddUnsupportedJsonArtifactsAsync(inputDirectory, safetyProfile, artifacts, gaps, cancellationToken);
@@ -729,6 +732,7 @@ public static class StaticHtmlEvidenceExplorer
         {
             var fileName = Path.GetFileName(path);
             if (fileName.Equals("scan-manifest.json", StringComparison.Ordinal)
+                || fileName.Equals("release-review.json", StringComparison.Ordinal)
                 || fileName.Equals("explorer-manifest.json", StringComparison.Ordinal)
                 || fileName.Equals("explorer-data.json", StringComparison.Ordinal))
             {
@@ -758,6 +762,229 @@ public static class StaticHtmlEvidenceExplorer
                 "A JSON artifact was discovered but is not supported by the first explorer slice. It is labeled unavailable without rendering raw content.",
                 [artifactId]));
         }
+    }
+
+    private static async Task AddReleaseReviewArtifactAsync(
+        string inputDirectory,
+        string safetyProfile,
+        List<ExplorerInputArtifact> artifacts,
+        List<ExplorerGap> gaps,
+        List<ExplorerLimitation> limitations,
+        CancellationToken cancellationToken)
+    {
+        const string artifactId = "artifact:release-review";
+        var path = Path.Combine(inputDirectory, "release-review.json");
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var snapshot = await ReadBoundedArtifactAsync(path, MaxReleaseReviewBytes, cancellationToken);
+        if (snapshot.Content is null)
+        {
+            AddUnsupportedReleaseReviewArtifact(
+                artifacts,
+                gaps,
+                safetyProfile,
+                snapshot.ContentHash,
+                "artifact-too-large",
+                "The release-review artifact exceeded the bounded compatibility-reader size and was not parsed.");
+            return;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(
+                snapshot.Content,
+                new JsonDocumentOptions
+                {
+                    AllowTrailingCommas = false,
+                    CommentHandling = JsonCommentHandling.Disallow,
+                    MaxDepth = 64
+                });
+            var root = RequireObject(document.RootElement, "root");
+            if (RequireString(root, "reportType") != "release-review"
+                || RequireString(root, "version") != "1.2")
+            {
+                throw new InvalidDataException("unsupported release-review identity");
+            }
+
+            var mode = RequireString(root, "mode");
+            var expectedIndexKind = mode switch
+            {
+                "ReleaseReviewSingleV1" => "single",
+                "ReleaseReviewCombinedV1" => "combined",
+                _ => throw new InvalidDataException("unsupported release-review mode")
+            };
+            var beforeCoverage = ReadReleaseReviewSnapshot(root, "beforeSnapshot", "before", expectedIndexKind);
+            var afterCoverage = ReadReleaseReviewSnapshot(root, "afterSnapshot", "after", expectedIndexKind);
+            var summary = RequireObject(RequireProperty(root, "summary"), "summary");
+            var truncated = RequireBoolean(summary, "truncated");
+            var gapCount = RequireNonNegativeInt32(summary, "gapCount");
+
+            var coverageLabels = new SortedSet<string>(StringComparer.Ordinal)
+            {
+                $"ReleaseReviewBefore{beforeCoverage}",
+                $"ReleaseReviewAfter{afterCoverage}",
+                truncated ? "ReleaseReviewTruncated" : "ReleaseReviewNotTruncated",
+                gapCount > 0 ? "ReleaseReviewGapsPresent" : "ReleaseReviewNoRecordedGaps"
+            };
+            artifacts.Add(new ExplorerInputArtifact(
+                artifactId,
+                "release-review",
+                "Release review",
+                snapshot.ContentHash,
+                "release-review/1.2",
+                ClaimLevelForSafetyProfile(safetyProfile),
+                coverageLabels.ToArray(),
+                [SourceId],
+                ["release-review-content-not-rendered"],
+                [],
+                "supported"));
+            limitations.Add(CreateLimitation(
+                "release-review-content-not-rendered",
+                ReleaseReviewInputRuleId,
+                "report-content-not-rendered",
+                "artifacts",
+                "compatibility-only",
+                "The explorer validated release-review compatibility metadata and content identity only. Finding bodies, source labels, paths, messages, metadata, and reducer conclusions are not read or rendered in this slice.",
+                [artifactId]));
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidDataException)
+        {
+            AddUnsupportedReleaseReviewArtifact(
+                artifacts,
+                gaps,
+                safetyProfile,
+                snapshot.ContentHash,
+                "unsupported-schema",
+                "The release-review artifact did not match the supported v1.2 compatibility metadata contract and was not rendered.");
+        }
+    }
+
+    private static void AddUnsupportedReleaseReviewArtifact(
+        List<ExplorerInputArtifact> artifacts,
+        List<ExplorerGap> gaps,
+        string safetyProfile,
+        string contentHash,
+        string gapKind,
+        string message)
+    {
+        const string artifactId = "artifact:release-review";
+        artifacts.Add(new ExplorerInputArtifact(
+            artifactId,
+            "release-review",
+            "Release review",
+            contentHash,
+            "release-review/unsupported",
+            ClaimLevelForSafetyProfile(safetyProfile),
+            [],
+            [SourceId],
+            [],
+            [UnsupportedSchemaRuleId],
+            "unsupported"));
+        gaps.Add(CreateGap(
+            "release-review-unsupported",
+            UnsupportedSchemaRuleId,
+            gapKind,
+            artifactId,
+            "artifacts",
+            "PartialAnalysis",
+            message,
+            [artifactId]));
+    }
+
+    private static string ReadReleaseReviewSnapshot(
+        JsonElement root,
+        string propertyName,
+        string expectedSide,
+        string expectedIndexKind)
+    {
+        var snapshot = RequireObject(RequireProperty(root, propertyName), propertyName);
+        if (RequireString(snapshot, "side") != expectedSide
+            || RequireString(snapshot, "indexKind") != expectedIndexKind)
+        {
+            throw new InvalidDataException("release-review snapshot identity mismatch");
+        }
+
+        var coverage = RequireString(snapshot, "reportCoverage");
+        if (coverage is not ("Full" or "Reduced"))
+        {
+            throw new InvalidDataException("unsupported release-review coverage");
+        }
+
+        var sources = RequireProperty(snapshot, "sources");
+        if (sources.ValueKind != JsonValueKind.Array || sources.GetArrayLength() == 0)
+        {
+            throw new InvalidDataException("release-review sources unavailable");
+        }
+
+        foreach (var sourceElement in sources.EnumerateArray())
+        {
+            var source = RequireObject(sourceElement, "source");
+            var commitProperties = source.EnumerateObject()
+                .Where(property => property.NameEquals("commitSha"))
+                .ToArray();
+            if (commitProperties.Length != 1)
+            {
+                throw new InvalidDataException("release-review source commit identity unavailable");
+            }
+
+            var commit = commitProperties[0].Value;
+            if (commit.ValueKind != JsonValueKind.Null
+                && (commit.ValueKind != JsonValueKind.String || !IsUsableCommitSha(commit.GetString())))
+            {
+                throw new InvalidDataException("release-review source commit identity invalid");
+            }
+        }
+
+        return coverage;
+    }
+
+    private static JsonElement RequireProperty(JsonElement element, string propertyName)
+    {
+        var properties = element.EnumerateObject()
+            .Where(property => property.NameEquals(propertyName))
+            .ToArray();
+        return properties.Length == 1
+            ? properties[0].Value
+            : throw new InvalidDataException("release-review property unavailable or duplicated");
+    }
+
+    private static JsonElement RequireObject(JsonElement element, string scope)
+    {
+        return element.ValueKind == JsonValueKind.Object
+            ? element
+            : throw new InvalidDataException($"release-review {scope} is not an object");
+    }
+
+    private static string RequireString(JsonElement element, string propertyName)
+    {
+        var value = RequireProperty(element, propertyName);
+        return value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString())
+            ? value.GetString()!
+            : throw new InvalidDataException("release-review string property unavailable");
+    }
+
+    private static bool RequireBoolean(JsonElement element, string propertyName)
+    {
+        var value = RequireProperty(element, propertyName);
+        return value.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => throw new InvalidDataException("release-review boolean property unavailable")
+        };
+    }
+
+    private static int RequireNonNegativeInt32(JsonElement element, string propertyName)
+    {
+        var value = RequireProperty(element, propertyName);
+        return value.ValueKind == JsonValueKind.Number
+            && value.TryGetInt32(out var number)
+            && number >= 0
+                ? number
+                : throw new InvalidDataException("release-review count property unavailable");
     }
 
     private static async Task<RuleCatalogLoadResult> AddRuleCatalogArtifactAsync(
@@ -1034,6 +1261,7 @@ public static class StaticHtmlEvidenceExplorer
             Rule(PartialSectionRuleId, "Explorer partial section", "Marks unavailable first-slice sections and missing optional artifacts as partial rather than empty."),
             Rule(SectionStatusRuleId, "Explorer section status", "Records deterministic section availability labels derived from compatible generated artifacts and rule-backed gaps."),
             Rule(CompatibilityLedgerRuleId, "Explorer compatibility ledger", "Records deterministic artifact, section, safety-profile, and claim-metadata compatibility states without reading unsupported content."),
+            Rule(ReleaseReviewInputRuleId, "Explorer release-review compatibility reader", "Validates bounded release-review v1.2 identity, snapshot shape, coverage, and content provenance without rendering report findings."),
             Rule(GeneratedFileStaleRuleId, "Explorer stale generated file", "Prevents overwriting stale generated explorer output without explicit force."),
             Rule(UserFileCollisionRuleId, "Explorer user file collision", "Prevents overwriting user-authored files in an explorer output directory."),
             Rule(UnsafeRejectedRuleId, "Explorer unsafe generated value rejected", "Fails generation when a generated asset contains an unsafe value after redaction.")
@@ -1356,6 +1584,7 @@ public static class StaticHtmlEvidenceExplorer
             ("artifact:facts-ndjson", "facts-ndjson", "Fact stream"),
             ("artifact:sqlite-index", "sqlite-index", "SQLite index"),
             ("artifact:markdown-report", "markdown-report", "Markdown report"),
+            ("artifact:release-review", "release-review", "Release review"),
             ("artifact:rule-catalog", "rule-catalog", "Rule catalog")
         ];
     }
@@ -1821,6 +2050,36 @@ public static class StaticHtmlEvidenceExplorer
         await using var stream = File.OpenRead(path);
         var hash = await SHA256.HashDataAsync(stream, cancellationToken);
         return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
+    }
+
+    private static async Task<BoundedArtifactSnapshot> ReadBoundedArtifactAsync(
+        string path,
+        long maxBytes,
+        CancellationToken cancellationToken)
+    {
+        await using var stream = File.OpenRead(path);
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var content = new MemoryStream();
+        var buffer = new byte[81_920];
+        long totalBytes = 0;
+        var tooLarge = false;
+        int read;
+        while ((read = await stream.ReadAsync(buffer, cancellationToken)) > 0)
+        {
+            hash.AppendData(buffer, 0, read);
+            totalBytes += read;
+            if (totalBytes <= maxBytes)
+            {
+                await content.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+            }
+            else
+            {
+                tooLarge = true;
+            }
+        }
+
+        var contentHash = $"sha256:{Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant()}";
+        return new BoundedArtifactSnapshot(contentHash, tooLarge ? null : content.ToArray());
     }
 
     private static string Hash(string value, int length = 64)
@@ -2433,4 +2692,8 @@ public static class StaticHtmlEvidenceExplorer
         string Description,
         string EvidenceTier,
         IReadOnlyList<string> Limitations);
+
+    private sealed record BoundedArtifactSnapshot(
+        string ContentHash,
+        byte[]? Content);
 }

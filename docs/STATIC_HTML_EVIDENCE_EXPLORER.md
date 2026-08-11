@@ -23,19 +23,37 @@ tracemap explorer generate --input <artifact-dir> --out <explorer-output>
 ```
 
 `--input` must point at a directory containing generated TraceMap artifacts.
-The first implementation slice supports:
+The explorer currently supports:
 
 - `scan-manifest.json` for safe commit, coverage, and extractor provenance;
 - `facts.ndjson` for safe evidence rows;
 - `index.sqlite` as a hashed provenance artifact only;
 - `report.md` as a hashed provenance artifact only.
+- `release-review.json` v1.2 through a bounded compatibility-metadata reader.
 
 Other top-level JSON files are labeled unsupported with
 `explorer.input.unsupported-schema.v1` gaps instead of being silently merged.
-In this first slice, that includes report JSON artifacts such as
-`dependency-report.json`, `release-review.json`, `demo-summary.json`, and
-other combined/reducer report JSON files; compatible readers for those
-artifacts are deferred to later slices.
+That still includes report JSON artifacts such as `dependency-report.json`,
+`demo-summary.json`, and other combined/reducer report JSON files; compatible
+readers for those artifacts are deferred to later slices.
+
+The `release-review.json` reader accepts only the exact generated
+`reportType: release-review`, version `1.2`, supported single/combined mode,
+matching before/after snapshot shape, closed `Full`/`Reduced` coverage values,
+non-empty source collections, valid-or-null source commit identities, and
+non-negative summary gap counts. The artifact is size bounded and identified
+by a deterministic SHA-256 content hash. Duplicate required properties,
+unsupported versions or modes, malformed metadata, invalid commit identities,
+and oversized inputs remain unavailable under
+`explorer.input.unsupported-schema.v1`.
+
+This reader projects only safe compatibility metadata: schema, content hash,
+closed coverage labels, and a rule-backed limitation. It does not read or
+render release-review finding bodies, source labels, paths, messages,
+metadata, checklist text, or reducer conclusions. A compatible report does not
+prove runtime reachability, production behavior, release approval, deployment
+safety, or complete analysis. Richer release-review rendering remains a
+separate surface/path/reducer reader slice.
 Current compatible inputs do not expose independent claim-level metadata. The
 explorer records that metadata as `claim-level:unknown` with a visible
 limitation and does not manufacture a profile or claim-level conflict. Commit
