@@ -514,6 +514,8 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "surfaces" && row.Status == "partial");
         Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "paths" && row.Status == "partial");
         Assert.Contains("PathsReducedCoverage", Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "paths-report").CoverageLabels);
+        Assert.Contains("PathsReducedCoverage", result.Data.Summary.CoverageLabels);
+        Assert.NotEqual("available", result.Data.Summary.CoverageStatus);
     }
 
     [Fact]
@@ -531,6 +533,31 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Contains(result.Gaps, gap => gap.GapKind == "surface-location-unavailable" && gap.AffectedSection == "surfaces");
         Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "paths" && row.Status == "partial");
         Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "surfaces" && row.Status == "partial");
+    }
+
+    [Fact]
+    public async Task Explorer_generate_rejects_duplicate_nested_paths_report_provenance()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "paths-only");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WritePathsReportArtifactAsync(input, FortyCharCommit("5"));
+        var reportPath = Path.Combine(input, "paths-report.json");
+        var json = await File.ReadAllTextAsync(reportPath);
+        json = json.Replace(
+            "\"scannerVersion\": \"test-scanner-v1\",",
+            "\"scannerVersion\": \"test-scanner-v1\",\n      \"scannerVersion\": \"order-dependent-version\",",
+            StringComparison.Ordinal);
+        await File.WriteAllTextAsync(reportPath, json);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "paths-report");
+        Assert.Equal("unsupported", artifact.Compatibility);
+        Assert.Empty(result.Data.Paths);
+        Assert.Empty(result.Data.Surfaces);
+        Assert.Contains(result.Gaps, gap => gap.Scope == "artifact:paths-report" && gap.GapKind == "unsupported-schema");
     }
 
     [Fact]
