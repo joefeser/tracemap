@@ -353,3 +353,78 @@ Review follow-up:
 - The second focused review regression run passed 35/35; the full .NET suite
   passed 1,377/1,377, and targeted formatting, private-path, and diff checks
   remained clean.
+
+## Implementation PR 3a — Static Dependency Paths Reader
+
+Branch: `codex/static-html-explorer-paths-reader`
+
+Starting point:
+
+- Base: fresh `origin/dev`
+- Base SHA: `e7b649150a56c158071dbc24d9b8f3086f4786c8`
+- The base includes merged PR #636 and explorer schema v2.
+
+Selected artifact family:
+
+- Ordinary `paths-report.json` version `1.0` only.
+- Legacy-flow schema/view variants, route-flow, reverse, property-flow,
+  release-review details, and reducer results remain separate readers.
+
+Implemented boundary:
+
+- The bounded reader requires exact version and ordinary schema identity,
+  usable and unique source commits, matching summary counts, closed path
+  classifications/confidence, contiguous ordered node/edge topology, closed
+  edge and surface kinds, usable rule IDs and evidence tiers, and valid spans.
+- The reader is bounded at 32 MiB, 1,000 sources, 1,000 paths, and 10,000 hops;
+  over-limit artifacts remain unsupported rather than producing an unbounded
+  generated HTML/data bundle.
+- Compatible reports add safe static `surfaces` and ordered `paths`/hop rows.
+  Stable report IDs, source-index IDs, node IDs, fact IDs, and edge IDs are
+  projected as hashed explorer-local identities. File evidence uses the
+  existing safe repository-path policy.
+- Query selectors, source labels, display symbols, surface names, SQL text,
+  notes, free-text gap messages, and free-text limitations are not rendered.
+- The reader copies existing static classifications only. It does not create
+  reducer results or claim runtime reachability, execution, production use,
+  impact, release safety, or complete analysis.
+- Adding top-level `surfaces` and `paths` arrays advances the explorer schema
+  to `tracemap-static-html-evidence-explorer.v3`; generated v1/v2 bundles stay
+  recognized for guarded `--force` replacement.
+- Added `explorer.input.paths-report.v1` to code and the rule catalog before
+  emitting reader limitations.
+
+Deferred:
+
+- Route-flow report compatibility, because that contract flattens flow rows
+  and does not retain path boundaries suitable for lossless path projection.
+- Reducer-backed impact rows and every other report family.
+- Raw SQLite graph browsing and any graph visualization or ranking.
+
+Validation:
+
+- Locked dependency restore passed.
+- Solution build passed with 0 warnings and 0 errors.
+- Focused `StaticHtmlEvidenceExplorerTests`: 42/42 passed.
+- Full .NET solution: 1,384/1,384 passed on the authoritative unchanged
+  sequential run. Two earlier runs each exposed a different unrelated
+  diagnostic-harness flake; both failing tests passed independently before the
+  clean full-suite result.
+- Targeted `dotnet format --verify-no-changes`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Real two-source CLI smoke scanned a TypeScript endpoint client and .NET
+  endpoint server, combined 221 facts, and produced an ordinary v1.0 paths
+  report with 12 paths, 60 hops, 4 terminal surfaces, and 45 upstream gaps.
+  The explorer rendered schema v3 with all 12 paths and 4 surfaces, retained
+  the reduced static coverage, and added only rule-backed compatibility gaps.
+- Direct generated-output inspection found no local/private paths, raw SQL,
+  URLs, credentials, connection strings, or private-source labels.
+- Upstream free-text gap kinds and messages are also omitted; retained report
+  gaps use the closed `paths-report-gap` explorer category with their safe rule,
+  tier, coverage, and hashed support evidence.
+- Desktop/mobile in-app browser validation was attempted because this slice
+  changes navigation and HTML. The browser runtime rejected the local
+  `file://` artifact under its URL policy; no alternate route was used. The
+  generated HTML remains covered by focused structural/no-JavaScript tests,
+  but interactive viewport validation is explicitly deferred.

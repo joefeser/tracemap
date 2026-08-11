@@ -204,6 +204,23 @@ rules:
       - Oversized inputs stop at the bounded size-decision point and use a closed unavailable placeholder instead of a full-content digest.
       - Richer release-review surface, path, and reducer projections require a separately bounded reader slice with public-safe validation.
 
+  - id: explorer.input.paths-report.v1
+    name: Static HTML explorer dependency-path report reader
+    description: Validates bounded paths-report v1.0 structure and projects deterministic static dependency surfaces, ordered path hops, provenance, gaps, and limitations into safe explorer rows.
+    evidenceTier: Tier4Unknown
+    emits:
+      - compatible paths-report input artifact
+      - explorer static dependency surface
+      - explorer static dependency path hop
+      - paths-report compatibility limitation
+    limitations:
+      - Projected rows preserve existing static report classifications and evidence only; they do not prove runtime reachability, execution, production use, business impact, release safety, or complete analysis.
+      - Query selectors, source labels, node and surface display names, report notes, raw SQL, and free-text report limitations are omitted from explorer output.
+      - Path topology must be contiguous and deterministic, every hop must carry a catalog-compatible rule ID and evidence tier, and surface kinds must remain in the existing closed TraceMap vocabulary; unsupported shapes remain unavailable rather than guessed.
+      - Support IDs and node identities are hashed into stable explorer-local identifiers; the explorer does not expose original combined fact, edge, node, source-index, or path IDs.
+      - The reader supports the ordinary paths-report v1.0 contract only. Legacy-flow variants, other report families, reducer results, and runtime evidence require separate bounded readers.
+      - A 32 MiB input bound plus 1,000-source, 1,000-path, and 10,000-hop caps limit this reader; over-limit reports remain unsupported and oversized reports do not receive a full-content digest.
+
   - id: explorer.validation.generated-file-stale.v1
     name: Static HTML explorer stale generated file guard
     description: Prevents overwriting stale or unverified generated explorer files without explicit operator intent.
