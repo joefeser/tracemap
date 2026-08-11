@@ -408,6 +408,25 @@ public sealed class ScanEngineTests
     }
 
     [Fact]
+    public void Unsupported_symbolic_link_file_does_not_block_source_inventory()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        using var temp = new TempDirectory();
+        using var outside = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Visible.cs"), "public sealed class Visible { }");
+        var notesPath = Path.Combine(outside.Path, "notes.txt");
+        File.WriteAllText(notesPath, "synthetic notes");
+        File.CreateSymbolicLink(Path.Combine(temp.Path, "latest.txt"), notesPath);
+
+        var inventory = FileInventory.Collect(temp.Path);
+
+        Assert.Contains(inventory, item => item.RelativePath == "Visible.cs");
+        Assert.DoesNotContain(inventory, item => item.RelativePath == "latest.txt");
+    }
+
+    [Fact]
     public void Scoped_scan_digest_covers_repository_local_roslyn_compilation_inputs()
     {
         using var temp = new TempDirectory();
@@ -436,6 +455,49 @@ public sealed class ScanEngineTests
         var after = ScanEngine.Scan(options with { OutputPath = Path.Combine(temp.Path, "after") });
 
         Assert.DoesNotContain(before.Inventory, item => item.RelativePath == "B.cs");
+        Assert.NotEqual(before.Manifest.SourceSnapshotDigest, after.Manifest.SourceSnapshotDigest);
+        Assert.NotEqual(before.Manifest.ScanId, after.Manifest.ScanId);
+    }
+
+    [Fact]
+    public void Include_prefix_preserves_out_of_prefix_repository_local_compilation_inputs()
+    {
+        using var temp = new TempDirectory();
+        var projectDirectory = Path.Combine(temp.Path, "src", "App");
+        var sharedDirectory = Path.Combine(temp.Path, "shared");
+        Directory.CreateDirectory(projectDirectory);
+        Directory.CreateDirectory(sharedDirectory);
+        File.WriteAllText(Path.Combine(projectDirectory, "App.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+              </PropertyGroup>
+              <ItemGroup>
+                <Compile Include="App.cs" />
+                <Compile Include="../../shared/Helper.cs" Link="Helper.cs" />
+              </ItemGroup>
+            </Project>
+            """);
+        File.WriteAllText(
+            Path.Combine(projectDirectory, "App.cs"),
+            "public sealed class App { public int Read() => Helper.Value; }");
+        var helperPath = Path.Combine(sharedDirectory, "Helper.cs");
+        File.WriteAllText(
+            helperPath,
+            "public static class Helper { public static int Value => 1; }");
+        var options = new ScanOptions(
+            temp.Path,
+            Path.Combine(temp.Path, "before"),
+            IncludeGlobs: ["src/**"]);
+
+        var before = ScanEngine.Scan(options);
+        File.WriteAllText(
+            helperPath,
+            "public static class Helper { public static int Value => 2; }");
+        var after = ScanEngine.Scan(options with { OutputPath = Path.Combine(temp.Path, "after") });
+
+        Assert.DoesNotContain(before.Inventory, item => item.RelativePath == "shared/Helper.cs");
         Assert.NotEqual(before.Manifest.SourceSnapshotDigest, after.Manifest.SourceSnapshotDigest);
         Assert.NotEqual(before.Manifest.ScanId, after.Manifest.ScanId);
     }
