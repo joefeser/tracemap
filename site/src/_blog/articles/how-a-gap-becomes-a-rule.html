@@ -1,0 +1,211 @@
+<p>
+  <strong>Public claim level: concept.</strong>
+  TraceMap treats an observed uncertainty or plausible wrong result as the
+  beginning of a deterministic hardening process. The goal is not to promise
+  that every gap will be solved. It is to prevent important uncertainty from
+  disappearing into a ticket, a memory, or a silent empty graph.
+</p>
+
+<section data-gap-rule-block="question">
+  <h2>What keeps a discovered unknown from becoming folklore?</h2>
+  <p>
+    A manager should be able to trace a hardening decision from the dangerous
+    conclusion it prevents to a synthetic fixture, a versioned rule ID, an
+    evidence tier, a coverage label, a persisted fact or typed failure, a
+    downstream readback, and a documented limitation. If one of those links is
+    missing, the lesson is easier to lose or accidentally overstate.
+  </p>
+  <p>
+    TraceMap's working principles are intentionally strict: no conclusion
+    without evidence, no evidence without a rule ID, and no rule without
+    documented limitations. A failed build is not a clean repository, and
+    partial analysis is useful only when it remains labeled partial.
+  </p>
+</section>
+
+<section data-gap-rule-block="observe">
+  <h2>1. Observe and independently reproduce the failure or unknown.</h2>
+  <p>
+    A report that looks suspicious is a lead, not yet a contract. The first
+    step is to reduce the observation to a behavior that can be reproduced
+    without private repository identity or environment assumptions. Historical
+    C# graph work, for example, separated same-name identity collapse,
+    unresolved receiver guessing, edge-direction loss, stale snapshots, and
+    silent omission into independent failure classes.
+  </p>
+  <p>
+    Reproduction should distinguish an extractor defect from unsupported input,
+    missing prerequisites, schema incompatibility, and ordinary reduced
+    coverage. Those outcomes require different rules and different owner
+    questions.
+  </p>
+</section>
+
+<section data-gap-rule-block="invariant">
+  <h2>2. State the dangerous wrong conclusion and the fail-closed invariant.</h2>
+  <p>
+    “The invocation has no target” is dangerous when semantic analysis never
+    completed. “This implementation is selected” is dangerous when the graph
+    contains only an interface candidate. “No dependents exist” is dangerous
+    when reverse traversal truncated or lacked a relationship family.
+  </p>
+  <p>
+    The invariant says what TraceMap must do instead: preserve syntax plus a
+    gap, cap a candidate at review tier, emit truncation state, reject an
+    ambiguous selector, or fail the artifact boundary. This statement is more
+    durable than a one-off patch because it defines the behavior future
+    refactors must retain.
+  </p>
+</section>
+
+<section data-gap-rule-block="fixture">
+  <h2>3. Create the smallest synthetic fixture that can be wrong.</h2>
+  <p>
+    A good fixture contains just enough structure to trigger the failure and
+    just enough contrast to prove the invariant. Two same-named symbols need a
+    distinguishing identity. A receiver-binding fixture needs a tempting wrong
+    target. A snapshot fixture needs a controlled source change. A dispatch
+    fixture needs more than one plausible implementation.
+  </p>
+  <p>
+    Synthetic inputs make the contract public-safe and repeatable. They do not
+    prove that every real repository shape is covered. The fixture should state
+    what it represents, what it omits, and which unsupported variants remain
+    outside the test.
+  </p>
+</section>
+
+<section data-gap-rule-block="rule">
+  <h2>4. Assign or revise a versioned rule and evidence tier.</h2>
+  <p>
+    A rule ID names the deterministic interpretation, not merely the detector.
+    Rules such as <code>csharp.semantic.callgraph.v1</code>,
+    <code>combined.dispatch-gap.v1</code>, and
+    <code>impact.reverse.gap.v1</code> give downstream consumers a stable way
+    to recognize semantics and limitations. Behavior changes require catalog
+    review rather than silently reusing a familiar label.
+  </p>
+  <p>
+    The evidence tier communicates strength: <code>Tier1Semantic</code> for
+    compiler-resolved symbol evidence, <code>Tier2Structural</code> for known
+    structural patterns, <code>Tier3SyntaxOrTextual</code> for syntax or text,
+    and <code>Tier4Unknown</code> for unknown state or an analysis gap. A rule
+    cannot promote <code>Tier3SyntaxOrTextual</code> into
+    <code>Tier1Semantic</code> merely because a plausible target exists.
+  </p>
+</section>
+
+<section data-gap-rule-block="provenance">
+  <h2>5. Retain provenance and snapshot identity.</h2>
+  <p>
+    Scan evidence must carry both repository identity and commit SHA. It should
+    also retain extractor ID/version, rule ID, tier, file path and span when
+    allowed, snippet hash rather than raw source by default, coverage, and
+    supporting fact or edge IDs. Non-scan evidence should name its applicable
+    snapshot identity. Those fields allow a reviewer to ask whether two outputs
+    describe the same scan and the same source bytes.
+  </p>
+  <p>
+    Provenance is especially important after a correction. A new extractor
+    version cannot retroactively repair an older artifact, and a source span is
+    not authority to mutate unrelated persisted evidence.
+  </p>
+</section>
+
+<section data-gap-rule-block="emit">
+  <h2>6. Emit an explicit gap or typed failure instead of clean absence.</h2>
+  <p>
+    When semantic analysis fails, TraceMap continues with bounded syntax and
+    structural extraction where possible, emits <code>AnalysisGap</code> facts,
+    and marks coverage reduced. When an artifact inventory, snapshot, or schema
+    contract is invalid, a typed failure can be safer than a partial output that
+    looks complete.
+  </p>
+  <p>
+    Gap kinds should be closed and reviewable: identity unverified, member
+    candidate unavailable, registration compatibility unproven, schema
+    unavailable, traversal truncated, source omitted, or a narrower documented
+    state. Free-form warnings alone are difficult to test and compose.
+  </p>
+</section>
+
+<section data-gap-rule-block="readback">
+  <h2>7. Assert persistence, readback, and downstream propagation.</h2>
+  <p>
+    In-memory correctness is not enough. The fact, edge, gap, tier, rule,
+    coverage, provenance, and stable identity must survive machine-readable
+    output, index persistence, readback, and the downstream surfaces that use
+    them. Paths, reverse impact, route-flow, reports, portfolios, review
+    packets, vault exports, and evidence documents must not silently strengthen
+    or drop the correction.
+  </p>
+  <p>
+    A regression suite should test both the positive evidence and the forbidden
+    conclusion. Byte-stable ordering, bounded caps, omitted counts, and schema
+    gaps are part of that contract when consumers depend on them.
+  </p>
+</section>
+
+<section data-gap-rule-block="limitations">
+  <h2>8. Document limitations and leave unsupported shapes visible.</h2>
+  <p>
+    A correction closes one bounded failure class. It does not establish
+    universal language coverage, complete runtime behavior, all build
+    configurations, every container, or every legacy input. The rule catalog,
+    public documentation, and output limitation should say what still requires
+    an owner, a different extractor, runtime observation, or future work.
+  </p>
+  <p>
+    Read <a href="/blog/csharp-extraction-without-plausible-wrong-graphs/">the C# extraction contract</a>,
+    <a href="/blog/bugs-hiding-in-graph-history/">the graph-history defect taxonomy</a>,
+    <a href="/blog/what-depends-on-this-symbol/">the reverse-impact boundary</a>,
+    <a href="/blog/interfaces-make-blast-radius-harder/">the dispatch candidate boundary</a>,
+    the <a href="/evidence/">evidence model</a>,
+    <a href="/evidence/gaps/">gap guide</a>,
+    <a href="/proof-paths/">proof paths</a>, and
+    <a href="/limitations/">limitations</a> for the connected public story.
+  </p>
+</section>
+
+<section data-gap-rule-block="owner">
+  <h2>The owner question survives the automation.</h2>
+  <p>
+    A deterministic gap does not decide business intent, runtime configuration,
+    acceptable risk, required testing, or release policy. It makes the missing
+    evidence assignable: who can provide the configuration, explain the legacy
+    shape, confirm the runtime boundary, or approve the next investigation?
+  </p>
+  <p>
+    Some backlog observations will remain research notes rather than shipped
+    rules. The important boundary is that published TraceMap conclusions cite
+    the rules and evidence they actually have, not the intentions of future
+    work.
+  </p>
+</section>
+
+<section data-gap-rule-block="non-claims" data-gap-rule-boundary="non-claims">
+  <h2>What this process does not establish.</h2>
+  <p>
+    It does not establish universal conversion of backlog observations into
+    rules, automatic remediation of gaps, success of private validation,
+    exhaustive coverage, or removal of owner and release approval. A checked-in fixture proves a
+    bounded regression contract, not production correctness or safety.
+  </p>
+  <p>
+    This article includes no private ticket, infrastructure name, source
+    snippet, analyzer output, raw SQLite, host path, credential, connection
+    material, or private identity. No LLM, embedding, vector, or prompt-based
+    classification supplies a rule or conclusion.
+  </p>
+</section>
+
+<section data-gap-rule-block="bottom-line">
+  <h2>A gap becomes durable when its refusal is testable.</h2>
+  <p>
+    Reproduction, a fail-closed invariant, a minimal fixture, a versioned rule,
+    an evidence tier, provenance, explicit gap emission, persisted readback,
+    downstream propagation, and documented limitations turn a hard lesson into
+    a reviewable contract. The process preserves uncertainty until evidence can
+    narrow it.
+  </p>
+</section>
