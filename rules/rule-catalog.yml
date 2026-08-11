@@ -176,6 +176,19 @@ rules:
       - First-slice not-rendered or not-provided labels must stay visibly partial and must not be converted into no-evidence conclusions.
       - Support IDs must use stable artifact IDs, rule IDs, or generated data paths rather than raw source paths, remotes, hostnames, or private repository names.
 
+  - id: explorer.render.compatibility-ledger.v1
+    name: Static HTML explorer compatibility ledger
+    description: Records deterministic compatibility states for generated artifacts, rendered sections, the selected output safety profile, and independently available claim metadata.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer compatibility ledger row
+      - generated compatibility table row
+    limitations:
+      - Compatibility rows describe explorer input and rendering support only; they do not prove evidence absence, runtime behavior, source reachability, production use, or complete analysis.
+      - Missing and unsupported artifacts remain unavailable or partial and must not be represented as compatible-empty evidence.
+      - Claim metadata that is not exposed by a compatible structured input remains unknown and must not be converted into a profile or claim-level conflict.
+      - Ledger labels, messages, scopes, statuses, and subject identities must use closed explorer-authored values and stable safe IDs rather than raw paths, remotes, hosts, private names, snippets, SQL, or configuration values.
+
   - id: explorer.validation.generated-file-stale.v1
     name: Static HTML explorer stale generated file guard
     description: Prevents overwriting stale or unverified generated explorer files without explicit operator intent.

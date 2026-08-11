@@ -36,9 +36,12 @@ In this first slice, that includes report JSON artifacts such as
 `dependency-report.json`, `release-review.json`, `demo-summary.json`, and
 other combined/reducer report JSON files; compatible readers for those
 artifacts are deferred to later slices.
-Claim-level conflict detection across multiple compatible structured artifacts
-is also deferred in this slice and is rendered as a visible
-`explorer.input.provenance-conflict.v1` limitation.
+Current compatible inputs do not expose independent claim-level metadata. The
+explorer records that metadata as `claim-level:unknown` with a visible
+limitation and does not manufacture a profile or claim-level conflict. Commit
+SHA disagreement between `scan-manifest.json` and `facts.ndjson` is detected as
+the closed `commit-conflict` kind under
+`explorer.input.provenance-conflict.v1`.
 Analyzer logs, raw SQLite content, raw facts, raw snippets, raw SQL, config
 values, raw remotes, hostnames, endpoint addresses, query strings, private
 sample names, and local absolute paths are not rendered.
@@ -79,9 +82,31 @@ The follow-up rendering slice also includes:
 - matching `sectionStatuses` and `redactions` data in `data/explorer-data.json`
   so downloadable data is no less redacted than the visible UI.
 
-Section status rows use the same semantic order in HTML and JSON: overview,
+The v2 explorer data contract adds a `Compatibility Ledger` table and matching
+`compatibilityLedger` JSON rows. Each row uses a stable safe subject ID, closed
+subject kind and compatibility status, rule ID, evidence tier, coverage label,
+scope, support IDs, limitation IDs, and an explorer-authored message. Artifact
+rows cover supported, provenance-only, missing, and unsupported inputs;
+section rows remain additive to the existing `sectionStatuses` contract.
+
+Closed compatibility statuses are:
+
+- `rendered-compatible` and `compatible-empty` for safely parsed inputs;
+- `provenance-only` for inputs hashed without reading or rendering content;
+- `not-provided`, `unsupported-schema`, and `unsupported-artifact` for inputs
+  that cannot support a rendered conclusion;
+- `partial` for rule-backed conflicts or compatibility gaps;
+- `compatible` for safe section and selected-profile state;
+- `profile-incompatible` and `safety-omitted` are reserved closed states for
+  future compatible readers that expose independently verifiable profile data.
+
+Missing and unsupported rows describe explorer compatibility only. They do not
+claim evidence is absent from an artifact or repository.
+
+Section status rows retain their existing semantic order in JSON: overview,
 sources, artifacts, evidence rows, surfaces, paths, reducer results, rules,
-then redactions.
+then redactions. HTML navigation places Compatibility Ledger after Coverage
+without changing the `sectionStatuses` collection.
 
 First-slice rows such as `not-rendered-in-current-slice` and `not-provided`
 are explorer compatibility labels only. They do not prove runtime behavior,
@@ -114,8 +139,10 @@ generated artifact path without printing the unsafe raw value.
 
 ## Manifest Schema
 
-`data/explorer-manifest.json` uses schema version
-`tracemap-static-html-evidence-explorer.v1` and includes:
+`data/explorer-manifest.json` and `data/explorer-data.json` use schema version
+`tracemap-static-html-evidence-explorer.v2`. The generator recognizes a prior
+v1 TraceMap-generated manifest when `--force` replaces an existing generated
+bundle, but all newly written bundles use v2. The manifest includes:
 
 - generator name, schema version, and TraceMap assembly version;
 - safety profile and claim level;
@@ -136,7 +163,26 @@ analysis, and `available` only when the supported first-slice inputs have no
 coverage-reduction labels or explorer gaps.
 
 `data/explorer-data.json` mirrors the safe view model used by the HTML page.
-It is no less redacted than the visible UI.
+It is no less redacted than the visible UI and includes the same ordered
+compatibility ledger rows rendered in the no-JavaScript HTML baseline.
+
+## Compatibility And Conflict Behavior
+
+The selected output profile remains the controlling policy. Public/demo
+aliases normalize to `public-demo`; hidden/local aliases normalize to
+`hidden-local`. These profile names are not compared directly with claim-level
+tokens.
+
+The current production conflict dimension is commit identity. When compatible
+manifest and fact inputs disagree, the fact artifact and affected evidence-row
+section remain partial and cite `explorer.input.provenance-conflict.v1` plus
+the stable `commit-conflict` gap. Generated messages do not include unsafe
+input paths or private identities.
+
+Claim level, independently declared input safety profile, source identity, and
+structured schema-version conflicts remain future hooks until a compatible
+reader exposes safe structured fields for them. Unknown metadata alone is a
+limitation, not a conflict.
 
 ## Partial Scope
 

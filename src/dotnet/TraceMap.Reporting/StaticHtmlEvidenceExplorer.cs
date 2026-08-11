@@ -64,6 +64,7 @@ public sealed record ExplorerData(
     string SchemaVersion,
     ExplorerSummary Summary,
     IReadOnlyList<ExplorerSectionStatus> SectionStatuses,
+    IReadOnlyList<ExplorerCompatibilityRow> CompatibilityLedger,
     IReadOnlyList<ExplorerSource> Sources,
     IReadOnlyList<ExplorerInputArtifact> Artifacts,
     IReadOnlyList<ExplorerEvidenceRow> EvidenceRows,
@@ -71,6 +72,20 @@ public sealed record ExplorerData(
     IReadOnlyList<ExplorerLimitation> Limitations,
     IReadOnlyList<ExplorerRule> Rules,
     IReadOnlyList<ExplorerRedaction> Redactions);
+
+public sealed record ExplorerCompatibilityRow(
+    string RowId,
+    string SubjectKind,
+    string SubjectId,
+    string SafeLabel,
+    string CompatibilityStatus,
+    string RuleId,
+    string EvidenceTier,
+    string CoverageLabel,
+    string Scope,
+    IReadOnlyList<string> SupportIds,
+    IReadOnlyList<string> LimitationIds,
+    string Message);
 
 public sealed record ExplorerSummary(
     string SafetyProfile,
@@ -185,8 +200,9 @@ public sealed record ExplorerRedaction(
 
 public static class StaticHtmlEvidenceExplorer
 {
-    public const string SchemaVersion = "tracemap-static-html-evidence-explorer.v1";
+    public const string SchemaVersion = "tracemap-static-html-evidence-explorer.v2";
     public const string GeneratorName = "tracemap-static-html-evidence-explorer";
+    private const string PriorSchemaVersion = "tracemap-static-html-evidence-explorer.v1";
 
     public const string UnsupportedSchemaRuleId = "explorer.input.unsupported-schema.v1";
     public const string ProvenanceConflictRuleId = "explorer.input.provenance-conflict.v1";
@@ -197,6 +213,7 @@ public static class StaticHtmlEvidenceExplorer
     public const string NoNetworkAssetsRuleId = "explorer.render.no-network-assets.v1";
     public const string PartialSectionRuleId = "explorer.render.partial-section.v1";
     public const string SectionStatusRuleId = "explorer.render.section-status.v1";
+    public const string CompatibilityLedgerRuleId = "explorer.render.compatibility-ledger.v1";
     public const string GeneratedFileStaleRuleId = "explorer.validation.generated-file-stale.v1";
     public const string UserFileCollisionRuleId = "explorer.validation.user-file-collision.v1";
     public const string UnsafeRejectedRuleId = "explorer.validation.unsafe-value-rejected.v1";
@@ -459,12 +476,12 @@ public static class StaticHtmlEvidenceExplorer
         await AddUnsupportedJsonArtifactsAsync(inputDirectory, safetyProfile, artifacts, gaps, cancellationToken);
 
         limitations.Add(CreateLimitation(
-            "claim-level-conflict-detection-deferred",
-            ProvenanceConflictRuleId,
-            "claim-level-conflict-detection-deferred",
+            "claim-level-metadata-unavailable",
+            PartialSectionRuleId,
+            "claim-level-metadata-unknown",
             "artifacts",
             "claim-level",
-            "Claim-level conflict detection across multiple compatible structured artifacts is deferred in this explorer slice. Existing rendered data still uses the selected safety profile and documents this limitation.",
+            "Compatible first-slice inputs do not expose independent claim-level metadata. The selected output safety profile governs rendering, and no claim-level conflict is inferred from unknown metadata.",
             ["input-directory"]));
 
         if (artifacts.All(artifact => artifact.ArtifactKind != "sqlite-index"))
@@ -562,10 +579,12 @@ public static class StaticHtmlEvidenceExplorer
             context.CoverageLabels,
             ReducerOutputPresent: false);
 
+        var sectionStatuses = BuildSectionStatuses(context);
         return new ExplorerData(
             SchemaVersion,
             summary,
-            BuildSectionStatuses(context),
+            sectionStatuses,
+            BuildCompatibilityLedger(context, sectionStatuses),
             context.Sources,
             context.Artifacts,
             context.EvidenceRows,
@@ -1014,6 +1033,7 @@ public static class StaticHtmlEvidenceExplorer
             Rule(NoNetworkAssetsRuleId, "Explorer local no-network assets", "Documents that generated HTML uses only bundled local CSS and JavaScript assets."),
             Rule(PartialSectionRuleId, "Explorer partial section", "Marks unavailable first-slice sections and missing optional artifacts as partial rather than empty."),
             Rule(SectionStatusRuleId, "Explorer section status", "Records deterministic section availability labels derived from compatible generated artifacts and rule-backed gaps."),
+            Rule(CompatibilityLedgerRuleId, "Explorer compatibility ledger", "Records deterministic artifact, section, safety-profile, and claim-metadata compatibility states without reading unsupported content."),
             Rule(GeneratedFileStaleRuleId, "Explorer stale generated file", "Prevents overwriting stale generated explorer output without explicit force."),
             Rule(UserFileCollisionRuleId, "Explorer user file collision", "Prevents overwriting user-authored files in an explorer output directory."),
             Rule(UnsafeRejectedRuleId, "Explorer unsafe generated value rejected", "Fails generation when a generated asset contains an unsafe value after redaction.")
@@ -1133,6 +1153,231 @@ public static class StaticHtmlEvidenceExplorer
         return rows.ToArray();
     }
 
+    private static IReadOnlyList<ExplorerCompatibilityRow> BuildCompatibilityLedger(
+        ExplorerBuildContext context,
+        IReadOnlyList<ExplorerSectionStatus> sectionStatuses)
+    {
+        var coverageLabel = context.CoverageLabels.FirstOrDefault() ?? "UnknownCoverage";
+        var rows = new List<ExplorerCompatibilityRow>();
+        var artifactsByKind = context.Artifacts
+            .GroupBy(artifact => artifact.ArtifactKind, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+
+        foreach (var expected in ExpectedArtifactSubjects())
+        {
+            if (!artifactsByKind.TryGetValue(expected.ArtifactKind, out var matchingArtifacts))
+            {
+                rows.Add(CompatibilityRow(
+                    "artifact",
+                    expected.ArtifactId,
+                    expected.SafeLabel,
+                    "not-provided",
+                    PartialSectionRuleId,
+                    coverageLabel,
+                    "generated-input-artifact",
+                    ["input-directory"],
+                    [],
+                    $"{expected.SafeLabel} was not provided; this compatibility state does not prove evidence absence."));
+                continue;
+            }
+
+            foreach (var artifact in matchingArtifacts)
+            {
+                rows.Add(BuildArtifactCompatibilityRow(context, artifact, coverageLabel));
+            }
+        }
+
+        foreach (var artifact in context.Artifacts
+                     .Where(artifact => !ExpectedArtifactSubjects().Any(expected => expected.ArtifactKind == artifact.ArtifactKind)))
+        {
+            rows.Add(BuildArtifactCompatibilityRow(context, artifact, coverageLabel));
+        }
+
+        foreach (var section in sectionStatuses)
+        {
+            var compatibilityStatus = section.Status switch
+            {
+                "not-provided" => "not-provided",
+                "not-rendered-in-current-slice" => "provenance-only",
+                "no-evidence-under-current-coverage" or "none-recorded" => "compatible-empty",
+                "partial" or "built-in-stubs" => "partial",
+                _ => "compatible"
+            };
+            var ruleId = compatibilityStatus is "not-provided" or "provenance-only" or "partial"
+                ? PartialSectionRuleId
+                : CompatibilityLedgerRuleId;
+            rows.Add(CompatibilityRow(
+                "section",
+                section.SectionId,
+                section.Label,
+                compatibilityStatus,
+                ruleId,
+                section.CoverageLabel,
+                "generated-explorer-section",
+                section.SupportIds,
+                compatibilityStatus == "partial" ? [section.RuleId] : [],
+                SectionCompatibilityMessage(section.Label, compatibilityStatus)));
+        }
+
+        rows.Add(CompatibilityRow(
+            "safety-profile",
+            $"safety-profile:{context.SafetyProfile}",
+            context.SafetyProfile == PublicDemo ? "Public/demo safety profile" : "Hidden/local safety profile",
+            "compatible",
+            CompatibilityLedgerRuleId,
+            coverageLabel,
+            "selected-output-profile",
+            ["data/explorer-manifest.json", "data/explorer-data.json"],
+            [],
+            "The selected output safety profile controls rendering and generated-output validation."));
+
+        rows.Add(CompatibilityRow(
+            "claim-level",
+            "claim-level:unknown",
+            "Artifact claim metadata",
+            "partial",
+            PartialSectionRuleId,
+            coverageLabel,
+            "artifact-claim-metadata",
+            ["input-directory"],
+            ["claim-level-metadata-unavailable"],
+            "Compatible first-slice inputs do not expose independent claim-level metadata; unknown metadata is not treated as a conflict."));
+
+        return rows
+            .OrderBy(row => row.SubjectKind, StringComparer.Ordinal)
+            .ThenBy(row => row.SubjectId, StringComparer.Ordinal)
+            .ThenBy(row => row.CompatibilityStatus, StringComparer.Ordinal)
+            .ThenBy(row => row.RuleId, StringComparer.Ordinal)
+            .ThenBy(row => row.RowId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static ExplorerCompatibilityRow BuildArtifactCompatibilityRow(
+        ExplorerBuildContext context,
+        ExplorerInputArtifact artifact,
+        string coverageLabel)
+    {
+        var affectedSection = artifact.ArtifactKind switch
+        {
+            "scan-manifest" => "sources",
+            "facts-ndjson" => "evidence-rows",
+            "rule-catalog" => "rules",
+            _ => "artifacts"
+        };
+        var relatedGaps = context.Gaps
+            .Where(gap => gap.AffectedSection == affectedSection
+                && (gap.Scope == artifact.ArtifactId || gap.SupportIds.Contains(artifact.ArtifactId, StringComparer.Ordinal)))
+            .OrderBy(gap => gap.GapId, StringComparer.Ordinal)
+            .ToArray();
+        var commitConflict = relatedGaps.Any(gap => gap.GapKind == "commit-conflict");
+        var unsupportedSchema = relatedGaps.Any(gap => gap.GapKind is "unsupported-schema" or "artifact-too-large");
+        var partialInput = relatedGaps.Any(gap => gap.GapKind is not ("unsupported-schema" or "artifact-too-large" or "unsupported"));
+        var status = artifact.Compatibility switch
+        {
+            "supported-provenance-only" => "provenance-only",
+            _ when unsupportedSchema => "unsupported-schema",
+            "unsupported" => "unsupported-artifact",
+            _ when commitConflict => "partial",
+            _ when partialInput => "partial",
+            "supported" when artifact.ArtifactKind == "facts-ndjson" && context.EvidenceRows.Count == 0 => "compatible-empty",
+            "supported" => "rendered-compatible",
+            _ => "partial"
+        };
+        var ruleId = status switch
+        {
+            "unsupported-schema" or "unsupported-artifact" => UnsupportedSchemaRuleId,
+            "partial" when commitConflict => ProvenanceConflictRuleId,
+            "partial" => PartialSectionRuleId,
+            _ => CompatibilityLedgerRuleId
+        };
+        var limitationIds = artifact.Limitations
+            .Concat(relatedGaps.Select(gap => gap.GapId))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var supportIds = artifact.SourceIds
+            .Append(artifact.ArtifactId)
+            .Concat(relatedGaps.SelectMany(gap => gap.SupportIds))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        return CompatibilityRow(
+            "artifact",
+            artifact.ArtifactId,
+            artifact.SafeLabel,
+            status,
+            ruleId,
+            artifact.CoverageLabels.FirstOrDefault() ?? coverageLabel,
+            "generated-input-artifact",
+            supportIds,
+            limitationIds,
+            ArtifactCompatibilityMessage(artifact.SafeLabel, status));
+    }
+
+    private static ExplorerCompatibilityRow CompatibilityRow(
+        string subjectKind,
+        string subjectId,
+        string safeLabel,
+        string compatibilityStatus,
+        string ruleId,
+        string coverageLabel,
+        string scope,
+        IReadOnlyList<string> supportIds,
+        IReadOnlyList<string> limitationIds,
+        string message)
+    {
+        return new ExplorerCompatibilityRow(
+            $"compatibility:{subjectKind}:{Hash(subjectId, 20)}",
+            subjectKind,
+            subjectId,
+            safeLabel,
+            compatibilityStatus,
+            ruleId,
+            Tier4Unknown,
+            coverageLabel,
+            scope,
+            supportIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            limitationIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            message);
+    }
+
+    private static IReadOnlyList<(string ArtifactId, string ArtifactKind, string SafeLabel)> ExpectedArtifactSubjects()
+    {
+        return
+        [
+            ("artifact:scan-manifest", "scan-manifest", "Scan manifest"),
+            ("artifact:facts-ndjson", "facts-ndjson", "Fact stream"),
+            ("artifact:sqlite-index", "sqlite-index", "SQLite index"),
+            ("artifact:markdown-report", "markdown-report", "Markdown report"),
+            ("artifact:rule-catalog", "rule-catalog", "Rule catalog")
+        ];
+    }
+
+    private static string ArtifactCompatibilityMessage(string safeLabel, string status)
+    {
+        return status switch
+        {
+            "rendered-compatible" => $"{safeLabel} was parsed through a compatible safe reader and contributed rendered explorer data.",
+            "compatible-empty" => $"{safeLabel} was parsed through a compatible safe reader and contained no renderable rows under the current coverage.",
+            "provenance-only" => $"{safeLabel} was hashed for provenance only; its raw content was not inspected or rendered.",
+            "unsupported-schema" => $"{safeLabel} was present but its schema is not supported by the current safe reader.",
+            "unsupported-artifact" => $"{safeLabel} was present but is not a supported rendered artifact in this explorer slice.",
+            _ => $"{safeLabel} contributed only partial compatible data because a rule-backed input gap applies."
+        };
+    }
+
+    private static string SectionCompatibilityMessage(string safeLabel, string status)
+    {
+        return status switch
+        {
+            "compatible" => $"{safeLabel} is available from compatible safe explorer data.",
+            "compatible-empty" => $"{safeLabel} has compatible input but no rows under the current coverage.",
+            "provenance-only" => $"{safeLabel} has provenance-only input; raw content was not inspected or rendered.",
+            "not-provided" => $"{safeLabel} lacks a compatible input and is unavailable rather than evidence-empty.",
+            _ => $"{safeLabel} is partial under the current rule-backed explorer coverage."
+        };
+    }
+
     private static ExplorerSectionStatus SectionStatus(
         string sectionId,
         string label,
@@ -1175,7 +1420,7 @@ public static class StaticHtmlEvidenceExplorer
                 "Explorer rules describe deterministic rendering, provenance, safety, or generation gaps only.",
                 "They do not create scanner or reducer conclusions and do not prove runtime behavior."
             ],
-            ["overview", "gaps", "limitations", "artifacts", "evidence-rows"]);
+            ["overview", "compatibility-ledger", "gaps", "limitations", "artifacts", "evidence-rows"]);
     }
 
     private static void RecordOmittedManifestIdentity(
@@ -1615,6 +1860,7 @@ public static class StaticHtmlEvidenceExplorer
         builder.AppendLine("  <main>");
         RenderOverview(builder, data.Summary);
         RenderCoverage(builder, data.SectionStatuses);
+        RenderCompatibilityLedger(builder, data.CompatibilityLedger);
         RenderSources(builder, data.Sources);
         RenderArtifacts(builder, data.Artifacts);
         RenderGaps(builder, data.Gaps);
@@ -1672,6 +1918,22 @@ public static class StaticHtmlEvidenceExplorer
         {
             var supportIds = Html(string.Join(", ", row.SupportIds));
             builder.AppendLine($"        <tr><th scope=\"row\">{Html(row.Label)}</th><td>{Html(row.Status)}</td><td>{Html(row.RuleId)}</td><td>{Html(row.EvidenceTier)}</td><td>{Html(row.CoverageLabel)}</td><td>{supportIds}</td><td>{Html(row.Message)}</td></tr>");
+        }
+        builder.AppendLine("      </tbody></table>");
+        builder.AppendLine("    </section>");
+    }
+
+    private static void RenderCompatibilityLedger(StringBuilder builder, IReadOnlyList<ExplorerCompatibilityRow> rows)
+    {
+        builder.AppendLine("    <section id=\"compatibility-ledger\" aria-labelledby=\"compatibility-ledger-heading\">");
+        builder.AppendLine("      <h2 id=\"compatibility-ledger-heading\">Compatibility Ledger</h2>");
+        builder.AppendLine("      <p>Compatibility rows explain what the explorer could safely read or render. Missing and unsupported inputs are not evidence-absence conclusions.</p>");
+        builder.AppendLine("      <table><caption>Rule-backed artifact, section, profile, and claim-metadata compatibility</caption><thead><tr><th>Subject</th><th>Kind</th><th>Label</th><th>Status</th><th>Rule ID</th><th>Tier</th><th>Coverage</th><th>Scope</th><th>Support IDs</th><th>Limitations</th><th>Message</th></tr></thead><tbody>");
+        foreach (var row in rows)
+        {
+            var supportIds = Html(string.Join(", ", row.SupportIds));
+            var limitationIds = Html(string.Join(", ", row.LimitationIds));
+            builder.AppendLine($"        <tr><th scope=\"row\">{Html(row.SubjectId)}</th><td>{Html(row.SubjectKind)}</td><td>{Html(row.SafeLabel)}</td><td>{Html(row.CompatibilityStatus)}</td><td>{Html(row.RuleId)}</td><td>{Html(row.EvidenceTier)}</td><td>{Html(row.CoverageLabel)}</td><td>{Html(row.Scope)}</td><td>{supportIds}</td><td>{limitationIds}</td><td>{Html(row.Message)}</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
@@ -1816,6 +2078,7 @@ public static class StaticHtmlEvidenceExplorer
         [
             ("overview", "Evidence Overview"),
             ("coverage", "Coverage"),
+            ("compatibility-ledger", "Compatibility Ledger"),
             ("sources", "Sources"),
             ("artifacts", "Artifacts"),
             ("gaps", "Gaps"),
@@ -2069,7 +2332,7 @@ public static class StaticHtmlEvidenceExplorer
         {
             using var document = JsonDocument.Parse(content);
             return document.RootElement.TryGetProperty("schemaVersion", out var schemaVersion)
-                && schemaVersion.GetString() == SchemaVersion
+                && schemaVersion.GetString() is SchemaVersion or PriorSchemaVersion
                 && document.RootElement.TryGetProperty("tracemapGenerated", out var generated)
                 && generated.ValueKind == JsonValueKind.True;
         }
