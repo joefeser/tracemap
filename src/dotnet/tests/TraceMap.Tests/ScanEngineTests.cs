@@ -316,6 +316,35 @@ public sealed class ScanEngineTests
     }
 
     [Fact]
+    public void Semantic_input_guard_covers_compilation_documents_outside_fact_extraction_scope()
+    {
+        using var temp = new TempDirectory();
+        const string selectedPath = "A.cs";
+        const string compilationOnlyPath = "B.cs";
+        File.WriteAllText(Path.Combine(temp.Path, selectedPath), "public sealed class A { }");
+        File.WriteAllText(Path.Combine(temp.Path, compilationOnlyPath), "public sealed class Alpha { }");
+        var inventory = FileInventory.Collect(temp.Path);
+        var baseline = ScanEngine.CaptureSemanticInputSnapshot(temp.Path, inventory);
+        var semanticResult = new SemanticExtractionResult(
+            [],
+            [],
+            true,
+            false,
+            new HashSet<string>(StringComparer.Ordinal) { selectedPath },
+            CompilationInputFiles: new HashSet<string>(StringComparer.Ordinal)
+            {
+                selectedPath,
+                compilationOnlyPath
+            });
+
+        File.WriteAllText(Path.Combine(temp.Path, compilationOnlyPath), "public sealed class Bravo { }");
+
+        var exception = Assert.Throws<SourceSnapshotException>(() =>
+            ScanEngine.VerifySemanticInputSnapshot(temp.Path, inventory, semanticResult, baseline));
+        Assert.Equal(SourceSnapshotException.ErrorCode, exception.Message);
+    }
+
+    [Fact]
     public void Scoped_scan_identity_includes_out_of_scope_msbuild_metadata_that_can_affect_semantics()
     {
         using var temp = new TempDirectory();
@@ -354,6 +383,61 @@ public sealed class ScanEngineTests
         Assert.Contains(result.Inventory, item => item.RelativePath == "src/Root.cs");
         Assert.Contains(result.Inventory, item => item.RelativePath == "src/nested/Nested.cs");
         Assert.DoesNotContain(result.Inventory, item => item.RelativePath == "Other.cs");
+    }
+
+    [Fact]
+    public void Include_scope_does_not_enter_an_unrelated_symbolic_link_directory()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        using var temp = new TempDirectory();
+        using var outside = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "src"));
+        File.WriteAllText(Path.Combine(temp.Path, "src", "Visible.cs"), "public sealed class Visible { }");
+        File.WriteAllText(Path.Combine(outside.Path, "Hidden.cs"), "public sealed class Hidden { }");
+        Directory.CreateSymbolicLink(Path.Combine(temp.Path, "vendor-link"), outside.Path);
+
+        var result = ScanEngine.Scan(new ScanOptions(
+            temp.Path,
+            Path.Combine(temp.Path, "out"),
+            IncludeGlobs: ["src/**"]));
+
+        Assert.Contains(result.Inventory, item => item.RelativePath == "src/Visible.cs");
+        Assert.DoesNotContain(result.Inventory, item => item.RelativePath.StartsWith("vendor-link", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Scoped_scan_digest_covers_repository_local_roslyn_compilation_inputs()
+    {
+        using var temp = new TempDirectory();
+        var projectPath = Path.Combine(temp.Path, "App.csproj");
+        var helperPath = Path.Combine(temp.Path, "B.cs");
+        File.WriteAllText(projectPath, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(
+            Path.Combine(temp.Path, "A.cs"),
+            "public sealed class A { public int Read() => B.Value; }");
+        File.WriteAllText(
+            helperPath,
+            "public static class B { public static int Value => 1; }");
+        var options = new ScanOptions(
+            temp.Path,
+            Path.Combine(temp.Path, "before"),
+            IncludeGlobs: ["App.csproj", "A.cs"]);
+
+        var before = ScanEngine.Scan(options);
+        File.WriteAllText(
+            helperPath,
+            "public static class B { public static int Value => 2; }");
+        var after = ScanEngine.Scan(options with { OutputPath = Path.Combine(temp.Path, "after") });
+
+        Assert.DoesNotContain(before.Inventory, item => item.RelativePath == "B.cs");
+        Assert.NotEqual(before.Manifest.SourceSnapshotDigest, after.Manifest.SourceSnapshotDigest);
+        Assert.NotEqual(before.Manifest.ScanId, after.Manifest.ScanId);
     }
 
     [Fact]

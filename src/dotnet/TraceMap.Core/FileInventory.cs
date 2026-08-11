@@ -87,7 +87,15 @@ public static class FileInventory
         string repoPath,
         string? outputPath,
         IReadOnlyList<string>? excludeGlobs,
-        StringComparer? pathComparer)
+        StringComparer? pathComparer) =>
+        Collect(repoPath, outputPath, excludeGlobs, pathComparer, includeGlobs: null);
+
+    public static IReadOnlyList<FileInventoryItem> Collect(
+        string repoPath,
+        string? outputPath,
+        IReadOnlyList<string>? excludeGlobs,
+        StringComparer? pathComparer,
+        IReadOnlyList<string>? includeGlobs)
     {
         var root = Path.GetFullPath(repoPath);
         var outputFullPath = string.IsNullOrWhiteSpace(outputPath)
@@ -109,7 +117,8 @@ public static class FileInventory
                 options,
                 outputFullPath,
                 excludeGlobs ?? [],
-                pathComparer ?? StringComparer.Ordinal).ToArray();
+                pathComparer ?? StringComparer.Ordinal,
+                includeGlobs ?? []).ToArray();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -140,7 +149,8 @@ public static class FileInventory
         EnumerationOptions options,
         string? outputFullPath,
         IReadOnlyList<string> excludeGlobs,
-        StringComparer pathComparer)
+        StringComparer pathComparer,
+        IReadOnlyList<string> includeGlobs)
     {
         var pending = new Stack<string>();
         pending.Push(root);
@@ -150,7 +160,8 @@ public static class FileInventory
             foreach (var childDirectory in Directory.EnumerateDirectories(directory, "*", options))
             {
                 if (ShouldExclude(root, childDirectory, outputFullPath)
-                    || IsExplicitlyExcludedDirectory(root, childDirectory, excludeGlobs, pathComparer))
+                    || IsExplicitlyExcludedDirectory(root, childDirectory, excludeGlobs, pathComparer)
+                    || !CanContainIncludedFile(root, childDirectory, includeGlobs, pathComparer))
                 {
                     continue;
                 }
@@ -171,6 +182,49 @@ public static class FileInventory
             }
         }
     }
+
+    private static bool CanContainIncludedFile(
+        string root,
+        string directory,
+        IReadOnlyList<string> includeGlobs,
+        StringComparer pathComparer)
+    {
+        var configuredGlobs = includeGlobs
+            .Where(glob => !string.IsNullOrWhiteSpace(glob))
+            .Select(glob => NormalizeRelativePath(glob.Trim()))
+            .ToArray();
+        if (configuredGlobs.Length == 0)
+            return true;
+
+        var directoryParts = NormalizeRelativePath(Path.GetRelativePath(root, directory))
+            .Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return configuredGlobs.Any(glob =>
+        {
+            var globParts = glob.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var literalDirectoryPartCount = 0;
+            while (literalDirectoryPartCount < globParts.Length - 1
+                && !ContainsGlobWildcard(globParts[literalDirectoryPartCount]))
+            {
+                literalDirectoryPartCount++;
+            }
+
+            if (literalDirectoryPartCount == 0)
+                return true;
+
+            var comparablePartCount = Math.Min(directoryParts.Length, literalDirectoryPartCount);
+            for (var index = 0; index < comparablePartCount; index++)
+            {
+                if (!pathComparer.Equals(directoryParts[index], globParts[index]))
+                    return false;
+            }
+
+            return true;
+        });
+    }
+
+    private static bool ContainsGlobWildcard(string value) =>
+        value.Contains('*', StringComparison.Ordinal)
+        || value.Contains('?', StringComparison.Ordinal);
 
     private static void RejectReparsePoint(string path)
     {

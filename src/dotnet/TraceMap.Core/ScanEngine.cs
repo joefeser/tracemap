@@ -28,7 +28,12 @@ public static class ScanEngine
             git = GitMetadataProvider.Detect(repoPath);
             MsBuildBinlogExtractor.ValidateCommitBinding(git.CommitSha, options.BinlogPaths, options.BinlogCommitSha);
             var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
-            fullInventory = FileInventory.Collect(repoPath, outputPath, options.ExcludeGlobs, sourcePathComparer);
+            fullInventory = FileInventory.Collect(
+                repoPath,
+                outputPath,
+                options.ExcludeGlobs,
+                sourcePathComparer,
+                options.IncludeGlobs);
             inventory = ApplyScope(fullInventory, repoPath, options);
             cancellationToken.ThrowIfCancellationRequested();
             discoveryOperation.RecordItems(inventory.Count);
@@ -57,7 +62,7 @@ public static class ScanEngine
         }
 
         inventory = IncludeSemanticallyAnalyzedFiles(inventory, fullInventory, semanticResult);
-        var discoveredSnapshotInventory = IncludeSemanticMetadataInputs(inventory, fullInventory);
+        var discoveredSnapshotInventory = IncludeSemanticInputs(inventory, fullInventory, semanticResult);
         IReadOnlyList<FileInventoryItem> authoritativeSnapshotInventory;
         try
         {
@@ -66,15 +71,17 @@ public static class ScanEngine
                 repoPath,
                 outputPath,
                 options.ExcludeGlobs,
-                sourcePathComparer);
+                sourcePathComparer,
+                options.IncludeGlobs);
             var refreshedInventory = ApplyScope(refreshedFullInventory, repoPath, options);
             refreshedInventory = IncludeSemanticallyAnalyzedFiles(
                 refreshedInventory,
                 refreshedFullInventory,
                 semanticResult);
-            var refreshedSnapshotInventory = IncludeSemanticMetadataInputs(
+            var refreshedSnapshotInventory = IncludeSemanticInputs(
                 refreshedInventory,
-                refreshedFullInventory);
+                refreshedFullInventory,
+                semanticResult);
             VerifySourceSnapshotInventoryMembership(discoveredSnapshotInventory, refreshedSnapshotInventory);
             VerifySemanticInputSnapshot(
                 repoPath,
@@ -182,15 +189,17 @@ public static class ScanEngine
                 repoPath,
                 outputPath,
                 options.ExcludeGlobs,
-                sourcePathComparer);
+                sourcePathComparer,
+                options.IncludeGlobs);
             var verificationInventory = ApplyScope(verificationFullInventory, repoPath, options);
             verificationInventory = IncludeSemanticallyAnalyzedFiles(
                 verificationInventory,
                 verificationFullInventory,
                 semanticResult);
-            var verificationSnapshotInventory = IncludeSemanticMetadataInputs(
+            var verificationSnapshotInventory = IncludeSemanticInputs(
                 verificationInventory,
-                verificationFullInventory);
+                verificationFullInventory,
+                semanticResult);
             VerifySourceSnapshotInventory(authoritativeSnapshotInventory, verificationSnapshotInventory);
             verificationDigest = CreateSourceSnapshotDigest(repoPath, verificationSnapshotInventory);
         }
@@ -312,6 +321,7 @@ public static class ScanEngine
         IReadOnlyDictionary<string, string> baseline)
     {
         var protectedPaths = GetSemanticallyAnalyzedFiles(semanticResult)
+            .Concat(semanticResult.CompilationInputFiles?.AsEnumerable() ?? Enumerable.Empty<string>())
             .Concat(inventory.Where(item => IsSemanticMetadataKind(item.Kind)).Select(item => item.RelativePath))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
@@ -340,12 +350,16 @@ public static class ScanEngine
     private static bool IsSemanticMetadataKind(string kind) =>
         kind is "Solution" or "Project" or "MSBuildProps" or "MSBuildTargets";
 
-    private static IReadOnlyList<FileInventoryItem> IncludeSemanticMetadataInputs(
+    private static IReadOnlyList<FileInventoryItem> IncludeSemanticInputs(
         IReadOnlyList<FileInventoryItem> inventory,
-        IReadOnlyList<FileInventoryItem> fullInventory)
+        IReadOnlyList<FileInventoryItem> fullInventory,
+        SemanticExtractionResult semanticResult)
     {
+        var compilationInputFiles = semanticResult.CompilationInputFiles ?? new HashSet<string>(StringComparer.Ordinal);
         return inventory
-            .Concat(fullInventory.Where(item => IsSemanticMetadataKind(item.Kind)))
+            .Concat(fullInventory.Where(item =>
+                IsSemanticMetadataKind(item.Kind)
+                || compilationInputFiles.Contains(item.RelativePath)))
             .GroupBy(item => item.RelativePath, StringComparer.Ordinal)
             .Select(group => group.First())
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
