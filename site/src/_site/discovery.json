@@ -1314,6 +1314,40 @@
     ]
   },
   {
+    "path": "/blog/bugs-hiding-in-graph-history/",
+    "title": "The Bugs Hiding in Graph History",
+    "summary": "Demo-level article about identity collapse, guessed receivers, reversed edges, stale snapshots, silent omission, and why loud incompleteness is safer.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/evidence/",
+    "limitations": [
+      "The historical taxonomy is grounded in checked-in synthetic fixture contracts and does not claim every past or possible C# graph defect is represented.",
+      "Static graph integrity does not establish runtime dispatch, branch feasibility, selected DI behavior, production reachability, severity, release approval, or safety."
+    ],
+    "nonClaims": [
+      "No complete-language, universal-correctness, runtime-reachability, production-behavior, severity, required-testing, release-approval, or operational-safety proof.",
+      "No source snippet, analyzer output, raw index, local path, private identity, credential, private validation detail, LLM, embedding, vector, or prompt-based classification."
+    ]
+  },
+  {
+    "path": "/blog/csharp-extraction-without-plausible-wrong-graphs/",
+    "title": "C# Extraction Without Plausible Wrong Graphs",
+    "summary": "Demo-level article about compiler-selected C# identity, exact call sites, syntax-plus-gap fallback, immutable snapshots, and bounded review-tier ambiguity.",
+    "publicClaimLevel": "demo",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/evidence/",
+    "limitations": [
+      "The article is grounded in checked-in synthetic fixture contracts and does not claim complete C# language or project-system coverage.",
+      "Static semantic identity does not establish runtime dispatch, branch feasibility, selected DI implementation, registration order, lifetime, or production reachability."
+    ],
+    "nonClaims": [
+      "No complete-language, runtime-reachability, production-correctness, severity, required-testing, release-approval, or operational-safety proof.",
+      "No source snippet, analyzer output, raw index, local path, private identity, credential, private validation detail, LLM, embedding, vector, or prompt-based classification."
+    ]
+  },
+  {
     "path": "/manager-brief/",
     "title": "Manager Problem Brief",
     "summary": "Concept-level manager brief for the coordination problem TraceMap reduces with deterministic static evidence packets and visible limitations.",
