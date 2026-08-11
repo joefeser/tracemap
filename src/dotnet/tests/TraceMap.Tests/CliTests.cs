@@ -14,6 +14,9 @@ public sealed class CliTests
 
         Assert.Equal(0, exitCode);
         Assert.Contains("tracemap scan --repo <path> --out <path>", output.ToString());
+        Assert.Contains("SourceInventoryIncomplete", output.ToString());
+        Assert.Contains("SourceSnapshotChangedDuringScan", output.ToString());
+        Assert.Contains("exit code 1; no scan artifacts are written", output.ToString());
         Assert.Equal(string.Empty, error.ToString());
     }
 

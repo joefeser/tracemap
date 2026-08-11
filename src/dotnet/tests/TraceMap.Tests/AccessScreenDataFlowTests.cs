@@ -110,6 +110,53 @@ public sealed class AccessScreenDataFlowTests
             && gap.SupportingFactIds.Contains("fact-page-context", StringComparer.Ordinal));
     }
 
+    [Theory]
+    [InlineData("pivot-expression")]
+    [InlineData("pivot_expression")]
+    public void Builder_excludes_non_output_roles_from_returned_value_flow(string sourceRole)
+    {
+        var facts = FlowFacts().ToList();
+        var outputSource = facts.Single(fact => fact.FactId == "fact-query-output-source");
+        facts.Add(outputSource with
+        {
+            FactId = "fact-query-output-non-value-source",
+            TargetSymbol = "access-field-14141414141414141414141414141414",
+            Properties = new SortedDictionary<string, string>(
+                outputSource.Properties.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["sourceRole"] = sourceRole
+            }
+        });
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
+
+        Assert.DoesNotContain(
+            report.Paths.SelectMany(path => path.Edges),
+            edge => edge.Evidence.FactId == "fact-query-output-non-value-source");
+    }
+
+    [Fact]
+    public void Builder_treats_missing_legacy_source_role_as_output_expression()
+    {
+        var facts = FlowFacts().ToList();
+        var outputSource = facts.Single(fact => fact.FactId == "fact-query-output-source");
+        facts[facts.IndexOf(outputSource)] = outputSource with
+        {
+            Properties = new SortedDictionary<string, string>(
+                outputSource.Properties
+                    .Where(item => item.Key != "sourceRole")
+                    .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+        };
+
+        var report = AccessScreenDataFlowReporter.Build("synthetic", Commit, facts, 12, 100, 100);
+
+        Assert.Contains(
+            report.Paths.SelectMany(path => path.Edges),
+            edge => edge.Evidence.FactId == "fact-query-output-source");
+    }
+
     [Fact]
     public void Builder_marks_partial_edges_normalizes_tiers_and_drops_unsafe_limitations()
     {
@@ -548,7 +595,7 @@ public sealed class AccessScreenDataFlowTests
             Fact("fact-query-output", FactTypes.AccessQueryOutputDeclared, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier2Structural, query, queryOutput,
                 ("coverageLabel", "complete")),
             Fact("fact-query-output-source", FactTypes.AccessQueryOutputSourceCandidate, RuleIds.LegacyAccessQuery, EvidenceTiers.Tier3SyntaxOrTextual, queryOutput, tableField,
-                ("targetKind", "field"), ("coverageLabel", "complete")),
+                ("sourceRole", "output-expression"), ("targetKind", "field"), ("coverageLabel", "complete")),
             Fact("fact-control-output", FactTypes.AccessBindingDeclared, RuleIds.LegacyAccessBinding, EvidenceTiers.Tier2Structural, control, queryOutput,
                 ("targetKind", "field"), ("coverageLabel", "complete")),
             Fact("fact-report", FactTypes.AccessReportDeclared, RuleIds.LegacyAccessUiSurface, EvidenceTiers.Tier2Structural, null, report,

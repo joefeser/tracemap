@@ -339,6 +339,26 @@ public static class AccessDesignEvidenceComposer
             if (fact.FactType == FactTypes.AccessQueryOutputSourceCandidate
                 && fact.SourceSymbol is not null)
             {
+                // Pivot-expression candidates describe how a literal crosstab
+                // column is produced; they are not the output expression's
+                // source alias. Keep them in the evidence graph, but exclude
+                // them from the unique output->source alias resolver so a
+                // crosstab does not become falsely ambiguous (aggregate field
+                // plus pivot field) for report/domain composition.
+                var sourceRole = fact.Properties.GetValueOrDefault("sourceRole");
+                if (string.IsNullOrWhiteSpace(sourceRole))
+                    sourceRole = "output-expression";
+                if (sourceRole == "pivot-expression")
+                    continue;
+                if (sourceRole != "output-expression")
+                {
+                    normalizationGaps.Add(new(
+                        "AccessDesignInputQueryOutputSourceRoleInvalid",
+                        "query-field",
+                        fact.SourceSymbol,
+                        RuleIds.LegacyAccessDesignInput));
+                    continue;
+                }
                 if (!queryOutputSourcesByOutput.TryGetValue(fact.SourceSymbol, out var sourceCandidates))
                     queryOutputSourcesByOutput[fact.SourceSymbol] = sourceCandidates = [];
                 sourceCandidates.Add(fact.TargetSymbol);

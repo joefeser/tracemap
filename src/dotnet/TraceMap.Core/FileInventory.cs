@@ -1,5 +1,25 @@
 namespace TraceMap.Core;
 
+public sealed class SourceInventoryException : Exception
+{
+    public const string ErrorCode = "SourceInventoryIncomplete";
+
+    public SourceInventoryException(Exception innerException)
+        : base(ErrorCode, innerException)
+    {
+    }
+}
+
+public sealed class SourceSnapshotException : Exception
+{
+    public const string ErrorCode = "SourceSnapshotChangedDuringScan";
+
+    public SourceSnapshotException(Exception? innerException = null)
+        : base(ErrorCode, innerException)
+    {
+    }
+}
+
 public static class FileInventory
 {
     private static readonly HashSet<string> IncludedExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -60,7 +80,14 @@ public static class FileInventory
         "obj"
     };
 
-    public static IReadOnlyList<FileInventoryItem> Collect(string repoPath, string? outputPath = null)
+    public static IReadOnlyList<FileInventoryItem> Collect(string repoPath, string? outputPath = null) =>
+        Collect(repoPath, outputPath, excludeGlobs: null, pathComparer: null);
+
+    public static IReadOnlyList<FileInventoryItem> Collect(
+        string repoPath,
+        string? outputPath,
+        IReadOnlyList<string>? excludeGlobs,
+        StringComparer? pathComparer)
     {
         var root = Path.GetFullPath(repoPath);
         var outputFullPath = string.IsNullOrWhiteSpace(outputPath)
@@ -69,11 +96,25 @@ public static class FileInventory
 
         var options = new EnumerationOptions
         {
-            RecurseSubdirectories = true,
-            IgnoreInaccessible = true
+            RecurseSubdirectories = false,
+            IgnoreInaccessible = false,
+            AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint
         };
 
-        var candidateFiles = EnumerateCandidateFiles(root, options, outputFullPath).ToArray();
+        string[] candidateFiles;
+        try
+        {
+            candidateFiles = EnumerateCandidateFiles(
+                root,
+                options,
+                outputFullPath,
+                excludeGlobs ?? [],
+                pathComparer ?? StringComparer.Ordinal).ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new SourceInventoryException(ex);
+        }
 
         var serviceReferenceFolders = candidateFiles
             .Where(path => Path.GetExtension(path).Equals(".svcmap", StringComparison.OrdinalIgnoreCase))
@@ -87,22 +128,60 @@ public static class FileInventory
 
         var items = candidateFiles
             .Where(path => ShouldInclude(root, path, serviceReferenceFolders, webReferenceFolders))
-            .Select(path => TryCreateItem(root, path, serviceReferenceFolders, webReferenceFolders))
-            .Where(item => item is not null)
-            .Select(item => item!)
+            .Select(path => CreateItem(root, path, serviceReferenceFolders, webReferenceFolders))
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .ToArray();
 
         return items;
     }
 
-    private static IEnumerable<string> EnumerateCandidateFiles(string root, EnumerationOptions options, string? outputFullPath)
+    private static IEnumerable<string> EnumerateCandidateFiles(
+        string root,
+        EnumerationOptions options,
+        string? outputFullPath,
+        IReadOnlyList<string> excludeGlobs,
+        StringComparer pathComparer)
     {
-        return Directory.EnumerateFiles(root, "*", options)
-            .Where(path => !ShouldExclude(root, path, outputFullPath));
+        var pending = new Stack<string>();
+        pending.Push(root);
+        while (pending.Count > 0)
+        {
+            var directory = pending.Pop();
+            foreach (var childDirectory in Directory.EnumerateDirectories(directory, "*", options))
+            {
+                if (ShouldExclude(root, childDirectory, outputFullPath)
+                    || IsExplicitlyExcludedDirectory(root, childDirectory, excludeGlobs, pathComparer))
+                {
+                    continue;
+                }
+
+                pending.Push(childDirectory);
+            }
+
+            foreach (var file in Directory.EnumerateFiles(directory, "*", options))
+            {
+                if (!ShouldExclude(root, file, outputFullPath))
+                    yield return file;
+            }
+        }
     }
 
-    private static FileInventoryItem? TryCreateItem(string root, string path, ISet<string> serviceReferenceFolders, ISet<string> webReferenceFolders)
+    private static bool IsExplicitlyExcludedDirectory(
+        string root,
+        string directory,
+        IReadOnlyList<string> excludeGlobs,
+        StringComparer pathComparer)
+    {
+        if (excludeGlobs.Count == 0)
+            return false;
+
+        var relativePath = NormalizeRelativePath(Path.GetRelativePath(root, directory));
+        return excludeGlobs.Any(glob =>
+            ScanEngine.GlobMatches(relativePath, glob, pathComparer)
+            || ScanEngine.GlobMatches(relativePath + "/", glob, pathComparer));
+    }
+
+    private static FileInventoryItem CreateItem(string root, string path, ISet<string> serviceReferenceFolders, ISet<string> webReferenceFolders)
     {
         try
         {
@@ -114,7 +193,7 @@ public static class FileInventory
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return null;
+            throw new SourceInventoryException(ex);
         }
     }
 

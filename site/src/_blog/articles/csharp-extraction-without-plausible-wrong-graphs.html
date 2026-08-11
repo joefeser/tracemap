@@ -1,0 +1,210 @@
+<p>
+  <strong>Public claim level: demo.</strong>
+  A C# dependency graph can look tidy and still be wrong. Two assemblies can
+  declare the same qualified type name. Overloads can share a display label.
+  A local can shadow a field. A missing reference can leave an invocation that
+  looks bindable but is not. TraceMap’s checked-in synthetic fixture matrix
+  treats those cases as graph-integrity tests, not formatting details.
+</p>
+
+<section data-csharp-truth-block="manager-question">
+  <h2>What makes the evidence stronger than a display-name graph?</h2>
+  <p>
+    The short answer is compiler-selected identity plus explicit failure
+    behavior. When Roslyn resolves a symbol, TraceMap retains a canonical ID,
+    the declared relationship direction, the exact call-site span, the source
+    and target assembly context, the rule ID, evidence tier, commit SHA,
+    extractor ID/version, coverage label, and limitation. The label shown to a
+    reviewer is not the join key.
+  </p>
+  <p>
+    When compiler evidence is unavailable, TraceMap does not silently recreate
+    the same confidence from text. It keeps syntax evidence and emits a gap.
+    That makes a reduced graph less attractive than a guessed graph, but much
+    more useful for responsible review.
+  </p>
+</section>
+
+<section data-csharp-truth-block="identity">
+  <h2>Canonical identity keeps same-looking symbols apart.</h2>
+  <p>
+    <code>csharp.semantic.symbolidentity.v1</code> and
+    <code>csharp.semantic.declarations.v1</code> preserve compiler-selected
+    identity across namespaces, assemblies, overload signatures, generic
+    substitutions, aliases, nested types, and partial declarations. A local
+    type and a framework type can share a simple name without becoming one
+    node. Same-named methods remain distinct when parameter or return types
+    differ.
+  </p>
+  <p>
+    Partial declarations in separate files can retain one canonical type
+    identity while each declaration and call keeps its real span. An alias is
+    resolved to the original symbol rather than promoted into a competing
+    identity. Constructed generic endpoints preserve definition identity while
+    substituted type keys keep incompatible constructions separate.
+  </p>
+</section>
+
+<section data-csharp-truth-block="call-sites">
+  <h2>The call site records what the compiler selected.</h2>
+  <p>
+    <code>csharp.semantic.callgraph.v1</code> treats the caller as the source and
+    the selected member as the target. Field, parameter, property, local,
+    inline declaration, pattern variable, static, extension, and
+    interface-typed receiver forms are scoped through compiler evidence. If a
+    local shadows a field, the local call and explicitly qualified field call
+    can point to different canonical targets.
+  </p>
+  <p>
+    Direction is preserved through extraction, machine-readable facts, the
+    standard index, and reverse traversal. Reverse analysis walks from target
+    to source; it does not rewrite the stored edge. This matters because a
+    reversed relationship can produce paths that look completely plausible.
+  </p>
+</section>
+
+<section data-csharp-truth-block="fallback">
+  <h2>Semantic failure becomes syntax plus a gap.</h2>
+  <p>
+    If a receiver or reference cannot be resolved, TraceMap refuses to invent a
+    Tier 1 endpoint. It can retain a Tier 3 invocation or declaration under
+    rules such as <code>csharp.syntax.invocation.v1</code> and
+    <code>csharp.syntax.callgraph.v1</code>, then attach a Tier 4 workspace or
+    compiler gap under <code>csharp.semantic.workspace.v1</code>. Coverage is
+    labeled reduced or partial rather than clean.
+  </p>
+  <p>
+    The fallback is deliberately asymmetric: syntax can preserve what was
+    written, but it cannot claim what the compiler would have selected. A
+    source declaration with a matching display name does not absorb an
+    unresolved global symbol. Error-type identities do not become durable
+    semantic nodes merely because they are convenient.
+  </p>
+</section>
+
+<section data-csharp-truth-block="refusals">
+  <h2>Several tempting joins are explicitly refused.</h2>
+  <p>
+    TraceMap does not join by display name, rebind unresolved symbols to nearby
+    declarations, choose an arbitrary receiver, or guess a member from the
+    receiver type alone. It does not merge partial types across assembly
+    boundaries. Noncanonical route, query, table, message, and project labels
+    are not promoted into semantic call edges.
+  </p>
+  <p>
+    Optional HTTP and database relationship families participate in reverse
+    traversal only when the caller and framework-member endpoints carry the
+    documented Tier 1 semantic identity and provenance. Syntax-only observations
+    remain observations with identity gaps, not substitute endpoints.
+  </p>
+</section>
+
+<section data-csharp-truth-block="snapshot">
+  <h2>Snapshot truthfulness protects the graph around the extractor.</h2>
+  <p>
+    The scan manifest binds repository and commit identity, selected scope,
+    source inventory, and coverage. Source-byte identity is checked so a file
+    that changes during a scan cannot quietly support evidence from two
+    different states. Missing inventory and explicit exclusion are different
+    conditions: only declared scope/exclusion authority may describe a source
+    as intentionally excluded.
+  </p>
+  <p>
+    Current C# graph construction rebuilds immutable full snapshots. A file
+    span says where evidence was observed; it is not ownership or deletion
+    authority. Moving, deleting, or excluding a target in a later full scan
+    must remove stale semantic evidence and degrade unresolved sites to syntax
+    plus gaps without pruning unrelated evidence.
+  </p>
+</section>
+
+<section data-csharp-truth-block="bounds">
+  <h2>Ambiguity and fan-out remain review-tier.</h2>
+  <p>
+    Canonical identity prevents many false joins, but it does not make static
+    dispatch equal runtime behavior. Interface and override candidates can fan
+    out. DI registration context may narrow compatible candidates without
+    selecting the runtime implementation, order, or lifetime. Bounded results,
+    truncation state, omitted counts, cycles, and identity/member/schema gaps
+    remain visible downstream.
+  </p>
+  <p>
+    Paths, route-flow reports, reverse queries, impact reports, portfolios,
+    review packets, and evidence exports must carry the weakest relationship
+    tier and gap state forward. They cannot strengthen an ambiguous candidate
+    merely because several reports repeat it. The dedicated static-dispatch
+    article tracked by issue #617 will own the deeper candidate-composition
+    walkthrough when that route is published.
+  </p>
+</section>
+
+<section data-csharp-truth-block="legacy">
+  <h2>Legacy and non-compiling inputs remain useful—but partial.</h2>
+  <p>
+    An old project with an unavailable reference can still yield structural
+    build diagnostics, syntax declarations, and syntax invocations. The honest
+    result also includes workspace gaps and reduced coverage. A failed build or
+    unavailable project load is not a clean repository, and an empty semantic
+    edge set does not prove no dependency exists.
+  </p>
+  <p>
+    Referenced projects may support compilation without placing out-of-scope
+    facts into the selected inventory. Linked compile items that belong to the
+    selected project remain inventoried. Out-of-root compiler identities can be
+    retained under bounded synthetic provenance without exposing host-local
+    paths.
+  </p>
+</section>
+
+<section data-csharp-truth-block="remaining-gaps">
+  <h2>Known gaps stay named.</h2>
+  <p>
+    TraceMap does not currently expose an in-place incremental replacement
+    contract. It does not combine multiple build configurations into universal
+    semantics. Nested partial and generated/source partial coverage still have
+    planned fixture work. Runtime dispatch, branch feasibility, reflection,
+    dynamic loading, selected DI implementation, registration order, and
+    production reachability require evidence outside this static contract.
+  </p>
+  <p>
+    Those limits belong in the handoff. Use the
+    companion history article,
+    <a href="/blog/bugs-hiding-in-graph-history/">The Bugs Hiding in Graph History</a>,
+    <a href="/evidence/">evidence model</a>,
+    <a href="/evidence/gaps/">gap guide</a>,
+    <a href="/static-vs-runtime/">static-versus-runtime boundary</a>,
+    <a href="/proof-paths/for-managers/">manager proof path</a>,
+    <a href="/capabilities/">capability index</a>,
+    <a href="/use-cases/change-review/">change-review use case</a>,
+    <a href="/validation/">validation guide</a>, and
+    <a href="/limitations/">limitations</a> before repeating a graph conclusion.
+  </p>
+</section>
+
+<section data-csharp-truth-block="non-claims" data-csharp-truth-boundary="non-claims">
+  <h2>What this evidence does not establish.</h2>
+  <p>
+    It does not establish complete language coverage, runtime dispatch or
+    reachability, a selected DI implementation, branch feasibility, production
+    correctness, severity, required testing, release approval, or operational
+    safety. It does not replace compilation review, runtime observation,
+    system owners, or human approval.
+  </p>
+  <p>
+    The public article includes no source snippet, analyzer output, raw index,
+    machine-local path, private identity, credential, or private validation
+    detail. No LLM, embedding, vector, or prompt classification creates the
+    graph.
+  </p>
+</section>
+
+<section data-csharp-truth-block="bottom-line">
+  <h2>A truthful partial graph beats a complete-looking guess.</h2>
+  <p>
+    TraceMap’s C# contract is strongest where the compiler selects exact
+    identities and weakest where evidence is missing or ambiguous. The value is
+    not a promise that every edge is known. It is the ability to distinguish a
+    canonical relationship from syntax evidence, review-tier candidates, and
+    explicit unknowns without hiding the difference.
+  </p>
+</section>
