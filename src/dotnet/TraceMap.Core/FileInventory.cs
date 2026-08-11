@@ -160,13 +160,18 @@ public static class FileInventory
             foreach (var childDirectory in Directory.EnumerateDirectories(directory, "*", options))
             {
                 if (ShouldExclude(root, childDirectory, outputFullPath)
-                    || IsExplicitlyExcludedDirectory(root, childDirectory, excludeGlobs, pathComparer)
-                    || !CanContainIncludedFile(root, childDirectory, includeGlobs, pathComparer))
+                    || IsExplicitlyExcludedDirectory(root, childDirectory, excludeGlobs, pathComparer))
                 {
                     continue;
                 }
 
-                RejectReparsePoint(childDirectory);
+                if (IsReparsePoint(childDirectory))
+                {
+                    if (!CanContainIncludedFile(root, childDirectory, includeGlobs, pathComparer))
+                        continue;
+
+                    RejectReparsePoint(childDirectory);
+                }
 
                 pending.Push(childDirectory);
             }
@@ -176,7 +181,6 @@ public static class FileInventory
                 if (!ShouldExclude(root, file, outputFullPath)
                     && !IsExplicitlyExcludedFile(root, file, excludeGlobs, pathComparer))
                 {
-                    RejectReparsePoint(file);
                     yield return file;
                 }
             }
@@ -228,13 +232,18 @@ public static class FileInventory
 
     private static void RejectReparsePoint(string path)
     {
+        if (IsReparsePoint(path))
+        {
+            throw new SourceInventoryException(
+                new IOException("An in-scope source path is a reparse point and cannot be inventoried truthfully."));
+        }
+    }
+
+    private static bool IsReparsePoint(string path)
+    {
         try
         {
-            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-            {
-                throw new SourceInventoryException(
-                    new IOException("An in-scope source path is a reparse point and cannot be inventoried truthfully."));
-            }
+            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -302,6 +311,7 @@ public static class FileInventory
     {
         try
         {
+            RejectReparsePoint(path);
             var info = new FileInfo(path);
             return new FileInventoryItem(
                 NormalizeRelativePath(Path.GetRelativePath(root, path)),
