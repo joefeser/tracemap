@@ -5206,13 +5206,6 @@ public static class CombinedRouteFlowReporter
         return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0;
     }
 
-    private static async Task<long> CountRowsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
-    {
-        await using var command = connection.CreateCommand();
-        command.CommandText = $"select count(*) from {tableName};";
-        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
-    }
-
     private static string RenderMarkdown(RouteFlowReport report)
     {
         IReadOnlyList<RouteFlowTouchedFile> touchedFiles = report.TouchedFiles ?? [];
