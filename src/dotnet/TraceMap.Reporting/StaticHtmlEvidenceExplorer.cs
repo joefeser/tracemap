@@ -381,7 +381,10 @@ public static class StaticHtmlEvidenceExplorer
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
-            if (sourceCommitSha is null && factCommitShas.Length == 1)
+            var factsHaveOneCompleteCommit = facts.Count > 0
+                && facts.All(fact => IsUsableCommitSha(fact.CommitSha))
+                && factCommitShas.Length == 1;
+            if (sourceCommitSha is null && factsHaveOneCompleteCommit)
             {
                 sourceCommitSha = factCommitShas[0];
                 sourceCommitSupportId = "artifact:facts-ndjson";
@@ -403,7 +406,7 @@ public static class StaticHtmlEvidenceExplorer
                 }
             }
 
-            if (manifest is null && factCommitShas.Length == 0)
+            if (manifest is null && !factsHaveOneCompleteCommit)
             {
                 gaps.Add(CreateGap(
                     "missing-commit-facts",
@@ -412,7 +415,7 @@ public static class StaticHtmlEvidenceExplorer
                     "artifact:facts-ndjson",
                     "evidence-rows",
                     "PartialAnalysis",
-                    "facts.ndjson does not contain usable commit metadata and no scan manifest was provided.",
+                    "facts.ndjson does not establish one usable commit for every fact and no scan manifest was provided.",
                     ["artifact:facts-ndjson"]));
             }
 
@@ -892,7 +895,7 @@ public static class StaticHtmlEvidenceExplorer
                 ClaimLevelForSafetyProfile(safetyProfile),
                 coverageLabels.ToArray(),
                 sourceIds,
-                ["release-review-content-not-rendered"],
+                ["limitation:release-review-content-not-rendered"],
                 [],
                 "supported"));
             limitations.Add(CreateLimitation(
