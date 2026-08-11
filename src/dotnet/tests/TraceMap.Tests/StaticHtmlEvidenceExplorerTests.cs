@@ -747,6 +747,36 @@ public sealed class StaticHtmlEvidenceExplorerTests
     }
 
     [Fact]
+    public async Task Explorer_generate_keeps_empty_evidence_section_partial_when_commit_provenance_is_missing()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await File.WriteAllTextAsync(Path.Combine(input, "facts.ndjson"), string.Empty);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var missingCommitGap = Assert.Single(result.Gaps, gap =>
+            gap.RuleId == StaticHtmlEvidenceExplorer.MissingCommitRuleId
+            && gap.GapKind == "missing-commit"
+            && gap.AffectedSection == "evidence-rows");
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectKind == "artifact"
+            && row.SubjectId == "artifact:facts-ndjson"
+            && row.CompatibilityStatus == "partial"
+            && row.LimitationIds.Contains(missingCommitGap.GapId));
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectKind == "section"
+            && row.SubjectId == "evidence-rows"
+            && row.CompatibilityStatus == "partial"
+            && row.LimitationIds.Contains(missingCommitGap.GapId));
+        Assert.DoesNotContain(result.Data.CompatibilityLedger, row =>
+            row.SubjectId == "evidence-rows"
+            && row.CompatibilityStatus == "compatible-empty");
+    }
+
+    [Fact]
     public async Task Explorer_generate_handles_legacy_null_manifest_and_fact_fields_as_gaps()
     {
         using var temp = new TempDirectory();
