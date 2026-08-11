@@ -212,14 +212,14 @@ Closed vocabularies used by this slice:
 
 Validation:
 
-- Focused `StaticHtmlEvidenceExplorerTests`: 24/24 passed after the v2 upgrade
+- Focused `StaticHtmlEvidenceExplorerTests`: 25/25 passed after the v2 upgrade
   and compatibility-ledger tests.
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with 0 warnings
   and 0 errors.
 - A first concurrent full-test invocation overlapped the build and logged one
   transient assembly-copy retry. The build remained green; an unchanged
   sequential rerun provided the authoritative result below.
-- `dotnet test src/dotnet/TraceMap.sln --no-build --no-restore`: 1,366/1,366
+- `dotnet test src/dotnet/TraceMap.sln --no-build --no-restore`: 1,367/1,367
   passed.
 - Targeted `dotnet format --verify-no-changes`: passed for the reporting and
   focused test files.
@@ -248,6 +248,12 @@ Initial PR review follow-up:
   to `explorer.render.compatibility-ledger.v1` and projects sorted concrete gap
   IDs into partial section rows. The commit-conflict test pins both artifact and
   affected-section traceability.
-- Post-patch focused tests remained 24/24, full tests remained 1,366/1,366,
+- Post-patch focused tests first remained 24/24, full tests remained 1,366/1,366,
   targeted formatting passed, private-path validation passed, and
   `git diff --check` passed.
+- A fresh Codex review then found that an empty fact stream without manifest
+  provenance could be projected as `compatible-empty` despite its
+  `missing-commit-facts` gap. Gap-backed partial state now takes precedence over
+  empty-compatible state for section rows, and a focused regression pins both
+  artifact and section gap traceability. Focused coverage is now 25/25 and the
+  full suite is 1,367/1,367.

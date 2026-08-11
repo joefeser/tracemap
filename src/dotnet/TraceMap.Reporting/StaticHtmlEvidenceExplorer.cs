@@ -1195,8 +1195,15 @@ public static class StaticHtmlEvidenceExplorer
 
         foreach (var section in sectionStatuses)
         {
+            var sectionGapIds = context.Gaps
+                .Where(gap => section.SectionId == "overview" || gap.AffectedSection == section.SectionId)
+                .Select(gap => gap.GapId)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
             var compatibilityStatus = section.Status switch
             {
+                _ when sectionGapIds.Length > 0 => "partial",
                 "not-provided" => "not-provided",
                 "not-rendered-in-current-slice" => "provenance-only",
                 "no-evidence-under-current-coverage" or "none-recorded" => "compatible-empty",
@@ -1206,14 +1213,6 @@ public static class StaticHtmlEvidenceExplorer
             var ruleId = compatibilityStatus is "not-provided" or "provenance-only" or "partial"
                 ? PartialSectionRuleId
                 : CompatibilityLedgerRuleId;
-            var sectionGapIds = compatibilityStatus == "partial"
-                ? context.Gaps
-                    .Where(gap => section.SectionId == "overview" || gap.AffectedSection == section.SectionId)
-                    .Select(gap => gap.GapId)
-                    .Distinct(StringComparer.Ordinal)
-                    .OrderBy(value => value, StringComparer.Ordinal)
-                    .ToArray()
-                : [];
             rows.Add(CompatibilityRow(
                 "section",
                 section.SectionId,
@@ -1223,7 +1222,7 @@ public static class StaticHtmlEvidenceExplorer
                 section.CoverageLabel,
                 "generated-explorer-section",
                 section.SupportIds,
-                sectionGapIds,
+                compatibilityStatus == "partial" ? sectionGapIds : [],
                 SectionCompatibilityMessage(section.Label, compatibilityStatus)));
         }
 
