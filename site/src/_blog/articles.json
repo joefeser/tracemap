@@ -1,5 +1,20 @@
 [
   {
+    "slug": "what-tracemap-learned-from-graphify",
+    "category": "External research",
+    "title": "What TraceMap Learned from Graphify—Without Becoming Graphify",
+    "h1": "What TraceMap learned from Graphify—without becoming Graphify",
+    "description": "How TraceMap studied Graphify's persistent-graph, provenance, affected-traversal, ambiguity, and incremental-correctness ideas while preserving an independent evidence contract.",
+    "ogDescription": "A bounded research story about external architecture lessons, independent TraceMap fixtures and implementation, deliberate product differences, and attribution boundaries.",
+    "cardDescription": "See which persistent-graph and correctness ideas sharpened TraceMap, which behaviors were independently implemented, and which directions remained outside scope.",
+    "hero": "External research is useful when it sharpens a local invariant without becoming local evidence, copied implementation, or an accidental product roadmap.",
+    "published": "2026-08-10",
+    "publishedDisplay": "August 10, 2026",
+    "body": "articles/what-tracemap-learned-from-graphify.html",
+    "calloutHeading": "Follow the independent hardening trail.",
+    "calloutHtml": "Read <a href=\"/blog/how-a-gap-becomes-a-rule/\">how a gap becomes a rule</a> and <a href=\"/blog/bugs-hiding-in-graph-history/\">how failure classes became synthetic regression fixtures</a>."
+  },
+  {
     "slug": "how-a-gap-becomes-a-rule",
     "category": "Evidence hardening",
     "title": "How a Gap Becomes a Rule",
