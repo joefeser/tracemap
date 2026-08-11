@@ -155,6 +155,211 @@ public sealed class StaticHtmlEvidenceExplorerTests
     }
 
     [Fact]
+    public async Task Explorer_generate_reads_release_review_v12_compatibility_metadata_without_rendering_report_content()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var publicOutput = Path.Combine(temp.Path, "public-explorer");
+        var hiddenOutput = Path.Combine(temp.Path, "hidden-explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("a"));
+        await WriteReleaseReviewArtifactAsync(input, afterCommitSha: FortyCharCommit("a"));
+
+        var publicResult = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, publicOutput));
+        var hiddenResult = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, hiddenOutput, "hidden-local"));
+
+        foreach (var result in new[] { publicResult, hiddenResult })
+        {
+            var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "release-review");
+            Assert.Equal("artifact:release-review", artifact.ArtifactId);
+            Assert.Equal("release-review/1.2", artifact.SchemaVersion);
+            Assert.Equal("supported", artifact.Compatibility);
+            Assert.Equal(
+                ["ReleaseReviewAfterReduced", "ReleaseReviewBeforeFull", "ReleaseReviewGapsPresent", "ReleaseReviewNotTruncated"],
+                artifact.CoverageLabels);
+            Assert.Contains("limitation:release-review-content-not-rendered", artifact.Limitations);
+            Assert.Contains(result.Data.Limitations, limitation =>
+                limitation.LimitationId == "limitation:release-review-content-not-rendered"
+                && limitation.RuleId == StaticHtmlEvidenceExplorer.ReleaseReviewInputRuleId
+                && limitation.ClaimEffect == "compatibility-only");
+            Assert.Contains(result.Data.CompatibilityLedger, row =>
+                row.SubjectId == "artifact:release-review"
+                && row.CompatibilityStatus == "rendered-compatible"
+                && row.LimitationIds.Contains("limitation:release-review-content-not-rendered"));
+            Assert.Contains(result.Data.Rules, rule => rule.RuleId == StaticHtmlEvidenceExplorer.ReleaseReviewInputRuleId);
+            Assert.DoesNotContain(result.Gaps, gap => gap.Scope == "artifact:release-review");
+        }
+
+        foreach (var output in new[] { publicOutput, hiddenOutput })
+        {
+            var generated = string.Join("\n", RelativeFileMap(output).Values);
+            Assert.DoesNotContain("private-source-name", generated, StringComparison.Ordinal);
+            Assert.DoesNotContain("C:\\private\\release\\Source.cs", generated, StringComparison.Ordinal);
+            Assert.DoesNotContain("SELECT secret_value FROM private_table", generated, StringComparison.Ordinal);
+            Assert.DoesNotContain("private release message", generated, StringComparison.Ordinal);
+        }
+    }
+
+    [Theory]
+    [InlineData("unsupported-version")]
+    [InlineData("duplicate-version")]
+    [InlineData("invalid-commit")]
+    public async Task Explorer_generate_keeps_incompatible_release_review_metadata_unavailable(string fixtureKind)
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("b"));
+        await WriteReleaseReviewArtifactAsync(input, fixtureKind, FortyCharCommit("b"));
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "release-review");
+        Assert.Equal("release-review/unsupported", artifact.SchemaVersion);
+        Assert.Equal("unsupported", artifact.Compatibility);
+        var gap = Assert.Single(result.Gaps, row => row.Scope == "artifact:release-review");
+        Assert.Equal(StaticHtmlEvidenceExplorer.UnsupportedSchemaRuleId, gap.RuleId);
+        Assert.Equal("unsupported-schema", gap.GapKind);
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectId == "artifact:release-review"
+            && row.CompatibilityStatus == "unsupported-schema"
+            && row.LimitationIds.Contains(gap.GapId));
+        Assert.DoesNotContain(result.Data.Artifacts, row => row.ArtifactKind == "unsupported-json");
+    }
+
+    [Fact]
+    public async Task Explorer_generate_is_deterministic_with_compatible_release_review_metadata()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var firstOutput = Path.Combine(temp.Path, "first");
+        var secondOutput = Path.Combine(temp.Path, "second");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("c"));
+        await WriteReleaseReviewArtifactAsync(input, afterCommitSha: FortyCharCommit("c"));
+
+        await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, firstOutput));
+        await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, secondOutput));
+
+        Assert.Equal(RelativeFileMap(firstOutput), RelativeFileMap(secondOutput));
+    }
+
+    [Fact]
+    public async Task Explorer_generate_does_not_bind_release_review_when_after_snapshot_commit_differs()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("1"));
+        await WriteReleaseReviewArtifactAsync(input, afterCommitSha: FortyCharCommit("2"));
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "release-review");
+        Assert.Empty(artifact.SourceIds);
+        var gap = Assert.Single(result.Gaps, row =>
+            row.Scope == "artifact:release-review"
+            && row.RuleId == StaticHtmlEvidenceExplorer.ProvenanceConflictRuleId
+            && row.GapKind == "commit-conflict");
+        Assert.Contains("artifact:scan-manifest", gap.SupportIds);
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectId == "artifact:release-review"
+            && row.CompatibilityStatus == "partial"
+            && row.LimitationIds.Contains(gap.GapId));
+    }
+
+    [Fact]
+    public async Task Explorer_generate_keeps_release_review_unbound_without_authoritative_scan_commit()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "report-only-input");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteReleaseReviewArtifactAsync(input, afterCommitSha: FortyCharCommit("3"));
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "release-review");
+        Assert.Empty(artifact.SourceIds);
+        var gap = Assert.Single(result.Gaps, row =>
+            row.Scope == "artifact:release-review"
+            && row.RuleId == StaticHtmlEvidenceExplorer.MissingCommitRuleId
+            && row.GapKind == "source-association-unknown");
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectId == "artifact:release-review"
+            && row.CompatibilityStatus == "partial"
+            && row.LimitationIds.Contains(gap.GapId));
+    }
+
+    [Fact]
+    public async Task Explorer_generate_rejects_partially_unidentified_fact_stream_as_commit_authority()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        var validCommit = FortyCharCommit("4");
+        await JsonlFactWriter.WriteAsync(
+            Path.Combine(input, "facts.ndjson"),
+            [
+                Fact(validCommit) with { FactId = "fact-valid" },
+                Fact("unknown") with { FactId = "fact-unknown" }
+            ]);
+        await WriteReleaseReviewArtifactAsync(input, afterCommitSha: validCommit);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "release-review");
+        Assert.Empty(artifact.SourceIds);
+        Assert.Contains(result.Gaps, row =>
+            row.Scope == "artifact:facts-ndjson"
+            && row.RuleId == StaticHtmlEvidenceExplorer.MissingCommitRuleId
+            && row.GapKind == "missing-commit");
+        Assert.Contains(result.Gaps, row =>
+            row.Scope == "artifact:release-review"
+            && row.RuleId == StaticHtmlEvidenceExplorer.MissingCommitRuleId
+            && row.GapKind == "source-association-unknown");
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectId == "artifact:release-review"
+            && row.CompatibilityStatus == "partial");
+    }
+
+    [Fact]
+    public async Task Explorer_generate_rejects_oversized_release_review_before_json_parsing()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("f"));
+        await File.WriteAllTextAsync(Path.Combine(input, "release-review.json"), new string(' ', 16_777_217));
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "release-review");
+        Assert.Equal("unavailable:artifact-too-large", artifact.ContentHash);
+        Assert.Contains(result.Gaps, gap =>
+            gap.Scope == "artifact:release-review"
+            && gap.RuleId == StaticHtmlEvidenceExplorer.UnsupportedSchemaRuleId
+            && gap.GapKind == "artifact-too-large");
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectId == "artifact:release-review"
+            && row.CompatibilityStatus == "unsupported-schema");
+    }
+
+    [Fact]
+    public void Explorer_release_review_reader_rule_is_cataloged_with_non_claims()
+    {
+        var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
+
+        Assert.Contains($"id: {StaticHtmlEvidenceExplorer.ReleaseReviewInputRuleId}", catalog, StringComparison.Ordinal);
+        Assert.Contains("does not prove runtime reachability, production behavior, release approval, deployment safety, or complete analysis", catalog, StringComparison.Ordinal);
+        Assert.Contains("Richer release-review surface, path, and reducer projections require a separately bounded reader slice", catalog, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Explorer_generate_renders_rule_backed_section_statuses_for_first_slice_gaps()
     {
         using var temp = new TempDirectory();
@@ -876,6 +1081,60 @@ public sealed class StaticHtmlEvidenceExplorerTests
         await File.WriteAllTextAsync(Path.Combine(directory, "report.md"), "# Report\n");
     }
 
+    private static async Task WriteReleaseReviewArtifactAsync(
+        string directory,
+        string fixtureKind = "compatible",
+        string? afterCommitSha = null)
+    {
+        var version = fixtureKind == "unsupported-version" ? "9.9" : "1.2";
+        var beforeCommit = fixtureKind == "invalid-commit" ? "not-a-commit" : FortyCharCommit("d");
+        var json = JsonSerializer.Serialize(new
+        {
+            reportType = "release-review",
+            version,
+            mode = "ReleaseReviewSingleV1",
+            query = new { source = "private-source-name" },
+            beforeSnapshot = new
+            {
+                side = "before",
+                indexKind = "single",
+                reportCoverage = "Full",
+                sources = new[] { new { sourceLabel = "private-source-name", commitSha = beforeCommit } }
+            },
+            afterSnapshot = new
+            {
+                side = "after",
+                indexKind = "single",
+                reportCoverage = "Reduced",
+                sources = new[] { new { sourceLabel = "private-source-name", commitSha = afterCommitSha ?? FortyCharCommit("e") } }
+            },
+            summary = new
+            {
+                rollupClassification = "ReviewRecommended",
+                gapCount = 2,
+                truncated = false,
+                message = "private release message"
+            },
+            topChangedSurfaces = new
+            {
+                findings = new[]
+                {
+                    new
+                    {
+                        filePath = "C:\\private\\release\\Source.cs",
+                        metadata = "SELECT secret_value FROM private_table"
+                    }
+                }
+            }
+        }, new JsonSerializerOptions { WriteIndented = true });
+        if (fixtureKind == "duplicate-version")
+        {
+            json = json.Replace("\"version\": \"1.2\",", "\"version\": \"1.2\",\n  \"version\": \"1.2\",", StringComparison.Ordinal);
+        }
+
+        await File.WriteAllTextAsync(Path.Combine(directory, "release-review.json"), json);
+    }
+
     private static CodeFact Fact(string commitSha)
     {
         return new CodeFact(
@@ -917,5 +1176,21 @@ public sealed class StaticHtmlEvidenceExplorerTests
         var index = html.IndexOf($"<tr><th scope=\"row\">{label}</th>", StringComparison.Ordinal);
         Assert.True(index >= 0, $"Expected section status row for {label}.");
         return index;
+    }
+
+    private static string FindRepoRoot()
+    {
+        var current = AppContext.BaseDirectory;
+        while (!string.IsNullOrWhiteSpace(current))
+        {
+            if (File.Exists(Path.Combine(current, "rules", "rule-catalog.yml")))
+            {
+                return current;
+            }
+
+            current = Directory.GetParent(current)?.FullName;
+        }
+
+        throw new DirectoryNotFoundException("Repository root was not found.");
     }
 }

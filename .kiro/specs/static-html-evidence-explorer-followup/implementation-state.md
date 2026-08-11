@@ -257,3 +257,99 @@ Initial PR review follow-up:
   empty-compatible state for section rows, and a focused regression pins both
   artifact and section gap traceability. Focused coverage is now 25/25 and the
   full suite is 1,367/1,367.
+
+## Implementation PR 2 — Release Review Compatibility Reader
+
+Branch: `codex/static-html-explorer-release-review-reader`
+
+Starting point:
+
+- Base: fresh `origin/dev`
+- Base SHA: `0d4fc027446f5f2c0e3b0b34fb7cdbb780ffd5a7`
+- The base includes merged PR #635 and explorer schema v2.
+
+Selected artifact family:
+
+- `release-review.json` only.
+- Accepted identity: `reportType: release-review`, version `1.2`.
+- Accepted modes: `ReleaseReviewSingleV1` and `ReleaseReviewCombinedV1`, with
+  matching single/combined before/after snapshot kinds.
+
+Implemented boundary:
+
+- The reader validates exact report identity/version, mode, before/after side
+  and index kind, closed `Full`/`Reduced` coverage values, non-empty source
+  collections, valid-or-null source commit identities, a boolean truncation
+  field, and a non-negative summary gap count.
+- Required properties must occur exactly once. Malformed JSON, duplicate
+  required properties, unsupported versions/modes, inconsistent snapshots,
+  invalid commit identities, and inputs above the 16 MiB reader limit become
+  sanitized `explorer.input.unsupported-schema.v1` gaps.
+- Compatible artifacts contribute a deterministic SHA-256 content identity,
+  `release-review/1.2` schema label, closed coverage labels, and a
+  rule-backed compatibility limitation.
+- The reader does not read or render finding bodies, source labels, paths,
+  messages, metadata, checklist text, SQL, or reducer conclusions.
+- No explorer schema bump is required because this slice populates the
+  existing v2 artifact and compatibility-ledger contracts without adding
+  top-level fields.
+- Added `explorer.input.release-review.v1` to code and the rule catalog before
+  emitting its limitation.
+
+Deferred:
+
+- Dependency, route-flow, property-flow, reverse, impact, portfolio, snapshot,
+  and other report JSON families.
+- Release-review finding, surface, path, reducer-result, checklist, and
+  priority rendering; those belong to separately bounded PR 3 readers.
+- Any runtime, production, release-approval, deployment-safety, or complete
+  analysis claim.
+
+Validation:
+
+- Focused `StaticHtmlEvidenceExplorerTests`: 34/34 passed after adding public
+  and hidden compatibility, unsupported-version, duplicate-property,
+  invalid-commit, oversized-input, rule-catalog, no-leak, determinism, exact
+  source binding, commit-mismatch, and missing-authority coverage.
+- Locked dependency restore and solution build passed with 0 warnings and 0
+  errors.
+- Full .NET solution: 1,376/1,376 passed.
+- Targeted `dotnet format --verify-no-changes`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Real CLI smoke: scanned `samples/modern-sample` with 27 facts, generated a
+  same-snapshot release review with 4 explicit gaps, and generated a six-file
+  public/demo explorer bundle. The explorer accepted the report as
+  `release-review/1.2`, recorded its SHA-256 identity, emitted four closed
+  coverage labels, and retained the content-not-rendered limitation.
+- Direct generated-output inspection found no local/private paths, URLs, raw
+  SQL, credentials, or release-review body values.
+- Browser revalidation was deferred because this slice changes no HTML, CSS,
+  JavaScript, navigation, or interaction code; it only adds rows through the
+  already browser-validated v2 artifact and compatibility-ledger renderers.
+
+Review follow-up:
+
+- ACK authorized one Qodo performance finding and one Codex P2 provenance
+  finding on exact head `3c185b9b3ac163fba4c53692a3519a0528332f65`.
+- Oversized inputs now stop before reading when file length already exceeds the
+  bound, with a max-plus-one byte fallback for concurrent growth. They use the
+  closed `unavailable:artifact-too-large` placeholder instead of hashing to
+  end-of-file.
+- The reader now retains validated after-snapshot commits and binds the report
+  to `source:scan-output` only when they include the authoritative usable scan
+  manifest commit or single unambiguous fact-stream commit. Mismatch and
+  missing authority emit sanitized rule-backed gaps and leave the report
+  unbound and partial.
+- Post-fix build remained clean, focused tests passed 34/34, full tests passed
+  1,376/1,376, and the real CLI smoke confirmed exact source binding for the
+  matching same-snapshot report.
+- A fresh exact-head Codex review found two additional P2 contract defects.
+  Manifest-less fact streams now establish commit authority only when every
+  fact carries the same usable commit; mixed usable/unusable provenance emits
+  explicit missing-commit and source-association gaps and leaves the release
+  review unbound. Release-review artifacts and compatibility rows now reference
+  the exact emitted `limitation:release-review-content-not-rendered` identity.
+- The second focused review regression run passed 35/35; the full .NET suite
+  passed 1,377/1,377, and targeted formatting, private-path, and diff checks
+  remained clean.
