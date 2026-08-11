@@ -50,7 +50,9 @@ free-text limitations are omitted; sensitive identifiers become stable
 explorer-local hashes. SQL impact, combined-change-impact, route-flow, package,
 and other reducer/report families remain unsupported.
 The accepted report coverage vocabulary is `Full`, `Reduced`, or `Partial`;
-`Partial` is retained when reducer limits truncate otherwise valid output.
+`Partial` is retained when reducer limits truncate otherwise valid output and
+is authoritative truncation evidence even when the producer's summary flag is
+false.
 
 Compatible reducer reports add `reducerResults` plus linked safe evidence rows.
 Impact wording appears only in those reducer-backed rows. It describes bounded

@@ -422,7 +422,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
         var input = Path.Combine(temp.Path, "reducer-only");
         var output = Path.Combine(temp.Path, "explorer");
         Directory.CreateDirectory(input);
-        await WriteReducerImpactArtifactAsync(input, FortyCharCommit("c"), partialCoverage: true, truncated: true);
+        await WriteReducerImpactArtifactAsync(input, FortyCharCommit("c"), partialCoverage: true);
 
         var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
 
