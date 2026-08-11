@@ -192,11 +192,20 @@ public static class FileInventory
         if (!normalizedGlob.Contains('*', StringComparison.Ordinal))
             return ScanEngine.GlobMatches(relativePath, normalizedGlob, pathComparer);
 
-        const string recursiveSuffix = "/**";
-        if (!normalizedGlob.EndsWith(recursiveSuffix, StringComparison.Ordinal))
+        if (normalizedGlob is "**" or "**/*")
+            return true;
+
+        const string recursiveDirectorySuffix = "/**";
+        const string recursiveFileSuffix = "/**/*";
+        var suffixLength = normalizedGlob.EndsWith(recursiveFileSuffix, StringComparison.Ordinal)
+            ? recursiveFileSuffix.Length
+            : normalizedGlob.EndsWith(recursiveDirectorySuffix, StringComparison.Ordinal)
+                ? recursiveDirectorySuffix.Length
+                : 0;
+        if (suffixLength == 0)
             return false;
 
-        var directoryGlob = normalizedGlob[..^recursiveSuffix.Length];
+        var directoryGlob = normalizedGlob[..^suffixLength];
         return !string.IsNullOrWhiteSpace(directoryGlob)
             && ScanEngine.GlobMatches(relativePath, directoryGlob, pathComparer);
     }
