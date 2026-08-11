@@ -47,11 +47,14 @@
   <h2>Candidate state preserves strength without claiming selection.</h2>
   <p>
     A fully symbol-backed relationship can be a
-    <code>SymbolBackedCandidate</code>. Syntax-only, ambiguous, generic,
-    type-level, high-fan-out, registration-context, or reduced-coverage inputs
-    remain a <code>WeakerCandidate</code>. Missing schema, identity,
-    relationship, implementation, or compatible evidence becomes a
-    <code>CandidateGap</code>.
+    <code>SymbolBackedCandidate</code>. Retained candidates are downgraded to
+    <code>WeakerCandidate</code> when coverage is reduced, extractor evidence
+    is missing, or compatible DI registration supplies only context. Type-level
+    or identity-ambiguous evidence, unsupported or open-generic registration,
+    and missing schema, relationship, implementation, or compatible evidence
+    produce a <code>CandidateGap</code> instead of inventing a candidate.
+    High fan-out retains the bounded relationship-backed candidates and emits
+    a separate fan-out gap.
   </p>
   <p>
     Even the strongest candidate is still a possible static continuation. It
