@@ -74,7 +74,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
             limitation.RuleId == StaticHtmlEvidenceExplorer.CompatibilityLedgerRuleId
             && limitation.LimitationKind == "claim-level-metadata-unknown"
             && limitation.ClaimEffect == "claim-level");
-        Assert.Equal("tracemap-static-html-evidence-explorer.v2", result.Data.SchemaVersion);
+        Assert.Equal("tracemap-static-html-evidence-explorer.v3", result.Data.SchemaVersion);
         Assert.Contains("Compatibility Ledger", allGenerated);
         Assert.Contains("explorer.render.compatibility-ledger.v1", allGenerated);
         Assert.Contains("Local generated artifact", allGenerated);
@@ -347,6 +347,268 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Contains(result.Data.CompatibilityLedger, row =>
             row.SubjectId == "artifact:release-review"
             && row.CompatibilityStatus == "unsupported-schema");
+    }
+
+    [Fact]
+    public async Task Explorer_generate_renders_safe_ordered_paths_and_surfaces_from_paths_report_v10()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        var commitSha = FortyCharCommit("6");
+        await WriteScanArtifactsAsync(input, commitSha: commitSha);
+        await WritePathsReportArtifactAsync(input, commitSha);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Equal("tracemap-static-html-evidence-explorer.v3", result.Data.SchemaVersion);
+        var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "paths-report");
+        Assert.Equal("paths-report/1.0", artifact.SchemaVersion);
+        Assert.Equal("supported", artifact.Compatibility);
+        Assert.Equal(["source:scan-output"], artifact.SourceIds);
+        Assert.Contains("limitation:paths-report-display-text-not-rendered", artifact.Limitations);
+
+        var surface = Assert.Single(result.Data.Surfaces);
+        Assert.Equal("sql-query", surface.SurfaceKind);
+        Assert.Equal("database.sql.shape.v1", surface.RuleId);
+        Assert.Equal(EvidenceTiers.Tier2Structural, surface.EvidenceTier);
+        Assert.Equal("StaticDependencySurface", surface.Classification);
+        Assert.Equal("source:scan-output", surface.SourceId);
+        Assert.Equal(commitSha, surface.CommitSha);
+        Assert.Equal("test-scanner-v1", surface.ExtractorVersion);
+        Assert.StartsWith("absolute-path-hash:", surface.FilePath, StringComparison.Ordinal);
+
+        var path = Assert.Single(result.Data.Paths);
+        Assert.Equal("dependency-path", path.PathKind);
+        Assert.Equal(CombinedDependencyPathClassifications.NeedsReviewStaticPath, path.Classification);
+        Assert.Equal("Low", path.Confidence);
+        var hop = Assert.Single(path.Hops);
+        Assert.Equal(1, hop.Sequence);
+        Assert.Equal("calls", hop.EdgeKind);
+        Assert.Equal("combined.paths.path.v1", hop.RuleId);
+        Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, hop.EvidenceTier);
+        Assert.Equal(commitSha, hop.CommitSha);
+        Assert.Equal("test-scanner-v1", hop.ExtractorVersion);
+        Assert.StartsWith("node:", hop.FromNodeId, StringComparison.Ordinal);
+        Assert.StartsWith("node:", hop.ToNodeId, StringComparison.Ordinal);
+        Assert.All(hop.SupportIds, supportId => Assert.StartsWith("support:", supportId, StringComparison.Ordinal));
+
+        Assert.Equal(1, result.Manifest.Counts.SurfaceCount);
+        Assert.Equal(1, result.Manifest.Counts.PathCount);
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "surfaces" && row.Status == "available");
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "paths" && row.Status == "available");
+        Assert.Contains(result.Data.EvidenceRows, row => row.EvidenceKind == "path-hop" && row.RuleId == "combined.paths.path.v1" && row.SnippetHash is null);
+        Assert.Contains(result.Data.EvidenceRows, row => row.EvidenceKind == "dependency-surface" && row.RuleId == "database.sql.shape.v1" && row.SnippetHash is null);
+
+        var generated = string.Join("\n", RelativeFileMap(output).Values);
+        Assert.Contains("<h2 id=\"surfaces-heading\">Surfaces</h2>", generated, StringComparison.Ordinal);
+        Assert.Contains("<h2 id=\"paths-heading\">Paths</h2>", generated, StringComparison.Ordinal);
+        Assert.Contains("Tier3SyntaxOrTextual", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-source-label", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain("Private.OrderService", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain("SELECT private_value FROM private_table", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain("C:\\private\\OrderService.cs", generated, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Explorer_generate_rejects_paths_report_with_non_contiguous_hop_endpoints()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        var commitSha = FortyCharCommit("7");
+        await WriteScanArtifactsAsync(input, commitSha: commitSha);
+        await WritePathsReportArtifactAsync(input, commitSha, invalidEdgeTarget: true);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "paths-report");
+        Assert.Equal("unsupported", artifact.Compatibility);
+        Assert.Empty(result.Data.Surfaces);
+        Assert.Empty(result.Data.Paths);
+        Assert.Contains(result.Gaps, row =>
+            row.Scope == "artifact:paths-report"
+            && row.RuleId == StaticHtmlEvidenceExplorer.UnsupportedSchemaRuleId
+            && row.GapKind == "unsupported-schema");
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "paths" && row.Status == "unsupported-schema");
+    }
+
+    [Fact]
+    public async Task Explorer_generate_paths_report_projection_is_deterministic()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var first = Path.Combine(temp.Path, "first");
+        var second = Path.Combine(temp.Path, "second");
+        Directory.CreateDirectory(input);
+        var commitSha = FortyCharCommit("8");
+        await WriteScanArtifactsAsync(input, commitSha: commitSha);
+        await WritePathsReportArtifactAsync(input, commitSha);
+
+        await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, first));
+        await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, second));
+
+        Assert.Equal(RelativeFileMap(first), RelativeFileMap(second));
+    }
+
+    [Fact]
+    public async Task Explorer_generate_uses_safe_paths_report_source_without_phantom_scan_source()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "paths-only");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WritePathsReportArtifactAsync(input, FortyCharCommit("9"));
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var source = Assert.Single(result.Data.Sources);
+        Assert.StartsWith("source:paths:", source.SourceId, StringComparison.Ordinal);
+        Assert.Equal("Paths report source 01", source.SafeLabel);
+        Assert.Equal(FortyCharCommit("9"), source.CommitSha);
+        Assert.Equal(["artifact:paths-report"], source.ArtifactIds);
+        Assert.DoesNotContain(result.Data.Sources, row => row.SourceId == "source:scan-output");
+        Assert.All(result.Data.Paths.SelectMany(path => path.Hops), hop => Assert.Equal(source.SourceId, hop.SourceId));
+
+        var generated = string.Join("\n", RelativeFileMap(output).Values);
+        Assert.DoesNotContain("private-source-index", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-source-label", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-repository", generated, StringComparison.Ordinal);
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "evidence-rows" && row.Status != "not-provided");
+    }
+
+    [Fact]
+    public async Task Explorer_generate_attributes_endpoint_match_to_server_source()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "paths-only");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WritePathsReportArtifactAsync(input, FortyCharCommit("1"), crossSourceEndpoint: true);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var serverSource = Assert.Single(result.Data.Sources, source => source.CommitSha == FortyCharCommit("2"));
+        var hop = Assert.Single(Assert.Single(result.Data.Paths).Hops);
+        Assert.Equal("endpoint-match", hop.EdgeKind);
+        Assert.Equal(serverSource.SourceId, hop.SourceId);
+        Assert.Equal(serverSource.CommitSha, hop.CommitSha);
+        Assert.Equal("test-server-scanner-v2", hop.ExtractorVersion);
+        var evidence = Assert.Single(result.Data.EvidenceRows, row => row.EvidenceKind == "path-hop");
+        Assert.Equal(serverSource.SourceId, evidence.SourceId);
+        Assert.Equal(serverSource.CommitSha, evidence.CommitSha);
+    }
+
+    [Fact]
+    public async Task Explorer_generate_marks_warning_only_reduced_paths_report_sections_partial()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "paths-only");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WritePathsReportArtifactAsync(input, FortyCharCommit("3"), reducedCoverage: true);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "surfaces" && row.Status == "partial");
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "paths" && row.Status == "partial");
+        Assert.Contains("PathsReducedCoverage", Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "paths-report").CoverageLabels);
+        Assert.Contains("PathsReducedCoverage", result.Data.Summary.CoverageLabels);
+        Assert.NotEqual("available", result.Data.Summary.CoverageStatus);
+    }
+
+    [Fact]
+    public async Task Explorer_generate_labels_missing_path_locations_as_partial_gaps()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "paths-only");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WritePathsReportArtifactAsync(input, FortyCharCommit("4"), omitPathLocations: true);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Gaps, gap => gap.GapKind == "path-hop-location-unavailable" && gap.AffectedSection == "paths");
+        Assert.Contains(result.Gaps, gap => gap.GapKind == "surface-location-unavailable" && gap.AffectedSection == "surfaces");
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "paths" && row.Status == "partial");
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "surfaces" && row.Status == "partial");
+    }
+
+    [Fact]
+    public async Task Explorer_generate_rejects_duplicate_nested_paths_report_provenance()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "paths-only");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WritePathsReportArtifactAsync(input, FortyCharCommit("5"));
+        var reportPath = Path.Combine(input, "paths-report.json");
+        var json = await File.ReadAllTextAsync(reportPath);
+        json = json.Replace(
+            "\"scannerVersion\": \"test-scanner-v1\",",
+            "\"scannerVersion\": \"test-scanner-v1\",\n      \"scannerVersion\": \"order-dependent-version\",",
+            StringComparison.Ordinal);
+        await File.WriteAllTextAsync(reportPath, json);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "paths-report");
+        Assert.Equal("unsupported", artifact.Compatibility);
+        Assert.Empty(result.Data.Paths);
+        Assert.Empty(result.Data.Surfaces);
+        Assert.Contains(result.Gaps, gap => gap.Scope == "artifact:paths-report" && gap.GapKind == "unsupported-schema");
+    }
+
+    [Fact]
+    public async Task Explorer_generate_marks_truncated_full_coverage_paths_report_partial()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "paths-only");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WritePathsReportArtifactAsync(input, FortyCharCommit("6"), truncated: true);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains("PathsTruncated", result.Data.Summary.CoverageLabels);
+        Assert.NotEqual("available", result.Data.Summary.CoverageStatus);
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "evidence-rows" && row.Status == "partial");
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "surfaces" && row.Status == "partial");
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "paths" && row.Status == "partial");
+    }
+
+    [Fact]
+    public async Task Explorer_generate_does_not_render_paths_report_gap_kinds_or_messages()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WritePathsReportArtifactAsync(input, FortyCharCommit("a"), includePrivateGap: true);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Gaps, gap =>
+            gap.Scope == "artifact:paths-report"
+            && gap.GapKind == "paths-report-gap"
+            && gap.RuleId == "combined.paths.path.v1"
+            && gap.EvidenceTier == EvidenceTiers.Tier2Structural);
+        var generated = string.Join("\n", RelativeFileMap(output).Values);
+        Assert.DoesNotContain("PrivateCustomerGap", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain("private customer gap message", generated, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Explorer_paths_report_reader_rule_is_cataloged_with_static_non_claims()
+    {
+        var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
+
+        Assert.Contains($"id: {StaticHtmlEvidenceExplorer.PathsReportInputRuleId}", catalog, StringComparison.Ordinal);
+        Assert.Contains("do not prove runtime reachability, execution, production use, business impact, release safety, or complete analysis", catalog, StringComparison.Ordinal);
+        Assert.Contains("Query selectors, source labels, node and surface display names, report notes, raw SQL, and free-text report limitations are omitted", catalog, StringComparison.Ordinal);
+        Assert.Contains("ordinary paths-report v1.0 contract only", catalog, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -860,8 +1122,10 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.DoesNotContain("stale generated output", await File.ReadAllTextAsync(Path.Combine(output, "index.html")));
     }
 
-    [Fact]
-    public async Task Explorer_generate_force_recognizes_prior_v1_generated_manifest_during_v2_upgrade()
+    [Theory]
+    [InlineData("tracemap-static-html-evidence-explorer.v1")]
+    [InlineData("tracemap-static-html-evidence-explorer.v2")]
+    public async Task Explorer_generate_force_recognizes_prior_generated_manifest_during_v3_upgrade(string priorSchema)
     {
         using var temp = new TempDirectory();
         var input = Path.Combine(temp.Path, "scan-output");
@@ -869,15 +1133,17 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Directory.CreateDirectory(input);
         Directory.CreateDirectory(Path.Combine(output, "data"));
         await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("7"));
-        await File.WriteAllTextAsync(Path.Combine(output, "data", "explorer-manifest.json"), """
-            {"schemaVersion":"tracemap-static-html-evidence-explorer.v1","tracemapGenerated":true}
+        await File.WriteAllTextAsync(
+            Path.Combine(output, "data", "explorer-manifest.json"),
+            $$"""
+            {"schemaVersion":"{{priorSchema}}","tracemapGenerated":true}
             """);
-        await File.WriteAllTextAsync(Path.Combine(output, "index.html"), "<!doctype html><title>v1 generated output</title>");
+        await File.WriteAllTextAsync(Path.Combine(output, "index.html"), "<!doctype html><title>prior generated output</title>");
 
         var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output, Force: true));
 
-        Assert.Equal("tracemap-static-html-evidence-explorer.v2", result.Manifest.SchemaVersion);
-        Assert.DoesNotContain("v1 generated output", await File.ReadAllTextAsync(Path.Combine(output, "index.html")));
+        Assert.Equal("tracemap-static-html-evidence-explorer.v3", result.Manifest.SchemaVersion);
+        Assert.DoesNotContain("prior generated output", await File.ReadAllTextAsync(Path.Combine(output, "index.html")));
     }
 
     [Fact]
@@ -1133,6 +1399,248 @@ public sealed class StaticHtmlEvidenceExplorerTests
         }
 
         await File.WriteAllTextAsync(Path.Combine(directory, "release-review.json"), json);
+    }
+
+    private static async Task WritePathsReportArtifactAsync(
+        string directory,
+        string commitSha,
+        bool invalidEdgeTarget = false,
+        bool includePrivateGap = false,
+        bool crossSourceEndpoint = false,
+        bool reducedCoverage = false,
+        bool omitPathLocations = false,
+        bool truncated = false)
+    {
+        var serverCommitSha = FortyCharCommit("2");
+        var primarySource = new
+        {
+            sourceIndexId = "private-source-index",
+            label = "private-source-label",
+            indexPathHash = "sha256:index",
+            scanId = "private-scan",
+            repoName = "private-repository",
+            remoteUrl = "git@example.com:private/repository.git",
+            branch = "private-branch",
+            commitSha,
+            scannerVersion = "test-scanner-v1",
+            language = "csharp",
+            storedLanguage = "csharp",
+            languageCorrected = false,
+            scanRootRelativePath = ".",
+            scanRootPathHash = "sha256:root",
+            gitRootHash = "sha256:git",
+            analysisLevel = "Level1SemanticAnalysisReduced",
+            buildStatus = "Succeeded"
+        };
+        var serverSource = new
+        {
+            sourceIndexId = "private-server-source-index",
+            label = "private-server-source-label",
+            indexPathHash = "sha256:server-index",
+            scanId = "private-server-scan",
+            repoName = "private-server-repository",
+            remoteUrl = "git@example.com:private/server.git",
+            branch = "private-server-branch",
+            commitSha = serverCommitSha,
+            scannerVersion = "test-server-scanner-v2",
+            language = "csharp",
+            storedLanguage = "csharp",
+            languageCorrected = false,
+            scanRootRelativePath = ".",
+            scanRootPathHash = "sha256:server-root",
+            gitRootHash = "sha256:server-git",
+            analysisLevel = "Level1SemanticAnalysisReduced",
+            buildStatus = "Succeeded"
+        };
+        var report = new
+        {
+            version = "1.0",
+            schemaVersion = (string?)null,
+            view = (string?)null,
+            reportCoverage = reducedCoverage ? "ReducedCoverage" : "FullEvidenceAvailable",
+            coverageWarnings = reducedCoverage ? new[] { "private warning text" } : Array.Empty<string>(),
+            query = new
+            {
+                fromEndpoint = "private endpoint selector",
+                fromSymbol = "Private.OrderService",
+                fromSource = "private-source-label",
+                fromWebFormsEvent = (string?)null,
+                toSurface = "sql-query",
+                surfaceName = "SELECT private_value FROM private_table",
+                sourcePair = (string?)null,
+                classification = (string?)null,
+                includeLegacyRoots = false,
+                maxDepth = 8,
+                maxPaths = 100,
+                maxFrontier = 10000,
+                algorithm = "bounded-bfs",
+                algorithmVersion = "1.0",
+                messageDirection = "both"
+            },
+            sources = crossSourceEndpoint ? new[] { primarySource, serverSource } : new[] { primarySource },
+            summary = new
+            {
+                sourceCount = crossSourceEndpoint ? 2 : 1,
+                graphNodeCount = 2,
+                graphEdgeCount = 1,
+                pathCount = 1,
+                gapCount = includePrivateGap ? 1 : 0,
+                selectorCandidateCount = 1,
+                truncated
+            },
+            paths = new[]
+            {
+                new
+                {
+                    pathId = "private-path-id",
+                    classification = CombinedDependencyPathClassifications.NeedsReviewStaticPath,
+                    confidence = "Low",
+                    length = 1,
+                    startNodeId = "private-node-start",
+                    endNodeId = "private-node-end",
+                    nodes = new object[]
+                    {
+                        new
+                        {
+                            nodeId = "private-node-start",
+                            nodeKind = "Method",
+                            displayName = "Private.OrderService",
+                            sourceIndexId = "private-source-index",
+                            sourceLabel = "private-source-label",
+                            scanId = "private-scan",
+                            commitSha,
+                            symbolId = "Private.OrderService.Run()",
+                            combinedFactId = "private-fact-entry",
+                            ruleId = "csharp.semantic.invocation.v1",
+                            evidenceTier = EvidenceTiers.Tier1Semantic,
+                            filePath = "C:\\private\\OrderService.cs",
+                            startLine = 10,
+                            endLine = 12,
+                            surfaceKind = (string?)null,
+                            surfaceName = (string?)null,
+                            httpMethod = (string?)null,
+                            normalizedPathKey = (string?)null,
+                            operationName = (string?)null,
+                            tableName = (string?)null,
+                            columnNames = (string?)null,
+                            sourceKind = (string?)null,
+                            shapeHash = (string?)null,
+                            textHash = (string?)null,
+                            textLength = (string?)null,
+                            packageName = (string?)null,
+                            configKey = (string?)null,
+                            operationDirection = (string?)null,
+                            surfaceSubtype = (string?)null,
+                            limitations = Array.Empty<string>()
+                        },
+                        new
+                        {
+                            nodeId = "private-node-end",
+                            nodeKind = "DependencySurface",
+                            displayName = "SELECT private_value FROM private_table",
+                            sourceIndexId = crossSourceEndpoint ? "private-server-source-index" : "private-source-index",
+                            sourceLabel = crossSourceEndpoint ? "private-server-source-label" : "private-source-label",
+                            scanId = crossSourceEndpoint ? "private-server-scan" : "private-scan",
+                            commitSha = crossSourceEndpoint ? serverCommitSha : commitSha,
+                            symbolId = (string?)null,
+                            combinedFactId = "private-fact-surface",
+                            ruleId = "database.sql.shape.v1",
+                            evidenceTier = EvidenceTiers.Tier2Structural,
+                            filePath = omitPathLocations ? null : "C:\\private\\OrderService.cs",
+                            startLine = omitPathLocations ? (int?)null : 20,
+                            endLine = omitPathLocations ? (int?)null : 22,
+                            surfaceKind = "sql-query",
+                            surfaceName = "SELECT private_value FROM private_table",
+                            httpMethod = (string?)null,
+                            normalizedPathKey = (string?)null,
+                            operationName = "select",
+                            tableName = "private_table",
+                            columnNames = "private_value",
+                            sourceKind = "sql",
+                            shapeHash = "sha256:private-shape",
+                            textHash = "sha256:private-text",
+                            textLength = "39",
+                            packageName = (string?)null,
+                            configKey = (string?)null,
+                            operationDirection = "read",
+                            surfaceSubtype = "query",
+                            limitations = new[] { "private surface limitation" }
+                        }
+                    },
+                    edges = new[]
+                    {
+                        new
+                        {
+                            edgeId = "private-edge-id",
+                            edgeKind = crossSourceEndpoint ? "endpoint-match" : "calls",
+                            fromNodeId = "private-node-start",
+                            toNodeId = invalidEdgeTarget ? "wrong-private-node" : "private-node-end",
+                            classification = crossSourceEndpoint ? CombinedEndpointClassifications.MatchedEndpoint : "EvidenceEdge",
+                            ruleId = crossSourceEndpoint ? "combined.paths.endpoint-match.v1" : "combined.paths.path.v1",
+                            evidenceTier = crossSourceEndpoint ? EvidenceTiers.Tier2Structural : EvidenceTiers.Tier3SyntaxOrTextual,
+                            supportingFactIds = new[] { "private-support-fact" },
+                            supportingCombinedEdgeIds = new[] { "private-support-edge" },
+                            filePath = omitPathLocations ? null : "C:\\private\\OrderService.cs",
+                            startLine = omitPathLocations ? (int?)null : 14,
+                            endLine = omitPathLocations ? (int?)null : 14,
+                            registrationContext = (string?)null,
+                            supportingRegistrationFactIds = Array.Empty<string>(),
+                            candidateCount = (int?)null,
+                            omittedCount = (int?)null,
+                            candidateLimit = (int?)null,
+                            candidateCapReason = (string?)null,
+                            candidateState = (string?)null,
+                            candidateBridgeKind = (string?)null,
+                            supportingRelationshipIds = Array.Empty<string>()
+                        }
+                    },
+                    supportingFactIds = new[] { "private-support-fact" },
+                    supportingEdgeIds = new[] { "private-support-edge" },
+                    notes = new[] { new { code = "PrivateNote", message = "private path note" } }
+                }
+            },
+            gaps = includePrivateGap
+                ? new object[]
+                {
+                    new
+                    {
+                        gapId = "private-gap-id",
+                        gapKind = "PrivateCustomerGap",
+                        classification = CombinedDependencyPathClassifications.AnalysisGap,
+                        message = "private customer gap message",
+                        sourceIndexId = "private-source-index",
+                        sourceLabel = "private-source-label",
+                        nodeId = "private-node-start",
+                        combinedFactId = "private-gap-fact",
+                        ruleId = "combined.paths.path.v1",
+                        evidenceTier = EvidenceTiers.Tier2Structural,
+                        filePath = "C:\\private\\OrderService.cs",
+                        startLine = 30,
+                        reason = "private reason",
+                        commitSha,
+                        extractorVersion = "private-extractor",
+                        evidenceScope = "private scope",
+                        endLine = 31,
+                        supportingFactIds = new[] { "private-gap-support" }
+                    }
+                }
+                : Array.Empty<object>(),
+            inventory = new
+            {
+                nodesByKind = new Dictionary<string, int> { ["Method"] = 1, ["DependencySurface"] = 1 },
+                edgesByKind = new Dictionary<string, int> { ["calls"] = 1 },
+                nodesBySource = new Dictionary<string, int> { ["private-source-index"] = 2 },
+                surfacesByKind = new Dictionary<string, int> { ["sql-query"] = 1 },
+                gapsByKind = new Dictionary<string, int>(),
+                evidenceNodes = Array.Empty<object>(),
+                evidenceEdges = Array.Empty<object>()
+            },
+            limitations = new[] { "SELECT private_value FROM private_table" }
+        };
+
+        await File.WriteAllTextAsync(
+            Path.Combine(directory, "paths-report.json"),
+            JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
     }
 
     private static CodeFact Fact(string commitSha)

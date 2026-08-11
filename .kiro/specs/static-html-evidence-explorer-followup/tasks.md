@@ -167,8 +167,11 @@ Public claim level: hidden
 - [x] PR 2: First richer supported report JSON compatibility reader:
   `release-review.json` v1.2 compatibility metadata only. Additional report
   families remain separate slices.
-- [ ] PR 3: Surface/path/reducer readers, preserving reducer-only impact
-  wording and public-safe validation.
+- [x] PR 3a: First surface/path reader: ordinary `paths-report.json` v1.0,
+  preserving ordered static hops, closed surfaces, provenance, and public-safe
+  wording. Other path families and reducer readers remain separate slices.
+- [ ] PR 3b: Reducer readers, preserving reducer-only impact wording and
+  public-safe validation.
 - [ ] PR 4: Browser accessibility and no-JavaScript validation expansion.
 
 ## Deferred Follow-Ups
