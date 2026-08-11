@@ -2,6 +2,7 @@ using System.Text.Json;
 using TraceMap.Cli;
 using TraceMap.Core;
 using TraceMap.Reporting;
+using TraceMap.Reduction;
 using TraceMap.Storage;
 
 namespace TraceMap.Tests;
@@ -74,7 +75,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
             limitation.RuleId == StaticHtmlEvidenceExplorer.CompatibilityLedgerRuleId
             && limitation.LimitationKind == "claim-level-metadata-unknown"
             && limitation.ClaimEffect == "claim-level");
-        Assert.Equal("tracemap-static-html-evidence-explorer.v3", result.Data.SchemaVersion);
+        Assert.Equal("tracemap-static-html-evidence-explorer.v4", result.Data.SchemaVersion);
         Assert.Contains("Compatibility Ledger", allGenerated);
         Assert.Contains("explorer.render.compatibility-ledger.v1", allGenerated);
         Assert.Contains("Local generated artifact", allGenerated);
@@ -350,6 +351,111 @@ public sealed class StaticHtmlEvidenceExplorerTests
     }
 
     [Fact]
+    public async Task Explorer_generate_renders_bounded_contract_delta_reducer_results_without_private_free_text()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        var commitSha = FortyCharCommit("8");
+        await WriteScanArtifactsAsync(input, commitSha: commitSha);
+        await WriteReducerImpactArtifactAsync(input, commitSha, includeGap: true);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Equal("tracemap-static-html-evidence-explorer.v4", result.Data.SchemaVersion);
+        var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "reducer-impact-report");
+        Assert.Equal("contract-delta-impact/2.0", artifact.SchemaVersion);
+        Assert.Equal("supported", artifact.Compatibility);
+        Assert.Equal(["ReducerFullCoverage", "ReducerGapsPresent", "ReducerNotTruncated"], artifact.CoverageLabels);
+        var reducerResult = Assert.Single(result.Data.ReducerResults);
+        Assert.Equal(ImpactClassifications.DefiniteImpact, reducerResult.Classification);
+        Assert.Equal("high", reducerResult.Confidence);
+        Assert.Equal(RuleIds.ContractDeltaImpact, reducerResult.RuleId);
+        Assert.Equal(EvidenceTiers.Tier1Semantic, reducerResult.EvidenceTier);
+        Assert.Equal("contract-delta-fact-match/2.0", reducerResult.ReducerVersion);
+        Assert.Single(reducerResult.EvidenceIds);
+        var evidence = Assert.Single(result.Data.EvidenceRows, row => row.EvidenceKind == "reducer-impact-evidence");
+        Assert.Equal(RuleIds.CSharpSemanticPropertyAccess, evidence.RuleId);
+        Assert.Equal(commitSha, evidence.CommitSha);
+        Assert.Equal("test-reducer-v2", evidence.ExtractorVersion);
+        Assert.Null(evidence.SnippetHash);
+        Assert.StartsWith("absolute-path-hash:", evidence.FilePath, StringComparison.Ordinal);
+        Assert.Contains(result.Gaps, gap =>
+            gap.Scope == "artifact:reducer-impact-report"
+            && gap.GapKind == "reducer-impact-gap"
+            && gap.RuleId == RuleIds.ContractDeltaImpact);
+        Assert.True(result.Data.Summary.ReducerOutputPresent);
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "reducer-results" && row.Status == "partial");
+
+        var generated = string.Join("\n", RelativeFileMap(output).Values);
+        Assert.Contains("<h2 id=\"reducer-results-heading\">Reducer Results</h2>", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain("Private.Customer.Email", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain("private impact reason", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-source-label", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain("C:\\private\\Customer.cs", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain("private reducer gap message", generated, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Explorer_generate_marks_reduced_or_truncated_reducer_results_partial()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "reducer-only");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteReducerImpactArtifactAsync(input, FortyCharCommit("9"), reducedCoverage: true, truncated: true);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains("ReducerReducedCoverage", result.Data.Summary.CoverageLabels);
+        Assert.Contains("ReducerTruncated", result.Data.Summary.CoverageLabels);
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "reducer-results" && row.Status == "partial");
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "evidence-rows" && row.Status == "partial");
+        Assert.NotEqual("available", result.Data.Summary.CoverageStatus);
+    }
+
+    [Theory]
+    [InlineData("unsupported-report")]
+    [InlineData("duplicate-provenance")]
+    [InlineData("mismatched-commit")]
+    public async Task Explorer_generate_fails_closed_for_incompatible_reducer_reports(string fixtureKind)
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "reducer-only");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteReducerImpactArtifactAsync(input, FortyCharCommit("a"), fixtureKind: fixtureKind);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "reducer-impact-report");
+        Assert.Equal("unsupported", artifact.Compatibility);
+        Assert.Empty(result.Data.ReducerResults);
+        Assert.DoesNotContain(result.Data.EvidenceRows, row => row.EvidenceKind == "reducer-impact-evidence");
+        Assert.Contains(result.Gaps, gap =>
+            gap.Scope == "artifact:reducer-impact-report"
+            && gap.GapKind == "unsupported-schema"
+            && gap.RuleId == StaticHtmlEvidenceExplorer.UnsupportedSchemaRuleId);
+    }
+
+    [Fact]
+    public async Task Explorer_generate_is_deterministic_for_reducer_input()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "reducer-only");
+        var firstOutput = Path.Combine(temp.Path, "first");
+        var secondOutput = Path.Combine(temp.Path, "second");
+        Directory.CreateDirectory(input);
+        await WriteReducerImpactArtifactAsync(input, FortyCharCommit("b"), includeGap: true);
+
+        await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, firstOutput));
+        await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, secondOutput));
+
+        Assert.Equal(RelativeFileMap(firstOutput), RelativeFileMap(secondOutput));
+    }
+
+    [Fact]
     public async Task Explorer_generate_renders_safe_ordered_paths_and_surfaces_from_paths_report_v10()
     {
         using var temp = new TempDirectory();
@@ -362,7 +468,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
 
         var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
 
-        Assert.Equal("tracemap-static-html-evidence-explorer.v3", result.Data.SchemaVersion);
+        Assert.Equal("tracemap-static-html-evidence-explorer.v4", result.Data.SchemaVersion);
         var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "paths-report");
         Assert.Equal("paths-report/1.0", artifact.SchemaVersion);
         Assert.Equal("supported", artifact.Compatibility);
@@ -609,6 +715,17 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Contains("do not prove runtime reachability, execution, production use, business impact, release safety, or complete analysis", catalog, StringComparison.Ordinal);
         Assert.Contains("Query selectors, source labels, node and surface display names, report notes, raw SQL, and free-text report limitations are omitted", catalog, StringComparison.Ordinal);
         Assert.Contains("ordinary paths-report v1.0 contract only", catalog, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Explorer_reducer_reader_rule_is_cataloged_with_bounded_static_non_claims()
+    {
+        var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
+
+        Assert.Contains($"id: {StaticHtmlEvidenceExplorer.ReducerImpactInputRuleId}", catalog, StringComparison.Ordinal);
+        Assert.Contains("the explorer does not infer impact, risk, runtime reachability, execution, production behavior, business effect, release safety, or complete dependency coverage", catalog, StringComparison.Ordinal);
+        Assert.Contains("contract-delta-impact-single and contract-delta-impact-combined version 2.0", catalog, StringComparison.Ordinal);
+        Assert.Contains("Finding elements, reasons, warnings, references, source labels, scan IDs", catalog, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1125,7 +1242,8 @@ public sealed class StaticHtmlEvidenceExplorerTests
     [Theory]
     [InlineData("tracemap-static-html-evidence-explorer.v1")]
     [InlineData("tracemap-static-html-evidence-explorer.v2")]
-    public async Task Explorer_generate_force_recognizes_prior_generated_manifest_during_v3_upgrade(string priorSchema)
+    [InlineData("tracemap-static-html-evidence-explorer.v3")]
+    public async Task Explorer_generate_force_recognizes_prior_generated_manifest_during_v4_upgrade(string priorSchema)
     {
         using var temp = new TempDirectory();
         var input = Path.Combine(temp.Path, "scan-output");
@@ -1142,7 +1260,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
 
         var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output, Force: true));
 
-        Assert.Equal("tracemap-static-html-evidence-explorer.v3", result.Manifest.SchemaVersion);
+        Assert.Equal("tracemap-static-html-evidence-explorer.v4", result.Manifest.SchemaVersion);
         Assert.DoesNotContain("prior generated output", await File.ReadAllTextAsync(Path.Combine(output, "index.html")));
     }
 
@@ -1199,7 +1317,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
         await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
 
         var html = await File.ReadAllTextAsync(Path.Combine(output, "index.html"));
-        Assert.Contains("No static evidence rows were found in the provided fact stream under the current coverage.", html);
+        Assert.Contains("No static evidence rows were found in the compatible evidence artifacts under the current coverage.", html);
         Assert.Contains("index.sqlite was not provided", html);
         Assert.Contains("A JSON artifact was discovered but is not supported", html);
 
@@ -1399,6 +1517,133 @@ public sealed class StaticHtmlEvidenceExplorerTests
         }
 
         await File.WriteAllTextAsync(Path.Combine(directory, "release-review.json"), json);
+    }
+
+    private static async Task WriteReducerImpactArtifactAsync(
+        string directory,
+        string commitSha,
+        bool includeGap = false,
+        bool reducedCoverage = false,
+        bool truncated = false,
+        string? fixtureKind = null)
+    {
+        var evidenceCommitSha = fixtureKind == "mismatched-commit" ? FortyCharCommit("f") : commitSha;
+        var report = new
+        {
+            reportType = fixtureKind == "unsupported-report" ? "combined-change-impact" : "contract-delta-impact-single",
+            version = "2.0",
+            inputCompatibility = "ContractDeltaV2",
+            reportCoverage = reducedCoverage ? "Reduced" : "Full",
+            coverageWarnings = reducedCoverage ? new[] { "private coverage warning" } : Array.Empty<string>(),
+            query = new
+            {
+                algorithm = "contract-delta-fact-match",
+                algorithmVersion = "2.0"
+            },
+            index = new
+            {
+                indexKind = "single",
+                sourceCount = 1,
+                repoIdentityHash = "private-repo-hash",
+                commitSha,
+                analysisLevel = "Level1SemanticAnalysis",
+                buildStatus = "Succeeded",
+                sources = new[]
+                {
+                    new
+                    {
+                        label = "private-source-label",
+                        sourceIndexId = (string?)null,
+                        scanId = "private-scan-id",
+                        language = "csharp",
+                        commitSha,
+                        scannerVersion = "test-reducer-v2",
+                        analysisLevel = "Level1SemanticAnalysis",
+                        buildStatus = "Succeeded",
+                        repositoryIdentityHash = "private-repo-hash"
+                    }
+                }
+            },
+            summary = new
+            {
+                changeCount = 1,
+                findingCount = 1,
+                evidenceRowCount = 1,
+                gapCount = includeGap ? 1 : 0,
+                truncated
+            },
+            findings = new[]
+            {
+                new
+                {
+                    element = "Private.Customer.Email",
+                    changeType = "changed",
+                    classification = ImpactClassifications.DefiniteImpact,
+                    ruleId = RuleIds.ContractDeltaImpact,
+                    reason = "private impact reason",
+                    warnings = new[] { "private finding warning" },
+                    findingId = "private-finding-id",
+                    changeId = "private-change-id",
+                    changeKind = "property",
+                    confidence = "high",
+                    evidenceTier = EvidenceTiers.Tier1Semantic,
+                    sourceLabel = "private-source-label",
+                    reference = new Dictionary<string, string> { ["private-key"] = "private-value" },
+                    pathContext = Array.Empty<object>(),
+                    reverseContext = Array.Empty<object>(),
+                    evidence = new[]
+                    {
+                        new
+                        {
+                            factId = "private-fact-id",
+                            factType = "PropertyRead",
+                            ruleId = RuleIds.CSharpSemanticPropertyAccess,
+                            evidenceTier = EvidenceTiers.Tier1Semantic,
+                            filePath = "C:\\private\\Customer.cs",
+                            startLine = 10,
+                            endLine = 11,
+                            targetSymbol = "Private.Customer.Email",
+                            contractElement = "Email",
+                            commitSha = evidenceCommitSha,
+                            sourceLabel = "private-source-label",
+                            sourceIndexId = (string?)null,
+                            scanId = "private-scan-id",
+                            sourceSymbol = "Private.Customer.ReadEmail()",
+                            metadata = new Dictionary<string, string> { ["private"] = "secret" }
+                        }
+                    },
+                    limitations = new[] { "private finding limitation" }
+                }
+            },
+            gaps = includeGap
+                ? new[]
+                {
+                    new
+                    {
+                        gapId = "private-gap-id",
+                        gapKind = "PrivateGapKind",
+                        changeId = "private-change-id",
+                        sourceLabel = "private-source-label",
+                        ruleId = RuleIds.ContractDeltaImpact,
+                        evidenceTier = EvidenceTiers.Tier4Unknown,
+                        classification = ImpactClassifications.UnknownAnalysisGap,
+                        message = "private reducer gap message",
+                        supportingFactIds = new[] { "private-fact-id" }
+                    }
+                }
+                : Array.Empty<object>(),
+            limitations = new[] { "private top-level limitation" }
+        };
+        var json = JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true });
+        if (fixtureKind == "duplicate-provenance")
+        {
+            json = json.Replace(
+                "\"scannerVersion\": \"test-reducer-v2\",",
+                "\"scannerVersion\": \"test-reducer-v2\",\n        \"scannerVersion\": \"order-dependent-version\",",
+                StringComparison.Ordinal);
+        }
+
+        await File.WriteAllTextAsync(Path.Combine(directory, "impact-report.json"), json);
     }
 
     private static async Task WritePathsReportArtifactAsync(
