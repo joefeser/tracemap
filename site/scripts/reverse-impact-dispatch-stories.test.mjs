@@ -28,6 +28,17 @@ test("story validator rejects route, cross-link, sitemap, and discovery drift", 
   const root = await fixture(t); await buildSite({ root, log() {} }); const pagePath = join(root, "dist/blog/what-depends-on-this-symbol/index.html"); await writeFile(pagePath, (await readFile(pagePath, "utf8")).replaceAll(staticDispatchRoute, "/blog/"), "utf8"); await rm(join(root, "dist/sitemap.xml")); const discoveryPath = join(root, "dist/routes-index.json"); const discovery = JSON.parse(await readFile(discoveryPath, "utf8")); discovery.entries.find((entry) => entry.path === reverseImpactRoute).publicClaimLevel = "concept"; await writeFile(discoveryPath, `${JSON.stringify(discovery, null, 2)}\n`, "utf8"); const errors = []; await validateReverseImpactDispatchStoriesDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /sitemap is missing/); assert.match(errors.join("\n"), /missing required link/); assert.match(errors.join("\n"), /claim level must be demo/);
 });
 
+test("story validator does not accept data-href as a navigable cross-link", async (t) => {
+  const root = await fixture(t);
+  await buildSite({ root, log() {} });
+  const pagePath = join(root, "dist/blog/what-depends-on-this-symbol/index.html");
+  const page = await readFile(pagePath, "utf8");
+  await writeFile(pagePath, page.replaceAll(`href="${staticDispatchRoute}"`, `data-href="${staticDispatchRoute}"`), "utf8");
+  const errors = [];
+  await validateReverseImpactDispatchStoriesDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /missing required link/);
+});
+
 test("story validator reports malformed discovery without throwing", async (t) => {
   for (const malformed of ["{", JSON.stringify({ entries: {} })]) await t.test(malformed, async (subtest) => { const root = await fixture(subtest); await buildSite({ root, log() {} }); await writeFile(join(root, "dist/routes-index.json"), malformed, "utf8"); const errors = []; await validateReverseImpactDispatchStoriesDist({ dist: join(root, "dist"), errors }); assert.match(errors.join("\n"), /valid JSON|entries array/); });
 });
