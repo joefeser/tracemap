@@ -135,6 +135,7 @@ public static partial class StaticHtmlEvidenceExplorer
                 }
             }
 
+            var reducerOutputTruncated = report.Summary.Truncated || report.ReportCoverage == "Partial";
             var coverageLabels = new SortedSet<string>(StringComparer.Ordinal)
             {
                 report.ReportCoverage switch
@@ -143,7 +144,7 @@ public static partial class StaticHtmlEvidenceExplorer
                     "Partial" => "ReducerPartialCoverage",
                     _ => "ReducerReducedCoverage"
                 },
-                report.Summary.Truncated ? "ReducerTruncated" : "ReducerNotTruncated",
+                reducerOutputTruncated ? "ReducerTruncated" : "ReducerNotTruncated",
                 report.Gaps.Count > 0 ? "ReducerGapsPresent" : "ReducerNoRecordedGaps"
             };
             foreach (var label in coverageLabels)

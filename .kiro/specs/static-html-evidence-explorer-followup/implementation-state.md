@@ -496,7 +496,9 @@ Validation:
   errors were reported.
 - Review fixes admit the producer's valid `Partial` coverage state, keep that
   state distinct from `Reduced`, and prevent `ReducerNotTruncated` from
-  matching the aggregate truncation predicate. Coverage-relative no-evidence
+  matching the aggregate truncation predicate. `Partial` also implies the
+  reducer output was truncated even when the producer summary flag remains
+  false. Coverage-relative no-evidence
   results retain the reducer artifact as support without inventing source-fact
   evidence; result rows continue to link every available location/provenance
   row by evidence ID.
