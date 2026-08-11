@@ -32,10 +32,17 @@ The manifest must include:
 - project/workspace identifiers
 - known gaps
 - scan root metadata when available: `scanRootRelativePath`, `scanRootPathHash`, and `gitRootHash`
+- source snapshot digest when available: `sourceSnapshotDigest`, a lowercase SHA-256 over the adapter's deterministic input framing and actual analyzed source bytes
 
 `Level1SemanticAnalysis` and `Succeeded` mean the scanner has full semantic evidence for the selected scan scope. Compiler errors, unresolved dependencies, project-load failures, skipped files, or syntax-only fallback must produce reduced coverage.
 
 `scanId` must be deterministic. Adapters should derive it from stable repository identity, commit SHA, and a deterministic adapter-specific signature such as sorted file inventory or normalized scan options. The inputs must be documented by the adapter and must not contain a timestamp, UUID, process ID, or output path. Fact IDs may include `scanId`, so unstable scan IDs cause every fact ID to churn between identical runs.
+
+Commit SHA alone is not an authoritative identity for a dirty working tree. When an adapter analyzes working-tree bytes, materially different byte states must not share a scan ID. The .NET adapter incorporates `sourceSnapshotDigest` into `scanId` and verifies that the framed inventory remains unchanged while facts are materialized after semantic project loading. Project loading can legitimately update intermediate build files, so the authoritative digest is established after that load boundary. A later change fails with `SourceSnapshotChangedDuringScan`. The digest proves byte integrity for the framed inventory; it does not prove authorship, repository cleanliness, or runtime behavior.
+
+The .NET adapter also protects compiler-analyzed C# and static MSBuild metadata across semantic project loading. A protected input change, removal, or read failure returns exit code 1 with `SourceSnapshotChangedDuringScan`; an in-scope entry that cannot be inventoried returns exit code 1 with `SourceInventoryIncomplete`. Neither failure writes a scan manifest or the other normal scan artifacts.
+
+For .NET scan scope, `--include` and `--exclude` match slash-separated logical repository paths. `*` matches within one path segment; `**` spans directory levels, and `**/` may span zero levels. Exclusions take precedence. Comparisons follow detected host case semantics; macOS comparisons use Form C equivalence, while persisted inventory and evidence paths retain the filesystem-provided Unicode spelling. These comparison rules do not globally normalize canonical paths or collapse names on filesystems where they remain distinct.
 
 Fact IDs must remain deterministic within an adapter and compatible across
 versions unless a schema/version migration explicitly says otherwise. The v1

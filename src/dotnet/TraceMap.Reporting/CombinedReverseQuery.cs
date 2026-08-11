@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using TraceMap.Core;
 
 namespace TraceMap.Reporting;
@@ -154,7 +155,14 @@ public sealed record CombinedReverseGap(
     int? StartLine,
     int? EndLine,
     string? Reason,
-    IReadOnlyDictionary<string, string> Metadata);
+    IReadOnlyDictionary<string, string> Metadata,
+    IReadOnlyList<string>? SupportingFactIds = null)
+{
+    [JsonIgnore]
+    public IReadOnlyList<string> EffectiveSupportingFactIds => SupportingFactIds is { Count: > 0 }
+        ? SupportingFactIds
+        : CombinedFactId is null ? [] : [CombinedFactId];
+}
 
 public static class CombinedReverseClassifications
 {
@@ -989,6 +997,13 @@ public static class CombinedReverseReporter
             notes.Add(new CombinedPathNote("SymbolReconciliationBoundary", "Symbol reconciliation hops are review-tier evidence, not compiler-resolved call evidence."));
         }
 
+        if (edges.Any(IsStaticDispatchCandidate))
+        {
+            notes.Add(new CombinedPathNote(
+                "StaticDispatchCandidate",
+                "Static dispatch candidate hops preserve compiler-backed relationship evidence for review, but do not prove runtime dispatch or a selected dependency-injection implementation."));
+        }
+
         return notes
             .OrderBy(note => note.Code, StringComparer.Ordinal)
             .ThenBy(note => note.Message, StringComparer.Ordinal)
@@ -1045,7 +1060,7 @@ public static class CombinedReverseReporter
                 var candidate = group.OrderBy(item => item.Node.SourceLabel, StringComparer.Ordinal).ThenBy(item => item.Node.DisplayName, StringComparer.Ordinal).First();
                 var pathIds = group.Select(item => item.PathId).Where(pathsById.ContainsKey).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
                 var rootPaths = pathIds.Select(id => pathsById[id]).ToArray();
-                var classification = rootPaths.Select(path => path.Classification).OrderBy(ClassificationRank).FirstOrDefault() ?? CombinedReverseClassifications.UnknownAnalysisGap;
+                var classification = AggregateRootClassification(rootPaths);
                 var source = sourcesById.TryGetValue(candidate.Node.SourceIndexId, out var found) ? found : null;
                 var caveats = source is not null && SourceHasReducedCoverage(source) ? new[] { $"Source `{source.Label}` has reduced coverage." } : [];
                 return new CombinedReverseRoot(
@@ -1064,6 +1079,18 @@ public static class CombinedReverseReporter
                     caveats);
             })
             .ToArray();
+    }
+
+    internal static string AggregateRootClassification(IReadOnlyList<CombinedReversePath> rootPaths)
+    {
+        var classification = rootPaths
+            .Select(path => path.Classification)
+            .OrderBy(ClassificationRank)
+            .FirstOrDefault() ?? CombinedReverseClassifications.UnknownAnalysisGap;
+        return rootPaths.Any(path => path.RuleIds.Contains("combined.dispatch-candidate.v1", StringComparer.Ordinal))
+            && ClassificationRank(classification) < ClassificationRank(CombinedReverseClassifications.NeedsReviewReversePath)
+                ? CombinedReverseClassifications.NeedsReviewReversePath
+                : classification;
     }
 
     private static bool IsTargetRoot(CombinedPathNode node, string target, string? sourceFilter)
@@ -1127,6 +1154,11 @@ public static class CombinedReverseReporter
             return CombinedReverseClassifications.NeedsReviewReversePath;
         }
 
+        if (edges.Any(IsStaticDispatchCandidate))
+        {
+            return CombinedReverseClassifications.NeedsReviewReversePath;
+        }
+
         if (edges.Any(edge => edge.EdgeKind == "endpoint-match" && (edge.Classification != CombinedEndpointClassifications.MatchedEndpoint || edge.EvidenceTier != "Tier2Structural"))
             || edges.Any(edge => edge.EvidenceTier == "Tier3SyntaxOrTextual" || edge.EdgeKind == "symbol-reconciliation"))
         {
@@ -1137,6 +1169,10 @@ public static class CombinedReverseReporter
             ? CombinedReverseClassifications.ProbableStaticReversePath
             : CombinedReverseClassifications.StrongStaticReversePath;
     }
+
+    private static bool IsStaticDispatchCandidate(CombinedPathEdge edge) =>
+        edge.EdgeKind is "interface-candidate" or "override-candidate"
+        || string.Equals(edge.RuleId, "combined.dispatch-candidate.v1", StringComparison.Ordinal);
 
     private static CombinedReverseGap FromPathGap(CombinedPathGap gap)
     {
@@ -1158,7 +1194,8 @@ public static class CombinedReverseReporter
             gap.StartLine,
             null,
             gap.Reason,
-            EmptyMetadata());
+            EmptyMetadata(),
+            gap.EffectiveSupportingFactIds);
     }
 
     private static CombinedReverseGap TruncatedGap(string reason, CombinedReverseSurface surface, CombinedPathNode node)
