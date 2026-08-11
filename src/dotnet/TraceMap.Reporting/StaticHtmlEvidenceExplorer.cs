@@ -615,6 +615,7 @@ public static class StaticHtmlEvidenceExplorer
             evidenceRows,
             gaps,
             limitations,
+            coverageLabels,
             redactions,
             cancellationToken);
         var catalogLoad = await AddRuleCatalogArtifactAsync(inputDirectory, safetyProfile, artifacts, gaps, redactions, cancellationToken);
@@ -1155,6 +1156,7 @@ public static class StaticHtmlEvidenceExplorer
         List<ExplorerEvidenceRow> evidenceRows,
         List<ExplorerGap> gaps,
         List<ExplorerLimitation> limitations,
+        SortedSet<string> overallCoverageLabels,
         Dictionary<(string RuleId, string Category, string Location, string Action), int> redactions,
         CancellationToken cancellationToken)
     {
@@ -1190,6 +1192,7 @@ public static class StaticHtmlEvidenceExplorer
                     MaxDepth = 96
                 });
             var root = RequireObject(document.RootElement, "root");
+            RejectDuplicateJsonProperties(root);
             foreach (var required in new[] { "version", "reportCoverage", "sources", "summary", "paths", "gaps", "limitations" })
             {
                 _ = RequireProperty(root, required);
@@ -1254,6 +1257,11 @@ public static class StaticHtmlEvidenceExplorer
                 report.Summary.Truncated ? "PathsTruncated" : "PathsNotTruncated",
                 report.Gaps.Count > 0 ? "PathsGapsPresent" : "PathsNoRecordedGaps"
             };
+            foreach (var label in coverageLabels)
+            {
+                overallCoverageLabels.Add(label);
+            }
+
             artifacts.Add(new ExplorerInputArtifact(
                 artifactId,
                 "paths-report",
@@ -1657,6 +1665,35 @@ public static class StaticHtmlEvidenceExplorer
         return properties.Length == 1
             ? properties[0].Value
             : throw new InvalidDataException("release-review property unavailable or duplicated");
+    }
+
+    private static void RejectDuplicateJsonProperties(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+            {
+                RejectDuplicateJsonProperties(item);
+            }
+
+            return;
+        }
+
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!names.Add(property.Name))
+            {
+                throw new InvalidDataException("paths report property duplicated");
+            }
+
+            RejectDuplicateJsonProperties(property.Value);
+        }
     }
 
     private static JsonElement RequireObject(JsonElement element, string scope)
