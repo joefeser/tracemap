@@ -86,21 +86,24 @@
     review rather than silently reusing a familiar label.
   </p>
   <p>
-    The evidence tier communicates strength: Tier 1 compiler-selected evidence,
-    Tier 2 structural evidence, Tier 3 syntax or textual evidence, and Tier 4
-    unknown or analysis gap. A rule cannot promote Tier 3 into Tier 1 merely
-    because a plausible target exists.
+    The evidence tier communicates strength: <code>Tier1Semantic</code> for
+    compiler-resolved symbol evidence, <code>Tier2Structural</code> for known
+    structural patterns, <code>Tier3SyntaxOrTextual</code> for syntax or text,
+    and <code>Tier4Unknown</code> for unknown state or an analysis gap. A rule
+    cannot promote <code>Tier3SyntaxOrTextual</code> into
+    <code>Tier1Semantic</code> merely because a plausible target exists.
   </p>
 </section>
 
 <section data-gap-rule-block="provenance">
   <h2>5. Retain provenance and snapshot identity.</h2>
   <p>
-    Evidence should carry repository or snapshot identity, commit SHA where
-    applicable, extractor ID/version, rule ID, tier, file path and span when
+    Scan evidence must carry both repository identity and commit SHA. It should
+    also retain extractor ID/version, rule ID, tier, file path and span when
     allowed, snippet hash rather than raw source by default, coverage, and
-    supporting fact or edge IDs. Those fields allow a reviewer to ask whether
-    two outputs describe the same scan and the same source bytes.
+    supporting fact or edge IDs. Non-scan evidence should name its applicable
+    snapshot identity. Those fields allow a reviewer to ask whether two outputs
+    describe the same scan and the same source bytes.
   </p>
   <p>
     Provenance is especially important after a correction. A new extractor

@@ -4,4 +4,5 @@
 - [x] Add the process article, registry record, and discovery metadata.
 - [x] Add focused validator tests and full-site integration.
 - [x] Run full site and browser validation.
-- [ ] Commit, push, open the stacked ready PR, and complete ACK.
+- [x] Commit, push, and open the stacked ready PR.
+- [ ] Complete ACK.
