@@ -31,7 +31,10 @@ reference rather than scanned source. Its public-key token must equal
 operation requires
 a compiler-resolved method whose original or reduced declaration is owned by
 `Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder` from that same
-allowlisted metadata assembly.
+allowlisted metadata assembly. The invocation's enclosing type must separately
+pass the migration-declaration admission rule. A helper in an ordinary type
+that accepts a genuine `MigrationBuilder` cannot emit an operation or gap under
+this rule family.
 
 Application methods, wrappers, source-declared framework lookalikes, extension
 methods in other assemblies, and unresolved symbols do not qualify. Test

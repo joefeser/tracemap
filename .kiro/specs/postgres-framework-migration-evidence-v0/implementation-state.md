@@ -1,6 +1,6 @@
 # Framework Migration Evidence v0 Implementation State
 
-Status: specified; implementation not started
+Status: spec-ready
 
 Branch: `codex/postgres-framework-migration-v0`
 
@@ -54,6 +54,10 @@ ordering, rollback, generated-SQL, database-state, or safety claim is added.
 - Both Kiro passes reported reduced tool coverage because their sandbox denied
   shell/network access. Repository checks and primary API-reference verification
   were run independently outside the advisory review.
+- Hosted review on PR #642 required an admitted migration owner for every
+  operation and identified two repository-vocabulary inconsistencies. The spec
+  now rejects genuine `MigrationBuilder` calls from ordinary helper types, uses
+  exact `Tier4Unknown`, and uses the documented `spec-ready` status token.
 - Implementation and product tests are intentionally deferred until PR 1.
 
 ## Owner Decisions Resolved By This Spec
