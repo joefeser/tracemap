@@ -189,6 +189,21 @@ rules:
       - Claim metadata that is not exposed by a compatible structured input remains unknown and must not be converted into a profile or claim-level conflict.
       - Ledger labels, messages, scopes, statuses, and subject identities must use closed explorer-authored values and stable safe IDs rather than raw paths, remotes, hosts, private names, snippets, SQL, or configuration values.
 
+  - id: explorer.input.release-review.v1
+    name: Static HTML explorer release-review compatibility reader
+    description: Validates bounded release-review v1.2 identity, mode, snapshot shape, closed coverage labels, and deterministic content identity for explorer compatibility projection.
+    evidenceTier: Tier4Unknown
+    emits:
+      - compatible release-review input artifact
+      - release-review compatibility limitation
+    limitations:
+      - This reader establishes artifact compatibility and deterministic content identity only; it does not render or independently verify findings, paths, source labels, messages, metadata, checklist text, or reducer conclusions.
+      - A compatible release-review artifact does not prove runtime reachability, production behavior, release approval, deployment safety, or complete analysis.
+      - Unsupported versions, modes, malformed metadata, duplicate required properties, invalid commit identities, and oversized artifacts remain unavailable under explorer.input.unsupported-schema.v1.
+      - The report is associated with the scan source only when its after-snapshot commits include the authoritative scan/fact commit; mismatch or unavailable authority remains an explicit provenance gap.
+      - Oversized inputs stop at the bounded size-decision point and use a closed unavailable placeholder instead of a full-content digest.
+      - Richer release-review surface, path, and reducer projections require a separately bounded reader slice with public-safe validation.
+
   - id: explorer.validation.generated-file-stale.v1
     name: Static HTML explorer stale generated file guard
     description: Prevents overwriting stale or unverified generated explorer files without explicit operator intent.
