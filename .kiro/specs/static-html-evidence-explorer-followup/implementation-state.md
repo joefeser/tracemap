@@ -480,7 +480,7 @@ Validation:
 
 - Locked dependency restore: passed.
 - Solution build: passed with 0 warnings and 0 errors.
-- Focused `StaticHtmlEvidenceExplorerTests`: 55/55 passed.
+- Focused `StaticHtmlEvidenceExplorerTests`: 58/58 passed after review fixes.
 - Full .NET solution tests: passed.
 - Targeted `dotnet format`: passed.
 - `./scripts/check-private-paths.sh`: passed.
@@ -494,3 +494,9 @@ Validation:
   the reducer navigation target, heading, and two result rows were present,
   body width remained bounded to the viewport, and no browser warnings or
   errors were reported.
+- Review fixes admit the producer's valid `Partial` coverage state, keep that
+  state distinct from `Reduced`, and prevent `ReducerNotTruncated` from
+  matching the aggregate truncation predicate. Coverage-relative no-evidence
+  results retain the reducer artifact as support without inventing source-fact
+  evidence; result rows continue to link every available location/provenance
+  row by evidence ID.

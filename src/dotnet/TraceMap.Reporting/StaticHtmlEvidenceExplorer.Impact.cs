@@ -137,7 +137,12 @@ public static partial class StaticHtmlEvidenceExplorer
 
             var coverageLabels = new SortedSet<string>(StringComparer.Ordinal)
             {
-                report.ReportCoverage == "Full" ? "ReducerFullCoverage" : "ReducerReducedCoverage",
+                report.ReportCoverage switch
+                {
+                    "Full" => "ReducerFullCoverage",
+                    "Partial" => "ReducerPartialCoverage",
+                    _ => "ReducerReducedCoverage"
+                },
                 report.Summary.Truncated ? "ReducerTruncated" : "ReducerNotTruncated",
                 report.Gaps.Count > 0 ? "ReducerGapsPresent" : "ReducerNoRecordedGaps"
             };
@@ -206,7 +211,7 @@ public static partial class StaticHtmlEvidenceExplorer
                     report.ReportCoverage!,
                     artifactId,
                     resultEvidenceIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-                    resultSupportIds.Count == 0 ? [resultId] : resultSupportIds,
+                    resultSupportIds.Count == 0 ? [artifactId] : resultSupportIds,
                     [limitationId]));
                 AddRedaction(redactions, OmittedUnsafeValueRuleId, "reducer-free-text", "impact-report.findings", "omit");
             }
@@ -246,7 +251,7 @@ public static partial class StaticHtmlEvidenceExplorer
     {
         if (!SupportedReducerReportTypes.Contains(report.ReportType ?? string.Empty)
             || report.Version != "2.0"
-            || report.ReportCoverage is not ("Full" or "Reduced")
+            || report.ReportCoverage is not ("Full" or "Reduced" or "Partial")
             || report.CoverageWarnings is null
             || report.Query is null
             || report.Query.Algorithm != "contract-delta-fact-match"
