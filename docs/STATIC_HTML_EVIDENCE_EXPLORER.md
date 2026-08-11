@@ -42,10 +42,20 @@ The `release-review.json` reader accepts only the exact generated
 matching before/after snapshot shape, closed `Full`/`Reduced` coverage values,
 non-empty source collections, valid-or-null source commit identities, and
 non-negative summary gap counts. The artifact is size bounded and identified
-by a deterministic SHA-256 content hash. Duplicate required properties,
+by a deterministic SHA-256 content hash when compatible. Duplicate required properties,
 unsupported versions or modes, malformed metadata, invalid commit identities,
 and oversized inputs remain unavailable under
 `explorer.input.unsupported-schema.v1`.
+
+The reader binds the report artifact to `source:scan-output` only when the
+release-review after snapshot contains the authoritative compatible scan
+manifest commit, or the single unambiguous fact-stream commit when no usable
+manifest commit is available. A mismatch emits a sanitized `commit-conflict`
+gap; missing authoritative scan identity emits a `source-association-unknown`
+gap. In both cases the report remains unbound and partial. Oversized reports
+stop at the size-decision boundary and use the closed
+`unavailable:artifact-too-large` content-hash placeholder rather than reading
+or hashing the full input.
 
 This reader projects only safe compatibility metadata: schema, content hash,
 closed coverage labels, and a rule-backed limitation. It does not read or

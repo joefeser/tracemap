@@ -307,13 +307,13 @@ Deferred:
 
 Validation:
 
-- Focused `StaticHtmlEvidenceExplorerTests`: 32/32 passed after adding public
+- Focused `StaticHtmlEvidenceExplorerTests`: 34/34 passed after adding public
   and hidden compatibility, unsupported-version, duplicate-property,
-  invalid-commit, oversized-input, rule-catalog, no-leak, and determinism
-  coverage.
+  invalid-commit, oversized-input, rule-catalog, no-leak, determinism, exact
+  source binding, commit-mismatch, and missing-authority coverage.
 - Locked dependency restore and solution build passed with 0 warnings and 0
   errors.
-- Full .NET solution: 1,374/1,374 passed.
+- Full .NET solution: 1,376/1,376 passed.
 - Targeted `dotnet format --verify-no-changes`: passed.
 - `./scripts/check-private-paths.sh`: passed.
 - `git diff --check`: passed.
@@ -327,3 +327,20 @@ Validation:
 - Browser revalidation was deferred because this slice changes no HTML, CSS,
   JavaScript, navigation, or interaction code; it only adds rows through the
   already browser-validated v2 artifact and compatibility-ledger renderers.
+
+Review follow-up:
+
+- ACK authorized one Qodo performance finding and one Codex P2 provenance
+  finding on exact head `3c185b9b3ac163fba4c53692a3519a0528332f65`.
+- Oversized inputs now stop before reading when file length already exceeds the
+  bound, with a max-plus-one byte fallback for concurrent growth. They use the
+  closed `unavailable:artifact-too-large` placeholder instead of hashing to
+  end-of-file.
+- The reader now retains validated after-snapshot commits and binds the report
+  to `source:scan-output` only when they include the authoritative usable scan
+  manifest commit or single unambiguous fact-stream commit. Mismatch and
+  missing authority emit sanitized rule-backed gaps and leave the report
+  unbound and partial.
+- Post-fix build remained clean, focused tests passed 34/34, full tests passed
+  1,376/1,376, and the real CLI smoke confirmed exact source binding for the
+  matching same-snapshot report.
