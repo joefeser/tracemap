@@ -135,6 +135,21 @@ SHA remain first-class `Fact`/`EvidenceSpan` fields and are not duplicated as
 properties. No producer may add an unlisted property without a versioned spec
 change.
 
+All facts take `ScanId`, `Repo`, and `CommitSha` from the scan manifest;
+`ProjectPath` is the normalized repository-relative project path; and evidence
+uses the normalized repository-relative source file plus exact 1-based line
+span. The remaining top-level `CodeFact` identity fields are closed:
+
+| Fact | `SourceSymbol` | `TargetSymbol` | `ContractElement` |
+| --- | --- | --- | --- |
+| `FrameworkMigrationDeclared` | null | fully qualified admitted migration type display name | `framework-migration` |
+| `FrameworkMigrationOperationCandidate` | fully qualified directly containing method display name | fully qualified resolved EF Core method display name | exact `operationKind` |
+| framework-migration `AnalysisGap` | directly containing method display name when `sourceSymbolId` is available; otherwise null | null | exact `gapKind` |
+
+These values, including required nulls, participate unchanged in
+`FactFactory.CreateFactId`. Canonical IDs remain in properties; display names
+in top-level symbol fields are not identity substitutes.
+
 `FrameworkMigrationDeclared` requires:
 
 | Property | Closed value or format |
@@ -190,6 +205,9 @@ Framework-migration `AnalysisGap` properties are closed to:
 | `frameworkFamily` | `ef-core` |
 | `providerScope` | `unknown` |
 | `migrationTypeSymbolId` | canonical admitted migration type ID when semantic admission succeeded; otherwise absent |
+| `sourceSymbolId` | canonical directly containing method ID when available; otherwise absent |
+| `sourceSymbolKind` | `Method` when `sourceSymbolId` is present; otherwise absent |
+| `sourceAssemblyIdentity` | canonical source assembly identity when `sourceSymbolId` is present; otherwise absent |
 | `operationKind` | recognized closed operation kind when available; otherwise absent |
 | `direction` | `up`, `down`, or `unknown` when available; otherwise absent |
 | `occurrenceCount` | positive invariant decimal with no leading zeros |
@@ -214,9 +232,12 @@ The v0 `gapKind` vocabulary is:
 
 Gap aggregation keys are migration type identity (or repository-relative file
 and bounded possible-migration declaration span when semantic identity is
-unavailable) plus `gapKind`. Gap properties never include protected argument
-text, a protected-value digest, a local absolute path, or arbitrary exception
-text.
+unavailable), `gapKind`, containing method identity or `<none>`, recognized
+`operationKind` or `<none>`, and `direction` or `<none>`. Thus unlike operations
+or directions never collapse into one row, while repeated equivalent gaps in
+one method aggregate into `occurrenceCount`. Gap properties never include
+protected argument text, a protected-value digest, a local absolute path, or
+arbitrary exception text.
 
 ## Provider Scope
 

@@ -67,14 +67,19 @@ migration evidence distinct from explicitly PostgreSQL-bound evidence.
     reversibility, generated SQL, provider selection at runtime, database
     existence, live-schema correspondence, compatibility, safety, or release
     approval.
-14. Gaps shall be aggregated deterministically by migration type and categorical
-    `gapKind`, with an occurrence count. Operation identity shall include a
-    deterministic invocation ordinal so identical operation shapes on one line
-    do not collapse.
+14. Gaps shall be aggregated deterministically by migration scope, categorical
+    `gapKind`, containing method, recognized operation kind, and direction,
+    using explicit absent sentinels in the aggregation key and an occurrence
+    count. Operation identity shall include a deterministic invocation ordinal
+    so identical operation shapes on one line do not collapse.
 15. Declaration, operation, and gap properties shall use only the closed keys,
     value vocabularies, canonical symbol roles, coverage labels, and fixed
     limitation strings in the design. New keys or values require a versioned
     contract change.
+16. Every top-level `CodeFact` identity input, including required null
+    `SourceSymbol`, `TargetSymbol`, and `ContractElement` values, shall follow
+    the closed table in the design so independent producers generate compatible
+    rows and fact IDs.
 
 ## Non-goals
 
