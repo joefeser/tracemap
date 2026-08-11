@@ -8,12 +8,13 @@ review readiness:
 ```
 
 The lane treats Codex and Qodo as a trusted review group. Qodo remains required
-and can be requested only by an explicit owner action, but it is a one-pass
-reviewer: a prior-head Qodo result with explicit zero finding counters may
-become residual risk when exact-head required Codex is clean and the configured
-fast quorum is met. Stale Codex plus stale Qodo cannot satisfy the lane. Checks,
-threads, findings, merge state, risky-file gates, and `main`/release promotion
-policy remain unchanged.
+and can be requested only by an explicit owner action. The initial batch waits
+for Qodo's single return. After Qodo has returned once, a later-head stale result
+is terminal residual risk: ACK must not request, retry, or wait for a second
+Qodo return. Exact-head Codex may then satisfy the configured fast quorum after
+all findings are patched or dispositioned. Stale Codex plus stale Qodo cannot
+satisfy the lane. Checks, threads, findings, merge state, risky-file gates, and
+`main`/release promotion policy remain unchanged.
 
 After `FRESH_REVIEW_FIX_CYCLE_CEILING_REACHED`, the trusted lane may use the
 configured `claude-local` reviewer as a bounded fallback. This is a read-only
@@ -52,25 +53,34 @@ Operational boundaries:
 - Merge-commit readback is the default; squash merge requires separate owner
   approval.
 
-The one-pass Qodo behavior requires Agent Control Kit PR #281, merged at
-`d4eeead`. The installed stable build `eeb217a` predates that fix even though it
-reports the same `0.2.0` version and capabilities. Before a loop, verify the
-actual build and use a built ACK checkout containing `d4eeead` or a descendant:
+The one-pass Qodo lifecycle and bounded current-head Codex recovery require the
+immutable Agent Control Kit `v0.4.4` release at
+`855428f7a8e9bd084decc3a1569aa59f7d50583d`. Before a loop, verify the exact
+checkout, stable identity, release receipt, and consumer lane:
 
 ```bash
-ACK_ROOT=../agent-control-kit
+ACK_ROOT=../agent-control-kit-v0.4.4
+ACK_RELEASE_RECEIPT="$ACK_ROOT/.agent-control/tmp/releases/0.4.4-855428f7a8e9bd084decc3a1569aa59f7d50583d.json"
+ACK_SHA=855428f7a8e9bd084decc3a1569aa59f7d50583d
+
+git -C "$ACK_ROOT" fetch origin --tags
+test "$(git -C "$ACK_ROOT" rev-parse HEAD)" = "$ACK_SHA"
+test "$(git -C "$ACK_ROOT" rev-parse 'v0.4.4^{commit}')" = "$ACK_SHA"
 npm --prefix "$ACK_ROOT" run build
-ACK_SHA=$(node "$ACK_ROOT/dist/cli.js" version --json | node -e \
-  'let data="";process.stdin.on("data",c=>data+=c).on("end",()=>process.stdout.write(JSON.parse(data).gitSha))')
-git -C "$ACK_ROOT" merge-base --is-ancestor d4eeead "$ACK_SHA"
+node "$ACK_ROOT/dist/cli.js" version --json
+node "$ACK_ROOT/dist/cli.js" release verify \
+  --repo-root "$ACK_ROOT" \
+  --receipt "$ACK_RELEASE_RECEIPT" \
+  --json
 node "$ACK_ROOT/dist/cli.js" doctor \
   --repo-root "$PWD" \
   --lane-config "$PWD/.agent-control/lanes/pr-review-loop.yaml" \
   --json
 ```
 
-A nonzero ancestry or doctor result is a preflight failure. Do not fall back to
-the older installed binary.
+A missing exact tag or receipt, a non-`release_ready` release verification, or a
+nonzero doctor result is a preflight failure. Do not fall back to a mutable dev
+checkout, an older installed binary, or a prerelease build.
 
 Run the loop from a TraceMap checkout so the repo-local lane file is loaded by
 default. The command expects normal GitHub CLI authentication or a GitHub token
