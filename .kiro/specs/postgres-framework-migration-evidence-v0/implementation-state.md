@@ -62,6 +62,9 @@ ordering, rollback, generated-SQL, database-state, or safety claim is added.
   now fixes declaration, operation, and gap keys; symbol roles; coverage and
   limitation values; identity encodings; invocation ordinals; aggregation
   keys; and the complete v0 `gapKind` vocabulary.
+- A second exact-head follow-up closed the separate top-level `CodeFact`
+  identity inputs and prevented gap aggregation from collapsing different
+  methods, operation kinds, or directions into one misleading row.
 - Implementation and product tests are intentionally deferred until PR 1.
 
 ## Owner Decisions Resolved By This Spec

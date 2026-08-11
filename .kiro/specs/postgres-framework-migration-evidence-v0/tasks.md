@@ -7,6 +7,9 @@
       limitations.
 - [ ] Implement the exact closed declaration/operation/gap property schemas;
       reject or test-fail on unlisted keys and vocabulary values.
+- [ ] Implement and assert the exact top-level `CodeFact` identity fields,
+      including required nulls, manifest bindings, project path, and evidence
+      span inputs used by `FactFactory`.
 - [ ] Add a pinned test-only `Microsoft.EntityFrameworkCore.Relational` package
       reference for positive metadata fixtures; reject identical
       application-source and unsigned same-name metadata lookalikes. Keep EF
@@ -32,7 +35,9 @@
       array/lambda identity-shape, semantic-unavailable, and rule-catalog
       regressions.
 - [ ] Aggregate gaps by migration type and `gapKind` with deterministic counts;
-      prove protected invocations do not create unbounded per-call rows.
+      partition by containing method, operation kind, and direction so unlike
+      contexts do not collapse; prove protected invocations do not create
+      unbounded per-call rows.
 - [ ] Exclude the new fact family from generic contract-delta property matching
       until an evidence-preserving reducer contract is specified. Early-return
       by new fact type and gap rule ID; add adversarial type, member, SQL,
