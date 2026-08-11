@@ -1,8 +1,7 @@
-# The one-pass Qodo posture below requires ACK PR #281 or newer. Semver and
-# capability gates remain necessary but cannot distinguish older 0.2.0 builds;
-# operators must also verify the reported build SHA is d4eeead or a descendant.
+# The one-pass Qodo posture and bounded current-head Codex recovery require the
+# reviewed ACK v0.4.4 stable line. Do not accept an older or prerelease build.
 agentControl:
-  requiredVersion: ">=0.2.0"
+  requiredVersion: ">=0.4.4 <0.5.0"
   channel: stable
   allowPrerelease: false
   requiredCapabilities:
@@ -96,7 +95,7 @@ prLoopPacket:
   bots:
     qodo:
       requirement: required
-      waitUntilReturnedBeforeProcessing: false
+      waitUntilReturnedBeforeProcessing: true
       waitTimeoutSeconds: 900
       requestAllowed: explicit_only
       requestRetryCeiling: 0
@@ -106,7 +105,7 @@ prLoopPacket:
       waitUntilReturnedBeforeProcessing: true
       waitTimeoutSeconds: 900
       requestAllowed: policy
-      requestRetryCeiling: 1
+      requestRetryCeiling: 2
       retryCooldownSeconds: 120
     gemini:
       requirement: optional
