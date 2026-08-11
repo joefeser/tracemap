@@ -15,6 +15,36 @@
     "calloutHtml": "Start with <a href=\"/blog/reverse-engineering-access-without-running-it/\">safe Access evidence acquisition</a>, then follow <a href=\"/blog/access-form-to-field-lineage/\">form-to-field lineage</a> before using this gap register."
   },
   {
+    "slug": "bugs-hiding-in-graph-history",
+    "category": "C# evidence integrity",
+    "title": "The Bugs Hiding in Graph History",
+    "h1": "The bugs hiding in graph history",
+    "description": "A demo-level field guide to the C# graph defects that taught TraceMap to prefer explicit incompleteness over plausible but unsupported relationships.",
+    "ogDescription": "How identity collapse, guessed receivers, reversed edges, stale snapshots, and silent omission can produce convincing but wrong dependency history.",
+    "cardDescription": "A historical defect taxonomy for recognizing C# graphs that look useful while quietly losing identity, direction, provenance, or coverage.",
+    "hero": "A loud incomplete graph asks for review. A plausible wrong graph can quietly steer every downstream answer in the wrong direction.",
+    "published": "2026-08-10",
+    "publishedDisplay": "August 10, 2026",
+    "body": "articles/bugs-hiding-in-graph-history.html",
+    "calloutHeading": "Start with the current contract.",
+    "calloutHtml": "Read <a href=\"/blog/csharp-extraction-without-plausible-wrong-graphs/\">the current C# extraction truth contract</a>, then use the <a href=\"/evidence/gaps/\">gap guide</a> when evidence is incomplete."
+  },
+  {
+    "slug": "csharp-extraction-without-plausible-wrong-graphs",
+    "category": "C# evidence integrity",
+    "title": "C# Extraction Without Plausible Wrong Graphs",
+    "h1": "C# extraction without plausible wrong graphs",
+    "description": "How TraceMap uses compiler-selected identity, exact call sites, truthful fallback, and immutable snapshots to avoid plausible but unsupported C# graph edges.",
+    "ogDescription": "A public-safe guide to TraceMap's C# graph-correctness contracts, reduced coverage, explicit gaps, and review-tier fan-out.",
+    "cardDescription": "Why canonical identity, compiler-selected receivers, exact spans, syntax fallback, and loud gaps matter more than a convenient display-name graph.",
+    "hero": "The dangerous C# graph is not the one that fails loudly. It is the one that looks convincing after identities collapse, receivers are guessed, or incomplete analysis is presented as clean.",
+    "published": "2026-08-10",
+    "publishedDisplay": "August 10, 2026",
+    "body": "articles/csharp-extraction-without-plausible-wrong-graphs.html",
+    "calloutHeading": "Follow the evidence contract.",
+    "calloutHtml": "Use the <a href=\"/evidence/\">evidence model</a>, <a href=\"/evidence/gaps/\">gap guide</a>, and <a href=\"/static-vs-runtime/\">static-versus-runtime boundary</a> when reviewing a C# relationship."
+  },
+  {
     "slug": "access-form-to-field-lineage",
     "category": "Microsoft Access evidence",
     "title": "From an Access Form to a Field",

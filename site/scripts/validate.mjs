@@ -10,6 +10,8 @@ import { validateAccessRebuildReadinessDist } from "./access-rebuild-readiness.m
 import { validateBuildReviewWorkflowStoryDist } from "./build-review-workflow-story.mjs";
 import { validateBlogProofPathSeriesDist } from "./blog-proof-path-series.mjs";
 import { validateChangeRiskLanguageGuideDist } from "./change-risk-language-guide.mjs";
+import { validateCsharpExtractionTruthDist } from "./csharp-extraction-truth.mjs";
+import { validateGraphHistoryBugsDist } from "./graph-history-bugs.mjs";
 import { validateDatabaseDesignReviewShowcaseDist } from "./database-design-review-showcase.mjs";
 import {
   validateDiscoveryDist,
@@ -103,6 +105,8 @@ export async function validateDist({
   requireMsbuildBinlogEvidence = true,
   requireAccessSafeEvidenceAcquisition = true,
   requireAccessFormFieldLineage = requireMsbuildBinlogEvidence,
+  requireCsharpExtractionTruth = true,
+  requireGraphHistoryBugs = true,
   requireAccessRebuildReadiness = true,
   root = defaultRoot
 } = {}) {
@@ -139,9 +143,15 @@ export async function validateDist({
     if (requireAccessSafeEvidenceAcquisition) {
       await validateAccessSafeEvidenceAcquisitionDist({ baseUrl: normalizedBaseUrl, dist, errors });
     }
-    if (requireAccessRebuildReadiness) {
-      await validateAccessRebuildReadinessDist({ baseUrl: normalizedBaseUrl, dist, errors });
-    }
+  if (requireCsharpExtractionTruth) {
+    await validateCsharpExtractionTruthDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requireGraphHistoryBugs) {
+    await validateGraphHistoryBugsDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requireAccessRebuildReadiness) {
+    await validateAccessRebuildReadinessDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
     await validateRobotsSitemap({ baseUrl: normalizedBaseUrl, errors, robotsPath });
     await validateDiscoveryDist({ baseUrl: normalizedBaseUrl, dist, errors });
     await validateDeployAuditDist({ baseUrl: normalizedBaseUrl, dist, errors });
