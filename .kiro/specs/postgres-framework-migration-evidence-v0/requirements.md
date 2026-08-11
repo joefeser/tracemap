@@ -16,8 +16,9 @@ migration evidence distinct from explicitly PostgreSQL-bound evidence.
    the same namespace and name shall not qualify.
 2. The extractor shall recognize migration operations only when Roslyn binds
    the invoked method to EF Core `MigrationBuilder` from an allowlisted
-   framework metadata assembly. Source lookalikes and application extension
-   methods shall not qualify.
+   framework metadata assembly and the enclosing type independently satisfies
+   the migration-declaration admission rule. Source lookalikes, application
+   extension methods, and calls from ordinary helper types shall not qualify.
 3. Each operation shall preserve its containing migration type, containing
    method, `up`, `down`, or `unknown` direction, closed operation kind,
    provider-scope classification, repository-relative span, commit SHA,
@@ -42,8 +43,8 @@ migration evidence distinct from explicitly PostgreSQL-bound evidence.
    Raw SQL, seed values, annotation values, argument text, and their digests
    shall not be retained.
 8. Recognizable migration syntax without usable semantic binding may emit only
-   Tier 4 coverage gaps. It shall not emit a migration declaration, operation,
-   provider, or object identity claim.
+   `Tier4Unknown` coverage gaps. It shall not emit a migration declaration,
+   operation, provider, or object identity claim.
 9. The first producer slice shall emit versioned framework-migration rule
    evidence and persist it through existing NDJSON and SQLite fact contracts
    without changing existing PostgreSQL raw-DDL facts.

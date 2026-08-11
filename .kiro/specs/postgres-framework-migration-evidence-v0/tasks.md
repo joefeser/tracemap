@@ -12,6 +12,8 @@
       the EF Core public-key token; do not emit Npgsql provider scope in v0.
 - [ ] Emit migration declarations only from compiler-resolved EF Core base
       types.
+- [ ] Require every operation's enclosing type to satisfy migration admission;
+      reject ordinary helpers that accept a genuine `MigrationBuilder`.
 - [ ] Emit the closed v0 `MigrationBuilder` operation vocabulary with constant
       bounded object identity, canonical owner roles, direction, provenance,
       and deterministic IDs.
