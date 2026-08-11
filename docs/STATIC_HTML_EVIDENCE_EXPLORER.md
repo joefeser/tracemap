@@ -28,14 +28,32 @@ The explorer currently supports:
 - `scan-manifest.json` for safe commit, coverage, and extractor provenance;
 - `facts.ndjson` for safe evidence rows;
 - `index.sqlite` as a hashed provenance artifact only;
-- `report.md` as a hashed provenance artifact only.
-- `release-review.json` v1.2 through a bounded compatibility-metadata reader.
+- `report.md` as a hashed provenance artifact only;
+- `release-review.json` v1.2 through a bounded compatibility-metadata reader;
+- `paths-report.json` v1.0 through a bounded static surface/path reader.
 
 Other top-level JSON files are labeled unsupported with
 `explorer.input.unsupported-schema.v1` gaps instead of being silently merged.
 That still includes report JSON artifacts such as `dependency-report.json`,
-`demo-summary.json`, and other combined/reducer report JSON files; compatible
+`route-flow-report.json`, `demo-summary.json`, and other combined/reducer report JSON files; compatible
 readers for those artifacts are deferred to later slices.
+
+The `paths-report.json` reader accepts the ordinary version `1.0` combined
+dependency-path contract only. It requires usable source commits, unique source
+and path identities, closed path classifications, contiguous ordered node/edge
+topology, known edge and surface kinds, rule IDs, evidence tiers, valid spans,
+and summary counts that agree with the parsed rows. Legacy-flow variants,
+malformed or duplicate required properties, non-contiguous paths, unknown
+vocabulary, and reports above 32 MiB or the 1,000-source, 1,000-path, and
+10,000-hop reader caps remain unsupported rather than being partially guessed.
+
+Compatible path reports add safe `surfaces` and `paths` arrays to explorer
+data. Surface rows use closed surface kinds and explorer-authored labels. Path
+rows preserve deterministic hop order, existing classifications, evidence
+tiers, rule IDs, safe file spans, coverage, and hashed support identities.
+Selectors, source labels, display symbols, surface names, SQL text, raw report
+IDs, notes, and free-text limitations are omitted. These rows are static path
+evidence, not runtime traces or reducer-backed impact conclusions.
 
 The `release-review.json` reader accepts only the exact generated
 `reportType: release-review`, version `1.2`, supported single/combined mode,
@@ -110,7 +128,7 @@ The follow-up rendering slice also includes:
 - matching `sectionStatuses` and `redactions` data in `data/explorer-data.json`
   so downloadable data is no less redacted than the visible UI.
 
-The v2 explorer data contract adds a `Compatibility Ledger` table and matching
+The v2 explorer data contract added a `Compatibility Ledger` table and matching
 `compatibilityLedger` JSON rows. Each row uses a stable safe subject ID, closed
 subject kind and compatibility status, rule ID, evidence tier, coverage label,
 scope, support IDs, limitation IDs, and an explorer-authored message. Artifact
@@ -130,6 +148,11 @@ Closed compatibility statuses are:
 
 Missing and unsupported rows describe explorer compatibility only. They do not
 claim evidence is absent from an artifact or repository.
+
+The v3 explorer data contract adds `surfaces` and `paths` arrays plus matching
+no-JavaScript HTML tables. Existing v1 and v2 generated bundles remain
+recognizable for guarded `--force` replacement, while all newly generated
+bundles use v3.
 
 Section status rows retain their existing semantic order in JSON: overview,
 sources, artifacts, evidence rows, surfaces, paths, reducer results, rules,
@@ -168,9 +191,9 @@ generated artifact path without printing the unsafe raw value.
 ## Manifest Schema
 
 `data/explorer-manifest.json` and `data/explorer-data.json` use schema version
-`tracemap-static-html-evidence-explorer.v2`. The generator recognizes a prior
-v1 TraceMap-generated manifest when `--force` replaces an existing generated
-bundle, but all newly written bundles use v2. The manifest includes:
+`tracemap-static-html-evidence-explorer.v3`. The generator recognizes prior
+v1 and v2 TraceMap-generated manifests when `--force` replaces an existing
+generated bundle, but all newly written bundles use v3. The manifest includes:
 
 - generator name, schema version, and TraceMap assembly version;
 - safety profile and claim level;
@@ -217,7 +240,8 @@ limitation, not a conflict.
 This first implementation slice intentionally marks unsupported sections as
 partial or unavailable:
 
-- static surfaces and paths are counted but not rendered from SQLite;
+- raw SQLite surfaces and paths remain provenance-only, while a compatible
+  `paths-report.json` supplies rendered static surface and path rows;
 - reducer-backed results are shown as not provided unless a future compatible
   reducer artifact reader is added;
 - rule catalog rendering uses a compatible `rule-catalog.yml` or
