@@ -237,3 +237,17 @@ Validation:
   Compatibility Ledger and existing sections with zero console warnings or
   errors. Network inspection showed only three local static requests:
   `index.html`, `assets/explorer.css`, and `assets/explorer.js`.
+
+Initial PR review follow-up:
+
+- ACK authorized three related exact-head threads: Qodo found that partial
+  section ledger rows dropped their concrete gap IDs and that the unknown
+  claim-metadata limitation used the generic partial-section rule; Codex
+  independently confirmed the rule/limitation mismatch.
+- The patch now attributes the unknown claim-metadata limitation and ledger row
+  to `explorer.render.compatibility-ledger.v1` and projects sorted concrete gap
+  IDs into partial section rows. The commit-conflict test pins both artifact and
+  affected-section traceability.
+- Post-patch focused tests remained 24/24, full tests remained 1,366/1,366,
+  targeted formatting passed, private-path validation passed, and
+  `git diff --check` passed.
