@@ -187,7 +187,19 @@ public sealed class SqlProjectRefactorTests
             """);
         File.CreateSymbolicLink(Path.Combine(temp.Path, "linked.refactorlog"), outsideLog);
 
-        var facts = SqlProjectRefactorExtractor.Extract(temp.Path, Manifest(), FileInventory.Collect(temp.Path));
+        var facts = SqlProjectRefactorExtractor.Extract(
+            temp.Path,
+            Manifest(),
+            [
+                new FileInventoryItem(
+                    "App.sqlproj",
+                    "SqlProject",
+                    new FileInfo(Path.Combine(temp.Path, "App.sqlproj")).Length),
+                new FileInventoryItem(
+                    "linked.refactorlog",
+                    "SqlProjectRefactorLog",
+                    new FileInfo(outsideLog).Length)
+            ]);
         var serialized = JsonSerializer.Serialize(facts);
 
         Assert.Contains(facts,

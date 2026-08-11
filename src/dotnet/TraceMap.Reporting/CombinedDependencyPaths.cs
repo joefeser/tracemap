@@ -153,7 +153,9 @@ public sealed record CombinedPathEdge(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? CandidateState = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    string? CandidateBridgeKind = null);
+    string? CandidateBridgeKind = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<string>? SupportingRelationshipIds = null);
 
 public sealed record CombinedPathNote(string Code, string Message);
 
@@ -2227,7 +2229,8 @@ public static class CombinedDependencyPathReporter
                 candidate.RegistrationContext == StaticDispatchRegistrationContexts.None ? null : candidate.RegistrationContext,
                 candidate.SupportingRegistrationFactIds.Count == 0 ? null : candidate.SupportingRegistrationFactIds,
                 candidate.State,
-                candidate.BridgeKind));
+                candidate.BridgeKind,
+                candidate.SupportingRelationshipIds));
         }
 
         foreach (var gap in candidates.Gaps)
@@ -4459,7 +4462,8 @@ public static class CombinedDependencyPathReporter
         string? RegistrationContext = null,
         IReadOnlyList<string>? SupportingRegistrationFactIds = null,
         string? CandidateState = null,
-        string? CandidateBridgeKind = null)
+        string? CandidateBridgeKind = null,
+        IReadOnlyList<string>? SupportingRelationshipIds = null)
     {
         public CombinedPathEdge ToReportEdge()
         {
@@ -4479,7 +4483,8 @@ public static class CombinedDependencyPathReporter
                 RegistrationContext,
                 SupportingRegistrationFactIds?.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                 CandidateState: CandidateState,
-                CandidateBridgeKind: CandidateBridgeKind);
+                CandidateBridgeKind: CandidateBridgeKind,
+                SupportingRelationshipIds: SupportingRelationshipIds?.OrderBy(value => value, StringComparer.Ordinal).ToArray());
         }
     }
 }

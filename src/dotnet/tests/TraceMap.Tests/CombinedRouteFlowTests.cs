@@ -1296,6 +1296,10 @@ public sealed class CombinedRouteFlowTests
         Assert.Single(candidate.SupportingRegistrationFactIds!);
         Assert.NotEmpty(candidate.SupportingCallEdgeIds!);
         Assert.NotEmpty(candidate.SupportingRelationshipIds!);
+        Assert.All(candidate.SupportingRelationshipIds!, id => Assert.StartsWith("edge:", id, StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            candidate.SupportingRelationshipIds!,
+            id => candidate.SupportingCallEdgeIds!.Contains(id, StringComparer.Ordinal));
         Assert.Equal(1, candidate.CandidateCount);
         Assert.Equal(0, candidate.OmittedCount);
         Assert.Null(candidate.CandidateLimit);
