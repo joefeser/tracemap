@@ -135,6 +135,15 @@ rendered table fields.
 The no-JavaScript evidence-row baseline renders the first 200 deterministic
 rows; the full safe row set is available in `data/explorer-data.json`.
 
+Keyboard users can bypass the generated header and section navigation with the
+`Skip to evidence content` link. Every progressively enhanced table filter has
+a stable label, controls relationship, and polite live result count. Coverage
+or empty-state rows are not filter targets, so filtering cannot hide the reason
+a table has no evidence rows. On narrow viewports, navigation links and filter
+inputs retain touch-sized targets. With JavaScript disabled, all sections,
+coverage messages, empty states, and the bounded evidence-row baseline remain
+visible; only interactive filtering is unavailable.
+
 The follow-up rendering slice also includes:
 
 - a `Coverage` table with rule-backed section status rows for overview,

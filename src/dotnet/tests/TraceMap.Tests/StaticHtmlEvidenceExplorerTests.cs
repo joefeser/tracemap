@@ -83,6 +83,76 @@ public sealed class StaticHtmlEvidenceExplorerTests
     }
 
     [Fact]
+    public async Task Explorer_generate_emits_keyboard_no_script_and_filter_accessibility_contracts()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("a"));
+
+        await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var html = await File.ReadAllTextAsync(Path.Combine(output, "index.html"));
+        Assert.Contains("<a class=\"skip-link\" href=\"#main-content\">Skip to evidence content</a>", html);
+        Assert.Contains("<main id=\"main-content\" tabindex=\"-1\">", html);
+        Assert.Contains("<noscript><p class=\"notice no-script-notice\">", html);
+        Assert.Contains("Interactive table filtering requires JavaScript", html);
+        Assert.Contains("id=\"surfaces-table\" data-filterable=\"true\" data-filter-name=\"static dependency surfaces\"", html);
+        Assert.Contains("id=\"paths-table\" data-filterable=\"true\" data-filter-name=\"static dependency paths\"", html);
+        Assert.Contains("id=\"reducer-results-table\" data-filterable=\"true\" data-filter-name=\"contract-delta reducer results\"", html);
+        Assert.Contains("id=\"evidence-rows-table\" data-filterable=\"true\" data-filter-name=\"safe evidence rows\"", html);
+        Assert.Equal(3, Occurrences(html, "data-empty-row=\"true\""));
+        Assert.Equal(1, Occurrences(html, "data-filter-row=\"true\""));
+
+        var script = await File.ReadAllTextAsync(Path.Combine(output, "assets", "explorer.js"));
+        Assert.Contains("label.htmlFor = filterId", script);
+        Assert.Contains("input.setAttribute(\"aria-controls\", table.id)", script);
+        Assert.Contains("input.setAttribute(\"aria-describedby\", statusId)", script);
+        Assert.Contains("status.setAttribute(\"aria-live\", \"polite\")", script);
+        Assert.Contains("tbody tr[data-filter-row='true']", script);
+        Assert.Contains("Showing ${visibleCount} of ${rows.length} rows.", script);
+        Assert.DoesNotContain("fetch(", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("XMLHttpRequest", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("WebSocket", script, StringComparison.OrdinalIgnoreCase);
+
+        var css = await File.ReadAllTextAsync(Path.Combine(output, "assets", "explorer.css"));
+        Assert.Contains(".skip-link:focus", css);
+        Assert.Contains("transform: translateY(0)", css);
+        Assert.Contains("main:focus", css);
+        Assert.Contains("outline-offset: -3px", css);
+        Assert.DoesNotContain("outline: none", css);
+        Assert.Contains("min-height: 44px", css);
+        Assert.Contains("@media (max-width: 720px)", css);
+    }
+
+    [Fact]
+    public async Task Explorer_generate_preserves_bounded_no_script_rows_and_full_downloadable_data()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "scan-output");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteScanArtifactsAsync(input, commitSha: FortyCharCommit("b"));
+        await JsonlFactWriter.WriteAsync(
+            Path.Combine(input, "facts.ndjson"),
+            Enumerable.Range(1, 205).Select(index => Fact(FortyCharCommit("b"), $"fact-{index:D3}")));
+
+        await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var html = await File.ReadAllTextAsync(Path.Combine(output, "index.html"));
+        Assert.Contains("first 200 deterministic rows out of 205", html);
+        Assert.Equal(200, Occurrences(html, "data-filter-row=\"true\""));
+        Assert.DoesNotContain("fact-205", html);
+
+        var dataJson = await File.ReadAllTextAsync(Path.Combine(output, "data", "explorer-data.json"));
+        using var document = JsonDocument.Parse(dataJson);
+        Assert.Equal(205, document.RootElement.GetProperty("evidenceRows").GetArrayLength());
+        Assert.Contains(document.RootElement.GetProperty("evidenceRows").EnumerateArray(), row =>
+            row.GetProperty("supportId").GetString() == "fact-205");
+    }
+
+    [Fact]
     public async Task Explorer_generate_emits_deterministic_safe_compatibility_ledger_with_absence_states()
     {
         using var temp = new TempDirectory();
@@ -1949,10 +2019,10 @@ public sealed class StaticHtmlEvidenceExplorerTests
             JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
     }
 
-    private static CodeFact Fact(string commitSha)
+    private static CodeFact Fact(string commitSha, string factId = "fact-1")
     {
         return new CodeFact(
-            "fact-1",
+            factId,
             "scan-test",
             "example-repo",
             commitSha,
@@ -1983,6 +2053,11 @@ public sealed class StaticHtmlEvidenceExplorerTests
     private static string FortyCharCommit(string character)
     {
         return string.Concat(Enumerable.Repeat(character, 40));
+    }
+
+    private static int Occurrences(string value, string fragment)
+    {
+        return value.Split(fragment, StringSplitOptions.None).Length - 1;
     }
 
     private static int SectionRowIndex(string html, string label)
