@@ -1899,17 +1899,22 @@ public static partial class StaticHtmlEvidenceExplorer
             return "partial";
         }
 
-        if (coverageLabels.Any(label =>
-                label.Contains("Reduced", StringComparison.OrdinalIgnoreCase)
-                || label.Contains("Partial", StringComparison.OrdinalIgnoreCase)
-                || label.Contains("Failed", StringComparison.OrdinalIgnoreCase)
-                || label.Contains("Truncated", StringComparison.OrdinalIgnoreCase)
-                || label.Contains("Unknown", StringComparison.OrdinalIgnoreCase)))
+        if (coverageLabels.Any(IsCoverageReducingLabel))
         {
             return "reduced";
         }
 
         return "available";
+    }
+
+    internal static bool IsCoverageReducingLabel(string label)
+    {
+        return label.Contains("Reduced", StringComparison.OrdinalIgnoreCase)
+            || label.Contains("Partial", StringComparison.OrdinalIgnoreCase)
+            || label.Contains("Failed", StringComparison.OrdinalIgnoreCase)
+            || label.EndsWith("Truncated", StringComparison.OrdinalIgnoreCase)
+                && !label.EndsWith("NotTruncated", StringComparison.OrdinalIgnoreCase)
+            || label.Contains("Unknown", StringComparison.OrdinalIgnoreCase);
     }
 
     private static ExplorerGap CreateGap(
@@ -2139,6 +2144,7 @@ public static partial class StaticHtmlEvidenceExplorer
                 || pathsReport.CoverageLabels.Contains("PathsTruncated", StringComparer.Ordinal));
         var reducerReportPartial = compatibleReducerReport
             && (reducerReport!.CoverageLabels.Contains("ReducerReducedCoverage", StringComparer.Ordinal)
+                || reducerReport.CoverageLabels.Contains("ReducerPartialCoverage", StringComparer.Ordinal)
                 || reducerReport.CoverageLabels.Contains("ReducerTruncated", StringComparer.Ordinal));
         var evidenceArtifactProvided = factsProvided || compatiblePathsReport || compatibleReducerReport;
         var evidenceRowsStatus = evidenceArtifactProvided

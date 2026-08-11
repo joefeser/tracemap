@@ -415,6 +415,63 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.NotEqual("available", result.Data.Summary.CoverageStatus);
     }
 
+    [Fact]
+    public async Task Explorer_generate_accepts_partial_reducer_coverage_and_keeps_it_partial()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "reducer-only");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteReducerImpactArtifactAsync(input, FortyCharCommit("c"), partialCoverage: true, truncated: true);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "reducer-impact-report");
+        Assert.Contains("ReducerPartialCoverage", artifact.CoverageLabels);
+        Assert.Contains("ReducerTruncated", artifact.CoverageLabels);
+        Assert.Equal("Partial", Assert.Single(result.Data.ReducerResults).CoverageLabel);
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "reducer-results" && row.Status == "partial");
+        Assert.NotEqual("available", result.Data.Summary.CoverageStatus);
+    }
+
+    [Fact]
+    public async Task Explorer_generate_keeps_full_non_truncated_reducer_coverage_available()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "reducer-only");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        var commitSha = FortyCharCommit("d");
+        await WriteReducerImpactArtifactAsync(input, commitSha);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains("ReducerNotTruncated", result.Data.Summary.CoverageLabels);
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "reducer-results" && row.Status == "available");
+        Assert.False(StaticHtmlEvidenceExplorer.IsCoverageReducingLabel("ReducerNotTruncated"));
+        Assert.True(StaticHtmlEvidenceExplorer.IsCoverageReducingLabel("ReducerTruncated"));
+        Assert.True(StaticHtmlEvidenceExplorer.IsCoverageReducingLabel("ReducerPartialCoverage"));
+    }
+
+    [Fact]
+    public async Task Explorer_generate_represents_coverage_relative_no_evidence_without_inventing_source_evidence()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "reducer-only");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WriteReducerImpactArtifactAsync(input, FortyCharCommit("e"), noEvidenceFinding: true);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        var reducerResult = Assert.Single(result.Data.ReducerResults);
+        Assert.Equal(ImpactClassifications.NoEvidenceFullCoverage, reducerResult.Classification);
+        Assert.Empty(reducerResult.EvidenceIds);
+        Assert.Equal(["artifact:reducer-impact-report"], reducerResult.SupportIds);
+        Assert.DoesNotContain(result.Data.EvidenceRows, row => row.EvidenceKind == "reducer-impact-evidence");
+        Assert.Contains("limitation:reducer-impact-static-coverage", reducerResult.LimitationIds);
+    }
+
     [Theory]
     [InlineData("unsupported-report")]
     [InlineData("duplicate-provenance")]
@@ -1524,7 +1581,9 @@ public sealed class StaticHtmlEvidenceExplorerTests
         string commitSha,
         bool includeGap = false,
         bool reducedCoverage = false,
+        bool partialCoverage = false,
         bool truncated = false,
+        bool noEvidenceFinding = false,
         string? fixtureKind = null)
     {
         var evidenceCommitSha = fixtureKind == "mismatched-commit" ? FortyCharCommit("f") : commitSha;
@@ -1533,7 +1592,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
             reportType = fixtureKind == "unsupported-report" ? "combined-change-impact" : "contract-delta-impact-single",
             version = "2.0",
             inputCompatibility = "ContractDeltaV2",
-            reportCoverage = reducedCoverage ? "Reduced" : "Full",
+            reportCoverage = partialCoverage ? "Partial" : reducedCoverage ? "Reduced" : "Full",
             coverageWarnings = reducedCoverage ? new[] { "private coverage warning" } : Array.Empty<string>(),
             query = new
             {
@@ -1568,7 +1627,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
             {
                 changeCount = 1,
                 findingCount = 1,
-                evidenceRowCount = 1,
+                evidenceRowCount = noEvidenceFinding ? 0 : 1,
                 gapCount = includeGap ? 1 : 0,
                 truncated
             },
@@ -1578,21 +1637,23 @@ public sealed class StaticHtmlEvidenceExplorerTests
                 {
                     element = "Private.Customer.Email",
                     changeType = "changed",
-                    classification = ImpactClassifications.DefiniteImpact,
+                    classification = noEvidenceFinding ? ImpactClassifications.NoEvidenceFullCoverage : ImpactClassifications.DefiniteImpact,
                     ruleId = RuleIds.ContractDeltaImpact,
                     reason = "private impact reason",
                     warnings = new[] { "private finding warning" },
                     findingId = "private-finding-id",
                     changeId = "private-change-id",
                     changeKind = "property",
-                    confidence = "high",
-                    evidenceTier = EvidenceTiers.Tier1Semantic,
+                    confidence = noEvidenceFinding ? "coverage-relative-none" : "high",
+                    evidenceTier = noEvidenceFinding ? EvidenceTiers.Tier4Unknown : EvidenceTiers.Tier1Semantic,
                     sourceLabel = "private-source-label",
                     reference = new Dictionary<string, string> { ["private-key"] = "private-value" },
                     pathContext = Array.Empty<object>(),
                     reverseContext = Array.Empty<object>(),
-                    evidence = new[]
-                    {
+                    evidence = noEvidenceFinding
+                        ? Array.Empty<object>()
+                        : new object[]
+                        {
                         new
                         {
                             factId = "private-fact-id",
