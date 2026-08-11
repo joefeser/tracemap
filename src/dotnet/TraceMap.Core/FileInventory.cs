@@ -160,7 +160,8 @@ public static class FileInventory
 
             foreach (var file in Directory.EnumerateFiles(directory, "*", options))
             {
-                if (!ShouldExclude(root, file, outputFullPath))
+                if (!ShouldExclude(root, file, outputFullPath)
+                    && !IsExplicitlyExcludedFile(root, file, excludeGlobs, pathComparer))
                     yield return file;
             }
         }
@@ -176,9 +177,41 @@ public static class FileInventory
             return false;
 
         var relativePath = NormalizeRelativePath(Path.GetRelativePath(root, directory));
-        return excludeGlobs.Any(glob =>
-            ScanEngine.GlobMatches(relativePath, glob, pathComparer)
-            || ScanEngine.GlobMatches(relativePath + "/", glob, pathComparer));
+        return excludeGlobs.Any(glob => ExcludesEntireDirectory(relativePath, glob, pathComparer));
+    }
+
+    private static bool ExcludesEntireDirectory(
+        string relativePath,
+        string glob,
+        StringComparer pathComparer)
+    {
+        var normalizedGlob = NormalizeRelativePath(glob.Trim()).TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(normalizedGlob))
+            return false;
+
+        if (!normalizedGlob.Contains('*', StringComparison.Ordinal))
+            return ScanEngine.GlobMatches(relativePath, normalizedGlob, pathComparer);
+
+        const string recursiveSuffix = "/**";
+        if (!normalizedGlob.EndsWith(recursiveSuffix, StringComparison.Ordinal))
+            return false;
+
+        var directoryGlob = normalizedGlob[..^recursiveSuffix.Length];
+        return !string.IsNullOrWhiteSpace(directoryGlob)
+            && ScanEngine.GlobMatches(relativePath, directoryGlob, pathComparer);
+    }
+
+    private static bool IsExplicitlyExcludedFile(
+        string root,
+        string file,
+        IReadOnlyList<string> excludeGlobs,
+        StringComparer pathComparer)
+    {
+        if (excludeGlobs.Count == 0)
+            return false;
+
+        var relativePath = NormalizeRelativePath(Path.GetRelativePath(root, file));
+        return excludeGlobs.Any(glob => ScanEngine.GlobMatches(relativePath, glob, pathComparer));
     }
 
     private static FileInventoryItem CreateItem(string root, string path, ISet<string> serviceReferenceFolders, ISet<string> webReferenceFolders)

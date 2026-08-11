@@ -182,6 +182,71 @@ public sealed class ScanEngineTests
     }
 
     [Fact]
+    public void Single_segment_exclude_filters_direct_files_without_pruning_nested_descendants()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "src", "nested"));
+        File.WriteAllText(Path.Combine(temp.Path, "src", "Direct.cs"), "public sealed class Direct { }");
+        File.WriteAllText(Path.Combine(temp.Path, "src", "nested", "Nested.cs"), "public sealed class Nested { }");
+
+        var inventory = FileInventory.Collect(
+            temp.Path,
+            Path.Combine(temp.Path, "out"),
+            ["src/*"],
+            StringComparer.Ordinal);
+
+        Assert.DoesNotContain(inventory, item => item.RelativePath == "src/Direct.cs");
+        Assert.Contains(inventory, item => item.RelativePath == "src/nested/Nested.cs");
+    }
+
+    [Fact]
+    public void Recursive_directory_exclude_prunes_the_entire_matching_subtree()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "restricted", "nested"));
+        File.WriteAllText(Path.Combine(temp.Path, "restricted", "nested", "Hidden.cs"), "public sealed class Hidden { }");
+        File.WriteAllText(Path.Combine(temp.Path, "Visible.cs"), "public sealed class Visible { }");
+
+        var inventory = FileInventory.Collect(
+            temp.Path,
+            Path.Combine(temp.Path, "out"),
+            ["restricted/**"],
+            StringComparer.Ordinal);
+
+        Assert.DoesNotContain(inventory, item => item.RelativePath.StartsWith("restricted/", StringComparison.Ordinal));
+        Assert.Contains(inventory, item => item.RelativePath == "Visible.cs");
+    }
+
+    [Fact]
+    public void Source_snapshot_digest_rejects_inventory_size_that_does_not_match_read_bytes()
+    {
+        using var temp = new TempDirectory();
+        const string relativePath = "Sample.cs";
+        File.WriteAllText(Path.Combine(temp.Path, relativePath), "public sealed class Sample { }");
+        var staleInventory = new[] { new FileInventoryItem(relativePath, "CSharp", 1) };
+
+        var exception = Assert.Throws<SourceSnapshotException>(() =>
+            ScanEngine.CreateSourceSnapshotDigest(temp.Path, staleInventory));
+
+        Assert.Equal(SourceSnapshotException.ErrorCode, exception.Message);
+    }
+
+    [Fact]
+    public void Source_snapshot_inventory_rejects_files_created_after_initial_discovery()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Existing.cs"), "public sealed class Existing { }");
+        var initial = FileInventory.Collect(temp.Path);
+        File.WriteAllText(Path.Combine(temp.Path, "Added.sql"), "-- synthetic fixture");
+        var observed = FileInventory.Collect(temp.Path);
+
+        var exception = Assert.Throws<SourceSnapshotException>(() =>
+            ScanEngine.VerifySourceSnapshotInventory(initial, observed));
+
+        Assert.Equal(SourceSnapshotException.ErrorCode, exception.Message);
+    }
+
+    [Fact]
     public void Semantic_input_guard_detects_same_size_source_changes_across_project_loading()
     {
         using var temp = new TempDirectory();
