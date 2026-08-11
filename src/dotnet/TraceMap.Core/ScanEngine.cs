@@ -76,6 +76,11 @@ public static class ScanEngine
                 refreshedInventory,
                 refreshedFullInventory);
             VerifySourceSnapshotInventoryMembership(discoveredSnapshotInventory, refreshedSnapshotInventory);
+            VerifySemanticInputSnapshot(
+                repoPath,
+                refreshedFullInventory,
+                semanticResult,
+                semanticInputSnapshot);
             fullInventory = refreshedFullInventory;
             inventory = refreshedInventory;
             authoritativeSnapshotInventory = refreshedSnapshotInventory;

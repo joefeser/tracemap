@@ -199,8 +199,11 @@ public sealed class ScanEngineTests
         Assert.Contains(inventory, item => item.RelativePath == "src/nested/Nested.cs");
     }
 
-    [Fact]
-    public void Recursive_directory_exclude_prunes_the_entire_matching_subtree()
+    [Theory]
+    [InlineData("restricted/**")]
+    [InlineData("restricted/**/*")]
+    [InlineData("**/restricted/**/*")]
+    public void Recursive_directory_exclude_prunes_the_entire_matching_subtree(string excludeGlob)
     {
         using var temp = new TempDirectory();
         Directory.CreateDirectory(Path.Combine(temp.Path, "restricted", "nested"));
@@ -210,7 +213,7 @@ public sealed class ScanEngineTests
         var inventory = FileInventory.Collect(
             temp.Path,
             Path.Combine(temp.Path, "out"),
-            ["restricted/**"],
+            [excludeGlob],
             StringComparer.Ordinal);
 
         Assert.DoesNotContain(inventory, item => item.RelativePath.StartsWith("restricted/", StringComparison.Ordinal));
