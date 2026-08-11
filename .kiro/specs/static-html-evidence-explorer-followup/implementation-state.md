@@ -428,3 +428,69 @@ Validation:
   `file://` artifact under its URL policy; no alternate route was used. The
   generated HTML remains covered by focused structural/no-JavaScript tests,
   but interactive viewport validation is explicitly deferred.
+
+## Implementation PR 3b — Contract-Delta Reducer Reader
+
+Branch: `codex/static-html-explorer-reducer-reader`
+
+Starting point:
+
+- Base: fresh `origin/dev`
+- Base SHA: `4dee1473bad3cf6afbdbc7a39a41c7fb59852164`
+- The base includes merged PR #638 and explorer schema v3.
+
+Selected artifact family:
+
+- `impact-report.json` with report type `contract-delta-impact-single` or
+  `contract-delta-impact-combined`, version `2.0`, and reducer algorithm
+  `contract-delta-fact-match/2.0` only.
+- SQL impact, combined-change-impact, route-flow, package, and other report or
+  reducer families remain separate bounded readers.
+
+Implemented boundary:
+
+- The reader validates bounded source/result/evidence/gap counts, summary
+  agreement, unique identities, exact reducer identity, closed classifications
+  and confidence values, rule IDs, evidence tiers, commit provenance, and
+  valid spans. Unsupported shapes fail closed.
+- Compatible reports produce safe reducer-result rows plus linked evidence
+  rows. Upstream classifications are preserved; the explorer does not execute
+  reduction or create new impact conclusions.
+- Finding/change labels, reasons, warnings, references, source labels, scan
+  IDs, symbols, evidence metadata, gap text, and free-text limitations are
+  omitted. Raw identities are hashed and paths use the existing safe-path
+  projection.
+- The reader is bounded at 32 MiB, 1,000 sources, 1,000 results, 10,000
+  evidence rows, and 1,000 gaps.
+- Populating reducer results advances the generated explorer schema to
+  `tracemap-static-html-evidence-explorer.v4`; v1-v3 generated bundles remain
+  recognized for guarded replacement.
+- Added `explorer.input.contract-delta-impact.v1` to code and the rule catalog
+  with explicit static-evidence limitations.
+
+Deferred:
+
+- Every reducer/report family outside contract-delta impact v2.
+- Running the reducer, rescanning source, SQLite graph browsing, runtime
+  evidence, risk ranking, and inferred impact.
+- PR 4 browser accessibility and no-JavaScript expansion beyond the current
+  deterministic baseline.
+
+Validation:
+
+- Locked dependency restore: passed.
+- Solution build: passed with 0 warnings and 0 errors.
+- Focused `StaticHtmlEvidenceExplorerTests`: 55/55 passed.
+- Full .NET solution tests: passed.
+- Targeted `dotnet format`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- Real CLI smoke scanned `samples/modern-sample` with full semantic coverage,
+  wrote 27 facts, reduced two changes into two findings with five evidence
+  rows and no reducer gaps, and generated a schema-v4 explorer. The explorer
+  rendered both reducer rows and all five linked reducer evidence rows while
+  retaining full static coverage and the exact reducer algorithm identity.
+- Desktop (1440x900) and mobile (390x844) local HTTP browser checks passed:
+  the reducer navigation target, heading, and two result rows were present,
+  body width remained bounded to the viewport, and no browser warnings or
+  errors were reported.
