@@ -1310,6 +1310,19 @@ public static class StaticHtmlEvidenceExplorer
                         supportIds,
                         [limitationId]);
                     hops.Add(hop);
+                    if (hop.FilePath is null || hop.StartLine is null || hop.EndLine is null)
+                    {
+                        gaps.Add(CreateGap(
+                            $"path-hop-location-{Hash(hop.HopId, 16)}",
+                            hop.RuleId,
+                            "path-hop-location-unavailable",
+                            artifactId,
+                            "paths",
+                            "ReducedCoverage",
+                            "A static path hop did not include a complete repository-relative file span; the hop remains available with explicitly partial location coverage.",
+                            hop.SupportIds.Append(hop.HopId).ToArray()));
+                    }
+
                     evidenceRows.Add(new ExplorerEvidenceRow(
                         $"evidence:{Hash(hop.HopId, 24)}",
                         hop.RuleId,
@@ -1370,6 +1383,19 @@ public static class StaticHtmlEvidenceExplorer
                         supportIds,
                         [limitationId]);
                     surfaceRows.Add(surfaceId, surface);
+                    if (surface.FilePath is null || surface.StartLine is null || surface.EndLine is null)
+                    {
+                        gaps.Add(CreateGap(
+                            $"surface-location-{Hash(surfaceId, 16)}",
+                            surface.RuleId,
+                            "surface-location-unavailable",
+                            artifactId,
+                            "surfaces",
+                            "ReducedCoverage",
+                            "A static dependency surface did not include a complete repository-relative file span; the surface remains available with explicitly partial location coverage.",
+                            supportIds.Append(surfaceId).ToArray()));
+                    }
+
                     evidenceRows.Add(new ExplorerEvidenceRow(
                         $"evidence:{Hash(surfaceId, 24)}",
                         surface.RuleId,

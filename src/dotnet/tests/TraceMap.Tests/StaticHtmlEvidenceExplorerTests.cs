@@ -517,6 +517,23 @@ public sealed class StaticHtmlEvidenceExplorerTests
     }
 
     [Fact]
+    public async Task Explorer_generate_labels_missing_path_locations_as_partial_gaps()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "paths-only");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WritePathsReportArtifactAsync(input, FortyCharCommit("4"), omitPathLocations: true);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains(result.Gaps, gap => gap.GapKind == "path-hop-location-unavailable" && gap.AffectedSection == "paths");
+        Assert.Contains(result.Gaps, gap => gap.GapKind == "surface-location-unavailable" && gap.AffectedSection == "surfaces");
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "paths" && row.Status == "partial");
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "surfaces" && row.Status == "partial");
+    }
+
+    [Fact]
     public async Task Explorer_generate_does_not_render_paths_report_gap_kinds_or_messages()
     {
         using var temp = new TempDirectory();
@@ -1344,7 +1361,8 @@ public sealed class StaticHtmlEvidenceExplorerTests
         bool invalidEdgeTarget = false,
         bool includePrivateGap = false,
         bool crossSourceEndpoint = false,
-        bool reducedCoverage = false)
+        bool reducedCoverage = false,
+        bool omitPathLocations = false)
     {
         var serverCommitSha = FortyCharCommit("2");
         var primarySource = new
@@ -1481,9 +1499,9 @@ public sealed class StaticHtmlEvidenceExplorerTests
                             combinedFactId = "private-fact-surface",
                             ruleId = "database.sql.shape.v1",
                             evidenceTier = EvidenceTiers.Tier2Structural,
-                            filePath = "C:\\private\\OrderService.cs",
-                            startLine = 20,
-                            endLine = 22,
+                            filePath = omitPathLocations ? null : "C:\\private\\OrderService.cs",
+                            startLine = omitPathLocations ? (int?)null : 20,
+                            endLine = omitPathLocations ? (int?)null : 22,
                             surfaceKind = "sql-query",
                             surfaceName = "SELECT private_value FROM private_table",
                             httpMethod = (string?)null,
@@ -1515,9 +1533,9 @@ public sealed class StaticHtmlEvidenceExplorerTests
                             evidenceTier = crossSourceEndpoint ? EvidenceTiers.Tier2Structural : EvidenceTiers.Tier3SyntaxOrTextual,
                             supportingFactIds = new[] { "private-support-fact" },
                             supportingCombinedEdgeIds = new[] { "private-support-edge" },
-                            filePath = "C:\\private\\OrderService.cs",
-                            startLine = 14,
-                            endLine = 14,
+                            filePath = omitPathLocations ? null : "C:\\private\\OrderService.cs",
+                            startLine = omitPathLocations ? (int?)null : 14,
+                            endLine = omitPathLocations ? (int?)null : 14,
                             registrationContext = (string?)null,
                             supportingRegistrationFactIds = Array.Empty<string>(),
                             candidateCount = (int?)null,
