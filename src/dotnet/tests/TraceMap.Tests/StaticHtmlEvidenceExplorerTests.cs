@@ -71,7 +71,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
             && redaction.Location == "scan-manifest.projects"
             && redaction.Category == "project-path");
         Assert.Contains(result.Manifest.Limitations, limitation =>
-            limitation.RuleId == StaticHtmlEvidenceExplorer.PartialSectionRuleId
+            limitation.RuleId == StaticHtmlEvidenceExplorer.CompatibilityLedgerRuleId
             && limitation.LimitationKind == "claim-level-metadata-unknown"
             && limitation.ClaimEffect == "claim-level");
         Assert.Equal("tracemap-static-html-evidence-explorer.v2", result.Data.SchemaVersion);
@@ -116,6 +116,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
             row.SubjectKind == "claim-level"
             && row.SubjectId == "claim-level:unknown"
             && row.CompatibilityStatus == "partial"
+            && row.RuleId == StaticHtmlEvidenceExplorer.CompatibilityLedgerRuleId
             && row.LimitationIds.Contains("claim-level-metadata-unavailable"));
         Assert.DoesNotContain(result.Data.CompatibilityLedger, row =>
             row.CompatibilityStatus == "profile-incompatible"
@@ -560,6 +561,11 @@ public sealed class StaticHtmlEvidenceExplorerTests
             row.SubjectId == "artifact:facts-ndjson"
             && row.CompatibilityStatus == "partial"
             && row.RuleId == StaticHtmlEvidenceExplorer.ProvenanceConflictRuleId
+            && row.LimitationIds.Any(id => id.Contains("commit-conflict", StringComparison.Ordinal)));
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectKind == "section"
+            && row.SubjectId == "evidence-rows"
+            && row.CompatibilityStatus == "partial"
             && row.LimitationIds.Any(id => id.Contains("commit-conflict", StringComparison.Ordinal)));
     }
 
