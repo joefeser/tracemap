@@ -1,0 +1,218 @@
+<p>
+  <strong>Public claim level: concept.</strong>
+  TraceMap studied <a href="https://github.com/Graphify-Labs/graphify">Graphify</a>
+  as an external research reference because both projects begin from a useful
+  premise: build durable structural state, then answer bounded graph questions
+  instead of repeatedly rediscovering the repository. The useful lesson was
+  not “become Graphify.” It was to sharpen TraceMap's own evidence contract.
+</p>
+
+<section data-graphify-block="boundary">
+  <h2>External research is not TraceMap evidence.</h2>
+  <p>
+    Graphify's repository, documentation, issues, changelog, and tests can
+    suggest questions and failure classes. They cannot prove a TraceMap rule,
+    extractor, traversal, or public claim. TraceMap evidence comes from its own
+    checked-in rules, synthetic fixtures, persisted artifacts, and validation
+    contracts.
+  </p>
+  <p>
+    This article therefore separates four things: an idea observed in external
+    research, an independently reproduced failure class, behavior implemented
+    in TraceMap, and work that remains planned or deliberately out of scope.
+    Similar architectural language does not imply copied implementation or
+    feature parity.
+  </p>
+</section>
+
+<section data-graphify-block="shared-premise">
+  <h2>The shared premise: persistent structure changes the review question.</h2>
+  <p>
+    A persistent graph gives tools and reviewers a stable object to query.
+    Paths, reverse dependencies, explanations, and scoped subgraphs can reuse
+    the same state instead of rescanning every file for each question. That
+    premise reinforced TraceMap's investment in machine-readable facts,
+    indexes, canonical identities, deterministic ordering, and bounded query
+    surfaces.
+  </p>
+  <p>
+    Persistence also raises the standard for correctness. A stale edge can
+    survive longer than a bad search result. Node replacement, pruning,
+    direction, partial rebuilds, and source omission can produce a graph that
+    remains plausible after it stops describing the selected snapshot.
+  </p>
+</section>
+
+<section data-graphify-block="trust">
+  <h2>Lesson one: relationship trust should be visible.</h2>
+  <p>
+    Graphify makes relationship confidence and explanation visible in its own
+    vocabulary. TraceMap retained its different vocabulary: rule IDs, evidence
+    tiers, coverage labels, source spans, supporting facts or edges, commit or
+    snapshot identity, extractor versions, gaps, and limitations. The shared
+    lesson is that opaque adjacency is not enough.
+  </p>
+  <p>
+    A reviewer should know whether a relationship was compiler-selected,
+    structurally derived, syntax-only, ambiguous, or unavailable. Repeating an
+    edge through a path or report does not independently strengthen it. The
+    weakest relevant evidence and every gap must survive downstream readback.
+  </p>
+</section>
+
+<section data-graphify-block="sites">
+  <h2>Lesson two: show the relationship site, not only two definitions.</h2>
+  <p>
+    Reverse or affected analysis becomes more useful when the reviewer can see
+    where a relationship was observed. TraceMap's response was to keep exact
+    call-site or relationship spans, rule IDs, evidence tiers, and supporting
+    IDs attached where the public boundary permits them. A path without hop
+    evidence is a navigation hint, not an auditable conclusion.
+  </p>
+  <p>
+    The persisted <a href="/blog/what-depends-on-this-symbol/">reverse-impact
+    traversal</a> uses canonical selectors, explicit relationship allowlists,
+    stable depth and frontier handling, evidence-backed hops, and explicit
+    truncation or coverage gaps. That implementation is TraceMap's own contract,
+    not a port of an external command.
+  </p>
+</section>
+
+<section data-graphify-block="identity">
+  <h2>Lesson three: do not rebuild a C# compiler with name heuristics.</h2>
+  <p>
+    C# resolution has difficult cases: namespace imports, aliases, overloads,
+    generics, nested and partial types, receiver shadowing, extension methods,
+    interface members, overrides, and cross-file identity. External resolver
+    complexity reinforced a choice TraceMap had already made: use Roslyn and
+    compiler identity when it is available, then degrade to syntax plus an
+    explicit gap when it is not.
+  </p>
+  <p>
+    TraceMap refuses display-name joins, nearest-name rebinding, and arbitrary
+    receiver selection. Read the
+    <a href="/blog/csharp-extraction-without-plausible-wrong-graphs/">C# extraction contract</a>
+    and <a href="/blog/interfaces-make-blast-radius-harder/">static dispatch
+    candidate boundary</a> for the implemented identity and candidate rules.
+  </p>
+</section>
+
+<section data-graphify-block="regressions">
+  <h2>Lesson four: incremental graph failures are adversarial test material.</h2>
+  <p>
+    Historical stale-edge, pruning, replacement, direction, and partial-update
+    failures are valuable even when two projects have different schemas and
+    implementations. TraceMap translated failure classes into independent,
+    minimal synthetic fixtures rather than copying external code or test data.
+  </p>
+  <p>
+    The resulting fixture matrix tests identity collapse, receiver guessing,
+    edge direction, immutable full snapshots, dirty source-byte identity,
+    exclusion authority, silent omission, and incomplete legacy inputs. The
+    <a href="/blog/bugs-hiding-in-graph-history/">graph-history article</a>
+    explains why a loud incomplete graph is safer than a plausible wrong one.
+  </p>
+</section>
+
+<section data-graphify-block="different-focus">
+  <h2>TraceMap stays narrower and follows enterprise evidence farther.</h2>
+  <p>
+    Graphify currently describes broad local structural mapping, query and path
+    surfaces, assistant integration, many language and file shapes, community
+    analysis, and optional semantic handling beyond code. TraceMap's center is
+    different: deterministic change and dependency evidence across code,
+    contracts, HTTP/API, SQL/database, messaging, tests, projects, deployable
+    units, and legacy or non-compiling inputs where evidence supports them.
+  </p>
+  <p>
+    Breadth is not automatically better, and depth is not automatically more
+    correct. The projects serve overlapping questions with different claim
+    contracts. TraceMap prioritizes canonical C# identity, explicit evidence
+    tiers and gaps, reducer classifications, review packets, and public proof
+    paths rather than parity with another product's feature list.
+  </p>
+</section>
+
+<section data-graphify-block="declined">
+  <h2>What TraceMap intentionally did not adopt for parity.</h2>
+  <p>
+    TraceMap did not add broad assistant memory, media ingestion, generic
+    community or “god node” analysis, dozens of language adapters, or semantic
+    enrichment merely because related capabilities exist elsewhere. It did not
+    add embeddings, vector search, or prompt-based impact classification to the
+    core scanner or reducer.
+  </p>
+  <p>
+    This is a TraceMap boundary, not a characterization that Graphify depends
+    on vectors: Graphify's current public documentation explicitly describes a
+    traversable graph rather than a vector index. External products evolve, so
+    public comparisons should cite their own documentation and avoid freezing
+    old research notes into present-tense claims.
+  </p>
+</section>
+
+<section data-graphify-block="independence">
+  <h2>Independent implementation keeps attribution and evidence clear.</h2>
+  <p>
+    Useful ideas—persistent state, affected traversal, relationship provenance,
+    visible ambiguity, and adversarial incremental invariants—were implemented
+    or tested through TraceMap's architecture, naming, schemas, rules, and
+    fixtures. The checked-in C# fixture matrix explicitly records that it
+    converts observed failure classes into independent TraceMap tests and does
+    not copy Graphify code.
+  </p>
+  <p>
+    Graphify's repository currently presents Apache-2.0 licensing and retains
+    an MIT notice for earlier contributions. If code were ever copied or
+    substantially adapted, the relevant license, notice, attribution, and
+    provenance obligations would need explicit review. This article publishes
+    no external source excerpt or implementation detail.
+  </p>
+</section>
+
+<section data-graphify-block="review">
+  <h2>A practical checklist for borrowing an idea safely.</h2>
+  <p>
+    Name the external source and the idea being studied. State the TraceMap
+    invariant independently. Reproduce the failure with a minimal public-safe
+    fixture. Implement against TraceMap's own schemas and rule catalog. Assert
+    persistence and downstream readback. Document what remains unsupported.
+    Keep planned work separate from behavior already demonstrated.
+  </p>
+  <p>
+    The <a href="/blog/how-a-gap-becomes-a-rule/">gap-to-rule process</a>,
+    <a href="/evidence/">evidence model</a>,
+    <a href="/evidence/gaps/">gap guide</a>,
+    <a href="/static-vs-runtime/">static-versus-runtime boundary</a>,
+    <a href="/proof-paths/for-managers/">manager proof path</a>, and
+    <a href="/limitations/">limitations</a> provide the review boundary for
+    those decisions.
+  </p>
+</section>
+
+<section data-graphify-block="non-claims" data-graphify-boundary="non-claims">
+  <h2>What this research story does not establish.</h2>
+  <p>
+    It does not establish feature parity, superiority, copied implementation,
+    runtime reachability, production use, complete graph coverage, release
+    readiness, or safety. Graphify behavior is not TraceMap evidence, and a
+    shared premise does not make the projects interchangeable.
+  </p>
+  <p>
+    This article includes no Graphify or private-repository source snippet,
+    analyzer dump, raw SQLite, credential, connection material, host path, or
+    private identity. It makes no LLM impact-classification claim and does not
+    imply embeddings, vectors, or prompt analysis are part of TraceMap's core.
+  </p>
+</section>
+
+<section data-graphify-block="bottom-line">
+  <h2>The best borrowed idea is one that becomes your own testable invariant.</h2>
+  <p>
+    Graphify helped sharpen questions about persistence, provenance, affected
+    traversal, ambiguity, language binding, and incremental correctness.
+    TraceMap answered those questions with its own compiler-backed identity,
+    evidence tiers, explicit gaps, synthetic fixtures, bounded traversal, and
+    enterprise review surfaces—without turning external research into proof.
+  </p>
+</section>

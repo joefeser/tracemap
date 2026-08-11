@@ -1,0 +1,183 @@
+<p>
+  <strong>Public claim level: demo.</strong>
+  TraceMap can answer a bounded static question over a persisted scan: which
+  recorded symbols depend directly or transitively on this canonical symbol?
+  The answer is a deterministic reverse traversal with evidence attached—not
+  a prediction that any path executes in production.
+</p>
+
+<section data-reverse-impact-block="question">
+  <h2>“What depends on this symbol?” needs a precise starting point.</h2>
+  <p>
+    A short display name is convenient for conversation but unsafe as graph
+    identity. <code>tracemap reverse-impact</code> starts from a canonical
+    symbol ID, or from a display selector only when that selector resolves to
+    exactly one persisted symbol. Ambiguous and missing selectors stop with an
+    explicit selector gap rather than choosing the nearest familiar name.
+  </p>
+  <p>
+    That distinction matters for overloads, nested types, aliases, generics,
+    same-named members, and symbols from different assemblies. The traversal
+    can only be as trustworthy as its root identity and the persisted
+    relationships it is allowed to follow.
+  </p>
+</section>
+
+<section data-reverse-impact-block="persisted">
+  <h2>The query reads persisted evidence; it does not rescan the repository.</h2>
+  <p>
+    The reverse-impact surface reads a checked, compatible index whose scan
+    identity, repository or snapshot identity, commit SHA, extractor versions,
+    coverage, and gaps were already recorded. That makes repeated queries over
+    the same artifact byte-stable and reviewable. It also means the answer is
+    bounded to that artifact: newer source, unscanned files, and unavailable
+    adapters are outside the result unless represented as gaps.
+  </p>
+  <p>
+    Rule <code>impact.reverse.traversal.v1</code> describes the traversal. Rule
+    <code>impact.reverse.gap.v1</code> keeps selector, schema, evidence,
+    identity, coverage, and truncation failures visible. A missing edge is not
+    silently promoted into proof that no dependent exists.
+  </p>
+</section>
+
+<section data-reverse-impact-block="traversal">
+  <h2>Reverse traversal is deterministic and relationship-scoped.</h2>
+  <p>
+    The stored graph keeps every relationship in its declared forward
+    direction. Reverse impact walks incoming relationships from the selected
+    symbol. It follows only an explicit relationship allowlist, in stable
+    order, and records the relationship kind used at each hop. Reviewers can
+    therefore distinguish a call dependency from a type relationship, an HTTP
+    boundary candidate, or a database surface.
+  </p>
+  <p>
+    The first layer contains direct dependents. Later layers contain transitive
+    dependents reached through one or more allowed hops. A result reached at
+    depth three is not presented as a direct caller, and two different paths to
+    the same result do not create two identities.
+  </p>
+</section>
+
+<section data-reverse-impact-block="bounds">
+  <h2>Depth, frontier, result, and cycle state stay visible.</h2>
+  <p>
+    Every traversal has configured bounds. Maximum depth limits how far the
+    search may expand. Frontier and result caps constrain breadth. Stable
+    visited state prevents a cycle from causing unbounded work by suppressing
+    re-expansion of already visited state. The current result contract does not
+    emit a separate cycle marker or cycle gap. If a limit is reached, the
+    response says it was truncated and reports omitted or frontier state where
+    the contract provides it.
+  </p>
+  <p>
+    Those bounds are part of the answer, not performance trivia. “No additional
+    result inside this depth and allowlist” is narrower than “nothing else
+    depends on this.” A manager should carry the configured bounds into any
+    handoff or review note.
+  </p>
+</section>
+
+<section data-reverse-impact-block="evidence">
+  <h2>Each hop is evidence-backed.</h2>
+  <p>
+    A useful hop retains its source and target identities, relationship kind,
+    rule ID, evidence tier, file span when public-safe and available, commit
+    SHA, extractor ID/version, supporting fact or edge IDs, coverage label,
+    and limitations. Tier 1 semantic evidence and Tier 3 syntax evidence are
+    not interchangeable. Tier 4 identifies an unknown or analysis gap rather
+    than a weak positive relationship.
+  </p>
+  <p>
+    Consider a synthetic chain: changed contract → direct caller → service →
+    route or database boundary. The diagram is useful only when every arrow is
+    labeled as static evidence and any unsupported continuation remains an
+    explicit gap. The chain does not prove branch feasibility, runtime traffic,
+    or production impact.
+  </p>
+</section>
+
+<section data-reverse-impact-block="families">
+  <h2>Optional relationship families widen the question deliberately.</h2>
+  <p>
+    The default relationship set can be supplemented with supported semantic
+    HTTP or database families. Enabling one changes the traversal contract and
+    must remain visible in the query metadata. An endpoint candidate, SQL
+    object reference, or storage boundary is not equivalent to a compiler
+    call edge, so the family and its evidence tier stay attached.
+  </p>
+  <p>
+    Schema-incompatible indexes, unavailable optional tables, reduced source
+    coverage, and missing extractor identity yield gaps. TraceMap does not
+    infer a cross-boundary edge from similar labels or convenient proximity.
+  </p>
+</section>
+
+<section data-reverse-impact-block="differences">
+  <h2>Reverse impact is not dependency search or combined-index reverse.</h2>
+  <p>
+    Text or dependency search helps locate mentions and candidate files. It
+    does not establish a canonical root or traverse a typed persisted graph.
+    The combined-index <code>tracemap reverse</code> surface query starts from
+    exposed dependency surfaces and produces consumer-oriented reverse paths
+    using rules such as <code>combined.reverse.path.v1</code>. Persisted
+    <code>tracemap reverse-impact</code> starts from a symbol identity and uses
+    the reverse-impact traversal contract.
+  </p>
+  <p>
+    The tools can support related review questions, but their roots, schemas,
+    relationship vocabularies, and output classifications differ. Results
+    should not be pasted together as though they were one proof surface.
+  </p>
+</section>
+
+<section data-reverse-impact-block="review">
+  <h2>Read the result as a bounded review queue.</h2>
+  <p>
+    Start with the root resolution. Check the allowlist and depth. Separate
+    direct from transitive results. Inspect every reduced-coverage, cycle,
+    truncation, and missing-schema marker. Then follow the strongest relevant
+    path back to its facts and source coordinates rather than treating the
+    summary count as the conclusion.
+  </p>
+  <p>
+    Use the <a href="/evidence/">evidence model</a>,
+    <a href="/evidence/gaps/">gap guide</a>,
+    <a href="/static-vs-runtime/">static-versus-runtime boundary</a>,
+    <a href="/proof-paths/for-managers/">manager proof path</a>,
+    <a href="/capabilities/">capability map</a>, and
+    <a href="/use-cases/change-review/">change-review use case</a> to keep the
+    result attached to its limitations.
+  </p>
+</section>
+
+<section data-reverse-impact-block="non-claims" data-reverse-impact-boundary="non-claims">
+  <h2>What the traversal does not establish.</h2>
+  <p>
+    It does not establish runtime reachability, observed execution, production
+    use, branch feasibility, complete graph coverage, severity, required
+    testing, a release blocker, release approval, or safety. It does not claim
+    that a candidate path is a defect.
+  </p>
+  <p>
+    This public article includes no source snippet, raw SQL, configuration,
+    credential, connection material, raw SQLite, analyzer output, local path,
+    or private identity. No LLM, embedding, vector, or prompt classification
+    chooses the traversal or its result.
+  </p>
+</section>
+
+<section data-reverse-impact-block="bottom-line">
+  <h2>A reverse-impact answer is useful because its boundary is inspectable.</h2>
+  <p>
+    Canonical identity, an explicit relationship allowlist, stable traversal,
+    evidence-backed hops, visible bounds, and explicit gaps turn “what depends
+    on this?” into a reproducible static review question. They do not turn the
+    answer into runtime truth.
+  </p>
+  <p>
+    Interface and override candidates add another layer of review context. Read
+    <a href="/blog/interfaces-make-blast-radius-harder/">why interfaces make
+    blast radius harder</a> before interpreting candidate-dependent paths.
+  </p>
+</section>
