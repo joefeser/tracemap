@@ -98,7 +98,7 @@ public static class FileInventory
         {
             RecurseSubdirectories = false,
             IgnoreInaccessible = false,
-            AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint
+            AttributesToSkip = FileAttributes.Hidden | FileAttributes.System
         };
 
         string[] candidateFiles;
@@ -155,6 +155,8 @@ public static class FileInventory
                     continue;
                 }
 
+                RejectReparsePoint(childDirectory);
+
                 pending.Push(childDirectory);
             }
 
@@ -162,8 +164,27 @@ public static class FileInventory
             {
                 if (!ShouldExclude(root, file, outputFullPath)
                     && !IsExplicitlyExcludedFile(root, file, excludeGlobs, pathComparer))
+                {
+                    RejectReparsePoint(file);
                     yield return file;
+                }
             }
+        }
+    }
+
+    private static void RejectReparsePoint(string path)
+    {
+        try
+        {
+            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new SourceInventoryException(
+                    new IOException("An in-scope source path is a reparse point and cannot be inventoried truthfully."));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new SourceInventoryException(ex);
         }
     }
 

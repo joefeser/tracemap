@@ -182,6 +182,54 @@ public sealed class ScanEngineTests
     }
 
     [Fact]
+    public async Task Scan_fails_truthfully_when_an_in_scope_source_is_a_symbolic_link()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        using var temp = new TempDirectory();
+        var targetPath = Path.Combine(temp.Path, "Target.cs");
+        var linkPath = Path.Combine(temp.Path, "Linked.cs");
+        var outputPath = Path.Combine(temp.Path, "out");
+        File.WriteAllText(targetPath, "public sealed class Target { }");
+        File.CreateSymbolicLink(linkPath, targetPath);
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync(
+            ["scan", "--repo", temp.Path, "--out", outputPath],
+            stdout,
+            stderr);
+
+        Assert.Equal(1, exitCode);
+        Assert.Equal("error: SourceInventoryIncomplete" + Environment.NewLine, stderr.ToString());
+        Assert.DoesNotContain(temp.Path, stderr.ToString(), StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(outputPath, "scan-manifest.json")));
+    }
+
+    [Fact]
+    public void Explicit_exclusion_remains_authoritative_for_a_symbolic_link()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        using var temp = new TempDirectory();
+        var targetPath = Path.Combine(temp.Path, "Target.cs");
+        var linkPath = Path.Combine(temp.Path, "Linked.cs");
+        File.WriteAllText(targetPath, "public sealed class Target { }");
+        File.CreateSymbolicLink(linkPath, targetPath);
+
+        var inventory = FileInventory.Collect(
+            temp.Path,
+            Path.Combine(temp.Path, "out"),
+            ["Linked.cs"],
+            StringComparer.Ordinal);
+
+        Assert.Contains(inventory, item => item.RelativePath == "Target.cs");
+        Assert.DoesNotContain(inventory, item => item.RelativePath == "Linked.cs");
+    }
+
+    [Fact]
     public void Single_segment_exclude_filters_direct_files_without_pruning_nested_descendants()
     {
         using var temp = new TempDirectory();
