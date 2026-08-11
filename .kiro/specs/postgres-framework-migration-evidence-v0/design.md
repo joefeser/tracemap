@@ -73,18 +73,18 @@ not projected in v0. They emit safe classifications such as
 
 The identity map is closed:
 
-| Kind | Required constant identity | Optional constant identity | Structured support shape |
+| Kind | Required API parameter to output property | Optional API parameter to output property | Structured support shape |
 | --- | --- | --- | --- |
-| `create-table` | `name` | `schema` | `columns` and `constraints` lambdas are not identities; emit `NestedTableShapeUnavailable` |
-| `add-column`, `alter-column` | `name`, `table` | `schema` | default/computed arguments emit protected gaps |
-| `drop-table` | `name` | `schema` | none |
-| `drop-column` | `name`, `table` | `schema` | none |
-| `rename-table` | `name`, `newName` | `schema`, `newSchema` | none |
-| `rename-column` | `name`, `newName`, `table` | `schema` | none |
-| `create-index` | `name`, `table` | `schema` | constant scalar/array `column` or `columns` may be supporting identity; other shapes emit `IndexColumnShapeUnavailable` |
-| `drop-index` | `name` | `table`, `schema` | none |
-| `add-foreign-key` | `name`, `table`, `principalTable` | `schema`, `principalSchema` | constant scalar/array `column(s)` and `principalColumn(s)` may be supporting identity; other shapes emit `ForeignKeyColumnShapeUnavailable` |
-| `drop-foreign-key` | `name`, `table` | `schema` | none |
+| `create-table` | `name` → `tableName` | `schema` → `schemaName` | `columns` and `constraints` lambdas are not identities; emit `NestedTableShapeUnavailable` |
+| `add-column`, `alter-column` | `name` → `columnName`; `table` → `tableName` | `schema` → `schemaName` | default/computed arguments emit protected gaps |
+| `drop-table` | `name` → `tableName` | `schema` → `schemaName` | none |
+| `drop-column` | `name` → `columnName`; `table` → `tableName` | `schema` → `schemaName` | none |
+| `rename-table` | `name` → `tableName`; `newName` → `newTableName` | `schema` → `schemaName`; `newSchema` → `newSchemaName` | none |
+| `rename-column` | `name` → `columnName`; `newName` → `newColumnName`; `table` → `tableName` | `schema` → `schemaName` | none |
+| `create-index` | `name` → `indexName`; `table` → `tableName` | `schema` → `schemaName` | constant scalar/array `column` or `columns` → `columnNames`; other shapes emit `IndexColumnShapeUnavailable` |
+| `drop-index` | `name` → `indexName` | `table` → `tableName`; `schema` → `schemaName` | none |
+| `add-foreign-key` | `name` → `constraintName`; `table` → `tableName`; `principalTable` → `principalTableName` | `schema` → `schemaName`; `principalSchema` → `principalSchemaName` | constant scalar/array `column(s)` → `columnNames` and `principalColumn(s)` → `principalColumnNames`; other shapes emit `ForeignKeyColumnShapeUnavailable` |
+| `drop-foreign-key` | `name` → `constraintName`; `table` → `tableName` | `schema` → `schemaName` | none |
 
 An operation fact requires all required identity fields. Optional fields stay
 absent when unspecified. Constant arrays are admitted only when every element
@@ -126,6 +126,97 @@ omitted and produce a gap. Fact IDs include canonical owner, operation,
 direction, source coordinates, and a deterministic invocation ordinal within
 the containing method so same-named migrations and identical shapes on one line
 cannot collide.
+
+## Closed Fact Property Schema
+
+Properties are ordinal, case-sensitive keys with invariant-culture values.
+Extractor version, rule ID, evidence tier, repository-relative span, and commit
+SHA remain first-class `Fact`/`EvidenceSpan` fields and are not duplicated as
+properties. No producer may add an unlisted property without a versioned spec
+change.
+
+`FrameworkMigrationDeclared` requires:
+
+| Property | Closed value or format |
+| --- | --- |
+| `declarationKind` | `framework-migration` |
+| `frameworkFamily` | `ef-core` |
+| `providerScope` | `unknown` |
+| `migrationTypeName` | fully qualified Roslyn display name |
+| `targetSymbolId` | canonical migration type ID from `AddSymbolProperties` |
+| `targetSymbolKind` | `NamedType` |
+| `targetAssemblyIdentity` | canonical containing-assembly identity |
+| `coverageLabel` | `bounded-static-migration` |
+| `limitations` | `Static framework migration declaration only; execution, ordering, provider selection, generated SQL, database state, rollback, and safety are not proven.` |
+
+`FrameworkMigrationOperationCandidate` requires the following common keys;
+the identity keys permitted for each `operationKind` are defined by the closed
+identity map above.
+
+| Property | Closed value or format |
+| --- | --- |
+| `frameworkFamily` | `ef-core` |
+| `providerScope` | `unknown` |
+| `migrationTypeSymbolId` | canonical admitted migration type ID |
+| `sourceSymbolId` | canonical directly containing method ID |
+| `sourceSymbolKind` | `Method` |
+| `sourceAssemblyIdentity` | canonical containing-assembly identity |
+| `targetSymbolId` | canonical resolved EF Core method ID |
+| `targetSymbolKind` | `Method` |
+| `targetAssemblyIdentity` | canonical EF Core relational assembly identity |
+| `direction` | `up`, `down`, or `unknown` |
+| `operationKind` | one closed operation kind listed above |
+| `objectKind` | `table`, `column`, `index`, or `foreign-key` according to operation kind |
+| `invocationOrdinal` | 1-based decimal ordinal by invocation `SpanStart` within the directly containing method; no leading zeros |
+| `coverageLabel` | `bounded-static-migration` |
+| `limitations` | `Static framework migration operation candidate only; execution, ordering, provider selection, generated SQL, database state, rollback, reversibility, and safety are not proven.` |
+
+`objectKind` is `table` for create/drop/rename-table, `column` for
+add/alter/drop/rename-column, `index` for create/drop-index, and `foreign-key`
+for add/drop-foreign-key.
+
+The only optional operation identity keys are `schemaName`, `tableName`,
+`newSchemaName`, `newTableName`, `columnName`, `newColumnName`, `indexName`,
+`constraintName`, `principalSchemaName`, `principalTableName`, `columnNames`,
+and `principalColumnNames`. The per-kind table determines which are required or
+allowed. Multi-column values are canonical JSON string arrays preserving source
+order; no delimited ad hoc encoding is allowed.
+
+Framework-migration `AnalysisGap` properties are closed to:
+
+| Property | Closed value or format |
+| --- | --- |
+| `gapKind` | one value from the gap vocabulary below |
+| `frameworkFamily` | `ef-core` |
+| `providerScope` | `unknown` |
+| `migrationTypeSymbolId` | canonical admitted migration type ID when semantic admission succeeded; otherwise absent |
+| `operationKind` | recognized closed operation kind when available; otherwise absent |
+| `direction` | `up`, `down`, or `unknown` when available; otherwise absent |
+| `occurrenceCount` | positive invariant decimal with no leading zeros |
+| `coverageLabel` | `reduced-static-migration` |
+| `limitations` | `Static framework migration coverage is reduced; omitted protected content and runtime behavior were not analyzed.` |
+
+The v0 `gapKind` vocabulary is:
+
+- `FrameworkAssemblyIdentityUnavailable`
+- `SemanticBindingUnavailable`
+- `MigrationDirectionUnavailable`
+- `DynamicIdentityUnavailable`
+- `MissingRequiredIdentity`
+- `NestedTableShapeUnavailable`
+- `IndexColumnShapeUnavailable`
+- `ForeignKeyColumnShapeUnavailable`
+- `RawSqlMigrationOperationUnavailable`
+- `DataMigrationOperationUnavailable`
+- `AnnotationMigrationOperationUnavailable`
+- `DefaultOrComputedExpressionUnavailable`
+- `UnsupportedMigrationOperation`
+
+Gap aggregation keys are migration type identity (or repository-relative file
+and bounded possible-migration declaration span when semantic identity is
+unavailable) plus `gapKind`. Gap properties never include protected argument
+text, a protected-value digest, a local absolute path, or arbitrary exception
+text.
 
 ## Provider Scope
 

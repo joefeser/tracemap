@@ -71,6 +71,10 @@ migration evidence distinct from explicitly PostgreSQL-bound evidence.
     `gapKind`, with an occurrence count. Operation identity shall include a
     deterministic invocation ordinal so identical operation shapes on one line
     do not collapse.
+15. Declaration, operation, and gap properties shall use only the closed keys,
+    value vocabularies, canonical symbol roles, coverage labels, and fixed
+    limitation strings in the design. New keys or values require a versioned
+    contract change.
 
 ## Non-goals
 
