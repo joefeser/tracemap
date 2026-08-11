@@ -278,6 +278,7 @@ public static class StaticHtmlEvidenceExplorer
     private const string PublicDemo = "public-demo";
     private const string HiddenLocal = "hidden-local";
     private const string SourceId = "source:scan-output";
+    private const string StaticDependencySurfaceClassification = "StaticDependencySurface";
     private const int EvidenceRowNoScriptLimit = 200;
     private const int MaxRuleCatalogTextLength = 360;
     private const long MaxRuleCatalogBytes = 1_048_576;
@@ -1377,7 +1378,7 @@ public static class StaticHtmlEvidenceExplorer
                         node.SurfaceKind!,
                         null,
                         $"Static {node.SurfaceKind} surface",
-                        reportPath.Classification,
+                        StaticDependencySurfaceClassification,
                         node.RuleId!,
                         node.EvidenceTier!,
                         report.ReportCoverage,
@@ -1865,6 +1866,7 @@ public static class StaticHtmlEvidenceExplorer
                 label.Contains("Reduced", StringComparison.OrdinalIgnoreCase)
                 || label.Contains("Partial", StringComparison.OrdinalIgnoreCase)
                 || label.Contains("Failed", StringComparison.OrdinalIgnoreCase)
+                || label.Contains("Truncated", StringComparison.OrdinalIgnoreCase)
                 || label.Contains("Unknown", StringComparison.OrdinalIgnoreCase)))
         {
             return "reduced";
@@ -2061,11 +2063,12 @@ public static class StaticHtmlEvidenceExplorer
         var compatibleRuleCatalogLoaded = context.CatalogRulesLoaded;
         var unsupportedJsonProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "unsupported-json");
         var coverageLabel = context.CoverageLabels.FirstOrDefault() ?? "UnknownCoverage";
-        var pathReportReduced = compatiblePathsReport
-            && pathsReport!.CoverageLabels.Contains("PathsReducedCoverage", StringComparer.Ordinal);
+        var pathReportPartial = compatiblePathsReport
+            && (pathsReport!.CoverageLabels.Contains("PathsReducedCoverage", StringComparer.Ordinal)
+                || pathsReport.CoverageLabels.Contains("PathsTruncated", StringComparer.Ordinal));
         var evidenceArtifactProvided = factsProvided || compatiblePathsReport;
         var evidenceRowsStatus = evidenceArtifactProvided
-            ? pathReportReduced
+            ? pathReportPartial
                 ? "partial"
                 : context.EvidenceRows.Count == 0
                 ? "no-evidence-under-current-coverage"
@@ -2118,7 +2121,7 @@ public static class StaticHtmlEvidenceExplorer
                 "surfaces",
                 "Surfaces",
                 compatiblePathsReport
-                    ? pathReportReduced
+                    ? pathReportPartial
                         ? "partial"
                         : context.Surfaces.Count == 0
                         ? context.Gaps.Any(gap => gap.AffectedSection == "surfaces") ? "partial" : "no-evidence-under-current-coverage"
@@ -2139,7 +2142,7 @@ public static class StaticHtmlEvidenceExplorer
                 "paths",
                 "Paths",
                 compatiblePathsReport
-                    ? pathReportReduced
+                    ? pathReportPartial
                         ? "partial"
                         : context.Paths.Count == 0
                         ? context.Gaps.Any(gap => gap.AffectedSection == "paths") ? "partial" : "no-evidence-under-current-coverage"

@@ -373,6 +373,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Equal("sql-query", surface.SurfaceKind);
         Assert.Equal("database.sql.shape.v1", surface.RuleId);
         Assert.Equal(EvidenceTiers.Tier2Structural, surface.EvidenceTier);
+        Assert.Equal("StaticDependencySurface", surface.Classification);
         Assert.Equal("source:scan-output", surface.SourceId);
         Assert.Equal(commitSha, surface.CommitSha);
         Assert.Equal("test-scanner-v1", surface.ExtractorVersion);
@@ -558,6 +559,24 @@ public sealed class StaticHtmlEvidenceExplorerTests
         Assert.Empty(result.Data.Paths);
         Assert.Empty(result.Data.Surfaces);
         Assert.Contains(result.Gaps, gap => gap.Scope == "artifact:paths-report" && gap.GapKind == "unsupported-schema");
+    }
+
+    [Fact]
+    public async Task Explorer_generate_marks_truncated_full_coverage_paths_report_partial()
+    {
+        using var temp = new TempDirectory();
+        var input = Path.Combine(temp.Path, "paths-only");
+        var output = Path.Combine(temp.Path, "explorer");
+        Directory.CreateDirectory(input);
+        await WritePathsReportArtifactAsync(input, FortyCharCommit("6"), truncated: true);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
+
+        Assert.Contains("PathsTruncated", result.Data.Summary.CoverageLabels);
+        Assert.NotEqual("available", result.Data.Summary.CoverageStatus);
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "evidence-rows" && row.Status == "partial");
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "surfaces" && row.Status == "partial");
+        Assert.Contains(result.Data.SectionStatuses, row => row.SectionId == "paths" && row.Status == "partial");
     }
 
     [Fact]
@@ -1389,7 +1408,8 @@ public sealed class StaticHtmlEvidenceExplorerTests
         bool includePrivateGap = false,
         bool crossSourceEndpoint = false,
         bool reducedCoverage = false,
-        bool omitPathLocations = false)
+        bool omitPathLocations = false,
+        bool truncated = false)
     {
         var serverCommitSha = FortyCharCommit("2");
         var primarySource = new
@@ -1466,7 +1486,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
                 pathCount = 1,
                 gapCount = includePrivateGap ? 1 : 0,
                 selectorCandidateCount = 1,
-                truncated = false
+                truncated
             },
             paths = new[]
             {
