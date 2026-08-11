@@ -58,6 +58,10 @@ ordering, rollback, generated-SQL, database-state, or safety claim is added.
   operation and identified two repository-vocabulary inconsistencies. The spec
   now rejects genuine `MigrationBuilder` calls from ordinary helper types, uses
   exact `Tier4Unknown`, and uses the documented `spec-ready` status token.
+- Exact-head Codex follow-up required a closed fact property schema. The design
+  now fixes declaration, operation, and gap keys; symbol roles; coverage and
+  limitation values; identity encodings; invocation ordinals; aggregation
+  keys; and the complete v0 `gapKind` vocabulary.
 - Implementation and product tests are intentionally deferred until PR 1.
 
 ## Owner Decisions Resolved By This Spec

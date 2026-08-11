@@ -5,6 +5,8 @@
 - [ ] Add framework migration fact types, declaration/operation/gap rule IDs,
       explicit evidence tiers, extractor version update, and rule-catalog
       limitations.
+- [ ] Implement the exact closed declaration/operation/gap property schemas;
+      reject or test-fail on unlisted keys and vocabulary values.
 - [ ] Add a pinned test-only `Microsoft.EntityFrameworkCore.Relational` package
       reference for positive metadata fixtures; reject identical
       application-source and unsigned same-name metadata lookalikes. Keep EF
@@ -37,6 +39,9 @@
       migration-gap, and `UnknownAnalysisGap` downgrade regressions.
 - [ ] Prove deterministic invocation ordinals preserve two identical operation
       shapes on one source line.
+- [ ] Assert exact property-key sets, canonical symbol roles, fixed coverage and
+      limitation values, canonical JSON column arrays, and the full closed
+      `gapKind` vocabulary in producer/storage round trips.
 - [ ] Audit snapshot diff, report counts, static HTML, and vault/evidence export
       behavior for the new fact types and gap rule; require preserved evidence
       metadata or explicit omission gaps.
