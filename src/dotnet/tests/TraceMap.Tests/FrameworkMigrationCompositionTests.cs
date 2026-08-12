@@ -17,7 +17,12 @@ public sealed class FrameworkMigrationCompositionTests
         var declaration = FrameworkDeclaration(manifest);
         var operation = FrameworkOperation(manifest);
         var upstreamGap = FrameworkGap(manifest);
-        SqliteIndexWriter.Write(index, manifest, [declaration, operation, upstreamGap]);
+        var incompatible = FrameworkOperation(manifest) with
+        {
+            FactId = "fact-incompatible-framework",
+            Evidence = Evidence(16) with { ExtractorId = "unknown", ExtractorVersion = "unknown" }
+        };
+        SqliteIndexWriter.Write(index, manifest, [declaration, operation, upstreamGap, incompatible]);
 
         var result = await DatabaseDesignReviewReporter.WriteAsync(new DatabaseDesignReviewOptions(index, output));
 
@@ -45,6 +50,11 @@ public sealed class FrameworkMigrationCompositionTests
         Assert.Equal(RuleIds.DatabaseFrameworkMigrationGap, rawSqlGap.RuleId);
         Assert.Equal(EvidenceTiers.Tier4Unknown, rawSqlGap.EvidenceTier);
         Assert.Contains(upstreamGap.FactId, rawSqlGap.SupportingFactIds);
+        var provenanceGap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "FrameworkMigrationEvidenceProvenanceUnavailable");
+        Assert.DoesNotContain("PostgreSQL", provenanceGap.Message, StringComparison.Ordinal);
+        Assert.Contains(incompatible.FactId, provenanceGap.SupportingFactIds);
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "CompatiblePostgresEvidenceUnavailable");
+        Assert.Equal("partial", result.Report.Coverage);
 
         var rendered = await File.ReadAllTextAsync(Path.Combine(output, "database-design-review.md"))
             + await File.ReadAllTextAsync(Path.Combine(output, "database-design-review.json"));
