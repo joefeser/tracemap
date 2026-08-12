@@ -924,12 +924,12 @@ public static partial class StaticHtmlEvidenceExplorer
         var coverage = fact.Properties.GetValueOrDefault("coverageLabel");
         var limitation = fact.Properties.GetValueOrDefault("limitations");
         var evidence = fact.Evidence;
-        var expectedExtractor = fact.RuleId == RuleIds.DatabaseFrameworkMigrationGap
-            ? evidence?.ExtractorVersion is ScannerVersions.FrameworkMigrationEvidenceExtractor or ScannerVersions.FrameworkMigrationSyntaxFallbackExtractor
-            : evidence?.ExtractorVersion == ScannerVersions.FrameworkMigrationEvidenceExtractor;
-        var expectedExtractorId = fact.RuleId == RuleIds.DatabaseFrameworkMigrationGap
-            ? evidence?.ExtractorId is "FrameworkMigrationEvidenceExtractor" or "FrameworkMigrationSyntaxFallbackExtractor"
-            : evidence?.ExtractorId == "FrameworkMigrationEvidenceExtractor";
+        var expectedExtractor = evidence is not null
+            && ((evidence.ExtractorId == "FrameworkMigrationEvidenceExtractor"
+                    && evidence.ExtractorVersion == ScannerVersions.FrameworkMigrationEvidenceExtractor)
+                || (fact.RuleId == RuleIds.DatabaseFrameworkMigrationGap
+                    && evidence.ExtractorId == "FrameworkMigrationSyntaxFallbackExtractor"
+                    && evidence.ExtractorVersion == ScannerVersions.FrameworkMigrationSyntaxFallbackExtractor));
         var valid = fact.FactType == expected.Item1
             && fact.EvidenceTier == expected.Item2
             && coverage == expected.Item3
@@ -941,8 +941,7 @@ public static partial class StaticHtmlEvidenceExplorer
             && !string.IsNullOrWhiteSpace(evidence.FilePath)
             && evidence.StartLine > 0
             && evidence.EndLine >= evidence.StartLine
-            && expectedExtractor
-            && expectedExtractorId;
+            && expectedExtractor;
         return (true, valid, valid ? coverage : null, valid ? limitation : null);
     }
 

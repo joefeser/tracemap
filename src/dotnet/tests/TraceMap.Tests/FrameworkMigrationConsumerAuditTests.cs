@@ -38,13 +38,23 @@ public sealed class FrameworkMigrationConsumerAuditTests
         Directory.CreateDirectory(input);
         var manifest = Manifest('b');
         var validOperation = FrameworkFacts(manifest).Single(fact => fact.RuleId == RuleIds.DatabaseFrameworkMigrationOperation);
+        var validGap = FrameworkFacts(manifest).Single(fact => fact.RuleId == RuleIds.DatabaseFrameworkMigrationGap);
         var invalidFacts = new[]
         {
             InvalidFrameworkOperation(manifest),
             validOperation with { FactId = "invalid-tier", EvidenceTier = EvidenceTiers.Tier4Unknown },
             validOperation with { FactId = "invalid-commit", CommitSha = new string('f', 40) },
             validOperation with { FactId = "invalid-span", Evidence = validOperation.Evidence with { StartLine = 0 } },
-            validOperation with { FactId = "invalid-extractor", Evidence = validOperation.Evidence with { ExtractorVersion = "framework-migration/9.9.9" } }
+            validOperation with { FactId = "invalid-extractor", Evidence = validOperation.Evidence with { ExtractorVersion = "framework-migration/9.9.9" } },
+            validGap with
+            {
+                FactId = "invalid-extractor-pair",
+                Evidence = validGap.Evidence with
+                {
+                    ExtractorId = "FrameworkMigrationSyntaxFallbackExtractor",
+                    ExtractorVersion = ScannerVersions.FrameworkMigrationEvidenceExtractor
+                }
+            }
         };
         var facts = FrameworkFacts(manifest).Concat(invalidFacts).ToArray();
         await ManifestWriter.WriteAsync(Path.Combine(input, "scan-manifest.json"), manifest);
