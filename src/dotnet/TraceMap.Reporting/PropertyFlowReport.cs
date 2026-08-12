@@ -1042,6 +1042,10 @@ public static class PropertyFlowReporter
 
     private static bool IsRootCandidate(PropertyFactRow fact, string selectorKind)
     {
+        if (!IsAdmittedPropertyFlowFact(fact))
+        {
+            return false;
+        }
         return selectorKind switch
         {
             "field" or "control" or "binding" => fact.FactType is "UiTemplateBinding" or "UiFormControlBinding" or "UiEventBinding" or "UiTemplateVariable" or "RazorBinding" or "RazorFormTarget",
@@ -1435,6 +1439,7 @@ public static class PropertyFlowReporter
                 var modelTargets = allFacts
                     .Where(fact => fact.SourceIndexId == rootFact.SourceIndexId
                         && fact.FactType == FactTypes.RazorModelBindingTarget
+                        && IsAdmittedPropertyFlowFact(fact)
                         && StringEqualsAny(propertyName, PropertyName(fact))
                         && FormMatchesModelBinding(formTarget, fact))
                     .OrderBy(fact => fact.FilePath, StringComparer.Ordinal)
@@ -1458,6 +1463,7 @@ public static class PropertyFlowReporter
             var targets = allFacts
                 .Where(fact => fact.SourceIndexId == rootFact.SourceIndexId
                     && fact.FactType == FactTypes.RazorModelBindingTarget
+                    && IsAdmittedPropertyFlowFact(fact)
                     && FormMatchesModelBinding(rootFact, fact))
                 .OrderBy(fact => PropertyName(fact), StringComparer.Ordinal)
                 .ThenBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
@@ -1552,6 +1558,7 @@ public static class PropertyFlowReporter
                 var modelTarget = allFacts
                     .Where(fact => fact.SourceIndexId == route.SourceIndexId
                         && fact.FactType == FactTypes.RazorModelBindingTarget
+                        && IsAdmittedPropertyFlowFact(fact)
                         && StringEqualsAny(propertyName, PropertyName(fact))
                         && RouteMatchesModelBinding(route, fact))
                     .OrderBy(fact => fact.FilePath, StringComparer.Ordinal)
@@ -1684,8 +1691,13 @@ public static class PropertyFlowReporter
 
     private static bool IsModelPropertyFact(PropertyFactRow fact)
     {
-        return fact.FactType is FactTypes.RazorModelBindingTarget or FactTypes.PropertyDeclared or FactTypes.SerializerContractMember;
+        return IsAdmittedPropertyFlowFact(fact)
+            && fact.FactType is FactTypes.RazorModelBindingTarget or FactTypes.PropertyDeclared or FactTypes.SerializerContractMember;
     }
+
+    private static bool IsAdmittedPropertyFlowFact(PropertyFactRow fact) =>
+        fact.RuleId != RuleIds.CSharpRazorSemanticModelBinding
+        && fact.RuleId != RuleIds.CSharpRazorSemanticModelBindingGap;
 
     private static string? PropertyName(PropertyFactRow fact)
     {

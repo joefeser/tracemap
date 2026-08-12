@@ -378,6 +378,8 @@ public static class RuleIds
     public const string CSharpSemanticFlowBoundary = "csharp.semantic.flowboundary.v1";
     public const string CSharpSemanticRuntimeEvidence = "csharp.semantic.runtimeevidence.v1";
     public const string CSharpSemanticWorkspace = "csharp.semantic.workspace.v1";
+    public const string CSharpRazorSemanticModelBinding = "csharp.razor.semantic-model-binding.v1";
+    public const string CSharpRazorSemanticModelBindingGap = "csharp.razor.semantic-model-binding-gap.v1";
     public const string DatabaseFrameworkMigrationDeclaration = "database.framework-migration.declaration.v1";
     public const string DatabaseFrameworkMigrationOperation = "database.framework-migration.operation.v1";
     public const string DatabaseFrameworkMigrationGap = "database.framework-migration.gap.v1";
@@ -529,7 +531,7 @@ public static class ScannerVersions
     public const string CSharpSyntaxExtractor = "csharp-syntax/0.4.0";
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.3.0";
-    public const string CSharpSemanticExtractor = "csharp-semantic/0.17.0";
+    public const string CSharpSemanticExtractor = "csharp-semantic/0.18.0";
     public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";
     public const string FrameworkMigrationSyntaxFallbackExtractor = "framework-migration-syntax-fallback/0.1.0";
     public const string ConfigExtractor = "config/0.1.0";

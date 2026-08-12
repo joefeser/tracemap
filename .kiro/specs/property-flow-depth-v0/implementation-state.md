@@ -1,11 +1,11 @@
 # Property Flow Depth v0 Implementation State
 
-Status: spec-reviewed-ready-for-pr
+Status: pr1-semantic-razor-producer-implemented
 
-Branch: `codex/property-flow-depth-spec`
+Branch: `codex/property-flow-semantic-razor-v0`
 
 Base: fresh `origin/dev` at
-`8eb8a72d85878f69f1a2d2851089e269d1f26a78`
+`ac887c857828c86da7a98cdf72b5b235d2c86391`
 
 Issue: [#517](https://github.com/joefeser/tracemap/issues/517)
 
@@ -144,10 +144,49 @@ Final validation after review-driven edits passed:
 - changed-file scope is limited to the five new spec files plus the superseded-
   spec implementation-state correction.
 
+PR 1 implementation validation at the fresh implementation base passed:
+
+- focused semantic Razor, property-flow, and reducer baseline: 46/46 tests;
+- `dotnet build src/dotnet/TraceMap.sln`: passed with zero warnings/errors;
+- `dotnet test src/dotnet/TraceMap.sln --no-build`: 1,456/1,456 passed;
+- targeted `dotnet format --verify-no-changes`: passed;
+- locked TypeScript restore plus `npm run check --prefix src/typescript`: 8/8
+  files and 33/33 tests passed (the existing npm audit reported two high-
+  severity dependency advisories; this slice did not mutate that dependency
+  lane);
+- `./scripts/check-private-paths.sh`: passed;
+- `git diff --check`: passed.
+
+Local signed-fixture provenance was Microsoft.AspNetCore.App `10.0.10` and
+Microsoft.NETCore.App `10.0.10`; the test project records that runtime patch,
+while product admission remains version-independent.
+
 ## Deferred Work
 
-- Product implementation begins only after this specification is reviewed and
-  merged.
+- PR 1 now emits compiler-resolved MVC action parameter, Razor Page handler
+  parameter, and handler-independent PageModel `[BindProperty]` targets. The
+  producer admits ASP.NET Core only through exact metadata type, assembly name,
+  and Microsoft public-key-token checks. The positive fixture targets
+  `net10.0`, pins `RuntimeFrameworkVersion` `10.0.10`, and the implementation
+  does not use runtime version as a trust predicate.
+- Semantic targets carry canonical owner, parameter, model-type, and property
+  identities; exact framework-admission provenance; a closed safe property
+  schema; a review-tier Tier1/Tier3 reconciliation tuple; bounded sorted HTTP
+  methods; coverage; and fixed limitations. Unsupported property/type and
+  forged-framework boundaries emit categorical Tier4 `AnalysisGap` facts.
+- Syntax and semantic rows intentionally coexist in generic NDJSON/SQLite.
+  Until PR 3 implements exact-ID composition, the new producer fact/gap rules
+  are explicitly excluded from generic contract reduction and semantic targets
+  are excluded from the current name-based property-flow reader. Regression
+  tests prove same-visible-name semantic rows cannot become roots, paths, or
+  stronger classifications.
+- The implementation is covered by real signed framework, partial/cross-file,
+  overload/multi-verb, handler-independent property, same-full-name cross-
+  assembly, source-lookalike, dynamic/type-parameter/external, closed-schema,
+  catalog, storage, determinism, reducer-isolation, and reporter-isolation
+  fixtures.
+- PR 2 direct property mapping, PR 3 exact-ID composition, and PR 4 consumer/
+  public-safe validation remain deferred in the recorded order.
 - No Windows, Access, browser, database, network service, or customer fixture
   is required for this runway.
 - No provider/package-specific mapper integration is authorized by this spec.

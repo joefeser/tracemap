@@ -649,6 +649,7 @@ public static class CSharpSemanticExtractor
         AddTypeDeclarationFacts(projectPath, filePath, root, model, facts);
         FrameworkMigrationEvidenceExtractor.Extract(projectPath, filePath, root, model, facts, gaps, protectedSourceSpans);
         var protectedFactStart = facts.Count;
+        RazorSemanticModelBindingExtractor.Extract(projectPath, filePath, root, model, facts, gaps);
         AddSymbolRelationshipFacts(projectPath, filePath, root, model, facts);
         AddFieldDeclarationFacts(projectPath, filePath, root, model, facts);
         AddParameterDeclarationFacts(projectPath, filePath, root, model, facts);
