@@ -393,20 +393,38 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
     [Fact]
     public void Conditional_access_annotation_chain_is_protected()
     {
-        var (_, gaps, protectedSpans) = Extract("""
+        var (facts, gaps, protectedSpans) = Extract("""
             using Microsoft.EntityFrameworkCore.Migrations;
             namespace Sample;
             public sealed class M : Migration
             {
                 protected override void Up(MigrationBuilder b) =>
                     b.CreateTable(name: "audit", columns: table => new { Id = table.Column<int>() })
-                        ?.Annotation("private-name", "private-value");
+                        ?.Annotation("private-name-1", "private-value-1")
+                        ?.Annotation("private-name-2", "private-value-2");
                 protected override void Down(MigrationBuilder b) { }
             }
             """, allowCompilationErrors: true);
 
         Assert.Contains(gaps, gap => gap.Properties!["gapKind"] == "AnnotationMigrationOperationUnavailable");
-        Assert.Contains(protectedSpans, span => span.Length > 0);
+        var annotationInvocations = CSharpSyntaxTree.ParseText("""
+            using Microsoft.EntityFrameworkCore.Migrations;
+            namespace Sample;
+            public sealed class M : Migration
+            {
+                protected override void Up(MigrationBuilder b) =>
+                    b.CreateTable(name: "audit", columns: table => new { Id = table.Column<int>() })
+                        ?.Annotation("private-name-1", "private-value-1")
+                        ?.Annotation("private-name-2", "private-value-2");
+                protected override void Down(MigrationBuilder b) { }
+            }
+            """).GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>()
+            .Where(invocation => invocation.Expression.ToString().Contains("Annotation", StringComparison.Ordinal))
+            .ToArray();
+        Assert.NotEmpty(annotationInvocations);
+        Assert.All(annotationInvocations, invocation => Assert.Contains(protectedSpans,
+            span => span.Start <= invocation.SpanStart && invocation.Span.End <= span.Start + span.Length));
+        Assert.DoesNotContain("private-value", string.Join("\n", facts.SelectMany(fact => fact.Properties?.Values ?? [])), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -522,6 +540,36 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
         Assert.DoesNotContain(syntaxFacts, fact => fact.FactType == FactTypes.ObjectShapeInferred);
         Assert.DoesNotContain(integrationFacts, fact => fact.FactType is FactTypes.SqlTextUsed or FactTypes.QueryPatternDetected);
         Assert.DoesNotContain("fallback-protected", string.Join("\n", syntaxFacts.SelectMany(fact => fact.Properties.Values)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Syntax_fallback_resolves_canonical_migration_namespace_alias()
+    {
+        const string source = """
+            using EfMigrations = Microsoft.EntityFrameworkCore.Migrations;
+            public sealed class M : EfMigrations.Migration
+            {
+                public void Up(object b) => b.Sql("SELECT namespace_alias_secret");
+            }
+            """;
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Migration.cs"), source);
+        var inventory = new[] { new FileInventoryItem("Migration.cs", "CSharp", source.Length) };
+
+        var fallback = FrameworkMigrationEvidenceExtractor.ExtractSyntaxFallback(
+            temp.Path,
+            inventory,
+            new HashSet<string>(StringComparer.Ordinal));
+        var facts = CSharpIntegrationSyntaxExtractor.Extract(
+            temp.Path,
+            Manifest(),
+            inventory,
+            new HashSet<string>(StringComparer.Ordinal),
+            fallback.ProtectedSpans);
+
+        Assert.Single(fallback.ProtectedSpans);
+        Assert.Single(fallback.Gaps, gap => gap.Properties!["gapKind"] == "SemanticBindingUnavailable");
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.SqlTextUsed);
     }
 
     [Fact]

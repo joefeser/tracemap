@@ -159,6 +159,12 @@ internal static class FrameworkMigrationEvidenceExtractor
             var direction = GetDirection(admittedSourceMethod);
             var methodName = InvocationName(invocation);
             var targetMethod = model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
+            if (methodName == "Annotation" && IsAdmittedAnnotationReceiver(invocation, model))
+            {
+                protectedSourceSpans?.Add(new ProtectedSourceSpan(filePath, invocation.SpanStart, invocation.Span.Length));
+                AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, "AnnotationMigrationOperationUnavailable", null, direction);
+                continue;
+            }
             if (targetMethod is null)
             {
                 if (IsProtectedSyntaxCandidateInvocation(invocation))
@@ -177,15 +183,6 @@ internal static class FrameworkMigrationEvidenceExtractor
                 {
                     AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, "AnnotationMigrationOperationUnavailable", null, direction);
                 }
-                continue;
-            }
-
-            if (methodName == "Annotation"
-                && IsTrustedOperationBuilder(targetMethod)
-                && IsAdmittedAnnotationReceiver(invocation, model))
-            {
-                protectedSourceSpans?.Add(new ProtectedSourceSpan(filePath, invocation.SpanStart, invocation.Span.Length));
-                AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, "AnnotationMigrationOperationUnavailable", null, direction);
                 continue;
             }
 
@@ -553,33 +550,69 @@ internal static class FrameworkMigrationEvidenceExtractor
 
     private static bool IsAdmittedAnnotationReceiver(InvocationExpressionSyntax annotation, SemanticModel model)
     {
-        ExpressionSyntax? receiver = annotation.Expression switch
+        ExpressionSyntax? receiver = GetAnnotationReceiver(annotation);
+        while (receiver is not null)
         {
-            MemberAccessExpressionSyntax memberAccess => memberAccess.Expression,
-            MemberBindingExpressionSyntax => annotation.Ancestors()
-                .OfType<ConditionalAccessExpressionSyntax>()
-                .FirstOrDefault(conditional => conditional.WhenNotNull.Span.Contains(annotation.Span))?
-                .Expression,
-            _ => null
-        };
-        while (receiver is InvocationExpressionSyntax invocation)
-        {
-            if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method)
+            if (receiver is ConditionalAccessExpressionSyntax conditional
+                && conditional.WhenNotNull is InvocationExpressionSyntax conditionalInvocation)
+            {
+                if (!IsAdmittedAnnotationHop(conditionalInvocation, model, allowUnresolvedAnnotation: true, out var isOperation))
+                {
+                    return false;
+                }
+                if (isOperation)
+                {
+                    return true;
+                }
+                receiver = conditional.Expression;
+                continue;
+            }
+            if (receiver is not InvocationExpressionSyntax invocation)
             {
                 return false;
             }
-            if (IsMigrationBuilderMethod(method) && Operations.ContainsKey(method.Name))
+            if (!IsAdmittedAnnotationHop(invocation, model, allowUnresolvedAnnotation: true, out var admittedOperation))
+            {
+                return false;
+            }
+            if (admittedOperation)
             {
                 return true;
             }
-            if (method.Name != "Annotation" || !IsTrustedOperationBuilder(method))
-            {
-                return false;
-            }
-            receiver = (invocation.Expression as MemberAccessExpressionSyntax)?.Expression;
+            receiver = GetAnnotationReceiver(invocation);
         }
         return false;
     }
+
+    private static bool IsAdmittedAnnotationHop(
+        InvocationExpressionSyntax invocation,
+        SemanticModel model,
+        bool allowUnresolvedAnnotation,
+        out bool isOperation)
+    {
+        isOperation = false;
+        if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method)
+        {
+            return allowUnresolvedAnnotation && InvocationName(invocation) == "Annotation";
+        }
+        if (IsMigrationBuilderMethod(method) && Operations.ContainsKey(method.Name))
+        {
+            isOperation = true;
+            return true;
+        }
+        return method.Name == "Annotation" && IsTrustedOperationBuilder(method);
+    }
+
+    private static ExpressionSyntax? GetAnnotationReceiver(InvocationExpressionSyntax invocation) => invocation.Expression switch
+    {
+        MemberAccessExpressionSyntax memberAccess => memberAccess.Expression,
+        MemberBindingExpressionSyntax => invocation.Ancestors()
+            .OfType<ConditionalAccessExpressionSyntax>()
+            .FirstOrDefault(conditional => !ReferenceEquals(conditional.Expression, invocation)
+                && conditional.WhenNotNull.Span.Contains(invocation.Span))?
+            .Expression,
+        _ => null
+    };
 
     internal static bool IsTrustedEfSymbol(INamedTypeSymbol? type)
     {
@@ -663,18 +696,30 @@ internal static class FrameworkMigrationEvidenceExtractor
             return true;
         }
 
-        var aliases = declaration.SyntaxTree.GetCompilationUnitRoot().Usings
+        var aliasDirectives = declaration.SyntaxTree.GetCompilationUnitRoot().Usings
             .Concat(declaration.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().SelectMany(namespaceDeclaration => namespaceDeclaration.Usings))
-            .Where(usingDirective => usingDirective.Alias is not null && IsCanonicalMigrationTypeName(usingDirective.Name?.ToString()))
+            .Where(usingDirective => usingDirective.Alias is not null)
+            .ToArray();
+        var typeAliases = aliasDirectives
+            .Where(usingDirective => IsCanonicalMigrationTypeName(usingDirective.Name?.ToString()))
             .Select(usingDirective => usingDirective.Alias!.Name.Identifier.ValueText)
             .ToHashSet(StringComparer.Ordinal);
-        return baseTypes.Any(aliases.Contains);
+        var namespaceAliases = aliasDirectives
+            .Where(usingDirective => IsCanonicalMigrationNamespace(usingDirective.Name?.ToString()))
+            .Select(usingDirective => usingDirective.Alias!.Name.Identifier.ValueText)
+            .ToHashSet(StringComparer.Ordinal);
+        return baseTypes.Any(typeAliases.Contains)
+            || baseTypes.Any(baseType => namespaceAliases.Any(alias => baseType.Equals($"{alias}.Migration", StringComparison.Ordinal)));
     }
 
     private static bool IsCanonicalMigrationTypeName(string? typeName) => typeName is
         "Migration" or
         "Microsoft.EntityFrameworkCore.Migrations.Migration" or
         "global::Microsoft.EntityFrameworkCore.Migrations.Migration";
+
+    private static bool IsCanonicalMigrationNamespace(string? namespaceName) => namespaceName is
+        "Microsoft.EntityFrameworkCore.Migrations" or
+        "global::Microsoft.EntityFrameworkCore.Migrations";
 
     private static bool IsProtectedSyntaxCandidateInvocation(InvocationExpressionSyntax invocation)
     {
