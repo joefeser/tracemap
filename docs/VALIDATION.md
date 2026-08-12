@@ -1424,6 +1424,21 @@ database/server identity, or raw SQL.
 
 ### Framework migration evidence
 
+Generic consumer audit:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~FrameworkMigrationConsumerAuditTests
+```
+
+Expected behavior: the Markdown report counts framework migration fact types
+without rendering protected fact properties; the static HTML explorer
+preserves only the exact bounded coverage and limitation contract; snapshot
+diff, vault export, and evidence-docs export emit rule-backed gaps with
+supporting fact IDs where no dedicated framework migration projection exists.
+None of these consumers claims migration application, ordering, provider
+selection, generated SQL, database state, rollback, approval, or safety.
+
 For changes to the bounded EF Core migration producer, run:
 
 ```bash

@@ -280,6 +280,7 @@ public static partial class StaticHtmlEvidenceExplorer
     public const string CatalogUnavailableRuleId = "explorer.render.catalog-unavailable.v1";
     public const string NoNetworkAssetsRuleId = "explorer.render.no-network-assets.v1";
     public const string PartialSectionRuleId = "explorer.render.partial-section.v1";
+    public const string FrameworkMigrationMetadataUnavailableRuleId = "explorer.input.framework-migration-metadata-unavailable.v1";
     public const string SectionStatusRuleId = "explorer.render.section-status.v1";
     public const string CompatibilityLedgerRuleId = "explorer.render.compatibility-ledger.v1";
     public const string ReleaseReviewInputRuleId = "explorer.input.release-review.v1";
@@ -551,6 +552,22 @@ public static partial class StaticHtmlEvidenceExplorer
                          .ThenBy(fact => fact.FactId, StringComparer.Ordinal))
             {
                 var evidence = fact.Evidence;
+                var frameworkMetadata = FrameworkMigrationMetadata(fact);
+                if (frameworkMetadata.IsFrameworkMigration && !frameworkMetadata.IsValid)
+                {
+                    gaps.Add(CreateGap(
+                        $"framework-migration-metadata-{Hash(fact.FactId, 16)}",
+                        FrameworkMigrationMetadataUnavailableRuleId,
+                        "framework-migration-metadata-unavailable",
+                        SourceId,
+                        "evidence-rows",
+                        "PartialAnalysis",
+                        "A framework migration fact did not contain the exact bounded coverage and limitation metadata required for safe explorer projection, so the evidence row was omitted.",
+                        [fact.FactId]));
+                    RecordOmittedFactProperties(fact, redactions);
+                    continue;
+                }
+
                 if (evidence is null)
                 {
                     gaps.Add(CreateGap(
@@ -559,7 +576,7 @@ public static partial class StaticHtmlEvidenceExplorer
                         "missing-evidence-span",
                         "artifact:facts-ndjson",
                         "evidence-rows",
-                        coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First(),
+                        frameworkMetadata.CoverageLabel ?? (coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First()),
                         "An evidence row did not include a file span, so the explorer rendered the row with partial span metadata.",
                         [fact.FactId]));
                 }
@@ -578,9 +595,9 @@ public static partial class StaticHtmlEvidenceExplorer
                     evidence?.StartLine,
                     evidence?.EndLine,
                     evidence is null ? "n/a" : SafeSnippetHash(evidence.SnippetHash, redactions),
-                    coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First(),
+                    frameworkMetadata.CoverageLabel ?? (coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First()),
                     SafeClosedText(evidence?.ExtractorVersion, "extractor-version", redactions),
-                    []));
+                    frameworkMetadata.Limitation is null ? [] : [frameworkMetadata.Limitation]));
                 RecordOmittedFactProperties(fact, redactions);
 
                 if (fact.FactType == FactTypes.AnalysisGap)
@@ -592,7 +609,7 @@ public static partial class StaticHtmlEvidenceExplorer
                         "analysis-gap",
                         SourceId,
                         "coverage",
-                        coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First(),
+                        frameworkMetadata.CoverageLabel ?? (coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First()),
                         "Input facts contain an AnalysisGap row. The explorer preserves it as a coverage limitation without deriving a new conclusion.",
                         [fact.FactId]));
                 }
@@ -874,6 +891,37 @@ public static partial class StaticHtmlEvidenceExplorer
         }
 
         return facts;
+    }
+
+    private static (bool IsFrameworkMigration, bool IsValid, string? CoverageLabel, string? Limitation) FrameworkMigrationMetadata(CodeFact fact)
+    {
+        var expected = fact.RuleId switch
+        {
+            RuleIds.DatabaseFrameworkMigrationDeclaration => (
+                FactTypes.FrameworkMigrationDeclared,
+                "bounded-static-migration",
+                "Static framework migration declaration only; execution, ordering, provider selection, generated SQL, database state, rollback, and safety are not proven."),
+            RuleIds.DatabaseFrameworkMigrationOperation => (
+                FactTypes.FrameworkMigrationOperationCandidate,
+                "bounded-static-migration",
+                "Static framework migration operation candidate only; execution, ordering, provider selection, generated SQL, database state, rollback, reversibility, and safety are not proven."),
+            RuleIds.DatabaseFrameworkMigrationGap => (
+                FactTypes.AnalysisGap,
+                "reduced-static-migration",
+                "Static framework migration coverage is reduced; omitted protected content and runtime behavior were not analyzed."),
+            _ => default
+        };
+        if (expected == default)
+        {
+            return (false, true, null, null);
+        }
+
+        var coverage = fact.Properties.GetValueOrDefault("coverageLabel");
+        var limitation = fact.Properties.GetValueOrDefault("limitations");
+        var valid = fact.FactType == expected.Item1
+            && coverage == expected.Item2
+            && limitation == expected.Item3;
+        return (true, valid, valid ? coverage : null, valid ? limitation : null);
     }
 
     private static async Task AddOptionalArtifactAsync(
@@ -2105,6 +2153,7 @@ public static partial class StaticHtmlEvidenceExplorer
             Rule(CatalogUnavailableRuleId, "Explorer rule catalog unavailable", "Records that only observed rule IDs and built-in explorer rule stubs are rendered."),
             Rule(NoNetworkAssetsRuleId, "Explorer local no-network assets", "Documents that generated HTML uses only bundled local CSS and JavaScript assets."),
             Rule(PartialSectionRuleId, "Explorer partial section", "Marks unavailable first-slice sections and missing optional artifacts as partial rather than empty."),
+            Rule(FrameworkMigrationMetadataUnavailableRuleId, "Framework migration metadata unavailable", "Omits framework migration rows whose bounded coverage or limitation metadata is missing or unexpected."),
             Rule(SectionStatusRuleId, "Explorer section status", "Records deterministic section availability labels derived from compatible generated artifacts and rule-backed gaps."),
             Rule(CompatibilityLedgerRuleId, "Explorer compatibility ledger", "Records deterministic artifact, section, safety-profile, and claim-metadata compatibility states without reading unsupported content."),
             Rule(ReleaseReviewInputRuleId, "Explorer release-review compatibility reader", "Validates bounded release-review v1.2 identity, snapshot shape, coverage, and content provenance without rendering report findings."),

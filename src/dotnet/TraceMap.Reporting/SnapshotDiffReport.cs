@@ -232,6 +232,7 @@ public static class SnapshotDiffReporter
     private const string EvidenceRuleId = "snapshot.diff.evidence.v1";
     private const string IdentityRuleId = "snapshot.diff.identity.v1";
     private const string SchemaRuleId = "snapshot.diff.schema.v1";
+    private const string FrameworkMigrationUnsupportedRuleId = "snapshot.diff.framework-migration-unsupported.v1";
 
     private static readonly HashSet<string> ValidScopes = new(StringComparer.Ordinal)
     {
@@ -300,6 +301,31 @@ public static class SnapshotDiffReporter
         var allGaps = new List<SnapshotDiffGap>();
         allGaps.AddRange(FilterGapsBySource(before.Gaps, options.Source));
         allGaps.AddRange(FilterGapsBySource(after.Gaps, options.Source));
+        var beforeFrameworkMigration = await ReleaseReviewReporter.ReadFrameworkMigrationEvidencePresenceAsync(
+            options.BeforePath,
+            before.Kind,
+            cancellationToken);
+        var afterFrameworkMigration = await ReleaseReviewReporter.ReadFrameworkMigrationEvidencePresenceAsync(
+            options.AfterPath,
+            after.Kind,
+            cancellationToken);
+        if ((scopes.Contains("surfaces", StringComparer.Ordinal) || scopes.Contains("gaps", StringComparer.Ordinal))
+            && (beforeFrameworkMigration.FactCount > 0 || afterFrameworkMigration.FactCount > 0))
+        {
+            allGaps.Add(Gap(
+                "framework-migration",
+                "FrameworkMigrationSnapshotDiffUnsupported",
+                "surfaceDiffs",
+                null,
+                FrameworkMigrationUnsupportedRuleId,
+                SnapshotDiffClassifications.UnknownAnalysisGap,
+                "Framework migration facts are present, but snapshot diff has no dedicated framework migration identity projection; no migration absence, application, ordering, provider, rollback, or safety conclusion is made.",
+                beforeFrameworkMigration.SupportingFactIds
+                    .Concat(afterFrameworkMigration.SupportingFactIds)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(id => id, StringComparer.Ordinal)
+                    .ToArray()));
+        }
         var sourcePairs = PairSources(before.Snapshot, after.Snapshot, options.Source);
         AddIdentityGaps(sourcePairs, allGaps, before.Kind == "combined");
         if (allGaps.Any(gap => gap.GapKind == "SourceIdentityConflict") && !options.AllowIdentityMismatch)
@@ -2076,7 +2102,15 @@ public static class SnapshotDiffReporter
             : SnapshotDiffClassifications.ChangedEvidence;
     }
 
-    private static SnapshotDiffGap Gap(string idKind, string gapKind, string section, string? sourceLabel, string ruleId, string classification, string message)
+    private static SnapshotDiffGap Gap(
+        string idKind,
+        string gapKind,
+        string section,
+        string? sourceLabel,
+        string ruleId,
+        string classification,
+        string message,
+        IReadOnlyList<string>? supportingFactIds = null)
     {
         return new SnapshotDiffGap(
             StableId("gap", idKind, gapKind, section, sourceLabel ?? "all"),
@@ -2088,7 +2122,7 @@ public static class SnapshotDiffReporter
             classification,
             message,
             [],
-            [],
+            supportingFactIds ?? [],
             [],
             [],
             CombinedReportHelpers.SortedMetadata([

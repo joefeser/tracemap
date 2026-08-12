@@ -228,6 +228,7 @@ public static class EvidenceDocsExporter
     private const string UnsupportedFamilyRuleId = "docs-export.gap.unsupported-family.v1";
     private const string MissingProvenanceRuleId = "docs-export.gap.missing-provenance.v1";
     private const string UnknownAnalysisRuleId = "docs-export.gap.unknown-analysis.v1";
+    private const string FrameworkMigrationConsumerUnsupportedRuleId = "docs-export.gap.framework-migration-consumer-unsupported.v1";
 
     private static readonly string[] AllFamilies =
     [
@@ -723,6 +724,11 @@ public static class EvidenceDocsExporter
     private static List<EvidenceDocChunk> ProjectIndexChunks(IndexInput input, IReadOnlyList<string> selectedFamilies, List<EvidenceDocsDiagnostic> diagnostics)
     {
         var chunks = new List<EvidenceDocChunk>();
+        var frameworkMigrationFacts = input.Facts
+            .Where(IsFrameworkMigrationFact)
+            .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        var projectableFacts = input.Facts.Where(fact => !IsFrameworkMigrationFact(fact)).ToArray();
         if (selectedFamilies.Contains("source-overview", StringComparer.Ordinal))
         {
             foreach (var source in input.Sources)
@@ -731,7 +737,7 @@ public static class EvidenceDocsExporter
             }
         }
 
-        foreach (var group in input.Facts.GroupBy(FamilyForFact).OrderBy(group => Array.IndexOf(AllFamilies, group.Key)))
+        foreach (var group in projectableFacts.GroupBy(FamilyForFact).OrderBy(group => Array.IndexOf(AllFamilies, group.Key)))
         {
             if (!selectedFamilies.Contains(group.Key, StringComparer.Ordinal))
             {
@@ -751,6 +757,18 @@ public static class EvidenceDocsExporter
                     chunks.Add(CreateFactChunk(fact, group.Key));
                 }
             }
+        }
+
+        if (frameworkMigrationFacts.Length > 0 && selectedFamilies.Contains("gap", StringComparer.Ordinal))
+        {
+            chunks.Add(CreateGapChunk(
+                "framework-migration-consumer",
+                FrameworkMigrationConsumerUnsupportedRuleId,
+                "framework-migration-consumer-unsupported",
+                "gap",
+                frameworkMigrationFacts.Select(fact => fact.Source).DistinctBy(source => source.SourceId).ToArray(),
+                frameworkMigrationFacts.Select(fact => fact.FactId).ToArray(),
+                "hidden"));
         }
 
         if (input.Kind == "single-index")
@@ -2613,6 +2631,11 @@ public static class EvidenceDocsExporter
 
         return "dependency-surface";
     }
+
+    private static bool IsFrameworkMigrationFact(DocFact fact) =>
+        fact.RuleId is RuleIds.DatabaseFrameworkMigrationDeclaration
+            or RuleIds.DatabaseFrameworkMigrationOperation
+            or RuleIds.DatabaseFrameworkMigrationGap;
 
     private static LegacyDataModelDescriptorProjectionRow? TryProjectLegacyDataDescriptor(DocFact fact)
     {
