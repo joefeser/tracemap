@@ -191,6 +191,14 @@ segment (including custom verbs) instead of treating any `OnPost...` prefix as
 POST. Inherited-exclusion and `OnPoster`/`OnTraceAsync` fixtures lock both
 behaviors without making runtime endpoint-selection claims.
 
+The following exact-head review closed three additional ownership edges:
+canonical `[FromServices]` parameters are excluded from request binding,
+handler-independent `[BindProperty]` facts use the attributed property as the
+owner exactly as the design requires, and eligible actions declared on an
+abstract source base are projected to discoverable concrete source controllers
+when no same-name declaration intervenes. Each behavior has a focused negative
+or identity regression and remains bounded to compiler-proven source symbols.
+
 ## Deferred Work
 
 - PR 1 now emits compiler-resolved MVC action parameter, Razor Page handler

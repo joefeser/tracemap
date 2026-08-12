@@ -19,6 +19,7 @@ internal static class RazorSemanticModelBindingExtractor
             ["Microsoft.AspNetCore.Mvc.NonActionAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
             ["Microsoft.AspNetCore.Mvc.FromBodyAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
             ["Microsoft.AspNetCore.Mvc.FromFormAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
+            ["Microsoft.AspNetCore.Mvc.FromServicesAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
             ["Microsoft.AspNetCore.Mvc.BindPropertyAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
             ["Microsoft.AspNetCore.Mvc.HttpGetAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
             ["Microsoft.AspNetCore.Mvc.HttpPostAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
@@ -65,8 +66,11 @@ internal static class RazorSemanticModelBindingExtractor
                 continue;
             }
 
+            var controllerOwners = InheritsTrusted(method.ContainingType, "Microsoft.AspNetCore.Mvc.ControllerBase")
+                ? EffectiveControllerOwners(method, model.Compilation)
+                : [];
             if (InheritsTrusted(method.ContainingType, "Microsoft.AspNetCore.Mvc.ControllerBase")
-                && !IsDiscoverableController(method.ContainingType))
+                && controllerOwners.Length == 0)
             {
                 AddGapOrCount(
                     projectPath,
@@ -151,6 +155,10 @@ internal static class RazorSemanticModelBindingExtractor
                 }
 
                 var source = ParameterSource(parameter);
+                if (source == "services")
+                {
+                    continue;
+                }
                 if (source is null)
                 {
                     AddGapOrCount(
@@ -175,23 +183,28 @@ internal static class RazorSemanticModelBindingExtractor
                     continue;
                 }
 
-                ExpandModelProperties(
-                    projectPath,
-                    filePath,
-                    parameterSyntax,
-                    ownerKind,
-                    source,
-                    method,
-                    parameter,
-                    modelType,
-                    httpMethods,
-                    supportsGet: null,
-                    ref factCount,
-                    ref gapCount,
-                    ref truncatedFacts,
-                    ref truncatedGaps,
-                    facts,
-                    gaps);
+                var owners = ownerKind == "mvc-action-parameter" ? controllerOwners : [method];
+                foreach (var owner in owners)
+                {
+                    ExpandModelProperties(
+                        projectPath,
+                        filePath,
+                        parameterSyntax,
+                        ownerKind,
+                        source,
+                        owner,
+                        method,
+                        parameter,
+                        modelType,
+                        httpMethods,
+                        supportsGet: null,
+                        ref factCount,
+                        ref gapCount,
+                        ref truncatedFacts,
+                        ref truncatedGaps,
+                        facts,
+                        gaps);
+                }
             }
         }
 
@@ -250,8 +263,9 @@ internal static class RazorSemanticModelBindingExtractor
                 propertySyntax,
                 "razor-page-property",
                 "bind-property",
-                property.ContainingType,
+                property,
                 parameter: null,
+                endpointMethod: null,
                 property.ContainingType,
                 property,
                 httpMethods: [],
@@ -275,7 +289,8 @@ internal static class RazorSemanticModelBindingExtractor
         SyntaxNode evidenceNode,
         string bindingKind,
         string parameterSource,
-        IMethodSymbol owner,
+        ISymbol owner,
+        IMethodSymbol endpointMethod,
         IParameterSymbol parameter,
         INamedTypeSymbol modelType,
         IReadOnlyList<string> httpMethods,
@@ -323,7 +338,7 @@ internal static class RazorSemanticModelBindingExtractor
                 continue;
             }
 
-            facts.Add(CreateTarget(projectPath, filePath, evidenceNode, bindingKind, parameterSource, owner, parameter, modelType, property, httpMethods, supportsGet));
+            facts.Add(CreateTarget(projectPath, filePath, evidenceNode, bindingKind, parameterSource, owner, parameter, endpointMethod, modelType, property, httpMethods, supportsGet));
             factCount++;
         }
     }
@@ -336,6 +351,7 @@ internal static class RazorSemanticModelBindingExtractor
         string parameterSource,
         ISymbol owner,
         IParameterSymbol? parameter,
+        IMethodSymbol? endpointMethod,
         INamedTypeSymbol modelType,
         IPropertySymbol property,
         IReadOnlyList<string> httpMethods,
@@ -367,17 +383,17 @@ internal static class RazorSemanticModelBindingExtractor
         AddIdentity(properties, "parameter", parameter);
         AddIdentity(properties, "modelType", modelType);
         AddIdentity(properties, "target", property);
-        if (owner is IMethodSymbol method)
+        if (endpointMethod is not null)
         {
             if (bindingKind == "mvc-action-parameter")
             {
-                properties["actionName"] = method.Name;
-                properties["controllerName"] = ControllerName(method.ContainingType.Name);
+                properties["actionName"] = endpointMethod.Name;
+                properties["controllerName"] = ControllerName((owner as INamedTypeSymbol ?? endpointMethod.ContainingType).Name);
             }
             else
             {
-                properties["handlerName"] = method.Name;
-                properties["pageModelName"] = method.ContainingType.Name;
+                properties["handlerName"] = endpointMethod.Name;
+                properties["pageModelName"] = endpointMethod.ContainingType.Name;
             }
         }
         else
@@ -470,6 +486,75 @@ internal static class RazorSemanticModelBindingExtractor
         && type.ContainingType is null
         && !type.TypeArguments.Any(argument => argument.TypeKind == TypeKind.TypeParameter);
 
+    private static ISymbol[] EffectiveControllerOwners(IMethodSymbol method, Compilation compilation)
+    {
+        if (IsDiscoverableController(method.ContainingType))
+        {
+            return [method];
+        }
+        if (!method.ContainingType.IsAbstract
+            || method.IsAbstract
+            || method.IsGenericMethod
+            || HasTrustedAttributeInTypeHierarchy(method.ContainingType, "Microsoft.AspNetCore.Mvc.NonControllerAttribute")
+            || HasTrustedAttributeInOverrideChain(method, "Microsoft.AspNetCore.Mvc.NonActionAttribute"))
+        {
+            return [];
+        }
+
+        return AllSourceTypes(compilation.Assembly.GlobalNamespace)
+            .Where(IsDiscoverableController)
+            .Where(candidate => InheritsFrom(candidate, method.ContainingType))
+            .Where(candidate => !candidate.GetMembers(method.Name).OfType<IMethodSymbol>().Any())
+            .OrderBy(candidate => candidate.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal)
+            .Cast<ISymbol>()
+            .ToArray();
+    }
+
+    private static IEnumerable<INamedTypeSymbol> AllSourceTypes(INamespaceSymbol root)
+    {
+        foreach (var member in root.GetMembers().OrderBy(member => member.Name, StringComparer.Ordinal))
+        {
+            if (member is INamespaceSymbol childNamespace)
+            {
+                foreach (var type in AllSourceTypes(childNamespace))
+                {
+                    yield return type;
+                }
+            }
+            else if (member is INamedTypeSymbol type)
+            {
+                foreach (var nested in SelfAndNestedTypes(type))
+                {
+                    yield return nested;
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<INamedTypeSymbol> SelfAndNestedTypes(INamedTypeSymbol type)
+    {
+        yield return type;
+        foreach (var nested in type.GetTypeMembers().OrderBy(candidate => candidate.Name, StringComparer.Ordinal))
+        {
+            foreach (var descendant in SelfAndNestedTypes(nested))
+            {
+                yield return descendant;
+            }
+        }
+    }
+
+    private static bool InheritsFrom(INamedTypeSymbol type, INamedTypeSymbol expectedBase)
+    {
+        for (var current = type.BaseType; current is not null; current = current.BaseType)
+        {
+            if (SymbolEqualityComparer.Default.Equals(current, expectedBase))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static bool IsEligibleProperty(IPropertySymbol property) =>
         !property.IsStatic
         && !property.IsIndexer
@@ -483,6 +568,10 @@ internal static class RazorSemanticModelBindingExtractor
 
     private static string? ParameterSource(IParameterSymbol parameter)
     {
+        if (TrustedAttribute(parameter, "Microsoft.AspNetCore.Mvc.FromServicesAttribute") is not null)
+        {
+            return "services";
+        }
         var body = TrustedAttribute(parameter, "Microsoft.AspNetCore.Mvc.FromBodyAttribute") is not null;
         var form = TrustedAttribute(parameter, "Microsoft.AspNetCore.Mvc.FromFormAttribute") is not null;
         if (body && form)
@@ -622,7 +711,7 @@ internal static class RazorSemanticModelBindingExtractor
         IParameterSymbol? parameter,
         IPropertySymbol property)
     {
-        var ownerType = owner.ContainingType ?? property.ContainingType;
+        var ownerType = owner as INamedTypeSymbol ?? owner.ContainingType ?? property.ContainingType;
         var frameworkTypeName = bindingKind == "mvc-action-parameter"
             ? "Microsoft.AspNetCore.Mvc.ControllerBase"
             : "Microsoft.AspNetCore.Mvc.RazorPages.PageModel";

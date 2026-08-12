@@ -106,6 +106,7 @@ public sealed class RazorSemanticModelBindingTests
                 public IActionResult SaveGeneric<T>(T input) => Ok();
                 public IActionResult SaveExternal(string input) => Ok();
                 public IActionResult SaveExternalBase(ExternalBaseInput input) => Ok();
+                public IActionResult SaveService([FromServices] InputModel service) => Ok();
 
                 [NonAction]
                 public void Ignore([FromBody] InputModel input) { }
@@ -176,6 +177,8 @@ public sealed class RazorSemanticModelBindingTests
             {
                 [NonAction]
                 public virtual IActionResult IgnoreInherited(InputModel input) => Ok();
+
+                public IActionResult InheritedAction(InputModel input) => Ok();
             }
 
             public sealed class DerivedActionController : ActionBaseController
@@ -222,6 +225,7 @@ public sealed class RazorSemanticModelBindingTests
             && fact.Properties["propertyName"] == "BaseName");
         var overloadedNames = semantic.Where(fact =>
                 fact.Properties["bindingKind"] == "mvc-action-parameter"
+                && fact.Properties.GetValueOrDefault("actionName") == "Save"
                 && fact.Properties["propertyName"] == "Name")
             .ToArray();
         Assert.Equal(2, overloadedNames.Length);
@@ -247,8 +251,8 @@ public sealed class RazorSemanticModelBindingTests
         Assert.Equal(string.Empty, searchProperty.Properties["httpMethods"]);
         Assert.Equal("Microsoft.AspNetCore.Mvc.RazorPages.PageModel", searchProperty.Properties["frameworkOwnerType"]);
         Assert.Equal("Microsoft.AspNetCore.Mvc.BindPropertyAttribute", searchProperty.Properties["bindingAttributeType"]);
-        Assert.NotEqual(searchProperty.Properties["ownerSymbolId"], searchProperty.Properties["targetSymbolId"]);
-        Assert.Equal("NamedType", searchProperty.Properties["ownerSymbolKind"]);
+        Assert.Equal(searchProperty.Properties["ownerSymbolId"], searchProperty.Properties["targetSymbolId"]);
+        Assert.Equal("Property", searchProperty.Properties["ownerSymbolKind"]);
         Assert.DoesNotContain("handlerName", searchProperty.Properties.Keys);
         Assert.Contains(semantic, fact =>
             fact.Properties["bindingKind"] == "razor-page-property"
@@ -261,6 +265,11 @@ public sealed class RazorSemanticModelBindingTests
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("HiddenController", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("SaveInheritedHidden", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("IgnoreInherited", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("SaveService", StringComparison.Ordinal) == true);
+        Assert.Contains(semantic, fact => fact.Properties.GetValueOrDefault("actionName") == "InheritedAction"
+            && fact.Properties.GetValueOrDefault("controllerName") == "DerivedAction"
+            && fact.Properties["propertyName"] == "Name"
+            && fact.Properties["ownerSymbolKind"] == "NamedType");
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("OnPostIgnored", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.Properties.GetValueOrDefault("controllerName") is "Internal" or "Abstract" or "Nested" or "Generic");
         Assert.Contains(semantic, fact => fact.Properties["propertyName"] == "LocalValue"
