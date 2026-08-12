@@ -130,8 +130,10 @@ public static class ScanEngine
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         var migrationFallbackReducedCoverage = migrationFallbackGaps.Length > 0;
+        var semanticBuildReducedCoverage = semanticResult.GapFacts.Any(gap =>
+            gap.RuleId != RuleIds.DatabaseFrameworkMigrationGap);
         var semanticBuildStatus = semanticResult.Attempted
-            ? semanticResult.ReducedCoverage || migrationFallbackReducedCoverage ? "FailedOrPartial" : "Succeeded"
+            ? semanticBuildReducedCoverage ? "FailedOrPartial" : "Succeeded"
             : "NotRun";
         var semanticAnalysisLevel = semanticResult.Attempted
             ? semanticResult.ReducedCoverage || migrationFallbackReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
@@ -645,17 +647,25 @@ public static class ScanEngine
             var fullPath = Path.Combine(repoPath, group.Key);
             if (!File.Exists(fullPath))
             {
+                result[group.Key] = [(1, int.MaxValue)];
                 continue;
             }
 
-            var source = SourceText.From(File.ReadAllText(fullPath));
-            result[group.Key] = group.Select(span =>
+            try
             {
-                var start = Math.Clamp(span.Start, 0, source.Length);
-                var length = Math.Clamp(span.Length, 0, source.Length - start);
-                var lineSpan = source.Lines.GetLinePositionSpan(new TextSpan(start, length));
-                return (lineSpan.Start.Line + 1, lineSpan.End.Line + 1);
-            }).ToArray();
+                var source = SourceText.From(File.ReadAllText(fullPath));
+                result[group.Key] = group.Select(span =>
+                {
+                    var start = Math.Clamp(span.Start, 0, source.Length);
+                    var length = Math.Clamp(span.Length, 0, source.Length - start);
+                    var lineSpan = source.Lines.GetLinePositionSpan(new TextSpan(start, length));
+                    return (lineSpan.Start.Line + 1, lineSpan.End.Line + 1);
+                }).ToArray();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                result[group.Key] = [(1, int.MaxValue)];
+            }
         }
         return result;
     }
@@ -668,9 +678,16 @@ public static class ScanEngine
 
     private static string GetGapMessage(SemanticFactCandidate gap)
     {
-        return gap.Properties is not null && gap.Properties.TryGetValue("message", out var message)
-            ? message
-            : "Roslyn semantic analysis reported a gap.";
+        if (gap.Properties is not null && gap.Properties.TryGetValue("message", out var message))
+        {
+            return message;
+        }
+        if (gap.RuleId == RuleIds.DatabaseFrameworkMigrationGap)
+        {
+            var gapKind = gap.Properties?.GetValueOrDefault("gapKind") ?? gap.ContractElement ?? "UnknownMigrationGap";
+            return $"Framework migration coverage reduced: {gapKind}.";
+        }
+        return "Roslyn semantic analysis reported a gap.";
     }
 
     private static string GetBuildStatusReason(

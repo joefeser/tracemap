@@ -34,7 +34,8 @@ ordering, rollback, generated-SQL, database-state, or safety claim is added.
 ## Producer Implementation
 
 PR 1 adds the three versioned framework-migration rules, the two closed fact
-types, and `csharp-semantic/0.17.0`. Admission requires Roslyn resolution to the
+types, `framework-migration/0.1.0`, and
+`framework-migration-syntax-fallback/0.1.0`. Admission requires Roslyn resolution to the
 strong-named `Microsoft.EntityFrameworkCore.Relational` metadata assembly with
 public-key token `adb9793829ddae60`; source and unsigned metadata lookalikes are
 rejected with categorical gaps.
@@ -47,9 +48,12 @@ default/computed expressions, and nested table shapes are gap-only. Their
 source text and digests are omitted. A semantic-to-syntax protected-span seam
 also prevents proven protected migration content from being reprojected by the
 generic C# syntax, integration, SQL text/shape, and later legacy passes. The
-bounded syntax fallback protects named and supported positional
+bounded syntax fallback protects named and supported positional current/old
 default/computed arguments and makes any fallback gap reduce the manifest's
-coverage instead of leaving a contradictory successful/full scan.
+analysis coverage instead of leaving a contradictory full analysis. Migration
+coverage and build outcome remain separate: a clean MSBuild/Roslyn build stays
+`Succeeded` while `analysisLevel` and categorical `knownGaps` state the reduced
+migration coverage.
 
 The generic contract-delta reducer returns before matching either new fact type
 or the framework gap rule. `IsSqlFact` and `IsPostgresSchemaFact` remain
@@ -60,14 +64,16 @@ still deferred.
 
 Producer implementation validation at the current worktree:
 
-- Focused framework-migration and reducer isolation tests: 27/27 passed.
+- Focused framework-migration tests: 31/31 passed; focused scan/reducer and
+  analyzer-capability tests: 35/35 passed.
 - Full .NET solution build: passed with 0 warnings and 0 errors.
-- Full .NET solution test: 1,430/1,430 passed.
-- Checked-in synthetic CLI scan: `FailedOrPartial` /
+- Full .NET solution test: 1,434/1,434 passed.
+- Checked-in synthetic CLI scan: `Succeeded` /
   `Level1SemanticAnalysisReduced`; all five artifacts present; NDJSON and
   SQLite contained one declaration, four operations, and one categorical raw-
-  SQL gap. The protected SQL sentinel was absent from NDJSON, SQLite, report,
-  and analyzer log.
+  SQL gap. The manifest names that migration gap categorically without
+  misreporting a build failure. The protected SQL sentinel was absent from
+  NDJSON, SQLite, report, and analyzer log.
 - Changed-file `dotnet format --verify-no-changes`: passed. Repository-wide
   format verification remains noisy from pre-existing formatting findings in
   unrelated files.

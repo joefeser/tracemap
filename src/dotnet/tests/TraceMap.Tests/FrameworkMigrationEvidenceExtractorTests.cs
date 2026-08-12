@@ -134,13 +134,14 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
     [Fact]
     public void Source_declared_framework_lookalike_is_rejected_with_identity_gap()
     {
-        var (facts, gaps, _) = Extract("""
+        var (facts, gaps, protectedSpans) = Extract("""
             namespace Microsoft.EntityFrameworkCore.Migrations
             {
                 public abstract class Migration { }
                 public sealed class MigrationBuilder
                 {
                     public void DropTable(string name) { }
+                    public void Sql(string value) { }
                 }
             }
 
@@ -149,7 +150,7 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
                 using Microsoft.EntityFrameworkCore.Migrations;
                 public sealed class Forged : Migration
                 {
-                    public void Up(MigrationBuilder builder) => builder.DropTable("accounts");
+                    public void Up(MigrationBuilder builder) => builder.Sql("SELECT private_value");
                 }
             }
             """, includeEfReferences: false);
@@ -158,6 +159,7 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
         var gap = Assert.Single(gaps, fact => fact.RuleId == RuleIds.DatabaseFrameworkMigrationGap);
         Assert.Equal("FrameworkAssemblyIdentityUnavailable", gap.Properties!["gapKind"]);
         Assert.DoesNotContain("migrationTypeSymbolId", gap.Properties.Keys);
+        Assert.Single(protectedSpans);
     }
 
     [Fact]
@@ -277,7 +279,7 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
             Assert.Equal(manifest.RepoName, fact.Repo);
             Assert.Equal(manifest.CommitSha, fact.CommitSha);
             Assert.Equal("src/Sample.csproj", fact.ProjectPath);
-            Assert.Equal(ScannerVersions.CSharpSemanticExtractor, fact.Evidence.ExtractorVersion);
+            Assert.Equal(ScannerVersions.FrameworkMigrationEvidenceExtractor, fact.Evidence.ExtractorVersion);
         });
         Assert.Equal(["1", "2"], first
             .Where(fact => fact.FactType == FactTypes.FrameworkMigrationOperationCandidate)
@@ -660,8 +662,11 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
             namespace Sample;
             public sealed class M : Migration
             {
-                public void Up(object b) =>
+                public void Up(object b)
+                {
                     b.AddColumn<object>("payload", "accounts", "blob", false, null, false, null, true, new PrivateCredential());
+                    b.AlterColumn<object>("payload", "accounts", null, null, null, false, true, null, null, null, null, null, null, null, null, null, null, new PrivateCredential());
+                }
             }
             public sealed class PrivateCredential { }
             """;
@@ -675,12 +680,10 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
             new HashSet<string>(StringComparer.Ordinal));
         var facts = CSharpSyntaxExtractor.Extract(temp.Path, Manifest(), inventory, fallback.ProtectedSpans);
 
-        Assert.Single(fallback.ProtectedSpans);
-        Assert.DoesNotContain(facts, fact => fact.FactType is FactTypes.ObjectCreated or FactTypes.CallEdge
+        Assert.Equal(2, fallback.ProtectedSpans.Count);
+        Assert.DoesNotContain(facts, fact =>
+            (fact.FactType == FactTypes.ObjectCreated || fact.FactType == FactTypes.CallEdge)
             && fact.TargetSymbol?.Contains("PrivateCredential", StringComparison.Ordinal) == true);
-        Assert.DoesNotContain("PrivateCredential", string.Join("\n", facts
-            .Where(fact => fact.Evidence.StartLine == 6)
-            .SelectMany(fact => fact.Properties.Values)), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -721,7 +724,7 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
     }
 
     [Fact]
-    public void Syntax_fallback_gap_marks_clean_project_load_as_partial()
+    public void Syntax_fallback_gap_reduces_analysis_without_claiming_build_failure()
     {
         using var temp = new TempDirectory();
         File.WriteAllText(Path.Combine(temp.Path, "Sample.csproj"), """
@@ -744,12 +747,107 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
 
         var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
 
-        Assert.Equal("FailedOrPartial", result.Manifest.BuildStatus);
+        Assert.Equal("Succeeded", result.Manifest.BuildStatus);
         Assert.Equal("Level1SemanticAnalysisReduced", result.Manifest.AnalysisLevel);
+        Assert.Contains("Framework migration coverage reduced: SemanticBindingUnavailable.", result.Manifest.KnownGaps);
         Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.DatabaseFrameworkMigrationGap
             && fact.Properties.GetValueOrDefault("gapKind") == "SemanticBindingUnavailable");
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SqlTextUsed
             && fact.Evidence.FilePath == "Migration.cs");
+    }
+
+    [Fact]
+    public void Alter_column_old_default_sql_is_protected_and_gapped()
+    {
+        const string source = """
+            using Microsoft.EntityFrameworkCore.Migrations;
+            public sealed class M : Migration
+            {
+                protected override void Up(MigrationBuilder b) => b.AlterColumn<string>(
+                    name: "notes", table: "accounts", nullable: true,
+                    oldDefaultValueSql: "SELECT private_default FROM internal_defaults");
+                protected override void Down(MigrationBuilder b) { }
+            }
+            """;
+        var (_, gaps, protectedSpans) = Extract(source);
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Migration.cs"), source);
+        var integrationFacts = CSharpIntegrationSyntaxExtractor.Extract(
+            temp.Path,
+            Manifest(),
+            [new FileInventoryItem("Migration.cs", "CSharp", source.Length)],
+            new HashSet<string>(StringComparer.Ordinal),
+            protectedSpans.Select(span => span with { FilePath = "Migration.cs" }).ToArray());
+
+        Assert.Contains(gaps, gap => gap.Properties!["gapKind"] == "DefaultOrComputedExpressionUnavailable");
+        Assert.Single(protectedSpans);
+        Assert.DoesNotContain(integrationFacts, fact => fact.FactType is FactTypes.SqlTextUsed or FactTypes.QueryPatternDetected);
+    }
+
+    [Fact]
+    public void Unsupported_operation_annotation_is_protected_independently_of_closed_operation_vocabulary()
+    {
+        const string source = """
+            using Microsoft.EntityFrameworkCore.Migrations;
+            public sealed class M : Migration
+            {
+                protected override void Up(MigrationBuilder b) =>
+                    b.AddPrimaryKey(name: "pk", table: "accounts", column: "id")
+                        .Annotation("Sample:Private", "SELECT private_annotation");
+                protected override void Down(MigrationBuilder b) { }
+            }
+            """;
+        var (_, gaps, protectedSpans) = Extract(source);
+        var annotation = CSharpSyntaxTree.ParseText(source).GetRoot().DescendantNodes()
+            .OfType<InvocationExpressionSyntax>()
+            .Single(invocation => invocation.Expression.ToString().Contains("Annotation", StringComparison.Ordinal));
+
+        Assert.Contains(gaps, gap => gap.Properties!["gapKind"] == "UnsupportedMigrationOperation");
+        Assert.Contains(gaps, gap => gap.Properties!["gapKind"] == "AnnotationMigrationOperationUnavailable");
+        Assert.Contains(protectedSpans, span => span.Start <= annotation.SpanStart
+            && annotation.Span.End <= span.Start + span.Length);
+    }
+
+    [Fact]
+    public void Syntax_fallback_recognizes_partial_and_repo_global_canonical_aliases()
+    {
+        using var temp = new TempDirectory();
+        var sources = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["GlobalUsings.cs"] = "global using EF = Microsoft.EntityFrameworkCore;",
+            ["Partial.cs"] = "using Microsoft.EntityFrameworkCore; public sealed class A : Migrations.Migration { public void Up(object b) => b.Sql(\"SELECT partial_secret\"); }",
+            ["GlobalAlias.cs"] = "public sealed class B : EF.Migrations.Migration { public void Up(object b) => b.Sql(\"SELECT global_secret\"); }",
+            ["LocalAlias.cs"] = "using Root = Microsoft.EntityFrameworkCore; public sealed class C : Root.Migrations.Migration { public void Up(object b) => b.Sql(\"SELECT alias_secret\"); }"
+        };
+        foreach (var pair in sources)
+        {
+            File.WriteAllText(Path.Combine(temp.Path, pair.Key), pair.Value);
+        }
+        var inventory = sources.Select(pair => new FileInventoryItem(pair.Key, "CSharp", pair.Value.Length)).ToArray();
+
+        var fallback = FrameworkMigrationEvidenceExtractor.ExtractSyntaxFallback(
+            temp.Path,
+            inventory,
+            new HashSet<string>(StringComparer.Ordinal));
+
+        Assert.Equal(3, fallback.ProtectedSpans.Count);
+        Assert.Equal(3, fallback.Gaps.Count);
+        Assert.All(fallback.Gaps, gap =>
+        {
+            Assert.Equal("FrameworkMigrationSyntaxFallbackExtractor", gap.Evidence.ExtractorId);
+            Assert.Equal(ScannerVersions.FrameworkMigrationSyntaxFallbackExtractor, gap.Evidence.ExtractorVersion);
+        });
+    }
+
+    [Fact]
+    public void Missing_protected_source_file_fails_closed_for_later_evidence_filters()
+    {
+        using var temp = new TempDirectory();
+        var ranges = ScanEngine.BuildProtectedLineRanges(
+            temp.Path,
+            [new ProtectedSourceSpan("Missing.cs", 10, 20)]);
+
+        Assert.Equal([(1, int.MaxValue)], ranges["Missing.cs"]);
     }
 
     [Fact]
