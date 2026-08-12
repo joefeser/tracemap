@@ -28,8 +28,14 @@ Issue: #517
       canonical `[BindProperty]` property identity for property binding; test
       real parameter attributes on non-endpoint helpers produce zero Tier1
       targets and PageModel properties do not synthesize handler owners.
+- [ ] For PageModel property targets, record canonical `supportsGet` attribute
+      evidence, emit no synthetic handler HTTP methods, and test default false
+      plus constant `SupportsGet = true` alignment semantics.
 - [ ] Emit Tier1 semantic `RazorModelBindingTarget` evidence for admitted MVC
       action and Razor Page handler parameter properties across files/partials.
+- [ ] Apply the closed model-bindable property predicate before expansion;
+      reject static/indexer/read-only/init-only/non-public-setter/explicit-
+      interface/ref-return and unsupported constructor/record/collection shapes.
 - [ ] Emit canonical owner, parameter, model type, and property roles with a
       closed property schema and fixed limitations.
 - [ ] Add categorical gaps for unresolved/error/dynamic/type-parameter,
@@ -42,6 +48,9 @@ Issue: #517
 - [ ] Add same-name cross-assembly, partial, overload/attribute, source-
       lookalike, semantic-unavailable, span, property-schema, catalog, storage,
       and file-order regressions.
+- [ ] Add negative property-eligibility fixtures for every excluded member
+      shape and prove each yields zero Tier1 targets plus the documented bounded
+      gap where its model boundary otherwise qualifies.
 - [ ] Exclude the semantic Razor fact/rule and its producer-gap rule IDs from
       generic reducer matching in this PR; lock existing reduce output and
       high-fan-out classification before the producer can land independently.

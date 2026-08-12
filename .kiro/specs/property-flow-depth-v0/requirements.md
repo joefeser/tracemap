@@ -57,6 +57,12 @@ mapped to another. Those are the two producer gaps owned here.
    file and partial source types MAY qualify; error types, type parameters,
    dynamic types, inaccessible metadata-only shapes, and ambiguous candidates
    SHALL emit a categorical gap rather than a target guess.
+   An expanded model property SHALL be an ordinary public instance property
+   with no index parameters, no ref/ref-readonly return, and a public,
+   non-init setter admitted by the binding source. Static, indexer, read-only,
+   init-only, inaccessible, explicit-interface, and otherwise unsupported
+   property shapes SHALL NOT emit Tier1 targets. Constructor/record binding and
+   collection-element expansion remain unsupported until separately specified.
 5. `[BindProperty]`, `[FromBody]`, `[FromForm]`, and any later admitted binding
    attributes SHALL be recognized only by canonical attribute symbol identity,
    not attribute text. Parameter attributes classify binding source only after
@@ -71,6 +77,11 @@ mapped to another. Those are the two producer gaps owned here.
    One fact SHALL represent one resolved target property for one owner and
    parameter/property binding source. HTTP methods SHALL be a sorted,
    deduplicated bounded property on that fact rather than multiplying facts.
+   Handler-independent PageModel property targets SHALL NOT synthesize handler
+   HTTP methods. They SHALL record a closed `supportsGet` boolean from the
+   canonical `[BindProperty]` named argument (default `false`); composition
+   SHALL treat absent HTTP-method rows as property-owned evidence, not as proof
+   that GET binding is unavailable.
 7. Semantic evidence SHALL coexist with syntax fallback deterministically. A
    compatible Tier1 target SHALL be preferred for strong joins; a syntax row
    SHALL not create a second hidden winner or upgrade an incompatible semantic
@@ -217,6 +228,10 @@ mapped to another. Those are the two producer gaps owned here.
    Positive Tier1 tests SHALL reference real signed ASP.NET Core metadata from
    a pinned test dependency/shared-framework reference available during locked
    restore. Source-declared framework lookalikes remain negative fixtures.
+   Negative eligibility fixtures SHALL include static, indexer, read-only,
+   init-only, non-public-setter, explicit-interface, ref-return, constructor/
+   record, and collection-element shapes. PageModel fixtures SHALL cover
+   default and constant `SupportsGet = true` without synthesized handlers.
 2. Mapping fixtures SHALL cover direct assignment, object initializer, LINQ
    projection, same-name non-mapping, reversed
    direction, conversion wrappers, dynamic/unsupported expressions, ambiguity,
