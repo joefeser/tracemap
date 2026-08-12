@@ -23,9 +23,11 @@ Issue: #517
       its version as fixture provenance only.
 - [ ] Pin the closed assembly-name/public-key-token/type/member/attribute
       allowlist; keep source-declared and unsigned framework shapes negative.
-- [ ] Require controller/page-model plus action/handler ownership independently
-      of binding-source attributes; test real attributes on non-endpoint helper
-      methods produce zero Tier1 targets.
+- [ ] Require controller/action ownership for MVC parameters, PageModel/handler
+      ownership for handler parameters, and handler-independent PageModel plus
+      canonical `[BindProperty]` property identity for property binding; test
+      real parameter attributes on non-endpoint helpers produce zero Tier1
+      targets and PageModel properties do not synthesize handler owners.
 - [ ] Emit Tier1 semantic `RazorModelBindingTarget` evidence for admitted MVC
       action and Razor Page handler parameter properties across files/partials.
 - [ ] Emit canonical owner, parameter, model type, and property roles with a
@@ -40,6 +42,9 @@ Issue: #517
 - [ ] Add same-name cross-assembly, partial, overload/attribute, source-
       lookalike, semantic-unavailable, span, property-schema, catalog, storage,
       and file-order regressions.
+- [ ] Exclude the semantic Razor fact/rule and its producer-gap rule IDs from
+      generic reducer matching in this PR; lock existing reduce output and
+      high-fan-out classification before the producer can land independently.
 
 ## PR 2: Direct Property Mapping Producer
 
@@ -54,9 +59,9 @@ Issue: #517
       generated/excluded-source, determinism, catalog, storage, and generic-
       reducer exclusion regressions.
 - [ ] Define per-method/per-file bounds and emit an aggregated truncation gap.
-- [ ] Prove the generic reducer explicitly excludes both new fact families and
-      gap rules, preserves existing output, and cannot cross its fan-out
-      threshold because these facts are present.
+- [ ] Extend the PR 1 reducer isolation to the mapping fact/gap rule IDs and
+      prove mapping rows cannot change existing output or cross the reducer's
+      fan-out threshold.
 
 ## PR 3: Exact-ID Property-Flow Composition
 

@@ -32,11 +32,13 @@ mapped to another. Those are the two producer gaps owned here.
 
 ## Requirement 1: Exact Semantic Razor Admission
 
-1. A Tier1 Razor model-binding target SHALL independently require Roslyn-
-   resolved framework identity for both the owning MVC controller/action or
-   Razor Page model/handler and any supported binding-source attribute used to
-   classify a parameter/property. A binding attribute alone SHALL NOT establish
-   endpoint ownership.
+1. A Tier1 Razor model-binding target SHALL independently establish the owning
+   framework surface and any binding-source attribute used for classification:
+   an MVC parameter requires an admitted controller and action; a Razor Page
+   handler parameter requires an admitted PageModel and handler; a PageModel
+   property requires an admitted PageModel plus canonical property and
+   `[BindProperty]` identity but SHALL NOT require or synthesize a handler.
+   A binding attribute alone SHALL NOT establish MVC endpoint ownership.
 2. Framework identity SHALL include an allowlisted metadata type and assembly
    identity. Source-declared, unsigned same-name, namespace-only, suffix-only,
    and unresolved lookalikes SHALL NOT qualify for Tier1 evidence.
@@ -57,8 +59,10 @@ mapped to another. Those are the two producer gaps owned here.
    SHALL emit a categorical gap rather than a target guess.
 5. `[BindProperty]`, `[FromBody]`, `[FromForm]`, and any later admitted binding
    attributes SHALL be recognized only by canonical attribute symbol identity,
-   not attribute text. These attributes classify binding source only after the
-   containing controller/page model and action/handler independently qualify.
+   not attribute text. Parameter attributes classify binding source only after
+   the containing controller/action or PageModel/handler independently
+   qualifies. PageModel property binding instead requires canonical PageModel,
+   property, and `[BindProperty]` identity and remains handler-independent.
 6. Each target SHALL preserve canonical owner method/property/type IDs,
    assembly identity, binding kind, model family, parameter source, controller/
    action or page/handler identity, HTTP method evidence where available,

@@ -109,6 +109,11 @@ Hosted review on PR #647 then found two current-head issues. Both were accepted:
 - the superseded composition spec's task header now matches its historical
   implementation-state status and points to this active queue.
 
+The fresh exact-head Codex follow-up then identified two staging gaps, both
+accepted: PageModel property `[BindProperty]` admission is now handler-
+independent and cannot synthesize handler ownership, and semantic Razor reducer
+isolation moves into PR 1 so that producer can land safely before mapping work.
+
 ## Validation
 
 Initial spec-only validation passed before review:

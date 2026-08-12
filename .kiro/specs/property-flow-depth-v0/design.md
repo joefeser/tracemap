@@ -50,17 +50,22 @@ work.
 Add a semantic pass adjacent to the current C# semantic extraction. The pass
 examines compiler symbols rather than text:
 
-1. Admit an owner only when its controller/page-model type and action/handler
-   independently resolve to metadata-backed framework semantics in the closed
-   ASP.NET Core assembly-name/public-key-token/signature allowlist. Runtime/
-   package version is fixture provenance, not an admission key. A real binding
-   attribute on a helper/service method cannot establish endpoint ownership.
+1. Admit an owner only through one of three closed surfaces: controller plus
+   action for MVC parameters; PageModel plus handler for handler parameters; or
+   PageModel plus canonical property and `[BindProperty]` for PageModel-bound
+   properties. A property-bound PageModel target has the property as its owner
+   and does not require or synthesize a handler. All framework roles resolve to
+   metadata-backed semantics in the closed ASP.NET Core assembly-name/public-
+   key-token/signature allowlist. Runtime/package version is fixture provenance,
+   not an admission key. A real binding attribute on a helper/service method
+   cannot establish endpoint ownership.
 2. Admit an action/handler only through exact method/attribute/base semantics
    documented by the implementation fixture. Method-name conventions alone
    may remain syntax fallback but cannot yield Tier1.
-   After ownership qualifies, canonical `[BindProperty]`, `[FromBody]`, or
-   `[FromForm]` identity may classify the binding source; it cannot admit the
-   owner or method.
+   After parameter ownership qualifies, canonical `[FromBody]` or `[FromForm]`
+   identity may classify its binding source; it cannot admit the owner or
+   method. Canonical `[BindProperty]` participates only in the separate
+   PageModel-property admission contract.
 3. Resolve parameter/property types through Roslyn, including cross-file and
    partial source types.
 4. Emit one target per source property symbol and owner/parameter binding
@@ -82,8 +87,8 @@ Minimum safe fields:
 
 | Role | Required evidence |
 | --- | --- |
-| owner | canonical action/handler method ID and assembly identity |
-| parameter | canonical parameter ID, ordinal, source classification |
+| owner | canonical action/handler method ID, or PageModel property ID for property binding, plus assembly identity |
+| parameter | canonical parameter ID/ordinal/source classification when parameter-bound; absent for PageModel-property binding |
 | model type | canonical named-type ID and assembly identity |
 | target | canonical property ID, type, containing-type ID |
 | binding | closed binding kind/model family/HTTP evidence |
