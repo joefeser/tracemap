@@ -21,7 +21,7 @@ public sealed class RazorSemanticModelBindingTests
 
     private static readonly HashSet<string> GapPropertySchema = new(StringComparer.Ordinal)
     {
-        "bindingKind", "coverageEffect", "coverageLabel", "frameworkState", "gapKind", "limitations", "occurrenceCount", "sanitization",
+        "bindingKind", "coverageEffect", "coverageLabel", "frameworkState", "gapKind", "limitations", "occurrenceCount", "ownerState", "sanitization",
         "scopeAssemblyName", "scopeAssemblyVersion", "scopeContainingSymbolId", "scopeSymbolId", "scopeSymbolKind",
         "targetTypeAssemblyName", "targetTypeAssemblyVersion", "targetTypeContainingSymbolId", "targetTypeSymbolId", "targetTypeSymbolKind", "typeState"
     };
@@ -71,6 +71,11 @@ public sealed class RazorSemanticModelBindingTests
             }
 
             public sealed record RecordInput(string ConstructorValue);
+
+            public sealed class ExternalBaseInput : System.Exception
+            {
+                public string LocalValue { get; set; } = "";
+            }
             """);
         File.WriteAllText(Path.Combine(project, "InputModel.Part2.cs"), """
             namespace WebSample;
@@ -100,6 +105,7 @@ public sealed class RazorSemanticModelBindingTests
                 public IActionResult SaveDynamic(dynamic input) => Ok();
                 public IActionResult SaveGeneric<T>(T input) => Ok();
                 public IActionResult SaveExternal(string input) => Ok();
+                public IActionResult SaveExternalBase(ExternalBaseInput input) => Ok();
 
                 [NonAction]
                 public void Ignore([FromBody] InputModel input) { }
@@ -125,6 +131,24 @@ public sealed class RazorSemanticModelBindingTests
                 public IActionResult Save([FromBody] InputModel input) => Ok();
             }
 
+            internal sealed class InternalController : ControllerBase
+            {
+                public IActionResult Save(InputModel input) => Ok();
+            }
+
+            public abstract class AbstractController : ControllerBase
+            {
+                public IActionResult Save(InputModel input) => Ok();
+            }
+
+            public sealed class Outer
+            {
+                public sealed class NestedController : ControllerBase
+                {
+                    public IActionResult Save(InputModel input) => Ok();
+                }
+            }
+
             public sealed class Helper
             {
                 public void Run([FromBody] InputModel input) { }
@@ -135,7 +159,7 @@ public sealed class RazorSemanticModelBindingTests
 
             public sealed class GenericController<T> : ControllerBase
             {
-                public IActionResult SaveType(T input) => Ok();
+                public IActionResult SaveType(InputModel input) => Ok();
             }
             """);
 
@@ -207,6 +231,9 @@ public sealed class RazorSemanticModelBindingTests
         Assert.DoesNotContain(semantic, fact => fact.Properties["propertyName"] is "StaticValue" or "ReadOnly" or "InitOnly" or "PrivateSetter" or "Hidden" or "RefValue" or "ExplicitValue" or "ConstructorValue" or "Item");
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("HiddenController", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("OnPostIgnored", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(semantic, fact => fact.Properties.GetValueOrDefault("controllerName") is "Internal" or "Abstract" or "Nested" or "Generic");
+        Assert.Contains(semantic, fact => fact.Properties["propertyName"] == "LocalValue"
+            && fact.SourceSymbol?.Contains("SaveExternalBase", StringComparison.Ordinal) == true);
 
         var gaps = first.Facts.Where(fact => fact.RuleId == RuleIds.CSharpRazorSemanticModelBindingGap).ToArray();
         Assert.Contains(gaps, gap => gap.Properties["gapKind"] == "RazorBindingPropertyUnavailable");
@@ -216,6 +243,10 @@ public sealed class RazorSemanticModelBindingTests
         Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("typeState") == "dynamic");
         Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("typeState") == "type-parameter");
         Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("typeState") == "external-unavailable");
+        Assert.Contains(gaps, gap => gap.Properties["gapKind"] == "RazorBindingExternalBaseUnavailable"
+            && gap.Properties.GetValueOrDefault("typeState") == "external-base-properties-unavailable");
+        Assert.True(gaps.Count(gap => gap.Properties["gapKind"] == "RazorEndpointOwnerUnavailable"
+            && gap.Properties.GetValueOrDefault("ownerState") == "controller-type-not-discoverable") >= 4);
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("SaveAmbiguous", StringComparison.Ordinal) == true);
         Assert.All(gaps, gap =>
         {

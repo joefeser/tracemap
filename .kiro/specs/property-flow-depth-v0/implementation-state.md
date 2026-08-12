@@ -169,6 +169,21 @@ properties deterministically with the most-derived declaration governing
 hidden or overridden names. The focused 46-test baseline and full 1,456-test
 solution suite remained green after these corrections.
 
+A fresh exact-head Codex review then identified two remaining coverage
+boundaries. MVC controller actions now require a public, top-level,
+non-abstract, closed controller type before Tier1 emission; rejected controller
+types and generic action methods emit categorical owner gaps. Model expansion
+also emits a categorical gap when a metadata-only base type can contribute
+properties that the source-only traversal cannot inspect. The patch preserves
+eligible source-declared properties and does not infer metadata members.
+
+Post-patch validation passed: focused semantic Razor/property-flow/reducer
+tests 46/46, build with zero warnings/errors, full solution tests 1,456/1,456,
+changed-file formatting, private-path guard, and `git diff --check`. The first
+full-suite attempt encountered the unrelated restore-diagnostic test flake;
+that exact test passed 1/1 on immediate isolated rerun before the clean full
+suite result.
+
 ## Deferred Work
 
 - PR 1 now emits compiler-resolved MVC action parameter, Razor Page handler

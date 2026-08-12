@@ -979,6 +979,7 @@ rules:
       - Evidence proves only a bounded static model-binding target relationship; it does not prove runtime binding, route selection, handler execution, validation, serializer behavior, authorization, or submitted values.
       - ASP.NET Core admission requires the documented Microsoft assembly names, public-key token, and exact framework type or attribute identity; assembly version is retained as fixture provenance and is not a product trust requirement.
       - Canonical NonController, NonAction, and NonHandler exclusions suppress Tier1 owner admission; source base-model properties are traversed deterministically with the most-derived declaration governing hidden or overridden names.
+      - Internal, nested, abstract, or open-generic controller types emit no Tier1 action targets; metadata-only base-model property boundaries reduce coverage through categorical gaps rather than silent omission.
       - Only public instance source properties with a public non-init setter are expanded; static, indexed, ref-returning, read-only, init-only, inaccessible, explicit-interface, metadata-only, ambiguous, or unresolved properties are omitted with rule-backed gaps.
       - These facts remain excluded from the legacy name-based property-flow reporter and generic contract reducer until exact-identity composition is implemented under the property-flow depth runway.
 
