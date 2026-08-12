@@ -1,0 +1,178 @@
+# Property Flow Depth v0 Requirements
+
+## Goal
+
+Implement the remaining bounded scope of issue #517: improve Razor
+action/handler model-binding identity and direct C# property-to-property mapping
+evidence, then let `tracemap property-flow` compose those facts without short-
+name guesses.
+
+This runway deepens deterministic static evidence. It does not prove runtime
+model binding, route selection, mapper execution, dependency-injection target,
+database access, browser behavior, business intent, or impact.
+
+## Existing Baseline
+
+The shipped baseline already provides:
+
+- Razor `asp-for`/`Html.*For` bindings and form-target metadata;
+- syntax/convention `RazorModelBindingTarget` facts, including explicit gaps
+  for cross-file and ambiguous syntax-only parameter types;
+- `PropertyDeclared`, `PropertyAccessed`, `ParameterDeclared`, object creation,
+  argument flow, local/field aliases, endpoint alignment, and route-flow facts;
+- `tracemap property-flow` report version `1.0`, deterministic selectors,
+  first-hop Razor/Angular joins, coverage gaps, and safe Markdown/JSON; and
+- property-flow consumers in docs export, vault export, release review, and the
+  static evidence explorer.
+
+The current syntax model-binding extractor is useful reduced evidence, not a
+compiler-resolved cross-file property identity contract. The current semantic
+extractor records property access but does not state that one property is
+mapped to another. Those are the two producer gaps owned here.
+
+## Requirement 1: Exact Semantic Razor Admission
+
+1. A Tier1 Razor model-binding target SHALL require Roslyn-resolved framework
+   identity for the owning MVC controller/action, Razor Page model/handler, or
+   an explicitly supported binding attribute.
+2. Framework identity SHALL include an allowlisted metadata type and assembly
+   identity. Source-declared, unsigned same-name, namespace-only, suffix-only,
+   and unresolved lookalikes SHALL NOT qualify for Tier1 evidence.
+3. The first implementation SHALL pin the exact supported ASP.NET Core metadata
+   assemblies, public-key token or equivalent strong assembly identity, type
+   names, member/attribute signatures, and package/runtime version in tests and
+   implementation state before emission.
+4. A controller action or page handler parameter SHALL expand to properties
+   only when Roslyn resolves the parameter type and property symbols. Cross-
+   file and partial source types MAY qualify; error types, type parameters,
+   dynamic types, inaccessible metadata-only shapes, and ambiguous candidates
+   SHALL emit a categorical gap rather than a target guess.
+5. `[BindProperty]`, `[FromBody]`, `[FromForm]`, and any later admitted binding
+   attributes SHALL be recognized only by canonical attribute symbol identity,
+   not attribute text.
+6. Each target SHALL preserve canonical owner method/property/type IDs,
+   assembly identity, binding kind, model family, parameter source, controller/
+   action or page/handler identity, HTTP method evidence where available,
+   repository-relative span, rule ID, tier, commit SHA, extractor version,
+   coverage label, supporting fact IDs where materialized, and limitations.
+7. Semantic evidence SHALL coexist with syntax fallback deterministically. A
+   compatible Tier1 target SHALL be preferred for strong joins; a syntax row
+   SHALL not create a second hidden winner or upgrade an incompatible semantic
+   gap.
+
+## Requirement 2: Direct Property Mapping Evidence
+
+1. A property mapping fact SHALL require Roslyn to resolve both source and
+   target as properties with canonical symbol and assembly identities.
+2. v0 SHALL support only these direct shapes:
+   - simple assignment: `target.Property = source.Property`;
+   - object initializer member assignment, including inside a LINQ projection:
+     `new Target { Property = source.Property }`; and
+   - constructor forwarding only when an exact constructor parameter-to-target-
+     property assignment is independently visible and both hops are preserved.
+3. Parentheses, null-forgiving syntax, and identity conversions MAY be unwrapped
+   only when Roslyn preserves the same source property symbol. Arbitrary method
+   calls, conditional expressions, arithmetic, interpolation, reflection,
+   dynamic access, collection transforms, custom resolvers, and runtime mapping
+   configuration SHALL not become direct mapping facts.
+4. Each mapping SHALL preserve source and target property IDs, containing type
+   IDs, assembly identities, containing method ID, closed mapping shape,
+   direction, source span, rule ID, tier, commit SHA, extractor version,
+   coverage label, and limitations.
+5. Same-name properties without an admitted mapping shape SHALL not produce a
+   mapping fact. Multiple candidate symbols or incomplete semantic binding
+   SHALL fail closed.
+6. Recognized mapper/projection boundaries that cannot expose one exact direct
+   source and target MAY emit an aggregated categorical gap. Gaps SHALL not
+   retain source expressions, snippets, constant values, configuration values,
+   or hashes derived from protected content.
+
+## Requirement 3: Property-Flow Composition
+
+1. `tracemap property-flow` SHALL prefer exact canonical property IDs when
+   joining Razor binding, model-binding, declared-property, and property-mapping
+   facts.
+2. A Tier1 semantic Razor target MAY strengthen a property-specific hop only
+   when its exact property identity agrees with the selected root/model
+   identity and any form/endpoint evidence used by the path.
+3. A direct property mapping MAY add a `model-property-mapped` hop only from its
+   recorded source property to its recorded target property. Reverse direction
+   SHALL not be inferred unless a separate fact proves it.
+4. Same-name, convention-only, syntax-only, alias-only, or family-only matches
+   SHALL remain `NeedsReviewLineage` or an explicit gap. They SHALL not be
+   upgraded merely because a stronger unrelated fact exists in the index.
+5. Ambiguous model targets, mapping targets, endpoint matches, or property IDs
+   SHALL preserve bounded candidates and emit gaps rather than select a hidden
+   winner.
+6. Backend route/service/query/data/dependency context MAY be reused only after
+   the selected trail reaches it through exact property-specific evidence.
+   Broad endpoint reachability remains insufficient.
+7. Existing `property-flow` version `1.0` MAY be retained only if additions are
+   backward-compatible rows/metadata and every current consumer safely ignores
+   or preserves them. Otherwise the implementation SHALL version the report or
+   emit a compatibility gap.
+
+## Requirement 4: Evidence, Gaps, and Determinism
+
+1. New evidence SHALL use versioned rule IDs with catalogued limitations before
+   product output emits it.
+2. Proposed producer rules are
+   `csharp.razor.semantic-model-binding.v1` and
+   `csharp.semantic.property-mapping.v1`; implementation MAY reuse an existing
+   rule only if its documented semantics and property schema are sufficient.
+3. New gap kinds SHALL be a closed vocabulary. Initial candidates are:
+   `RazorFrameworkIdentityUnavailable`, `RazorBindingTypeUnavailable`,
+   `RazorBindingPropertyUnavailable`, `AmbiguousRazorBindingTarget`,
+   `PropertyMappingSemanticUnavailable`, `PropertyMappingShapeUnsupported`,
+   `PropertyMappingTargetAmbiguous`, and `PropertyMappingCoverageReduced`.
+4. Gaps SHALL use `Tier4Unknown`, a rule ID, coverage label, safe scope
+   identity, deterministic occurrence count where aggregation applies, and
+   fixed limitations.
+5. Fact IDs and ordering SHALL remain byte-stable across repeated scans and
+   file enumeration order. Identity inputs SHALL use canonical symbols,
+   mapping shape, direction, source coordinates, and manifest scan identity.
+6. Same-name cross-assembly types/properties, overloads, partial types,
+   generated/source mixtures, aliases, shadowing, and semantic-unavailable
+   fixtures SHALL not collide or silently upgrade evidence.
+
+## Requirement 5: Safety and Non-Claims
+
+1. No output SHALL retain raw source snippets, raw Razor/HTML, submitted values,
+   validation values, secrets, connection material, raw URLs, local absolute
+   paths, private infrastructure identity, arbitrary mapping expressions, or
+   protected-value digests.
+2. No output SHALL claim runtime binding success, serializer behavior,
+   validation success, handler execution, route reachability, mapper execution,
+   object persistence, database execution, business intent, correctness,
+   completeness, impact, safety, or release approval.
+3. No implementation SHALL add LLM calls, embeddings, vector databases, or
+   prompt-based classification to scanner, reducer, report, or export paths.
+4. Partial analysis remains useful but SHALL be labeled reduced/partial and
+   SHALL cap absence conclusions.
+
+## Requirement 6: Validation
+
+1. Producer fixtures SHALL cover exact cross-file MVC and Razor Pages targets,
+   partial models, same-name cross-assembly lookalikes, source framework
+   lookalikes, binding attributes, error types, and deterministic fallback.
+2. Mapping fixtures SHALL cover direct assignment, object initializer, LINQ
+   projection, constructor forwarding, same-name non-mapping, reversed
+   direction, conversion wrappers, dynamic/unsupported expressions, ambiguity,
+   and file-order determinism.
+3. Composition fixtures SHALL prove exact-ID joins, downgrade syntax/convention
+   evidence, reject short-name/cross-assembly collisions, preserve direction,
+   and attach no broad endpoint context without a property bridge.
+4. Consumer tests SHALL cover report JSON/Markdown, storage/combine, docs/vault,
+   release review, and explorer behavior for any changed fact or row contract.
+5. Validation SHALL run focused Razor, semantic extraction, property-flow,
+   combine/storage, and touched consumer tests; full .NET build/test; applicable
+   pinned smokes from `docs/VALIDATION.md`; private-path guard; and diff check.
+
+## Deferred
+
+- AutoMapper, Mapster, custom mapper packages, custom resolvers, profiles, and
+  runtime configuration until exact package/signature contracts are pinned.
+- Interprocedural mapping through arbitrary helpers or repository abstractions.
+- Runtime model-binding, serializer, validation, browser, HTTP, DI, or database
+  observation.
+- Whole-application property inventory UI and persisted derived flow rows.
