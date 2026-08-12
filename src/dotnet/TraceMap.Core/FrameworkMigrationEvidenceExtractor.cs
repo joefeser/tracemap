@@ -215,6 +215,7 @@ internal static class FrameworkMigrationEvidenceExtractor
 
             var identityProperties = new SortedDictionary<string, string>(StringComparer.Ordinal);
             var missingRequired = false;
+            var identityShapeGapped = false;
             foreach (var pair in contract.Required)
             {
                 if (TryGetStringArgument(invocation, targetMethod, pair.Key, model, out var value))
@@ -224,6 +225,7 @@ internal static class FrameworkMigrationEvidenceExtractor
                 else
                 {
                     missingRequired = true;
+                    identityShapeGapped = true;
                     AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod,
                         HasArgument(invocation, targetMethod, pair.Key) ? "DynamicIdentityUnavailable" : "MissingRequiredIdentity",
                         contract.Kind, direction);
@@ -238,19 +240,20 @@ internal static class FrameworkMigrationEvidenceExtractor
                 }
                 else if (HasArgument(invocation, targetMethod, pair.Key))
                 {
+                    identityShapeGapped = true;
                     AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, "DynamicIdentityUnavailable", contract.Kind, direction);
                 }
             }
 
             if (contract.ArrayParameter is not null)
             {
-                AddArrayIdentity(invocation, targetMethod, contract.ArrayParameter, contract.ArrayProperty!, model, identityProperties,
+                identityShapeGapped |= AddArrayIdentity(invocation, targetMethod, contract.ArrayParameter, contract.ArrayProperty!, model, identityProperties,
                     contract.ObjectKind == "index" ? "IndexColumnShapeUnavailable" : "ForeignKeyColumnShapeUnavailable",
                     gapCounts, filePath, declaration, migrationType, admittedSourceMethod, contract.Kind, direction);
             }
             if (contract.SecondaryArrayParameter is not null)
             {
-                AddArrayIdentity(invocation, targetMethod, contract.SecondaryArrayParameter, contract.SecondaryArrayProperty!, model, identityProperties,
+                identityShapeGapped |= AddArrayIdentity(invocation, targetMethod, contract.SecondaryArrayParameter, contract.SecondaryArrayProperty!, model, identityProperties,
                     "ForeignKeyColumnShapeUnavailable", gapCounts, filePath, declaration, migrationType, admittedSourceMethod, contract.Kind, direction);
             }
 
@@ -263,6 +266,10 @@ internal static class FrameworkMigrationEvidenceExtractor
             {
                 protectedSourceSpans?.Add(new ProtectedSourceSpan(filePath, invocation.SpanStart, invocation.Span.Length));
                 AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, "DefaultOrComputedExpressionUnavailable", contract.Kind, direction);
+            }
+            if (identityShapeGapped)
+            {
+                protectedSourceSpans?.Add(new ProtectedSourceSpan(filePath, invocation.SpanStart, invocation.Span.Length));
             }
 
             if (!missingRequired)
@@ -403,7 +410,7 @@ internal static class FrameworkMigrationEvidenceExtractor
         };
     }
 
-    private static void AddArrayIdentity(
+    private static bool AddArrayIdentity(
         InvocationExpressionSyntax invocation,
         IMethodSymbol method,
         string parameter,
@@ -423,14 +430,15 @@ internal static class FrameworkMigrationEvidenceExtractor
             ?? (parameter.EndsWith('s') ? FindArgument(invocation, method, parameter[..^1]) : null);
         if (argument is null)
         {
-            return;
+            return false;
         }
         if (TryGetStringArray(argument.Expression, model, out var values))
         {
             properties[property] = JsonSerializer.Serialize(values);
-            return;
+            return false;
         }
         AddGap(gaps, filePath, declaration, migrationType, source, gapKind, operationKind, direction);
+        return true;
     }
 
     private static bool TryGetStringArray(ExpressionSyntax expression, SemanticModel model, out string[] values)
@@ -727,6 +735,7 @@ internal static class FrameworkMigrationEvidenceExtractor
     private static string InvocationName(InvocationExpressionSyntax invocation) => invocation.Expression switch
     {
         MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
+        MemberBindingExpressionSyntax memberBinding => memberBinding.Name.Identifier.ValueText,
         IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
         GenericNameSyntax generic => generic.Identifier.ValueText,
         _ => string.Empty
