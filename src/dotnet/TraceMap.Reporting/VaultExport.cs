@@ -618,9 +618,14 @@ public static class VaultExporter
                 cancellationToken);
             if (frameworkMigrationEvidence.FactCount > 0)
             {
+                var frameworkClaimLevel = frameworkMigrationEvidence.SourceIndexIds
+                    .Select(sourceId => sourceClaimBySourceIndexId.GetValueOrDefault(sourceId, "hidden"))
+                    .DefaultIfEmpty("hidden")
+                    .OrderBy(ClaimRank)
+                    .First();
                 gaps.Add(new VaultGraphGap(
-                    $"gap:{Hash(string.Join('\u001f', ["gap/v1", "framework-migration-consumer", "hidden", "FrameworkMigrationEvidenceConsumerUnsupported", FrameworkMigrationConsumerUnsupportedRuleId, EvidenceTiers.Tier4Unknown]), IdHashLength)}",
-                    "hidden",
+                    $"gap:{Hash(string.Join('\u001f', ["gap/v1", "framework-migration-consumer", frameworkClaimLevel, "FrameworkMigrationEvidenceConsumerUnsupported", FrameworkMigrationConsumerUnsupportedRuleId, EvidenceTiers.Tier4Unknown]), IdHashLength)}",
+                    frameworkClaimLevel,
                     "FrameworkMigrationEvidenceConsumerUnsupported",
                     FrameworkMigrationConsumerUnsupportedRuleId,
                     EvidenceTiers.Tier4Unknown,

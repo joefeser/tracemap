@@ -205,7 +205,10 @@ internal sealed record ReleaseIndexInfo(string Kind, ReleaseReviewSnapshot Snaps
 
 internal sealed record AccessEvidencePresence(long FactCount, IReadOnlyList<string> SupportingFactIds);
 
-internal sealed record FrameworkMigrationEvidencePresence(long FactCount, IReadOnlyList<string> SupportingFactIds);
+internal sealed record FrameworkMigrationEvidencePresence(
+    long FactCount,
+    IReadOnlyList<string> SupportingFactIds,
+    IReadOnlyList<string> SourceIndexIds);
 
 internal sealed record SingleComparableFact(
     string StableKey,
@@ -1846,7 +1849,7 @@ public static class ReleaseReviewReporter
             && !string.IsNullOrWhiteSpace(sourceLabel)
             && !sourceLabel.Equals("single", StringComparison.Ordinal))
         {
-            return new FrameworkMigrationEvidencePresence(0, []);
+            return new FrameworkMigrationEvidencePresence(0, [], []);
         }
 
         await using var connection = new SqliteConnection(ReadOnlyConnectionString(path));
@@ -1871,7 +1874,24 @@ public static class ReleaseReviewReporter
         await using var reader = await idCommand.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
             ids.Add(StringOrDefault(reader, 0, "unknown"));
-        return new FrameworkMigrationEvidencePresence(count, ids);
+
+        var sourceIds = new List<string>();
+        if (indexKind == "combined")
+        {
+            await using var sourceCommand = connection.CreateCommand();
+            sourceCommand.CommandText = "select distinct f.source_index_id from combined_facts f join index_sources s on s.source_index_id = f.source_index_id where f.rule_id in ($declaration, $operation, $gap) and ($source is null or s.label = $source) order by f.source_index_id;";
+            AddFrameworkMigrationRuleParameters(sourceCommand);
+            sourceCommand.Parameters.AddWithValue("$source", (object?)sourceLabel ?? DBNull.Value);
+            await using var sourceReader = await sourceCommand.ExecuteReaderAsync(cancellationToken);
+            while (await sourceReader.ReadAsync(cancellationToken))
+                sourceIds.Add(StringOrDefault(sourceReader, 0, "unknown"));
+        }
+        else if (count > 0)
+        {
+            sourceIds.Add("single");
+        }
+
+        return new FrameworkMigrationEvidencePresence(count, ids, sourceIds);
     }
 
     private static void AddFrameworkMigrationRuleParameters(SqliteCommand command)
