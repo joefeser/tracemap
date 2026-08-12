@@ -184,6 +184,13 @@ full-suite attempt encountered the unrelated restore-diagnostic test flake;
 that exact test passed 1/1 on immediate isolated rerun before the clean full
 suite result.
 
+The next fresh Codex pass found two convention edges. Canonical MVC exclusion
+attributes are now honored through the relevant base-type or override chain,
+and Razor handler parsing records the complete conventional HTTP-method
+segment (including custom verbs) instead of treating any `OnPost...` prefix as
+POST. Inherited-exclusion and `OnPoster`/`OnTraceAsync` fixtures lock both
+behaviors without making runtime endpoint-selection claims.
+
 ## Deferred Work
 
 - PR 1 now emits compiler-resolved MVC action parameter, Razor Page handler
