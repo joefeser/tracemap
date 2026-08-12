@@ -14,47 +14,47 @@ Issue: #517
 - [x] Record implementation ordering and validation requirements.
 - [x] Complete an exact-head read-only Kiro advisory review and disposition its
       blocking/important findings in the specification.
-- [ ] Complete hosted review and ACK for this spec-only PR.
+- [x] Complete hosted review and ACK for this spec-only PR.
 
 ## PR 1: Semantic Razor Model-Binding Producer
 
-- [ ] Add a pinned test dependency/shared-framework metadata reference that
+- [x] Add a pinned test dependency/shared-framework metadata reference that
       supplies real signed ASP.NET Core symbols under locked restore; record
       its version as fixture provenance only.
-- [ ] Pin the closed assembly-name/public-key-token/type/member/attribute
+- [x] Pin the closed assembly-name/public-key-token/type/member/attribute
       allowlist; keep source-declared and unsigned framework shapes negative.
-- [ ] Require controller/action ownership for MVC parameters, PageModel/handler
+- [x] Require controller/action ownership for MVC parameters, PageModel/handler
       ownership for handler parameters, and handler-independent PageModel plus
       canonical `[BindProperty]` property identity for property binding; test
       real parameter attributes on non-endpoint helpers produce zero Tier1
       targets and PageModel properties do not synthesize handler owners.
-- [ ] For PageModel property targets, record canonical `supportsGet` attribute
+- [x] For PageModel property targets, record canonical `supportsGet` attribute
       evidence, emit no synthetic handler HTTP methods, and test default false
       plus constant `SupportsGet = true` alignment semantics.
-- [ ] Emit Tier1 semantic `RazorModelBindingTarget` evidence for admitted MVC
+- [x] Emit Tier1 semantic `RazorModelBindingTarget` evidence for admitted MVC
       action and Razor Page handler parameter properties across files/partials.
-- [ ] Apply the closed model-bindable property predicate before expansion;
+- [x] Apply the closed model-bindable property predicate before expansion;
       reject static/indexer/read-only/init-only/non-public-setter/explicit-
       interface/ref-return and unsupported constructor/record/collection shapes.
-- [ ] Emit canonical owner, parameter, model type, and property roles with a
+- [x] Emit canonical owner, parameter, model type, and property roles with a
       closed property schema and fixed limitations.
-- [ ] Add categorical gaps for unresolved/error/dynamic/type-parameter,
+- [x] Add categorical gaps for unresolved/error/dynamic/type-parameter,
       external-unavailable, ambiguous, and forged framework shapes.
-- [ ] Reconcile semantic rows with syntax fallback without duplicate hidden
+- [x] Reconcile semantic rows with syntax fallback without duplicate hidden
       winners or evidence-tier inflation.
-- [ ] Emit one row per owner/parameter/property binding source with sorted,
+- [x] Emit one row per owner/parameter/property binding source with sorted,
       bounded HTTP-method metadata; document the review-tier Tier1/Tier3
       reconciliation tuple.
-- [ ] Add same-name cross-assembly, partial, overload/attribute, source-
+- [x] Add same-name cross-assembly, partial, overload/attribute, source-
       lookalike, semantic-unavailable, span, property-schema, catalog, storage,
       and file-order regressions.
-- [ ] Add negative property-eligibility fixtures for every excluded member
+- [x] Add negative property-eligibility fixtures for every excluded member
       shape and prove each yields zero Tier1 targets plus the documented bounded
       gap where its model boundary otherwise qualifies.
-- [ ] Exclude the semantic Razor fact/rule and its producer-gap rule IDs from
+- [x] Exclude the semantic Razor fact/rule and its producer-gap rule IDs from
       generic reducer matching in this PR; lock existing reduce output and
       high-fan-out classification before the producer can land independently.
-- [ ] Exclude the semantic producer rule from the current property-flow reader
+- [x] Exclude the semantic producer rule from the current property-flow reader
       in this PR; prove semantic rows cannot create name-joined paths or change
       existing rows/classifications before exact-ID composition lands.
 
