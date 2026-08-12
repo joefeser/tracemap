@@ -228,6 +228,19 @@ schema now state that existing Tier3 rows are contextual support only because
 they lack the canonical identity needed for exact reconciliation; PR 3 owns
 actual composition.
 
+The exact-head Kiro re-review confirmed those three fixes and found two further
+P2 truth boundaries. Producer-local Razor gaps are now excluded from global
+semantic-toolchain reduction and toolchain capability support while remaining
+visible as rule-backed known gaps. Expanded-property gaps now carry canonical
+owner, endpoint-method, parameter, and ordinal identity so projected concrete
+owners cannot collapse into one occurrence. The same pass repaired vacuous
+negative assertions, classified arrays with collection gaps, closed the emitted
+gap vocabulary, and aligned the Tier1/Tier3 requirement with the staged
+contextual-only reconciliation contract. Other request-source attributes,
+class-level BindProperties, recursive complex BindProperty expansion, and
+custom handler-verb interpretation remain documented v1 limitations rather
+than hidden claims.
+
 ## Deferred Work
 
 - PR 1 now emits compiler-resolved MVC action parameter, Razor Page handler

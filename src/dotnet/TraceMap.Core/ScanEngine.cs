@@ -51,13 +51,15 @@ public static class ScanEngine
             throw new SourceSnapshotException(ex);
         }
         SemanticExtractionResult semanticResult;
+        bool semanticToolchainReducedCoverage;
         using (var semanticOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.SemanticAnalysis, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             semanticResult = CSharpSemanticExtractor.Extract(repoPath, inventory, options, fullInventory);
+            semanticToolchainReducedCoverage = HasToolchainSemanticReduction(semanticResult);
             cancellationToken.ThrowIfCancellationRequested();
             VerifySemanticInputSnapshot(repoPath, fullInventory, semanticResult, semanticInputSnapshot);
-            semanticOperation.Complete(semanticResult.ReducedCoverage
+            semanticOperation.Complete(semanticToolchainReducedCoverage
                 ? TraceMapDiagnosticOutcome.Partial
                 : TraceMapDiagnosticOutcome.Succeeded);
         }
@@ -137,7 +139,7 @@ public static class ScanEngine
             ? semanticBuildReducedCoverage ? "FailedOrPartial" : "Succeeded"
             : "NotRun";
         var semanticAnalysisLevel = semanticResult.Attempted
-            ? semanticResult.ReducedCoverage || migrationFallbackReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
+            ? semanticToolchainReducedCoverage || migrationFallbackReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
             : migrationFallbackReducedCoverage ? "Level3SyntaxAnalysisReduced" : "Level3SyntaxAnalysis";
 
         var provisionalManifest = new ScanManifest(
@@ -176,7 +178,7 @@ public static class ScanEngine
             .ToArray();
         var manifest = provisionalManifest with
         {
-            AnalysisLevel = binlogReducedCoverage && !semanticResult.ReducedCoverage
+            AnalysisLevel = binlogReducedCoverage && !semanticToolchainReducedCoverage
                 ? semanticResult.Attempted ? "Level1SemanticAnalysisReduced" : "Level3SyntaxAnalysisReduced"
                 : semanticAnalysisLevel,
             BuildStatus = binlogReducedCoverage ? "FailedOrPartial" : semanticBuildStatus,
@@ -617,7 +619,12 @@ public static class ScanEngine
         facts.AddRange(FilterProtectedEvidence(LegacyWebFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
         facts.AddRange(FilterProtectedEvidence(LegacyWinFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
         facts.AddRange(FilterProtectedEvidence(LegacyAspNetExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
-        facts.AddRange(AnalyzerCapabilityDiagnosticExtractor.Extract(manifest, inventory, semanticResult, facts, options));
+        var diagnosticSemanticResult = semanticResult with
+        {
+            GapFacts = semanticResult.GapFacts.Where(gap => !IsProducerLocalSemanticGap(gap)).ToArray(),
+            ReducedCoverage = HasToolchainSemanticReduction(semanticResult)
+        };
+        facts.AddRange(AnalyzerCapabilityDiagnosticExtractor.Extract(manifest, inventory, diagnosticSemanticResult, facts, options));
 
         return facts
             .GroupBy(fact => fact.FactId, StringComparer.Ordinal)
@@ -695,6 +702,12 @@ public static class ScanEngine
         }
         return "Roslyn semantic analysis reported a gap.";
     }
+
+    private static bool HasToolchainSemanticReduction(SemanticExtractionResult result) =>
+        result.GapFacts.Any(gap => !IsProducerLocalSemanticGap(gap));
+
+    private static bool IsProducerLocalSemanticGap(SemanticFactCandidate gap) =>
+        gap.RuleId == RuleIds.CSharpRazorSemanticModelBindingGap;
 
     private static string GetBuildStatusReason(
         ScanManifest manifest,

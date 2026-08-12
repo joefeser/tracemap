@@ -202,7 +202,19 @@ internal static class RazorSemanticModelBindingExtractor
                     || modelType.TypeKind == TypeKind.Error
                     || modelType.IsUnboundGenericType)
                 {
-                    AddGapOrCount(projectPath, filePath, parameterSyntax, ownerKind, "RazorBindingTypeUnavailable", parameter, parameter.Type, ref gapCount, ref truncatedGaps, gaps);
+                    AddGapOrCount(
+                        projectPath,
+                        filePath,
+                        parameterSyntax,
+                        ownerKind,
+                        "RazorBindingTypeUnavailable",
+                        parameter,
+                        parameter.Type,
+                        ref gapCount,
+                        ref truncatedGaps,
+                        gaps,
+                        stateKey: "typeState",
+                        stateValue: parameter.Type is IArrayTypeSymbol ? "unsupported-collection" : TypeState(parameter.Type));
                     continue;
                 }
                 if (IsTerminalParameterType(modelType))
@@ -400,11 +412,16 @@ internal static class RazorSemanticModelBindingExtractor
                 ref truncatedGaps,
                 gaps,
                 stateKey: "typeState",
-                stateValue: "external-base-properties-unavailable");
+                stateValue: "external-base-properties-unavailable",
+                owner: owner,
+                endpointMethod: endpointMethod,
+                parameter: parameter);
         }
         if (properties.Length == 0)
         {
-            AddGapOrCount(projectPath, filePath, evidenceNode, bindingKind, "RazorBindingPropertyUnavailable", owner, modelType, ref gapCount, ref truncatedGaps, gaps);
+            AddGapOrCount(
+                projectPath, filePath, evidenceNode, bindingKind, "RazorBindingPropertyUnavailable", owner, modelType,
+                ref gapCount, ref truncatedGaps, gaps, owner: owner, endpointMethod: endpointMethod, parameter: parameter);
             return;
         }
 
@@ -412,7 +429,9 @@ internal static class RazorSemanticModelBindingExtractor
         {
             if (!IsEligibleProperty(property))
             {
-                AddGapOrCount(projectPath, filePath, evidenceNode, bindingKind, "RazorBindingPropertyUnavailable", property, property.Type, ref gapCount, ref truncatedGaps, gaps);
+                AddGapOrCount(
+                    projectPath, filePath, evidenceNode, bindingKind, "RazorBindingPropertyUnavailable", property, property.Type,
+                    ref gapCount, ref truncatedGaps, gaps, owner: owner, endpointMethod: endpointMethod, parameter: parameter);
                 continue;
             }
             if (factCount >= MaxFactsPerDocument)
@@ -941,7 +960,10 @@ internal static class RazorSemanticModelBindingExtractor
         ref int truncatedGaps,
         List<SemanticFactCandidate> gaps,
         string? stateKey = null,
-        string? stateValue = null)
+        string? stateValue = null,
+        ISymbol? owner = null,
+        IMethodSymbol? endpointMethod = null,
+        IParameterSymbol? parameter = null)
     {
         if (gapCount >= MaxGapsPerDocument)
         {
@@ -972,6 +994,13 @@ internal static class RazorSemanticModelBindingExtractor
         }
         AddIdentity(properties, "scope", scope);
         AddIdentity(properties, "targetType", targetType);
+        AddIdentity(properties, "owner", owner);
+        AddIdentity(properties, "endpointMethod", endpointMethod);
+        AddIdentity(properties, "parameter", parameter);
+        if (parameter is not null)
+        {
+            properties["parameterOrdinal"] = parameter.Ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
         gaps.Add(new SemanticFactCandidate(
             FactTypes.AnalysisGap,
             RuleIds.CSharpRazorSemanticModelBindingGap,
