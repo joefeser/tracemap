@@ -9,6 +9,7 @@ namespace TraceMap.Tests;
 public sealed class FrameworkMigrationConsumerAuditTests
 {
     private const string ProtectedSymbol = "private-framework-migration-symbol-sentinel";
+    private const string UntrustedFactId = "innocent-looking-owner-derived-value";
     private const string DeclarationLimitation = "Static framework migration declaration only; execution, ordering, provider selection, generated SQL, database state, rollback, and safety are not proven.";
     private const string OperationLimitation = "Static framework migration operation candidate only; execution, ordering, provider selection, generated SQL, database state, rollback, reversibility, and safety are not proven.";
     private const string GapLimitation = "Static framework migration coverage is reduced; omitted protected content and runtime behavior were not analyzed.";
@@ -42,6 +43,7 @@ public sealed class FrameworkMigrationConsumerAuditTests
         var invalidFacts = new[]
         {
             InvalidFrameworkOperation(manifest),
+            InvalidFrameworkOperation(manifest) with { FactId = UntrustedFactId },
             validOperation with { FactId = "invalid-tier", EvidenceTier = EvidenceTiers.Tier4Unknown },
             validOperation with { FactId = "invalid-commit", CommitSha = new string('f', 40) },
             validOperation with { FactId = "invalid-span", Evidence = validOperation.Evidence with { StartLine = 0 } },
@@ -78,12 +80,15 @@ public sealed class FrameworkMigrationConsumerAuditTests
         Assert.Equal(invalidFacts.Length, metadataGaps.Length);
         Assert.All(invalidFacts, invalid =>
         {
-            Assert.Contains(metadataGaps, gap => gap.SupportIds.Contains(invalid.FactId, StringComparer.Ordinal));
+            Assert.Contains(metadataGaps, gap => gap.GapId.EndsWith(FactFactory.Hash(invalid.FactId, 16), StringComparison.Ordinal));
+            Assert.DoesNotContain(metadataGaps, gap => gap.SupportIds.Contains(invalid.FactId, StringComparer.Ordinal));
             Assert.DoesNotContain(result.Data.EvidenceRows, row => row.SupportId == invalid.FactId);
         });
+        Assert.All(metadataGaps.SelectMany(gap => gap.SupportIds), supportId => Assert.StartsWith("support:", supportId, StringComparison.Ordinal));
 
         var generated = string.Join('\n', Directory.EnumerateFiles(output, "*", SearchOption.AllDirectories).Select(File.ReadAllText));
         Assert.DoesNotContain(ProtectedSymbol, generated, StringComparison.Ordinal);
+        Assert.DoesNotContain(UntrustedFactId, generated, StringComparison.Ordinal);
     }
 
     [Fact]

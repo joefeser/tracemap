@@ -563,7 +563,7 @@ public static partial class StaticHtmlEvidenceExplorer
                         "evidence-rows",
                         "PartialAnalysis",
                         "A framework migration fact did not contain the exact bounded coverage and limitation metadata required for safe explorer projection, so the evidence row was omitted.",
-                        [fact.FactId]));
+                        SafeSupportIds([fact.FactId])));
                     RecordOmittedFactProperties(fact, redactions);
                     continue;
                 }
