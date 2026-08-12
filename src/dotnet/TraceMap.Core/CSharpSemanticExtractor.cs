@@ -17,7 +17,9 @@ public sealed record SemanticFactCandidate(
     string? SourceSymbol = null,
     string? TargetSymbol = null,
     string? ContractElement = null,
-    IReadOnlyDictionary<string, string>? Properties = null);
+    IReadOnlyDictionary<string, string>? Properties = null,
+    int? SourceStart = null,
+    int? SourceLength = null);
 
 public sealed record ProtectedSourceSpan(string FilePath, int Start, int Length);
 
@@ -646,6 +648,7 @@ public static class CSharpSemanticExtractor
         analyzedFiles.Add(filePath);
         AddTypeDeclarationFacts(projectPath, filePath, root, model, facts);
         FrameworkMigrationEvidenceExtractor.Extract(projectPath, filePath, root, model, facts, gaps, protectedSourceSpans);
+        var protectedFactStart = facts.Count;
         AddSymbolRelationshipFacts(projectPath, filePath, root, model, facts);
         AddFieldDeclarationFacts(projectPath, filePath, root, model, facts);
         AddParameterDeclarationFacts(projectPath, filePath, root, model, facts);
@@ -658,6 +661,7 @@ public static class CSharpSemanticExtractor
         AddRuntimeEvidenceFacts(projectPath, filePath, root, model, facts);
         AddContractMappingFacts(projectPath, filePath, root, model, facts);
         AddIntegrationFacts(projectPath, filePath, root, model, facts);
+        RemoveProtectedSemanticFacts(facts, protectedFactStart, filePath, protectedSourceSpans);
     }
 
     private static void AddTypeDeclarationFacts(
@@ -4832,7 +4836,38 @@ public static class CSharpSemanticExtractor
             sourceSymbol,
             targetSymbol,
             contractElement,
-            properties);
+            properties,
+            node.SpanStart,
+            node.Span.Length);
+    }
+
+    internal static void RemoveProtectedSemanticFacts(
+        List<SemanticFactCandidate> facts,
+        int startIndex,
+        string filePath,
+        IReadOnlyList<ProtectedSourceSpan> protectedSourceSpans)
+    {
+        var spans = protectedSourceSpans
+            .Where(span => span.FilePath.Equals(filePath, StringComparison.Ordinal))
+            .ToArray();
+        if (spans.Length == 0)
+        {
+            return;
+        }
+
+        for (var index = facts.Count - 1; index >= startIndex; index--)
+        {
+            var fact = facts[index];
+            if (fact.SourceStart is not int factStart || fact.SourceLength is not int factLength)
+            {
+                continue;
+            }
+            var factEnd = factStart + factLength;
+            if (spans.Any(span => factStart < span.Start + span.Length && span.Start < factEnd))
+            {
+                facts.RemoveAt(index);
+            }
+        }
     }
 
     private static SemanticFactCandidate CreateGap(
